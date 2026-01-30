@@ -169,13 +169,16 @@ export default function JobsPage() {
   }, [isMinimized, savedWidth])
 
   // Handle optimal width change from table
-  const handleTableWidthChange = React.useCallback((width: number) => {
-    // Only auto-update width if user hasn't manually resized
-    if (!hasUserResized && !isMinimized) {
-      setLeftPanelWidth(width)
-      setSavedWidth(width)
-    }
-  }, [hasUserResized, isMinimized])
+  const handleTableWidthChange = React.useCallback(
+    (width: number) => {
+      // Only auto-update width if user hasn't manually resized
+      if (!hasUserResized && !isMinimized) {
+        setLeftPanelWidth(width)
+        setSavedWidth(width)
+      }
+    },
+    [hasUserResized, isMinimized],
+  )
 
   // Handle mouse move for resizing
   React.useEffect(() => {

@@ -12,12 +12,12 @@ import {
   Table,
   Text,
 } from '@radix-ui/themes'
-import { CheckCircle, XmarkCircle, InfoCircle } from 'iconoir-react'
+import { CheckCircle, InfoCircle, XmarkCircle } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
-  IncomeExpensesChart,
   ChartTypeSelector,
+  IncomeExpensesChart,
 } from '@shared/ui/components/IncomeExpensesChart'
 import { contaClient } from '@shared/api/conta/client'
 import { findContaProjectId } from '../../utils/contaProjects'
@@ -51,7 +51,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('area')
-  const [listView, setListView] = React.useState<'income' | 'expenses'>('income')
+  const [listView, setListView] = React.useState<'income' | 'expenses'>(
+    'income',
+  )
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '—'
@@ -157,7 +159,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const matchesJobNumber = React.useCallback(
     (line: ContaLedgerLine) => {
       if (!jobNumberTokens.length) return false
-      const haystack = `${line.description || ''} ${line.invoiceNo || ''}`.toLowerCase()
+      const haystack =
+        `${line.description || ''} ${line.invoiceNo || ''}`.toLowerCase()
       return jobNumberTokens.some((token) => haystack.includes(token))
     },
     [jobNumberTokens],
@@ -233,7 +236,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       if (!companyId) return null
       const { data, error } = await supabase
         .from('companies')
-        .select('employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate')
+        .select(
+          'employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate',
+        )
         .eq('id', companyId)
         .single()
       if (error) throw error
@@ -265,6 +270,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           `
           id,
           user_id,
+          placeholder_name,
           time_period_id,
           user:user_id (
             user_id,
@@ -279,16 +285,22 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       if (!reservedCrew || reservedCrew.length === 0) return []
 
       // Get user IDs to fetch company_user rates
-      const userIds = reservedCrew.map((rc: any) => rc.user_id)
+      const userIds = reservedCrew
+        .map((rc: any) => rc.user_id)
+        .filter((id: string | null): id is string => !!id)
 
       // Fetch company_user rates for these users
-      const { data: companyUsers, error: cuError } = await supabase
-        .from('company_user_profiles')
-        .select('user_id, role, rate_type, rate')
-        .eq('company_id', companyId!)
-        .in('user_id', userIds)
+      let companyUsers: Array<any> = []
+      if (userIds.length > 0) {
+        const { data, error: cuError } = await supabase
+          .from('company_user_profiles')
+          .select('user_id, role, rate_type, rate')
+          .eq('company_id', companyId!)
+          .in('user_id', userIds)
 
-      if (cuError) throw cuError
+        if (cuError) throw cuError
+        companyUsers = data || []
+      }
 
       // Create a map of user_id to company_user data
       const userRatesMap = new Map(
@@ -304,7 +316,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         return {
           id: rc.id,
           user_id: rc.user_id,
-          user_name: user?.display_name || user?.email || 'Unknown',
+          user_name:
+            user?.display_name ||
+            user?.email ||
+            rc.placeholder_name ||
+            'Unknown',
           role: companyUser?.role || null,
           rate_type: companyUser?.rate_type || null,
           rate: companyUser?.rate ? Number(companyUser.rate) : null,
@@ -409,7 +425,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     return [...crewExpenses, ...accountingExpenses]
   }, [crewExpenses, accountingExpenses])
 
-  const incomeItems = React.useMemo<MoneyItem[]>(() => {
+  const incomeItems = React.useMemo<Array<MoneyItem>>(() => {
     return acceptedOffers.map((offer) => ({
       id: `offer-${offer.id}`,
       description: offer.title || `Offer v${offer.version_number}`,
@@ -419,7 +435,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     }))
   }, [acceptedOffers])
 
-  const expenseItems = React.useMemo<MoneyItem[]>(() => {
+  const expenseItems = React.useMemo<Array<MoneyItem>>(() => {
     return expenses.map((expense) => ({
       id: expense.id,
       description: expense.description,
@@ -647,8 +663,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             <Table.Header>
               <Table.Row>
                 <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell align="right">
                   Amount

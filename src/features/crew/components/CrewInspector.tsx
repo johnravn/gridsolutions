@@ -22,16 +22,16 @@ import { EditPencil } from 'iconoir-react'
 import { toEventInputs } from '@features/calendar/components/domain'
 import InspectorCalendar from '@features/calendar/components/InspectorCalendar'
 import { crewCalendarQuery } from '@features/calendar/api/queries'
+import ChangeRoleConfirmDialog from '@features/company/components/dialogs/ChangeRoleConfirmDialog'
+import { useToast } from '@shared/ui/toast/ToastProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import {
   crewDetailQuery,
   crewIndexQuery,
   updateCrewMemberRate,
 } from '../api/queries'
 import type { CrewDetail } from '../api/queries'
-import ChangeRoleConfirmDialog from '@features/company/components/dialogs/ChangeRoleConfirmDialog'
 import type { CompanyRole } from '@features/company/api/queries'
-import { useToast } from '@shared/ui/toast/ToastProvider'
-import { useAuthz } from '@shared/auth/useAuthz'
 
 export default function CrewInspector({ userId }: { userId: string | null }) {
   const { companyId } = useCompany()
@@ -46,10 +46,12 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
     currentRole: CompanyRole
     newRole: CompanyRole
   } | null>(null)
-  
+
   // Rate editing state
   const [isEditingRate, setIsEditingRate] = React.useState(false)
-  const [rateType, setRateType] = React.useState<'daily' | 'hourly' | null>(null)
+  const [rateType, setRateType] = React.useState<'daily' | 'hourly' | null>(
+    null,
+  )
   const [rate, setRate] = React.useState<string>('')
 
   const { data, isLoading, isError, error } = useQuery<CrewDetail | null>({
@@ -89,12 +91,17 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
   // Fetch company general rates for employees/owners
   const { data: companyRates } = useQuery({
     queryKey: ['company', companyId, 'general-rates'] as const,
-    enabled: !!companyId && !!data && (data.role === 'employee' || data.role === 'owner'),
+    enabled:
+      !!companyId &&
+      !!data &&
+      (data.role === 'employee' || data.role === 'owner'),
     queryFn: async () => {
       if (!companyId) return null
       const { data, error } = await supabase
         .from('companies')
-        .select('employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate')
+        .select(
+          'employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate',
+        )
         .eq('id', companyId)
         .single()
       if (error) throw error
@@ -333,7 +340,9 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
       <Separator my="2" />
 
       {/* Billing Rate - show for employees, freelancers, and owners */}
-      {(data.role === 'employee' || data.role === 'freelancer' || data.role === 'owner') && (
+      {(data.role === 'employee' ||
+        data.role === 'freelancer' ||
+        data.role === 'owner') && (
         <>
           <SectionTitle>Billing Rate</SectionTitle>
           {data.role === 'freelancer' && !isEditingRate ? (
@@ -375,13 +384,23 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
               <Flex direction="column" gap="3">
                 <Flex align="end" gap="3" wrap="wrap">
                   <Box style={{ flex: 1, minWidth: 150 }}>
-                    <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                    <Text
+                      as="label"
+                      size="2"
+                      weight="medium"
+                      mb="1"
+                      style={{ display: 'block' }}
+                    >
                       Rate type
                     </Text>
                     <Select.Root
                       value={rateType ?? 'none'}
                       onValueChange={(value) =>
-                        setRateType(value === 'none' ? null : (value as 'daily' | 'hourly'))
+                        setRateType(
+                          value === 'none'
+                            ? null
+                            : (value as 'daily' | 'hourly'),
+                        )
                       }
                     >
                       <Select.Trigger placeholder="Select rate type" />
@@ -394,7 +413,13 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
                   </Box>
 
                   <Box style={{ flex: '0 0 auto', minWidth: 120 }}>
-                    <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                    <Text
+                      as="label"
+                      size="2"
+                      weight="medium"
+                      mb="1"
+                      style={{ display: 'block' }}
+                    >
                       Rate amount
                     </Text>
                     <Flex align="center" gap="2">

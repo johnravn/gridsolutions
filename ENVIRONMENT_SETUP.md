@@ -24,18 +24,23 @@ Vercel Dashboard    # Production environment variables
 **When to use:** You want to develop locally with a local database.
 
 **Setup:**
+
 1. Start local Supabase:
+
    ```bash
    npm run supabase:start
    ```
 
 2. Get local credentials:
+
    ```bash
    npm run db:status
    ```
+
    This shows your local Supabase URL and anon key.
 
 3. Create `.env.local`:
+
    ```env
    # Local Supabase (Docker)
    VITE_SUPABASE_URL=http://127.0.0.1:54321
@@ -49,6 +54,7 @@ Vercel Dashboard    # Production environment variables
    ```
 
 **Benefits:**
+
 - ✅ Faster development (no network latency)
 - ✅ Free (no API rate limits)
 - ✅ Safe to test migrations
@@ -59,12 +65,14 @@ Vercel Dashboard    # Production environment variables
 **When to use:** You don't want to use Docker, or you want to test against production data.
 
 **Setup:**
+
 1. Get production credentials from Supabase Dashboard:
    - Go to https://app.supabase.com
    - Select your project
    - Go to **Settings → API**
 
 2. Create `.env.local`:
+
    ```env
    # Production Supabase (for local development)
    VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
@@ -133,6 +141,7 @@ npm run db:switch:remote
 ## ✅ Verification Checklist
 
 ### Local Development
+
 - [ ] `.env.local` exists (not committed to git)
 - [ ] `VITE_SUPABASE_URL` matches your setup (localhost or production)
 - [ ] `VITE_SUPABASE_ANON_KEY` is set
@@ -140,6 +149,7 @@ npm run db:switch:remote
 - [ ] `npm run db:switch:status` shows correct connection
 
 ### Vercel/Production
+
 - [ ] Environment variables set in Vercel Dashboard
 - [ ] Production environment has all 3 variables
 - [ ] Preview environment has all 3 variables (optional)
@@ -150,6 +160,7 @@ npm run db:switch:remote
 ### "Invalid API key" or Connection Errors
 
 1. **Check your `.env.local` file exists:**
+
    ```bash
    cat .env.local
    ```
@@ -159,6 +170,7 @@ npm run db:switch:remote
    - Using production? → `https://...supabase.co`
 
 3. **Check if local Supabase is running:**
+
    ```bash
    npm run db:status
    ```
@@ -172,6 +184,7 @@ npm run db:switch:remote
 If `http://127.0.0.1:54321` doesn't work:
 
 1. **Start local Supabase:**
+
    ```bash
    npm run supabase:start
    ```
@@ -179,6 +192,7 @@ If `http://127.0.0.1:54321` doesn't work:
 2. **Wait for it to start** (takes 30-60 seconds)
 
 3. **Get the correct URL:**
+
    ```bash
    npm run db:status
    ```
@@ -194,16 +208,16 @@ If `http://127.0.0.1:54321` doesn't work:
 
 ## 📝 Summary
 
-| Environment | File/Location | URL Format |
-|------------|----------------|------------|
-| **Local (Docker)** | `.env.local` | `http://127.0.0.1:54321` |
-| **Local (Production)** | `.env.local` | `https://...supabase.co` |
-| **Vercel Production** | Vercel Dashboard | `https://...supabase.co` |
-| **Vercel Preview** | Vercel Dashboard | `https://...supabase.co` |
+| Environment            | File/Location    | URL Format               |
+| ---------------------- | ---------------- | ------------------------ |
+| **Local (Docker)**     | `.env.local`     | `http://127.0.0.1:54321` |
+| **Local (Production)** | `.env.local`     | `https://...supabase.co` |
+| **Vercel Production**  | Vercel Dashboard | `https://...supabase.co` |
+| **Vercel Preview**     | Vercel Dashboard | `https://...supabase.co` |
 
 **Remember:**
+
 - ✅ Localhost in `.env.local` is correct if using Docker
 - ✅ Production URL in Vercel Dashboard is required
 - ✅ Never commit `.env.local` to git
 - ✅ Always use `https://` for production URLs
-

@@ -382,6 +382,16 @@ function EditTimePeriodDialog({
   const [startAt, setStartAt] = React.useState(timePeriod.start_at)
   const [endAt, setEndAt] = React.useState(timePeriod.end_at)
   const [autoSetEndTime, setAutoSetEndTime] = React.useState(!timePeriod.id)
+  const getDateMs = (value: string) => {
+    const ms = new Date(value).getTime()
+    return Number.isNaN(ms) ? null : ms
+  }
+  const hasInvalidTimeRange = (() => {
+    const startMs = getDateMs(startAt)
+    const endMs = getDateMs(endAt)
+    if (startMs === null || endMs === null) return false
+    return endMs < startMs
+  })()
 
   // Auto-set end time when start time changes (only for new time periods)
   React.useEffect(() => {
@@ -478,6 +488,7 @@ function EditTimePeriodDialog({
           <DateTimePicker
             label="End"
             value={endAt}
+            invalid={hasInvalidTimeRange}
             onChange={(value) => {
               setEndAt(value)
               setAutoSetEndTime(false)
@@ -489,7 +500,10 @@ function EditTimePeriodDialog({
           <Button variant="soft" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSave} disabled={isSaving || !title.trim()}>
+          <Button
+            onClick={handleSave}
+            disabled={isSaving || !title.trim() || hasInvalidTimeRange}
+          >
             {isSaving ? 'Saving...' : 'Save'}
           </Button>
         </Flex>

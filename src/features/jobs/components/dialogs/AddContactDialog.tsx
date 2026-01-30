@@ -68,8 +68,8 @@ export default function AddContactDialog({
         const patterns = [
           `%${term}%`,
           term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as string[]
-        
+        ].filter(Boolean) as Array<string>
+
         const conditions = patterns
           .flatMap((pattern) => [
             `name.ilike.${pattern}`,
@@ -77,7 +77,7 @@ export default function AddContactDialog({
             `phone.ilike.${pattern}`,
           ])
           .join(',')
-        
+
         q = q.or(conditions)
       }
 
@@ -99,11 +99,7 @@ export default function AddContactDialog({
     return fuzzySearch(
       contacts,
       searchQuery,
-      [
-        (c) => c.name,
-        (c) => c.email ?? '',
-        (c) => c.phone ?? '',
-      ],
+      [(c) => c.name, (c) => c.email ?? '', (c) => c.phone ?? ''],
       0.25,
     )
   }, [contacts, searchQuery])

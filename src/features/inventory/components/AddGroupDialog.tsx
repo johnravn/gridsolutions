@@ -32,9 +32,11 @@ type PickerItem = {
   current_price: number | null
   on_hand: number | null
   type: 'item' | 'group'
+  category_name?: string | null
   brand_name?: string | null
   model?: string | null
   description?: string | null
+  nicknames?: string | null
 }
 type Part = {
   item_id: string | null
@@ -117,6 +119,13 @@ export default function AddGroupDialog({
     internally_owned: true,
     external_owner_id: null,
   })
+  const [partQuantityDrafts, setPartQuantityDrafts] = React.useState<
+    Record<string, string>
+  >({})
+
+  const escapeForPostgrestOr = React.useCallback((value: string) => {
+    return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
+  }, [])
   const set = <TKey extends keyof FormState>(
     key: TKey,
     value: FormState[TKey],
@@ -168,9 +177,11 @@ export default function AddGroupDialog({
     if (!normalized) return true
     return [
       item.name,
+      item.category_name,
       item.brand_name,
       item.model,
       item.description,
+      item.nicknames,
     ].some((value) => value?.toLowerCase().includes(normalized))
   }, [])
   const {
@@ -183,6 +194,7 @@ export default function AddGroupDialog({
     enabled: !!companyId && open,
     queryFn: async (): Promise<Array<PickerItem>> => {
       let brandIds: Array<string> = []
+      let categoryIds: Array<string> = []
       if (search) {
         const { data: brandMatches, error: brandErr } = await supabase
           .from('item_brands')
@@ -192,25 +204,41 @@ export default function AddGroupDialog({
           .limit(20)
         if (brandErr) throw brandErr
         brandIds = brandMatches.map((b) => b.id)
+
+        const { data: categoryMatches, error: categoryErr } = await supabase
+          .from('item_categories')
+          .select('id')
+          .eq('company_id', companyId)
+          .ilike('name', `%${search}%`)
+          .limit(20)
+        if (categoryErr) throw categoryErr
+        categoryIds = categoryMatches.map((c) => c.id)
       }
 
       // Fetch items with on_hand from items table
       let itemsQ = supabase
         .from('items')
-        .select('id, name, total_quantity, model, notes, item_brands(name)')
+        .select(
+          'id, name, total_quantity, model, notes, nicknames, item_brands(name), item_categories(name)',
+        )
         .eq('company_id', companyId)
         .eq('active', true)
         .or('deleted.is.null,deleted.eq.false')
         .limit(20)
 
       if (search) {
+        const termSafe = escapeForPostgrestOr(search)
         const filters = [
-          `name.ilike.%${search}%`,
-          `model.ilike.%${search}%`,
-          `notes.ilike.%${search}%`,
+          `name.ilike.%${termSafe}%`,
+          `model.ilike.%${termSafe}%`,
+          `notes.ilike.%${termSafe}%`,
+          `nicknames.ilike.%${termSafe}%`,
         ]
         if (brandIds.length) {
           filters.push(`brand_id.in.(${brandIds.join(',')})`)
+        }
+        if (categoryIds.length) {
+          filters.push(`category_id.in.(${categoryIds.join(',')})`)
         }
         itemsQ = itemsQ.or(filters.join(','))
       }
@@ -228,8 +256,9 @@ export default function AddGroupDialog({
         .limit(20)
 
       if (search) {
+        const termSafe = escapeForPostgrestOr(search)
         groupsQ = groupsQ.or(
-          `name.ilike.%${search}%,description.ilike.%${search}%`,
+          `name.ilike.%${termSafe}%,description.ilike.%${termSafe}%`,
         )
       }
       if (mode === 'edit' && initialData?.id) {
@@ -280,9 +309,11 @@ export default function AddGroupDialog({
         current_price: r.id ? (prices[r.id] ?? null) : null,
         on_hand: r.total_quantity ?? null,
         type: 'item' as const,
+        category_name: r.item_categories?.name ?? null,
         brand_name: r.item_brands?.name ?? null,
         model: r.model ?? null,
         description: r.notes ?? null,
+        nicknames: r.nicknames ?? null,
       }))
 
       const groups = groupsData.map((r) => ({
@@ -330,9 +361,7 @@ export default function AddGroupDialog({
       item_name: p.item_name,
       quantity: p.quantity,
       unit_price: p.item_current_price,
-      part_type: (p.part_type ? p.part_type : p.item_id ? 'item' : 'group') as
-        | 'item'
-        | 'group',
+      part_type: (p.part_type ? p.part_type : p.item_id ? 'item' : 'group'),
     }))
 
     setForm((prev) => {
@@ -589,7 +618,11 @@ export default function AddGroupDialog({
       'parts',
       form.parts.filter((_, i) => i !== index),
     )
+    setPartQuantityDrafts({})
   }
+
+  const partKey = (part: Part, index: number) =>
+    `${part.part_type}:${part.item_id ?? part.child_group_id ?? 'row'}:${index}`
 
   /* -------- Update part quantity -------- */
   const handleUpdateQuantity = (index: number, quantity: number) => {
@@ -859,52 +892,52 @@ export default function AddGroupDialog({
                         zIndex: 1000,
                       }}
                     >
-                    {pickerItems
-                      .filter((item) => matchesSearch(item, search))
-                      .map((item) => (
-                        <Box
-                          key={item.id}
-                          onClick={() => handleAddPart(item)}
-                          style={{
-                            padding: '8px 12px',
-                            cursor: 'pointer',
-                            borderBottom: '1px solid var(--gray-a6)',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor =
-                              'var(--gray-a3)'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor =
-                              'transparent'
-                          }}
-                        >
-                          <Flex direction="column" gap="1">
-                            <Flex justify="between" align="center">
-                              <Flex align="center" gap="2">
-                                <Text size="2" weight="medium">
-                                  {item.name}
-                                </Text>
-                                {item.type === 'group' && (
-                                  <Badge color="blue" size="1">
-                                    Group
-                                  </Badge>
+                      {pickerItems
+                        .filter((item) => matchesSearch(item, search))
+                        .map((item) => (
+                          <Box
+                            key={item.id}
+                            onClick={() => handleAddPart(item)}
+                            style={{
+                              padding: '8px 12px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid var(--gray-a6)',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor =
+                                'var(--gray-a3)'
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor =
+                                'transparent'
+                            }}
+                          >
+                            <Flex direction="column" gap="1">
+                              <Flex justify="between" align="center">
+                                <Flex align="center" gap="2">
+                                  <Text size="2" weight="medium">
+                                    {item.name}
+                                  </Text>
+                                  {item.type === 'group' && (
+                                    <Badge color="blue" size="1">
+                                      Group
+                                    </Badge>
+                                  )}
+                                </Flex>
+                                {item.current_price != null && (
+                                  <Text size="1" color="gray">
+                                    {fmtCurrency.format(item.current_price)}
+                                  </Text>
                                 )}
                               </Flex>
-                              {item.current_price != null && (
+                              {item.type === 'item' && item.on_hand != null && (
                                 <Text size="1" color="gray">
-                                  {fmtCurrency.format(item.current_price)}
+                                  On hand: {item.on_hand}
                                 </Text>
                               )}
                             </Flex>
-                            {item.type === 'item' && item.on_hand != null && (
-                              <Text size="1" color="gray">
-                                On hand: {item.on_hand}
-                              </Text>
-                            )}
-                          </Flex>
-                        </Box>
-                      ))}
+                          </Box>
+                        ))}
                     </Box>
                   )}
                 </Box>
@@ -960,13 +993,42 @@ export default function AddGroupDialog({
                             <Table.Cell>
                               <TextField.Root
                                 type="number"
-                                value={part.quantity}
-                                onChange={(e) =>
+                                value={
+                                  partQuantityDrafts[partKey(part, index)] ??
+                                  String(part.quantity)
+                                }
+                                onChange={(e) => {
+                                  const nextValue = e.target.value
+                                  const key = partKey(part, index)
+                                  setPartQuantityDrafts((prev) => ({
+                                    ...prev,
+                                    [key]: nextValue,
+                                  }))
+
+                                  if (nextValue === '') return
+                                  const parsed = Number(nextValue)
+                                  if (Number.isNaN(parsed)) return
+
                                   handleUpdateQuantity(
                                     index,
-                                    Number(e.target.value),
+                                    Math.max(1, parsed),
                                   )
-                                }
+                                  setPartQuantityDrafts((prev) => {
+                                    const next = { ...prev }
+                                    delete next[key]
+                                    return next
+                                  })
+                                }}
+                                onBlur={() => {
+                                  const key = partKey(part, index)
+                                  if (partQuantityDrafts[key] === '') {
+                                    setPartQuantityDrafts((prev) => {
+                                      const next = { ...prev }
+                                      delete next[key]
+                                      return next
+                                    })
+                                  }
+                                }}
                                 style={{ width: '60px' }}
                                 size="1"
                               />

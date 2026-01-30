@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -945,6 +925,7 @@ export type Database = {
           internally_owned: boolean
           model: string | null
           name: string
+          nicknames: string | null
           notes: string | null
           total_quantity: number
         }
@@ -961,6 +942,7 @@ export type Database = {
           internally_owned?: boolean
           model?: string | null
           name: string
+          nicknames?: string | null
           notes?: string | null
           total_quantity?: number
         }
@@ -977,6 +959,7 @@ export type Database = {
           internally_owned?: boolean
           model?: string | null
           name?: string
+          nicknames?: string | null
           notes?: string | null
           total_quantity?: number
         }
@@ -1234,6 +1217,7 @@ export type Database = {
           accepted_by_phone: string | null
           access_token: string
           based_on_offer_id: string | null
+          bookings_synced_at: string | null
           company_id: string
           created_at: string
           crew_subtotal: number
@@ -1272,6 +1256,7 @@ export type Database = {
           accepted_by_phone?: string | null
           access_token: string
           based_on_offer_id?: string | null
+          bookings_synced_at?: string | null
           company_id: string
           created_at?: string
           crew_subtotal?: number
@@ -1310,6 +1295,7 @@ export type Database = {
           accepted_by_phone?: string | null
           access_token?: string
           based_on_offer_id?: string | null
+          bookings_synced_at?: string | null
           company_id?: string
           created_at?: string
           crew_subtotal?: number
@@ -1515,6 +1501,54 @@ export type Database = {
           {
             foreignKeyName: "jobs_project_lead_user_id_fkey"
             columns: ["project_lead_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      logging_periods: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          is_locked: boolean
+          locked_at: string | null
+          locked_by_user_id: string | null
+          period_start: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          is_locked?: boolean
+          locked_at?: string | null
+          locked_by_user_id?: string | null
+          period_start: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          is_locked?: boolean
+          locked_at?: string | null
+          locked_by_user_id?: string | null
+          period_start?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logging_periods_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "logging_periods_locked_by_user_id_fkey"
+            columns: ["locked_by_user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
@@ -2280,30 +2314,33 @@ export type Database = {
           during: unknown
           id: string
           notes: string | null
+          placeholder_name: string | null
           requested_at: string | null
           status: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           created_at?: string
           during?: unknown
           id?: string
           notes?: string | null
+          placeholder_name?: string | null
           requested_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           created_at?: string
           during?: unknown
           id?: string
           notes?: string | null
+          placeholder_name?: string | null
           requested_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
           time_period_id?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -2918,6 +2955,7 @@ export type Database = {
           is_group: boolean | null
           model: string | null
           name: string | null
+          nicknames: string | null
           on_hand: number | null
           unique: boolean | null
         }
@@ -3248,6 +3286,7 @@ export type Database = {
               p_effective_from?: string
               p_model?: string
               p_name: string
+              p_nicknames?: string
               p_notes?: string
               p_price?: number
               p_total_quantity?: number
@@ -3320,6 +3359,44 @@ export type Database = {
           p_starts_at: string
         }
         Returns: number
+      }
+      mark_job_offer_bookings_synced: {
+        Args: { p_offer_id: string }
+        Returns: undefined
+      }
+      public_offer_accept: {
+        Args: {
+          p_access_token: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+        }
+        Returns: undefined
+      }
+      public_offer_get: { Args: { p_access_token: string }; Returns: Json }
+      public_offer_mark_viewed: {
+        Args: { p_access_token: string }
+        Returns: undefined
+      }
+      public_offer_reject: {
+        Args: {
+          p_access_token: string
+          p_comment: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+        }
+        Returns: undefined
+      }
+      public_offer_request_revision: {
+        Args: {
+          p_access_token: string
+          p_comment: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+        }
+        Returns: undefined
       }
       set_company_user_role: {
         Args: {
@@ -3587,9 +3664,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       activity_type: [
@@ -3682,4 +3756,3 @@ export const Constants = {
     },
   },
 } as const
-

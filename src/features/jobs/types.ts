@@ -211,8 +211,9 @@ export type CrewReqStatus = BookingStatus
 export type ReservedCrewRow = {
   id: UUID
   time_period_id: UUID
-  user_id: UUID
+  user_id: UUID | null
   notes: string | null
+  placeholder_name?: string | null
   status: BookingStatus
   start_at: string | null
   end_at: string | null
@@ -288,6 +289,7 @@ export type JobOffer = {
   locked: boolean
   created_at: string
   updated_at: string
+  bookings_synced_at: string | null
   sent_at: string | null
   viewed_at: string | null
   accepted_at: string | null

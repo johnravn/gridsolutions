@@ -131,8 +131,9 @@ export default function CalendarPage() {
 
   // Get suggestions based on category with fuzzy search filtering
   const suggestions = React.useMemo(() => {
-    let allSuggestions: Array<{ id: string; name: string; subtitle?: string }> = []
-    
+    let allSuggestions: Array<{ id: string; name: string; subtitle?: string }> =
+      []
+
     if (category === 'transport') {
       allSuggestions = vehicles.map((v) => ({
         id: v.id,
@@ -161,20 +162,17 @@ export default function CalendarPage() {
         subtitle: job.customer?.name || undefined,
       }))
     }
-    
+
     // Apply fuzzy search filtering if search query exists
     if (searchQuery.trim()) {
       return fuzzySearch(
         allSuggestions,
         searchQuery,
-        [
-          (s) => s.name,
-          (s) => s.subtitle ?? '',
-        ],
+        [(s) => s.name, (s) => s.subtitle ?? ''],
         0.3,
       )
     }
-    
+
     return allSuggestions
   }, [category, vehicles, items, crew, jobs, searchQuery])
 

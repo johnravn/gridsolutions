@@ -37,6 +37,7 @@ import {
   lockOffer,
   offerDetailQuery,
   recalculateOfferTotals,
+  syncBookingsFromOffer,
 } from '../../api/offerQueries'
 import { calculateOfferTotals } from '../../utils/offerCalculations'
 import type {
@@ -94,6 +95,10 @@ type LocalEquipmentItem = {
     external_owner_id?: UUID | null
     external_owner_name?: string | null
   } | null
+}
+
+function escapeForPostgrestOr(value: string) {
+  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
 type LocalCrewItem = {
@@ -262,6 +267,11 @@ export default function TechnicalOfferEditor({
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
+  const invalidateBookingQueries = React.useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
+    qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+    qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
+  }, [qc, jobId])
   const isEditMode = !!offerId
   const [currentOfferId, setCurrentOfferId] = React.useState<string | null>(
     offerId || null,
@@ -287,9 +297,9 @@ export default function TechnicalOfferEditor({
         : (data as any).customer
 
       return {
-        title: data.title as string,
-        start_at: (data.start_at ?? null) as string | null,
-        end_at: (data.end_at ?? null) as string | null,
+        title: data.title,
+        start_at: (data.start_at ?? null),
+        end_at: (data.end_at ?? null),
         customer: customer
           ? ({
               id: customer.id,
@@ -304,6 +314,15 @@ export default function TechnicalOfferEditor({
   const { data: companyExpansion } = useQuery({
     ...companyExpansionQuery({ companyId }),
     enabled: open && !!companyId && typeof companyId === 'string',
+  })
+
+  const { data: user } = useQuery({
+    queryKey: ['auth', 'user'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser()
+      return data.user
+    },
+    enabled: open,
   })
 
   const defaultCrewRatePerDay = React.useMemo(() => {
@@ -363,6 +382,19 @@ export default function TechnicalOfferEditor({
   const [discountPercent, setDiscountPercent] = React.useState(0)
   const [vatPercent, setVatPercent] = React.useState(25)
   const [showPricePerLine, setShowPricePerLine] = React.useState(true)
+  const [daysOfUseDraft, setDaysOfUseDraft] = React.useState<string | null>(
+    null,
+  )
+  const [discountPercentDraft, setDiscountPercentDraft] = React.useState<
+    string | null
+  >(null)
+  const [syncBeforeSaveOpen, setSyncBeforeSaveOpen] = React.useState(false)
+  const [syncPromptAction, setSyncPromptAction] = React.useState<
+    'create' | 'save' | 'lock'
+  >('save')
+  const [afterSaveAction, setAfterSaveAction] = React.useState<'lock' | null>(
+    null,
+  )
 
   // Equipment groups and items
   const [equipmentGroups, setEquipmentGroups] = React.useState<
@@ -391,6 +423,7 @@ export default function TechnicalOfferEditor({
   React.useEffect(() => {
     if (!open || isEditMode || !job?.start_at || !job?.end_at) return
     setDaysOfUse(defaultDaysOfUse)
+    setDaysOfUseDraft(null)
   }, [open, isEditMode, defaultDaysOfUse, job?.start_at, job?.end_at])
 
   // Initialize from existing offer
@@ -403,6 +436,8 @@ export default function TechnicalOfferEditor({
       setTitle(existingOffer.title)
       setDaysOfUse(existingOffer.days_of_use)
       setDiscountPercent(existingOffer.discount_percent)
+      setDaysOfUseDraft(null)
+      setDiscountPercentDraft(null)
       // Normalize VAT to 0 or 25
       const normalizedVat =
         existingOffer.vat_percent === 0 || existingOffer.vat_percent === 25
@@ -666,7 +701,7 @@ export default function TechnicalOfferEditor({
   ])
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (payload?: { syncAfterSave?: boolean }) => {
       if (!title.trim()) {
         throw new Error('Title is required')
       }
@@ -967,22 +1002,61 @@ export default function TechnicalOfferEditor({
         // The offer is still saved successfully, just totals might be stale
       }
 
-      return workingOfferId
+      return {
+        offerId: workingOfferId,
+        syncAfterSave: !!payload?.syncAfterSave,
+      }
     },
-    onSuccess: async (savedOfferId) => {
+    onSuccess: async (result) => {
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      await qc.invalidateQueries({ queryKey: ['offer-detail', savedOfferId] })
+      await qc.invalidateQueries({ queryKey: ['offer-detail', result.offerId] })
       // Update current offer ID so we can show preview/lock buttons
-      setCurrentOfferId(savedOfferId)
+      setCurrentOfferId(result.offerId)
+      if (result.syncAfterSave) {
+        if (!user?.id) {
+          toastError(
+            'Authentication required',
+            'Please log in to sync bookings.',
+          )
+        } else {
+          try {
+            const warnings = await syncBookingsFromOffer(
+              result.offerId,
+              user.id,
+            )
+            invalidateBookingQueries()
+            await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+            await qc.invalidateQueries({
+              queryKey: ['offer-detail', result.offerId],
+            })
+            if (warnings?.length) {
+              info('Booking warnings', warnings.join('\n'), 6000)
+            }
+          } catch (syncError: any) {
+            toastError(
+              'Failed to sync bookings',
+              syncError?.message || 'Please try again.',
+            )
+          }
+        }
+      }
       success(
         isEditMode ? 'Offer updated' : 'Offer created',
         `Technical offer "${title.trim()}" was saved successfully.`,
       )
+
+      if (afterSaveAction === 'lock') {
+        setAfterSaveAction(null)
+        lockOfferMutation.mutate(result.offerId)
+        return
+      }
+
       // Close dialog after save
       onOpenChange(false)
-      onSaved?.(savedOfferId)
+      onSaved?.(result.offerId)
     },
     onError: (e: any) => {
+      setAfterSaveAction(null)
       toastError(
         'Failed to save offer',
         e?.message ?? 'Please check your inputs and try again.',
@@ -1019,6 +1093,9 @@ export default function TechnicalOfferEditor({
           'The offer has been locked and is ready to send.',
         )
       }
+
+      onOpenChange(false)
+      onSaved?.(lockedOfferId)
     },
     onError: (e: any) => {
       toastError('Failed to lock offer', e?.message ?? 'Please try again.')
@@ -1035,13 +1112,31 @@ export default function TechnicalOfferEditor({
     },
   })
 
-  const handleLockAndSend = (offerIdToLock: string) => {
+  const handleLockAndSend = () => {
     // If no offer ID yet, save first
     if (!currentOfferId) {
       info('Save required', 'Please save the offer first before locking it.')
       return
     }
-    lockOfferMutation.mutate(offerIdToLock)
+    setSyncPromptAction('lock')
+    setSyncBeforeSaveOpen(true)
+  }
+
+  const handleSaveClick = () => {
+    setSyncPromptAction(isEditMode ? 'save' : 'create')
+    setSyncBeforeSaveOpen(true)
+  }
+
+  const handleSaveWithSync = (syncAfterSave: boolean) => {
+    setSyncBeforeSaveOpen(false)
+    if (syncPromptAction === 'lock') {
+      setAfterSaveAction('lock')
+      saveMutation.mutate({ syncAfterSave })
+      return
+    }
+
+    setAfterSaveAction(null)
+    saveMutation.mutate({ syncAfterSave })
   }
 
   return (
@@ -1121,10 +1216,23 @@ export default function TechnicalOfferEditor({
                       <TextField.Root
                         type="number"
                         min="1"
-                        value={String(daysOfUse)}
-                        onChange={(e) =>
-                          setDaysOfUse(Math.max(1, Number(e.target.value) || 1))
-                        }
+                        value={daysOfUseDraft ?? String(daysOfUse)}
+                        onChange={(e) => {
+                          const nextValue = e.target.value
+                          setDaysOfUseDraft(nextValue)
+
+                          if (nextValue === '') return
+                          const parsed = Number(nextValue)
+                          if (Number.isNaN(parsed)) return
+
+                          setDaysOfUse(Math.max(1, parsed))
+                          setDaysOfUseDraft(null)
+                        }}
+                        onBlur={() => {
+                          if (daysOfUseDraft === '') {
+                            setDaysOfUseDraft(null)
+                          }
+                        }}
                         readOnly={isReadOnly}
                       />
                       <Text
@@ -1147,15 +1255,23 @@ export default function TechnicalOfferEditor({
                       type="number"
                       min="0"
                       max="100"
-                      value={String(discountPercent)}
-                      onChange={(e) =>
-                        setDiscountPercent(
-                          Math.max(
-                            0,
-                            Math.min(100, Number(e.target.value) || 0),
-                          ),
-                        )
-                      }
+                      value={discountPercentDraft ?? String(discountPercent)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value
+                        setDiscountPercentDraft(nextValue)
+
+                        if (nextValue === '') return
+                        const parsed = Number(nextValue)
+                        if (Number.isNaN(parsed)) return
+
+                        setDiscountPercent(Math.max(0, Math.min(100, parsed)))
+                        setDiscountPercentDraft(null)
+                      }}
+                      onBlur={() => {
+                        if (discountPercentDraft === '') {
+                          setDiscountPercentDraft(null)
+                        }
+                      }}
                       readOnly={isReadOnly}
                     />
                   </Field>
@@ -1315,7 +1431,7 @@ export default function TechnicalOfferEditor({
                     variant="soft"
                     color="blue"
                     onClick={() => {
-                      handleLockAndSend(existingOffer.id)
+                      handleLockAndSend()
                     }}
                     disabled={lockOfferMutation.isPending}
                   >
@@ -1333,7 +1449,7 @@ export default function TechnicalOfferEditor({
             {!isReadOnly && (
               <Button
                 variant="classic"
-                onClick={() => saveMutation.mutate()}
+                onClick={handleSaveClick}
                 disabled={saveMutation.isPending || !title.trim()}
               >
                 {saveMutation.isPending
@@ -1346,6 +1462,47 @@ export default function TechnicalOfferEditor({
           </Flex>
         </Flex>
       </Dialog.Content>
+
+      <Dialog.Root
+        open={syncBeforeSaveOpen}
+        onOpenChange={(openValue) => setSyncBeforeSaveOpen(openValue)}
+      >
+        <Dialog.Content maxWidth="520px">
+          <Dialog.Title>Sync offer to bookings?</Dialog.Title>
+          <Separator my="3" />
+          <Text size="2">
+            Do you want to sync bookings to match this offer? Syncing will
+            replace the current equipment, crew, and transport bookings on this
+            job.
+          </Text>
+          <Flex gap="2" mt="4" justify="end">
+            <Dialog.Close>
+              <Button variant="soft">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              variant="soft"
+              onClick={() => handleSaveWithSync(false)}
+              disabled={saveMutation.isPending}
+            >
+              {syncPromptAction === 'lock'
+                ? 'Send without syncing'
+                : syncPromptAction === 'create'
+                  ? 'Create without syncing'
+                  : 'Save without syncing'}
+            </Button>
+            <Button
+              onClick={() => handleSaveWithSync(true)}
+              disabled={saveMutation.isPending}
+            >
+              {syncPromptAction === 'lock'
+                ? 'Send and sync'
+                : syncPromptAction === 'create'
+                  ? 'Create and sync'
+                  : 'Save and sync'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Dialog.Root>
   )
 }
@@ -1513,6 +1670,12 @@ function EquipmentSection({
   const [activeSearchGroupId, setActiveSearchGroupId] = React.useState<
     string | null
   >(null)
+  const [quantityDrafts, setQuantityDrafts] = React.useState<
+    Record<string, string>
+  >({})
+  const [unitPriceDrafts, setUnitPriceDrafts] = React.useState<
+    Record<string, string>
+  >({})
   const [searchResults, setSearchResults] = React.useState<
     Array<{
       id: string
@@ -1570,6 +1733,7 @@ function EquipmentSection({
         return
       }
 
+      const termSafe = escapeForPostgrestOr(term)
       const { data, error } = await supabase
         .from('inventory_index')
         .select(
@@ -1589,7 +1753,9 @@ function EquipmentSection({
         .eq('active', true)
         .or('deleted.is.null,deleted.eq.false')
         .or('is_group.eq.true,allow_individual_booking.eq.true')
-        .ilike('name', `%${term}%`)
+        .or(
+          `name.ilike.%${termSafe}%,category_name.ilike.%${termSafe}%,brand_name.ilike.%${termSafe}%,model.ilike.%${termSafe}%,nicknames.ilike.%${termSafe}%`,
+        )
         .limit(20)
 
       if (error) {
@@ -2110,15 +2276,39 @@ function EquipmentSection({
                                     <TextField.Root
                                       type="number"
                                       min="1"
-                                      value={String(item.quantity)}
-                                      onChange={(e) =>
-                                        updateItem(group.id, item.id, {
-                                          quantity: Math.max(
-                                            1,
-                                            Number(e.target.value) || 1,
-                                          ),
-                                        })
+                                      value={
+                                        quantityDrafts[item.id] ??
+                                        String(item.quantity)
                                       }
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value
+                                        setQuantityDrafts((prev) => ({
+                                          ...prev,
+                                          [item.id]: nextValue,
+                                        }))
+
+                                        if (nextValue === '') return
+                                        const parsed = Number(nextValue)
+                                        if (Number.isNaN(parsed)) return
+
+                                        updateItem(group.id, item.id, {
+                                          quantity: Math.max(1, parsed),
+                                        })
+                                        setQuantityDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[item.id]
+                                          return next
+                                        })
+                                      }}
+                                      onBlur={() => {
+                                        if (quantityDrafts[item.id] === '') {
+                                          setQuantityDrafts((prev) => {
+                                            const next = { ...prev }
+                                            delete next[item.id]
+                                            return next
+                                          })
+                                        }
+                                      }}
                                       style={{ width: 80 }}
                                       readOnly={readOnly}
                                     />
@@ -2128,15 +2318,39 @@ function EquipmentSection({
                                       type="number"
                                       min="0"
                                       step="0.01"
-                                      value={String(item.unit_price)}
-                                      onChange={(e) =>
-                                        updateItem(group.id, item.id, {
-                                          unit_price: Math.max(
-                                            0,
-                                            Number(e.target.value) || 0,
-                                          ),
-                                        })
+                                      value={
+                                        unitPriceDrafts[item.id] ??
+                                        String(item.unit_price)
                                       }
+                                      onChange={(e) => {
+                                        const nextValue = e.target.value
+                                        setUnitPriceDrafts((prev) => ({
+                                          ...prev,
+                                          [item.id]: nextValue,
+                                        }))
+
+                                        if (nextValue === '') return
+                                        const parsed = Number(nextValue)
+                                        if (Number.isNaN(parsed)) return
+
+                                        updateItem(group.id, item.id, {
+                                          unit_price: Math.max(0, parsed),
+                                        })
+                                        setUnitPriceDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[item.id]
+                                          return next
+                                        })
+                                      }}
+                                      onBlur={() => {
+                                        if (unitPriceDrafts[item.id] === '') {
+                                          setUnitPriceDrafts((prev) => {
+                                            const next = { ...prev }
+                                            delete next[item.id]
+                                            return next
+                                          })
+                                        }
+                                      }}
                                       style={{ width: 120 }}
                                       readOnly={readOnly}
                                     />
@@ -2290,6 +2504,12 @@ function CrewSection({
   const [expandedItems, setExpandedItems] = React.useState<Set<string>>(
     new Set(),
   )
+  const [countDrafts, setCountDrafts] = React.useState<Record<string, string>>(
+    {},
+  )
+  const [dailyRateDrafts, setDailyRateDrafts] = React.useState<
+    Record<string, string>
+  >({})
 
   const roleSuggestions = [
     'Technician',
@@ -2737,15 +2957,39 @@ function CrewSection({
                                 <TextField.Root
                                   type="number"
                                   min="1"
-                                  value={String(item.crew_count)}
-                                  onChange={(e) =>
-                                    updateItem(item.id, {
-                                      crew_count: Math.max(
-                                        1,
-                                        Number(e.target.value) || 1,
-                                      ),
-                                    })
+                                  value={
+                                    countDrafts[item.id] ??
+                                    String(item.crew_count)
                                   }
+                                  onChange={(e) => {
+                                    const nextValue = e.target.value
+                                    setCountDrafts((prev) => ({
+                                      ...prev,
+                                      [item.id]: nextValue,
+                                    }))
+
+                                    if (nextValue === '') return
+                                    const parsed = Number(nextValue)
+                                    if (Number.isNaN(parsed)) return
+
+                                    updateItem(item.id, {
+                                      crew_count: Math.max(1, parsed),
+                                    })
+                                    setCountDrafts((prev) => {
+                                      const next = { ...prev }
+                                      delete next[item.id]
+                                      return next
+                                    })
+                                  }}
+                                  onBlur={() => {
+                                    if (countDrafts[item.id] === '') {
+                                      setCountDrafts((prev) => {
+                                        const next = { ...prev }
+                                        delete next[item.id]
+                                        return next
+                                      })
+                                    }
+                                  }}
                                   style={{ width: 120 }}
                                   readOnly={readOnly}
                                   onClick={(e) => e.stopPropagation()}
@@ -2811,15 +3055,39 @@ function CrewSection({
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={String(item.daily_rate)}
-                                    onChange={(e) =>
-                                      updateItem(item.id, {
-                                        daily_rate: Math.max(
-                                          0,
-                                          Number(e.target.value) || 0,
-                                        ),
-                                      })
+                                    value={
+                                      dailyRateDrafts[item.id] ??
+                                      String(item.daily_rate)
                                     }
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value
+                                      setDailyRateDrafts((prev) => ({
+                                        ...prev,
+                                        [item.id]: nextValue,
+                                      }))
+
+                                      if (nextValue === '') return
+                                      const parsed = Number(nextValue)
+                                      if (Number.isNaN(parsed)) return
+
+                                      updateItem(item.id, {
+                                        daily_rate: Math.max(0, parsed),
+                                      })
+                                      setDailyRateDrafts((prev) => {
+                                        const next = { ...prev }
+                                        delete next[item.id]
+                                        return next
+                                      })
+                                    }}
+                                    onBlur={() => {
+                                      if (dailyRateDrafts[item.id] === '') {
+                                        setDailyRateDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[item.id]
+                                          return next
+                                        })
+                                      }
+                                    }}
                                     placeholder={
                                       defaultRatePerDay != null
                                         ? String(defaultRatePerDay)

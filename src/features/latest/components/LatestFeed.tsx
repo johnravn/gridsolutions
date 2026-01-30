@@ -134,7 +134,8 @@ export default function LatestFeed({
                   : isHovered
                     ? '1px solid var(--gray-a6)'
                     : '1px solid transparent',
-                transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                transition:
+                  'background-color 0.15s ease, border-color 0.15s ease',
               }}
               onClick={() => onSelect(activity.id)}
               onMouseEnter={() => setHoveredId(activity.id)}

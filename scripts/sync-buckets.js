@@ -82,7 +82,11 @@ async function syncBuckets() {
     }
   }
 
-  if (!remoteKey || remoteKey.includes('127.0.0.1') || remoteKey === 'YOUR_REMOTE_ANON_KEY_HERE') {
+  if (
+    !remoteKey ||
+    remoteKey.includes('127.0.0.1') ||
+    remoteKey === 'YOUR_REMOTE_ANON_KEY_HERE'
+  ) {
     log('❌ Please configure remote credentials:', 'red')
     log('   1. Update .env.remote.db with your remote anon key', 'yellow')
     log('   2. Or switch to remote: npm run db:switch:remote', 'yellow')
@@ -92,7 +96,8 @@ async function syncBuckets() {
   // Get local credentials
   const localUrl = 'http://127.0.0.1:54321'
   // Use service role key for local to bypass RLS
-  const localServiceKey = process.env.SUPABASE_LOCAL_SERVICE_KEY ||
+  const localServiceKey =
+    process.env.SUPABASE_LOCAL_SERVICE_KEY ||
     'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz' // Default local service key
 
   // Create clients
@@ -107,25 +112,29 @@ async function syncBuckets() {
   try {
     // Step 1: Get buckets from remote using storage API
     log('1️⃣  Fetching bucket definitions from remote...', 'cyan')
-    
+
     let remoteBuckets = []
-    
+
     // Try using storage API first (most reliable)
     try {
       log('   Querying remote storage API...', 'cyan')
-      const { data: listedBuckets, error: listError } = await remoteClient.storage.listBuckets()
-      
+      const { data: listedBuckets, error: listError } =
+        await remoteClient.storage.listBuckets()
+
       if (listError) {
         throw new Error(listError.message)
       }
-      
+
       if (!listedBuckets || listedBuckets.length === 0) {
-        log('   ⚠️  No buckets found via API, trying database dump...', 'yellow')
+        log(
+          '   ⚠️  No buckets found via API, trying database dump...',
+          'yellow',
+        )
         throw new Error('No buckets found')
       }
-      
+
       // Convert API response to bucket format
-      remoteBuckets = listedBuckets.map(b => ({
+      remoteBuckets = listedBuckets.map((b) => ({
         id: b.name,
         name: b.name,
         public: b.public || false,
@@ -136,47 +145,63 @@ async function syncBuckets() {
     } catch (apiError) {
       log(`   ⚠️  Storage API failed: ${apiError.message}`, 'yellow')
       log('   Trying to extract from database dump...', 'cyan')
-      
+
       // Fallback: Try to get buckets from database dump
       try {
         const { writeFileSync, readFileSync, unlinkSync } = await import('fs')
         const { join } = await import('path')
         const { tmpdir } = await import('os')
-        
+
         const tempFile = join(tmpdir(), `supabase_buckets_${Date.now()}.sql`)
-        
+
         // Dump only storage schema
         execSync(
           `npx supabase db dump --linked --schema storage > "${tempFile}" 2>/dev/null || true`,
-          { stdio: 'pipe' }
+          { stdio: 'pipe' },
         )
-        
+
         const dumpContent = readFileSync(tempFile, 'utf-8')
         unlinkSync(tempFile)
-        
+
         // Parse INSERT statements for buckets
-        const bucketMatches = dumpContent.matchAll(/INSERT INTO storage\.buckets[^;]+;/gi)
+        const bucketMatches = dumpContent.matchAll(
+          /INSERT INTO storage\.buckets[^;]+;/gi,
+        )
         for (const match of bucketMatches) {
           const insert = match[0]
-          const idMatch = insert.match(/id\s*=\s*'([^']+)'|'([^']+)',\s*'([^']+)'/i)
+          const idMatch = insert.match(
+            /id\s*=\s*'([^']+)'|'([^']+)',\s*'([^']+)'/i,
+          )
           const publicMatch = insert.match(/public\s*=\s*(true|false|t|f)/i)
           const sizeMatch = insert.match(/file_size_limit\s*=\s*(\d+)/i)
-          const mimeMatch = insert.match(/allowed_mime_types\s*=\s*ARRAY\[([^\]]+)\]/i)
-          
+          const mimeMatch = insert.match(
+            /allowed_mime_types\s*=\s*ARRAY\[([^\]]+)\]/i,
+          )
+
           if (idMatch) {
             const bucketId = idMatch[1] || idMatch[2] || idMatch[3]
             remoteBuckets.push({
               id: bucketId,
               name: bucketId,
-              public: publicMatch ? (publicMatch[1].toLowerCase() === 'true' || publicMatch[1].toLowerCase() === 't') : false,
+              public: publicMatch
+                ? publicMatch[1].toLowerCase() === 'true' ||
+                  publicMatch[1].toLowerCase() === 't'
+                : false,
               file_size_limit: sizeMatch ? parseInt(sizeMatch[1]) : null,
-              allowed_mime_types: mimeMatch ? mimeMatch[1].split(',').map(t => t.trim().replace(/^['"]|['"]$/g, '')) : null,
+              allowed_mime_types: mimeMatch
+                ? mimeMatch[1]
+                    .split(',')
+                    .map((t) => t.trim().replace(/^['"]|['"]$/g, ''))
+                : null,
             })
           }
         }
-        
+
         if (remoteBuckets.length > 0) {
-          log(`   ✓ Found ${remoteBuckets.length} bucket(s) in database dump`, 'green')
+          log(
+            `   ✓ Found ${remoteBuckets.length} bucket(s) in database dump`,
+            'green',
+          )
         } else {
           throw new Error('No buckets found in dump')
         }
@@ -201,24 +226,31 @@ async function syncBuckets() {
     }
 
     log(`   Found ${remoteBuckets.length} bucket(s) on remote`, 'green')
-    remoteBuckets.forEach(b => {
+    remoteBuckets.forEach((b) => {
       log(`      - ${b.id} (public: ${b.public})`, 'cyan')
     })
 
     // Step 2: Get local buckets
     log('\n2️⃣  Checking local buckets...', 'cyan')
-    const { data: localBuckets, error: localBucketsError } = await localClient.storage.listBuckets()
-    
+    const { data: localBuckets, error: localBucketsError } =
+      await localClient.storage.listBuckets()
+
     if (localBucketsError) {
-      log(`   ⚠️  Error listing local buckets: ${localBucketsError.message}`, 'yellow')
+      log(
+        `   ⚠️  Error listing local buckets: ${localBucketsError.message}`,
+        'yellow',
+      )
     }
 
-    const localBucketNames = localBuckets ? localBuckets.map(b => b.name) : []
-    log(`   Found ${localBucketNames.length} bucket(s) locally: ${localBucketNames.join(', ') || 'none'}`, 'green')
+    const localBucketNames = localBuckets ? localBuckets.map((b) => b.name) : []
+    log(
+      `   Found ${localBucketNames.length} bucket(s) locally: ${localBucketNames.join(', ') || 'none'}`,
+      'green',
+    )
 
     // Step 3: Create missing buckets locally using SQL
     log('\n3️⃣  Creating missing buckets locally...', 'cyan')
-    
+
     // Find psql - try common locations
     let psqlPath = 'psql'
     const possiblePaths = [
@@ -250,10 +282,12 @@ async function syncBuckets() {
 
       // Build SQL to create bucket
       const fileSizeLimit = remoteBucket.file_size_limit || 52428800 // Default 50MB
-      const allowedMimeTypes = remoteBucket.allowed_mime_types && remoteBucket.allowed_mime_types.length > 0
-        ? `ARRAY[${remoteBucket.allowed_mime_types.map(t => `'${t}'`).join(', ')}]`
-        : 'NULL'
-      
+      const allowedMimeTypes =
+        remoteBucket.allowed_mime_types &&
+        remoteBucket.allowed_mime_types.length > 0
+          ? `ARRAY[${remoteBucket.allowed_mime_types.map((t) => `'${t}'`).join(', ')}]`
+          : 'NULL'
+
       const sql = `
         INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
         VALUES (
@@ -269,19 +303,25 @@ async function syncBuckets() {
       try {
         execSync(
           `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "${sql.replace(/"/g, '\\"')}"`,
-          { stdio: 'pipe' }
+          { stdio: 'pipe' },
         )
         log(`   ✓ Created bucket: ${remoteBucket.id}`, 'green')
         created++
       } catch (error) {
-        log(`   ⚠️  Failed to create bucket ${remoteBucket.id}: ${error.message}`, 'yellow')
+        log(
+          `   ⚠️  Failed to create bucket ${remoteBucket.id}: ${error.message}`,
+          'yellow',
+        )
         // Try using Supabase client as fallback
         try {
-          const { error: createError } = await localClient.storage.createBucket(remoteBucket.id, {
-            public: remoteBucket.public,
-            fileSizeLimit: fileSizeLimit,
-            allowedMimeTypes: remoteBucket.allowed_mime_types || undefined,
-          })
+          const { error: createError } = await localClient.storage.createBucket(
+            remoteBucket.id,
+            {
+              public: remoteBucket.public,
+              fileSizeLimit: fileSizeLimit,
+              allowedMimeTypes: remoteBucket.allowed_mime_types || undefined,
+            },
+          )
           if (createError) {
             log(`   ❌ Also failed via API: ${createError.message}`, 'red')
           } else {
@@ -296,7 +336,10 @@ async function syncBuckets() {
 
     console.log('')
     if (created > 0) {
-      log(`✅ Created ${created} bucket(s), ${skipped} already existed`, 'green')
+      log(
+        `✅ Created ${created} bucket(s), ${skipped} already existed`,
+        'green',
+      )
     } else {
       log(`✅ All buckets are in sync (${skipped} bucket(s))`, 'green')
     }
@@ -312,4 +355,3 @@ syncBuckets().catch((error) => {
   console.error(error)
   process.exit(1)
 })
-

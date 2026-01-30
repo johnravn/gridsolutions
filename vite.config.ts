@@ -13,30 +13,35 @@ export default defineConfig({
     {
       name: 'youversion-dev-api',
       configureServer(server) {
-        server.middlewares.use('/api/verse-of-the-day', async (req, res, next) => {
-          if (!req || !res) return next()
-          if (req.method && req.method !== 'GET') return next()
+        server.middlewares.use(
+          '/api/verse-of-the-day',
+          async (req, res, next) => {
+            if (!req || !res) return next()
+            if (req.method && req.method !== 'GET') return next()
 
-          try {
-            const url = new URL(req.url ?? '/', 'http://localhost')
-            const lang = url.searchParams.get('lang') || 'en'
-            const { getVerseOfTheDay } = await import('@glowstudent/youversion')
-            const data = await getVerseOfTheDay(lang)
+            try {
+              const url = new URL(req.url ?? '/', 'http://localhost')
+              const lang = url.searchParams.get('lang') || 'en'
+              const { getVerseOfTheDay } = await import(
+                '@glowstudent/youversion'
+              )
+              const data = await getVerseOfTheDay(lang)
 
-            res.statusCode = 200
-            res.setHeader('Content-Type', 'application/json; charset=utf-8')
-            res.end(JSON.stringify(data ?? null))
-          } catch (e: any) {
-            res.statusCode = 500
-            res.setHeader('Content-Type', 'application/json; charset=utf-8')
-            res.end(
-              JSON.stringify({
-                error: 'Failed to load verse of the day',
-                message: e?.message ?? String(e),
-              }),
-            )
-          }
-        })
+              res.statusCode = 200
+              res.setHeader('Content-Type', 'application/json; charset=utf-8')
+              res.end(JSON.stringify(data ?? null))
+            } catch (e: any) {
+              res.statusCode = 500
+              res.setHeader('Content-Type', 'application/json; charset=utf-8')
+              res.end(
+                JSON.stringify({
+                  error: 'Failed to load verse of the day',
+                  message: e?.message ?? String(e),
+                }),
+              )
+            }
+          },
+        )
       },
     },
   ],

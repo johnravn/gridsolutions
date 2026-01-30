@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Button,
+  Checkbox,
   Dialog,
   Flex,
   Select,
@@ -57,6 +58,9 @@ export default function JobDialog({
   const [projectLead, setProjectLead] = React.useState<UUID | ''>(
     initialData?.project_lead_user_id ?? '',
   )
+  const [isCompanyCustomer, setIsCompanyCustomer] = React.useState(
+    Boolean(initialData?.customer_user_id),
+  )
   const [customerId, setCustomerId] = React.useState<UUID | ''>(
     initialData?.customer_id ?? '',
   )
@@ -66,6 +70,29 @@ export default function JobDialog({
   const [contactId, setContactId] = React.useState<UUID | ''>(
     initialData?.customer_contact_id ?? '',
   )
+  const resetCreateFields = React.useCallback(() => {
+    setTitle('')
+    setDescription('')
+    setStatus('planned')
+    setStartAt('')
+    setEndAt('')
+    setAutoSetEndTime(true)
+    setProjectLead('')
+    setIsCompanyCustomer(false)
+    setCustomerId('')
+    setCustomerUserId('')
+    setContactId('')
+  }, [])
+  const getDateMs = (value: string) => {
+    const ms = new Date(value).getTime()
+    return Number.isNaN(ms) ? null : ms
+  }
+  const hasInvalidTimeRange = (() => {
+    const startMs = getDateMs(startAt)
+    const endMs = getDateMs(endAt)
+    if (startMs === null || endMs === null) return false
+    return endMs < startMs
+  })()
 
   React.useEffect(() => {
     if (!open || mode !== 'edit' || !initialData) return
@@ -76,10 +103,16 @@ export default function JobDialog({
     setEndAt(initialData.end_at ?? '')
     setAutoSetEndTime(false) // Don't auto-set when loading existing data
     setProjectLead(initialData.project_lead_user_id ?? '')
+    setIsCompanyCustomer(Boolean(initialData.customer_user_id))
     setCustomerId(initialData.customer_id ?? '')
     setCustomerUserId(initialData.customer_user_id ?? '')
     setContactId(initialData.customer_contact_id ?? '')
   }, [open, mode, initialData])
+
+  React.useEffect(() => {
+    if (!open || mode !== 'create') return
+    resetCreateFields()
+  }, [open, mode, resetCreateFields])
 
   // Auto-set end time when start time changes (only in create mode or when manually setting)
   React.useEffect(() => {
@@ -192,10 +225,7 @@ export default function JobDialog({
     phone: string | null
   }) => [c.name, c.email, c.phone].filter(Boolean).join(' · ')
 
-  const cascadeBookingStatus = async (
-    jobId: UUID,
-    nextStatus: JobStatus,
-  ) => {
+  const cascadeBookingStatus = async (jobId: UUID, nextStatus: JobStatus) => {
     if (nextStatus !== 'confirmed' && nextStatus !== 'canceled') return
 
     const { data: timePeriods, error: tpErr } = await supabase
@@ -410,11 +440,26 @@ export default function JobDialog({
         }),
       ])
 
+      if (mode === 'create') {
+        resetCreateFields()
+      }
       onOpenChange(false)
       onSaved?.(id)
     },
     onError: (e: any) => {
-      showError('Failed to save job', e?.message ?? 'Please try again.')
+      const errorMessage = String(e?.message ?? '')
+      const isInvalidTimeRange =
+        errorMessage.includes(
+          'range lower bound must be less than or equal to range upper bound',
+        ) ||
+        errorMessage.includes('range lower bound must be less than or equal')
+
+      if (isInvalidTimeRange) {
+        showError('Invalid time range', 'End time is before the start time.')
+        return
+      }
+
+      showError('Failed to save job', errorMessage || 'Please try again.')
       // (Optional) keep the dialog open so they can fix inputs
       // You already keep it open by default on error since onOpenChange(false) is only in onSuccess
     },
@@ -423,7 +468,8 @@ export default function JobDialog({
   const disabled =
     upsert.isPending ||
     !title.trim() ||
-    (mode === 'create' && (!startAt || !endAt))
+    (mode === 'create' && (!startAt || !endAt)) ||
+    hasInvalidTimeRange
 
   // ===== TESTING ONLY: Auto-populate function =====
   // TODO: Remove this function and button when testing is complete
@@ -494,6 +540,7 @@ export default function JobDialog({
     setEndAt(endAtStr)
     setAutoSetEndTime(false)
     setProjectLead(randomLead?.user_id ?? '')
+    setIsCompanyCustomer(false)
     setCustomerId(randomCustomer?.id ?? '')
     setCustomerUserId('')
     setContactId('')
@@ -507,7 +554,9 @@ export default function JobDialog({
         style={{ display: 'flex', flexDirection: 'column' }}
       >
         <Flex align="center" justify="between">
-          <Dialog.Title>{mode === 'edit' ? 'Edit job' : 'New job'}</Dialog.Title>
+          <Dialog.Title>
+            {mode === 'edit' ? 'Edit job' : 'New job'}
+          </Dialog.Title>
           {/* ===== TESTING ONLY: Auto-fill button ===== */}
           {mode === 'create' && (
             <Button
@@ -591,32 +640,45 @@ export default function JobDialog({
             </Flex>
 
             <Flex wrap={'wrap'}>
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <Checkbox
+                  checked={isCompanyCustomer}
+                  onCheckedChange={(checked) => {
+                    const isChecked = checked === true
+                    setIsCompanyCustomer(isChecked)
+                    if (isChecked) {
+                      setCustomerId('')
+                      setContactId('')
+                    } else {
+                      setCustomerUserId('')
+                    }
+                  }}
+                />
+                <Text size="2">Customer is a member of the company</Text>
+              </label>
               <Field label="Customer">
                 <Select.Root
                   value={customerId}
                   onValueChange={(v) => setCustomerId(v)}
+                  disabled={isCompanyCustomer}
                 >
-                  <Select.Trigger placeholder="None" />
+                  <Select.Trigger
+                    placeholder={
+                      isCompanyCustomer ? 'Disabled for company member' : 'None'
+                    }
+                  />
                   <Select.Content style={{ zIndex: 10000 }}>
                     {customers.map((c) => (
                       <Select.Item key={c.id} value={c.id}>
                         {c.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </Field>
-
-              <Field label="Customer (from company)">
-                <Select.Root
-                  value={customerUserId}
-                  onValueChange={(v) => setCustomerUserId(v)}
-                >
-                  <Select.Trigger placeholder="None" />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {companyUsers.map((u) => (
-                      <Select.Item key={u.user_id} value={u.user_id}>
-                        {u.display_name ?? u.email}
                       </Select.Item>
                     ))}
                   </Select.Content>
@@ -628,18 +690,23 @@ export default function JobDialog({
                   value={contactId}
                   onValueChange={(v) => setContactId(v)}
                   disabled={
-                    !customerId || contactsLoading || contacts.length === 0
+                    isCompanyCustomer ||
+                    !customerId ||
+                    contactsLoading ||
+                    contacts.length === 0
                   }
                 >
                   <Select.Trigger
                     placeholder={
-                      !customerId
-                        ? 'Select a customer first'
-                        : contactsLoading
-                          ? 'Loading…'
-                          : contacts.length === 0
-                            ? 'No contacts found'
-                            : 'None'
+                      isCompanyCustomer
+                        ? 'Disabled for company member'
+                        : !customerId
+                          ? 'Select a customer first'
+                          : contactsLoading
+                            ? 'Loading…'
+                            : contacts.length === 0
+                              ? 'No contacts found'
+                              : 'None'
                     }
                   />
                   <Select.Content style={{ zIndex: 10000 }}>
@@ -651,6 +718,24 @@ export default function JobDialog({
                   </Select.Content>
                 </Select.Root>
               </Field>
+
+              {isCompanyCustomer && (
+                <Field label="Customer from company">
+                  <Select.Root
+                    value={customerUserId}
+                    onValueChange={(v) => setCustomerUserId(v)}
+                  >
+                    <Select.Trigger placeholder="None" />
+                    <Select.Content style={{ zIndex: 10000 }}>
+                      {companyUsers.map((u) => (
+                        <Select.Item key={u.user_id} value={u.user_id}>
+                          {u.display_name ?? u.email}
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                </Field>
+              )}
             </Flex>
           </div>
 
@@ -666,6 +751,7 @@ export default function JobDialog({
             <DateTimePicker
               label="End"
               value={endAt}
+              invalid={hasInvalidTimeRange}
               onChange={(value) => {
                 setEndAt(value)
                 setAutoSetEndTime(false)
@@ -690,6 +776,12 @@ export default function JobDialog({
             onClick={() => {
               if (!title.trim()) {
                 return showError('Missing title', 'Please enter a job title.')
+              }
+              if (hasInvalidTimeRange) {
+                return showError(
+                  'Invalid time range',
+                  'End time must be after start time.',
+                )
               }
               upsert.mutate()
             }}

@@ -16,6 +16,8 @@ export type TimeEntryWithProfile = TimeEntry & {
 
 export type TimeEntryInsert =
   Database['public']['Tables']['time_entries']['Insert']
+export type TimeEntryUpdate =
+  Database['public']['Tables']['time_entries']['Update']
 
 export function timeEntriesQuery({
   companyId,
@@ -71,4 +73,27 @@ export async function createTimeEntry(input: TimeEntryInsert) {
 
   if (error) throw error
   return data?.id
+}
+
+export async function updateTimeEntry({
+  id,
+  changes,
+}: {
+  id: string
+  changes: TimeEntryUpdate
+}) {
+  const { data, error } = await supabase
+    .from('time_entries')
+    .update(changes)
+    .eq('id', id)
+    .select('id')
+    .single()
+
+  if (error) throw error
+  return data?.id
+}
+
+export async function deleteTimeEntry({ id }: { id: string }) {
+  const { error } = await supabase.from('time_entries').delete().eq('id', id)
+  if (error) throw error
 }

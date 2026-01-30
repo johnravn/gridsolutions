@@ -21,8 +21,12 @@ export default function CompanyLogoUpload({
 }: CompanyLogoUploadProps) {
   const [uploadingLight, setUploadingLight] = React.useState(false)
   const [uploadingDark, setUploadingDark] = React.useState(false)
-  const [previewLightUrl, setPreviewLightUrl] = React.useState<string | null>(null)
-  const [previewDarkUrl, setPreviewDarkUrl] = React.useState<string | null>(null)
+  const [previewLightUrl, setPreviewLightUrl] = React.useState<string | null>(
+    null,
+  )
+  const [previewDarkUrl, setPreviewDarkUrl] = React.useState<string | null>(
+    null,
+  )
   const [lightImageLoading, setLightImageLoading] = React.useState(true)
   const [darkImageLoading, setDarkImageLoading] = React.useState(true)
   const lightFileInputRef = React.useRef<HTMLInputElement>(null)
@@ -129,8 +133,7 @@ export default function CompanyLogoUpload({
       // Update the appropriate path
       const currentLightPath =
         mode === 'light' ? uploadPath : currentLightLogoPath
-      const currentDarkPath =
-        mode === 'dark' ? uploadPath : currentDarkLogoPath
+      const currentDarkPath = mode === 'dark' ? uploadPath : currentDarkLogoPath
 
       onUploadComplete(currentLightPath, currentDarkPath)
       success(
@@ -403,4 +406,3 @@ export default function CompanyLogoUpload({
     </Box>
   )
 }
-

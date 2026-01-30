@@ -29,7 +29,7 @@ export function mattersIndexQueryAll() {
 
       const isSuperuser = profile?.superuser ?? false
 
-      let companyIds: string[] = []
+      let companyIds: Array<string> = []
       if (isSuperuser) {
         // Superusers can access all companies
         const { data: allCompanies } = await supabase
@@ -69,7 +69,7 @@ export function mattersIndexQueryAll() {
 
       // Now fetch matters from all companies the user is a member of
       // User must be either creator OR recipient
-      let q = supabase
+      const q = supabase
         .from('matters' as any)
         .select(
           `
@@ -173,9 +173,11 @@ export function mattersIndexQueryAll() {
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
         // Matter is unread if user is a recipient and hasn't viewed it
-        // Matters created by user are always considered "read"
+        // Matters created by the user are considered "read" unless they were created_as_company
+        // (company-created matters should still be treated as unread if delivered to the inbox)
         is_unread:
-          m.created_by_user_id !== user.id && unreadMatterIds.has(m.id),
+          unreadMatterIds.has(m.id) &&
+          (m.created_by_user_id !== user.id || m.created_as_company),
       })) as Array<Matter>
     },
   }
@@ -215,7 +217,7 @@ export function mattersIndexQuery(companyId: string) {
       // Now fetch matters that:
       // 1. Belong to the company
       // 2. User is either creator OR recipient
-      let q = supabase
+      const q = supabase
         .from('matters' as any)
         .select(
           `
@@ -319,9 +321,11 @@ export function mattersIndexQuery(companyId: string) {
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
         // Matter is unread if user is a recipient and hasn't viewed it
-        // Matters created by user are always considered "read"
+        // Matters created by the user are considered "read" unless they were created_as_company
+        // (company-created matters should still be treated as unread if delivered to the inbox)
         is_unread:
-          m.created_by_user_id !== user.id && unreadMatterIds.has(m.id),
+          unreadMatterIds.has(m.id) &&
+          (m.created_by_user_id !== user.id || m.created_as_company),
       })) as Array<Matter>
     },
   }
@@ -650,8 +654,8 @@ export async function sendCrewInvites(
 
   // Filter out the creator from the recipient list
   const userIds = crew
-    .map((c) => c.user_id as string)
-    .filter((id) => id !== currentUser.id)
+    .map((c) => c.user_id)
+    .filter((id): id is string => !!id && id !== currentUser.id)
 
   // Check if there are any recipients after filtering out the creator
   if (userIds.length === 0) {
@@ -662,10 +666,10 @@ export async function sendCrewInvites(
 
   const roleTitle = timePeriod.title || 'Role'
   const startDate = timePeriod.start_at
-    ? new Date(timePeriod.start_at as string).toLocaleDateString()
+    ? new Date(timePeriod.start_at).toLocaleDateString()
     : ''
   const endDate = timePeriod.end_at
-    ? new Date(timePeriod.end_at as string).toLocaleDateString()
+    ? new Date(timePeriod.end_at).toLocaleDateString()
     : ''
 
   const title = `Crew invitation: ${roleTitle}`
@@ -1044,7 +1048,7 @@ export function unreadMattersCountQueryAll() {
 
       const isSuperuser = profile?.superuser ?? false
 
-      let companyIds: string[] = []
+      let companyIds: Array<string> = []
       if (isSuperuser) {
         // Superusers can access all companies
         const { data: allCompanies } = await supabase
@@ -1077,18 +1081,25 @@ export function unreadMattersCountQueryAll() {
 
       if (unreadMatterIds.length === 0) return 0
 
-      // Filter to only matters in companies the user is a member of
-      // Also exclude matters created by the user (matters created by user are always considered "read")
+      // Filter to only matters in companies the user is a member of.
+      // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
         .from('matters' as any)
-        .select('id, created_by_user_id')
+        .select('id, created_by_user_id, created_as_company')
         .in('company_id', companyIds)
         .in('id', unreadMatterIds)
-        .neq('created_by_user_id', user.id) // Exclude matters created by the user
 
       if (matterError) throw matterError
 
-      return companyMatters?.length || 0
+      const filtered = (companyMatters || []).filter(
+        (matter: {
+          created_by_user_id: string
+          created_as_company?: boolean
+        }) =>
+          matter.created_by_user_id !== user.id || matter.created_as_company,
+      )
+
+      return filtered.length
     },
     refetchInterval: 30000, // Refetch every 30 seconds
   }
@@ -1119,18 +1130,25 @@ export function unreadMattersCountQuery(companyId: string) {
 
       if (unreadMatterIds.length === 0) return 0
 
-      // Filter to only matters in the current company
-      // Also exclude matters created by the user (matters created by user are always considered "read")
+      // Filter to only matters in the current company.
+      // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
         .from('matters' as any)
-        .select('id, created_by_user_id')
+        .select('id, created_by_user_id, created_as_company')
         .eq('company_id', companyId)
         .in('id', unreadMatterIds)
-        .neq('created_by_user_id', user.id) // Exclude matters created by the user
 
       if (matterError) throw matterError
 
-      return companyMatters?.length || 0
+      const filtered = (companyMatters || []).filter(
+        (matter: {
+          created_by_user_id: string
+          created_as_company?: boolean
+        }) =>
+          matter.created_by_user_id !== user.id || matter.created_as_company,
+      )
+
+      return filtered.length
     },
     refetchInterval: 30000, // Refetch every 30 seconds
   }

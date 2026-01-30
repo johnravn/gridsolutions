@@ -1,12 +1,7 @@
 // src/features/inventory/components/BrandAutocomplete.tsx
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Flex,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+import { Box, Flex, Text, TextField } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 
@@ -38,7 +33,9 @@ export default function BrandAutocomplete({
   const [showSuggestions, setShowSuggestions] = React.useState(false)
   const inputRef = React.useRef<HTMLInputElement>(null)
   const suggestionsRef = React.useRef<HTMLDivElement>(null)
-  const lastCreatedBrandRef = React.useRef<{ id: string; name: string } | null>(null)
+  const lastCreatedBrandRef = React.useRef<{ id: string; name: string } | null>(
+    null,
+  )
 
   // Update input value when prop changes (e.g., when editing existing item)
   React.useEffect(() => {
@@ -49,11 +46,17 @@ export default function BrandAutocomplete({
 
   // Fetch brands with fuzzy search using PostgreSQL similarity
   const { data: suggestions = [] } = useQuery({
-    queryKey: ['company', companyId, 'item_brands', 'search', inputValue.trim()],
+    queryKey: [
+      'company',
+      companyId,
+      'item_brands',
+      'search',
+      inputValue.trim(),
+    ],
     enabled: !!companyId && inputValue.trim().length > 0,
     queryFn: async (): Promise<Array<Brand>> => {
       const searchTerm = inputValue.trim()
-      
+
       // Use ILIKE for fuzzy matching (PostgreSQL will use indexes)
       // For better fuzzy search, we can add a PostgreSQL function later
       const { data, error } = await supabase
@@ -73,33 +76,32 @@ export default function BrandAutocomplete({
   // Filter suggestions client-side for better fuzzy matching
   const filteredSuggestions = React.useMemo(() => {
     if (!inputValue.trim()) return []
-    
+
     const term = inputValue.trim().toLowerCase()
-    
+
     // Exact matches first
-    const exact = suggestions.filter(b => 
-      b.name.toLowerCase() === term
-    )
-    
+    const exact = suggestions.filter((b) => b.name.toLowerCase() === term)
+
     // Starts with
-    const startsWith = suggestions.filter(b => 
-      b.name.toLowerCase().startsWith(term) && 
-      b.name.toLowerCase() !== term
+    const startsWith = suggestions.filter(
+      (b) =>
+        b.name.toLowerCase().startsWith(term) && b.name.toLowerCase() !== term,
     )
-    
+
     // Contains
-    const contains = suggestions.filter(b => 
-      b.name.toLowerCase().includes(term) && 
-      !b.name.toLowerCase().startsWith(term)
+    const contains = suggestions.filter(
+      (b) =>
+        b.name.toLowerCase().includes(term) &&
+        !b.name.toLowerCase().startsWith(term),
     )
-    
+
     // Fuzzy match (typos, similar)
-    const fuzzy = suggestions.filter(b => {
+    const fuzzy = suggestions.filter((b) => {
       const name = b.name.toLowerCase()
       if (name === term || name.startsWith(term) || name.includes(term)) {
         return false // Already included
       }
-      
+
       // Simple fuzzy: check if most characters match in order
       let searchIdx = 0
       for (let i = 0; i < name.length && searchIdx < term.length; i++) {
@@ -107,11 +109,11 @@ export default function BrandAutocomplete({
           searchIdx++
         }
       }
-      
+
       // If 70%+ of search chars found in order, consider it a match
       return searchIdx >= Math.ceil(term.length * 0.7)
     })
-    
+
     return [...exact, ...startsWith, ...contains, ...fuzzy].slice(0, 8)
   }, [suggestions, inputValue])
 
@@ -134,7 +136,7 @@ export default function BrandAutocomplete({
   const handleCreateNew = () => {
     const brandName = inputValue.trim()
     if (!brandName) return
-    
+
     // Create new brand
     supabase
       .from('item_brands')
@@ -207,7 +209,7 @@ export default function BrandAutocomplete({
           )
         }
       })
-    
+
     setShowSuggestions(false)
     inputRef.current?.blur()
   }
@@ -230,12 +232,10 @@ export default function BrandAutocomplete({
   }, [])
 
   const hasExactMatch = filteredSuggestions.some(
-    b => b.name.toLowerCase() === inputValue.trim().toLowerCase()
+    (b) => b.name.toLowerCase() === inputValue.trim().toLowerCase(),
   )
-  const showCreateOption = 
-    inputValue.trim().length > 0 && 
-    !hasExactMatch &&
-    showSuggestions
+  const showCreateOption =
+    inputValue.trim().length > 0 && !hasExactMatch && showSuggestions
 
   return (
     <Box style={{ position: 'relative', width: '100%' }}>
@@ -248,70 +248,70 @@ export default function BrandAutocomplete({
         placeholder={placeholder}
       />
 
-      {showSuggestions && (filteredSuggestions.length > 0 || showCreateOption) && (
-        <Box
-          ref={suggestionsRef}
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
-            zIndex: 10000,
-            marginTop: 4,
-            backgroundColor: 'var(--gray-1)',
-            border: '1px solid var(--gray-a6)',
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            maxHeight: 200,
-            overflowY: 'auto',
-          }}
-        >
-          {filteredSuggestions.map((brand) => (
-            <Box
-              key={brand.id}
-              onClick={() => handleSelectBrand(brand)}
-              style={{
-                padding: '8px 12px',
-                cursor: 'pointer',
-                borderBottom: '1px solid var(--gray-a4)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <Text size="2">{brand.name}</Text>
-            </Box>
-          ))}
-          
-          {showCreateOption && (
-            <Box
-              onClick={handleCreateNew}
-              style={{
-                padding: '8px 12px',
-                cursor: 'pointer',
-                borderTop: '1px solid var(--gray-a4)',
-                backgroundColor: 'var(--blue-a2)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--blue-a3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--blue-a2)'
-              }}
-            >
-              <Flex align="center" gap="2">
-                <Text size="2" weight="medium">
-                  + Create "{inputValue.trim()}"
-                </Text>
-              </Flex>
-            </Box>
-          )}
-        </Box>
-      )}
+      {showSuggestions &&
+        (filteredSuggestions.length > 0 || showCreateOption) && (
+          <Box
+            ref={suggestionsRef}
+            style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              zIndex: 10000,
+              marginTop: 4,
+              backgroundColor: 'var(--gray-1)',
+              border: '1px solid var(--gray-a6)',
+              borderRadius: 8,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+              maxHeight: 200,
+              overflowY: 'auto',
+            }}
+          >
+            {filteredSuggestions.map((brand) => (
+              <Box
+                key={brand.id}
+                onClick={() => handleSelectBrand(brand)}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderBottom: '1px solid var(--gray-a4)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                <Text size="2">{brand.name}</Text>
+              </Box>
+            ))}
+
+            {showCreateOption && (
+              <Box
+                onClick={handleCreateNew}
+                style={{
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  borderTop: '1px solid var(--gray-a4)',
+                  backgroundColor: 'var(--blue-a2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--blue-a3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--blue-a2)'
+                }}
+              >
+                <Flex align="center" gap="2">
+                  <Text size="2" weight="medium">
+                    + Create "{inputValue.trim()}"
+                  </Text>
+                </Flex>
+              </Box>
+            )}
+          </Box>
+        )}
     </Box>
   )
 }
-

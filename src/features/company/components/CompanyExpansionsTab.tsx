@@ -816,7 +816,9 @@ export default function CompanyExpansionsTab() {
                                   size="1"
                                   variant="soft"
                                   onClick={() => refetchHealth()}
-                                  disabled={!hasApiKeyConfigured || healthLoading}
+                                  disabled={
+                                    !hasApiKeyConfigured || healthLoading
+                                  }
                                 >
                                   Check now
                                 </Button>
@@ -992,10 +994,7 @@ export default function CompanyExpansionsTab() {
                     pt="4"
                     style={{ borderTop: '1px solid var(--gray-a6)' }}
                   >
-                    <Button
-                      variant="soft"
-                      onClick={handleCancelConfig}
-                    >
+                    <Button variant="soft" onClick={handleCancelConfig}>
                       Cancel
                     </Button>
                     <Button

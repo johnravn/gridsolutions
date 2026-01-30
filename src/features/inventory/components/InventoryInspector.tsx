@@ -177,6 +177,7 @@ export default function InventoryInspector({ id }: { id: string | null }) {
           allow_individual_booking: entry.allow_individual_booking,
           active: entry.active,
           notes: entry.notes ?? '',
+          nicknames: entry.nicknames ?? '',
           price: entry.current_price,
           total_quantity: entry.on_hand ?? 0,
           internally_owned: entry.internally_owned,
@@ -324,6 +325,25 @@ export default function InventoryInspector({ id }: { id: string | null }) {
             >
               <Text size="2" color={entry.notes ? undefined : 'gray'}>
                 {entry.notes || 'No notes'}
+              </Text>
+            </Box>
+          </div>
+
+          {/* Nicknames */}
+          <div>
+            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+              Nicknames
+            </Text>
+            <Box
+              p="2"
+              style={{
+                border: '1px solid var(--gray-a6)',
+                borderRadius: 8,
+                minHeight: 40,
+              }}
+            >
+              <Text size="2" color={entry.nicknames ? undefined : 'gray'}>
+                {entry.nicknames || 'No nicknames'}
               </Text>
             </Box>
           </div>

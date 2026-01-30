@@ -28,6 +28,7 @@ SUPABASE_PROJECT_REF=your-project-ref
 ```
 
 > **Where to find these:**
+>
 > - Go to your Supabase dashboard
 > - Project Settings → API
 > - The project ref is in your project URL: `https://app.supabase.com/project/YOUR-PROJECT-REF`
@@ -83,12 +84,14 @@ npm run db:types:remote
 ### When You Make Database Changes
 
 **Option A: Changes via Supabase Dashboard**
+
 1. Make your changes in the Supabase dashboard
 2. Pull the changes: `npx supabase db pull`
 3. Generate new types: `npm run db:types:remote`
 4. Commit the migration files to git
 
 **Option B: Changes via SQL Migration Files**
+
 1. Create a new migration: `npx supabase migration new your_change_name`
 2. Edit the migration file in `supabase/migrations/`
 3. Push to remote: `npm run db:push`
@@ -96,17 +99,18 @@ npm run db:types:remote
 
 ## 🛠️ Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run db:types` | Generate types from local database |
-| `npm run db:types:remote` | Generate types from remote database |
-| `npm run db:diff <name>` | Create migration from remote changes |
-| `npm run db:reset` | Reset local database to migrations |
-| `npm run db:push` | Push local migrations to remote |
+| Command                   | Description                          |
+| ------------------------- | ------------------------------------ |
+| `npm run db:types`        | Generate types from local database   |
+| `npm run db:types:remote` | Generate types from remote database  |
+| `npm run db:diff <name>`  | Create migration from remote changes |
+| `npm run db:reset`        | Reset local database to migrations   |
+| `npm run db:push`         | Push local migrations to remote      |
 
 ## 💡 Benefits for AI Development
 
 Once you generate the types, I (your AI assistant) can:
+
 - ✅ See your exact database schema
 - ✅ Provide type-safe code suggestions
 - ✅ Catch database-related errors before runtime
@@ -131,4 +135,3 @@ const { data } = await supabase.from('jobs').select('*')
 
 - Full Supabase CLI docs: https://supabase.com/docs/guides/cli
 - Migration guide: https://supabase.com/docs/guides/cli/local-development
-

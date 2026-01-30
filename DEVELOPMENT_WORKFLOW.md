@@ -3,6 +3,7 @@
 ## Daily Development Process
 
 ### 1. Start Your Day
+
 ```bash
 npm run supabase:start      # Start local Supabase
 npm run db:switch:local     # Use local database
@@ -12,6 +13,7 @@ npm run dev                 # Start dev server
 ### 2. Make Database Changes
 
 **Option A: Create Migration (Recommended)**
+
 ```bash
 # Create new migration
 npm run db:migrate add_feature_name
@@ -30,6 +32,7 @@ npm run db:types:remote
 ```
 
 **Option B: Use Supabase Studio GUI**
+
 ```bash
 # 1. Open http://127.0.0.1:54323
 # 2. Make changes in the GUI
@@ -80,6 +83,7 @@ git push origin main
 ### With Vercel Auto-Deploy
 
 1. **Work on `dev` branch:**
+
    ```bash
    git checkout dev
    # Make changes, test locally
@@ -178,11 +182,13 @@ git push origin main
 **Critical:** Migrations must be applied to production database BEFORE Vercel deploys new code.
 
 **Safe approach:**
+
 1. Push migrations → Remote Supabase
 2. Wait a few seconds
 3. Push code → GitHub → Vercel deploys
 
 **Or use Supabase Dashboard:**
+
 - Push migrations manually via dashboard
 - Then deploy code
 
@@ -212,4 +218,3 @@ git checkout main
 git merge feature/name
 git push origin main
 ```
-

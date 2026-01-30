@@ -125,7 +125,11 @@ function ColorSwatch({
         aria-label={`Select ${label} color`}
         title={label}
       />
-      <Text size="1" color={isSelected ? undefined : 'gray'} style={{ fontSize: '10px' }}>
+      <Text
+        size="1"
+        color={isSelected ? undefined : 'gray'}
+        style={{ fontSize: '10px' }}
+      >
         {label}
       </Text>
     </Flex>

@@ -1,11 +1,13 @@
 # Troubleshooting Migration CLI Freeze
 
 ## Problem
+
 The `npx supabase migration list --linked` command freezes after "Initialising login role..."
 
 ## Solutions
 
 ### Option 1: Check Migrations Directly via SQL (Recommended)
+
 Since the CLI is freezing, you can check migrations directly in the Supabase Dashboard:
 
 1. Go to **Supabase Dashboard** → **SQL Editor**
@@ -13,7 +15,7 @@ Since the CLI is freezing, you can check migrations directly in the Supabase Das
 
 ```sql
 -- View all applied migrations
-SELECT 
+SELECT
   version,
   name,
   inserted_at
@@ -24,6 +26,7 @@ ORDER BY version ASC;
 This will show you exactly which migrations are applied in your database.
 
 ### Option 2: Update Supabase CLI
+
 The CLI version (2.54.11) is outdated. Try updating:
 
 ```bash
@@ -35,6 +38,7 @@ npx supabase@latest migration list --linked
 ```
 
 ### Option 3: Re-authenticate
+
 The freeze might be due to authentication issues:
 
 ```bash
@@ -44,6 +48,7 @@ npx supabase login
 ```
 
 ### Option 4: Check Project Link
+
 Verify your project is properly linked:
 
 ```bash
@@ -63,4 +68,3 @@ Since you don't need the CLI to fix the migration history, you can:
 3. **Verify** by running the check query above
 
 The CLI freeze doesn't prevent you from fixing the migrations - you can do everything via SQL!
-

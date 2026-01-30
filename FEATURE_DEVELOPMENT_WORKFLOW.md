@@ -79,6 +79,7 @@ EXECUTE FUNCTION update_updated_at_column();
 ```
 
 **Migration Best Practices:**
+
 - ✅ Use `IF NOT EXISTS` / `IF EXISTS` for idempotency
 - ✅ Always enable RLS on new tables
 - ✅ Add indexes for foreign keys and frequently queried columns
@@ -95,6 +96,7 @@ npm run db:reset
 ```
 
 This resets the local DB and applies all migrations from scratch. Check:
+
 - Does it run without errors?
 - Do your tables/columns exist? (check in Supabase Studio: http://127.0.0.1:54323)
 - Do RLS policies work correctly?
@@ -108,6 +110,7 @@ npm run dev
 ```
 
 Use Supabase Studio (http://127.0.0.1:54323) to:
+
 - Inspect tables
 - Check data
 - Test queries
@@ -121,6 +124,7 @@ npm run db:push
 ```
 
 This will:
+
 - Show you which migrations will be applied
 - Ask for confirmation
 - Apply migrations to your remote database
@@ -365,9 +369,3 @@ npm run db:switch:status      # Which DB is active
 2. ✅ Practice the full workflow locally first
 3. ✅ Always test with `npm run db:reset` before pushing
 4. ✅ Keep migrations small and focused (one feature per migration)
-
-
-
-
-
-

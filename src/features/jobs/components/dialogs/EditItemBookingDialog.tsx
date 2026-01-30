@@ -20,6 +20,7 @@ export default function EditItemBookingDialog({
 }) {
   const qc = useQueryClient()
   const [quantity, setQuantity] = React.useState<number>(row.quantity)
+  const [quantityDraft, setQuantityDraft] = React.useState<string | null>(null)
   const [status, setStatus] = React.useState<ExternalReqStatus>(
     row.external_status ?? 'planned',
   )
@@ -35,6 +36,7 @@ export default function EditItemBookingDialog({
   React.useEffect(() => {
     if (!open) return
     setQuantity(row.quantity)
+    setQuantityDraft(null)
     setStatus(row.external_status as ExternalReqStatus)
     setNote(row.external_note ?? '')
     setUseTimePeriodWindow(!row.start_at && !row.end_at)
@@ -84,10 +86,23 @@ export default function EditItemBookingDialog({
           <TextField.Root
             type="number"
             min="1"
-            value={String(quantity)}
-            onChange={(e) =>
-              setQuantity(Math.max(1, Number(e.target.value || 1)))
-            }
+            value={quantityDraft ?? String(quantity)}
+            onChange={(e) => {
+              const nextValue = e.target.value
+              setQuantityDraft(nextValue)
+
+              if (nextValue === '') return
+              const parsed = Number(nextValue)
+              if (Number.isNaN(parsed)) return
+
+              setQuantity(Math.max(1, parsed))
+              setQuantityDraft(null)
+            }}
+            onBlur={() => {
+              if (quantityDraft === '') {
+                setQuantityDraft(null)
+              }
+            }}
           />
         </Field>
         <Field label="External status">

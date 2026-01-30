@@ -22,9 +22,9 @@ import CompanyInspector from '../components/CompanyInspector'
 import UsersTable from '../components/UsersTable'
 import UserDialog from '../components/UserDialog'
 import UserInspector from '../components/UserInspector'
+import { createDummyCompany } from '../api/queries'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
-import { createDummyCompany } from '../api/queries'
 
 export default function SuperPage() {
   const { success, error: toastError } = useToast()

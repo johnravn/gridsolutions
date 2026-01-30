@@ -8,9 +8,11 @@ import {
   Dialog,
   Flex,
   Heading,
+  RadioCards,
   Separator,
   Table,
   Text,
+  TextArea,
   TextField,
 } from '@radix-ui/themes'
 import {
@@ -30,6 +32,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
+import { createMatter } from '@features/matters/api/queries'
 import {
   createBookingsFromOffer,
   createTechnicalOfferFromBookings,
@@ -44,8 +47,9 @@ import TechnicalOfferEditor from '../dialogs/TechnicalOfferEditor'
 import PrettyOfferEditor from '../dialogs/PrettyOfferEditor'
 import type { JobOffer, OfferType } from '../../types'
 
-function getOfferStatusBadgeColor(status: JobOffer['status']) {
-  switch (status) {
+function getOfferStatusBadgeColor(offer: JobOffer) {
+  if (offer.revision_requested_at) return 'orange'
+  switch (offer.status) {
     case 'draft':
       return 'gray'
     case 'sent':
@@ -63,8 +67,20 @@ function getOfferStatusBadgeColor(status: JobOffer['status']) {
   }
 }
 
+function getOfferStatusLabel(offer: JobOffer) {
+  return offer.revision_requested_at ? 'wants revision' : offer.status
+}
+
 function getOfferTypeLabel(type: OfferType) {
   return type === 'technical' ? 'Technical' : 'Pretty'
+}
+
+function isOfferSyncedToBookings(offer: JobOffer) {
+  if (!offer.bookings_synced_at) return false
+  return (
+    new Date(offer.bookings_synced_at).getTime() >=
+    new Date(offer.updated_at).getTime()
+  )
 }
 
 export default function OffersTab({
@@ -85,9 +101,22 @@ export default function OffersTab({
     null,
   )
   const [createDialogOpen, setCreateDialogOpen] = React.useState(false)
+  const [responseDialogOpen, setResponseDialogOpen] =
+    React.useState<JobOffer | null>(null)
+  const [responseType, setResponseType] = React.useState<
+    'accepted' | 'rejected' | 'revision'
+  >('accepted')
+  const [responseComment, setResponseComment] = React.useState('')
+  const [revisionMessageOffer, setRevisionMessageOffer] =
+    React.useState<JobOffer | null>(null)
 
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
+  const invalidateBookingQueries = React.useCallback(() => {
+    qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
+    qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+    qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
+  }, [qc, jobId])
 
   const { data: offers = [], isLoading } = useQuery({
     ...jobOffersQuery(jobId),
@@ -157,6 +186,7 @@ export default function OffersTab({
       // Invalidate calendar queries to show new bookings
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
       qc.invalidateQueries({ queryKey: ['time-periods', jobId] })
+      invalidateBookingQueries()
       success(
         'Bookings created',
         'Time periods and reservations have been created from the offer.',
@@ -179,13 +209,134 @@ export default function OffersTab({
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
       qc.invalidateQueries({ queryKey: ['time-periods', jobId] })
+      invalidateBookingQueries()
       success('Bookings synced', 'Bookings were synced from the offer.')
-      if (warnings?.length) {
+      if (warnings.length) {
         info('Booking warnings', warnings.join('\n'), 6000)
       }
     },
     onError: (err: any) => {
       toastError('Failed to sync bookings', err?.message || 'Please try again.')
+    },
+  })
+
+  const setOfferResponseMutation = useMutation({
+    mutationFn: async (payload: {
+      offerId: string
+      offerTitle: string
+      responseType: 'accepted' | 'rejected' | 'revision'
+      comment: string
+    }) => {
+      const now = new Date().toISOString()
+      const comment = payload.comment.trim()
+      const recordedBy = 'Project lead'
+
+      let jobData: {
+        id: string
+        title: string | null
+        project_lead_user_id: string | null
+      } | null = null
+
+      if (payload.responseType === 'revision') {
+        const { data, error: jobError } = await supabase
+          .from('jobs')
+          .select('id, title, project_lead_user_id')
+          .eq('id', jobId)
+          .single()
+        if (jobError) throw jobError
+        jobData = data
+        if (!jobData.project_lead_user_id) {
+          throw new Error(
+            'Project lead is missing. Assign a project lead to send the revision matter.',
+          )
+        }
+      }
+
+      const baseUpdate = {
+        accepted_at: null,
+        accepted_by_name: null,
+        accepted_by_phone: null,
+        accepted_by_email: null,
+        rejected_at: null,
+        rejected_by_name: null,
+        rejected_by_phone: null,
+        rejection_comment: null,
+        revision_requested_at: null,
+        revision_requested_by_name: null,
+        revision_requested_by_phone: null,
+        revision_comment: null,
+      }
+
+      let update: Record<string, any> = baseUpdate
+
+      if (payload.responseType === 'accepted') {
+        update = {
+          ...baseUpdate,
+          status: 'accepted',
+          accepted_at: now,
+          accepted_by_name: recordedBy,
+          accepted_by_phone: null,
+        }
+      } else if (payload.responseType === 'rejected') {
+        update = {
+          ...baseUpdate,
+          status: 'rejected',
+          rejected_at: now,
+          rejected_by_name: recordedBy,
+          rejected_by_phone: null,
+          rejection_comment: null,
+        }
+      } else {
+        update = {
+          ...baseUpdate,
+          status: 'viewed',
+          revision_requested_at: now,
+          revision_requested_by_name: recordedBy,
+          revision_requested_by_phone: null,
+          revision_comment: comment || null,
+        }
+      }
+
+      const { error } = await supabase
+        .from('job_offers')
+        .update(update)
+        .eq('id', payload.offerId)
+
+      if (error) throw error
+
+      if (payload.responseType === 'revision') {
+        const projectLeadId = jobData?.project_lead_user_id as string
+        const jobTitle = jobData?.title?.trim() || 'Job'
+        const jobLink = `${window.location.origin}/jobs?jobId=${jobId}`
+        const message = comment || 'No message provided.'
+        const content = [
+          `Customer requested a revision on offer "${payload.offerTitle}".`,
+          `Message: ${message}`,
+          `Job: ${jobTitle}`,
+          `Go to job: ${jobLink}`,
+        ].join('\n')
+
+        await createMatter({
+          company_id: companyId,
+          matter_type: 'update',
+          title: `Offer revision requested: ${jobTitle}`,
+          content,
+          job_id: jobId,
+          recipient_user_ids: [projectLeadId],
+          created_as_company: true,
+        })
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      success('Offer response updated', 'The offer response has been set.')
+      setResponseDialogOpen(null)
+    },
+    onError: (err: any) => {
+      toastError(
+        'Failed to set offer response',
+        err?.message || 'Please try again.',
+      )
     },
   })
 
@@ -306,6 +457,12 @@ export default function OffersTab({
     exportPdfMutation.mutate(offer.id)
   }
 
+  const openResponseDialog = (offer: JobOffer) => {
+    setResponseDialogOpen(offer)
+    setResponseType('accepted')
+    setResponseComment('')
+  }
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('nb-NO', {
       style: 'currency',
@@ -384,12 +541,13 @@ export default function OffersTab({
         </Box>
       ) : (
         <Box style={{ overflowX: 'auto' }}>
-          <Table.Root variant="surface" style={{ minWidth: 980 }}>
+          <Table.Root variant="surface" style={{ minWidth: 1060 }}>
             <Table.Header>
               <Table.Row>
                 <Table.ColumnHeaderCell>Version</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Synced</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
@@ -413,12 +571,36 @@ export default function OffersTab({
                     </Badge>
                   </Table.Cell>
                   <Table.Cell>
+                    <Flex direction="column" gap="1">
+                      <Badge
+                        radius="full"
+                        color={getOfferStatusBadgeColor(offer)}
+                        highContrast
+                      >
+                        {getOfferStatusLabel(offer)}
+                      </Badge>
+                      {offer.revision_requested_at && (
+                        <Button
+                          size="1"
+                          variant="ghost"
+                          onClick={() => setRevisionMessageOffer(offer)}
+                        >
+                          Show message
+                        </Button>
+                      )}
+                    </Flex>
+                  </Table.Cell>
+                  <Table.Cell>
                     <Badge
-                      radius="full"
-                      color={getOfferStatusBadgeColor(offer.status)}
-                      highContrast
+                      variant="soft"
+                      color={isOfferSyncedToBookings(offer) ? 'green' : 'gray'}
+                      title={
+                        offer.bookings_synced_at
+                          ? `Last synced: ${formatDate(offer.bookings_synced_at)}`
+                          : 'Not synced'
+                      }
                     >
-                      {offer.status}
+                      {isOfferSyncedToBookings(offer) ? 'Synced' : 'Not synced'}
                     </Badge>
                   </Table.Cell>
                   <Table.Cell>
@@ -553,6 +735,14 @@ export default function OffersTab({
                             disabled={exportPdfMutation.isPending}
                           >
                             <Download width={14} height={14} /> Export PDF
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={() => openResponseDialog(offer)}
+                          >
+                            <Edit width={14} height={14} />
+                            Set Response
                           </Button>
                           <Button
                             size="1"
@@ -846,6 +1036,126 @@ export default function OffersTab({
             qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
           }}
         />
+      )}
+
+      {/* Set Offer Response Dialog */}
+      {!isReadOnly && responseDialogOpen && (
+        <Dialog.Root
+          open={!!responseDialogOpen}
+          onOpenChange={(open) => {
+            setResponseDialogOpen(open ? responseDialogOpen : null)
+            if (!open) {
+              setResponseType('accepted')
+              setResponseComment('')
+            }
+          }}
+        >
+          <Dialog.Content maxWidth="520px">
+            <Dialog.Title>Set offer response</Dialog.Title>
+            <Separator my="3" />
+            <Flex direction="column" gap="3">
+              <Box>
+                <Text size="2" weight="medium" mb="1">
+                  Response
+                </Text>
+                <RadioCards.Root
+                  value={responseType}
+                  onValueChange={(value) =>
+                    setResponseType(
+                      value as 'accepted' | 'rejected' | 'revision',
+                    )
+                  }
+                >
+                  <Flex gap="3" wrap="wrap">
+                    <RadioCards.Item value="accepted">
+                      <Text weight="medium">Accepted</Text>
+                    </RadioCards.Item>
+                    <RadioCards.Item value="rejected">
+                      <Text weight="medium">Rejected</Text>
+                    </RadioCards.Item>
+                    <RadioCards.Item value="revision">
+                      <Text weight="medium">Wants revision</Text>
+                    </RadioCards.Item>
+                  </Flex>
+                </RadioCards.Root>
+                <Text size="1" color="gray" mt="2">
+                  Recorded by the project lead.
+                </Text>
+              </Box>
+              {responseType === 'revision' && (
+                <Box>
+                  <Text size="2" weight="medium" mb="1">
+                    Message to customer
+                  </Text>
+                  <TextArea
+                    placeholder="Add the revision request message..."
+                    rows={4}
+                    value={responseComment}
+                    onChange={(e) => setResponseComment(e.target.value)}
+                  />
+                </Box>
+              )}
+            </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button variant="soft">Cancel</Button>
+              </Dialog.Close>
+              <Button
+                onClick={() => {
+                  setOfferResponseMutation.mutate({
+                    offerId: responseDialogOpen.id,
+                    offerTitle: responseDialogOpen.title,
+                    responseType,
+                    comment: responseComment,
+                  })
+                }}
+                disabled={setOfferResponseMutation.isPending}
+              >
+                {setOfferResponseMutation.isPending
+                  ? 'Saving...'
+                  : 'Set response'}
+              </Button>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
+      )}
+      {revisionMessageOffer && (
+        <Dialog.Root
+          open={!!revisionMessageOffer}
+          onOpenChange={(open) => !open && setRevisionMessageOffer(null)}
+        >
+          <Dialog.Content maxWidth="520px">
+            <Dialog.Title>Revision request</Dialog.Title>
+            <Separator my="3" />
+            <Flex direction="column" gap="2">
+              <Text size="1" color="gray">
+                Signed by
+              </Text>
+              <Text size="2" weight="medium">
+                {revisionMessageOffer.revision_requested_by_name || '—'}
+              </Text>
+              <Box
+                mt="2"
+                p="3"
+                style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
+              >
+                <Text size="1" color="gray" mb="1">
+                  Revision text
+                </Text>
+                <br />
+                <Text size="2">
+                  {revisionMessageOffer.revision_comment?.trim() ||
+                    'No message provided.'}
+                </Text>
+              </Box>
+            </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button variant="soft">Close</Button>
+              </Dialog.Close>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
       )}
     </Box>
   )

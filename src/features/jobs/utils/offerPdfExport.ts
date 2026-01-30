@@ -30,7 +30,10 @@ const formatDateTime = (dateString?: string | null): string => {
   })
 }
 
-const formatDateRange = (start?: string | null, end?: string | null): string => {
+const formatDateRange = (
+  start?: string | null,
+  end?: string | null,
+): string => {
   if (!start && !end) return '—'
   if (start && !end) return formatDate(start)
   if (!start && end) return formatDate(end)
@@ -137,8 +140,7 @@ const tintColor = (
   color: { r: number; g: number; b: number },
   ratio: number,
 ) => {
-  const mix = (channel: number) =>
-    Math.round(255 - (255 - channel) * ratio)
+  const mix = (channel: number) => Math.round(255 - (255 - channel) * ratio)
   return {
     r: mix(color.r),
     g: mix(color.g),
@@ -228,7 +230,11 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
 
   const drawTableRow = (
     cells: Array<{ text: string; width: number; align?: 'left' | 'right' }>,
-    headerColumns?: Array<{ label: string; width: number; align?: 'left' | 'right' }>,
+    headerColumns?: Array<{
+      label: string
+      width: number
+      align?: 'left' | 'right'
+    }>,
   ) => {
     const rowLineHeight = 5
     const lineGroups = cells.map((cell) =>
@@ -245,8 +251,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     lineGroups.forEach((lines, index) => {
       const cell = cells[index]
       lines.forEach((line, lineIndex) => {
-        const textX =
-          cell.align === 'right' ? xPos + cell.width - 1 : xPos + 1
+        const textX = cell.align === 'right' ? xPos + cell.width - 1 : xPos + 1
         doc.text(line, textX, yPos + lineIndex * rowLineHeight, {
           align: cell.align || 'left',
         })
@@ -276,7 +281,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   doc.setFontSize(9)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(110)
-  doc.text(`Status: ${offer.status}`, pageWidth - margin, yPos, { align: 'right' })
+  doc.text(`Status: ${offer.status}`, pageWidth - margin, yPos, {
+    align: 'right',
+  })
   yPos += 6
 
   if (offer.company?.address) {
@@ -337,7 +344,12 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
       leftY += drawContactLine(leftX, leftY, 'Email', offer.customer.email)
       leftY += drawContactLine(leftX, leftY, 'Phone', offer.customer.phone)
       if (offer.customer.address) {
-        leftY += drawContactLine(leftX, leftY, 'Address', offer.customer.address)
+        leftY += drawContactLine(
+          leftX,
+          leftY,
+          'Address',
+          offer.customer.address,
+        )
       }
     }
 
@@ -505,10 +517,10 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         [
           { text: roleLabel, width: 55 },
           { text: `${crew.crew_count}`, width: 12, align: 'right' },
-        {
-          text: formatDateTimeRange(crew.start_date, crew.end_date),
-          width: 45,
-        },
+          {
+            text: formatDateTimeRange(crew.start_date, crew.end_date),
+            width: 45,
+          },
           { text: `${rateLabel}${totalHoursLabel}`, width: 30, align: 'right' },
           { text: formatCurrency(crew.total_price), width: 28, align: 'right' },
         ],
@@ -533,9 +545,13 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
       const distanceIncrement =
         offer.company_expansion?.vehicle_distance_increment ?? 150
       const effectiveDailyRate =
-        transport.daily_rate ?? offer.company_expansion?.vehicle_daily_rate ?? null
+        transport.daily_rate ??
+        offer.company_expansion?.vehicle_daily_rate ??
+        null
       const effectiveDistanceRate =
-        transport.distance_rate ?? offer.company_expansion?.vehicle_distance_rate ?? null
+        transport.distance_rate ??
+        offer.company_expansion?.vehicle_distance_rate ??
+        null
       const vehicleName = formatVehicleCategory(
         transport.vehicle_category ?? null,
       )
@@ -556,7 +572,11 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
             width: 45,
           },
           { text: rateParts.join('\n'), width: 35, align: 'right' },
-          { text: formatCurrency(transport.total_price), width: 35, align: 'right' },
+          {
+            text: formatCurrency(transport.total_price),
+            width: 35,
+            align: 'right',
+          },
         ],
         transportColumns,
       )
@@ -609,7 +629,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   yPos += 5
 
   doc.text('Crew', margin, yPos)
-  doc.text(formatCurrency(offer.crew_subtotal), subtotalX, yPos, { align: 'right' })
+  doc.text(formatCurrency(offer.crew_subtotal), subtotalX, yPos, {
+    align: 'right',
+  })
   yPos += 5
 
   doc.text('Transport', margin, yPos)
@@ -663,4 +685,3 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   const filename = `${offer.title.replace(/[^a-z0-9]/gi, '_')}_v${offer.version_number}.pdf`
   doc.save(filename)
 }
-

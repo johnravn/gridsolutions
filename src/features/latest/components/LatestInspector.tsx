@@ -19,7 +19,10 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { formatDistanceToNow } from 'date-fns'
-import { makeWordPresentable, getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
+import {
+  getInitialsFromNameOrEmail,
+  makeWordPresentable,
+} from '@shared/lib/generalFunctions'
 import {
   createActivityComment,
   deleteActivityComment,

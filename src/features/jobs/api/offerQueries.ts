@@ -1,26 +1,26 @@
 // src/features/jobs/api/offerQueries.ts
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
-import type {
-  JobOffer,
-  OfferDetail,
-  OfferAcceptance,
-  OfferRejection,
-  OfferRevisionRequest,
-  OfferEquipmentGroup,
-  OfferEquipmentItem,
-  OfferCrewItem,
-  OfferTransportItem,
-  OfferPrettySection,
-  OfferType,
-  OfferStatus,
-  PrettySectionType,
-} from '../types'
 import {
   calculateOfferTotals,
   generateSecureToken,
 } from '../utils/offerCalculations'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
+import type {
+  JobOffer,
+  OfferAcceptance,
+  OfferCrewItem,
+  OfferDetail,
+  OfferEquipmentGroup,
+  OfferEquipmentItem,
+  OfferPrettySection,
+  OfferRejection,
+  OfferRevisionRequest,
+  OfferStatus,
+  OfferTransportItem,
+  OfferType,
+  PrettySectionType,
+} from '../types'
 
 // Query functions for offer management
 
@@ -299,6 +299,7 @@ export function offerDetailQuery(offerId: string) {
 
       const offerDetail: OfferDetail = {
         ...offer,
+        bookings_synced_at: (offer as any).bookings_synced_at ?? null,
         groups: groupsWithItems,
         crew_items: (crewItems || []) as Array<OfferCrewItem>,
         transport_items: (transportItems || []) as Array<OfferTransportItem>,
@@ -397,361 +398,11 @@ export function publicOfferQuery(accessToken: string) {
   return queryOptions<OfferDetail | null>({
     queryKey: ['public-offer', accessToken] as const,
     queryFn: async (): Promise<OfferDetail | null> => {
-      // Fetch main offer with job, customer, company, and project lead info
-      const { data: offer, error: offerError } = await supabase
-        .from('job_offers')
-        .select(
-          `
-          *,
-          job:jobs!job_offers_job_id_fkey (
-            id,
-            customer_id,
-            customer_contact_id,
-            project_lead_user_id,
-            customer:customer_id (
-              id,
-              name,
-              email,
-              phone,
-              address,
-              logo_path
-            ),
-            customer_contact:contacts!jobs_customer_contact_id_fkey (
-              id,
-              name,
-              phone,
-              email
-            ),
-            project_lead:profiles!jobs_project_lead_user_id_fkey (
-              user_id,
-              display_name,
-              email,
-              phone
-            )
-          ),
-          company:companies!job_offers_company_id_fkey (
-            id,
-            name,
-            address,
-            logo_light_path,
-            logo_dark_path,
-            accent_color
-          )
-        `,
-        )
-        .eq('access_token', accessToken)
-        .maybeSingle()
-
-      if (offerError) throw offerError
-      if (!offer || offer.status === 'draft') return null
-
-      // Fetch groups and items separately to avoid PostgREST relationship ambiguity
-      const { data: groups, error: groupsError } = await supabase
-        .from('offer_equipment_groups')
-        .select('*')
-        .eq('offer_id', offer.id)
-        .order('sort_order', { ascending: true })
-
-      if (groupsError) throw groupsError
-
-      // Fetch equipment items for each group
-      const groupsWithItems = await Promise.all(
-        (groups || []).map(async (group: any) => {
-          const { data: items, error: itemsError } = await supabase
-            .from('offer_equipment_items')
-            .select('*')
-            .eq('offer_group_id', group.id)
-            .order('sort_order', { ascending: true })
-
-          if (itemsError) throw itemsError
-          return { ...group, items: items || [] }
-        }),
-      )
-
-      // Fetch crew items
-      const { data: crewItems, error: crewError } = await supabase
-        .from('offer_crew_items')
-        .select('*')
-        .eq('offer_id', offer.id)
-        .order('sort_order', { ascending: true })
-
-      if (crewError) throw crewError
-
-      // Fetch transport items
-      const { data: transportItemsRaw, error: transportError } = await supabase
-        .from('offer_transport_items')
-        .select('*')
-        .eq('offer_id', offer.id)
-        .order('sort_order', { ascending: true })
-
-      if (transportError) throw transportError
-
-      // Fetch vehicles separately if any transport items have vehicle_id
-      const vehicleIds = (transportItemsRaw || [])
-        .map((item: any) => item.vehicle_id)
-        .filter((id): id is string => id !== null && id !== undefined)
-
-      const vehicleMap = new Map<
-        string,
-        { id: string; name: string; external_owner_id: string | null }
-      >()
-      if (vehicleIds.length > 0) {
-        const { data: vehicles, error: vehiclesError } = await supabase
-          .from('vehicles')
-          .select('id, name, external_owner_id')
-          .in('id', vehicleIds)
-
-        if (vehiclesError) throw vehiclesError
-        if (vehicles) {
-          vehicles.forEach((v) => {
-            vehicleMap.set(v.id, v)
-          })
-        }
-      }
-
-      // Combine transport items with vehicle data
-      const transportItems = (transportItemsRaw || []).map((item: any) => ({
-        ...item,
-        vehicle: item.vehicle_id
-          ? vehicleMap.get(item.vehicle_id) || null
-          : null,
-      }))
-
-      // Fetch pretty sections (if this is a pretty offer)
-      let prettySections: Array<any> | undefined
-      if (offer.offer_type === 'pretty') {
-        const { data: sections, error: sectionsError } = await supabase
-          .from('offer_pretty_sections')
-          .select('*')
-          .eq('offer_id', offer.id)
-          .order('sort_order', { ascending: true })
-
-        if (sectionsError) throw sectionsError
-        prettySections = (sections || []) as Array<any>
-      }
-
-      const offerDetail: any = {
-        ...offer,
-        groups: groupsWithItems,
-        crew_items: (crewItems || []) as Array<any>,
-        transport_items: transportItems || [],
-        pretty_sections: prettySections,
-      }
-
-      // Fetch item details separately to avoid PostgREST relationship ambiguity
-      const allItemIds = new Set<string>()
-      const allGroupIds = new Set<string>()
-      offerDetail.groups?.forEach((group: any) => {
-        group.items?.forEach((item: any) => {
-          if (item.item_id) allItemIds.add(item.item_id)
-          if (item.group_id) allGroupIds.add(item.group_id)
-        })
+      const { data, error } = await (supabase as any).rpc('public_offer_get', {
+        p_access_token: accessToken,
       })
-
-      const itemMap = new Map<
-        string,
-        {
-          id: string
-          name: string
-          internally_owned: boolean
-          external_owner_id: string | null
-          external_owner_name: string | null
-          brand?: { id: string; name: string } | null
-          model?: string | null
-        }
-      >()
-
-      if (allItemIds.size > 0) {
-        const { data: itemDetails, error: itemsDetailError } = await supabase
-          .from('items')
-          .select(
-            `
-            id,
-            name,
-            internally_owned,
-            external_owner_id,
-            model,
-            external_owner:customers!items_external_owner_id_fkey ( id, name ),
-            brand:item_brands ( id, name )
-          `,
-          )
-          .in('id', Array.from(allItemIds))
-
-        if (itemsDetailError) throw itemsDetailError
-
-        if (itemDetails) {
-          itemDetails.forEach((item: any) => {
-            const brand = Array.isArray(item.brand) ? item.brand[0] : item.brand
-            itemMap.set(item.id, {
-              id: item.id,
-              name: item.name,
-              internally_owned: !!item.internally_owned,
-              external_owner_id: item.external_owner_id ?? null,
-              external_owner_name: item.external_owner?.name ?? null,
-              brand: brand || null,
-              model: item.model || null,
-            })
-          })
-        }
-      }
-
-      const groupMap = new Map<
-        string,
-        {
-          id: string
-          name: string
-          internally_owned: boolean
-          external_owner_id: string | null
-          external_owner_name: string | null
-        }
-      >()
-
-      if (allGroupIds.size > 0) {
-        const { data: groupDetails, error: groupDetailsError } = await supabase
-          .from('item_groups')
-          .select(
-            `
-            id,
-            name,
-            internally_owned,
-            external_owner_id,
-            external_owner:customers!item_groups_external_owner_id_fkey ( id, name )
-          `,
-          )
-          .in('id', Array.from(allGroupIds))
-
-        if (groupDetailsError) throw groupDetailsError
-
-        if (groupDetails) {
-          groupDetails.forEach((group: any) => {
-            groupMap.set(group.id, {
-              id: group.id,
-              name: group.name,
-              internally_owned: !!group.internally_owned,
-              external_owner_id: group.external_owner_id ?? null,
-              external_owner_name: group.external_owner?.name ?? null,
-            })
-          })
-        }
-      }
-
-      // Attach item details to each equipment item
-      offerDetail.groups?.forEach((group: any) => {
-        if (group.items) {
-          group.items = group.items.map((item: any) => ({
-            ...item,
-            item: item.item_id ? itemMap.get(item.item_id) || null : null,
-            group: item.group_id ? groupMap.get(item.group_id) || null : null,
-          }))
-        }
-      })
-
-      // Fetch company terms and conditions
-      const { data: company, error: companyError } = await supabase
-        .from('companies')
-        .select(
-          'terms_and_conditions_type, terms_and_conditions_text, terms_and_conditions_pdf_path',
-        )
-        .eq('id', offer.company_id)
-        .maybeSingle()
-
-      if (companyError) {
-        console.error('Failed to fetch company terms:', companyError)
-        // Don't fail the whole query if company terms can't be fetched
-      }
-
-      // Add company terms to offer detail
-      if (company) {
-        offerDetail.company_terms = {
-          type: company.terms_and_conditions_type as 'pdf' | 'text' | null,
-          text: company.terms_and_conditions_text,
-          pdf_path: company.terms_and_conditions_pdf_path,
-        }
-      }
-
-      // Add customer info from job
-      const job = offer.job
-      if (job) {
-        const jobData = Array.isArray(job) ? job[0] : job
-        offerDetail.job_title = jobData?.title ?? null
-
-        const customer = Array.isArray(jobData.customer)
-          ? jobData.customer[0]
-          : jobData.customer
-        if (customer) {
-          offerDetail.customer = {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-            address: customer.address,
-            logo_path: customer.logo_path,
-          }
-        }
-
-        // Add customer contact
-        const customerContact = Array.isArray(jobData.customer_contact)
-          ? jobData.customer_contact[0]
-          : jobData.customer_contact
-        if (customerContact) {
-          offerDetail.customer_contact = {
-            id: customerContact.id,
-            name: customerContact.name,
-            phone: customerContact.phone,
-            email: customerContact.email,
-          }
-        }
-
-        // Add project lead
-        const projectLead = Array.isArray(jobData.project_lead)
-          ? jobData.project_lead[0]
-          : jobData.project_lead
-        if (projectLead) {
-          offerDetail.project_lead = {
-            user_id: projectLead.user_id,
-            display_name: projectLead.display_name,
-            email: projectLead.email,
-            phone: projectLead.phone,
-          }
-        }
-      }
-
-      // Add company info
-      const offerCompany = offer.company
-      if (offerCompany) {
-        const companyData = Array.isArray(offerCompany)
-          ? offerCompany[0]
-          : offerCompany
-        if (companyData) {
-          offerDetail.company = {
-            id: companyData.id,
-            name: companyData.name,
-            address: companyData.address,
-            logo_light_path: companyData.logo_light_path ?? null,
-            logo_dark_path: companyData.logo_dark_path ?? null,
-            accent_color: companyData.accent_color ?? null,
-          }
-        }
-      }
-
-      const { data: expansion, error: expansionError } = await supabase
-        .from('company_expansions')
-        .select(
-          'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
-        )
-        .eq('company_id', offer.company_id)
-        .maybeSingle()
-
-      if (!expansionError && expansion) {
-        offerDetail.company_expansion = {
-          vehicle_daily_rate: expansion.vehicle_daily_rate ?? null,
-          vehicle_distance_rate: expansion.vehicle_distance_rate ?? null,
-          vehicle_distance_increment:
-            expansion.vehicle_distance_increment ?? null,
-        }
-      }
-
-      return offerDetail as OfferDetail
+      if (error) throw error
+      return (data ?? null) as OfferDetail | null
     },
   })
 }
@@ -813,7 +464,7 @@ export async function createOffer(payload: {
     .single()
 
   if (error) throw error
-  return data.id as string
+  return data.id
 }
 
 /**
@@ -1370,50 +1021,12 @@ export async function acceptOffer(
   accessToken: string,
   acceptance: OfferAcceptance,
 ): Promise<void> {
-  const { data: offer, error: offerError } = await supabase
-    .from('job_offers')
-    .select('id, job_id, version_number, status')
-    .eq('access_token', accessToken)
-    .maybeSingle()
-
-  if (offerError) throw offerError
-  if (!offer) throw new Error('Offer not found')
-  if (offer.status === 'superseded') {
-    throw new Error(
-      'This offer can no longer be accepted because a newer version has been sent.',
-    )
-  }
-  if (offer.status !== 'sent') {
-    throw new Error('This offer can no longer be accepted.')
-  }
-
-  const { data: newerOffers, error: newerError } = await supabase
-    .from('job_offers')
-    .select('id')
-    .eq('job_id', offer.job_id)
-    .gt('version_number', offer.version_number)
-    .in('status', ['sent', 'viewed', 'accepted'])
-    .limit(1)
-
-  if (newerError) throw newerError
-  if (newerOffers && newerOffers.length > 0) {
-    throw new Error(
-      'This offer can no longer be accepted because a newer version has been sent.',
-    )
-  }
-
-  const fullName = `${acceptance.first_name} ${acceptance.last_name}`.trim()
-  const { error } = await supabase
-    .from('job_offers')
-    .update({
-      status: 'accepted',
-      accepted_at: new Date().toISOString(),
-      accepted_by_name: fullName,
-      accepted_by_phone: acceptance.phone,
-    })
-    .eq('access_token', accessToken)
-    .eq('status', 'sent')
-
+  const { error } = await (supabase as any).rpc('public_offer_accept', {
+    p_access_token: accessToken,
+    p_first_name: acceptance.first_name,
+    p_last_name: acceptance.last_name,
+    p_phone: acceptance.phone,
+  })
   if (error) throw error
 }
 
@@ -1424,19 +1037,13 @@ export async function rejectOffer(
   accessToken: string,
   rejection: OfferRejection,
 ): Promise<void> {
-  const fullName = `${rejection.first_name} ${rejection.last_name}`.trim()
-  const { error } = await supabase
-    .from('job_offers')
-    .update({
-      status: 'rejected',
-      rejected_at: new Date().toISOString(),
-      rejected_by_name: fullName,
-      rejected_by_phone: rejection.phone,
-      rejection_comment: rejection.comment || null,
-    })
-    .eq('access_token', accessToken)
-    .eq('status', 'sent')
-
+  const { error } = await (supabase as any).rpc('public_offer_reject', {
+    p_access_token: accessToken,
+    p_first_name: rejection.first_name,
+    p_last_name: rejection.last_name,
+    p_phone: rejection.phone,
+    p_comment: rejection.comment || '',
+  })
   if (error) throw error
 }
 
@@ -1447,20 +1054,13 @@ export async function requestOfferRevision(
   accessToken: string,
   revisionRequest: OfferRevisionRequest,
 ): Promise<void> {
-  const fullName =
-    `${revisionRequest.first_name} ${revisionRequest.last_name}`.trim()
-  const { error } = await supabase
-    .from('job_offers')
-    .update({
-      revision_requested_at: new Date().toISOString(),
-      revision_requested_by_name: fullName,
-      revision_requested_by_phone: revisionRequest.phone,
-      revision_comment: revisionRequest.comment || null,
-      status: 'viewed', // Update status to viewed when revision is requested
-    })
-    .eq('access_token', accessToken)
-    .eq('status', 'sent')
-
+  const { error } = await (supabase as any).rpc('public_offer_request_revision', {
+    p_access_token: accessToken,
+    p_first_name: revisionRequest.first_name,
+    p_last_name: revisionRequest.last_name,
+    p_phone: revisionRequest.phone,
+    p_comment: revisionRequest.comment || '',
+  })
   if (error) throw error
 }
 
@@ -1468,14 +1068,9 @@ export async function requestOfferRevision(
  * Mark offer as viewed
  */
 export async function markOfferViewed(accessToken: string): Promise<void> {
-  const { error } = await supabase
-    .from('job_offers')
-    .update({
-      viewed_at: new Date().toISOString(),
-    })
-    .eq('access_token', accessToken)
-
-  // Don't throw if update fails (view tracking is optional)
+  const { error } = await (supabase as any).rpc('public_offer_mark_viewed', {
+    p_access_token: accessToken,
+  })
   if (error) console.error('Failed to mark offer as viewed:', error)
 }
 
@@ -1639,6 +1234,13 @@ export async function updateOfferStatus(
     .update(updateData)
     .eq('id', offerId)
 
+  if (error) throw error
+}
+
+async function markJobOfferBookingsSynced(offerId: string): Promise<void> {
+  const { error } = await (supabase as any).rpc('mark_job_offer_bookings_synced', {
+    p_offer_id: offerId,
+  })
   if (error) throw error
 }
 
@@ -1995,7 +1597,7 @@ export async function createBookingsFromOffer(
 
     if (vehiclesFetchError) throw vehiclesFetchError
 
-    const availableVehicles: VehicleCandidate[] = (vehicleRows || [])
+    const availableVehicles: Array<VehicleCandidate> = (vehicleRows || [])
       .filter((row: any) => !row.deleted)
       .map((row: any) => ({
         id: row.id as string,
@@ -2146,6 +1748,13 @@ export async function createBookingsFromOffer(
         if (noteError) throw noteError
       }
     }
+  }
+
+  // Mark that bookings are now synced from this offer (best-effort).
+  try {
+    await markJobOfferBookingsSynced(offerId)
+  } catch (e) {
+    console.warn('Failed to mark offer as synced to bookings:', e)
   }
 }
 

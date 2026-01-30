@@ -70,7 +70,10 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
   if (target.startsWith(search)) return 0.9
 
   // Contains search term as whole word
-  const wordRegex = new RegExp(`\\b${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i')
+  const wordRegex = new RegExp(
+    `\\b${search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`,
+    'i',
+  )
   if (wordRegex.test(target)) return 0.8
 
   // Contains search term anywhere
@@ -93,7 +96,7 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
   // This helps with typos like "unaktive" vs "unactive" (k vs c)
   let matchingChars = 0
   const maxLength = Math.max(search.length, target.length)
-  
+
   // Count matching characters in similar positions (allows for some position shift)
   for (let i = 0; i < search.length; i++) {
     const char = search[i]
@@ -104,7 +107,11 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
       // Check nearby positions (within 2 characters) for typos
       const checkRange = Math.min(2, target.length - i)
       let found = false
-      for (let j = Math.max(0, i - 1); j <= Math.min(target.length - 1, i + checkRange); j++) {
+      for (
+        let j = Math.max(0, i - 1);
+        j <= Math.min(target.length - 1, i + checkRange);
+        j++
+      ) {
         if (target[j] === char && Math.abs(i - j) <= 2) {
           matchingChars += 0.7 // Partial credit for nearby match
           found = true
@@ -117,7 +124,7 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
       }
     }
   }
-  
+
   // Also check reverse: how many target chars match search
   // This helps when search is shorter than target
   let reverseMatches = 0
@@ -127,12 +134,12 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
       reverseMatches++
     }
   }
-  
+
   // Combine forward and reverse matching
   const forwardSimilarity = matchingChars / search.length
   const reverseSimilarity = reverseMatches / target.length
   const combinedSimilarity = (forwardSimilarity + reverseSimilarity) / 2
-  
+
   return combinedSimilarity * 0.4
 }
 
@@ -161,11 +168,11 @@ export function fuzzyMatch(
  * @returns Filtered array sorted by match score (highest first)
  */
 export function fuzzySearch<T>(
-  items: T[],
+  items: Array<T>,
   searchTerm: string,
   fields: Array<(item: T) => string | null | undefined>,
   threshold = 0.3,
-): T[] {
+): Array<T> {
   if (!searchTerm.trim()) return items
 
   const scored = items
@@ -190,21 +197,21 @@ export function fuzzySearch<T>(
  * Generates initials from a display name or email.
  * For names with multiple words, uses first letter of first word + first letter of last word.
  * For single words or emails, uses first 2 characters.
- * 
+ *
  * @param nameOrEmail - Display name or email address
  * @returns Initials string (e.g., "John Ravndal" -> "JR", "john@example.com" -> "JO")
  */
 export function getInitials(nameOrEmail: string | null | undefined): string {
   const base = (nameOrEmail || '').trim()
   if (!base) return '?'
-  
+
   const parts = base.split(/\s+/).filter(Boolean)
-  
+
   // If we have 2+ words, use first letter of first word + first letter of last word
   if (parts.length >= 2) {
     return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
   }
-  
+
   // For single word or email, use first 2 characters
   return base.slice(0, 2).toUpperCase()
 }
@@ -212,7 +219,7 @@ export function getInitials(nameOrEmail: string | null | undefined): string {
 /**
  * Generates initials from a name (with fallback to email).
  * For names with multiple words, uses first letter of first word + first letter of last word.
- * 
+ *
  * @param name - Display name (can be null)
  * @param email - Email address (used as fallback if name is not available)
  * @returns Initials string (e.g., "John Ravndal" -> "JR", "john@example.com" -> "JO")

@@ -65,11 +65,12 @@ export function groupInventoryActivities(
         // Sort group by time (earliest first for display)
         group.sort(
           (a, b) =>
-            new Date(a.created_at).getTime() -
-            new Date(b.created_at).getTime(),
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
         )
 
-        const items = group.filter((a) => a.activity_type === 'inventory_item_created')
+        const items = group.filter(
+          (a) => a.activity_type === 'inventory_item_created',
+        )
         const groups = group.filter(
           (a) => a.activity_type === 'inventory_group_created',
         )
@@ -123,4 +124,3 @@ export function groupInventoryActivities(
 
   return result
 }
-

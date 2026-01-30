@@ -3,11 +3,11 @@ import type { JobOffer, OfferDetail } from '../types'
 
 export type ValidationResult = {
   valid: boolean
-  errors: string[]
+  errors: Array<string>
 }
 
 export function validateOffer(offer: OfferDetail): ValidationResult {
-  const errors: string[] = []
+  const errors: Array<string> = []
 
   // Check if offer has at least one item in one category
   const hasEquipment =

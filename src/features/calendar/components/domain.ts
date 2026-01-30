@@ -1,6 +1,6 @@
 // src/features/calendar/domain.ts
-import type { EventInput } from '@fullcalendar/core'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
+import type { EventInput } from '@fullcalendar/core'
 
 /** What kinds of things can appear in the calendar */
 export type CalendarKind = 'job' | 'item' | 'vehicle' | 'crew'
@@ -17,7 +17,7 @@ export type CalendarRecord = {
   ref?: {
     jobId?: string
     itemId?: string // For single-item queries (backward compatibility)
-    itemIds?: string[] // All item IDs for this equipment period
+    itemIds?: Array<string> // All item IDs for this equipment period
     vehicleId?: string
     userId?: string // crew
   }

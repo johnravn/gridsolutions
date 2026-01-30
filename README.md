@@ -190,7 +190,7 @@ The application uses Supabase Authentication with role-based access control. Use
 
 ## Database
 
-The project uses Supabase (PostgreSQL) for data storage. Database schema is managed through migrations located in `supabase/migrations/`. 
+The project uses Supabase (PostgreSQL) for data storage. Database schema is managed through migrations located in `supabase/migrations/`.
 
 **⚠️ IMPORTANT: All database schema changes MUST go through the migration workflow. See `CONTRIBUTING.md` for the complete migration workflow.**
 
@@ -214,6 +214,7 @@ The application is deployed to **gridsolutions.app** via Vercel. The `main` bran
 - **Migrations**: Push backward-compatible migrations before merging code
 
 For detailed instructions, see:
+
 - `DEPLOYMENT_WORKFLOW.md` - Complete deployment workflow, branch strategy, and migration timing
 - `CONTRIBUTING.md` - Complete migration workflow and best practices
 - `supabase/DEVELOPMENT_WORKFLOW.md` - Detailed Supabase development guide

@@ -340,7 +340,10 @@ export default function CustomerInspector({
                 {fmtVAT(c.vat_number)}
               </Text>
               {c.vat_number && (
-                <CopyIconButton text={c.vat_number} copyLabel="Copy VAT number" />
+                <CopyIconButton
+                  text={c.vat_number}
+                  copyLabel="Copy VAT number"
+                />
               )}
             </Flex>
           </div>

@@ -13,6 +13,7 @@ npm run supabase:start
 ```
 
 This will:
+
 - Pull Docker images (first time only - takes a few minutes)
 - Start all Supabase services
 - Create a local database
@@ -33,6 +34,7 @@ npm run db:status
 ```
 
 This shows you:
+
 - **API URL**: `http://127.0.0.1:54321`
 - **Studio URL**: `http://localhost:54323`
 - **Anon Key**: (for your `.env.local`)
@@ -41,6 +43,7 @@ This shows you:
 ## 📊 What You Get Locally
 
 ### Supabase Studio (GUI) - Port 54323
+
 - ✅ **Table Editor** - View/edit tables just like on supabase.com
 - ✅ **SQL Editor** - Run SQL queries
 - ✅ **Authentication** - Manage users
@@ -50,14 +53,17 @@ This shows you:
 - ✅ **Settings** - Configure your local instance
 
 ### API - Port 54321
+
 - Your app connects to: `http://127.0.0.1:54321`
 - Same API as production, but local
 
 ### Database - Port 54322
+
 - Direct PostgreSQL connection
 - Connection string shown in `npm run db:status`
 
 ### Other Services
+
 - **Inbucket** (Email testing): http://localhost:54324
 - **Analytics**: Port 54327
 
@@ -66,6 +72,7 @@ This shows you:
 ### Option A: Use the GUI (Like supabase.com)
 
 1. **Start Supabase:**
+
    ```bash
    npm run supabase:start
    ```
@@ -79,9 +86,11 @@ This shows you:
    - Test queries
 
 4. **Capture changes as migration:**
+
    ```bash
    npm run db:diff capture_gui_changes
    ```
+
    This creates a migration file from your GUI changes!
 
 5. **Test your app:**
@@ -92,11 +101,13 @@ This shows you:
 ### Option B: Use Migration Files (Recommended)
 
 1. **Start Supabase:**
+
    ```bash
    npm run supabase:start
    ```
 
 2. **Create migration:**
+
    ```bash
    npm run db:migrate add_new_feature
    ```
@@ -104,6 +115,7 @@ This shows you:
 3. **Edit the migration file** in `supabase/migrations/`
 
 4. **Apply migration:**
+
    ```bash
    npm run db:reset  # Resets and applies all migrations
    # OR
@@ -122,6 +134,7 @@ This shows you:
 ### Accessing the Studio
 
 1. Make sure Supabase is running:
+
    ```bash
    npm run db:status
    ```
@@ -164,6 +177,7 @@ This shows you:
 ### For Local Development
 
 Update `.env.local`:
+
 ```env
 VITE_SUPABASE_URL=http://127.0.0.1:54321
 VITE_SUPABASE_ANON_KEY=<get-from-npm-run-db-status>
@@ -172,6 +186,7 @@ VITE_SUPABASE_ANON_KEY=<get-from-npm-run-db-status>
 ### For Production/Staging
 
 Use remote URLs:
+
 ```env
 VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
 VITE_SUPABASE_ANON_KEY=<your-remote-key>
@@ -189,6 +204,7 @@ npm run db:reset
 ### 2. Capture GUI Changes
 
 If you make changes in Studio GUI:
+
 ```bash
 npm run db:diff capture_changes
 ```
@@ -244,6 +260,7 @@ npm run db:types:remote
 ## 🎯 Workflow Comparison
 
 ### Remote (supabase.com)
+
 - ✅ Production data
 - ✅ Shared with team
 - ❌ Network latency
@@ -251,6 +268,7 @@ npm run db:types:remote
 - ❌ Costs (on paid plans)
 
 ### Local (Docker)
+
 - ✅ Fast (no network)
 - ✅ Free (no limits)
 - ✅ Safe to experiment
@@ -289,8 +307,8 @@ npm run db:types:remote
 ## 🎉 You're All Set!
 
 Once Docker finishes pulling images, you'll have:
+
 - ✅ Full Supabase Studio GUI at http://localhost:54323
 - ✅ Local API at http://127.0.0.1:54321
 - ✅ Fast, free local development
 - ✅ Same interface you're used to!
-

@@ -6,7 +6,10 @@ export type RangeInfo = {
   label: string
 }
 
-export function getRange(range: RangeOption, selectedMonth?: string): RangeInfo {
+export function getRange(
+  range: RangeOption,
+  selectedMonth?: string,
+): RangeInfo {
   const now = new Date()
   const year = now.getFullYear()
 
@@ -24,7 +27,11 @@ export function getRange(range: RangeOption, selectedMonth?: string): RangeInfo 
   if (range === 'last-year') {
     const start = new Date(year - 1, 0, 1)
     const end = new Date(year, 0, 1)
-    return { from: start.toISOString(), to: end.toISOString(), label: `${year - 1}` }
+    return {
+      from: start.toISOString(),
+      to: end.toISOString(),
+      label: `${year - 1}`,
+    }
   }
 
   const start = new Date(year, 0, 1)
@@ -36,6 +43,32 @@ export function formatMonthInput(date: Date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   return `${year}-${month}`
+}
+
+export function getMonthOptions(year: number) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ]
+
+  return months.map((label, index) => {
+    const month = String(index + 1).padStart(2, '0')
+    return {
+      label,
+      value: `${year}-${month}`,
+      monthIndex: index,
+    }
+  })
 }
 
 function parseMonthInput(value: string | undefined, fallback: Date) {

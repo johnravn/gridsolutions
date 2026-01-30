@@ -3,7 +3,8 @@ import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { setCompanyUserRole, type CompanyRole } from '../../api/queries'
+import {  setCompanyUserRole } from '../../api/queries'
+import type {CompanyRole} from '../../api/queries';
 
 export default function ChangeRoleConfirmDialog({
   open,
@@ -66,7 +67,16 @@ export default function ChangeRoleConfirmDialog({
           <Text weight="medium">{capitalizeRole(newRole)}</Text>?
         </Dialog.Description>
 
-        <Flex direction="column" gap="2" mt="4" p="3" style={{ backgroundColor: 'var(--amber-3)', borderRadius: 'var(--radius-2)' }}>
+        <Flex
+          direction="column"
+          gap="2"
+          mt="4"
+          p="3"
+          style={{
+            backgroundColor: 'var(--amber-3)',
+            borderRadius: 'var(--radius-2)',
+          }}
+        >
           <Text size="2" weight="medium" style={{ color: 'var(--amber-11)' }}>
             ⚠️ Warning
           </Text>
@@ -104,4 +114,3 @@ export default function ChangeRoleConfirmDialog({
     </Dialog.Root>
   )
 }
-

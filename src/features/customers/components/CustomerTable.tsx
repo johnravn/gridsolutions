@@ -158,79 +158,82 @@ export default function CustomerTable({
   const paginatedRows = rows.slice(startIndex, endIndex)
 
   return (
-    <Box ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      ref={containerRef}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div ref={controlsRef}>
         <Flex gap="2" align="center" wrap="wrap">
-        <TextField.Root
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search customers…"
-          size="3"
-          style={{ flex: '1 1 260px' }}
-        >
-          <TextField.Slot side="left">
-            <Search />
-          </TextField.Slot>
-          <TextField.Slot side="right">
-            {(isFetching || isLoading) && (
-              <Flex align="center" gap="1">
-                <Text>Thinking</Text>
-                <Spinner size="2" />
-              </Flex>
-            )}
-          </TextField.Slot>
-        </TextField.Root>
+          <TextField.Root
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search customers…"
+            size="3"
+            style={{ flex: '1 1 260px' }}
+          >
+            <TextField.Slot side="left">
+              <Search />
+            </TextField.Slot>
+            <TextField.Slot side="right">
+              {(isFetching || isLoading) && (
+                <Flex align="center" gap="1">
+                  <Text>Thinking</Text>
+                  <Spinner size="2" />
+                </Flex>
+              )}
+            </TextField.Slot>
+          </TextField.Root>
 
-        <Select.Root
-          value={customerTypeFilter}
-          size="3"
-          onValueChange={(val) =>
-            setCustomerTypeFilter(val as CustomerTypeFilter)
-          }
-        >
-          <Select.Trigger
-            placeholder="Filter type…"
-            style={{ minHeight: 'var(--space-7)' }}
+          <Select.Root
+            value={customerTypeFilter}
+            size="3"
+            onValueChange={(val) =>
+              setCustomerTypeFilter(val as CustomerTypeFilter)
+            }
+          >
+            <Select.Trigger
+              placeholder="Filter type…"
+              style={{ minHeight: 'var(--space-7)' }}
+            />
+            <Select.Content>
+              <Select.Item value="all">All</Select.Item>
+              <Select.Item value="customer">Customer</Select.Item>
+              <Select.Item value="partner">Partner</Select.Item>
+            </Select.Content>
+          </Select.Root>
+
+          <Button variant="classic" onClick={() => setAddOpen(true)}>
+            Add customer
+          </Button>
+
+          <AddCustomerDialog
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            onAdded={() =>
+              qc.invalidateQueries({
+                queryKey: ['company', companyId, 'customers-index'],
+              })
+            }
           />
-          <Select.Content>
-            <Select.Item value="all">All</Select.Item>
-            <Select.Item value="customer">Customer</Select.Item>
-            <Select.Item value="partner">Partner</Select.Item>
-          </Select.Content>
-        </Select.Root>
-
-        <Button variant="classic" onClick={() => setAddOpen(true)}>
-          Add customer
-        </Button>
-
-        <AddCustomerDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          onAdded={() =>
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'customers-index'],
-            })
-          }
-        />
-      </Flex>
+        </Flex>
       </div>
 
       <Box style={{ flex: 1, minHeight: 0 }}>
         <Table.Root variant="surface" style={{ marginTop: 16 }}>
           <Table.Header ref={theadRef}>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Contact</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>
-              <Flex gap={'1'}>
-                Type
-                <Tooltip content="Customer: normal customer, Partner: supplier & customer">
-                  <InfoCircle width={'1em'} />
-                </Tooltip>
-              </Flex>
-            </Table.ColumnHeaderCell>
-          </Table.Row>
-        </Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Contact</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>
+                <Flex gap={'1'}>
+                  Type
+                  <Tooltip content="Customer: normal customer, Partner: supplier & customer">
+                    <InfoCircle width={'1em'} />
+                  </Tooltip>
+                </Flex>
+              </Table.ColumnHeaderCell>
+            </Table.Row>
+          </Table.Header>
           <Table.Body>
             {paginatedRows.length === 0 ? (
               <Table.Row>
@@ -238,44 +241,44 @@ export default function CustomerTable({
               </Table.Row>
             ) : (
               paginatedRows.map((r) => {
-              const active = r.id === selectedId
-              return (
-                <Table.Row
-                  key={r.id}
-                  onClick={() => onSelect(r.id)}
-                  style={{
-                    cursor: 'pointer',
-                    background: active ? 'var(--accent-a3)' : undefined,
-                  }}
-                  data-state={active ? 'active' : undefined}
-                >
-                  <Table.Cell>
-                    <Text size="2" weight="medium">
-                      {r.name}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2" color="gray">
-                      {r.email || '—'}
-                    </Text>
-                    {r.phone && (
-                      <Text as="div" size="1" color="gray">
-                        {prettyPhone(r.phone)}
+                const active = r.id === selectedId
+                return (
+                  <Table.Row
+                    key={r.id}
+                    onClick={() => onSelect(r.id)}
+                    style={{
+                      cursor: 'pointer',
+                      background: active ? 'var(--accent-a3)' : undefined,
+                    }}
+                    data-state={active ? 'active' : undefined}
+                  >
+                    <Table.Cell>
+                      <Text size="2" weight="medium">
+                        {r.name}
                       </Text>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell>
-                    {r.is_partner ? (
-                      <Badge variant="soft" color="green">
-                        Partner
-                      </Badge>
-                    ) : (
-                      <Badge variant="soft">Customer</Badge>
-                    )}
-                  </Table.Cell>
-                </Table.Row>
-              )
-            })
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2" color="gray">
+                        {r.email || '—'}
+                      </Text>
+                      {r.phone && (
+                        <Text as="div" size="1" color="gray">
+                          {prettyPhone(r.phone)}
+                        </Text>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {r.is_partner ? (
+                        <Badge variant="soft" color="green">
+                          Partner
+                        </Badge>
+                      ) : (
+                        <Badge variant="soft">Customer</Badge>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                )
+              })
             )}
             {/* Probe row for height measurement */}
             <Table.Row
@@ -294,8 +297,8 @@ export default function CustomerTable({
         <div ref={pagerRef}>
           <Flex align="center" justify="between" mt="3">
             <Text size="2" color="gray">
-              Showing {startIndex + 1}-
-              {Math.min(endIndex, rows.length)} of {rows.length} customers
+              Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of{' '}
+              {rows.length} customers
             </Text>
             <Flex gap="2">
               <Button

@@ -228,7 +228,8 @@ export default function AddEditVehicleDialog({
       'Reserve vehicle',
     ]
 
-    const randomName = vehicleNames[Math.floor(Math.random() * vehicleNames.length)]
+    const randomName =
+      vehicleNames[Math.floor(Math.random() * vehicleNames.length)]
     const randomReg = regNumbers[Math.floor(Math.random() * regNumbers.length)]
     const randomFuel = fuels[Math.floor(Math.random() * fuels.length)]
     const randomCategory =
@@ -246,7 +247,7 @@ export default function AddEditVehicleDialog({
       fuel: randomFuel,
       vehicle_category: randomCategory,
       internally_owned: isInternal,
-      external_owner_id: isInternal ? null : randomPartner?.id ?? null,
+      external_owner_id: isInternal ? null : (randomPartner?.id ?? null),
       image_path: null,
       notes: randomNotes,
     })

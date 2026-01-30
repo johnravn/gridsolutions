@@ -222,13 +222,13 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
           : (data as any).contact_person) ?? null
 
       return {
-        id: data.id as string,
-        name: data.name as string,
-        created_at: data.created_at as string,
-        address: (data.address ?? null) as string | null,
-        vat_number: (data.vat_number ?? null) as string | null,
-        general_email: (data.general_email ?? null) as string | null,
-        contact_person_id: (data.contact_person_id ?? null) as string | null,
+        id: data.id,
+        name: data.name,
+        created_at: data.created_at,
+        address: (data.address ?? null),
+        vat_number: (data.vat_number ?? null),
+        general_email: (data.general_email ?? null),
+        contact_person_id: (data.contact_person_id ?? null),
         accent_color: (data.accent_color as RadixAccentColor | null) ?? null,
         theme_radius: (data.theme_radius as RadixRadius | null) ?? null,
         theme_gray_color:
@@ -236,9 +236,9 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
         theme_panel_background:
           (data.theme_panel_background as RadixPanelBackground | null) ?? null,
         theme_scaling: (data.theme_scaling as RadixScaling | null) ?? null,
-        logo_path: (data.logo_path as string | null) ?? null,
-        logo_light_path: (data.logo_light_path as string | null) ?? null,
-        logo_dark_path: (data.logo_dark_path as string | null) ?? null,
+        logo_path: (data.logo_path) ?? null,
+        logo_light_path: (data.logo_light_path) ?? null,
+        logo_dark_path: (data.logo_dark_path) ?? null,
         contact_person: person as {
           user_id: string
           display_name: string | null
@@ -295,7 +295,10 @@ export async function updateCompany({
   if (logo_light_path !== undefined) updates.logo_light_path = logo_light_path
   if (logo_dark_path !== undefined) updates.logo_dark_path = logo_dark_path
 
-  const { error } = await supabase.from('companies').update(updates).eq('id', id)
+  const { error } = await supabase
+    .from('companies')
+    .update(updates)
+    .eq('id', id)
 
   if (error) throw error
 }

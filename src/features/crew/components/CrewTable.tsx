@@ -14,7 +14,11 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { ArrowDown, ArrowUp, Search, Trash } from 'iconoir-react'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
-import { crewIndexQuery, deleteInvite, pendingInvitesQuery } from '../api/queries'
+import {
+  crewIndexQuery,
+  deleteInvite,
+  pendingInvitesQuery,
+} from '../api/queries'
 import AddFreelancerDialog from './dialogs/AddFreelancerDialog'
 
 type Props = {
@@ -133,11 +137,7 @@ export default function CrewTable({
       ? fuzzySearch(
           L,
           search,
-          [
-            (r) => r.title,
-            (r) => r.subtitle ?? '',
-            (r) => r.email ?? '',
-          ],
+          [(r) => r.title, (r) => r.subtitle ?? '', (r) => r.email ?? ''],
           0.3,
         )
       : L
@@ -274,12 +274,26 @@ export default function CrewTable({
         recomputePageSize()
       })
     }
-  }, [empLoading, frLoading, invLoading, owLoading, rows.length, recomputePageSize])
+  }, [
+    empLoading,
+    frLoading,
+    invLoading,
+    owLoading,
+    rows.length,
+    recomputePageSize,
+  ])
 
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setPage(1)
-  }, [search, sortColumn, sortDirection, showEmployees, showFreelancers, showMyPending])
+  }, [
+    search,
+    sortColumn,
+    sortDirection,
+    showEmployees,
+    showFreelancers,
+    showMyPending,
+  ])
 
   // Paginate the rows
   const totalPages = Math.ceil(rows.length / pageSize)
@@ -309,86 +323,89 @@ export default function CrewTable({
   })
 
   return (
-    <Box ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      ref={containerRef}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div ref={controlsRef}>
         <Flex gap="2" align="center" wrap="wrap">
-        <TextField.Root
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search crew…"
-          size="3"
-          style={{ flex: '1 1 260px' }}
-        >
-          <TextField.Slot side="left">
-            <Search />
-          </TextField.Slot>
-          <TextField.Slot side="right">
-            {(empLoading || frLoading || invLoading || owLoading) && (
-              <Flex align="center" gap="1">
-                <Text>Thinking</Text>
-                <Spinner size="2" />
-              </Flex>
-            )}
-          </TextField.Slot>
-        </TextField.Root>
+          <TextField.Root
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search crew…"
+            size="3"
+            style={{ flex: '1 1 260px' }}
+          >
+            <TextField.Slot side="left">
+              <Search />
+            </TextField.Slot>
+            <TextField.Slot side="right">
+              {(empLoading || frLoading || invLoading || owLoading) && (
+                <Flex align="center" gap="1">
+                  <Text>Thinking</Text>
+                  <Spinner size="2" />
+                </Flex>
+              )}
+            </TextField.Slot>
+          </TextField.Root>
 
-        <Button variant="classic" onClick={() => setAddOpen(true)}>
-          Add freelancer
-        </Button>
+          <Button variant="classic" onClick={() => setAddOpen(true)}>
+            Add freelancer
+          </Button>
 
-        <AddFreelancerDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          onAdded={() => {
-            // refresh lists
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'crew-index', 'freelancer'],
-            })
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'pending-invites'],
-            })
-          }}
-        />
-      </Flex>
+          <AddFreelancerDialog
+            open={addOpen}
+            onOpenChange={setAddOpen}
+            onAdded={() => {
+              // refresh lists
+              qc.invalidateQueries({
+                queryKey: ['company', companyId, 'crew-index', 'freelancer'],
+              })
+              qc.invalidateQueries({
+                queryKey: ['company', companyId, 'pending-invites'],
+              })
+            }}
+          />
+        </Flex>
       </div>
 
       <Box style={{ flex: 1, minHeight: 0 }}>
         <Table.Root variant="surface" style={{ marginTop: 16 }}>
           <Table.Header ref={theadRef}>
-          <Table.Row>
-            <Table.ColumnHeaderCell
-              style={{ cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => handleSort('name')}
-            >
-              <Flex align="center" gap="1">
-                <Text>Name / Email</Text>
-                {sortColumn === 'name' &&
-                  (sortDirection === 'asc' ? (
-                    <ArrowUp width={12} height={12} />
-                  ) : (
-                    <ArrowDown width={12} height={12} />
-                  ))}
-              </Flex>
-            </Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell
-              style={{ cursor: 'pointer', userSelect: 'none' }}
-              onClick={() => handleSort('status')}
-            >
-              <Flex align="center" gap="1">
-                <Text>Status</Text>
-                {sortColumn === 'status' &&
-                  (sortDirection === 'asc' ? (
-                    <ArrowUp width={12} height={12} />
-                  ) : (
-                    <ArrowDown width={12} height={12} />
-                  ))}
-              </Flex>
-            </Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell
-              style={{ width: 120, textAlign: 'right' }}
-            />
-          </Table.Row>
-        </Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => handleSort('name')}
+              >
+                <Flex align="center" gap="1">
+                  <Text>Name / Email</Text>
+                  {sortColumn === 'name' &&
+                    (sortDirection === 'asc' ? (
+                      <ArrowUp width={12} height={12} />
+                    ) : (
+                      <ArrowDown width={12} height={12} />
+                    ))}
+                </Flex>
+              </Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => handleSort('status')}
+              >
+                <Flex align="center" gap="1">
+                  <Text>Status</Text>
+                  {sortColumn === 'status' &&
+                    (sortDirection === 'asc' ? (
+                      <ArrowUp width={12} height={12} />
+                    ) : (
+                      <ArrowDown width={12} height={12} />
+                    ))}
+                </Flex>
+              </Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell
+                style={{ width: 120, textAlign: 'right' }}
+              />
+            </Table.Row>
+          </Table.Header>
           <Table.Body>
             {paginatedRows.length === 0 ? (
               <Table.Row>
@@ -396,66 +413,66 @@ export default function CrewTable({
               </Table.Row>
             ) : (
               paginatedRows.map((r) => {
-              const active = r.kind !== 'invite' && r.id === selectedUserId
-              return (
-                <Table.Row
-                  key={r.id}
-                  onClick={() => r.kind !== 'invite' && onSelect(r.id)}
-                  style={{
-                    cursor: r.kind !== 'invite' ? 'pointer' : 'default',
-                    background: active ? 'var(--accent-a3)' : undefined,
-                  }}
-                  data-state={active ? 'active' : undefined}
-                >
-                  <Table.Cell>
-                    <Text size="2" weight="medium">
-                      {r.title}
-                    </Text>
-                    {r.subtitle && (
-                      <Text as="div" size="1" color="gray">
-                        {r.subtitle}
+                const active = r.kind !== 'invite' && r.id === selectedUserId
+                return (
+                  <Table.Row
+                    key={r.id}
+                    onClick={() => r.kind !== 'invite' && onSelect(r.id)}
+                    style={{
+                      cursor: r.kind !== 'invite' ? 'pointer' : 'default',
+                      background: active ? 'var(--accent-a3)' : undefined,
+                    }}
+                    data-state={active ? 'active' : undefined}
+                  >
+                    <Table.Cell>
+                      <Text size="2" weight="medium">
+                        {r.title}
                       </Text>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    {r.kind === 'invite' ? (
-                      <Badge variant="soft" color="amber">
-                        Pending invite
-                      </Badge>
-                    ) : (
-                      <Badge
-                        variant="soft"
-                        color={
-                          r.kind === 'owner'
-                            ? 'purple'
-                            : r.kind === 'employee'
-                              ? 'blue'
-                              : 'green'
-                        }
-                      >
-                        {r.kind}
-                      </Badge>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ textAlign: 'right' }}>
-                    {r.kind === 'invite' && (
-                      <Button
-                        variant="soft"
-                        color="red"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          const id = r.id.replace('invite:', '')
-                          delInvite.mutate(id)
-                        }}
-                        disabled={delInvite.isPending}
-                      >
-                        <Trash width={14} height={14} />
-                      </Button>
-                    )}
-                  </Table.Cell>
-                </Table.Row>
-              )
-            })
+                      {r.subtitle && (
+                        <Text as="div" size="1" color="gray">
+                          {r.subtitle}
+                        </Text>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell style={{ verticalAlign: 'middle' }}>
+                      {r.kind === 'invite' ? (
+                        <Badge variant="soft" color="amber">
+                          Pending invite
+                        </Badge>
+                      ) : (
+                        <Badge
+                          variant="soft"
+                          color={
+                            r.kind === 'owner'
+                              ? 'purple'
+                              : r.kind === 'employee'
+                                ? 'blue'
+                                : 'green'
+                          }
+                        >
+                          {r.kind}
+                        </Badge>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell style={{ textAlign: 'right' }}>
+                      {r.kind === 'invite' && (
+                        <Button
+                          variant="soft"
+                          color="red"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const id = r.id.replace('invite:', '')
+                            delInvite.mutate(id)
+                          }}
+                          disabled={delInvite.isPending}
+                        >
+                          <Trash width={14} height={14} />
+                        </Button>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                )
+              })
             )}
             {/* Probe row for height measurement */}
             <Table.Row
@@ -474,8 +491,8 @@ export default function CrewTable({
         <div ref={pagerRef}>
           <Flex align="center" justify="between" mt="3">
             <Text size="2" color="gray">
-              Showing {startIndex + 1}-
-              {Math.min(endIndex, rows.length)} of {rows.length} crew members
+              Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of{' '}
+              {rows.length} crew members
             </Text>
             <Flex gap="2">
               <Button

@@ -155,7 +155,7 @@ export function itemCalendarQuery({
       if (itemsError) throw itemsError
 
       // Create a map of time_period_id to array of item_ids
-      const itemMap = new Map<string, string[]>()
+      const itemMap = new Map<string, Array<string>>()
       ;(allItemsRes || []).forEach((i: any) => {
         if (!itemMap.has(i.time_period_id)) {
           itemMap.set(i.time_period_id, [])
@@ -385,7 +385,7 @@ export function companyCalendarQuery({
       })
 
       // Map time_period_id to array of item_ids (equipment periods can have multiple items)
-      const itemMap = new Map<string, string[]>()
+      const itemMap = new Map<string, Array<string>>()
       ;(itemsRes.data || []).forEach((i: any) => {
         if (!itemMap.has(i.time_period_id)) {
           itemMap.set(i.time_period_id, [])

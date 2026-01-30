@@ -242,6 +242,7 @@ export default function ProfilePage() {
         city: addr.city,
         country: addr.country,
         is_personal: true,
+        company_id: null,
       }
 
       if (addressId) {
@@ -256,14 +257,13 @@ export default function ProfilePage() {
         addr.zip_code &&
         addr.country
       ) {
-        const { data: inserted, error: insErr } = await supabase
+        const newAddressId = crypto.randomUUID()
+        const { error: insErr } = await supabase
           .from('addresses')
-          .insert([{ ...cleanAddress }])
-          .select('id')
-          .single()
+          .insert([{ id: newAddressId, ...cleanAddress }])
         if (insErr) throw insErr
-        addressId = inserted.id
-        setAddr((s) => ({ ...s, id: inserted.id }))
+        addressId = newAddressId
+        setAddr((s) => ({ ...s, id: newAddressId }))
       }
 
       // 5b) Set primary_address_id on profile (separate simple update)
@@ -429,7 +429,10 @@ export default function ProfilePage() {
           </Flex>
         </Flex>
         <Flex align="center" gap="4" wrap="wrap">
-          <Popover.Root open={stylingMenuOpen} onOpenChange={setStylingMenuOpen}>
+          <Popover.Root
+            open={stylingMenuOpen}
+            onOpenChange={setStylingMenuOpen}
+          >
             <Popover.Trigger>
               <Button size="2" variant="soft">
                 Styling

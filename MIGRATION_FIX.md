@@ -25,11 +25,13 @@ npx supabase db pull
 ### Option 2: Work with Remote for Now
 
 For now, you can:
+
 1. Skip local Supabase setup
 2. Use the remote database directly
 3. Your `.env.local` already points to remote
 
 Then later, when you have time:
+
 - Pull the base schema
 - Set up local development properly
 
@@ -53,4 +55,3 @@ Your app will work fine with the remote database. Local development is optional 
 3. ⏳ Then local Supabase will work
 
 For now, you can continue developing against the remote database!
-

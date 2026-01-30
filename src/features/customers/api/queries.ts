@@ -53,7 +53,7 @@ export function customersIndexQuery({
         )
         .eq('company_id', companyId)
         .or('deleted.is.null,deleted.eq.false')
-      
+
       // Apply fuzzy search using expanded ilike patterns
       if (search && search.trim()) {
         const term = search.trim()
@@ -63,35 +63,35 @@ export function customersIndexQuery({
         const patterns = [
           `%${term}%`,
           term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as string[]
-        
+        ].filter(Boolean) as Array<string>
+
         const conditions = patterns
           .map((pattern) => `name.ilike.${pattern}`)
           .join(',')
         q = q.or(conditions)
       }
-      
+
       q = q.order('name', { ascending: true })
-      
+
       if (showRegular && !showPartner) q = q.eq('is_partner', false)
       if (!showRegular && showPartner) q = q.eq('is_partner', true)
       // if both on -> no filter; if both off -> show none
       if (!showRegular && !showPartner) return []
       const { data, error } = await q
       if (error) throw error
-      
+
       // Apply client-side fuzzy matching for better results
       // This handles cases where database ilike isn't fuzzy enough
       if (search && search.trim()) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
         return fuzzySearch(
-          (data || []) as CustomerRow[],
+          (data || []) as Array<CustomerRow>,
           search,
           [(item) => item.name, (item) => item.email, (item) => item.phone],
           0.25, // Lower threshold since we already filtered with ilike
-        ) as CustomerRow[]
+        )
       }
-      
+
       return data as any
     },
   }

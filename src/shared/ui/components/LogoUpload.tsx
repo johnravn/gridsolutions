@@ -101,8 +101,11 @@ export default function LogoUpload({
     // Validate aspect ratio
     setUploading(true)
     try {
-      const { isValid: isValidAspectRatio, width, height } =
-        await validateAspectRatio(file)
+      const {
+        isValid: isValidAspectRatio,
+        width,
+        height,
+      } = await validateAspectRatio(file)
       if (!isValidAspectRatio) {
         const currentRatio = width && height ? `${width}:${height}` : 'unknown'
         toastError(
@@ -138,7 +141,7 @@ export default function LogoUpload({
 
       onUploadComplete(uploadPath)
       success('Logo uploaded', 'Logo has been uploaded successfully.')
-      
+
       // Clear preview URL after successful upload - the actual logo URL will be used
       if (previewUrlRef.current) {
         URL.revokeObjectURL(previewUrlRef.current)
@@ -268,4 +271,3 @@ export default function LogoUpload({
     </Box>
   )
 }
-

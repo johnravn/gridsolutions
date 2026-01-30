@@ -128,36 +128,44 @@ export default function VehiclesView({
   const totalPages = Math.ceil(allData.length / pageSize)
   const startIndex = (page - 1) * pageSize
   const endIndex = startIndex + pageSize
-  const data = viewMode === 'list' ? allData.slice(startIndex, endIndex) : allData
+  const data =
+    viewMode === 'list' ? allData.slice(startIndex, endIndex) : allData
 
   return (
-    <Box ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      ref={containerRef}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div ref={controlsRef}>
         <Flex gap="2" align="center" wrap="wrap">
-        <TextField.Root
-          value={search}
-          onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search vehicles…"
-          size="3"
-          style={{ flex: '1 1 260px' }}
-        >
-          <TextField.Slot side="left">
-            <Search />
-          </TextField.Slot>
-          <TextField.Slot side="right">
-            {(isLoading || isFetching) && <Spinner />}
-          </TextField.Slot>
-        </TextField.Root>
+          <TextField.Root
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search vehicles…"
+            size="3"
+            style={{ flex: '1 1 260px' }}
+          >
+            <TextField.Slot side="left">
+              <Search />
+            </TextField.Slot>
+            <TextField.Slot side="right">
+              {(isLoading || isFetching) && <Spinner />}
+            </TextField.Slot>
+          </TextField.Root>
 
-        <Button variant="classic" onClick={() => setAddOpen(true)}>
-          Add vehicle
-        </Button>
-      </Flex>
+          <Button variant="classic" onClick={() => setAddOpen(true)}>
+            Add vehicle
+          </Button>
+        </Flex>
       </div>
 
       <Box style={{ flex: 1, minHeight: 0 }}>
         {viewMode === 'grid' ? (
-          <VehiclesGrid rows={data} selectedId={selectedId} onSelect={onSelect} />
+          <VehiclesGrid
+            rows={data}
+            selectedId={selectedId}
+            onSelect={onSelect}
+          />
         ) : (
           <div
             ref={(el) => {
@@ -166,7 +174,11 @@ export default function VehiclesView({
               }
             }}
           >
-            <VehiclesList rows={data} selectedId={selectedId} onSelect={onSelect} />
+            <VehiclesList
+              rows={data}
+              selectedId={selectedId}
+              onSelect={onSelect}
+            />
           </div>
         )}
       </Box>
@@ -175,8 +187,8 @@ export default function VehiclesView({
         <div ref={pagerRef}>
           <Flex align="center" justify="between" mt="3">
             <Text size="2" color="gray">
-              Showing {startIndex + 1}-
-              {Math.min(endIndex, allData.length)} of {allData.length} vehicles
+              Showing {startIndex + 1}-{Math.min(endIndex, allData.length)} of{' '}
+              {allData.length} vehicles
             </Text>
             <Flex gap="2">
               <Button

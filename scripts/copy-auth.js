@@ -51,7 +51,7 @@ async function copyAuth() {
     // Dump auth schema (users, identities, but skip sessions/refresh_tokens)
     execSync(
       `npx supabase db dump --linked --schema auth --data-only > "${tempFile}" 2>&1`,
-      { stdio: 'pipe' }
+      { stdio: 'pipe' },
     )
   } catch (error) {
     // Check if it's just a warning or actual error
@@ -74,7 +74,10 @@ async function copyAuth() {
   const stats = fs.statSync(tempFile)
   if (stats.size === 0) {
     log('⚠️  Auth dump appears to be empty.', 'yellow')
-    log('   This might mean there are no users in remote, or auth schema is restricted.', 'yellow')
+    log(
+      '   This might mean there are no users in remote, or auth schema is restricted.',
+      'yellow',
+    )
     if (existsSync(tempFile)) unlinkSync(tempFile)
     return
   }
@@ -83,7 +86,7 @@ async function copyAuth() {
   // Skip sessions, refresh_tokens, audit_log_entries, etc.
   log('2️⃣  Processing auth data...', 'cyan')
   const dumpContent = fs.readFileSync(tempFile, 'utf-8')
-  
+
   // Filter to only include INSERT statements for users and identities
   const lines = dumpContent.split('\n')
   const filteredLines = []
@@ -93,7 +96,7 @@ async function copyAuth() {
 
   for (const line of lines) {
     const trimmed = line.trim()
-    
+
     // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith('--')) {
       continue
@@ -124,7 +127,11 @@ async function copyAuth() {
     }
 
     // Skip SET, SELECT, and other statements
-    if (trimmed.startsWith('SET ') || trimmed.startsWith('SELECT ') || trimmed.startsWith('\\')) {
+    if (
+      trimmed.startsWith('SET ') ||
+      trimmed.startsWith('SELECT ') ||
+      trimmed.startsWith('\\')
+    ) {
       continue
     }
 
@@ -154,7 +161,10 @@ async function copyAuth() {
   }
 
   // Write filtered content to temp file
-  const filteredFile = join(tmpdir(), `supabase_auth_filtered_${Date.now()}.sql`)
+  const filteredFile = join(
+    tmpdir(),
+    `supabase_auth_filtered_${Date.now()}.sql`,
+  )
   writeFileSync(filteredFile, filteredLines.join('\n'), 'utf-8')
 
   // Step 3: Restore to local
@@ -186,7 +196,7 @@ async function copyAuth() {
 ALTER TABLE auth.users DISABLE TRIGGER ALL;
 ALTER TABLE auth.identities DISABLE TRIGGER ALL;
 `
-    
+
     execSync(
       `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "${disableTriggersSQL.replace(/"/g, '\\"')}"`,
       { stdio: 'pipe' },
@@ -203,7 +213,7 @@ ALTER TABLE auth.identities DISABLE TRIGGER ALL;
 ALTER TABLE auth.users ENABLE TRIGGER ALL;
 ALTER TABLE auth.identities ENABLE TRIGGER ALL;
 `
-    
+
     execSync(
       `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "${enableTriggersSQL.replace(/"/g, '\\"')}"`,
       { stdio: 'pipe' },
@@ -221,16 +231,22 @@ ALTER TABLE auth.identities ENABLE TRIGGER ALL;
   if (existsSync(filteredFile)) unlinkSync(filteredFile)
 
   // Count how many users were copied
-  const userCount = filteredLines.filter(l => 
-    l.toUpperCase().includes('INSERT INTO AUTH.USERS')
+  const userCount = filteredLines.filter((l) =>
+    l.toUpperCase().includes('INSERT INTO AUTH.USERS'),
   ).length
 
   log(`✅ Copied ${userCount} user(s) successfully!`, 'green')
   console.log('')
   log('💡 Note:', 'blue')
   log('   - Users can now log in locally with their remote passwords', 'cyan')
-  log('   - Email confirmation is disabled in local dev, so emails work immediately', 'cyan')
-  log('   - Sessions/refresh tokens were not copied (you\'ll need to log in again)', 'cyan')
+  log(
+    '   - Email confirmation is disabled in local dev, so emails work immediately',
+    'cyan',
+  )
+  log(
+    "   - Sessions/refresh tokens were not copied (you'll need to log in again)",
+    'cyan',
+  )
 }
 
 copyAuth().catch((error) => {
@@ -238,4 +254,3 @@ copyAuth().catch((error) => {
   console.error(error)
   process.exit(1)
 })
-

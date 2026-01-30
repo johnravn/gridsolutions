@@ -20,11 +20,12 @@ import { prettyPhone } from '@shared/phone/phone'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
+  
   companyUsersQuery,
-  removeUserFromCompany,
-  type CompanyUserRow,
+  removeUserFromCompany
 } from '../api/queries'
 import AssignUserToCompanyDialog from './AssignUserToCompanyDialog'
+import type {CompanyUserRow} from '../api/queries';
 
 export default function CompanyInspector({
   id,
@@ -42,10 +43,7 @@ export default function CompanyInspector({
     enabled: !!id,
   })
 
-  const {
-    data: companyUsers = [],
-    isLoading: usersLoading,
-  } = useQuery({
+  const { data: companyUsers = [], isLoading: usersLoading } = useQuery({
     ...companyUsersQuery({ companyId: id ?? '__none__' }),
     enabled: !!id,
   })
@@ -53,8 +51,9 @@ export default function CompanyInspector({
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [assignDialogOpen, setAssignDialogOpen] = React.useState(false)
-  const [userToRemove, setUserToRemove] =
-    React.useState<CompanyUserRow | null>(null)
+  const [userToRemove, setUserToRemove] = React.useState<CompanyUserRow | null>(
+    null,
+  )
 
   const removeUserMutation = useMutation({
     mutationFn: async (userId: string) => {
@@ -90,7 +89,7 @@ export default function CompanyInspector({
         errorMessage.includes('JSON object') ||
         errorMessage.includes('No rows returned') ||
         errorMessage.includes('PGRST116')
-      
+
       if ((!data && !isError) || (isError && isNotFoundError)) {
         onDeleted?.()
       }
@@ -108,7 +107,7 @@ export default function CompanyInspector({
     errorMessage.includes('JSON object') ||
     errorMessage.includes('No rows returned') ||
     errorMessage.includes('PGRST116')
-  
+
   if (isError && isNotFoundError) {
     // Clear selection and show "select a company" message
     // The useEffect will handle clearing the id, but we need to render something now
@@ -443,7 +442,8 @@ export default function CompanyInspector({
                     >
                       {user.role === 'super_user'
                         ? 'Super User'
-                        : user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                        : user.role.charAt(0).toUpperCase() +
+                          user.role.slice(1)}
                     </Badge>
                   </Table.Cell>
                   <Table.Cell style={{ textAlign: 'right' }}>

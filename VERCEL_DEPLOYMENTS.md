@@ -13,42 +13,50 @@
 ### 1. Preview Deployments (Feature Branches)
 
 **When they happen:**
+
 - Every push to a feature branch
 - Every PR created/updated
 - Every commit to a non-main branch
 
 **What you get:**
+
 - Unique URL: `https://grid-xxxxx-johnravns-projects.vercel.app`
 - Each branch gets its own preview URL
 - URL stays the same for that branch (updates on new commits)
 
 **Purpose:**
+
 - Test changes before merging
 - Share with team for feedback
 - Verify everything works
 - Catch bugs before production
 
 **Environment Variables:**
+
 - Uses **Preview** environment variables (if set)
 - Falls back to **Production** variables if Preview not set
 
 ### 2. Production Deployments (Main Branch)
 
 **When they happen:**
+
 - Every merge to `main` branch
 - Every direct push to `main` (not recommended)
 
 **What you get:**
+
 - Your custom domain: `https://gridsolutions.app`
 - This is your **live production site**
 - Users see this version
 
 **Purpose:**
+
 - Live production site
 - What your users access
 - Should always be stable
 
 **Environment Variables:**
+
 - Uses **Production** environment variables only
 
 ## The Complete Flow
@@ -146,7 +154,8 @@
 
 ### Q: How do I know when production is deployed?
 
-**A**: 
+**A**:
+
 - Check Vercel dashboard
 - Visit gridsolutions.app
 - Check deployment status in GitHub (after merging)
@@ -196,12 +205,13 @@
 
 ## Summary
 
-| Type | Branch | URL | Purpose |
-|------|--------|-----|---------|
-| **Preview** | Feature branches | `grid-xxxxx.vercel.app` | Test before production |
-| **Production** | `main` | `gridsolutions.app` | Live production site |
+| Type           | Branch           | URL                     | Purpose                |
+| -------------- | ---------------- | ----------------------- | ---------------------- |
+| **Preview**    | Feature branches | `grid-xxxxx.vercel.app` | Test before production |
+| **Production** | `main`           | `gridsolutions.app`     | Live production site   |
 
-**Remember**: 
+**Remember**:
+
 - Preview = Testing ground (safe to break)
 - Production = Live site (must be stable)
 - Merge to `main` = Deploy to production
@@ -209,4 +219,3 @@
 ---
 
 **Your current situation**: You have a preview deployment. Test it, and when ready, merge the PR to deploy to gridsolutions.app!
-

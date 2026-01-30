@@ -153,9 +153,7 @@ export default function ActivityFilter({
               onClick={() => {
                 // If all types are selected, deselect all; otherwise select all
                 if (isSelected) {
-                  onTypesChange(
-                    selectedTypes.filter((t) => !types.includes(t)),
-                  )
+                  onTypesChange(selectedTypes.filter((t) => !types.includes(t)))
                 } else {
                   const newTypes = [...new Set([...selectedTypes, ...types])]
                   onTypesChange(newTypes)

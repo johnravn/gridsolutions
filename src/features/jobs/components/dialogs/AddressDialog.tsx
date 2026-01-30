@@ -19,8 +19,8 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { addressIndexQuery } from '@features/jobs/api/queries'
-import type { JobDetail, UUID } from '../../types'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
+import type { JobDetail, UUID } from '../../types'
 
 type Props = {
   open: boolean
@@ -218,7 +218,7 @@ export default function AddressDialog({
         .select('id')
         .single()
       if (error) throw error
-      return data.id as string
+      return data.id
     },
     onSuccess: async (newId) => {
       await qc.invalidateQueries({

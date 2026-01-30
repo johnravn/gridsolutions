@@ -1,4 +1,9 @@
-export type MatterType = 'crew_invite' | 'vote' | 'announcement' | 'chat' | 'update'
+export type MatterType =
+  | 'crew_invite'
+  | 'vote'
+  | 'announcement'
+  | 'chat'
+  | 'update'
 export type MatterRecipientStatus =
   | 'pending'
   | 'sent'

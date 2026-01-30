@@ -6,9 +6,9 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyDetailQuery } from '@features/company/api/queries'
 import type {
   RadixAccentColor,
-  RadixRadius,
   RadixGrayColor,
   RadixPanelBackground,
+  RadixRadius,
   RadixScaling,
 } from '@features/company/api/queries'
 

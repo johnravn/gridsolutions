@@ -102,24 +102,24 @@ export default function MatterList({
 
     const onResize = () => recomputePageSize()
     window.addEventListener('resize', onResize)
-    
+
     // Use ResizeObserver to watch for container size changes
     const resizeObserver = new ResizeObserver(() => {
       recomputePageSize()
     })
-    
+
     resizeObserver.observe(containerRef.current)
-    
+
     // Delay initial calculation to ensure DOM is ready
     const timeoutId = setTimeout(() => {
       recomputePageSize()
     }, 0)
-    
+
     // Also try after a frame to ensure layout is complete
     const rafId = requestAnimationFrame(() => {
       recomputePageSize()
     })
-    
+
     return () => {
       window.removeEventListener('resize', onResize)
       resizeObserver.disconnect()
@@ -217,7 +217,15 @@ export default function MatterList({
 
       return sortDir === 'asc' ? comparison : -comparison
     })
-  }, [allMatters, search, typeFilter, unreadFilter, companyFilter, sortBy, sortDir])
+  }, [
+    allMatters,
+    search,
+    typeFilter,
+    unreadFilter,
+    companyFilter,
+    sortBy,
+    sortDir,
+  ])
 
   // Paginate the filtered matters
   const totalPages = Math.ceil(allFilteredMatters.length / pageSize)
@@ -306,7 +314,10 @@ export default function MatterList({
   }
 
   return (
-    <Box ref={containerRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box
+      ref={containerRef}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+    >
       <div ref={controlsRef}>
         <Flex gap="2" align="center" wrap="wrap" mb="3">
           <TextField.Root

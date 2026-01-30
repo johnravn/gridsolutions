@@ -14,8 +14,7 @@ import {
 } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
-import { assignUserToCompany } from '../api/queries'
-import { companyUsersQuery } from '../api/queries'
+import { assignUserToCompany, companyUsersQuery  } from '../api/queries'
 
 type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 
@@ -107,10 +106,7 @@ export default function AssignUserToCompanyDialog({
       onAssigned?.()
     },
     onError: (e: any) => {
-      toastError(
-        'Failed to assign user',
-        e?.message ?? 'Please try again.',
-      )
+      toastError('Failed to assign user', e?.message ?? 'Please try again.')
     },
   })
 
@@ -201,7 +197,12 @@ export default function AssignUserToCompanyDialog({
           {selectedUser && (
             <>
               <div>
-                <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+                <Text
+                  as="div"
+                  size="2"
+                  color="gray"
+                  style={{ marginBottom: 6 }}
+                >
                   Role
                 </Text>
                 <Select.Root
@@ -235,7 +236,11 @@ export default function AssignUserToCompanyDialog({
 
           <Flex gap="3" justify="end" mt="4">
             <Dialog.Close>
-              <Button type="button" variant="soft" disabled={assignMutation.isPending}>
+              <Button
+                type="button"
+                variant="soft"
+                disabled={assignMutation.isPending}
+              >
                 Cancel
               </Button>
             </Dialog.Close>
@@ -252,4 +257,3 @@ export default function AssignUserToCompanyDialog({
     </Dialog.Root>
   )
 }
-

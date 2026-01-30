@@ -15,7 +15,7 @@ export default function SelectExternalOwnerDialog({
   onOpenChange: (v: boolean) => void
   companyId: string
   onSelect: (ownerId: string, ownerName: string) => void
-  excludeOwnerIds?: string[]
+  excludeOwnerIds?: Array<string>
 }) {
   const [selectedOwnerId, setSelectedOwnerId] = React.useState<string>('')
 

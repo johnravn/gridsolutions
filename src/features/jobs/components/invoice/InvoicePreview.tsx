@@ -1,6 +1,7 @@
 // src/features/jobs/components/invoice/InvoicePreview.tsx
 import * as React from 'react'
 import {
+  Badge,
   Box,
   Card,
   Flex,
@@ -8,7 +9,6 @@ import {
   Separator,
   Table,
   Text,
-  Badge,
 } from '@radix-ui/themes'
 import type { JobOffer } from '../../types'
 import type { BookingsForInvoice } from '../../api/invoiceQueries'
@@ -104,7 +104,8 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
               <Table.Row>
                 <Table.Cell>
                   <Text weight="medium">
-                    {offer.title || `Invoice for Offer v${offer.version_number}`}
+                    {offer.title ||
+                      `Invoice for Offer v${offer.version_number}`}
                   </Text>
                 </Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>
@@ -115,9 +116,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                 </Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>
                   {offer.discount_percent > 0 ? (
-                    <Badge color="orange">
-                      {offer.discount_percent}%
-                    </Badge>
+                    <Badge color="orange">{offer.discount_percent}%</Badge>
                   ) : (
                     <Text color="gray">—</Text>
                   )}
@@ -130,20 +129,29 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
           </Table.Root>
           <Separator />
           <Flex direction="column" gap="2" style={{ alignItems: 'flex-end' }}>
-            <Flex justify="between" style={{ width: '100%', maxWidth: '300px' }}>
+            <Flex
+              justify="between"
+              style={{ width: '100%', maxWidth: '300px' }}
+            >
               <Text size="2" color="gray">
                 Subtotal (ex VAT)
               </Text>
               <Text>{formatCurrency(subtotal)}</Text>
             </Flex>
-            <Flex justify="between" style={{ width: '100%', maxWidth: '300px' }}>
+            <Flex
+              justify="between"
+              style={{ width: '100%', maxWidth: '300px' }}
+            >
               <Text size="2" color="gray">
                 VAT ({offer.vat_percent}%)
               </Text>
               <Text>{formatCurrency(vatAmount)}</Text>
             </Flex>
             <Separator />
-            <Flex justify="between" style={{ width: '100%', maxWidth: '300px' }}>
+            <Flex
+              justify="between"
+              style={{ width: '100%', maxWidth: '300px' }}
+            >
               <Text size="3" weight="bold">
                 Total (incl. VAT)
               </Text>
@@ -267,4 +275,3 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
     </Card>
   )
 }
-
