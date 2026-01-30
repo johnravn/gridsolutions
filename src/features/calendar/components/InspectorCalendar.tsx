@@ -89,14 +89,12 @@ export default function InspectorCalendar({
     >
       <Flex align="center" justify="between" mb="2">
         <Text weight="bold">
-          {listMode ? (
-            currentDate.toLocaleDateString('en-US', {
-              month: 'long',
-              year: 'numeric',
-            })
-          ) : (
-            'Schedule'
-          )}
+          {listMode
+            ? currentDate.toLocaleDateString('en-US', {
+                month: 'long',
+                year: 'numeric',
+              })
+            : 'Schedule'}
         </Text>
         <Flex gap="2" align="center">
           <IconButton

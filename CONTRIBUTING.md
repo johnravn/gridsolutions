@@ -9,9 +9,11 @@ This project is primarily developed using AI agents. This guide ensures all cont
 ### Creating Database Migrations
 
 1. **Create a new migration file:**
+
    ```bash
    npm run db:migrate descriptive_name
    ```
+
    This creates: `supabase/migrations/YYYYMMDDHHMMSS_descriptive_name.sql`
 
 2. **Write your SQL in the migration file:**
@@ -21,11 +23,13 @@ This project is primarily developed using AI agents. This guide ensures all cont
    - Use `DROP POLICY IF EXISTS` before creating policies
 
 3. **Test locally:**
+
    ```bash
    npm run db:reset  # Resets local DB and applies all migrations
    ```
 
 4. **Push to production:**
+
    ```bash
    npm run db:push  # Pushes migrations to remote Supabase
    ```
@@ -47,6 +51,7 @@ This project is primarily developed using AI agents. This guide ensures all cont
    - Superusers: Allow access via `profiles.superuser = true`
 
 Example RLS policy pattern:
+
 ```sql
 -- Enable RLS
 ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
@@ -82,11 +87,13 @@ CREATE POLICY "Users can view company addresses"
 ### Local Development Setup
 
 1. Start local Supabase:
+
    ```bash
    npm run supabase:start
    ```
 
 2. Switch to local database:
+
    ```bash
    npm run db:switch:local
    ```
@@ -105,6 +112,7 @@ CREATE POLICY "Users can view company addresses"
 ### Type Generation
 
 After any schema change:
+
 - **Local**: `npm run db:types` (from local DB)
 - **Remote**: `npm run db:types:remote` (from production DB)
 
@@ -134,4 +142,3 @@ Always commit updated `src/shared/types/database.types.ts` after schema changes.
 ---
 
 **Remember**: When in doubt about database changes, always create a migration file and test it locally first!
-

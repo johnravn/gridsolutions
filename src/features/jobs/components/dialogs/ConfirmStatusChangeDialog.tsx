@@ -1,11 +1,6 @@
 // src/features/jobs/components/dialogs/ConfirmStatusChangeDialog.tsx
 import * as React from 'react'
-import {
-  Button,
-  Dialog,
-  Flex,
-  Text,
-} from '@radix-ui/themes'
+import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import type { BookingStatus } from '../../types'
 
 export default function ConfirmStatusChangeDialog({
@@ -58,4 +53,3 @@ export default function ConfirmStatusChangeDialog({
     </Dialog.Root>
   )
 }
-

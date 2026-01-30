@@ -3,6 +3,7 @@
 ## Current Status
 
 ### Local Migration Files (17 total):
+
 1. ✅ 20250102000000 - add_job_status_changed_activity_type
 2. ✅ 20250103000000 - enable_fuzzy_search
 3. ✅ 20250104000000 - add_job_number_system
@@ -22,29 +23,36 @@
 17. ✅ 20251202000000 - handle_offer_acceptance_followup
 
 ### Remote Database Migrations (17 total):
+
 All the above EXCEPT:
+
 - ❌ Missing: 20250115000000 (needs to be applied)
-- ⚠️  Extra: 20250105000000 (duplicate of 20251201000000, already deleted locally)
+- ⚠️ Extra: 20250105000000 (duplicate of 20251201000000, already deleted locally)
 
 ## How to Verify Sync
 
 ### Option 1: Run SQL Query (Recommended)
+
 Run `verify_migrations_sync.sql` in Supabase SQL Editor to get a detailed comparison.
 
 ### Option 2: Use CLI (if working)
+
 ```bash
 npx supabase migration list --linked
 ```
 
 ### Option 3: Manual Check
+
 1. Run this in SQL Editor:
+
 ```sql
-SELECT version, name 
-FROM supabase_migrations.schema_migrations 
+SELECT version, name
+FROM supabase_migrations.schema_migrations
 ORDER BY version;
 ```
 
 2. Compare with local files:
+
 ```bash
 find supabase/migrations -name "*.sql" | grep -E '[0-9]{14}' | sort
 ```
@@ -54,6 +62,7 @@ find supabase/migrations -name "*.sql" | grep -E '[0-9]{14}' | sort
 1. **Apply the Conta migration:**
    - Run `20250115000000_fix_conta_api_key_permissions.sql` in SQL Editor
    - Then mark it as applied:
+
    ```sql
    INSERT INTO supabase_migrations.schema_migrations (version, statements, name)
    VALUES ('20250115000000', ARRAY[]::text[], 'fix_conta_api_key_permissions')
@@ -62,7 +71,7 @@ find supabase/migrations -name "*.sql" | grep -E '[0-9]{14}' | sort
 
 2. **Optional: Remove duplicate from remote** (if you want to clean it up):
    ```sql
-   DELETE FROM supabase_migrations.schema_migrations 
+   DELETE FROM supabase_migrations.schema_migrations
    WHERE version = '20250105000000' AND name = 'add_offers_system';
    ```
    (Only do this if you're sure 20251201000000 has all the same changes)
@@ -73,4 +82,3 @@ find supabase/migrations -name "*.sql" | grep -E '[0-9]{14}' | sort
 - ✅ Remote should have 17 migrations (or 16 if you remove the duplicate)
 - ✅ No missing migrations
 - ✅ Migration history fully synced
-

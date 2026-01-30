@@ -29,6 +29,7 @@ type FormState = {
   total_quantity: number
   active: boolean
   notes?: string
+  nicknames?: string
   price?: number | null
   internally_owned: boolean
   external_owner_id: string | null
@@ -46,6 +47,7 @@ type EditInitialData = {
   total_quantity: number
   active: boolean
   notes?: string | null
+  nicknames?: string | null
   price: number | null
   internally_owned: boolean
   external_owner_id: string | null
@@ -83,10 +85,14 @@ export default function AddItemDialog({
     total_quantity: 0,
     active: true,
     notes: '',
+    nicknames: '',
     price: undefined,
     internally_owned: true,
     external_owner_id: null,
   })
+  const [totalQuantityDraft, setTotalQuantityDraft] = React.useState<
+    string | null
+  >(null)
   // keep a stable ref of original price for change detection
   const originalPriceRef = React.useRef<number | null>(null)
 
@@ -106,11 +112,13 @@ export default function AddItemDialog({
       total_quantity: 0,
       active: true,
       notes: '',
+      nicknames: '',
       price: undefined,
       internally_owned: true,
       external_owner_id: null,
     })
     setBrandName(null)
+    setTotalQuantityDraft(null)
     originalPriceRef.current = null
   }, [])
 
@@ -191,6 +199,7 @@ export default function AddItemDialog({
         prev.total_quantity === initialData.total_quantity &&
         prev.active === initialData.active &&
         prev.notes === (initialData.notes ?? '') &&
+        prev.nicknames === (initialData.nicknames ?? '') &&
         prev.price === initialData.price
       ) {
         return prev
@@ -204,6 +213,7 @@ export default function AddItemDialog({
         total_quantity: initialData.total_quantity,
         active: initialData.active,
         notes: initialData.notes ?? '',
+        nicknames: initialData.nicknames ?? '',
         price: initialData.price,
         internally_owned: initialData.internally_owned,
         external_owner_id: initialData.external_owner_id ?? null,
@@ -260,6 +270,7 @@ export default function AddItemDialog({
           p_total_quantity: f.total_quantity || 0,
           p_active: f.active,
           p_notes: f.notes || null,
+          p_nicknames: f.nicknames || null,
           p_price: f.price ?? null,
           p_effective_from: null,
         },
@@ -376,6 +387,7 @@ export default function AddItemDialog({
           total_quantity: f.total_quantity || 0,
           active: f.active,
           notes: f.notes || null,
+          nicknames: f.nicknames || null,
           internally_owned: f.internally_owned,
           external_owner_id: f.internally_owned ? null : f.external_owner_id,
         })
@@ -528,6 +540,7 @@ export default function AddItemDialog({
       total_quantity: randomQuantity,
       active: Math.random() > 0.2, // 80% chance of being active
       notes: randomNotes,
+      nicknames: '',
       price: randomPrice,
       internally_owned: isInternal,
       external_owner_id: isInternal ? null : (randomPartner?.id ?? null),
@@ -712,13 +725,23 @@ export default function AddItemDialog({
                   type="number"
                   inputMode="numeric"
                   min="0"
-                  value={String(form.total_quantity)}
-                  onChange={(e) =>
-                    set(
-                      'total_quantity',
-                      Math.max(0, Number(e.target.value || 0)),
-                    )
-                  }
+                  value={totalQuantityDraft ?? String(form.total_quantity)}
+                  onChange={(e) => {
+                    const nextValue = e.target.value
+                    setTotalQuantityDraft(nextValue)
+
+                    if (nextValue === '') return
+                    const parsed = Number(nextValue)
+                    if (Number.isNaN(parsed)) return
+
+                    set('total_quantity', Math.max(0, parsed))
+                    setTotalQuantityDraft(null)
+                  }}
+                  onBlur={() => {
+                    if (totalQuantityDraft === '') {
+                      setTotalQuantityDraft(null)
+                    }
+                  }}
                 />
               </Field>
             </Flex>
@@ -755,6 +778,15 @@ export default function AddItemDialog({
                 value={form.notes ?? ''}
                 onChange={(e) => set('notes', e.target.value)}
                 placeholder="Optional notes…"
+              />
+            </Field>
+
+            <Field label="Nicknames (search keywords)">
+              <TextArea
+                rows={2}
+                value={form.nicknames ?? ''}
+                onChange={(e) => set('nicknames', e.target.value)}
+                placeholder="e.g. audio, cable, xlrf, backup"
               />
             </Field>
 

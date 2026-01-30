@@ -87,9 +87,7 @@ export async function contaRequest(
   })
 }
 
-async function buildContaErrorMessage(
-  response: Response,
-): Promise<string> {
+async function buildContaErrorMessage(response: Response): Promise<string> {
   let errorMessage = `HTTP ${response.status}: ${response.statusText}`
   try {
     const errorData = await response.json()
@@ -98,8 +96,7 @@ async function buildContaErrorMessage(
       errorMessage += ` - ${errorData.hint}`
     }
     if (errorData.messages?.EN || errorData.messages?.NO) {
-      const message =
-        errorData.messages?.EN || errorData.messages?.NO || ''
+      const message = errorData.messages?.EN || errorData.messages?.NO || ''
       if (message) {
         errorMessage = message
       }
@@ -107,9 +104,7 @@ async function buildContaErrorMessage(
     if (Array.isArray(errorData.errors) && errorData.errors.length > 0) {
       const firstError = errorData.errors[0]
       const detail =
-        firstError?.messages?.EN ||
-        firstError?.messages?.NO ||
-        firstError?.id
+        firstError?.messages?.EN || firstError?.messages?.NO || firstError?.id
       if (detail) {
         errorMessage = `${errorMessage} - ${detail}`
       }

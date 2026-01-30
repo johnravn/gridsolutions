@@ -20,12 +20,12 @@ import { supabase } from './supabase'
 export function applyFuzzySearch(
   query: any,
   searchTerm: string,
-  columns: string[],
+  columns: Array<string>,
 ): any {
   if (!searchTerm || !searchTerm.trim()) return query
 
   const term = searchTerm.trim()
-  const patterns: string[] = []
+  const patterns: Array<string> = []
 
   // Add exact match pattern
   patterns.push(`%${term}%`)
@@ -37,7 +37,7 @@ export function applyFuzzySearch(
   }
 
   // Build OR conditions for all columns with all patterns
-  const conditions: string[] = []
+  const conditions: Array<string> = []
   columns.forEach((col) => {
     patterns.forEach((pattern) => {
       conditions.push(`${col}.ilike.${pattern}`)
@@ -58,15 +58,15 @@ export function applyFuzzySearch(
 export async function fuzzySearchRPC<T>(
   table: string,
   searchTerm: string,
-  searchColumns: string[],
+  searchColumns: Array<string>,
   baseQuery?: any,
-): Promise<T[]> {
+): Promise<Array<T>> {
   if (!searchTerm || !searchTerm.trim()) {
     // If no search term, return all results
     if (baseQuery) {
       const { data, error } = await baseQuery
       if (error) throw error
-      return (data || []) as T[]
+      return (data || []) as Array<T>
     }
     return []
   }
@@ -76,4 +76,3 @@ export async function fuzzySearchRPC<T>(
   // This would require creating a specific RPC for each table
   throw new Error('fuzzySearchRPC not yet implemented - use applyFuzzySearch')
 }
-

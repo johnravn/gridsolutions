@@ -47,6 +47,7 @@ Before creating an invoice, you can preview what will be sent:
 ### Invoice Tracking
 
 All invoices are now tracked in the `job_invoices` table with:
+
 - **Status**: `pending`, `created`, or `failed`
 - **Conta Invoice ID**: The ID returned from Conta API
 - **Full Request/Response**: Complete invoice data and API response stored as JSONB
@@ -55,6 +56,7 @@ All invoices are now tracked in the `job_invoices` table with:
 ### Invoice History
 
 The Invoice History section shows:
+
 - All invoices created for the job
 - Creation date and time
 - Invoice basis (offer or bookings)
@@ -66,6 +68,7 @@ The Invoice History section shows:
 ### Test Mode Indicator
 
 When connected to a sandbox/test environment:
+
 - Yellow banner appears at the bottom of the Invoice tab
 - Clearly indicates you're in test mode
 - Reminds that invoices won't appear in production
@@ -86,6 +89,7 @@ npx supabase migration up
 ```
 
 The migration creates:
+
 - `job_invoices` table
 - Indexes for efficient queries
 - RLS policies for security
@@ -125,6 +129,7 @@ The migration creates:
 ## API Response Handling
 
 The system stores the full API response from Conta, which typically includes:
+
 - Invoice ID
 - Invoice number
 - Status
@@ -132,4 +137,3 @@ The system stores the full API response from Conta, which typically includes:
 - Other metadata
 
 This information is displayed in the Invoice History and can be used for further integration.
-

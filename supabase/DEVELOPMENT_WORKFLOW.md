@@ -5,6 +5,7 @@
 ### Initial Setup (One-time)
 
 1. **Environment Variables**: Ensure `.env.local` exists with:
+
    ```env
    VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
    VITE_SUPABASE_ANON_KEY=your-key
@@ -12,6 +13,7 @@
    ```
 
 2. **Link Supabase CLI**:
+
    ```bash
    npx supabase login
    npm run supabase:link
@@ -29,19 +31,22 @@
 **Best Practice: Use Migration Files**
 
 1. **Create a new migration**:
+
    ```bash
    npm run db:migrate add_new_feature
    ```
+
    This creates: `supabase/migrations/YYYYMMDDHHMMSS_add_new_feature.sql`
 
 2. **Edit the migration file** with your SQL changes:
+
    ```sql
    -- Example: Add a new column
    ALTER TABLE jobs ADD COLUMN new_field TEXT;
-   
+
    -- Always enable RLS on new tables
    ALTER TABLE new_table ENABLE ROW LEVEL SECURITY;
-   
+
    -- Add RLS policies
    CREATE POLICY "Users can view their company's data"
    ON new_table FOR SELECT
@@ -52,11 +57,13 @@
    ```
 
 3. **Test locally** (if using Docker):
+
    ```bash
    npm run db:reset  # Applies all migrations
    ```
 
 4. **Push to remote**:
+
    ```bash
    npm run db:push
    ```
@@ -69,6 +76,7 @@
 #### If You Made Changes in Dashboard
 
 1. **Capture the changes**:
+
    ```bash
    npm run db:diff capture_dashboard_changes
    ```
@@ -76,6 +84,7 @@
 2. **Review the generated migration** in `supabase/migrations/`
 
 3. **Push to remote** (if needed):
+
    ```bash
    npm run db:push
    ```
@@ -92,6 +101,7 @@
    - ❌ Bad: `20250120000000_add_everything.sql`
 
 2. **Always include RLS for new tables**
+
    ```sql
    CREATE TABLE new_table (...);
    ALTER TABLE new_table ENABLE ROW LEVEL SECURITY;
@@ -99,6 +109,7 @@
    ```
 
 3. **Use IF EXISTS / IF NOT EXISTS** for idempotency
+
    ```sql
    CREATE TABLE IF NOT EXISTS ...
    DROP TABLE IF EXISTS ...
@@ -125,6 +136,7 @@ git add src/shared/types/database.types.ts
 ### Local Development (Optional but Recommended)
 
 **Benefits:**
+
 - Faster iteration (no network latency)
 - Free (no API rate limits)
 - Test migrations safely
@@ -144,6 +156,7 @@ git add src/shared/types/database.types.ts
    ```
 
 **When to use local vs remote:**
+
 - **Local**: Development, testing migrations, experimenting
 - **Remote**: Production, staging, generating types for deployment
 
@@ -215,4 +228,3 @@ npm run supabase:link          # Link to remote project
 2. ✅ Run `supabase/verify_rls_coverage.sql` in SQL Editor to check RLS
 3. ✅ Set up local development (optional but recommended)
 4. ✅ Establish migration review process for your team
-

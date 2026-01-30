@@ -3,6 +3,7 @@
 ## What is a Pull Request (PR)?
 
 A **Pull Request** is a way to propose changes to your codebase. It's like saying:
+
 > "Hey, I made some changes in this branch. Can you review them and merge them into the main branch?"
 
 ## How Pull Requests Work
@@ -195,4 +196,3 @@ Even if you're working alone, PRs are still valuable:
 ---
 
 **Remember**: PRs are your safety net. Even for solo projects, they help you catch issues before they reach production!
-

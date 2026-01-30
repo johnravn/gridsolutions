@@ -32,6 +32,7 @@ export default function AddCrewToRoleDialog({
   const { success, error: toastError } = useToast()
   const [search, setSearch] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<UUID>>(new Set())
+  const [placeholderName, setPlaceholderName] = React.useState('')
 
   // Get existing crew for this role to filter them out
   const { data: existingCrew = [] } = useQuery({
@@ -129,10 +130,42 @@ export default function AddCrewToRoleDialog({
     },
   })
 
+  const addPlaceholder = useMutation({
+    mutationFn: async () => {
+      const name = placeholderName.trim()
+      if (!name) {
+        throw new Error('Please enter a name')
+      }
+      const { error } = await supabase.from('reserved_crew').insert({
+        time_period_id: timePeriodId,
+        user_id: null,
+        placeholder_name: name,
+        status: 'planned' as const,
+        notes: null,
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+      qc.invalidateQueries({
+        queryKey: ['jobs', jobId, 'time_periods', 'crew'],
+      })
+      success('Success', 'Placeholder crew member added')
+      setPlaceholderName('')
+    },
+    onError: (e: any) => {
+      toastError(
+        'Failed to add placeholder',
+        e?.hint || e?.message || 'Please try again.',
+      )
+    },
+  })
+
   React.useEffect(() => {
     if (!open) {
       setSearch('')
       setSelectedIds(new Set())
+      setPlaceholderName('')
     }
   }, [open])
 
@@ -150,6 +183,29 @@ export default function AddCrewToRoleDialog({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
+        </Box>
+
+        <Box mb="4">
+          <Text as="div" size="2" weight="medium">
+            Add placeholder
+          </Text>
+          <Text as="div" size="1" color="gray">
+            Add a named crew member without a user account
+          </Text>
+          <Flex gap="2" mt="2">
+            <TextField.Root
+              placeholder="Placeholder name"
+              value={placeholderName}
+              onChange={(e) => setPlaceholderName(e.target.value)}
+            />
+            <Button
+              variant="soft"
+              onClick={() => addPlaceholder.mutate()}
+              disabled={addPlaceholder.isPending || !placeholderName.trim()}
+            >
+              {addPlaceholder.isPending ? 'Adding…' : 'Add placeholder'}
+            </Button>
+          </Flex>
         </Box>
 
         <Box

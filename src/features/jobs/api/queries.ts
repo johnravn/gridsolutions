@@ -115,7 +115,9 @@ export function jobsIndexQuery({
       // Client-side fuzzy filtering across title, customer name, customer user name, project lead name, status, and date
       // (PostgREST doesn't support filtering on joined columns like customer.name)
       if (search.trim()) {
-        const { fuzzySearch, makeWordPresentable } = await import('@shared/lib/generalFunctions')
+        const { fuzzySearch, makeWordPresentable } = await import(
+          '@shared/lib/generalFunctions'
+        )
         results = fuzzySearch(
           results,
           search,
@@ -138,8 +140,16 @@ export function jobsIndexQuery({
       // Client-side sort for customer_name
       if (sortBy === 'customer_name') {
         results = [...results].sort((a, b) => {
-          const aName = a.customer?.name ?? a.customer_user?.display_name ?? a.customer_user?.email ?? ''
-          const bName = b.customer?.name ?? b.customer_user?.display_name ?? b.customer_user?.email ?? ''
+          const aName =
+            a.customer?.name ??
+            a.customer_user?.display_name ??
+            a.customer_user?.email ??
+            ''
+          const bName =
+            b.customer?.name ??
+            b.customer_user?.display_name ??
+            b.customer_user?.email ??
+            ''
           const comparison = aName.localeCompare(bName)
           return sortDir === 'asc' ? comparison : -comparison
         })
@@ -359,6 +369,6 @@ export async function upsertTimePeriod(payload: {
       .select('id')
       .single()
     if (error) throw error
-    return data.id as string
+    return data.id
   }
 }

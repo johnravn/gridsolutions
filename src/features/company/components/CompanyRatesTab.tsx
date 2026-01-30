@@ -114,7 +114,8 @@ export default function CompanyRatesTab() {
           initialRates={{
             vehicle_daily_rate: expansion?.vehicle_daily_rate ?? null,
             vehicle_distance_rate: expansion?.vehicle_distance_rate ?? null,
-            vehicle_distance_increment: expansion?.vehicle_distance_increment ?? 150,
+            vehicle_distance_increment:
+              expansion?.vehicle_distance_increment ?? 150,
           }}
         />
 
@@ -240,14 +241,20 @@ function CrewRatesCard({
   const summary = (
     <Flex gap="4" align="center" wrap="wrap">
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Day:</Text>
+        <Text size="1" color="gray">
+          Day:
+        </Text>
         <Text size="3" weight="bold">
           {formatCurrency(rates.crew_rate_per_day)}
         </Text>
       </Flex>
-      <Text size="1" color="gray">•</Text>
+      <Text size="1" color="gray">
+        •
+      </Text>
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Hour:</Text>
+        <Text size="1" color="gray">
+          Hour:
+        </Text>
         <Text size="3" weight="bold">
           {formatCurrency(rates.crew_rate_per_hour)}
         </Text>
@@ -396,9 +403,13 @@ function VehicleRatesCard({
   const { success, error: toastError } = useToast()
   const [rates, setRates] = React.useState(initialRates)
   const [isExpanded, setIsExpanded] = React.useState(false)
+  const [distanceIncrementDraft, setDistanceIncrementDraft] = React.useState<
+    string | null
+  >(null)
 
   React.useEffect(() => {
     setRates(initialRates)
+    setDistanceIncrementDraft(null)
   }, [initialRates])
 
   const formatCurrency = (amount: number | null) => {
@@ -414,16 +425,23 @@ function VehicleRatesCard({
   const summary = (
     <Flex gap="4" align="center" wrap="wrap">
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Daily:</Text>
+        <Text size="1" color="gray">
+          Daily:
+        </Text>
         <Text size="3" weight="bold">
           {formatCurrency(rates.vehicle_daily_rate)}
         </Text>
       </Flex>
-      <Text size="1" color="gray">•</Text>
+      <Text size="1" color="gray">
+        •
+      </Text>
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Distance:</Text>
+        <Text size="1" color="gray">
+          Distance:
+        </Text>
         <Text size="3" weight="bold">
-          {formatCurrency(rates.vehicle_distance_rate)} / {rates.vehicle_distance_increment}km
+          {formatCurrency(rates.vehicle_distance_rate)} /{' '}
+          {rates.vehicle_distance_increment}km
         </Text>
       </Flex>
     </Flex>
@@ -551,21 +569,35 @@ function VehicleRatesCard({
               min="1"
               step="1"
               placeholder="e.g., 150"
-              value={String(rates.vehicle_distance_increment)}
-              onChange={(e) =>
+              value={
+                distanceIncrementDraft ??
+                String(rates.vehicle_distance_increment)
+              }
+              onChange={(e) => {
+                const nextValue = e.target.value
+                setDistanceIncrementDraft(nextValue)
+
+                if (nextValue === '') return
+                const parsed = Number(nextValue)
+                if (Number.isNaN(parsed)) return
+
                 setRates({
                   ...rates,
-                  vehicle_distance_increment: Math.max(
-                    1,
-                    Number(e.target.value) || 150,
-                  ),
+                  vehicle_distance_increment: Math.max(1, parsed),
                 })
-              }
+                setDistanceIncrementDraft(null)
+              }}
+              onBlur={() => {
+                if (distanceIncrementDraft === '') {
+                  setDistanceIncrementDraft(null)
+                }
+              }}
             />
           </Box>
         </Flex>
         <Text size="1" color="gray">
-          Fixed daily rate for vehicles, plus distance-based rate calculated per increment. Distance is rounded up to the nearest increment.
+          Fixed daily rate for vehicles, plus distance-based rate calculated per
+          increment. Distance is rounded up to the nearest increment.
         </Text>
         <Flex justify="end">
           <Button
@@ -609,14 +641,20 @@ function DiscountsCard({
   const summary = (
     <Flex gap="4" align="center" wrap="wrap">
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Customer:</Text>
+        <Text size="1" color="gray">
+          Customer:
+        </Text>
         <Text size="3" weight="bold">
           {formatPercent(discounts.customer_discount_percent)}
         </Text>
       </Flex>
-      <Text size="1" color="gray">•</Text>
+      <Text size="1" color="gray">
+        •
+      </Text>
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Partner:</Text>
+        <Text size="1" color="gray">
+          Partner:
+        </Text>
         <Text size="3" weight="bold">
           {formatPercent(discounts.partner_discount_percent)}
         </Text>
@@ -779,12 +817,20 @@ function RentalFactorsCard({
   const summary = config.fixed_rate_start_day ? (
     <Flex gap="4" align="center" wrap="wrap">
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Starts at day:</Text>
-        <Text size="3" weight="bold">{config.fixed_rate_start_day}</Text>
+        <Text size="1" color="gray">
+          Starts at day:
+        </Text>
+        <Text size="3" weight="bold">
+          {config.fixed_rate_start_day}
+        </Text>
       </Flex>
-      <Text size="1" color="gray">•</Text>
+      <Text size="1" color="gray">
+        •
+      </Text>
       <Flex align="center" gap="2">
-        <Text size="1" color="gray">Multiplier:</Text>
+        <Text size="1" color="gray">
+          Multiplier:
+        </Text>
         <Text size="3" weight="bold">
           {config.fixed_rate_per_day !== null
             ? `0.${String(config.fixed_rate_per_day).replace('0.', '')}`
@@ -992,7 +1038,6 @@ const DEFAULT_RENTAL_FACTORS: RentalFactorConfig = {
   30: 4.5,
 }
 
-
 function RentalFactorsEditor({
   config,
   onChange,
@@ -1037,7 +1082,9 @@ function RentalFactorsEditor({
     const configDays = Object.keys(localConfig).map((day) => Number(day))
     const maxFromConfig = configDays.length
       ? Math.max(...configDays)
-      : Math.max(...Object.keys(DEFAULT_RENTAL_FACTORS).map((day) => Number(day)))
+      : Math.max(
+          ...Object.keys(DEFAULT_RENTAL_FACTORS).map((day) => Number(day)),
+        )
     return Math.max(1, maxFromConfig)
   }, [localConfig, maxDays])
 

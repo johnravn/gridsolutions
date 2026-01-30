@@ -9,8 +9,8 @@ import {
   Heading,
   IconButton,
   Popover,
-  Select,
   SegmentedControl,
+  Select,
   Table,
   Text,
   TextField,
@@ -19,6 +19,7 @@ import { supabase } from '@shared/api/supabase'
 import {
   Check,
   Edit,
+  Link,
   LinkSlash,
   NavArrowDown,
   NavArrowRight,
@@ -194,6 +195,9 @@ function InternalEquipmentTable({
     id: string
     value: number
   } | null>(null)
+  const [editingQtyDrafts, setEditingQtyDrafts] = React.useState<
+    Partial<Record<string, string>>
+  >({})
   const [statusPopoverOpen, setStatusPopoverOpen] = React.useState<
     string | null
   >(null)
@@ -201,6 +205,12 @@ function InternalEquipmentTable({
   const [decoupledRows, setDecoupledRows] = React.useState<Set<string>>(
     new Set(),
   )
+  const [decoupledGroups, setDecoupledGroups] = React.useState<Set<string>>(
+    new Set(),
+  )
+
+  const groupStatusKey = (groupId: string, timePeriodId: string) =>
+    `group:${groupId}:${timePeriodId}`
 
   const toggleGroup = (groupId: string) => {
     setExpandedGroups((prev) => {
@@ -214,19 +224,108 @@ function InternalEquipmentTable({
     })
   }
 
-  // Group rows by source_group_id
-  const groupMap = new Map<string, Array<any>>()
-  const directRows: Array<any> = []
+  const getRowCategory = (row: any, sourceGroup?: any) => {
+    const groupCategory = Array.isArray(sourceGroup?.category)
+      ? sourceGroup?.category[0]?.name
+      : sourceGroup?.category?.name
+    if (groupCategory) return groupCategory
+    const item = firstItem(row.item) as any
+    return item?.category?.name ?? 'Uncategorized'
+  }
 
-  rows.forEach((r) => {
-    if (r.source_kind === 'group' && r.source_group_id) {
-      const arr = groupMap.get(r.source_group_id) ?? []
-      arr.push(r)
-      groupMap.set(r.source_group_id, arr)
-    } else {
-      directRows.push(r)
+  const categorizedEntries = React.useMemo(() => {
+    // Group rows by source_group_id (compute inside memo so deps are stable)
+    const groupMap = new Map<string, Array<any>>()
+    const directRows: Array<any> = []
+
+    rows.forEach((r) => {
+      if (r.source_kind === 'group' && r.source_group_id) {
+        const arr = groupMap.get(r.source_group_id) ?? []
+        arr.push(r)
+        groupMap.set(r.source_group_id, arr)
+      } else {
+        directRows.push(r)
+      }
+    })
+
+    const categoryMap = new Map<
+      string,
+      {
+        groupEntries: Array<[string, Array<any>]>
+        directRows: Array<any>
+      }
+    >()
+
+    for (const [groupId, groupRows] of groupMap.entries()) {
+      const firstRow = groupRows[0]
+      const sourceGroup = Array.isArray(firstRow?.source_group)
+        ? firstRow?.source_group[0]
+        : firstRow?.source_group
+      const categoryName = getRowCategory(firstRow, sourceGroup)
+      const entry = categoryMap.get(categoryName) ?? {
+        groupEntries: [],
+        directRows: [],
+      }
+      entry.groupEntries.push([groupId, groupRows])
+      categoryMap.set(categoryName, entry)
     }
-  })
+
+    for (const row of directRows) {
+      const categoryName = getRowCategory(row)
+      const entry = categoryMap.get(categoryName) ?? {
+        groupEntries: [],
+        directRows: [],
+      }
+      entry.directRows.push(row)
+      categoryMap.set(categoryName, entry)
+    }
+
+    const entries = Array.from(categoryMap.entries()).map(
+      ([categoryName, entry]) => ({
+        categoryName,
+        groupEntries: entry.groupEntries,
+        directRows: entry.directRows,
+      }),
+    )
+
+    entries.sort((a, b) => {
+      if (a.categoryName === 'Uncategorized') return 1
+      if (b.categoryName === 'Uncategorized') return -1
+      return a.categoryName.localeCompare(b.categoryName)
+    })
+
+    return entries
+  }, [rows])
+
+  const [expandedCategories, setExpandedCategories] = React.useState<
+    Set<string>
+  >(new Set())
+
+  React.useEffect(() => {
+    setExpandedCategories((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const entry of categorizedEntries) {
+        if (!next.has(entry.categoryName)) {
+          next.add(entry.categoryName)
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [categorizedEntries])
+
+  const toggleCategory = (categoryName: string) => {
+    setExpandedCategories((prev) => {
+      const next = new Set(prev)
+      if (next.has(categoryName)) {
+        next.delete(categoryName)
+      } else {
+        next.add(categoryName)
+      }
+      return next
+    })
+  }
 
   const handleSaveQty = async (rowId: string, newQty: number) => {
     try {
@@ -238,6 +337,12 @@ function InternalEquipmentTable({
 
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       setEditingQty(null)
+      setEditingQtyDrafts((prev) => {
+        if (!(rowId in prev)) return prev
+        const next = { ...prev }
+        delete next[rowId]
+        return next
+      })
       success('Saved', 'Quantity updated')
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
@@ -317,7 +422,14 @@ function InternalEquipmentTable({
     try {
       // Filter out decoupled rows from bulk update
       const itemIds = rows
-        .filter((r) => !decoupledRows.has(r.id))
+        .filter((r) => {
+          if (decoupledRows.has(r.id)) return false
+          if (r.source_kind === 'group' && r.source_group_id && r.time_period_id) {
+            const key = groupStatusKey(r.source_group_id, r.time_period_id)
+            if (decoupledGroups.has(key)) return false
+          }
+          return true
+        })
         .map((r) => r.id)
       if (itemIds.length === 0) return
 
@@ -341,6 +453,30 @@ function InternalEquipmentTable({
     setDecoupledRows((prev) => {
       const next = new Set(prev)
       next.add(rowId)
+      return next
+    })
+  }
+
+  const handleRecoupleRow = (rowId: string) => {
+    setDecoupledRows((prev) => {
+      const next = new Set(prev)
+      next.delete(rowId)
+      return next
+    })
+  }
+
+  const handleDecoupleGroup = (key: string) => {
+    setDecoupledGroups((prev) => {
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+  }
+
+  const handleRecoupleGroup = (key: string) => {
+    setDecoupledGroups((prev) => {
+      const next = new Set(prev)
+      next.delete(key)
       return next
     })
   }
@@ -372,7 +508,6 @@ function InternalEquipmentTable({
                   }
                 >
                   <Select.Trigger
-                    size="2"
                     variant="soft"
                     placeholder="Set all status..."
                   />
@@ -427,298 +562,541 @@ function InternalEquipmentTable({
         )}
       </Box>
 
-      <Table.Root variant="surface">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Model</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Time period</Table.ColumnHeaderCell>
-            {editMode && <Table.ColumnHeaderCell />}
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {/* Render grouped items */}
-          {Array.from(groupMap.entries()).map(([groupId, groupRows]) => {
-            const firstRow = groupRows[0]
-            const sourceGroup = Array.isArray(firstRow?.source_group)
-              ? firstRow?.source_group[0]
-              : firstRow?.source_group
-            const groupName =
-              sourceGroup?.name ?? `Group ${groupId.slice(0, 8)}`
-            const groupCategory = Array.isArray(sourceGroup?.category)
-              ? sourceGroup?.category[0]?.name
-              : sourceGroup?.category?.name
-            const isExpanded = expandedGroups.has(groupId)
-            const totalQty = groupRows.reduce(
-              (sum, r) => sum + (r.quantity ?? 0),
-              0,
-            )
+      <Flex direction="column" gap="3">
+        {categorizedEntries.map((category) => {
+          const isCategoryExpanded = expandedCategories.has(
+            category.categoryName,
+          )
+          const itemCount =
+            category.directRows.length +
+            category.groupEntries.reduce((sum, [, groupRows]) => {
+              return sum + groupRows.length
+            }, 0)
 
-            return (
-              <React.Fragment key={groupId}>
-                {/* Group header row */}
-                <Table.Row
-                  style={{
-                    cursor: editMode ? 'default' : 'pointer',
-                    backgroundColor: 'var(--gray-a1)',
-                  }}
-                  onClick={() => !editMode && toggleGroup(groupId)}
-                >
-                  <Table.Cell>
-                    <Box
-                      style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-                    >
-                      {!editMode &&
-                        (isExpanded ? (
-                          <NavArrowDown width={18} height={18} />
-                        ) : (
-                          <NavArrowRight width={18} height={18} />
-                        ))}
-                      <Text>{groupName}</Text>
-                      <Badge color="pink" variant="soft">
-                        Group
-                      </Badge>
-                    </Box>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text weight="bold">{totalQty}</Text>
-                  </Table.Cell>
-                  <Table.Cell>—</Table.Cell>
-                  <Table.Cell>—</Table.Cell>
-                  <Table.Cell>{groupCategory ?? '—'}</Table.Cell>
-                  <Table.Cell>
-                    {isReadOnly ? (
-                      <Badge
-                        radius="full"
-                        highContrast
-                        color={
-                          firstRow?.status === 'confirmed'
-                            ? 'green'
-                            : firstRow?.status === 'canceled'
-                              ? 'red'
-                              : 'gray'
-                        }
-                      >
-                        {firstRow?.status ?? 'planned'}
-                      </Badge>
+          return (
+            <Box
+              key={category.categoryName}
+              style={{
+                border: '1px solid var(--gray-a5)',
+                borderRadius: 8,
+                overflow: 'hidden',
+                background: 'var(--gray-a1)',
+              }}
+            >
+              <Box
+                p="3"
+                style={{
+                  background: 'var(--gray-a2)',
+                  cursor: 'pointer',
+                  borderBottom: isCategoryExpanded
+                    ? '1px solid var(--gray-a5)'
+                    : 'none',
+                }}
+                onClick={() => toggleCategory(category.categoryName)}
+              >
+                <Flex align="center" justify="between">
+                  <Flex align="center" gap="3">
+                    {isCategoryExpanded ? (
+                      <NavArrowDown width={18} height={18} />
                     ) : (
-                      <BookingStatusControl
-                        value={(firstRow?.status as BookingStatus) ?? 'planned'}
-                        onChange={(v) =>
-                          handleUpdateGroupStatus(
-                            groupId,
-                            firstRow.time_period_id,
-                            v,
-                          )
-                        }
-                      />
+                      <NavArrowRight width={18} height={18} />
                     )}
-                  </Table.Cell>
-                  <Table.Cell>
-                    {firstRow?.time_period?.title ??
-                      `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
-                  </Table.Cell>
-                  {editMode && (
-                    <Table.Cell align="right">
-                      <Button
-                        size="1"
-                        variant="soft"
-                        color="red"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleDeleteGroup(groupId, firstRow.time_period_id)
-                        }}
-                      >
-                        <Trash width={14} height={14} />
-                      </Button>
-                    </Table.Cell>
-                  )}
-                </Table.Row>
+                    <Text weight="medium">{category.categoryName}</Text>
+                    <Text size="2" color="gray">
+                      ({itemCount} {itemCount === 1 ? 'item' : 'items'})
+                    </Text>
+                  </Flex>
+                </Flex>
+              </Box>
 
-                {/* Expanded group items */}
-                {isExpanded &&
-                  !editMode &&
-                  groupRows.map((r) => {
-                    const item = firstItem(r.item)
-                    return (
-                      <Table.Row
-                        key={r.id}
-                        style={{ backgroundColor: 'var(--gray-a1)' }}
-                      >
-                        <Table.Cell style={{ paddingLeft: 32 }}>
-                          <Text color="gray">↳ {item?.name ?? '—'}</Text>
-                        </Table.Cell>
-                        <Table.Cell>{r.quantity}</Table.Cell>
-                        <Table.Cell>{item?.brand?.name ?? '—'}</Table.Cell>
-                        <Table.Cell>{item?.model ?? '—'}</Table.Cell>
-                        <Table.Cell>{item?.category?.name ?? '—'}</Table.Cell>
-                        <Table.Cell>—</Table.Cell>
-                        <Table.Cell>—</Table.Cell>
+              {isCategoryExpanded && (
+                <Box p="3">
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Model</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>
+                          Category
+                        </Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>
+                          Time period
+                        </Table.ColumnHeaderCell>
+                        {editMode && <Table.ColumnHeaderCell />}
                       </Table.Row>
-                    )
-                  })}
-              </React.Fragment>
-            )
-          })}
+                    </Table.Header>
+                    <Table.Body>
+                      {/* Render grouped items */}
+                      {category.groupEntries.map(([groupId, groupRows]) => {
+                        const firstRow = groupRows[0]
+                        const sourceGroup = Array.isArray(
+                          firstRow?.source_group,
+                        )
+                          ? firstRow?.source_group[0]
+                          : firstRow?.source_group
+                        const groupName =
+                          sourceGroup?.name ?? `Group ${groupId.slice(0, 8)}`
+                        const groupCategory = Array.isArray(
+                          sourceGroup?.category,
+                        )
+                          ? sourceGroup?.category[0]?.name
+                          : sourceGroup?.category?.name
+                        const isExpanded = expandedGroups.has(groupId)
+                        const statusKey = groupStatusKey(
+                          groupId,
+                          firstRow.time_period_id,
+                        )
+                        const totalQty = groupRows.reduce(
+                          (sum, r) => sum + (r.quantity ?? 0),
+                          0,
+                        )
 
-          {/* Render direct items */}
-          {directRows.map((r) => {
-            const item = firstItem(r.item)
-            const isEditing = editingQty?.id === r.id
-            return (
-              <Table.Row key={r.id}>
-                <Table.Cell>{item?.name ?? '—'}</Table.Cell>
-                <Table.Cell>
-                  {editMode ? (
-                    <Box
-                      style={{ display: 'flex', gap: 4, alignItems: 'center' }}
-                    >
-                      <TextField.Root
-                        type="number"
-                        min="1"
-                        value={String(
-                          isEditing && editingQty
-                            ? editingQty.value
-                            : r.quantity,
-                        )}
-                        onChange={(e) =>
-                          setEditingQty({
-                            id: r.id,
-                            value: Math.max(1, Number(e.target.value || 1)),
-                          })
-                        }
-                        style={{ width: 80 }}
-                      />
-                      {isEditing && editingQty && (
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={() => handleSaveQty(r.id, editingQty.value)}
-                        >
-                          <Check width={14} height={14} />
-                        </Button>
-                      )}
-                    </Box>
-                  ) : (
-                    r.quantity
-                  )}
-                </Table.Cell>
-                <Table.Cell>{item?.brand?.name ?? '—'}</Table.Cell>
-                <Table.Cell>{item?.model ?? '—'}</Table.Cell>
-                <Table.Cell>{item?.category?.name ?? '—'}</Table.Cell>
-                <Table.Cell
-                  onMouseEnter={() => !isReadOnly && setHoveredRowId(r.id)}
-                  onMouseLeave={() => setHoveredRowId(null)}
-                >
-                  <Flex align="center" gap="2">
-                    <Badge
-                      radius="full"
-                      highContrast
-                      color={
-                        r.status === 'confirmed'
-                          ? 'green'
-                          : r.status === 'canceled'
-                            ? 'red'
-                            : 'gray'
-                      }
-                    >
-                      {r.status ?? 'planned'}
-                    </Badge>
-                    {!isReadOnly && (
-                      <>
-                        {decoupledRows.has(r.id) ? (
-                          <Popover.Root
-                            open={statusPopoverOpen === r.id}
-                            onOpenChange={(open) =>
-                              setStatusPopoverOpen(open ? r.id : null)
-                            }
-                          >
-                            <Popover.Trigger>
-                              <IconButton
-                                size="1"
-                                variant="ghost"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit width={14} height={14} />
-                              </IconButton>
-                            </Popover.Trigger>
-                            <Popover.Content style={{ width: 180 }}>
-                              <Flex direction="column" gap="2">
-                                <Text size="2" weight="medium">
-                                  Change status
-                                </Text>
-                                <Select.Root
-                                  value={r.status ?? 'planned'}
-                                  onValueChange={(value) => {
-                                    handleUpdateStatus(
-                                      r.id,
-                                      value as BookingStatus,
-                                    )
-                                    setStatusPopoverOpen(null)
+                        return (
+                          <React.Fragment key={groupId}>
+                            {/* Group header row */}
+                            <Table.Row
+                              style={{
+                                cursor: editMode ? 'default' : 'pointer',
+                                backgroundColor: 'var(--gray-a1)',
+                              }}
+                              onClick={() => !editMode && toggleGroup(groupId)}
+                            >
+                              <Table.Cell>
+                                <Box
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 8,
                                   }}
                                 >
-                                  <Select.Trigger size="2" />
-                                  <Select.Content>
-                                    <Select.Item value="planned">
-                                      Planned
-                                    </Select.Item>
-                                    <Select.Item value="confirmed">
-                                      Confirmed
-                                    </Select.Item>
-                                    <Select.Item value="canceled">
-                                      Canceled
-                                    </Select.Item>
-                                  </Select.Content>
-                                </Select.Root>
+                                  {!editMode &&
+                                    (isExpanded ? (
+                                      <NavArrowDown width={18} height={18} />
+                                    ) : (
+                                      <NavArrowRight width={18} height={18} />
+                                    ))}
+                                  <Text>{groupName}</Text>
+                                  <Badge color="pink" variant="soft">
+                                    Group
+                                  </Badge>
+                                </Box>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text weight="bold">{totalQty}</Text>
+                              </Table.Cell>
+                              <Table.Cell>—</Table.Cell>
+                              <Table.Cell>—</Table.Cell>
+                              <Table.Cell>{groupCategory ?? '—'}</Table.Cell>
+                              <Table.Cell>
+                                <Box
+                                  onMouseEnter={() =>
+                                    !isReadOnly && setHoveredRowId(statusKey)
+                                  }
+                                  onMouseLeave={() => setHoveredRowId(null)}
+                                >
+                                  <Flex align="center" gap="2">
+                                    <Badge
+                                      radius="full"
+                                      highContrast
+                                      color={
+                                        firstRow?.status === 'confirmed'
+                                          ? 'green'
+                                          : firstRow?.status === 'canceled'
+                                            ? 'red'
+                                            : 'gray'
+                                      }
+                                    >
+                                      {firstRow?.status ?? 'planned'}
+                                    </Badge>
+                                    {!isReadOnly && (
+                                      <>
+                                        {decoupledGroups.has(statusKey) ? (
+                                          <>
+                                            <Popover.Root
+                                              open={statusPopoverOpen === statusKey}
+                                              onOpenChange={(open) =>
+                                                setStatusPopoverOpen(
+                                                  open ? statusKey : null,
+                                                )
+                                              }
+                                            >
+                                              <Popover.Trigger>
+                                                <IconButton
+                                                  size="1"
+                                                  variant="ghost"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                  }}
+                                                >
+                                                  <Edit width={14} height={14} />
+                                                </IconButton>
+                                              </Popover.Trigger>
+                                              <Popover.Content style={{ width: 180 }}>
+                                                <Flex direction="column" gap="2">
+                                                  <Text size="2" weight="medium">
+                                                    Change status
+                                                  </Text>
+                                                  <Select.Root
+                                                    value={
+                                                      (firstRow?.status ??
+                                                        'planned') as BookingStatus
+                                                    }
+                                                    onValueChange={(value) => {
+                                                      handleUpdateGroupStatus(
+                                                        groupId,
+                                                        firstRow.time_period_id,
+                                                        value as BookingStatus,
+                                                      )
+                                                      setStatusPopoverOpen(null)
+                                                    }}
+                                                  >
+                                                    <Select.Trigger size="2" />
+                                                    <Select.Content>
+                                                      <Select.Item value="planned">
+                                                        Planned
+                                                      </Select.Item>
+                                                      <Select.Item value="confirmed">
+                                                        Confirmed
+                                                      </Select.Item>
+                                                      <Select.Item value="canceled">
+                                                        Canceled
+                                                      </Select.Item>
+                                                    </Select.Content>
+                                                  </Select.Root>
+                                                </Flex>
+                                              </Popover.Content>
+                                            </Popover.Root>
+                                            <IconButton
+                                              size="1"
+                                              variant="ghost"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                handleRecoupleGroup(statusKey)
+                                              }}
+                                              style={{
+                                                opacity:
+                                                  hoveredRowId === statusKey ? 1 : 0,
+                                                pointerEvents:
+                                                  hoveredRowId === statusKey
+                                                    ? 'auto'
+                                                    : 'none',
+                                              }}
+                                            >
+                                              <Link width={14} height={14} />
+                                            </IconButton>
+                                          </>
+                                        ) : (
+                                          <IconButton
+                                            size="1"
+                                            variant="ghost"
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleDecoupleGroup(statusKey)
+                                            }}
+                                            style={{
+                                              opacity:
+                                                hoveredRowId === statusKey ? 1 : 0,
+                                              pointerEvents:
+                                                hoveredRowId === statusKey
+                                                  ? 'auto'
+                                                  : 'none',
+                                            }}
+                                          >
+                                            <LinkSlash width={14} height={14} />
+                                          </IconButton>
+                                        )}
+                                      </>
+                                    )}
+                                  </Flex>
+                                </Box>
+                              </Table.Cell>
+                              <Table.Cell>
+                                {firstRow?.time_period?.title ??
+                                  `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
+                              </Table.Cell>
+                              {editMode && (
+                                <Table.Cell align="right">
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    color="red"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleDeleteGroup(
+                                        groupId,
+                                        firstRow.time_period_id,
+                                      )
+                                    }}
+                                  >
+                                    <Trash width={14} height={14} />
+                                  </Button>
+                                </Table.Cell>
+                              )}
+                            </Table.Row>
+
+                            {/* Expanded group items */}
+                            {isExpanded &&
+                              !editMode &&
+                              groupRows.map((r) => {
+                                const item = firstItem(r.item)
+                                return (
+                                  <Table.Row
+                                    key={r.id}
+                                    style={{
+                                      backgroundColor: 'var(--gray-a1)',
+                                    }}
+                                  >
+                                    <Table.Cell style={{ paddingLeft: 32 }}>
+                                      <Text color="gray">
+                                        ↳ {item?.name ?? '—'}
+                                      </Text>
+                                    </Table.Cell>
+                                    <Table.Cell>{r.quantity}</Table.Cell>
+                                    <Table.Cell>
+                                      {item?.brand?.name ?? '—'}
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                      {item?.model ?? '—'}
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                      {item?.category?.name ?? '—'}
+                                    </Table.Cell>
+                                    <Table.Cell>—</Table.Cell>
+                                    <Table.Cell>—</Table.Cell>
+                                  </Table.Row>
+                                )
+                              })}
+                          </React.Fragment>
+                        )
+                      })}
+
+                      {/* Render direct items */}
+                      {category.directRows.map((r) => {
+                        const item = firstItem(r.item)
+                        const isEditing = editingQty?.id === r.id
+                        return (
+                          <Table.Row key={r.id}>
+                            <Table.Cell>{item?.name ?? '—'}</Table.Cell>
+                            <Table.Cell>
+                              {editMode ? (
+                                <Box
+                                  style={{
+                                    display: 'flex',
+                                    gap: 4,
+                                    alignItems: 'center',
+                                  }}
+                                >
+                                  <TextField.Root
+                                    type="number"
+                                    min="1"
+                                    value={String(
+                                      editingQtyDrafts[r.id] ??
+                                        (isEditing && editingQty
+                                          ? editingQty.value
+                                          : r.quantity),
+                                    )}
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value
+                                      setEditingQtyDrafts((prev) => ({
+                                        ...prev,
+                                        [r.id]: nextValue,
+                                      }))
+
+                                      if (nextValue === '') return
+                                      const parsed = Number(nextValue)
+                                      if (Number.isNaN(parsed)) return
+
+                                      setEditingQty({
+                                        id: r.id,
+                                        value: Math.max(1, parsed),
+                                      })
+                                      setEditingQtyDrafts((prev) => {
+                                        const next = { ...prev }
+                                        delete next[r.id]
+                                        return next
+                                      })
+                                    }}
+                                    onBlur={() => {
+                                      if (editingQtyDrafts[r.id] === '') {
+                                        setEditingQtyDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[r.id]
+                                          return next
+                                        })
+                                      }
+                                    }}
+                                    style={{ width: 80 }}
+                                  />
+                                  {isEditing && editingQty && (
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      onClick={() =>
+                                        handleSaveQty(r.id, editingQty.value)
+                                      }
+                                    >
+                                      <Check width={14} height={14} />
+                                    </Button>
+                                  )}
+                                </Box>
+                              ) : (
+                                r.quantity
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>{item?.brand?.name ?? '—'}</Table.Cell>
+                            <Table.Cell>{item?.model ?? '—'}</Table.Cell>
+                            <Table.Cell>
+                              {item?.category?.name ?? '—'}
+                            </Table.Cell>
+                            <Table.Cell
+                              onMouseEnter={() =>
+                                !isReadOnly && setHoveredRowId(r.id)
+                              }
+                              onMouseLeave={() => setHoveredRowId(null)}
+                            >
+                              <Flex align="center" gap="2">
+                                <Badge
+                                  radius="full"
+                                  highContrast
+                                  color={
+                                    r.status === 'confirmed'
+                                      ? 'green'
+                                      : r.status === 'canceled'
+                                        ? 'red'
+                                        : 'gray'
+                                  }
+                                >
+                                  {r.status ?? 'planned'}
+                                </Badge>
+                                {!isReadOnly && (
+                                  <>
+                                    {decoupledRows.has(r.id) ? (
+                                      <>
+                                        <Popover.Root
+                                          open={statusPopoverOpen === r.id}
+                                          onOpenChange={(open) =>
+                                            setStatusPopoverOpen(
+                                              open ? r.id : null,
+                                            )
+                                          }
+                                        >
+                                          <Popover.Trigger>
+                                            <IconButton
+                                              size="1"
+                                              variant="ghost"
+                                              onClick={(e) =>
+                                                e.stopPropagation()
+                                              }
+                                            >
+                                              <Edit width={14} height={14} />
+                                            </IconButton>
+                                          </Popover.Trigger>
+                                          <Popover.Content
+                                            style={{ width: 180 }}
+                                          >
+                                            <Flex direction="column" gap="2">
+                                              <Text size="2" weight="medium">
+                                                Change status
+                                              </Text>
+                                              <Select.Root
+                                                value={r.status ?? 'planned'}
+                                                onValueChange={(value) => {
+                                                  handleUpdateStatus(
+                                                    r.id,
+                                                    value as BookingStatus,
+                                                  )
+                                                  setStatusPopoverOpen(null)
+                                                }}
+                                              >
+                                                <Select.Trigger />
+                                                <Select.Content>
+                                                  <Select.Item value="planned">
+                                                    Planned
+                                                  </Select.Item>
+                                                  <Select.Item value="confirmed">
+                                                    Confirmed
+                                                  </Select.Item>
+                                                  <Select.Item value="canceled">
+                                                    Canceled
+                                                  </Select.Item>
+                                                </Select.Content>
+                                              </Select.Root>
+                                            </Flex>
+                                          </Popover.Content>
+                                        </Popover.Root>
+                                        <IconButton
+                                          size="1"
+                                          variant="ghost"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleRecoupleRow(r.id)
+                                          }}
+                                          style={{
+                                            opacity:
+                                              hoveredRowId === r.id ? 1 : 0,
+                                            pointerEvents:
+                                              hoveredRowId === r.id
+                                                ? 'auto'
+                                                : 'none',
+                                          }}
+                                        >
+                                          <Link width={14} height={14} />
+                                        </IconButton>
+                                      </>
+                                    ) : (
+                                      <IconButton
+                                        size="1"
+                                        variant="ghost"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDecoupleRow(r.id)
+                                        }}
+                                        style={{
+                                          opacity:
+                                            hoveredRowId === r.id ? 1 : 0,
+                                          pointerEvents:
+                                            hoveredRowId === r.id
+                                              ? 'auto'
+                                              : 'none',
+                                        }}
+                                      >
+                                        <LinkSlash width={14} height={14} />
+                                      </IconButton>
+                                    )}
+                                  </>
+                                )}
                               </Flex>
-                            </Popover.Content>
-                          </Popover.Root>
-                        ) : (
-                          <IconButton
-                            size="1"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDecoupleRow(r.id)
-                            }}
-                            style={{
-                              opacity: hoveredRowId === r.id ? 1 : 0,
-                              pointerEvents:
-                                hoveredRowId === r.id ? 'auto' : 'none',
-                            }}
-                          >
-                            <LinkSlash width={14} height={14} />
-                          </IconButton>
-                        )}
-                      </>
-                    )}
-                  </Flex>
-                </Table.Cell>
-                <Table.Cell>
-                  {r.time_period?.title ??
-                    `${fmtDate(r.time_period?.start_at)} – ${fmtDate(r.time_period?.end_at)}`}
-                </Table.Cell>
-                {editMode && (
-                  <Table.Cell align="right">
-                    <Button
-                      size="1"
-                      variant="soft"
-                      color="red"
-                      onClick={() => handleDelete(r.id)}
-                    >
-                      <Trash width={14} height={14} />
-                    </Button>
-                  </Table.Cell>
-                )}
-              </Table.Row>
-            )
-          })}
-        </Table.Body>
-      </Table.Root>
+                            </Table.Cell>
+                            <Table.Cell>
+                              {r.time_period?.title ??
+                                `${fmtDate(r.time_period?.start_at)} – ${fmtDate(r.time_period?.end_at)}`}
+                            </Table.Cell>
+                            {editMode && (
+                              <Table.Cell align="right">
+                                <Button
+                                  size="1"
+                                  variant="soft"
+                                  color="red"
+                                  onClick={() => handleDelete(r.id)}
+                                >
+                                  <Trash width={14} height={14} />
+                                </Button>
+                              </Table.Cell>
+                            )}
+                          </Table.Row>
+                        )
+                      })}
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
+              )}
+            </Box>
+          )
+        })}
+      </Flex>
 
       {/* Empty State */}
       {rows.length === 0 && canBook && (
@@ -789,6 +1167,9 @@ function ExternalEquipmentTable({
     id: string
     value: number
   } | null>(null)
+  const [editingQtyDrafts, setEditingQtyDrafts] = React.useState<
+    Partial<Record<string, string>>
+  >({})
   const [expandedOwners, setExpandedOwners] = React.useState<Set<string>>(
     new Set(),
   )
@@ -965,6 +1346,12 @@ function ExternalEquipmentTable({
 
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       setEditingQty(null)
+      setEditingQtyDrafts((prev) => {
+        if (!(rowId in prev)) return prev
+        const next = { ...prev }
+        delete next[rowId]
+        return next
+      })
       success('Saved', 'Quantity updated')
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
@@ -1137,6 +1524,14 @@ function ExternalEquipmentTable({
     setDecoupledRows((prev) => {
       const next = new Set(prev)
       next.add(rowId)
+      return next
+    })
+  }
+
+  const handleRecoupleRow = (rowId: string) => {
+    setDecoupledRows((prev) => {
+      const next = new Set(prev)
+      next.delete(rowId)
       return next
     })
   }
@@ -1431,19 +1826,43 @@ function ExternalEquipmentTable({
                                             type="number"
                                             min="1"
                                             value={String(
-                                              editingQty?.id === r.id
-                                                ? editingQty.value
-                                                : r.quantity,
+                                              editingQtyDrafts[r.id] ??
+                                                (editingQty?.id === r.id
+                                                  ? editingQty.value
+                                                  : r.quantity),
                                             )}
-                                            onChange={(e) =>
+                                            onChange={(e) => {
+                                              const nextValue = e.target.value
+                                              setEditingQtyDrafts((prev) => ({
+                                                ...prev,
+                                                [r.id]: nextValue,
+                                              }))
+
+                                              if (nextValue === '') return
+                                              const parsed = Number(nextValue)
+                                              if (Number.isNaN(parsed)) return
+
                                               setEditingQty({
                                                 id: r.id,
-                                                value: Math.max(
-                                                  1,
-                                                  Number(e.target.value || 1),
-                                                ),
+                                                value: Math.max(1, parsed),
                                               })
-                                            }
+                                              setEditingQtyDrafts((prev) => {
+                                                const next = { ...prev }
+                                                delete next[r.id]
+                                                return next
+                                              })
+                                            }}
+                                            onBlur={() => {
+                                              if (
+                                                editingQtyDrafts[r.id] === ''
+                                              ) {
+                                                setEditingQtyDrafts((prev) => {
+                                                  const next = { ...prev }
+                                                  delete next[r.id]
+                                                  return next
+                                                })
+                                              }
+                                            }}
                                             style={{ width: 80 }}
                                           />
                                           {editingQty?.id === r.id && (
@@ -1495,76 +1914,101 @@ function ExternalEquipmentTable({
                                         {!isReadOnly && (
                                           <>
                                             {decoupledRows.has(r.id) ? (
-                                              <Popover.Root
-                                                open={
-                                                  statusPopoverOpen === r.id
-                                                }
-                                                onOpenChange={(open) =>
-                                                  setStatusPopoverOpen(
-                                                    open ? r.id : null,
-                                                  )
-                                                }
-                                              >
-                                                <Popover.Trigger>
-                                                  <IconButton
-                                                    size="1"
-                                                    variant="ghost"
-                                                    onClick={(e) =>
-                                                      e.stopPropagation()
-                                                    }
-                                                  >
-                                                    <Edit
-                                                      width={14}
-                                                      height={14}
-                                                    />
-                                                  </IconButton>
-                                                </Popover.Trigger>
-                                                <Popover.Content
-                                                  style={{ width: 180 }}
+                                              <>
+                                                <Popover.Root
+                                                  open={
+                                                    statusPopoverOpen === r.id
+                                                  }
+                                                  onOpenChange={(open) =>
+                                                    setStatusPopoverOpen(
+                                                      open ? r.id : null,
+                                                    )
+                                                  }
                                                 >
-                                                  <Flex
-                                                    direction="column"
-                                                    gap="2"
-                                                  >
-                                                    <Text
-                                                      size="2"
-                                                      weight="medium"
-                                                    >
-                                                      Change status
-                                                    </Text>
-                                                    <Select.Root
-                                                      value={
-                                                        r.external_status ??
-                                                        'planned'
+                                                  <Popover.Trigger>
+                                                    <IconButton
+                                                      size="1"
+                                                      variant="ghost"
+                                                      onClick={(e) =>
+                                                        e.stopPropagation()
                                                       }
-                                                      onValueChange={(
-                                                        value,
-                                                      ) => {
-                                                        handleUpdateItemStatus(
-                                                          r.id,
-                                                          value as ExternalReqStatus,
-                                                        )
-                                                        setStatusPopoverOpen(
-                                                          null,
-                                                        )
-                                                      }}
                                                     >
-                                                      <Select.Trigger />
-                                                      <Select.Content>
-                                                        <Select.Item value="planned">
-                                                          Planned
-                                                        </Select.Item>
-                                                        <Select.Item value="requested">
-                                                          Requested
-                                                        </Select.Item>
-                                                        <Select.Item value="confirmed">
-                                                          Confirmed
-                                                        </Select.Item>
-                                                      </Select.Content>
-                                                    </Select.Root>
-                                                  </Flex>
-                                                </Popover.Content>
-                                              </Popover.Root>
+                                                      <Edit
+                                                        width={14}
+                                                        height={14}
+                                                      />
+                                                    </IconButton>
+                                                  </Popover.Trigger>
+                                                  <Popover.Content
+                                                    style={{ width: 180 }}
+                                                  >
+                                                    <Flex
+                                                      direction="column"
+                                                      gap="2"
+                                                    >
+                                                      <Text
+                                                        size="2"
+                                                        weight="medium"
+                                                      >
+                                                        Change status
+                                                      </Text>
+                                                      <Select.Root
+                                                        value={
+                                                          r.external_status ??
+                                                          'planned'
+                                                        }
+                                                        onValueChange={(
+                                                          value,
+                                                        ) => {
+                                                          handleUpdateItemStatus(
+                                                            r.id,
+                                                            value as ExternalReqStatus,
+                                                          )
+                                                          setStatusPopoverOpen(
+                                                            null,
+                                                          )
+                                                        }}
+                                                      >
+                                                        <Select.Trigger />
+                                                        <Select.Content>
+                                                          <Select.Item value="planned">
+                                                            Planned
+                                                          </Select.Item>
+                                                          <Select.Item value="requested">
+                                                            Requested
+                                                          </Select.Item>
+                                                          <Select.Item value="confirmed">
+                                                            Confirmed
+                                                          </Select.Item>
+                                                        </Select.Content>
+                                                      </Select.Root>
+                                                    </Flex>
+                                                  </Popover.Content>
+                                                </Popover.Root>
+                                                <IconButton
+                                                  size="1"
+                                                  variant="ghost"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    handleRecoupleRow(r.id)
+                                                  }}
+                                                  style={{
+                                                    opacity:
+                                                      hoveredRowId === r.id
+                                                        ? 1
+                                                        : 0,
+                                                    pointerEvents:
+                                                      hoveredRowId === r.id
+                                                        ? 'auto'
+                                                        : 'none',
+                                                  }}
+                                                >
+                                                  <Link
+                                                    width={14}
+                                                    height={14}
+                                                  />
+                                                </IconButton>
+                                              </>
                                             ) : (
                                               <IconButton
                                                 size="1"

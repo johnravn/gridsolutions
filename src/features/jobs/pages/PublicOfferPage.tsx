@@ -463,7 +463,7 @@ export default function PublicOfferPage() {
     const hours = Math.floor((totalMinutes % (60 * 24)) / 60)
     const minutes = totalMinutes % 60
 
-    const parts: string[] = []
+    const parts: Array<string> = []
     if (days > 0) {
       parts.push(`${days} day${days !== 1 ? 's' : ''}`)
     }

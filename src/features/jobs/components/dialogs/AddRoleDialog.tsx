@@ -17,6 +17,7 @@ export default function AddRoleDialog({
   const qc = useQueryClient()
   const [title, setTitle] = React.useState('')
   const [needed, setNeeded] = React.useState<number>(1)
+  const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
   const [startAt, setStartAt] = React.useState('')
   const [endAt, setEndAt] = React.useState('')
   const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
@@ -100,6 +101,7 @@ export default function AddRoleDialog({
       onOpenChange(false)
       setTitle('')
       setNeeded(1)
+      setNeededDraft(null)
       setStartAt('')
       setEndAt('')
       setRoleCategory('')
@@ -146,10 +148,23 @@ export default function AddRoleDialog({
             <TextField.Root
               type="number"
               min="1"
-              value={String(needed)}
-              onChange={(e) =>
-                setNeeded(Math.max(1, Number(e.target.value || 1)))
-              }
+              value={neededDraft ?? String(needed)}
+              onChange={(e) => {
+                const nextValue = e.target.value
+                setNeededDraft(nextValue)
+
+                if (nextValue === '') return
+                const parsed = Number(nextValue)
+                if (Number.isNaN(parsed)) return
+
+                setNeeded(Math.max(1, parsed))
+                setNeededDraft(null)
+              }}
+              onBlur={() => {
+                if (neededDraft === '') {
+                  setNeededDraft(null)
+                }
+              }}
               style={{ width: 120 }}
             />
           </Box>

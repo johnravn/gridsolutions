@@ -1,5 +1,14 @@
 import * as React from 'react'
-import { Avatar, Flex, Table, Text } from '@radix-ui/themes'
+import {
+  Avatar,
+  Button,
+  Dialog,
+  Flex,
+  IconButton,
+  Table,
+  Text,
+} from '@radix-ui/themes'
+import { Edit, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
@@ -8,10 +17,18 @@ export default function TimeEntriesTable({
   entries,
   isLoading,
   emptyLabel = 'No entries yet for this period.',
+  onEditEntry,
+  canEditEntry,
+  onDeleteEntry,
+  canDeleteEntry,
 }: {
   entries: Array<TimeEntryWithProfile>
   isLoading: boolean
   emptyLabel?: string
+  onEditEntry?: (entry: TimeEntryWithProfile) => void
+  canEditEntry?: (entry: TimeEntryWithProfile) => boolean
+  onDeleteEntry?: (entry: TimeEntryWithProfile) => void
+  canDeleteEntry?: (entry: TimeEntryWithProfile) => boolean
 }) {
   if (isLoading) {
     return <Text>Loading...</Text>
@@ -33,6 +50,7 @@ export default function TimeEntriesTable({
           <Table.ColumnHeaderCell>Job #</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
           <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
+          {(onEditEntry || onDeleteEntry) && <Table.ColumnHeaderCell />}
         </Table.Row>
       </Table.Header>
       <Table.Body>
@@ -66,8 +84,60 @@ export default function TimeEntriesTable({
               <Text weight="medium">{entry.title}</Text>
             </Table.Cell>
             <Table.Cell>{entry.job_number ?? '-'}</Table.Cell>
-            <Table.Cell>{entry.note ?? '-'}</Table.Cell>
-            <Table.Cell>{formatDuration(entry.start_at, entry.end_at)}</Table.Cell>
+            <Table.Cell>
+              {isBlankNote(entry.note) ? (
+                <Text color="gray">-</Text>
+              ) : (
+                <Dialog.Root>
+                  <Dialog.Trigger asChild>
+                    <Button variant="soft" size="1">
+                      Show
+                    </Button>
+                  </Dialog.Trigger>
+                  <Dialog.Content size="2" style={{ maxWidth: 520 }}>
+                    <Dialog.Title>Note</Dialog.Title>
+                    <Dialog.Description size="2" color="gray" mb="3">
+                      Details for this time entry.
+                    </Dialog.Description>
+                    <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                      {entry.note}
+                    </Text>
+                  </Dialog.Content>
+                </Dialog.Root>
+              )}
+            </Table.Cell>
+            <Table.Cell>
+              {formatDuration(entry.start_at, entry.end_at)}
+            </Table.Cell>
+            {(onEditEntry || onDeleteEntry) && (
+              <Table.Cell>
+                <Flex align="center" gap="1" justify="end">
+                  {onEditEntry && (
+                    <IconButton
+                      variant="ghost"
+                      size="1"
+                      onClick={() => onEditEntry(entry)}
+                      disabled={canEditEntry ? !canEditEntry(entry) : false}
+                      aria-label="Edit time entry"
+                    >
+                      <Edit width={14} height={14} />
+                    </IconButton>
+                  )}
+                  {onDeleteEntry && (
+                    <IconButton
+                      variant="ghost"
+                      size="1"
+                      color="red"
+                      onClick={() => onDeleteEntry(entry)}
+                      disabled={canDeleteEntry ? !canDeleteEntry(entry) : false}
+                      aria-label="Delete time entry"
+                    >
+                      <Trash width={14} height={14} />
+                    </IconButton>
+                  )}
+                </Flex>
+              </Table.Cell>
+            )}
           </Table.Row>
         ))}
       </Table.Body>
@@ -119,4 +189,8 @@ function getDisplayName(
     [profile.first_name, profile.last_name].filter(Boolean).join(' ') ||
     profile.email
   )
+}
+
+function isBlankNote(note: string | null | undefined) {
+  return !note || note.trim().length === 0
 }

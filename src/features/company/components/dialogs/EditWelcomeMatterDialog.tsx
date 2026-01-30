@@ -57,9 +57,9 @@ export default function EditWelcomeMatterDialog({
 
       return data
         ? {
-            id: data.id as string,
-            title: data.title as string,
-            content: (data.content as string | null) ?? '',
+            id: data.id,
+            title: data.title,
+            content: (data.content) ?? '',
           }
         : null
     },

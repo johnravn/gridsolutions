@@ -25,6 +25,10 @@ import type { UUID } from '../../types'
 
 const ALL = '__ALL__'
 
+function escapeForPostgrestOr(value: string) {
+  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
 // Picker result row (unified: item or group)
 type PickerRow =
   | {
@@ -96,6 +100,9 @@ export default function BookItemsDialog({
   const qc = useQueryClient()
   const [search, setSearch] = React.useState('')
   const [rows, setRows] = React.useState<Array<Row>>([])
+  const [quantityDrafts, setQuantityDrafts] = React.useState<
+    Record<string, string>
+  >({})
   const [selectedTimePeriodId, setSelectedTimePeriodId] = React.useState<
     string | null
   >(initialTimePeriodId ?? null)
@@ -280,7 +287,12 @@ export default function BookItemsDialog({
         q = q.or('is_group.eq.true,allow_individual_booking.eq.true')
       }
 
-      if (search) q = q.ilike('name', `%${search}%`)
+      if (search) {
+        const term = escapeForPostgrestOr(search)
+        q = q.or(
+          `name.ilike.%${term}%,category_name.ilike.%${term}%,brand_name.ilike.%${term}%,model.ilike.%${term}%,nicknames.ilike.%${term}%`,
+        )
+      }
       if (categoryFilter) q = q.eq('category_name', categoryFilter)
 
       const { data, error: fetchError } = await q
@@ -321,6 +333,19 @@ export default function BookItemsDialog({
       })
     },
   })
+
+  const groupedPicker = React.useMemo(() => {
+    const groups = new Map<string, Array<PickerRow>>()
+    for (const row of picker) {
+      const key = row.category_name?.trim() || 'Uncategorized'
+      const existing = groups.get(key) ?? []
+      existing.push(row)
+      groups.set(key, existing)
+    }
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([category, rows]) => ({ category, rows }))
+  }, [picker])
 
   // const add = (it: PickerItem) => {
   //   setRows((r) => {
@@ -414,6 +439,14 @@ export default function BookItemsDialog({
   }
   function removeRow(target: Row) {
     setRows((prevRows) => prevRows.filter((x) => rowKey(x) !== rowKey(target)))
+  }
+  function clearQuantityDraft(key: string) {
+    setQuantityDrafts((prev) => {
+      if (!(key in prev)) return prev
+      const next = { ...prev }
+      delete next[key]
+      return next
+    })
   }
 
   const save = useMutation({
@@ -1135,99 +1168,122 @@ export default function BookItemsDialog({
                 <Text>Thinking</Text>
                 <Spinner />
               </Flex>
-            ) : picker.length === 0 ? (
+            ) : groupedPicker.length === 0 ? (
               <Text color="gray">No results</Text>
             ) : (
-              <Table.Root variant="surface">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>On hand</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Price</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Owner</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {picker.map((r) => (
-                    <Table.Row key={`${r.kind}:${r.id}`}>
-                      {/* Name + badges */}
-                      <Table.Cell>
-                        <Flex align="center" gap="2">
-                          <Text size="2" weight="medium">
-                            {r.name}
-                          </Text>
-                          {r.is_group && (
-                            <Badge size="1" variant="soft" color="pink">
-                              Group
-                            </Badge>
-                          )}
-                          {r.is_group && r.unique === true && (
-                            <Badge size="1" variant="soft">
-                              Unique
-                            </Badge>
-                          )}
-                          {r.active === false && (
-                            <Badge size="1" variant="soft" color="red">
-                              Inactive
-                            </Badge>
-                          )}
-                        </Flex>
-                      </Table.Cell>
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                {groupedPicker.map((group) => (
+                  <Box
+                    key={group.category}
+                    p="2"
+                    style={{
+                      border: '1px solid var(--gray-a6)',
+                      borderRadius: 8,
+                      background: 'var(--gray-a1)',
+                    }}
+                  >
+                    <Text size="2" weight="medium" mb="2">
+                      {group.category}
+                    </Text>
+                    <Table.Root variant="surface">
+                      <Table.Header>
+                        <Table.Row>
+                          <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>
+                            Category
+                          </Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>
+                            On hand
+                          </Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Price</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Owner</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell />
+                        </Table.Row>
+                      </Table.Header>
+                      <Table.Body>
+                        {group.rows.map((r) => (
+                          <Table.Row key={`${r.kind}:${r.id}`}>
+                            {/* Name + badges */}
+                            <Table.Cell>
+                              <Flex align="center" gap="2">
+                                <Text size="2" weight="medium">
+                                  {r.name}
+                                </Text>
+                                {r.is_group && (
+                                  <Badge size="1" variant="soft" color="pink">
+                                    Group
+                                  </Badge>
+                                )}
+                                {r.is_group && r.unique === true && (
+                                  <Badge size="1" variant="soft">
+                                    Unique
+                                  </Badge>
+                                )}
+                                {r.active === false && (
+                                  <Badge size="1" variant="soft" color="red">
+                                    Inactive
+                                  </Badge>
+                                )}
+                              </Flex>
+                            </Table.Cell>
 
-                      {/* Category */}
-                      <Table.Cell>
-                        <Text size="2" color="gray">
-                          {r.category_name ?? ''}
-                        </Text>
-                      </Table.Cell>
+                            {/* Category */}
+                            <Table.Cell>
+                              <Text size="2" color="gray">
+                                {r.category_name ?? ''}
+                              </Text>
+                            </Table.Cell>
 
-                      {/* Brand */}
-                      <Table.Cell>
-                        <Text size="2" color="gray">
-                          {r.brand_name ?? ''}
-                        </Text>
-                      </Table.Cell>
+                            {/* Brand */}
+                            <Table.Cell>
+                              <Text size="2" color="gray">
+                                {r.brand_name ?? ''}
+                              </Text>
+                            </Table.Cell>
 
-                      {/* On hand */}
-                      <Table.Cell>{r.on_hand ?? ''}</Table.Cell>
+                            {/* On hand */}
+                            <Table.Cell>{r.on_hand ?? ''}</Table.Cell>
 
-                      {/* Price */}
-                      <Table.Cell>
-                        {r.current_price != null
-                          ? formatNOK(r.current_price)
-                          : ''}
-                      </Table.Cell>
+                            {/* Price */}
+                            <Table.Cell>
+                              {r.current_price != null
+                                ? formatNOK(r.current_price)
+                                : ''}
+                            </Table.Cell>
 
-                      {/* Owner */}
-                      <Table.Cell>
-                        {r.internally_owned ? (
-                          <Badge size="1" variant="soft" color="indigo">
-                            Internal
-                          </Badge>
-                        ) : (
-                          <Badge size="1" variant="soft" color="amber">
-                            {r.external_owner_name ?? 'External'}
-                          </Badge>
-                        )}
-                      </Table.Cell>
+                            {/* Owner */}
+                            <Table.Cell>
+                              {r.internally_owned ? (
+                                <Badge size="1" variant="soft" color="indigo">
+                                  Internal
+                                </Badge>
+                              ) : (
+                                <Badge size="1" variant="soft" color="amber">
+                                  {r.external_owner_name ?? 'External'}
+                                </Badge>
+                              )}
+                            </Table.Cell>
 
-                      {/* Add */}
-                      <Table.Cell align="right">
-                        <Button
-                          size="1"
-                          variant="classic"
-                          onClick={() => addRow(r)}
-                        >
-                          Add
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
+                            {/* Add */}
+                            <Table.Cell align="right">
+                              <Button
+                                size="1"
+                                variant="classic"
+                                onClick={() => addRow(r)}
+                              >
+                                Add
+                              </Button>
+                            </Table.Cell>
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table.Root>
+                  </Box>
+                ))}
+              </div>
             )}
           </div>
 
@@ -1305,14 +1361,30 @@ export default function BookItemsDialog({
                           type="number"
                           min="1"
                           max={r.on_hand ?? undefined}
-                          value={String(r.quantity)}
-                          onChange={(e) =>
-                            updateQty(
-                              r,
-                              Math.max(1, Number(e.target.value || 1)),
-                              r.on_hand,
-                            )
+                          value={
+                            quantityDrafts[rowKey(r)] ?? String(r.quantity)
                           }
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            const key = rowKey(r)
+                            setQuantityDrafts((prev) => ({
+                              ...prev,
+                              [key]: nextValue,
+                            }))
+
+                            if (nextValue === '') return
+                            const parsed = Number(nextValue)
+                            if (Number.isNaN(parsed)) return
+
+                            updateQty(r, Math.max(1, parsed), r.on_hand)
+                            clearQuantityDraft(key)
+                          }}
+                          onBlur={() => {
+                            const key = rowKey(r)
+                            if (quantityDrafts[key] === '') {
+                              clearQuantityDraft(key)
+                            }
+                          }}
                         />
                       </Table.Cell>
                       <Table.Cell align="right">

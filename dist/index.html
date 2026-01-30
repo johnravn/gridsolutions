@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="/grid-icon-light.svg"
+      id="favicon"
+    />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Web site created using create-tsrouter-app"
+    />
+    <link rel="apple-touch-icon" href="/logo192.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <title>grid</title>
+    <script>
+      // Update favicon based on theme
+      function updateFavicon() {
+        const favicon = document.getElementById('favicon')
+        if (!favicon) return
+
+        // Check the actual class on the html element (this is what ThemeToggle sets)
+        const htmlElement = document.documentElement
+        const isDark = htmlElement.classList.contains('dark')
+
+        // Update favicon based on the html class
+        favicon.href = isDark ? '/grid-icon-dark.svg' : '/grid-icon-light.svg'
+      }
+
+      // Update on load
+      updateFavicon()
+
+      // Watch for changes to the html element's class list
+      const observer = new MutationObserver(updateFavicon)
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class'],
+      })
+
+      // Also listen for localStorage changes (cross-tab sync)
+      window.addEventListener('storage', () => {
+        if (event.key === 'theme') {
+          updateFavicon()
+        }
+      })
+    </script>
+    <script type="module" crossorigin src="/assets/index-CNRNNxjl.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-CV1k4BNf.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

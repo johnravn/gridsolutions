@@ -67,7 +67,7 @@ npm run db:types
 ### Available Commands
 
 - `npm run db:types` - Generate types from local database
-- `npm run db:types:remote` - Generate types from remote database  
+- `npm run db:types:remote` - Generate types from remote database
 - `npm run db:diff <name>` - Create a migration from remote changes
 - `npm run db:reset` - Reset local database to migrations
 - `npm run db:push` - Push local migrations to remote
@@ -81,4 +81,3 @@ VITE_SUPABASE_URL=your-supabase-url
 VITE_SUPABASE_ANON_KEY=your-anon-key
 SUPABASE_PROJECT_REF=your-project-ref
 ```
-

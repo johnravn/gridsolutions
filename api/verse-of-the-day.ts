@@ -15,7 +15,10 @@ export default async function handler(req: any, res: any) {
 
     // Cache at the edge (Vercel) but allow refresh.
     res.setHeader('Content-Type', 'application/json; charset=utf-8')
-    res.setHeader('Cache-Control', 's-maxage=3600, stale-while-revalidate=86400')
+    res.setHeader(
+      'Cache-Control',
+      's-maxage=3600, stale-while-revalidate=86400',
+    )
     res.statusCode = 200
     res.end(JSON.stringify(data ?? null))
   } catch (e: any) {
@@ -29,4 +32,3 @@ export default async function handler(req: any, res: any) {
     )
   }
 }
-

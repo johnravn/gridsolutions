@@ -23,7 +23,7 @@ Your storage copy script found files but needs the buckets to exist first.
 ```sql
 -- Run this in Supabase Studio SQL Editor
 INSERT INTO storage.buckets (id, name, public)
-VALUES 
+VALUES
   ('company_files', 'company_files', false),
   ('vehicle_images', 'vehicle_images', true),
   ('logos', 'logos', true)
@@ -33,6 +33,7 @@ ON CONFLICT (id) DO NOTHING;
 ### Option 3: Check Migrations
 
 Some buckets might be created by migrations. Check:
+
 ```bash
 grep -r "bucket" supabase/migrations/ --include="*.sql"
 ```
@@ -40,9 +41,9 @@ grep -r "bucket" supabase/migrations/ --include="*.sql"
 ## After Creating Buckets
 
 Run the copy script again:
+
 ```bash
 npm run db:copy-storage
 ```
 
 It should now copy all 12 files (1 + 5 + 6) successfully!
-

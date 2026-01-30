@@ -64,7 +64,11 @@ async function copyStorage() {
     }
   }
 
-  if (!remoteKey || remoteKey.includes('127.0.0.1') || remoteKey === 'YOUR_REMOTE_ANON_KEY_HERE') {
+  if (
+    !remoteKey ||
+    remoteKey.includes('127.0.0.1') ||
+    remoteKey === 'YOUR_REMOTE_ANON_KEY_HERE'
+  ) {
     log('❌ Please configure remote credentials:', 'red')
     log('   1. Update .env.remote.db with your remote anon key', 'yellow')
     log('   2. Or switch to remote: npm run db:switch:remote', 'yellow')
@@ -74,7 +78,8 @@ async function copyStorage() {
   // Get local credentials
   const localUrl = 'http://127.0.0.1:54321'
   // Use service role key for local to bypass RLS for file uploads
-  const localServiceKey = process.env.SUPABASE_LOCAL_SERVICE_KEY ||
+  const localServiceKey =
+    process.env.SUPABASE_LOCAL_SERVICE_KEY ||
     'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz' // Default local service key
 
   // Create clients - use service role for local to bypass RLS
@@ -100,15 +105,18 @@ async function copyStorage() {
     // Try to list buckets from remote (using anon key - may fail due to RLS)
     log('1️⃣  Listing buckets from remote...', 'cyan')
     log(`   Connecting to: ${remoteUrl}`, 'cyan')
-    
+
     let buckets = []
     const { data: listedBuckets, error: bucketsError } =
       await remoteClient.storage.listBuckets()
 
     if (bucketsError || !listedBuckets || listedBuckets.length === 0) {
-      log(`   ⚠️  Cannot list buckets from remote (anon key may not have permission)`, 'yellow')
+      log(
+        `   ⚠️  Cannot list buckets from remote (anon key may not have permission)`,
+        'yellow',
+      )
       log(`   Will try known bucket names as fallback...`, 'cyan')
-      buckets = knownBuckets.map(name => ({ name, public: true }))
+      buckets = knownBuckets.map((name) => ({ name, public: true }))
     } else {
       buckets = listedBuckets
       log(`   Found ${buckets.length} bucket(s) via API`, 'green')
@@ -118,15 +126,21 @@ async function copyStorage() {
     log(`\n   Checking local buckets...`, 'cyan')
     const { data: localBuckets, error: localBucketsError } =
       await localClient.storage.listBuckets()
-    
+
     if (!localBucketsError && localBuckets && localBuckets.length > 0) {
-      const localBucketNames = localBuckets.map(b => b.name)
-      log(`   Found ${localBuckets.length} local bucket(s): ${localBucketNames.join(', ')}`, 'green')
-      
+      const localBucketNames = localBuckets.map((b) => b.name)
+      log(
+        `   Found ${localBuckets.length} local bucket(s): ${localBucketNames.join(', ')}`,
+        'green',
+      )
+
       // Filter out buckets that don't exist locally
-      buckets = buckets.filter(b => localBucketNames.includes(b.name))
+      buckets = buckets.filter((b) => localBucketNames.includes(b.name))
       if (buckets.length !== listedBuckets?.length) {
-        log(`   Filtered to ${buckets.length} bucket(s) that exist in both remote and local`, 'cyan')
+        log(
+          `   Filtered to ${buckets.length} bucket(s) that exist in both remote and local`,
+          'cyan',
+        )
       }
     }
 
@@ -151,7 +165,10 @@ async function copyStorage() {
 
         if (listError) {
           // If bucket doesn't exist or we can't access it, skip
-          if (listError.message.includes('not found') || listError.message.includes('Bucket')) {
+          if (
+            listError.message.includes('not found') ||
+            listError.message.includes('Bucket')
+          ) {
             return []
           }
           throw listError
@@ -184,12 +201,18 @@ async function copyStorage() {
       try {
         files = await listFilesRecursive()
       } catch (listError) {
-        log(`   ⚠️  Cannot access bucket ${bucket.name}: ${listError.message}`, 'yellow')
+        log(
+          `   ⚠️  Cannot access bucket ${bucket.name}: ${listError.message}`,
+          'yellow',
+        )
         continue
       }
 
       if (!files || files.length === 0) {
-        log(`   No files in bucket ${bucket.name} (or bucket doesn't exist)`, 'yellow')
+        log(
+          `   No files in bucket ${bucket.name} (or bucket doesn't exist)`,
+          'yellow',
+        )
         continue
       }
 
@@ -216,7 +239,10 @@ async function copyStorage() {
             await remoteClient.storage.from(bucket.name).download(filePath)
 
           if (downloadError) {
-            log(`   ⚠️  Failed to download ${filePath}: ${downloadError.message}`, 'yellow')
+            log(
+              `   ⚠️  Failed to download ${filePath}: ${downloadError.message}`,
+              'yellow',
+            )
             skipped++
             continue
           }
@@ -234,7 +260,10 @@ async function copyStorage() {
             })
 
           if (uploadError) {
-            log(`   ⚠️  Failed to upload ${filePath}: ${uploadError.message}`, 'yellow')
+            log(
+              `   ⚠️  Failed to upload ${filePath}: ${uploadError.message}`,
+              'yellow',
+            )
             skipped++
           } else {
             copied++
@@ -278,4 +307,3 @@ copyStorage().catch((error) => {
   log(`❌ Error: ${error.message}`, 'red')
   process.exit(1)
 })
-

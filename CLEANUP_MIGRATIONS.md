@@ -1,17 +1,19 @@
 # Migration Cleanup Guide
 
 ## Problem
+
 Your local migration files don't match what's actually applied in the remote database, causing conflicts when trying to push migrations.
 
 ## Solution
 
 ### Step 1: Mark Applied Migrations
+
 Run this SQL in your Supabase Dashboard SQL Editor:
 
 ```sql
 -- Mark migrations that are already applied but missing from history
 INSERT INTO supabase_migrations.schema_migrations (version, statements, name)
-VALUES 
+VALUES
   ('20250105000000', ARRAY[]::text[], 'add_offers_system'),
   ('20250106000000', ARRAY[]::text[], 'add_theme_properties'),
   ('20250107000000', ARRAY[]::text[], 'add_terms_and_conditions'),
@@ -28,6 +30,7 @@ ON CONFLICT (version) DO NOTHING;
 ```
 
 ### Step 2: Apply the Conta API Key Migration
+
 If you haven't already, run the migration SQL from `20250115000000_fix_conta_api_key_permissions.sql` in the SQL Editor, then mark it as applied:
 
 ```sql
@@ -37,7 +40,9 @@ ON CONFLICT (version) DO NOTHING;
 ```
 
 ### Step 3: Verify
+
 Run this to check your migration status:
+
 ```bash
 npx supabase migration list --linked
 ```
@@ -45,13 +50,15 @@ npx supabase migration list --linked
 All migrations should now show as synced (both Local and Remote columns filled).
 
 ### Step 4: Future Migrations
+
 Going forward, you can push new migrations with:
+
 ```bash
 npm run db:push
 ```
 
 ## What Was Fixed
+
 - ✅ Removed duplicate `20250105000000_add_offers_system.sql` (20251201000000 is the actual one)
 - ✅ Created cleanup script to mark applied migrations
 - ✅ Migration history should now be in sync
-

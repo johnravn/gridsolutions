@@ -53,6 +53,8 @@ export type InventoryIndexRow = {
   name: string
   category_name: string | null
   brand_name: string | null
+  model: string | null
+  nicknames: string | null
   on_hand: number | null
   current_price: number | null
   currency: string // "NOK"
@@ -86,6 +88,7 @@ export type ItemDetail = {
   allow_individual_booking: boolean
   active: boolean
   notes: string | null
+  nicknames: string | null
   current_price: number | null
   on_hand: number | null
   price_history: Array<ItemPriceHistoryRow>
@@ -320,6 +323,8 @@ export const inventoryIndexQuery = ({
           conditions.push(`name.ilike.${pattern}`)
           conditions.push(`category_name.ilike.${pattern}`)
           conditions.push(`brand_name.ilike.${pattern}`)
+          conditions.push(`model.ilike.${pattern}`)
+          conditions.push(`nicknames.ilike.${pattern}`)
         })
 
         if (conditions.length > 0) {
@@ -360,6 +365,8 @@ export const inventoryIndexQuery = ({
             (row) => row.name,
             (row) => row.category_name || '',
             (row) => row.brand_name || '',
+            (row) => row.model || '',
+            (row) => row.nicknames || '',
           ],
           0.25, // Lower threshold since we already filtered with ilike
         )
@@ -454,6 +461,7 @@ export const inventoryDetailQuery = ({
               id,
               model,
               notes,
+              nicknames,
               allow_individual_booking,
               active
             `,
@@ -464,6 +472,7 @@ export const inventoryDetailQuery = ({
               id: string
               model: string | null
               notes: string | null
+              nicknames: string | null
               allow_individual_booking: boolean | null
               active: boolean | null
             }>()
@@ -501,6 +510,7 @@ export const inventoryDetailQuery = ({
             ),
             active: Boolean(itemMeta?.active ?? base.active),
             notes: itemMeta?.notes ?? null,
+            nicknames: itemMeta?.nicknames ?? base.nicknames ?? null,
             current_price: base.current_price ?? null,
             on_hand: base.on_hand ?? 0,
             price_history: hist as Array<ItemPriceHistoryRow>,
@@ -550,7 +560,9 @@ export const inventoryDetailQuery = ({
           console.time(t('GROUP parts'))
           const { data: parts, error: pErr } = await supabase
             .from('group_parts')
-            .select('item_id, child_group_id, item_name, quantity, item_current_price, part_type')
+            .select(
+              'item_id, child_group_id, item_name, quantity, item_current_price, part_type',
+            )
             .eq('group_id', id)
           logSb('GROUP parts', { data: parts, error: pErr })
           console.timeEnd(t('GROUP parts'))

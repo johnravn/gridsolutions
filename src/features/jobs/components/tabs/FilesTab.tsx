@@ -131,283 +131,285 @@ const FilesTab = React.forwardRef<FilesTabHandle, { job: JobDetail }>(
       }
     }
 
-  const { data: files = [], isLoading } = useQuery({
-    queryKey: ['job-files', job.id],
-    queryFn: async () => {
-      const { data, error: queryError } = await supabase
-        .from('job_files')
-        .select('*, uploaded_by:uploaded_by_user_id(email, display_name)')
-        .eq('job_id', job.id)
-        .order('created_at', { ascending: false })
-
-      if (queryError) throw queryError
-      return data
-    },
-  })
-
-  const deleteFile = useMutation({
-    mutationFn: async (fileId: string) => {
-      // Get the file to delete the storage object
-      const { data: file } = await supabase
-        .from('job_files')
-        .select('path')
-        .eq('id', fileId)
-        .single()
-
-      if (file) {
-        // Delete from storage
-        const { error: storageErr } = await supabase.storage
+    const { data: files = [], isLoading } = useQuery({
+      queryKey: ['job-files', job.id],
+      queryFn: async () => {
+        const { data, error: queryError } = await supabase
           .from('job_files')
-          .remove([file.path])
+          .select('*, uploaded_by:uploaded_by_user_id(email, display_name)')
+          .eq('job_id', job.id)
+          .order('created_at', { ascending: false })
 
-        if (storageErr) throw storageErr
-      }
+        if (queryError) throw queryError
+        return data
+      },
+    })
 
-      // Delete from database
-      const { error: dbErr } = await supabase
-        .from('job_files')
-        .delete()
-        .eq('id', fileId)
+    const deleteFile = useMutation({
+      mutationFn: async (fileId: string) => {
+        // Get the file to delete the storage object
+        const { data: file } = await supabase
+          .from('job_files')
+          .select('path')
+          .eq('id', fileId)
+          .single()
 
-      if (dbErr) throw dbErr
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['job-files', job.id] })
-      success('File deleted', 'The file has been removed.')
-    },
-    onError: (err: any) => {
-      error('Delete failed', err?.message || 'Please try again.')
-    },
-  })
+        if (file) {
+          // Delete from storage
+          const { error: storageErr } = await supabase.storage
+            .from('job_files')
+            .remove([file.path])
 
-  if (isLoading) return <Text>Loading files…</Text>
+          if (storageErr) throw storageErr
+        }
 
-  return (
-    <Box>
-      <Box mb="4">
-        <Heading size="3" mb="3">Notes</Heading>
-        {isReadOnly ? (
-          <Text style={{ whiteSpace: 'pre-wrap' }}>{notes || '—'}</Text>
-        ) : (
-          <Box>
-            <TextArea
-              value={notes || ''}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes here"
-              rows={6}
-              resize="vertical"
-            />
-            {initialNotes != notes && (
-              <Flex gap="2" mt="2" justify="end">
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => {
-                    setNotes(initialNotes)
-                  }}
-                  disabled={notesMutation.isPending}
-                >
-                  Discard
-                </Button>
-                <Button
-                  size="2"
-                  variant="solid"
-                  onClick={() => notesMutation.mutate()}
-                  disabled={notesMutation.isPending}
-                >
-                  {notesMutation.isPending ? 'Saving…' : 'Save'}
-                </Button>
-              </Flex>
-            )}
-          </Box>
-        )}
-      </Box>
+        // Delete from database
+        const { error: dbErr } = await supabase
+          .from('job_files')
+          .delete()
+          .eq('id', fileId)
 
+        if (dbErr) throw dbErr
+      },
+      onSuccess: () => {
+        qc.invalidateQueries({ queryKey: ['job-files', job.id] })
+        success('File deleted', 'The file has been removed.')
+      },
+      onError: (err: any) => {
+        error('Delete failed', err?.message || 'Please try again.')
+      },
+    })
+
+    if (isLoading) return <Text>Loading files…</Text>
+
+    return (
       <Box>
-        <Flex justify="between" align="center" mb="3">
-        <Text size="2" color="gray">
-          Files uploaded for this job
-        </Text>
-        {!isReadOnly && (
-          <Button size="2" variant="soft" onClick={() => setAddOpen(true)}>
-            <Plus width={16} height={16} />
-            Upload file
-          </Button>
-        )}
-        <AddFileDialog
-          open={addOpen}
-          onOpenChange={setAddOpen}
-          jobId={job.id}
-          onUploaded={() => {
-            setAddOpen(false)
-            qc.invalidateQueries({ queryKey: ['job-files', job.id] })
-          }}
-        />
-        <EditFileDialog
-          open={!!editFileId}
-          onOpenChange={(open) => !open && setEditFileId(null)}
-          fileId={editFileId}
-          jobId={job.id}
-          onSaved={() => {
-            setEditFileId(null)
-            qc.invalidateQueries({ queryKey: ['job-files', job.id] })
-          }}
-        />
-      </Flex>
-
-      {files.length === 0 ? (
-        <Box
-          p="4"
-          style={{ border: '1px dashed var(--gray-a6)', borderRadius: 8 }}
-        >
-          <Text size="2" color="gray" align="center">
-            No files uploaded yet. Click "Upload file" to add one.
-          </Text>
+        <Box mb="4">
+          <Heading size="3" mb="3">
+            Notes
+          </Heading>
+          {isReadOnly ? (
+            <Text style={{ whiteSpace: 'pre-wrap' }}>{notes || '—'}</Text>
+          ) : (
+            <Box>
+              <TextArea
+                value={notes || ''}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes here"
+                rows={6}
+                resize="vertical"
+              />
+              {initialNotes != notes && (
+                <Flex gap="2" mt="2" justify="end">
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => {
+                      setNotes(initialNotes)
+                    }}
+                    disabled={notesMutation.isPending}
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    size="2"
+                    variant="solid"
+                    onClick={() => notesMutation.mutate()}
+                    disabled={notesMutation.isPending}
+                  >
+                    {notesMutation.isPending ? 'Saving…' : 'Save'}
+                  </Button>
+                </Flex>
+              )}
+            </Box>
+          )}
         </Box>
-      ) : (
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>File</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Uploaded by</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell style={{ width: 80 }}>
-                Actions
-              </Table.ColumnHeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {files.map((file: any) => (
-              <Table.Row key={file.id}>
-                <Table.Cell>
-                  <Flex align="center" gap="2">
-                    <GoogleDocs width={16} height={16} />
-                    <Text size="2" weight="medium">
-                      {file.filename || 'Unnamed file'}
-                    </Text>
-                    {file.size_bytes && (
-                      <Text size="1" color="gray">
-                        ({(file.size_bytes / 1024).toFixed(1)} KB)
-                      </Text>
-                    )}
-                  </Flex>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text size="2" color={file.title ? undefined : 'gray'}>
-                    {file.title || '—'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text size="2" color={file.note ? undefined : 'gray'}>
-                    {file.note || '—'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text size="2" color="gray">
-                    {file.uploaded_by?.display_name ||
-                      file.uploaded_by?.email ||
-                      '—'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Flex gap="1">
-                    <IconButton
-                      size="1"
-                      variant="soft"
-                      onClick={async () => {
-                        const { data } = await supabase.storage
-                          .from('job_files')
-                          .download(file.path)
 
-                        if (data && file.filename) {
-                          const url = window.URL.createObjectURL(data)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = file.filename
-                          document.body.appendChild(a)
-                          a.click()
-                          window.URL.revokeObjectURL(url)
-                          document.body.removeChild(a)
-                        }
-                      }}
-                    >
-                      <Download width={14} height={14} />
-                    </IconButton>
-                    {!isReadOnly && (
-                      <>
+        <Box>
+          <Flex justify="between" align="center" mb="3">
+            <Text size="2" color="gray">
+              Files uploaded for this job
+            </Text>
+            {!isReadOnly && (
+              <Button size="2" variant="soft" onClick={() => setAddOpen(true)}>
+                <Plus width={16} height={16} />
+                Upload file
+              </Button>
+            )}
+            <AddFileDialog
+              open={addOpen}
+              onOpenChange={setAddOpen}
+              jobId={job.id}
+              onUploaded={() => {
+                setAddOpen(false)
+                qc.invalidateQueries({ queryKey: ['job-files', job.id] })
+              }}
+            />
+            <EditFileDialog
+              open={!!editFileId}
+              onOpenChange={(open) => !open && setEditFileId(null)}
+              fileId={editFileId}
+              jobId={job.id}
+              onSaved={() => {
+                setEditFileId(null)
+                qc.invalidateQueries({ queryKey: ['job-files', job.id] })
+              }}
+            />
+          </Flex>
+
+          {files.length === 0 ? (
+            <Box
+              p="4"
+              style={{ border: '1px dashed var(--gray-a6)', borderRadius: 8 }}
+            >
+              <Text size="2" color="gray" align="center">
+                No files uploaded yet. Click "Upload file" to add one.
+              </Text>
+            </Box>
+          ) : (
+            <Table.Root variant="surface">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>File</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Uploaded by</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: 80 }}>
+                    Actions
+                  </Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {files.map((file: any) => (
+                  <Table.Row key={file.id}>
+                    <Table.Cell>
+                      <Flex align="center" gap="2">
+                        <GoogleDocs width={16} height={16} />
+                        <Text size="2" weight="medium">
+                          {file.filename || 'Unnamed file'}
+                        </Text>
+                        {file.size_bytes && (
+                          <Text size="1" color="gray">
+                            ({(file.size_bytes / 1024).toFixed(1)} KB)
+                          </Text>
+                        )}
+                      </Flex>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2" color={file.title ? undefined : 'gray'}>
+                        {file.title || '—'}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2" color={file.note ? undefined : 'gray'}>
+                        {file.note || '—'}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2" color="gray">
+                        {file.uploaded_by?.display_name ||
+                          file.uploaded_by?.email ||
+                          '—'}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Flex gap="1">
                         <IconButton
                           size="1"
                           variant="soft"
-                          onClick={() => setEditFileId(file.id)}
-                        >
-                          <Edit width={14} height={14} />
-                        </IconButton>
-                        <IconButton
-                          size="1"
-                          variant="soft"
-                          color="red"
-                          onClick={() => {
-                            info('Deleting file...', 'Please wait')
-                            deleteFile.mutate(file.id)
+                          onClick={async () => {
+                            const { data } = await supabase.storage
+                              .from('job_files')
+                              .download(file.path)
+
+                            if (data && file.filename) {
+                              const url = window.URL.createObjectURL(data)
+                              const a = document.createElement('a')
+                              a.href = url
+                              a.download = file.filename
+                              document.body.appendChild(a)
+                              a.click()
+                              window.URL.revokeObjectURL(url)
+                              document.body.removeChild(a)
+                            }
                           }}
                         >
-                          <Trash width={14} height={14} />
+                          <Download width={14} height={14} />
                         </IconButton>
-                      </>
-                    )}
-                  </Flex>
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      )}
-      </Box>
+                        {!isReadOnly && (
+                          <>
+                            <IconButton
+                              size="1"
+                              variant="soft"
+                              onClick={() => setEditFileId(file.id)}
+                            >
+                              <Edit width={14} height={14} />
+                            </IconButton>
+                            <IconButton
+                              size="1"
+                              variant="soft"
+                              color="red"
+                              onClick={() => {
+                                info('Deleting file...', 'Please wait')
+                                deleteFile.mutate(file.id)
+                              }}
+                            >
+                              <Trash width={14} height={14} />
+                            </IconButton>
+                          </>
+                        )}
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          )}
+        </Box>
 
-      {/* Save before leave dialog */}
-      <AlertDialog.Root
-        open={saveBeforeLeaveOpen}
-        onOpenChange={setSaveBeforeLeaveOpen}
-      >
-        <AlertDialog.Content maxWidth="480px">
-          <AlertDialog.Title>Save changes?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            You have unsaved changes to the notes. Do you want to save them
-            before leaving?
-          </AlertDialog.Description>
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
+        {/* Save before leave dialog */}
+        <AlertDialog.Root
+          open={saveBeforeLeaveOpen}
+          onOpenChange={setSaveBeforeLeaveOpen}
+        >
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Save changes?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              You have unsaved changes to the notes. Do you want to save them
+              before leaving?
+            </AlertDialog.Description>
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button
+                  variant="soft"
+                  onClick={() => {
+                    setSaveBeforeLeaveOpen(false)
+                    setPendingNavigation(null)
+                  }}
+                >
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
               <Button
                 variant="soft"
-                onClick={() => {
-                  setSaveBeforeLeaveOpen(false)
-                  setPendingNavigation(null)
-                }}
+                color="red"
+                onClick={handleDiscardAndLeave}
+                disabled={notesMutation.isPending}
               >
-                Cancel
+                Discard
               </Button>
-            </AlertDialog.Cancel>
-            <Button
-              variant="soft"
-              color="red"
-              onClick={handleDiscardAndLeave}
-              disabled={notesMutation.isPending}
-            >
-              Discard
-            </Button>
-            <Button
-              variant="solid"
-              onClick={handleSaveAndLeave}
-              disabled={notesMutation.isPending}
-            >
-              {notesMutation.isPending ? 'Saving…' : 'Save and leave'}
-            </Button>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-    </Box>
-  )
+              <Button
+                variant="solid"
+                onClick={handleSaveAndLeave}
+                disabled={notesMutation.isPending}
+              >
+                {notesMutation.isPending ? 'Saving…' : 'Save and leave'}
+              </Button>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      </Box>
+    )
   },
 )
 

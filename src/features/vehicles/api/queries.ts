@@ -88,15 +88,15 @@ export function vehiclesIndexQuery({
         const patterns = [
           `%${term}%`,
           term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as string[]
-        
+        ].filter(Boolean) as Array<string>
+
         const conditions = patterns
           .flatMap((pattern) => [
             `name.ilike.${pattern}`,
             `registration_no.ilike.${pattern}`,
           ])
           .join(',')
-        
+
         q = q.or(conditions)
       }
 
@@ -194,7 +194,7 @@ export async function upsertVehicle(payload: UpsertVehiclePayload) {
     .select('id')
     .single()
   if (error) throw error
-  return data.id as string
+  return data.id
 }
 
 export async function markVehicleDeleted({

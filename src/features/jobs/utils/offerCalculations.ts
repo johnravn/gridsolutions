@@ -18,9 +18,9 @@ export type OfferTotals = {
 }
 
 export function calculateOfferTotals(
-  equipmentItems: OfferEquipmentItem[],
-  crewItems: OfferCrewItem[],
-  transportItems: OfferTransportItem[],
+  equipmentItems: Array<OfferEquipmentItem>,
+  crewItems: Array<OfferCrewItem>,
+  transportItems: Array<OfferTransportItem>,
   daysOfUse: number,
   discountPercent: number,
   vatPercent: number,
@@ -52,7 +52,7 @@ export function calculateOfferTotals(
         (1000 * 60 * 60 * 24),
     )
     const dailyCost = item.daily_rate * Math.max(1, days)
-    
+
     // Calculate distance cost if distance and rates are available
     const increment = vehicleDistanceIncrement ?? 150
     const distanceIncrements = item.distance_km
@@ -62,7 +62,7 @@ export function calculateOfferTotals(
       vehicleDistanceRate && distanceIncrements > 0
         ? vehicleDistanceRate * distanceIncrements
         : 0
-    
+
     return sum + dailyCost + distanceCost
   }, 0)
 

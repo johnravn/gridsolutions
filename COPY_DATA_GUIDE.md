@@ -45,17 +45,21 @@ PGPASSWORD=postgres psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -f users_
 ## Troubleshooting
 
 ### "Local Supabase is not running"
+
 ```bash
 npm run supabase:start
 ```
 
 ### "Failed to dump remote data"
+
 Make sure you're linked:
+
 ```bash
 npm run supabase:link
 ```
 
 ### "Permission denied"
+
 The script needs to run psql. Make sure PostgreSQL client tools are installed.
 
 ## Workflow Example
@@ -71,4 +75,3 @@ npm run db:copy-data
 # Start developing with real data
 npm run dev
 ```
-

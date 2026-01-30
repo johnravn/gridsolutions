@@ -10,11 +10,9 @@ This document outlines the complete workflow for developing, testing, and deploy
   - Auto-deploys to Vercel → gridsolutions.app
   - Must always be stable and deployable
   - All migrations must be applied before merging
-  
 - **`develop`** (optional) - Development branch
   - For integrating multiple features
   - Can have a staging Vercel preview
-  
 - **`feature/*`** - Feature branches
   - Named like: `feature/add-inventory-tracking`
   - Created from `main` or `develop`
@@ -32,6 +30,7 @@ This document outlines the complete workflow for developing, testing, and deploy
 ### Starting a New Feature
 
 1. **Create feature branch from main:**
+
    ```bash
    git checkout main
    git pull origin main
@@ -39,6 +38,7 @@ This document outlines the complete workflow for developing, testing, and deploy
    ```
 
 2. **Develop locally:**
+
    ```bash
    npm run supabase:start      # Start local Supabase (if using Docker)
    npm run db:switch:local     # Switch to local DB
@@ -66,17 +66,20 @@ This document outlines the complete workflow for developing, testing, and deploy
 If your migration is backward-compatible (adds columns, tables, etc. without breaking existing code):
 
 1. **Create migration in feature branch:**
+
    ```bash
    npm run db:migrate add_inventory_tracking
    # Edit the migration file
    ```
 
 2. **Test locally:**
+
    ```bash
    npm run db:reset  # Test migration locally
    ```
 
 3. **Push migration to production BEFORE merging code:**
+
    ```bash
    npm run db:push  # Push to production Supabase
    npm run db:types:remote  # Update types
@@ -95,11 +98,13 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
 If your migration breaks existing code (removes columns, changes types, etc.):
 
 1. **Create migration in feature branch:**
+
    ```bash
    npm run db:migrate remove_old_column
    ```
 
 2. **Test locally:**
+
    ```bash
    npm run db:reset
    ```
@@ -135,6 +140,7 @@ Vercel creates **two types of deployments**:
 **Environment**: Uses Preview environment variables (or Production if not set)
 
 **Benefits**:
+
 - ✅ Test changes safely
 - ✅ Share with team for feedback
 - ✅ Catch issues before production
@@ -148,6 +154,7 @@ Vercel creates **two types of deployments**:
 **Environment**: Uses Production environment variables
 
 **Process**:
+
 1. Vercel automatically detects the push to `main`
 2. Builds the application
 3. Deploys to gridsolutions.app
@@ -156,15 +163,17 @@ Vercel creates **two types of deployments**:
 ### Manual Deployment Steps
 
 1. **Ensure migrations are applied:**
+
    ```bash
    # Check migration status
    npx supabase migration list
-   
+
    # If needed, push migrations
    npm run db:push
    ```
 
 2. **Update TypeScript types:**
+
    ```bash
    npm run db:types:remote
    git add src/shared/types/database.types.ts
@@ -173,6 +182,7 @@ Vercel creates **two types of deployments**:
    ```
 
 3. **Merge to main:**
+
    ```bash
    git checkout main
    git merge feature/my-feature-name
@@ -196,6 +206,7 @@ You need **different** Supabase URLs for local development vs production:
 ### Local Environment Variables (`.env.local`)
 
 **If using local Supabase (Docker):**
+
 ```env
 # Local Supabase (when running: npm run supabase:start)
 VITE_SUPABASE_URL=http://127.0.0.1:54321
@@ -204,6 +215,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 ```
 
 **If NOT using local Supabase (connecting directly to production):**
+
 ```env
 # Production Supabase (for local development)
 VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
@@ -224,6 +236,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 ```
 
 **How to find your production values:**
+
 1. Go to https://app.supabase.com
 2. Select your project
 3. Go to **Settings → API**
@@ -233,17 +246,20 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
    - **Project Reference ID** → `SUPABASE_PROJECT_REF` (from URL: `https://app.supabase.com/project/YOUR-PROJECT-REF`)
 
 **Preview Environment (for feature branches):**
+
 - Set the same values in **Vercel → Settings → Environment Variables → Preview**
 - Or use a separate staging Supabase project if you have one
 
 ### Quick Check: Which URL Should You Use?
 
 **Use localhost (`http://127.0.0.1:54321`) if:**
+
 - ✅ You run `npm run supabase:start` for local development
 - ✅ You want to test migrations locally
 - ✅ You want faster development (no network latency)
 
 **Use production URL (`https://...supabase.co`) if:**
+
 - ✅ You're deploying to Vercel
 - ✅ You're not using Docker/local Supabase
 - ✅ You want to test against production data (be careful!)
@@ -266,6 +282,7 @@ Before merging to `main`:
 ### Local Testing
 
 1. **Test with local database:**
+
    ```bash
    npm run supabase:start
    npm run db:switch:local
@@ -285,6 +302,7 @@ Before merging to `main`:
 Before merging to main:
 
 1. **Test migration locally:**
+
    ```bash
    npm run db:reset  # Should apply all migrations successfully
    ```
@@ -304,10 +322,12 @@ Before merging to main:
 ### Rollback Code (Vercel)
 
 1. **Revert commit in GitHub:**
+
    ```bash
    git revert <commit-hash>
    git push origin main
    ```
+
    Vercel will automatically redeploy the previous version.
 
 2. **Or use Vercel Dashboard:**
@@ -320,12 +340,14 @@ Before merging to main:
 **⚠️ WARNING: Rolling back migrations is complex and risky!**
 
 1. **Create a new migration to undo changes:**
+
    ```bash
    npm run db:migrate rollback_previous_migration
    # Write SQL to reverse the previous migration
    ```
 
 2. **Test locally:**
+
    ```bash
    npm run db:reset
    ```
@@ -342,6 +364,7 @@ Before merging to main:
 ### Creating a Pull Request
 
 1. **Push feature branch:**
+
    ```bash
    git push origin feature/my-feature-name
    ```
@@ -367,9 +390,11 @@ Create `.github/pull_request_template.md`:
 
 ```markdown
 ## Description
+
 Brief description of changes
 
 ## Database Changes
+
 - [ ] No database changes
 - [ ] Migration created: `YYYYMMDDHHMMSS_description.sql`
 - [ ] Migration tested locally
@@ -377,11 +402,13 @@ Brief description of changes
 - [ ] Types updated
 
 ## Testing
+
 - [ ] Tested locally
 - [ ] Tested with production data (if applicable)
 - [ ] RLS policies verified
 
 ## Checklist
+
 - [ ] Code follows project patterns
 - [ ] Types updated
 - [ ] No console errors
@@ -440,4 +467,3 @@ Brief description of changes
 ---
 
 **Remember**: When in doubt, test locally first, then test in a feature branch, and only merge to main when everything is verified!
-

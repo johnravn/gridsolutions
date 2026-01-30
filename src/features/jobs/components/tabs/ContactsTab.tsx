@@ -96,11 +96,13 @@ export default function ContactsTab({
       if (resIds.length) {
         const { data: rows, error } = await supabase
           .from('reserved_crew')
-          .select('user:user_id ( display_name, email, phone )')
+          .select(
+            'placeholder_name, user:user_id ( display_name, email, phone )',
+          )
           .in('time_period_id', resIds)
         if (error) throw error
         crew = rows.map((r: any) => ({
-          name: r.user?.display_name ?? '—',
+          name: r.user?.display_name ?? r.placeholder_name ?? '—',
           email: r.user?.email ?? '—',
           phone: r.user?.phone ?? null,
         }))
@@ -179,34 +181,32 @@ export default function ContactsTab({
           <Grid columns="2" gap="3">
             <Box>
               <Flex direction="column" gap="0">
-
-              <Text size="1" color="gray" mb="1">
-                Name
-              </Text>
-              <Text size="2" weight="medium">
-                {projectLeadData.project_lead.display_name ?? '—'}
-              </Text>
+                <Text size="1" color="gray" mb="1">
+                  Name
+                </Text>
+                <Text size="2" weight="medium">
+                  {projectLeadData.project_lead.display_name ?? '—'}
+                </Text>
               </Flex>
             </Box>
             <Box>
               <Flex direction="column" gap="0">
-
-              <Text size="1" color="gray" mb="1">
-                Email
-              </Text>
-              {projectLeadData.project_lead.email ? (
-                <a
-                href={`mailto:${projectLeadData.project_lead.email}`}
-                style={{
-                  color: 'inherit',
-                  textDecoration: 'none',
-                }}
-                >
-                  <Text size="2">{projectLeadData.project_lead.email}</Text>
-                </a>
-              ) : (
-                <Text size="2">—</Text>
-              )}
+                <Text size="1" color="gray" mb="1">
+                  Email
+                </Text>
+                {projectLeadData.project_lead.email ? (
+                  <a
+                    href={`mailto:${projectLeadData.project_lead.email}`}
+                    style={{
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Text size="2">{projectLeadData.project_lead.email}</Text>
+                  </a>
+                ) : (
+                  <Text size="2">—</Text>
+                )}
               </Flex>
             </Box>
             {projectLeadData.project_lead.phone && (

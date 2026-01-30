@@ -532,7 +532,7 @@ function VehicleBookingCard({
                 </Badge>
               ) : (
                 <BookingStatusControl
-                  value={currentStatus as BookingStatus}
+                  value={currentStatus}
                   onChange={onStatusChange}
                 />
               )}

@@ -5,6 +5,7 @@
 ### 1. Determine Your Mac's Processor
 
 Run this command to check:
+
 ```bash
 uname -m
 ```
@@ -15,9 +16,11 @@ uname -m
 ### 2. Download Docker Desktop
 
 **For Apple Silicon (M1/M2/M3):**
+
 - Direct download: https://desktop.docker.com/mac/main/arm64/Docker.dmg
 
 **For Intel Macs:**
+
 - Direct download: https://desktop.docker.com/mac/main/amd64/Docker.dmg
 
 **Or visit:** https://www.docker.com/products/docker-desktop/
@@ -99,4 +102,3 @@ softwareupdate --install-rosetta
 
 - [Official Docker Desktop Docs](https://docs.docker.com/desktop/install/mac-install/)
 - [Docker Desktop Download](https://www.docker.com/products/docker-desktop/)
-

@@ -28,6 +28,7 @@ VITE_SUPABASE_ANON_KEY=your-remote-anon-key-here
 ```
 
 Or switch to remote temporarily:
+
 ```bash
 npm run db:switch:remote
 npm run db:copy-storage
@@ -49,14 +50,17 @@ npm run db:copy-storage
 ## Troubleshooting
 
 ### "Please configure remote credentials"
+
 Update `.env.remote.db` with your remote anon key, or temporarily switch to remote mode.
 
 ### "Local Supabase is not running"
+
 ```bash
 npm run supabase:start
 ```
 
 ### Some files fail to copy
+
 - Large files might take time
 - Check file permissions in remote storage
 - Verify bucket policies allow public access if needed
@@ -67,4 +71,3 @@ npm run supabase:start
 - **Preserves folder structure** - Directory structure is maintained
 - **Bucket settings** - Public/private settings are preserved
 - **No deletion** - Only copies files, doesn't delete local files not in remote
-

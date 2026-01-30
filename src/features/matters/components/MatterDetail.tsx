@@ -14,7 +14,15 @@ import {
   Text,
   TextArea,
 } from '@radix-ui/themes'
-import { Check, Download, Edit, Send, Trash, Xmark, ArrowRight } from 'iconoir-react'
+import {
+  ArrowRight,
+  Check,
+  Download,
+  Edit,
+  Send,
+  Trash,
+  Xmark,
+} from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
@@ -233,12 +241,13 @@ export default function MatterDetail({
   React.useEffect(() => {
     // Skip if we've already marked this matter as viewed
     if (hasMarkedAsViewedRef.current === matterId) return
-    
+
     // Skip if matter is not loaded yet
     if (!matter) return
 
-    // Skip if user is the creator (creators' matters are always considered read)
-    if (user?.id === matter.created_by_user_id) {
+    // Skip if user is the creator AND it was not created as company.
+    // Company-created matters can be delivered to the creator's inbox and should be markable as read.
+    if (user?.id === matter.created_by_user_id && !matter.created_as_company) {
       hasMarkedAsViewedRef.current = matterId
       return
     }
@@ -251,13 +260,11 @@ export default function MatterDetail({
       .then(async () => {
         // Invalidate and refetch queries to ensure UI updates immediately
         await Promise.all([
-          qc.invalidateQueries({ queryKey: ['matters', 'unread-count'] }),
-          qc.invalidateQueries({ queryKey: ['matters', 'index'] }),
+          qc.invalidateQueries({ queryKey: ['matters'] }),
         ])
         // Force refetch to ensure fresh data
         await Promise.all([
-          qc.refetchQueries({ queryKey: ['matters', 'unread-count'] }),
-          qc.refetchQueries({ queryKey: ['matters', 'index'] }),
+          qc.refetchQueries({ queryKey: ['matters'] }),
         ])
       })
       .catch((error) => {
@@ -352,6 +359,8 @@ export default function MatterDetail({
     )
   }
 
+  const activityId = (matter.metadata as any)?.activity_id as string | undefined
+
   const getTypeBadge = () => {
     const variants: Record<string, { color: string; label: string }> = {
       crew_invite: { color: 'blue', label: 'Crew Invitation' },
@@ -377,16 +386,33 @@ export default function MatterDetail({
             {getTypeBadge()}
             <Heading size="5">{matter.title}</Heading>
           </Flex>
-          {isCreator && (
-            <Button
-              size="2"
-              variant="soft"
-              color="red"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash width={16} height={16} /> Delete
-            </Button>
-          )}
+          <Flex align="center" gap="2">
+            {matter.job?.id && (
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() =>
+                  navigate({
+                    to: '/jobs',
+                    search: { jobId: matter.job?.id, tab: undefined },
+                  })
+                }
+              >
+                <ArrowRight width={16} height={16} />
+                Go to job
+              </Button>
+            )}
+            {isCreator && (
+              <Button
+                size="2"
+                variant="soft"
+                color="red"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash width={16} height={16} /> Delete
+              </Button>
+            )}
+          </Flex>
         </Flex>
         <Flex align="center" justify="between" gap="4">
           <Box>
@@ -680,7 +706,7 @@ export default function MatterDetail({
       )}
 
       {/* Link to latest update if this is a notification about an activity */}
-      {matter.metadata?.activity_id && (
+      {activityId && (
         <Box mb="4">
           <Separator size="4" mb="3" />
           <Button
@@ -688,7 +714,7 @@ export default function MatterDetail({
             onClick={() => {
               navigate({
                 to: '/latest',
-                search: { activityId: matter.metadata.activity_id },
+                search: { activityId },
               })
             }}
           >

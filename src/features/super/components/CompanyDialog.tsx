@@ -1,7 +1,16 @@
 // src/features/super/components/CompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Box, Button, Dialog, Flex, Separator, Spinner, Text, TextField } from '@radix-ui/themes'
+import {
+  Box,
+  Button,
+  Dialog,
+  Flex,
+  Separator,
+  Spinner,
+  Text,
+  TextField,
+} from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
@@ -51,14 +60,20 @@ export default function CompanyDialog({
   }
 
   // Parse address string (format: "address_line, zip_code, city, country")
-  const parseAddress = (addr: string | null | undefined): {
+  const parseAddress = (
+    addr: string | null | undefined,
+  ): {
     address_line: string
     zip_code: string
     city: string
     country: string
   } => {
-    if (!addr) return { address_line: '', zip_code: '', city: '', country: 'Norway' }
-    const parts = addr.split(',').map((s) => s.trim()).filter(Boolean)
+    if (!addr)
+      return { address_line: '', zip_code: '', city: '', country: 'Norway' }
+    const parts = addr
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
     return {
       address_line: parts[0] || '',
       zip_code: parts[1] || '',
@@ -82,7 +97,7 @@ export default function CompanyDialog({
     key: TKey,
     value: FormState[TKey],
   ) => setForm((s) => ({ ...s, [key]: value }))
-  
+
   const setAddr = (
     k: 'address_line' | 'zip_code' | 'city' | 'country',
     v: string,
@@ -90,7 +105,12 @@ export default function CompanyDialog({
 
   // Load users for contact person selection with search
   const { data: profiles = [], isFetching: profilesLoading } = useQuery({
-    queryKey: ['profiles', 'contact-person-search', contactPersonSearch, form.contact_person_id],
+    queryKey: [
+      'profiles',
+      'contact-person-search',
+      contactPersonSearch,
+      form.contact_person_id,
+    ],
     enabled: open,
     queryFn: async () => {
       let q = supabase
@@ -187,12 +207,7 @@ export default function CompanyDialog({
   const createMutation = useMutation({
     mutationFn: async (f: FormState) => {
       // Build address string from components
-      const addressParts = [
-        f.address_line,
-        f.zip_code,
-        f.city,
-        f.country,
-      ]
+      const addressParts = [f.address_line, f.zip_code, f.city, f.country]
         .filter(Boolean)
         .join(', ')
       const addressString = addressParts || null
@@ -232,12 +247,7 @@ export default function CompanyDialog({
       if (!initialData?.id) throw new Error('Missing company id')
 
       // Build address string from components
-      const addressParts = [
-        f.address_line,
-        f.zip_code,
-        f.city,
-        f.country,
-      ]
+      const addressParts = [f.address_line, f.zip_code, f.city, f.country]
         .filter(Boolean)
         .join(', ')
       const addressString = addressParts || null
@@ -292,11 +302,13 @@ export default function CompanyDialog({
 
         <form onSubmit={handleSubmit}>
           <Flex direction="column" gap="3" mt="3">
-            <Field label={
-              <>
-                Name <Text color="red">*</Text>
-              </>
-            }>
+            <Field
+              label={
+                <>
+                  Name <Text color="red">*</Text>
+                </>
+              }
+            >
               <TextField.Root
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
@@ -424,10 +436,9 @@ export default function CompanyDialog({
                         style={{
                           cursor: 'pointer',
                           borderRadius: 6,
-                          background:
-                            !form.contact_person_id
-                              ? 'var(--blue-a3)'
-                              : 'transparent',
+                          background: !form.contact_person_id
+                            ? 'var(--blue-a3)'
+                            : 'transparent',
                         }}
                         onClick={() => {
                           set('contact_person_id', null)
@@ -469,7 +480,11 @@ export default function CompanyDialog({
                                   {profile.label}
                                 </Text>
                                 {profile.display_name && (
-                                  <Text size="1" color="gray" style={{ marginLeft: 6 }}>
+                                  <Text
+                                    size="1"
+                                    color="gray"
+                                    style={{ marginLeft: 6 }}
+                                  >
                                     {profile.email}
                                   </Text>
                                 )}

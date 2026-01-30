@@ -16,7 +16,6 @@ export default function BookingsTab({
   const [activeSubTab, setActiveSubTab] = React.useState<string>(
     initialSubTab || 'equipment',
   )
-  const [crewView, setCrewView] = React.useState<'roles' | 'crew'>('roles')
 
   return (
     <Tabs.Root value={activeSubTab} onValueChange={setActiveSubTab}>
@@ -31,14 +30,7 @@ export default function BookingsTab({
       </Tabs.Content>
 
       <Tabs.Content value="crew">
-        {companyId && (
-          <CrewTab
-            jobId={jobId}
-            companyId={companyId}
-            view={crewView}
-            onViewChange={setCrewView}
-          />
-        )}
+        {companyId && <CrewTab jobId={jobId} companyId={companyId} />}
       </Tabs.Content>
 
       <Tabs.Content value="transport">

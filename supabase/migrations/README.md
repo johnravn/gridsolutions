@@ -120,4 +120,3 @@ OR EXISTS (
 ---
 
 **Remember**: When in doubt, create a migration file and test it locally first!
-

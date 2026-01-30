@@ -243,7 +243,10 @@ export default function UserInspector({
 
             <DT>Notes</DT>
             <DD>
-              <Text size="2" color={user.preferences.notes ? undefined : 'gray'}>
+              <Text
+                size="2"
+                color={user.preferences.notes ? undefined : 'gray'}
+              >
                 {user.preferences.notes || '—'}
               </Text>
             </DD>

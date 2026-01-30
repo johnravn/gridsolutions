@@ -255,11 +255,16 @@ export default function ContactDialog({
         onSaved={async () => {
           // Refresh contacts list
           await qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customer', customerId, 'contacts'],
+            queryKey: [
+              'company',
+              companyId,
+              'customer',
+              customerId,
+              'contacts',
+            ],
           })
         }}
       />
     </>
   )
 }
-

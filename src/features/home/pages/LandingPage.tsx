@@ -85,7 +85,10 @@ export default function LandingPage() {
                     color: 'var(--gray-12)',
                   }}
                 >
-                  <ReportColumns width={isMd ? 40 : 32} height={isMd ? 40 : 32} />
+                  <ReportColumns
+                    width={isMd ? 40 : 32}
+                    height={isMd ? 40 : 32}
+                  />
                 </Box>
               </Flex>
             </motion.div>

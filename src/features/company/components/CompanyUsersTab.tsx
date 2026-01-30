@@ -14,8 +14,8 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { NavArrowDown } from 'iconoir-react'
-import CompanyTable from './CompanyTable'
 import CrewInspector from '../../crew/components/CrewInspector'
+import CompanyTable from './CompanyTable'
 
 type Selection = { kind: 'user'; userId: string } | { kind: 'none' }
 

@@ -30,6 +30,7 @@ export default function EditRoleDialog({
 
   const [title, setTitle] = React.useState('')
   const [needed, setNeeded] = React.useState<number>(1)
+  const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
   const [startAt, setStartAt] = React.useState('')
   const [endAt, setEndAt] = React.useState('')
   const [roleCategory, setRoleCategory] = React.useState('')
@@ -38,6 +39,7 @@ export default function EditRoleDialog({
     if (!open || !initial) return
     setTitle(initial.title ?? '')
     setNeeded(initial.needed_count ?? 1)
+    setNeededDraft(null)
     setStartAt(initial.start_at ?? '')
     setEndAt(initial.end_at ?? '')
     setRoleCategory(initial.role_category ?? '')
@@ -105,10 +107,23 @@ export default function EditRoleDialog({
             <TextField.Root
               type="number"
               min="1"
-              value={String(needed)}
-              onChange={(e) =>
-                setNeeded(Math.max(1, Number(e.target.value || 1)))
-              }
+              value={neededDraft ?? String(needed)}
+              onChange={(e) => {
+                const nextValue = e.target.value
+                setNeededDraft(nextValue)
+
+                if (nextValue === '') return
+                const parsed = Number(nextValue)
+                if (Number.isNaN(parsed)) return
+
+                setNeeded(Math.max(1, parsed))
+                setNeededDraft(null)
+              }}
+              onBlur={() => {
+                if (neededDraft === '') {
+                  setNeededDraft(null)
+                }
+              }}
               style={{ width: 120 }}
             />
           </Box>
@@ -121,11 +136,7 @@ export default function EditRoleDialog({
               />
             </Box>
             <Box style={{ flex: 1 }}>
-              <DateTimePicker
-                label="End"
-                value={endAt}
-                onChange={setEndAt}
-              />
+              <DateTimePicker label="End" value={endAt} onChange={setEndAt} />
             </Box>
           </Flex>
           <Box>

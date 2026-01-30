@@ -20,6 +20,7 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
+import { getJobStatusColor } from '../utils/statusColors'
 import OverviewTab from './tabs/OverviewTab'
 import BookingsTab from './tabs/BookingsTab'
 import TimelineTab from './tabs/TimelineTab'
@@ -32,7 +33,6 @@ import InvoiceTab from './tabs/InvoiceTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
 import JobDialog from './dialogs/JobDialog'
-import { getJobStatusColor } from '../utils/statusColors'
 import type { JobDetail, JobStatus } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
 
@@ -138,7 +138,13 @@ export default function JobInspector({
 
   // Archive/unarchive mutation
   const archiveJob = useMutation({
-    mutationFn: async ({ jobId, archived }: { jobId: string; archived: boolean }) => {
+    mutationFn: async ({
+      jobId,
+      archived,
+    }: {
+      jobId: string
+      archived: boolean
+    }) => {
       const { error } = await supabase
         .from('jobs')
         .update({ archived })
@@ -151,7 +157,10 @@ export default function JobInspector({
       await qc.invalidateQueries({ queryKey: ['jobs-index'] })
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
       setArchiveOpen(false)
-      success('Job updated', archived ? 'Job has been archived.' : 'Job has been unarchived.')
+      success(
+        'Job updated',
+        archived ? 'Job has been archived.' : 'Job has been unarchived.',
+      )
     },
     onError: (err: any) => {
       error('Failed to update job', err?.message || 'Please try again.')
@@ -237,7 +246,9 @@ export default function JobInspector({
                 open={archiveOpen}
                 onOpenChange={setArchiveOpen}
                 job={job}
-                onConfirm={() => archiveJob.mutate({ jobId: job.id, archived: !job.archived })}
+                onConfirm={() =>
+                  archiveJob.mutate({ jobId: job.id, archived: !job.archived })
+                }
                 isArchiving={archiveJob.isPending}
               />
             </>
@@ -427,9 +438,7 @@ function ArchiveJobDialog({
         <Separator my="3" />
 
         <Flex direction="column" gap="3">
-          <Text size="2">
-            Are you sure you want to {actionText} this job?
-          </Text>
+          <Text size="2">Are you sure you want to {actionText} this job?</Text>
 
           <Text size="2" color="gray">
             {job.archived

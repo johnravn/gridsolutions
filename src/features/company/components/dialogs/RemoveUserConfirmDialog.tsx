@@ -55,10 +55,20 @@ export default function RemoveUserConfirmDialog({
         <Dialog.Title>Remove {userKind}</Dialog.Title>
         <Dialog.Description size="2">
           Are you sure you want to remove{' '}
-          <Text weight="medium">{userName}</Text> ({userEmail}) from this company?
+          <Text weight="medium">{userName}</Text> ({userEmail}) from this
+          company?
         </Dialog.Description>
 
-        <Flex direction="column" gap="2" mt="4" p="3" style={{ backgroundColor: 'var(--red-3)', borderRadius: 'var(--radius-2)' }}>
+        <Flex
+          direction="column"
+          gap="2"
+          mt="4"
+          p="3"
+          style={{
+            backgroundColor: 'var(--red-3)',
+            borderRadius: 'var(--radius-2)',
+          }}
+        >
           <Text size="2" weight="medium" style={{ color: 'var(--red-11)' }}>
             ⚠️ Warning
           </Text>
@@ -96,4 +106,3 @@ export default function RemoveUserConfirmDialog({
     </Dialog.Root>
   )
 }
-

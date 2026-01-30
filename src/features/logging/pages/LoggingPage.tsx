@@ -3,49 +3,80 @@ import {
   Box,
   Button,
   Card,
+  Dialog,
   Flex,
   Grid,
   Heading,
   SegmentedControl,
+  Select,
   Separator,
   Text,
   TextArea,
   TextField,
 } from '@radix-ui/themes'
+import { Lock } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { createTimeEntry, timeEntriesQuery } from '../api/timeEntries'
+import { jobsIndexQuery } from '@features/jobs/api/queries'
+import {
+  createTimeEntry,
+  deleteTimeEntry,
+  timeEntriesQuery,
+} from '../api/timeEntries'
+import { loggingPeriodsQuery } from '../api/loggingPeriods'
+import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
 import TimeEntriesTable from '../components/TimeEntriesTable'
-import { formatMonthInput, getRange } from '../lib/timeEntryRange'
-import type { RangeOption } from '../lib/timeEntryRange'
+import {
+  formatMonthInput,
+  getMonthOptions,
+  getRange,
+} from '../lib/timeEntryRange'
+import type { LoggingPeriod } from '../api/loggingPeriods'
+import type { TimeEntryWithProfile } from '../api/timeEntries'
 
 export default function LoggingPage() {
   const { companyId } = useCompany()
-  const { userId } = useAuthz()
+  const { userId, isGlobalSuperuser, companyRole } = useAuthz()
   const qc = useQueryClient()
   const { success, error } = useToast()
 
-  const [range, setRange] = React.useState<RangeOption>('month')
   const [selectedMonth, setSelectedMonth] = React.useState(() =>
     formatMonthInput(new Date()),
   )
+  const selectedYear =
+    Number(selectedMonth.split('-')[0]) || new Date().getFullYear()
+  const monthOptions = React.useMemo(
+    () => getMonthOptions(selectedYear),
+    [selectedYear],
+  )
+  const yearOptions = React.useMemo(() => {
+    const currentYear = new Date().getFullYear()
+    return Array.from({ length: 5 }, (_, i) => currentYear - 2 + i)
+  }, [])
+
   const { from, to, label } = React.useMemo(
-    () => getRange(range, selectedMonth),
-    [range, selectedMonth],
+    () => getRange('month', selectedMonth),
+    [selectedMonth],
   )
 
   const { startAt: defaultStartAt, endAt: defaultEndAt } = React.useMemo(
     () => getDefaultTimes(),
     [],
   )
+  const [entryMode, setEntryMode] = React.useState<'manual' | 'job'>('manual')
+  const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
   const [title, setTitle] = React.useState('')
   const [jobNumber, setJobNumber] = React.useState('')
   const [note, setNote] = React.useState('')
   const [startAt, setStartAt] = React.useState(defaultStartAt)
   const [endAt, setEndAt] = React.useState(defaultEndAt)
+  const hasInvalidTimeRange = React.useMemo(() => {
+    if (!startAt || !endAt) return false
+    return new Date(endAt).getTime() < new Date(startAt).getTime()
+  }, [endAt, startAt])
   const pickedHours = React.useMemo(
     () => formatHoursBetween(startAt, endAt),
     [startAt, endAt],
@@ -62,16 +93,147 @@ export default function LoggingPage() {
     enabled,
   })
 
+  const { data: jobsData = [], isLoading: jobsLoading } = useQuery({
+    ...jobsIndexQuery({
+      companyId: companyId ?? '',
+      search: '',
+      sortBy: 'start_at',
+      sortDir: 'desc',
+      userId: userId ?? null,
+      companyRole: companyRole ?? null,
+      includeArchived: false,
+    }),
+    enabled,
+  })
+
+  const recentJobs = React.useMemo(() => {
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    return jobsData
+      .filter((job) => {
+        if (!job.start_at) return false
+        return new Date(job.start_at).getTime() < todayStart.getTime()
+      })
+      .slice(0, 25)
+  }, [jobsData])
+
+  const entryStartYear = React.useMemo(
+    () => getYearFromIso(startAt) ?? new Date().getFullYear(),
+    [startAt],
+  )
+  const entryEndYear = React.useMemo(
+    () => getYearFromIso(endAt) ?? entryStartYear,
+    [endAt, entryStartYear],
+  )
+
+  const { data: loggingPeriodsView = [] } = useQuery<Array<LoggingPeriod>>({
+    queryKey: ['logging_periods', companyId ?? 'none', selectedYear],
+    enabled: !!companyId,
+    queryFn: async () => {
+      if (!companyId) return []
+      const { queryFn } = loggingPeriodsQuery({ companyId, year: selectedYear })
+      return queryFn()
+    },
+  })
+  const { data: loggingPeriodsStart = [] } = useQuery<Array<LoggingPeriod>>({
+    queryKey: ['logging_periods', companyId ?? 'none', entryStartYear],
+    enabled: !!companyId && entryStartYear !== selectedYear,
+    queryFn: async () => {
+      if (!companyId) return []
+      const { queryFn } = loggingPeriodsQuery({
+        companyId,
+        year: entryStartYear,
+      })
+      return queryFn()
+    },
+  })
+  const { data: loggingPeriodsEnd = [] } = useQuery<Array<LoggingPeriod>>({
+    queryKey: ['logging_periods', companyId ?? 'none', entryEndYear],
+    enabled:
+      !!companyId &&
+      entryEndYear !== selectedYear &&
+      entryEndYear !== entryStartYear,
+    queryFn: async () => {
+      if (!companyId) return []
+      const { queryFn } = loggingPeriodsQuery({
+        companyId,
+        year: entryEndYear,
+      })
+      return queryFn()
+    },
+  })
+
+  const lockedMonthSetForView = React.useMemo(() => {
+    const set = new Set<string>()
+    loggingPeriodsView.forEach((period) => {
+      if (!period.is_locked) return
+      const monthKey = toMonthKey(period.period_start)
+      set.add(monthKey)
+    })
+    return set
+  }, [loggingPeriodsView])
+
+  const lockedMonthSetForEntry = React.useMemo(() => {
+    const set = new Set<string>()
+    const combined = [
+      ...loggingPeriodsView,
+      ...loggingPeriodsStart,
+      ...loggingPeriodsEnd,
+    ]
+    combined.forEach((period) => {
+      if (!period.is_locked) return
+      const monthKey = toMonthKey(period.period_start)
+      set.add(monthKey)
+    })
+    return set
+  }, [loggingPeriodsEnd, loggingPeriodsStart, loggingPeriodsView])
+
+  const isEntryInLockedPeriod = React.useMemo(() => {
+    return isRangeOverlappingLockedPeriod({
+      startAt,
+      endAt,
+      lockedMonthSet: lockedMonthSetForEntry,
+    })
+  }, [endAt, lockedMonthSetForEntry, startAt])
+
+  const handleJobSelect = React.useCallback(
+    (jobId: string) => {
+      setSelectedJobId(jobId)
+      const job = recentJobs.find((item) => item.id === jobId)
+      if (!job) return
+
+      setTitle(job.title || '')
+      setJobNumber(job.jobnr != null ? String(job.jobnr) : '')
+
+      const nextStart = job.start_at ?? ''
+      if (nextStart) {
+        setStartAt(nextStart)
+        if (job.end_at) {
+          setEndAt(job.end_at)
+        } else {
+          setEndAt(getEndFallback(nextStart))
+        }
+      }
+    },
+    [recentJobs],
+  )
+
   const createEntry = useMutation({
     mutationFn: async () => {
       if (!companyId || !userId) throw new Error('Missing company or user')
+      if (isEntryInLockedPeriod) {
+        throw new Error('You cannot add an entry in a locked logging period')
+      }
       if (!title.trim()) {
         throw new Error('Title is required')
+      }
+      if (entryMode === 'job' && !selectedJobId) {
+        throw new Error('Select a job to link')
       }
       if (!startAt || !endAt) {
         throw new Error('Start and end time are required')
       }
-      if (new Date(endAt).getTime() < new Date(startAt).getTime()) {
+      if (hasInvalidTimeRange) {
         throw new Error('End time must be after start time')
       }
 
@@ -86,24 +248,54 @@ export default function LoggingPage() {
       })
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: ['time_entries', companyId, userId, from, to],
-      })
-      await qc.invalidateQueries({
-        queryKey: ['time_entries', companyId, 'all', from, to],
-      })
+      await invalidateEntries()
       const { startAt: resetStart, endAt: resetEnd } = getDefaultTimes()
       setTitle('')
       setJobNumber('')
       setNote('')
       setStartAt(resetStart)
       setEndAt(resetEnd)
+      setEntryMode('manual')
+      setSelectedJobId(null)
       success('Saved', 'Time entry added')
     },
     onError: (e: any) => {
       error('Failed to save', e?.message || 'Please try again.')
     },
   })
+
+  const deleteEntry = useMutation({
+    mutationFn: async (entry: TimeEntryWithProfile) => {
+      if (!companyId || !userId) throw new Error('Missing company or user')
+      if (
+        isRangeOverlappingLockedPeriod({
+          startAt: entry.start_at,
+          endAt: entry.end_at,
+          lockedMonthSet: lockedMonthSetForView,
+        })
+      ) {
+        throw new Error('You cannot delete an entry in a locked logging period')
+      }
+      await deleteTimeEntry({ id: entry.id })
+    },
+    onSuccess: async () => {
+      await invalidateEntries()
+      setDeleteCandidate(null)
+      success('Deleted', 'Time entry removed')
+    },
+    onError: (e: any) => {
+      error('Failed to delete', e?.message || 'Please try again.')
+    },
+  })
+
+  const invalidateEntries = React.useCallback(async () => {
+    await qc.invalidateQueries({
+      queryKey: ['time_entries', companyId, userId, from, to],
+    })
+    await qc.invalidateQueries({
+      queryKey: ['time_entries', companyId, 'all', from, to],
+    })
+  }, [companyId, from, qc, to, userId])
 
   const handleStartChange = React.useCallback(
     (value: string) => {
@@ -131,6 +323,25 @@ export default function LoggingPage() {
     [endAt],
   )
 
+  const lastSelectedMonthRef = React.useRef(selectedMonth)
+  React.useEffect(() => {
+    if (lastSelectedMonthRef.current === selectedMonth) return
+    lastSelectedMonthRef.current = selectedMonth
+    const shifted = shiftRangeToMonth({
+      startAt,
+      endAt,
+      monthKey: selectedMonth,
+    })
+    if (!shifted) return
+    if (shifted.startAt !== startAt) setStartAt(shifted.startAt)
+    if (shifted.endAt !== endAt) setEndAt(shifted.endAt)
+  }, [endAt, selectedMonth, startAt])
+
+  const [editingEntry, setEditingEntry] =
+    React.useState<TimeEntryWithProfile | null>(null)
+  const [deleteCandidate, setDeleteCandidate] =
+    React.useState<TimeEntryWithProfile | null>(null)
+
   const entryForm = (
     <>
       <Flex align="center" justify="between" gap="3" wrap="wrap" mb="3">
@@ -147,6 +358,53 @@ export default function LoggingPage() {
       >
         <label>
           <Text as="div" size="2" mb="1" weight="medium">
+            Entry type
+          </Text>
+          <SegmentedControl.Root
+            value={entryMode}
+            onValueChange={(value) => {
+              setEntryMode(value as 'manual' | 'job')
+              if (value === 'manual') {
+                setSelectedJobId(null)
+              }
+            }}
+          >
+            <SegmentedControl.Item value="manual">Manual</SegmentedControl.Item>
+            <SegmentedControl.Item value="job">
+              Link to job
+            </SegmentedControl.Item>
+          </SegmentedControl.Root>
+        </label>
+        {entryMode === 'job' && (
+          <label>
+            <Text as="div" size="2" mb="1" weight="medium">
+              Recent job
+            </Text>
+            <Select.Root
+              value={selectedJobId || undefined}
+              onValueChange={handleJobSelect}
+              disabled={false}
+            >
+              <Select.Trigger
+                placeholder={jobsLoading ? 'Loading jobs…' : 'Select a job'}
+              />
+              <Select.Content>
+                {recentJobs.length === 0 && (
+                  <Select.Item value="none" disabled>
+                    No recent jobs
+                  </Select.Item>
+                )}
+                {recentJobs.map((job) => (
+                  <Select.Item key={job.id} value={job.id}>
+                    {formatJobOption(job)}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
+          </label>
+        )}
+        <label>
+          <Text as="div" size="2" mb="1" weight="medium">
             Title
           </Text>
           <TextField.Root
@@ -154,6 +412,7 @@ export default function LoggingPage() {
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Time entry title"
             autoFocus
+            disabled={false}
           />
         </label>
         <label>
@@ -164,17 +423,21 @@ export default function LoggingPage() {
             value={jobNumber}
             onChange={(e) => setJobNumber(e.target.value)}
             placeholder="Optional"
+            disabled={entryMode === 'job'}
           />
         </label>
         <DateTimePicker
           label="Start"
           value={startAt}
           onChange={handleStartChange}
+          disabled={false}
         />
         <DateTimePicker
           label="End"
           value={endAt}
           onChange={(value) => setEndAt(value)}
+          disabled={false}
+          invalid={hasInvalidTimeRange}
         />
       </Box>
 
@@ -188,6 +451,7 @@ export default function LoggingPage() {
           onChange={(e) => setNote(e.target.value)}
           placeholder="Optional notes"
           style={{ minHeight: 60, width: '100%', display: 'block' }}
+          disabled={false}
         />
       </Box>
 
@@ -197,11 +461,22 @@ export default function LoggingPage() {
         </Text>
         <Button
           onClick={() => createEntry.mutate()}
-          disabled={createEntry.isPending || !title.trim()}
+          disabled={
+            createEntry.isPending ||
+            !title.trim() ||
+            hasInvalidTimeRange ||
+            isEntryInLockedPeriod ||
+            (entryMode === 'job' && !selectedJobId)
+          }
         >
           {createEntry.isPending ? 'Saving…' : 'Add entry'}
         </Button>
       </Flex>
+      {isEntryInLockedPeriod && (
+        <Text size="2" color="red" mt="2">
+          You can&apos;t add an entry in a locked logging period.
+        </Text>
+      )}
     </>
   )
 
@@ -223,26 +498,52 @@ export default function LoggingPage() {
           <Text size="2" color="gray">
             {entries.length} total
           </Text>
-          <SegmentedControl.Root
-            value={range}
-            onValueChange={(value) => setRange(value as RangeOption)}
+          <Select.Root
+            value={String(selectedYear)}
+            onValueChange={(value) => {
+              const monthPart = selectedMonth.split('-')[1] ?? '01'
+              setSelectedMonth(`${value}-${monthPart}`)
+            }}
           >
-            <SegmentedControl.Item value="month">Month</SegmentedControl.Item>
-            <SegmentedControl.Item value="year">
-              This year
-            </SegmentedControl.Item>
-            <SegmentedControl.Item value="last-year">
-              Last year
-            </SegmentedControl.Item>
-          </SegmentedControl.Root>
-          {range === 'month' && (
-            <TextField.Root
-              type="month"
+            <Select.Trigger />
+            <Select.Content>
+              {yearOptions.map((year) => (
+                <Select.Item key={year} value={String(year)}>
+                  {year}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+          <Box style={{ maxWidth: '100%', overflowX: 'auto' }}>
+            <SegmentedControl.Root
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              style={{ minWidth: 160 }}
-            />
-          )}
+              onValueChange={(value) => setSelectedMonth(value)}
+              style={{ minWidth: 'max-content' }}
+            >
+              {monthOptions.map((month) => {
+                const isLocked = lockedMonthSetForView.has(month.value)
+                return (
+                  <SegmentedControl.Item
+                    key={month.value}
+                    value={month.value}
+                    style={
+                      isLocked
+                        ? {
+                            backgroundColor: 'var(--green-3)',
+                            color: 'var(--green-11)',
+                          }
+                        : undefined
+                    }
+                  >
+                    <Flex align="center" gap="1">
+                      <Text size="1">{month.label}</Text>
+                      {isLocked && <Lock width={12} height={12} />}
+                    </Flex>
+                  </SegmentedControl.Item>
+                )
+              })}
+            </SegmentedControl.Root>
+          </Box>
         </Flex>
       </Flex>
       <Text size="2" color="gray" mb="3">
@@ -250,17 +551,103 @@ export default function LoggingPage() {
       </Text>
       <Separator size="4" mb="3" />
 
-      <TimeEntriesTable entries={entries} isLoading={isLoading} />
+      <TimeEntriesTable
+        entries={entries}
+        isLoading={isLoading}
+        onEditEntry={(entry) => setEditingEntry(entry)}
+        canEditEntry={(entry) => {
+          if (
+            isRangeOverlappingLockedPeriod({
+              startAt: entry.start_at,
+              endAt: entry.end_at,
+              lockedMonthSet: lockedMonthSetForView,
+            })
+          )
+            return false
+          if (!userId) return false
+          if (isGlobalSuperuser) return true
+          return entry.user_id === userId
+        }}
+        onDeleteEntry={(entry) => {
+          setDeleteCandidate(entry)
+        }}
+        canDeleteEntry={(entry) => {
+          if (
+            isRangeOverlappingLockedPeriod({
+              startAt: entry.start_at,
+              endAt: entry.end_at,
+              lockedMonthSet: lockedMonthSetForView,
+            })
+          )
+            return false
+          if (!userId) return false
+          if (isGlobalSuperuser) return true
+          return entry.user_id === userId && !deleteEntry.isPending
+        }}
+      />
 
       <Flex justify="end" mt="3">
         <Text size="4" weight="bold">
           Total: {totalHours.toFixed(2)} hours
         </Text>
       </Flex>
+      <EditTimeEntryDialog
+        open={Boolean(editingEntry)}
+        onOpenChange={(open) => {
+          if (!open) setEditingEntry(null)
+        }}
+        entry={editingEntry}
+        onSaved={invalidateEntries}
+        disabled={Boolean(
+          editingEntry &&
+            isRangeOverlappingLockedPeriod({
+              startAt: editingEntry.start_at,
+              endAt: editingEntry.end_at,
+              lockedMonthSet: lockedMonthSetForView,
+            }),
+        )}
+      />
+      <Dialog.Root
+        open={Boolean(deleteCandidate)}
+        onOpenChange={(open) => {
+          if (!open) setDeleteCandidate(null)
+        }}
+      >
+        <Dialog.Content size="2" style={{ maxWidth: 480 }}>
+          <Dialog.Title>Delete time entry</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="3">
+            This will permanently remove the entry.
+          </Dialog.Description>
+          {deleteCandidate && (
+            <Text size="2" as="div">
+              {deleteCandidate.title}
+            </Text>
+          )}
+          <Flex justify="end" gap="2" mt="4">
+            <Button
+              variant="soft"
+              disabled={deleteEntry.isPending}
+              onClick={() => setDeleteCandidate(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              color="red"
+              onClick={() => {
+                if (!deleteCandidate) return
+                deleteEntry.mutate(deleteCandidate)
+              }}
+              disabled={deleteEntry.isPending}
+            >
+              {deleteEntry.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </>
   )
 
-  // 50/50 split; same responsive pattern as you use elsewhere
+  // 35/65 split; same responsive pattern as you use elsewhere
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
     typeof window !== 'undefined'
       ? window.matchMedia('(min-width: 1024px)').matches
@@ -278,8 +665,8 @@ export default function LoggingPage() {
     }
   }, [])
 
-  // Resize state: track left panel width as percentage (default 50% for 1fr/1fr ratio)
-  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(50)
+  // Resize state: track left panel width as percentage (default 35% for 35/65 ratio)
+  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(35)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
 
@@ -469,4 +856,116 @@ function formatHoursBetween(startAt: string, endAt: string) {
   const durationMs = Math.max(0, end.getTime() - start.getTime())
   const hours = durationMs / (1000 * 60 * 60)
   return `${hours.toFixed(2)} hours`
+}
+
+function getYearFromIso(value: string | null | undefined) {
+  if (!value) return null
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return null
+  return parsed.getFullYear()
+}
+
+function getMonthKeyFromDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+function isRangeOverlappingLockedPeriod({
+  startAt,
+  endAt,
+  lockedMonthSet,
+}: {
+  startAt: string
+  endAt: string
+  lockedMonthSet: Set<string>
+}) {
+  if (!startAt || !endAt || lockedMonthSet.size === 0) return false
+  const start = new Date(startAt)
+  const end = new Date(endAt)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return false
+  }
+  if (end.getTime() < start.getTime()) return false
+
+  const cursor = new Date(start)
+  cursor.setDate(1)
+  cursor.setHours(0, 0, 0, 0)
+  const endMonth = new Date(end)
+  endMonth.setDate(1)
+  endMonth.setHours(0, 0, 0, 0)
+
+  while (cursor.getTime() <= endMonth.getTime()) {
+    if (lockedMonthSet.has(getMonthKeyFromDate(cursor))) return true
+    cursor.setMonth(cursor.getMonth() + 1)
+  }
+  return false
+}
+
+function shiftRangeToMonth({
+  startAt,
+  endAt,
+  monthKey,
+}: {
+  startAt: string
+  endAt: string
+  monthKey: string
+}) {
+  if (!startAt || !endAt || !monthKey) return null
+  if (toMonthKey(startAt) === monthKey) return null
+  const [yearStr, monthStr] = monthKey.split('-')
+  const year = Number(yearStr)
+  const monthIndex = Number(monthStr) - 1
+  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return null
+
+  const start = new Date(startAt)
+  const end = new Date(endAt)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return null
+  }
+  const durationMs = Math.max(0, end.getTime() - start.getTime())
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate()
+  const nextDay = Math.min(start.getDate(), lastDay)
+
+  const nextStart = new Date(start)
+  nextStart.setFullYear(year, monthIndex, nextDay)
+  const nextEnd = new Date(nextStart.getTime() + durationMs)
+  return { startAt: nextStart.toISOString(), endAt: nextEnd.toISOString() }
+}
+
+function formatJobOption(job: {
+  title: string
+  jobnr: number | null
+  start_at: string | null
+  end_at: string | null
+}) {
+  const numberPart = job.jobnr != null ? `#${job.jobnr}` : 'Job'
+  const titlePart = job.title ? ` — ${job.title}` : ''
+  const datePart = job.start_at ? ` (${formatJobDate(job.start_at)})` : ''
+  return `${numberPart}${titlePart}${datePart}`
+}
+
+function formatJobDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString()
+}
+
+function getEndFallback(startAt: string) {
+  const start = new Date(startAt)
+  if (Number.isNaN(start.getTime())) return startAt
+  const end = new Date(start.getTime() + 60 * 60 * 1000)
+  return end.toISOString()
+}
+
+function toMonthKey(value: string) {
+  const match = value.match(/^(\d{4}-\d{2})/)
+  if (match) return match[1]
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return value.slice(0, 7)
+  }
+  const year = parsed.getFullYear()
+  const month = String(parsed.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
 }

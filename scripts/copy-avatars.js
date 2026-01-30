@@ -43,7 +43,8 @@ async function copyAvatars() {
 
   // Get local credentials
   const localUrl = 'http://127.0.0.1:54321'
-  const localServiceKey = process.env.SUPABASE_LOCAL_SERVICE_KEY ||
+  const localServiceKey =
+    process.env.SUPABASE_LOCAL_SERVICE_KEY ||
     'sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz'
 
   // Create clients
@@ -64,12 +65,20 @@ async function copyAvatars() {
         .not('avatar_url', 'is', null)
 
       if (!queryError && profiles && profiles.length > 0) {
-        avatarPaths = [...new Set(profiles.map(p => p.avatar_url).filter(Boolean))]
-        log(`   Found ${avatarPaths.length} avatar path(s) from profiles`, 'green')
+        avatarPaths = [
+          ...new Set(profiles.map((p) => p.avatar_url).filter(Boolean)),
+        ]
+        log(
+          `   Found ${avatarPaths.length} avatar path(s) from profiles`,
+          'green',
+        )
       }
-      } catch (error) {
-        log(`   ⚠️  Cannot query profiles (RLS may block): ${error.message}`, 'yellow')
-      }
+    } catch (error) {
+      log(
+        `   ⚠️  Cannot query profiles (RLS may block): ${error.message}`,
+        'yellow',
+      )
+    }
 
     // Method 2: Try to list files in avatars bucket directly (may work if bucket is public)
     if (avatarPaths.length === 0) {
@@ -85,9 +94,9 @@ async function copyAvatars() {
             const { data: items } = await remoteClient.storage
               .from('avatars')
               .list(path, { limit: 1000 })
-            
+
             if (!items) return []
-            
+
             const allFiles = []
             for (const item of items) {
               if (item.id === null && item.name) {
@@ -105,7 +114,10 @@ async function copyAvatars() {
 
           const allFiles = await getAllFiles()
           avatarPaths = allFiles
-          log(`   Found ${avatarPaths.length} file(s) in avatars bucket`, 'green')
+          log(
+            `   Found ${avatarPaths.length} file(s) in avatars bucket`,
+            'green',
+          )
         }
       } catch (error) {
         log(`   ⚠️  Cannot list files: ${error.message}`, 'yellow')
@@ -117,12 +129,21 @@ async function copyAvatars() {
       log('', 'reset')
       log('The avatars bucket uses RLS, so we need either:', 'yellow')
       log('1. Service role key to query profiles table', 'cyan')
-      log('   Get it from: https://app.supabase.com/project/tlpgejkglrgoljgvpubn/settings/api', 'cyan')
+      log(
+        '   Get it from: https://app.supabase.com/project/tlpgejkglrgoljgvpubn/settings/api',
+        'cyan',
+      )
       log('   Look for "service_role" key (longer than anon key)', 'cyan')
-      log('   Add to .env.remote.db: SUPABASE_SERVICE_ROLE_KEY=your_key_here', 'cyan')
+      log(
+        '   Add to .env.remote.db: SUPABASE_SERVICE_ROLE_KEY=your_key_here',
+        'cyan',
+      )
       log('', 'reset')
       log('2. Or manually copy avatar files via Supabase Studio:', 'yellow')
-      log('   https://app.supabase.com/project/tlpgejkglrgoljgvpubn/storage/buckets/avatars', 'cyan')
+      log(
+        '   https://app.supabase.com/project/tlpgejkglrgoljgvpubn/storage/buckets/avatars',
+        'cyan',
+      )
       return
     }
 
@@ -138,7 +159,10 @@ async function copyAvatars() {
           await remoteClient.storage.from('avatars').download(avatarPath)
 
         if (downloadError) {
-          log(`   ⚠️  Cannot download ${avatarPath}: ${downloadError.message}`, 'yellow')
+          log(
+            `   ⚠️  Cannot download ${avatarPath}: ${downloadError.message}`,
+            'yellow',
+          )
           skipped++
           continue
         }
@@ -153,7 +177,10 @@ async function copyAvatars() {
           .upload(avatarPath, buffer, { upsert: true })
 
         if (uploadError) {
-          log(`   ⚠️  Cannot upload ${avatarPath}: ${uploadError.message}`, 'yellow')
+          log(
+            `   ⚠️  Cannot upload ${avatarPath}: ${uploadError.message}`,
+            'yellow',
+          )
           skipped++
           continue
         }

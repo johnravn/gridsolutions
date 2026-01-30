@@ -27,11 +27,13 @@
 ## Local Anon Key
 
 1. **Make sure Supabase is running:**
+
    ```bash
    npm run supabase:start
    ```
 
 2. **Get the status:**
+
    ```bash
    npm run db:status
    ```
@@ -57,4 +59,3 @@
 - ✅ The `anon` key is safe for frontend use
 - ❌ The `service_role` key should NEVER be used in frontend code
 - 🔄 Keys are different for local vs remote - make sure you use the right one!
-

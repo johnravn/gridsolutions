@@ -6,16 +6,24 @@ import {
   useNavigate,
   useRouterState,
 } from '@tanstack/react-router'
-import { Avatar, Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
+import {
+  Avatar,
+  Badge,
+  Box,
+  Button,
+  Flex,
+  IconButton,
+  Text,
+} from '@radix-ui/themes'
 import { Menu } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 // add
 import { useQuery } from '@tanstack/react-query'
-import { useMediaQuery } from '../hooks/useMediaQuery'
-import { NAV, Sidebar } from './Sidebar'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
+import { useMediaQuery } from '../hooks/useMediaQuery'
+import { NAV, Sidebar } from './Sidebar'
 
 export default function AppShell() {
   const [open, setOpen] = React.useState(true)
@@ -24,6 +32,9 @@ export default function AppShell() {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const navigate = useNavigate()
   const { companies, loading: companyLoading } = useCompany()
+  const isLocal =
+    import.meta.env.DEV ||
+    ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
 
   // Get user from shared query (already fetched by CompanyProvider)
   const { data: authUser } = useQuery({
@@ -258,6 +269,19 @@ export default function AppShell() {
           </Box>
         </Flex>
       </Box>
+      {isLocal && (
+        <Box style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}>
+          <Badge
+            role="status"
+            aria-live="polite"
+            color="yellow"
+            variant="surface"
+            size="3"
+          >
+            Dev environment
+          </Badge>
+        </Box>
+      )}
     </Flex>
   )
 }

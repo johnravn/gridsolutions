@@ -22,9 +22,9 @@ import { Check, Edit, MessageText, Trash, Upload, Xmark } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import EditWelcomeMatterDialog from './dialogs/EditWelcomeMatterDialog'
 import EditBrandsDialog from '@features/inventory/components/EditBrandsDialog'
 import { useAuthz } from '@shared/auth/useAuthz'
+import EditWelcomeMatterDialog from './dialogs/EditWelcomeMatterDialog'
 
 type ItemCategory = {
   id: string
@@ -286,7 +286,9 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('companies')
-        .select('employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate')
+        .select(
+          'employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate',
+        )
         .eq('id', companyId)
         .single()
       if (error) throw error
@@ -307,10 +309,18 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
   const saveMutation = useMutation({
     mutationFn: async () => {
       const updateData: any = {
-        employee_daily_rate: employeeDailyRate.trim() ? parseFloat(employeeDailyRate) : null,
-        employee_hourly_rate: employeeHourlyRate.trim() ? parseFloat(employeeHourlyRate) : null,
-        owner_daily_rate: ownerDailyRate.trim() ? parseFloat(ownerDailyRate) : null,
-        owner_hourly_rate: ownerHourlyRate.trim() ? parseFloat(ownerHourlyRate) : null,
+        employee_daily_rate: employeeDailyRate.trim()
+          ? parseFloat(employeeDailyRate)
+          : null,
+        employee_hourly_rate: employeeHourlyRate.trim()
+          ? parseFloat(employeeHourlyRate)
+          : null,
+        owner_daily_rate: ownerDailyRate.trim()
+          ? parseFloat(ownerDailyRate)
+          : null,
+        owner_hourly_rate: ownerHourlyRate.trim()
+          ? parseFloat(ownerHourlyRate)
+          : null,
       }
 
       // Validate rates
@@ -362,7 +372,12 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
           >
             <Flex direction="column" gap="3">
               <Box>
-                <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                <Text
+                  size="2"
+                  weight="bold"
+                  mb="2"
+                  style={{ display: 'block' }}
+                >
                   Employee Rates
                 </Text>
                 <DefinitionList>
@@ -382,7 +397,12 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
               </Box>
               <Separator />
               <Box>
-                <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
+                <Text
+                  size="2"
+                  weight="bold"
+                  mb="2"
+                  style={{ display: 'block' }}
+                >
                   Owner Rates
                 </Text>
                 <DefinitionList>
@@ -416,7 +436,13 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
               </Text>
               <Flex direction="column" gap="3">
                 <Box>
-                  <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                  <Text
+                    as="label"
+                    size="2"
+                    weight="medium"
+                    mb="1"
+                    style={{ display: 'block' }}
+                  >
                     Daily rate
                   </Text>
                   <Flex align="center" gap="2">
@@ -435,7 +461,13 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
                   </Flex>
                 </Box>
                 <Box>
-                  <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                  <Text
+                    as="label"
+                    size="2"
+                    weight="medium"
+                    mb="1"
+                    style={{ display: 'block' }}
+                  >
                     Hourly rate
                   </Text>
                   <Flex align="center" gap="2">
@@ -464,7 +496,13 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
               </Text>
               <Flex direction="column" gap="3">
                 <Box>
-                  <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                  <Text
+                    as="label"
+                    size="2"
+                    weight="medium"
+                    mb="1"
+                    style={{ display: 'block' }}
+                  >
                     Daily rate
                   </Text>
                   <Flex align="center" gap="2">
@@ -483,7 +521,13 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
                   </Flex>
                 </Box>
                 <Box>
-                  <Text as="label" size="2" weight="medium" mb="1" style={{ display: 'block' }}>
+                  <Text
+                    as="label"
+                    size="2"
+                    weight="medium"
+                    mb="1"
+                    style={{ display: 'block' }}
+                  >
                     Hourly rate
                   </Text>
                   <Flex align="center" gap="2">
@@ -513,10 +557,18 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
                 setIsEditing(false)
                 // Reset to original values
                 if (companyRates) {
-                  setEmployeeDailyRate(companyRates.employee_daily_rate?.toString() ?? '')
-                  setEmployeeHourlyRate(companyRates.employee_hourly_rate?.toString() ?? '')
-                  setOwnerDailyRate(companyRates.owner_daily_rate?.toString() ?? '')
-                  setOwnerHourlyRate(companyRates.owner_hourly_rate?.toString() ?? '')
+                  setEmployeeDailyRate(
+                    companyRates.employee_daily_rate?.toString() ?? '',
+                  )
+                  setEmployeeHourlyRate(
+                    companyRates.employee_hourly_rate?.toString() ?? '',
+                  )
+                  setOwnerDailyRate(
+                    companyRates.owner_daily_rate?.toString() ?? '',
+                  )
+                  setOwnerHourlyRate(
+                    companyRates.owner_hourly_rate?.toString() ?? '',
+                  )
                 }
               }}
               disabled={saveMutation.isPending}

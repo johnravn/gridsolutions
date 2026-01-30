@@ -79,9 +79,7 @@ export function jobBookingsForInvoiceQuery({
       }
 
       const timePeriodIds = timePeriods.map((tp) => tp.id)
-      const timePeriodMap = new Map(
-        timePeriods.map((tp) => [tp.id, tp]),
-      )
+      const timePeriodMap = new Map(timePeriods.map((tp) => [tp.id, tp]))
 
       // Helper to calculate days between two dates
       const calculateDays = (start: string, end: string): number => {
@@ -110,7 +108,9 @@ export function jobBookingsForInvoiceQuery({
 
       // Fetch prices separately from item_current_price view
       const itemIds =
-        equipmentBookings?.map((b) => b.item_id).filter((id): id is string => !!id) ?? []
+        equipmentBookings
+          ?.map((b) => b.item_id)
+          .filter((id): id is string => !!id) ?? []
       const pricesMap = new Map<string, number | null>()
       if (itemIds.length > 0) {
         const { data: prices, error: pricesError } = await supabase
@@ -137,7 +137,9 @@ export function jobBookingsForInvoiceQuery({
 
       // Fetch user data separately from profiles
       const userIds =
-        crewBookings?.map((b) => b.user_id).filter((id): id is string => !!id) ?? []
+        crewBookings
+          ?.map((b) => b.user_id)
+          .filter((id): id is string => !!id) ?? []
       const usersMap = new Map<
         string,
         { user_id: string; display_name: string | null; email: string }
@@ -179,7 +181,9 @@ export function jobBookingsForInvoiceQuery({
       const equipmentLines: Array<BookingInvoiceLine> = []
       if (equipmentBookings) {
         for (const booking of equipmentBookings) {
-          const item = Array.isArray(booking.item) ? booking.item[0] : booking.item
+          const item = Array.isArray(booking.item)
+            ? booking.item[0]
+            : booking.item
           const timePeriod = timePeriodMap.get(booking.time_period_id)
           if (!item || !timePeriod) continue
           const brand = Array.isArray(item.brand) ? item.brand[0] : item.brand
@@ -292,7 +296,10 @@ export function jobBookingsForInvoiceQuery({
       const allLines = [...equipmentLines, ...crewLines, ...transportLines]
 
       // Calculate totals
-      const totalExVat = allLines.reduce((sum, line) => sum + line.totalPrice, 0)
+      const totalExVat = allLines.reduce(
+        (sum, line) => sum + line.totalPrice,
+        0,
+      )
       const totalVat = allLines.reduce(
         (sum, line) => sum + (line.totalPrice * line.vatPercent) / 100,
         0,
@@ -311,4 +318,3 @@ export function jobBookingsForInvoiceQuery({
     },
   })
 }
-

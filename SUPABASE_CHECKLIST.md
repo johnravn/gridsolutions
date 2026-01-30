@@ -3,6 +3,7 @@
 ## Setup Status
 
 ### ✅ Completed
+
 - [x] Supabase CLI installed (in devDependencies)
 - [x] Migration files organized in `supabase/migrations/`
 - [x] Type generation scripts configured
@@ -11,6 +12,7 @@
 - [x] Helpful npm scripts added
 
 ### 🔄 In Progress / To Verify
+
 - [x] Environment variables configured (`.env.local` file exists) ✅
 - [ ] Supabase CLI linked to remote project (run `npm run supabase:link`)
 - [ ] TypeScript types generated and up to date (run `npm run db:types:remote`)
@@ -29,6 +31,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 ```
 
 **To get your keys:**
+
 1. Go to https://app.supabase.com/project/tlpgejkglrgoljgvpubn
 2. Navigate to Settings → API
 3. Copy the "Project URL" and "anon public" key
@@ -57,11 +60,13 @@ If you want to run Supabase locally (requires Docker):
 1. **Install Docker Desktop**: https://www.docker.com/products/docker-desktop
 
 2. **Start local Supabase**:
+
    ```bash
    npm run supabase:start
    ```
 
 3. **Update `.env.local`** for local development:
+
    ```env
    VITE_SUPABASE_URL=http://127.0.0.1:54321
    VITE_SUPABASE_ANON_KEY=<get-from-supabase-status>
@@ -78,6 +83,7 @@ If you want to run Supabase locally (requires Docker):
 ### Making Database Changes
 
 **Option A: Via Supabase Dashboard**
+
 1. Make changes in Supabase dashboard
 2. Generate migration: `npm run db:diff capture_changes`
 3. Review the generated migration file
@@ -85,6 +91,7 @@ If you want to run Supabase locally (requires Docker):
 5. Regenerate types: `npm run db:types:remote`
 
 **Option B: Via Migration Files (Recommended)**
+
 1. Create new migration: `npm run db:migrate add_new_feature`
 2. Edit the migration file in `supabase/migrations/`
 3. Test locally (if using Docker): `npm run db:reset`
@@ -94,6 +101,7 @@ If you want to run Supabase locally (requires Docker):
 ### Testing Migrations
 
 If using local Supabase:
+
 ```bash
 # Reset local DB and apply all migrations
 npm run db:reset
@@ -104,18 +112,18 @@ npm run db:status
 
 ## Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `npm run db:types` | Generate types from local database |
-| `npm run db:types:remote` | Generate types from remote database |
-| `npm run db:diff <name>` | Create migration from remote changes |
-| `npm run db:reset` | Reset local database to migrations |
-| `npm run db:push` | Push local migrations to remote |
-| `npm run db:migrate <name>` | Create a new migration file |
-| `npm run db:status` | Show Supabase status (local) |
-| `npm run supabase:start` | Start local Supabase (requires Docker) |
-| `npm run supabase:stop` | Stop local Supabase |
-| `npm run supabase:link` | Link CLI to remote project |
+| Command                     | Description                            |
+| --------------------------- | -------------------------------------- |
+| `npm run db:types`          | Generate types from local database     |
+| `npm run db:types:remote`   | Generate types from remote database    |
+| `npm run db:diff <name>`    | Create migration from remote changes   |
+| `npm run db:reset`          | Reset local database to migrations     |
+| `npm run db:push`           | Push local migrations to remote        |
+| `npm run db:migrate <name>` | Create a new migration file            |
+| `npm run db:status`         | Show Supabase status (local)           |
+| `npm run supabase:start`    | Start local Supabase (requires Docker) |
+| `npm run supabase:stop`     | Stop local Supabase                    |
+| `npm run supabase:link`     | Link CLI to remote project             |
 
 ## Security Checklist
 
@@ -128,11 +136,13 @@ npm run db:status
 ## RLS Policy Coverage
 
 Your migrations show RLS policies for:
+
 - ✅ `job_offers` and related offer tables
 - ✅ `job_invoices`
 - ✅ Storage buckets (`company_files`, logos)
 
 **Action:** Review all tables to ensure RLS is enabled. Check:
+
 - All user-facing tables should have RLS enabled
 - Policies should be tested with different user roles
 - Consider adding policies for any tables missing them
@@ -147,11 +157,13 @@ Your migrations show RLS policies for:
 ## Troubleshooting
 
 ### Types are out of date
+
 ```bash
 npm run db:types:remote
 ```
 
 ### Migration conflicts
+
 ```bash
 # Pull latest from remote
 npx supabase db pull
@@ -162,6 +174,7 @@ npm run db:push
 ```
 
 ### Local Supabase won't start
+
 - Ensure Docker Desktop is running
 - Check ports 54321-54327 are available
 - Try: `npm run supabase:stop` then `npm run supabase:start`
@@ -171,4 +184,3 @@ npm run db:push
 - [Supabase CLI Docs](https://supabase.com/docs/guides/cli)
 - [RLS Guide](https://supabase.com/docs/guides/auth/row-level-security)
 - [Migration Guide](https://supabase.com/docs/guides/cli/local-development#database-migrations)
-

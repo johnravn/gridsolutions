@@ -7,12 +7,15 @@ type Props = {
   onChange: (value: string) => void
   label?: string
   placeholder?: string
+  /** If true, shows error styling on trigger */
+  invalid?: boolean
   /** If true, shows only date picker (no time) */
   dateOnly?: boolean
   /** If true, uses an icon button trigger instead of text field */
   iconButton?: boolean
   /** Icon button size (only used when iconButton is true) */
   iconButtonSize?: '1' | '2' | '3'
+  disabled?: boolean
 }
 
 /**
@@ -26,9 +29,11 @@ export default function DateTimePicker({
   onChange,
   label,
   placeholder,
+  invalid = false,
   dateOnly = false,
   iconButton = false,
   iconButtonSize = '2',
+  disabled = false,
 }: Props) {
   const defaultPlaceholder = dateOnly ? 'Select date' : 'Select date and time'
   const finalPlaceholder = placeholder || defaultPlaceholder
@@ -97,6 +102,7 @@ export default function DateTimePicker({
   }, [currentMonth])
 
   const handleDateClick = (date: Date) => {
+    if (disabled) return
     const dateStr = toLocalDate(date.toISOString())
     if (dateOnly) {
       // For date-only, set time to start of day (00:00)
@@ -115,6 +121,7 @@ export default function DateTimePicker({
   }
 
   const handleHourClick = (h: number) => {
+    if (disabled) return
     if (!dateValue) {
       // If no date selected, set today
       const today = toLocalDate(new Date().toISOString())
@@ -130,6 +137,7 @@ export default function DateTimePicker({
   }
 
   const handleMinuteClick = (m: number) => {
+    if (disabled) return
     if (!dateValue) {
       const today = toLocalDate(new Date().toISOString())
       const timeStr = `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -176,10 +184,6 @@ export default function DateTimePicker({
     return `${dateLabel}, ${displayHour}:${displayMin}`
   }
 
-  const monthName = currentMonth.toLocaleDateString('en-US', {
-    month: 'long',
-    year: 'numeric',
-  })
   const currentYear = currentMonth.getFullYear()
   const currentMonthIndex = currentMonth.getMonth()
   const monthNameOnly = currentMonth.toLocaleDateString('en-US', {
@@ -189,7 +193,7 @@ export default function DateTimePicker({
   // Generate years for year picker (1930 to current year + 10 years)
   const yearRange = React.useMemo(() => {
     const currentYearNum = new Date().getFullYear()
-    const years: number[] = []
+    const years: Array<number> = []
     for (let i = 1930; i <= currentYearNum + 10; i++) {
       years.push(i)
     }
@@ -204,9 +208,10 @@ export default function DateTimePicker({
   // Auto-scroll to current year when year picker opens
   React.useEffect(() => {
     if (showYearPicker && yearPickerRef.current) {
-      const currentYearButton = yearPickerRef.current.querySelector(
-        `[data-year="${new Date().getFullYear()}"]`,
-      ) as HTMLElement
+      const currentYearButton =
+        yearPickerRef.current.querySelector<HTMLElement>(
+          `[data-year="${new Date().getFullYear()}"]`,
+        )
       if (currentYearButton) {
         currentYearButton.scrollIntoView({
           block: 'center',
@@ -223,17 +228,30 @@ export default function DateTimePicker({
     toLocalDate(date.toISOString()) === toLocalDate(selectedDate.toISOString())
 
   const triggerButton = iconButton ? (
-    <IconButton variant="soft" size={iconButtonSize}>
+    <IconButton
+      variant="soft"
+      size={iconButtonSize}
+      disabled={disabled}
+      style={
+        invalid
+          ? {
+              border: '1px solid var(--red-8)',
+              boxShadow: '0 0 0 1px var(--red-8)',
+            }
+          : undefined
+      }
+    >
       <Calendar width={16} height={16} />
     </IconButton>
   ) : (
     <button
       type="button"
+      disabled={disabled}
       style={{
         width: '100%',
         padding: '8px 12px',
         borderRadius: 'var(--radius-3)',
-        border: '1px solid var(--gray-a6)',
+        border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
         background: 'var(--color-panel-solid)',
         color: value ? 'var(--gray-12)' : 'var(--gray-9)',
         fontSize: 'var(--font-size-3)',
@@ -242,15 +260,22 @@ export default function DateTimePicker({
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
         transition: 'border-color 0.15s, background-color 0.15s',
         textAlign: 'left',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.borderColor = 'var(--gray-a8)'
+        if (disabled) return
+        e.currentTarget.style.borderColor = invalid
+          ? 'var(--red-9)'
+          : 'var(--gray-a8)'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'var(--gray-a6)'
+        if (disabled) return
+        e.currentTarget.style.borderColor = invalid
+          ? 'var(--red-8)'
+          : 'var(--gray-a6)'
       }}
     >
       <Calendar width={16} height={16} />
@@ -267,8 +292,9 @@ export default function DateTimePicker({
       )}
 
       <Popover.Root
-        open={open}
+        open={disabled ? false : open}
         onOpenChange={(newOpen) => {
+          if (disabled) return
           setOpen(newOpen)
           if (!newOpen) {
             // Reset year picker when popover closes
