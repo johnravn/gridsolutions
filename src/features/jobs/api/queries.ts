@@ -130,8 +130,8 @@ export function jobsIndexQuery({
             (job) => job.project_lead?.email ?? null,
             (job) => job.start_at ?? null,
             // Search status by both raw value and presentable format (e.g., "in progress" matches "in_progress")
-            (job) => job.status ?? null,
-            (job) => makeWordPresentable(job.status ?? ''),
+            (job) => job.status,
+            (job) => makeWordPresentable(job.status),
           ],
           0.25, // Lower threshold for fuzzy matching
         )
@@ -155,62 +155,92 @@ export function jobsIndexQuery({
         })
       }
 
-      // Filter for freelancers to only show jobs they're part of with accepted status
+      // Filter for freelancers to only show jobs they're part of (active crew bookings)
       if (companyRole === 'freelancer' && userId) {
-        // Get all time periods for these jobs
+        // Freelancers should see jobs they are:
+        // - invited to (crew_invite matter)
+        // - accepted (reserved_crew.status = confirmed)
+        // - canceled (reserved_crew.status = canceled)
+        //
+        // "Invited" is modeled as a crew_invite matter on a crew time_period,
+        // and typically corresponds to reserved_crew.status = planned.
         const jobIds = results.map((j) => j.id)
+        if (jobIds.length === 0) return []
 
-        if (jobIds.length > 0) {
-          // First, get all time periods for these jobs
-          const { data: timePeriods, error: tpError } = await supabase
-            .from('time_periods')
-            .select('id, job_id')
-            .in('job_id', jobIds)
+        // 1) Get crew time periods for these jobs (reserved_crew links to time_periods)
+        const { data: timePeriods, error: tpError } = await supabase
+          .from('time_periods')
+          .select('id, job_id')
+          .in('job_id', jobIds)
+          .eq('category', 'crew')
 
-          if (tpError) throw tpError
+        if (tpError) throw tpError
+        if (timePeriods.length === 0) return []
 
-          if (timePeriods && timePeriods.length > 0) {
-            // Then get crew reservations for this user in these time periods
-            const timePeriodIds = timePeriods.map((tp) => tp.id)
+        const timePeriodIds = timePeriods.map((tp) => tp.id)
 
-            const { data: crewRes, error: crewError } = await supabase
-              .from('reserved_crew')
-              .select('time_period_id, status')
-              .eq('user_id', userId)
-              .in('time_period_id', timePeriodIds)
+        // 2) Get this user's crew reservations across those time periods
+        const { data: crewRes, error: crewError } = await supabase
+          .from('reserved_crew')
+          .select('time_period_id, status')
+          .eq('user_id', userId)
+          .in('time_period_id', timePeriodIds)
 
-            if (crewError) throw crewError
+        if (crewError) throw crewError
 
-            // Get unique job IDs where user has accepted crew assignments
-            const acceptedJobIds = new Set<string>()
-            if (crewRes) {
-              crewRes.forEach((c: any) => {
-                if (c.status === 'accepted') {
-                  const tp = timePeriods.find(
-                    (t: any) => t.id === c.time_period_id,
-                  )
-                  if (tp?.job_id) {
-                    acceptedJobIds.add(tp.job_id)
-                  }
-                }
-              })
-            }
+        // Map time_period_id -> job_id
+        const tpJobById = new Map<string, string>()
+        timePeriods.forEach((tp) => {
+          if (tp.job_id) tpJobById.set(tp.id, tp.job_id)
+        })
 
-            // Filter results to only jobs where freelancer has accepted assignments
-            results = results.filter((job) => {
-              // Exclude canceled jobs
-              if (job.status === 'canceled') return false
-              // Only include jobs where they have accepted assignments
-              return acceptedJobIds.has(job.id)
-            })
-          } else {
-            // No time periods for these jobs
-            results = []
+        // 3) Fetch crew_invite matters where this user is a recipient for these tps
+        const { data: inviteMatters, error: inviteError } = await supabase
+          .from('matters' as any)
+          .select('time_period_id, matter_recipients!inner(user_id)')
+          .eq('matter_type', 'crew_invite')
+          .in('time_period_id', timePeriodIds)
+          .eq('matter_recipients.user_id', userId)
+
+        if (inviteError) throw inviteError
+
+        const invitedTpIds = new Set<string>()
+        ;(
+          inviteMatters as unknown as Array<{ time_period_id: string | null }>
+        ).forEach((m) => {
+          if (m.time_period_id) invitedTpIds.add(m.time_period_id)
+        })
+
+        const visibleJobIds = new Set<string>()
+
+        // - accepted/canceled jobs (based on reserved_crew status)
+        ;(
+          crewRes as unknown as Array<{
+            time_period_id: string
+            status: 'planned' | 'confirmed' | 'canceled'
+          }>
+        ).forEach((c) => {
+          const jobId = tpJobById.get(c.time_period_id)
+          if (!jobId) return
+
+          if (c.status === 'confirmed' || c.status === 'canceled') {
+            visibleJobIds.add(jobId)
+            return
           }
-        } else {
-          // No jobs, return empty
-          results = []
-        }
+
+          // - invited jobs: planned + has crew_invite matter for that tp
+          if (invitedTpIds.has(c.time_period_id)) {
+            visibleJobIds.add(jobId)
+          }
+        })
+
+        // Also include any invite matters that might exist without a reserved_crew row yet
+        invitedTpIds.forEach((tpId) => {
+          const jobId = tpJobById.get(tpId)
+          if (jobId) visibleJobIds.add(jobId)
+        })
+
+        results = results.filter((job) => visibleJobIds.has(job.id))
       }
 
       return results
@@ -231,7 +261,7 @@ export function customersForFilterQuery(companyId: string) {
         .or('deleted.is.null,deleted.eq.false')
         .order('name', { ascending: true })
       if (error) throw error
-      return (data || []) as Array<{ id: string; name: string }>
+      return data as Array<{ id: string; name: string }>
     },
     staleTime: 60_000,
   }

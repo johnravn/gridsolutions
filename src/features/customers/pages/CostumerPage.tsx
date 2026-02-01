@@ -1,6 +1,20 @@
 import * as React from 'react'
-import { Box, Card, Flex, Grid, Heading, Separator } from '@radix-ui/themes'
+import {
+  Box,
+  Card,
+  Flex,
+  Grid,
+  Heading,
+  IconButton,
+  Separator,
+  Tooltip,
+} from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { TransitionLeft } from 'iconoir-react'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
 
@@ -28,8 +42,30 @@ export default function CustomerPage() {
 
   // Resize state: track left panel width as percentage (default 50% for 1fr/1fr ratio)
   const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(50)
+  const [isMinimized, setIsMinimized] = React.useState(false)
+  const [savedWidth, setSavedWidth] = React.useState<number>(50)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+
+  const toggleMinimize = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 50)
+      setIsMinimized(false)
+    } else {
+      setSavedWidth(leftPanelWidth)
+      setIsMinimized(true)
+    }
+  }, [isMinimized, leftPanelWidth, savedWidth])
+
+  const handleGlowingBarClick = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 50)
+      setIsMinimized(false)
+    }
+  }, [isMinimized, savedWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
   // Handle mouse move for resizing
   React.useEffect(() => {
@@ -176,67 +212,141 @@ export default function CustomerPage() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            width: `${leftPanelWidth}%`,
+            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
             height: isLarge ? '100%' : undefined,
-            minWidth: '300px',
-            maxWidth: '75%',
+            minWidth: isMinimized ? '60px' : '300px',
+            maxWidth: isMinimized ? '60px' : '75%',
             minHeight: 0,
             flexShrink: 0,
             transition: isResizing ? 'none' : 'width 0.1s ease-out',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <Flex align="center" justify="between" mb="3">
-            <Heading size="5">Customers</Heading>
-          </Flex>
-          <Separator size="4" mb="3" />
-          <Box
-            style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
-            }}
-          >
-            <CustomerTable
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              showRegular={true}
-              showPartner={true}
-            />
-          </Box>
+          {isMinimized ? (
+            <Box
+              onClick={handleGlowingBarClick}
+              onMouseEnter={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '24px'
+              }}
+              onMouseLeave={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '12px'
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                cursor: 'pointer',
+                zIndex: 1,
+              }}
+            >
+              <Box
+                data-glowing-bar
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '20px',
+                  bottom: '20px',
+                  transform: 'translateX(-50%)',
+                  width: '12px',
+                  borderRadius: '4px',
+                  background:
+                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  transition: 'all 0.2s ease-out',
+                  animation: 'glow-pulse 5s ease-in-out infinite',
+                }}
+              />
+              <style>{`
+                @keyframes glow-pulse {
+                  0%, 100% {
+                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                  }
+                  50% {
+                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                  }
+                }
+              `}</style>
+            </Box>
+          ) : (
+            <>
+              <Flex align="center" justify="between" mb="3">
+                <Heading size="5">Customers</Heading>
+                <Tooltip
+                  content={`Collapse sidebar (${collapseShortcutLabel})`}
+                >
+                  <IconButton
+                    size="3"
+                    variant="ghost"
+                    onClick={toggleMinimize}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <TransitionLeft width={22} height={22} />
+                  </IconButton>
+                </Tooltip>
+              </Flex>
+              <Separator size="4" mb="3" />
+              <Box
+                style={{
+                  flex: isLarge ? 1 : undefined,
+                  minHeight: isLarge ? 0 : undefined,
+                  overflowY: isLarge ? 'auto' : 'visible',
+                }}
+              >
+                <CustomerTable
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  showRegular={true}
+                  showPartner={true}
+                />
+              </Box>
+            </>
+          )}
         </Card>
 
         {/* RESIZER */}
-        <Box
-          className="section-resizer"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          style={{
-            width: '6px',
-            height: '20%',
-            cursor: 'col-resize',
-            backgroundColor: 'var(--gray-a4)',
-            borderRadius: '4px',
-            flexShrink: 0,
-            alignSelf: 'center',
-            userSelect: 'none',
-            margin: '0 -4px',
-            zIndex: 10,
-            transition: isResizing ? 'none' : 'background-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-              e.currentTarget.style.cursor = 'col-resize'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-            }
-          }}
-        />
+        {!isMinimized && (
+          <Box
+            className="section-resizer"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setIsResizing(true)
+            }}
+            style={{
+              width: '6px',
+              height: '20%',
+              cursor: 'col-resize',
+              backgroundColor: 'var(--gray-a4)',
+              borderRadius: '4px',
+              flexShrink: 0,
+              alignSelf: 'center',
+              userSelect: 'none',
+              margin: '0 -4px',
+              zIndex: 10,
+              transition: isResizing ? 'none' : 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                e.currentTarget.style.cursor = 'col-resize'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+              }
+            }}
+          />
+        )}
 
         {/* RIGHT */}
         <Card

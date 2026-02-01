@@ -81,7 +81,7 @@
     "jsdom": "^26.0.0",
     "openapi-typescript": "^7.10.1",
     "prettier": "^3.5.3",
-    "supabase": "^2.67.1",
+    "supabase": "^2.74.4",
     "typescript": "^5.7.2",
     "vite": "^6.3.5",
     "vitest": "^3.0.5",

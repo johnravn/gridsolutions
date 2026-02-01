@@ -14,7 +14,6 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { prettyPhone } from '@shared/phone/phone'
 import { InfoCircle, Search } from 'iconoir-react'
 import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
@@ -100,14 +99,14 @@ export default function CustomerTable({
       return
     }
 
-    const visibleRow = containerRef.current?.querySelector<HTMLTableRowElement>(
+    const visibleRow = containerRef.current.querySelector<HTMLTableRowElement>(
       'tbody tr:not([data-row-probe])',
     )
     const rowH = visibleRow?.getBoundingClientRect().height || 60
 
     // Be conservative - don't add extra rows, and use floor to ensure we don't overflow
-    const rows = Math.max(5, Math.min(50, Math.floor(available / rowH)))
-    setPageSize(rows)
+    const nextPageSize = Math.max(5, Math.min(50, Math.floor(available / rowH)))
+    setPageSize(nextPageSize)
   }, [])
 
   React.useEffect(() => {
@@ -223,7 +222,7 @@ export default function CustomerTable({
           <Table.Header ref={theadRef}>
             <Table.Row>
               <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Contact</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Address</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>
                 <Flex gap={'1'}>
                   Type
@@ -259,13 +258,8 @@ export default function CustomerTable({
                     </Table.Cell>
                     <Table.Cell>
                       <Text size="2" color="gray">
-                        {r.email || '—'}
+                        {r.address || '—'}
                       </Text>
-                      {r.phone && (
-                        <Text as="div" size="1" color="gray">
-                          {prettyPhone(r.phone)}
-                        </Text>
-                      )}
                     </Table.Cell>
                     <Table.Cell>
                       {r.is_partner ? (

@@ -143,8 +143,6 @@ export default function CustomerInspector({
         id: data.id,
         company_id: companyId,
         name: data.name,
-        email: data.email ?? null,
-        phone: data.phone ?? null,
         address: data.address ?? null,
         vat_number: data.vat_number ?? null,
         is_partner: data.is_partner,
@@ -225,8 +223,6 @@ export default function CustomerInspector({
               id: c.id,
               name: c.name,
               address: c.address ?? '',
-              email: c.email ?? '',
-              phone: c.phone ?? '',
               vat_number: c.vat_number ?? '',
               is_partner: c.is_partner,
               logo_path: c.logo_path ?? null,
@@ -307,30 +303,6 @@ export default function CustomerInspector({
       <Grid columns={{ initial: '1', sm: '2' }} gap="4" mb="3">
         {/* Left column: Meta */}
         <Flex direction="column" gap="2">
-          <div>
-            <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
-              Email
-            </Text>
-            <Text as="div" size="2">
-              <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>
-                {c.email}
-              </a>
-            </Text>
-          </div>
-          <div>
-            <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
-              Phone
-            </Text>
-            <Text as="div" size="2">
-              {c.phone ? (
-                <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>
-                  {prettyPhone(c.phone)}
-                </a>
-              ) : (
-                '—'
-              )}
-            </Text>
-          </div>
           <div>
             <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
               VAT number

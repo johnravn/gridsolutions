@@ -1,19 +1,28 @@
 // src/features/jobs/components/tabs/OffersTab.tsx
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Badge,
   Box,
   Button,
+  Callout,
   Dialog,
+  DropdownMenu,
   Flex,
   Heading,
+  IconButton,
   RadioCards,
   Separator,
   Table,
   Text,
   TextArea,
   TextField,
+  Tooltip,
 } from '@radix-ui/themes'
 import {
   Calendar,
@@ -22,6 +31,7 @@ import {
   Edit,
   Eye,
   Import,
+  InfoCircle,
   Link,
   Lock,
   Plus,
@@ -41,11 +51,12 @@ import {
   exportOfferPDF,
   jobOffersQuery,
   lockOffer,
+  offerDetailQuery,
   syncBookingsFromOffer,
 } from '../../api/offerQueries'
 import TechnicalOfferEditor from '../dialogs/TechnicalOfferEditor'
 import PrettyOfferEditor from '../dialogs/PrettyOfferEditor'
-import type { JobOffer, OfferType } from '../../types'
+import type { JobOffer, OfferDetail, OfferType } from '../../types'
 
 function getOfferStatusBadgeColor(offer: JobOffer) {
   if (offer.revision_requested_at) return 'orange'
@@ -75,23 +86,34 @@ function getOfferTypeLabel(type: OfferType) {
   return type === 'technical' ? 'Technical' : 'Pretty'
 }
 
-function isOfferSyncedToBookings(offer: JobOffer) {
-  if (!offer.bookings_synced_at) return false
-  return (
-    new Date(offer.bookings_synced_at).getTime() >=
-    new Date(offer.updated_at).getTime()
-  )
+type GroupItemRow = {
+  group_id: string
+  item_id: string
+  quantity: number | null
 }
 
 export default function OffersTab({
   jobId,
   companyId,
+  isActive,
 }: {
   jobId: string
   companyId: string
+  isActive?: boolean
 }) {
   const { companyRole } = useAuthz()
   const isReadOnly = companyRole === 'freelancer'
+  const [syncingOfferId, setSyncingOfferId] = React.useState<string | null>(
+    null,
+  )
+  const [syncConfirm, setSyncConfirm] = React.useState<{
+    offer: JobOffer
+    removals: {
+      equipment: Array<string>
+      crew: Array<string>
+      transport: Array<string>
+    }
+  } | null>(null)
   const [deleteOpen, setDeleteOpen] = React.useState<JobOffer | null>(null)
   const [editorOpen, setEditorOpen] = React.useState(false)
   const [editingOfferId, setEditingOfferId] = React.useState<string | null>(
@@ -116,11 +138,699 @@ export default function OffersTab({
     qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
     qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
+    // CrewTab also has a dedicated roles query key (time_periods), so invalidate it too.
+    qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods', 'crew'] })
+    // OffersTab internal snapshot
+    qc.invalidateQueries({
+      queryKey: ['jobs', jobId, 'bookings-snapshot-for-offers'],
+    })
   }, [qc, jobId])
 
-  const { data: offers = [], isLoading } = useQuery({
+  const offersQuery = useQuery({
     ...jobOffersQuery(jobId),
+    // The "Synced" column depends on current bookings; always re-check on tab entry.
+    refetchOnMount: 'always',
+    staleTime: 0,
   })
+  const { data: offers = [], isLoading } = offersQuery
+
+  type BookingsSnapshot = {
+    equipment: Array<{
+      item_id: string
+      quantity: number
+      source_kind: 'direct' | 'group'
+      source_group_id: string | null
+    }>
+    crewPeriods: Array<{
+      title: string | null
+      start_at: string
+      end_at: string
+      needed_count: number | null
+      role_category: string | null
+    }>
+    transport: Array<{
+      vehicle_id: string
+    }>
+  }
+
+  const bookingsSnapshotQuery = useQuery({
+    queryKey: ['jobs', jobId, 'bookings-snapshot-for-offers'] as const,
+    enabled: isActive ?? true,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    queryFn: async (): Promise<BookingsSnapshot> => {
+      const { data: timePeriodsRaw, error: tpErr } = await supabase
+        .from('time_periods')
+        .select(
+          'id, title, start_at, end_at, category, needed_count, role_category, deleted',
+        )
+        .eq('job_id', jobId)
+        .in('category', ['equipment', 'crew', 'transport'])
+        .or('deleted.is.null,deleted.eq.false')
+
+      if (tpErr) throw tpErr
+
+      const timePeriods =
+        (timePeriodsRaw as Array<any> | null | undefined) ?? []
+
+      const equipmentPeriodIds = timePeriods
+        .filter((tp: any) => tp.category === 'equipment')
+        .map((tp: any) => tp.id as string)
+      const transportPeriodIds = timePeriods
+        .filter((tp: any) => tp.category === 'transport')
+        .map((tp: any) => tp.id as string)
+      const crewPeriods = timePeriods
+        .filter((tp: any) => tp.category === 'crew')
+        .map((tp: any) => ({
+          title: (tp.title as string | null) ?? null,
+          start_at: tp.start_at as string,
+          end_at: tp.end_at as string,
+          needed_count: (tp.needed_count as number | null) ?? null,
+          role_category: (tp.role_category as string | null) ?? null,
+        }))
+
+      const equipment =
+        equipmentPeriodIds.length > 0
+          ? await (async () => {
+              const { data: rows, error: itemsErr } = await supabase
+                .from('reserved_items')
+                .select('item_id, quantity, source_kind, source_group_id')
+                .in('time_period_id', equipmentPeriodIds)
+
+              if (itemsErr) throw itemsErr
+
+              return ((rows as Array<any> | null | undefined) ?? []).map(
+                (r: any) => {
+                  const sourceKind: 'group' | 'direct' =
+                    r.source_kind === 'group' ? 'group' : 'direct'
+                  return {
+                    item_id: r.item_id as string,
+                    quantity: Number(r.quantity ?? 0),
+                    source_kind: sourceKind,
+                    source_group_id:
+                      (r.source_group_id as string | null) ?? null,
+                  }
+                },
+              )
+            })()
+          : []
+
+      const transport =
+        transportPeriodIds.length > 0
+          ? await (async () => {
+              const { data: rows, error: vehiclesErr } = await supabase
+                .from('reserved_vehicles')
+                .select('vehicle_id')
+                .in('time_period_id', transportPeriodIds)
+
+              if (vehiclesErr) throw vehiclesErr
+
+              return ((rows as Array<any> | null | undefined) ?? [])
+                .map((r: any) => ({
+                  vehicle_id: r.vehicle_id as string,
+                }))
+                .filter((r) => !!r.vehicle_id)
+            })()
+          : []
+
+      return { equipment, crewPeriods, transport }
+    },
+  })
+
+  const technicalOffers = React.useMemo(
+    () => offers.filter((o) => o.offer_type === 'technical'),
+    [offers],
+  )
+
+  const offerDetailResults = useQueries({
+    queries: technicalOffers.map((offer) => ({
+      ...offerDetailQuery(offer.id),
+      enabled: (isActive ?? true) && technicalOffers.length > 0,
+      staleTime: 0,
+      refetchOnMount: 'always' as const,
+    })),
+  })
+
+  const offerDetailsById = React.useMemo(() => {
+    const m = new Map<string, OfferDetail>()
+    for (const res of offerDetailResults) {
+      const offerDetail = res.data
+      if (offerDetail?.id) {
+        m.set(offerDetail.id, offerDetail)
+      }
+    }
+    return m
+  }, [offerDetailResults])
+
+  const groupIdsUsedByOffers = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const offerDetail of offerDetailsById.values()) {
+      for (const group of offerDetail.groups || []) {
+        for (const item of group.items) {
+          if (item.group_id) ids.add(item.group_id)
+        }
+      }
+    }
+    return Array.from(ids).sort()
+  }, [offerDetailsById])
+
+  const groupItemsQuery = useQuery({
+    queryKey: ['group-items', ...groupIdsUsedByOffers] as const,
+    enabled: (isActive ?? true) && groupIdsUsedByOffers.length > 0,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    queryFn: async (): Promise<
+      Map<string, Array<{ item_id: string; quantity: number }>>
+    > => {
+      const { data, error } = await supabase
+        .from('group_items')
+        .select('group_id, item_id, quantity')
+        .in('group_id', groupIdsUsedByOffers)
+
+      if (error) throw error
+
+      const map = new Map<
+        string,
+        Array<{ item_id: string; quantity: number }>
+      >()
+      for (const row of (data as Array<GroupItemRow> | null | undefined) ??
+        []) {
+        if (!row.group_id || !row.item_id) continue
+        const list = map.get(row.group_id) ?? []
+        list.push({
+          item_id: row.item_id,
+          quantity: row.quantity ?? 1,
+        })
+        map.set(row.group_id, list)
+      }
+      return map
+    },
+  })
+
+  const makeEquipmentKey = (row: {
+    item_id: string
+    source_kind: 'direct' | 'group'
+    source_group_id: string | null
+  }) => `${row.source_kind}:${row.source_group_id ?? ''}:${row.item_id}`
+
+  const buildCurrentEquipmentMap = React.useCallback(
+    (snapshot: BookingsSnapshot) => {
+      const m = new Map<string, number>()
+      for (const row of snapshot.equipment) {
+        const k = makeEquipmentKey(row)
+        m.set(k, (m.get(k) ?? 0) + row.quantity)
+      }
+      // normalize: remove zeroes
+      for (const [k, v] of m.entries()) {
+        if (!v) m.delete(k)
+      }
+      return m
+    },
+    [],
+  )
+
+  const buildExpectedEquipmentMap = React.useCallback(
+    (
+      offerDetail: OfferDetail,
+      groupItemsMap: Map<string, Array<{ item_id: string; quantity: number }>>,
+    ) => {
+      const m = new Map<string, number>()
+      for (const group of offerDetail.groups || []) {
+        for (const item of group.items) {
+          if (item.item_id) {
+            const k = makeEquipmentKey({
+              item_id: item.item_id,
+              source_kind: 'direct',
+              source_group_id: null,
+            })
+            m.set(k, (m.get(k) ?? 0) + item.quantity)
+            continue
+          }
+
+          if (item.group_id) {
+            const members = groupItemsMap.get(item.group_id) ?? []
+            for (const member of members) {
+              const k = makeEquipmentKey({
+                item_id: member.item_id,
+                source_kind: 'group',
+                source_group_id: item.group_id,
+              })
+              const qty = (member.quantity || 1) * Math.max(0, item.quantity)
+              m.set(k, (m.get(k) ?? 0) + qty)
+            }
+          }
+        }
+      }
+      // normalize: remove zeroes
+      for (const [k, v] of m.entries()) {
+        if (!v) m.delete(k)
+      }
+      return m
+    },
+    [],
+  )
+
+  const mapsEqual = (a: Map<string, number>, b: Map<string, number>) => {
+    if (a.size !== b.size) return false
+    for (const [k, v] of a.entries()) {
+      if ((b.get(k) ?? 0) !== v) return false
+    }
+    return true
+  }
+
+  const parseEquipmentKey = (
+    key: string,
+  ): { source_kind: 'direct' | 'group'; source_group_id: string | null; item_id: string } => {
+    const [source_kind, source_group_id_raw, item_id] = key.split(':')
+    return {
+      source_kind: source_kind === 'group' ? 'group' : 'direct',
+      source_group_id: source_group_id_raw ? source_group_id_raw : null,
+      item_id: item_id || '',
+    }
+  }
+
+  type OfferDiff = {
+    equipmentChanges: Array<{
+      key: string
+      item_id: string
+      source_kind: 'direct' | 'group'
+      source_group_id: string | null
+      expected: number
+      current: number
+    }>
+    crewChanges: Array<{
+      key: string
+      title: string
+      start_at: string
+      end_at: string
+      expected: number
+      current: number
+    }>
+    expectedTransport: Array<string> | null
+    currentTransport: Array<string>
+  }
+
+  const computeOfferDiff = React.useCallback(
+    (
+      snapshot: BookingsSnapshot,
+      detail: OfferDetail,
+      groupItemsMap: Map<string, Array<{ item_id: string; quantity: number }>>,
+    ): OfferDiff => {
+      const expectedEquip = buildExpectedEquipmentMap(detail, groupItemsMap)
+      const currentEquip = buildCurrentEquipmentMap(snapshot)
+
+      const expectedCrew = buildExpectedCrewMap(detail)
+      const currentCrew = buildCurrentCrewMap(snapshot)
+
+      const expectedTransport = buildExpectedTransportMultiset(detail)
+      const currentTransport = buildCurrentTransportMultiset(snapshot)
+
+      const equipmentChanges: OfferDiff['equipmentChanges'] = []
+      const allEquipKeys = new Set<string>([
+        ...Array.from(expectedEquip.keys()),
+        ...Array.from(currentEquip.keys()),
+      ])
+      for (const key of allEquipKeys) {
+        const expected = expectedEquip.get(key) ?? 0
+        const current = currentEquip.get(key) ?? 0
+        if (expected === current) continue
+        const parsed = parseEquipmentKey(key)
+        equipmentChanges.push({
+          key,
+          item_id: parsed.item_id,
+          source_kind: parsed.source_kind,
+          source_group_id: parsed.source_group_id,
+          expected,
+          current,
+        })
+      }
+
+      const crewChanges: OfferDiff['crewChanges'] = []
+      const allCrewKeys = new Set<string>([
+        ...Array.from(expectedCrew.keys()),
+        ...Array.from(currentCrew.keys()),
+      ])
+      for (const key of allCrewKeys) {
+        const expected = expectedCrew.get(key) ?? 0
+        const current = currentCrew.get(key) ?? 0
+        if (expected === current) continue
+        const [title, start_at, end_at] = key.split('__')
+        crewChanges.push({
+          key,
+          title: title || '',
+          start_at: start_at || '',
+          end_at: end_at || '',
+          expected,
+          current,
+        })
+      }
+
+      return {
+        equipmentChanges,
+        crewChanges,
+        expectedTransport,
+        currentTransport,
+      }
+    },
+    [
+      buildCurrentEquipmentMap,
+      buildExpectedEquipmentMap,
+      buildCurrentCrewMap,
+      buildExpectedCrewMap,
+    ],
+  )
+
+  const getOfferDiff = React.useCallback(
+    (offer: JobOffer) => {
+      if (offer.offer_type !== 'technical') return null
+
+      const snapshot = bookingsSnapshotQuery.data
+      const detail = offerDetailsById.get(offer.id)
+      if (!snapshot || !detail) return null
+
+      const needsGroupItems = (detail.groups ?? []).some((g) =>
+        g.items.some((i) => !!i.group_id),
+      )
+      if (needsGroupItems && groupItemsQuery.isLoading) return null
+
+      const groupItemsMap = groupItemsQuery.data ?? new Map()
+      return computeOfferDiff(snapshot, detail, groupItemsMap)
+    },
+    [
+      bookingsSnapshotQuery.data,
+      groupItemsQuery.data,
+      groupItemsQuery.isLoading,
+      offerDetailsById,
+      computeOfferDiff,
+    ],
+  )
+
+  const diffItemIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const offer of technicalOffers) {
+      const diff = getOfferDiff(offer)
+      if (!diff) continue
+      for (const ch of diff.equipmentChanges) {
+        if (ch.item_id) ids.add(ch.item_id)
+      }
+    }
+    return Array.from(ids).slice(0, 200).sort()
+  }, [getOfferDiff, technicalOffers])
+
+  const itemNamesQuery = useQuery({
+    queryKey: ['items', 'names', diffItemIds] as const,
+    enabled: (isActive ?? true) && diffItemIds.length > 0,
+    staleTime: 60_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('items')
+        .select('id, name')
+        .in('id', diffItemIds)
+      if (error) throw error
+      const m = new Map<string, string>()
+      for (const row of ((data as Array<{ id: string; name: string }> | null) ?? [])) {
+        m.set(row.id, row.name)
+      }
+      return m
+    },
+  })
+
+  const formatItem = (itemId: string) => {
+    const name = itemNamesQuery.data?.get(itemId)
+    return name ? `${name}` : itemId
+  }
+
+  const buildDiffTooltip = (offer: JobOffer) => {
+    const diff = getOfferDiff(offer)
+    if (!diff) {
+      return (
+        <Text size="1" color="gray">
+          Loading differences…
+        </Text>
+      )
+    }
+
+    const removedEquipment = diff.equipmentChanges
+      .filter((c) => c.current > c.expected)
+      .sort((a, b) => b.current - b.expected - (a.current - a.expected))
+    const addedEquipment = diff.equipmentChanges
+      .filter((c) => c.expected > c.current)
+      .sort((a, b) => b.expected - b.current - (a.expected - a.current))
+
+    const removedCrew = diff.crewChanges
+      .filter((c) => c.current > c.expected)
+      .sort((a, b) => b.current - b.expected - (a.current - a.expected))
+    const addedCrew = diff.crewChanges
+      .filter((c) => c.expected > c.current)
+      .sort((a, b) => b.expected - b.current - (a.expected - a.current))
+
+    const lines: Array<React.ReactNode> = []
+
+    const pushSection = (
+      title: string,
+      items: Array<React.ReactNode>,
+      emptyText: string,
+    ) => {
+      lines.push(
+        <Text key={`${title}-title`} size="1" weight="bold">
+          {title}
+        </Text>,
+      )
+      if (items.length === 0) {
+        lines.push(
+          <Text key={`${title}-empty`} size="1" color="gray">
+            {emptyText}
+          </Text>,
+        )
+      } else {
+        for (const node of items.slice(0, 8)) lines.push(node)
+        if (items.length > 8) {
+          lines.push(
+            <Text key={`${title}-more`} size="1" color="gray">
+              …and {items.length - 8} more
+            </Text>,
+          )
+        }
+      }
+      lines.push(<Box key={`${title}-spacer`} height="6px" />)
+    }
+
+    pushSection(
+      'Removed from bookings (present now, not in offer)',
+      removedEquipment.map((c) => (
+        <Text key={`re-${c.key}`} size="1">
+          - {formatItem(c.item_id)}
+          {c.source_kind === 'group' ? ' (group)' : ''}: -{c.current - c.expected}
+        </Text>
+      )),
+      'None',
+    )
+
+    pushSection(
+      'Added to bookings (in offer, missing now)',
+      addedEquipment.map((c) => (
+        <Text key={`ae-${c.key}`} size="1">
+          - {formatItem(c.item_id)}
+          {c.source_kind === 'group' ? ' (group)' : ''}: +{c.expected - c.current}
+        </Text>
+      )),
+      'None',
+    )
+
+    pushSection(
+      'Crew role changes',
+      [...removedCrew, ...addedCrew].map((c) => (
+        <Text key={`cr-${c.key}`} size="1">
+          - {c.title || 'Crew'}: {c.current} → {c.expected}
+        </Text>
+      )),
+      'None',
+    )
+
+    if (diff.expectedTransport === null) {
+      lines.push(
+        <Text key="transport" size="1" color="gray">
+          Transport: cannot be strictly compared (offer does not specify vehicles).
+        </Text>,
+      )
+    } else {
+      const exp = diff.expectedTransport.join('|')
+      const cur = diff.currentTransport.join('|')
+      lines.push(
+        <Text key="transport" size="1" color={exp === cur ? 'gray' : undefined}>
+          Transport: {exp === cur ? 'matches' : 'differs'}
+        </Text>,
+      )
+    }
+
+    return <Box style={{ maxWidth: 360 }}>{lines}</Box>
+  }
+
+  function buildExpectedCrewMap(offerDetail: OfferDetail) {
+    const m = new Map<string, number>()
+    for (const item of offerDetail.crew_items || []) {
+      const title = item.role_title.trim()
+      const start = item.start_date
+      const end = item.end_date
+      const k = `${title}__${start}__${end}`
+      m.set(k, (m.get(k) ?? 0) + item.crew_count)
+    }
+    for (const [k, v] of m.entries()) {
+      if (!v) m.delete(k)
+    }
+    return m
+  }
+
+  function buildCurrentCrewMap(snapshot: BookingsSnapshot) {
+    const m = new Map<string, number>()
+    for (const tp of snapshot.crewPeriods) {
+      const title = tp.title ? tp.title.trim() : ''
+      if (!title) continue
+      const k = `${title}__${tp.start_at}__${tp.end_at}`
+      m.set(k, tp.needed_count || 0)
+    }
+    for (const [k, v] of m.entries()) {
+      if (!v) m.delete(k)
+    }
+    return m
+  }
+
+  function buildExpectedTransportMultiset(offerDetail: OfferDetail) {
+    const expected: Array<string> = []
+    for (const item of offerDetail.transport_items || []) {
+      if (!item.vehicle_id) return null // can't deterministically verify
+      expected.push(item.vehicle_id)
+    }
+    expected.sort()
+    return expected
+  }
+
+  function buildCurrentTransportMultiset(snapshot: BookingsSnapshot) {
+    const current = snapshot.transport.map((t) => t.vehicle_id).filter(Boolean)
+    current.sort()
+    return current
+  }
+
+  const getOfferSyncStatus = React.useCallback(
+    (
+      offer: JobOffer,
+    ): { label: string; color: 'green' | 'gray'; title: string } => {
+      if (offer.offer_type !== 'technical') {
+        return {
+          label: '—',
+          color: 'gray',
+          title: 'Only technical offers can sync to bookings.',
+        }
+      }
+
+      const snapshot = bookingsSnapshotQuery.data
+      const detail = offerDetailsById.get(offer.id)
+
+      if (!snapshot || !detail) {
+        return {
+          label: 'Checking…',
+          color: 'gray',
+          title: 'Refreshing bookings sync status…',
+        }
+      }
+
+      if (syncingOfferId === offer.id) {
+        return {
+          label: 'Checking…',
+          color: 'gray',
+          title: 'Sync in progress… refreshing status.',
+        }
+      }
+
+      // If this offer references item groups, we need the group member list to compare accurately.
+      const needsGroupItems = (detail.groups ?? []).some((g) =>
+        g.items.some((i) => !!i.group_id),
+      )
+      const groupItemsMap = groupItemsQuery.data ?? new Map()
+      if (needsGroupItems && groupItemsQuery.isLoading) {
+        return {
+          label: 'Checking…',
+          color: 'gray',
+          title: 'Loading item group definitions…',
+        }
+      }
+
+      const expectedEquip = buildExpectedEquipmentMap(detail, groupItemsMap)
+      const currentEquip = buildCurrentEquipmentMap(snapshot)
+      const equipmentMatches = mapsEqual(expectedEquip, currentEquip)
+
+      const expectedCrew = buildExpectedCrewMap(detail)
+      const currentCrew = buildCurrentCrewMap(snapshot)
+      const crewMatches = mapsEqual(expectedCrew, currentCrew)
+
+      const expectedTransport = buildExpectedTransportMultiset(detail)
+      const currentTransport = buildCurrentTransportMultiset(snapshot)
+      const transportMatches =
+        expectedTransport === null
+          ? true
+          : expectedTransport.join('|') === currentTransport.join('|')
+
+      const isSyncedNow = equipmentMatches && crewMatches && transportMatches
+
+      if (isSyncedNow) {
+        return {
+          label: 'Synced',
+          color: 'green',
+          title:
+            expectedTransport === null
+              ? 'Offer matches current bookings (transport not strictly verifiable).'
+              : 'Offer matches current bookings.',
+        }
+      }
+
+      const reasons: Array<string> = []
+      if (!equipmentMatches) reasons.push('Equipment differs')
+      if (!crewMatches) reasons.push('Crew differs')
+      if (expectedTransport === null) {
+        // Transport is ignored in match calculation when not verifiable
+      } else if (!transportMatches) {
+        reasons.push('Transport differs')
+      }
+
+      return {
+        label: 'Not synced',
+        color: 'gray',
+        title: `Offer does not match current bookings. ${reasons.join(' • ')}`,
+      }
+    },
+    [
+      bookingsSnapshotQuery.data,
+      buildCurrentEquipmentMap,
+      buildExpectedEquipmentMap,
+      groupItemsQuery.data,
+      groupItemsQuery.isLoading,
+      offerDetailsById,
+      syncingOfferId,
+    ],
+  )
+
+  const prevIsActiveRef = React.useRef<boolean>(false)
+  React.useEffect(() => {
+    const nowActive = isActive ?? true
+    const wasActive = prevIsActiveRef.current
+    prevIsActiveRef.current = nowActive
+    if (!nowActive || wasActive) return
+
+    // Force-refresh whenever the user enters the Offers tab.
+    offersQuery.refetch()
+    bookingsSnapshotQuery.refetch()
+    for (const res of offerDetailResults) {
+      res.refetch()
+    }
+    groupItemsQuery.refetch()
+  }, [
+    isActive,
+    jobId,
+    bookingsSnapshotQuery,
+    groupItemsQuery,
+    offerDetailResults,
+    offersQuery,
+  ])
 
   const deleteOfferMutation = useMutation({
     mutationFn: deleteOffer,
@@ -205,17 +915,29 @@ export default function OffersTab({
       if (!user?.id) throw new Error('User not authenticated')
       return await syncBookingsFromOffer(offerId, user.id)
     },
+    onMutate: (offerId) => {
+      setSyncingOfferId(offerId)
+    },
     onSuccess: (warnings) => {
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
       qc.invalidateQueries({ queryKey: ['time-periods', jobId] })
       invalidateBookingQueries()
       success('Bookings synced', 'Bookings were synced from the offer.')
+      // Re-check immediately so the "Synced" badge updates in realtime.
+      offersQuery.refetch()
+      bookingsSnapshotQuery.refetch()
       if (warnings.length) {
         info('Booking warnings', warnings.join('\n'), 6000)
       }
     },
+    onSettled: () => {
+      setSyncingOfferId(null)
+      // Defensive refetch: ensures UI settles even if queries were fresh.
+      bookingsSnapshotQuery.refetch()
+    },
     onError: (err: any) => {
+      setSyncingOfferId(null)
       toastError('Failed to sync bookings', err?.message || 'Please try again.')
     },
   })
@@ -445,13 +1167,151 @@ export default function OffersTab({
     createBookingsMutation.mutate(offer.id)
   }
 
-  const handleSyncBookings = (offer: JobOffer) => {
+  const fetchGroupItemsMap = React.useCallback(
+    async (groupIds: Array<string>) => {
+      const ids = Array.from(new Set(groupIds)).filter(Boolean)
+      if (ids.length === 0) return new Map<string, Array<{ item_id: string; quantity: number }>>()
+
+      const { data, error } = await supabase
+        .from('group_items')
+        .select('group_id, item_id, quantity')
+        .in('group_id', ids)
+
+      if (error) throw error
+
+      const map = new Map<string, Array<{ item_id: string; quantity: number }>>()
+      for (const row of (data as Array<GroupItemRow> | null | undefined) ?? []) {
+        if (!row.group_id || !row.item_id) continue
+        const list = map.get(row.group_id) ?? []
+        list.push({ item_id: row.item_id, quantity: row.quantity ?? 1 })
+        map.set(row.group_id, list)
+      }
+      return map
+    },
+    [],
+  )
+
+  const fetchOfferDiffForSync = React.useCallback(
+    async (offer: JobOffer): Promise<OfferDiff | null> => {
+      if (offer.offer_type !== 'technical') return null
+
+      const snapshotResult = await bookingsSnapshotQuery.refetch()
+      const snapshot = snapshotResult.data
+      const detail = await qc.fetchQuery(offerDetailQuery(offer.id))
+      if (!snapshot || !detail) return null
+
+      const groupIds: Array<string> = []
+      for (const group of detail.groups ?? []) {
+        for (const item of group.items) {
+          if (item.group_id) groupIds.push(item.group_id)
+        }
+      }
+      const groupItemsMap = await fetchGroupItemsMap(groupIds)
+      return computeOfferDiff(snapshot, detail, groupItemsMap)
+    },
+    [bookingsSnapshotQuery, computeOfferDiff, fetchGroupItemsMap, qc],
+  )
+
+  const handleSyncBookings = React.useCallback(async (offer: JobOffer) => {
     if (!user?.id) {
       toastError('Authentication required', 'Please log in to sync bookings.')
       return
     }
+    // If syncing would remove anything, warn before proceeding.
+    let diff: OfferDiff | null = null
+    try {
+      diff = await fetchOfferDiffForSync(offer)
+    } catch (e: any) {
+      toastError(
+        'Failed to check booking changes',
+        e?.message || 'Please try again.',
+      )
+      return
+    }
+    if (!diff) {
+      info(
+        'Just a sec…',
+        'Loading differences so we can warn you about removals. Try again in a moment.',
+      )
+      offersQuery.refetch()
+      bookingsSnapshotQuery.refetch()
+      groupItemsQuery.refetch()
+      return
+    }
+
+    const equipmentRemovals: Array<string> = []
+    const crewRemovals: Array<string> = []
+    const transportRemovals: Array<string> = []
+
+    const removedEquipment = diff.equipmentChanges
+      .filter((c) => c.current > c.expected)
+      .sort((a, b) => (b.current - b.expected) - (a.current - a.expected))
+    for (const c of removedEquipment.slice(0, 10)) {
+      equipmentRemovals.push(
+        `Equipment: ${formatItem(c.item_id)}${c.source_kind === 'group' ? ' (group)' : ''} (-${c.current - c.expected})`,
+      )
+    }
+    if (removedEquipment.length > 10) {
+      equipmentRemovals.push(
+        `…and ${removedEquipment.length - 10} more equipment removals`,
+      )
+    }
+
+    const removedCrew = diff.crewChanges
+      .filter((c) => c.current > c.expected)
+      .sort((a, b) => (b.current - b.expected) - (a.current - a.expected))
+    for (const c of removedCrew.slice(0, 10)) {
+      crewRemovals.push(`${c.title || 'Crew'} (${c.current} → ${c.expected})`)
+    }
+    if (removedCrew.length > 10) {
+      crewRemovals.push(`…and ${removedCrew.length - 10} more crew removals`)
+    }
+
+    // Transport removals (best-effort)
+    if (diff.expectedTransport === null) {
+      if (diff.currentTransport.length > 0) {
+        transportRemovals.push(
+          `Transport: existing vehicle bookings may be replaced (${diff.currentTransport.length} current)`,
+        )
+      }
+    } else {
+      const expectedSet = new Set(diff.expectedTransport)
+      const removedVehicles = diff.currentTransport.filter(
+        (id) => !expectedSet.has(id),
+      )
+      if (removedVehicles.length > 0) {
+        transportRemovals.push(
+          `${removedVehicles.length} vehicle booking(s) will be removed/replaced`,
+        )
+      }
+    }
+
+    const totalRemovalCount =
+      equipmentRemovals.length + crewRemovals.length + transportRemovals.length
+    if (totalRemovalCount > 0) {
+      setSyncConfirm({
+        offer,
+        removals: {
+          equipment: equipmentRemovals,
+          crew: crewRemovals,
+          transport: transportRemovals,
+        },
+      })
+      return
+    }
+
+    setSyncingOfferId(offer.id)
     syncBookingsMutation.mutate(offer.id)
-  }
+  }, [
+    bookingsSnapshotQuery,
+    fetchOfferDiffForSync,
+    groupItemsQuery,
+    info,
+    offersQuery,
+    syncBookingsMutation,
+    toastError,
+    user?.id,
+  ])
 
   const handleExportPDF = (offer: JobOffer) => {
     exportPdfMutation.mutate(offer.id)
@@ -591,17 +1451,34 @@ export default function OffersTab({
                     </Flex>
                   </Table.Cell>
                   <Table.Cell>
-                    <Badge
-                      variant="soft"
-                      color={isOfferSyncedToBookings(offer) ? 'green' : 'gray'}
-                      title={
-                        offer.bookings_synced_at
-                          ? `Last synced: ${formatDate(offer.bookings_synced_at)}`
-                          : 'Not synced'
-                      }
-                    >
-                      {isOfferSyncedToBookings(offer) ? 'Synced' : 'Not synced'}
-                    </Badge>
+                    {(() => {
+                      const status = getOfferSyncStatus(offer)
+                      const showInfo =
+                        status.label === 'Not synced' &&
+                        offer.offer_type === 'technical'
+                      return (
+                        <Flex align="center" gap="2">
+                          <Badge
+                            variant="soft"
+                            color={status.color}
+                            title={status.title}
+                          >
+                            {status.label}
+                          </Badge>
+                          {showInfo && (
+                            <Tooltip content={buildDiffTooltip(offer)}>
+                              <IconButton
+                                size="1"
+                                variant="ghost"
+                                aria-label="Show differences"
+                              >
+                                <InfoCircle width={14} height={14} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Flex>
+                      )
+                    })()}
                   </Table.Cell>
                   <Table.Cell>
                     <Text weight="medium">{offer.title}</Text>
@@ -616,145 +1493,193 @@ export default function OffersTab({
                   <Table.Cell>
                     <Text size="2">{formatDate(offer.created_at)}</Text>
                   </Table.Cell>
-                  <Table.Cell style={{ minWidth: 320 }}>
-                    <Flex gap="2" wrap="wrap" align="center">
-                      {offer.offer_type === 'technical' ? (
-                        <>
-                          {offer.locked ? (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => {
-                                setEditorType('technical')
-                                handleViewOffer(offer)
-                              }}
-                            >
-                              <Eye width={14} height={14} /> View
-                            </Button>
-                          ) : (
-                            !isReadOnly && (
-                              <Button
+                  <Table.Cell style={{ width: 56, minWidth: 56 }}>
+                    {(() => {
+                      const canView = offer.locked
+                      const canEdit = !offer.locked && !isReadOnly
+                      const canCopyLink =
+                        offer.locked && offer.status !== 'draft'
+                      const canManage = !isReadOnly
+                      const hasAnyAction =
+                        canView || canEdit || canCopyLink || canManage
+
+                      if (!hasAnyAction) return null
+
+                      return (
+                        <Flex justify="end">
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger>
+                              <IconButton
                                 size="1"
-                                variant="soft"
-                                onClick={() => {
-                                  setEditorType('technical')
-                                  handleEditOffer(offer)
-                                }}
+                                variant="ghost"
+                                aria-label="Offer actions"
+                                title="Actions"
                               >
-                                <Edit width={14} height={14} /> Edit
-                              </Button>
-                            )
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          {offer.locked ? (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => {
-                                setEditorType('pretty')
-                                handleViewOffer(offer)
-                              }}
-                            >
-                              <Eye width={14} height={14} /> View
-                            </Button>
-                          ) : (
-                            !isReadOnly && (
-                              <Button
-                                size="1"
-                                variant="soft"
-                                onClick={() => {
-                                  setEditorType('pretty')
-                                  handleEditOffer(offer)
-                                }}
-                              >
-                                <Edit width={14} height={14} /> Edit
-                              </Button>
-                            )
-                          )}
-                        </>
-                      )}
-                      {offer.locked && offer.status !== 'draft' && (
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={() => handleCopyLink(offer)}
-                          title="Copy offer link"
-                        >
-                          <Link width={14} height={14} /> Copy Link
-                        </Button>
-                      )}
-                      {!isReadOnly && (
-                        <>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() => handleDuplicateOffer(offer)}
-                            disabled={duplicateOfferMutation.isPending}
-                          >
-                            <Copy width={14} height={14} />
-                            Duplicate
-                          </Button>
-                          {!offer.locked && (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => handleLockOffer(offer)}
-                              disabled={lockOfferMutation.isPending}
-                            >
-                              <Lock width={14} height={14} /> Lock & Send
-                            </Button>
-                          )}
-                          {offer.status === 'accepted' && (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              color="green"
-                              onClick={() => handleCreateBookings(offer)}
-                              disabled={createBookingsMutation.isPending}
-                            >
-                              <Calendar width={14} height={14} /> Create
-                              Bookings
-                            </Button>
-                          )}
-                          {offer.offer_type === 'technical' && (
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => handleSyncBookings(offer)}
-                              disabled={syncBookingsMutation.isPending}
-                            >
-                              <Refresh width={14} height={14} /> Sync Bookings
-                            </Button>
-                          )}
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() => handleExportPDF(offer)}
-                            disabled={exportPdfMutation.isPending}
-                          >
-                            <Download width={14} height={14} /> Export PDF
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() => openResponseDialog(offer)}
-                          >
-                            <Edit width={14} height={14} />
-                            Set Response
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            color="red"
-                            onClick={() => setDeleteOpen(offer)}
-                          >
-                            <Trash width={14} height={14} />
-                          </Button>
-                        </>
-                      )}
-                    </Flex>
+                                <Text
+                                  size="4"
+                                  style={{
+                                    lineHeight: 1,
+                                    transform: 'translateY(-1px)',
+                                  }}
+                                >
+                                  ⋯
+                                </Text>
+                              </IconButton>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Content align="end">
+                              {offer.offer_type === 'technical' ? (
+                                <>
+                                  {offer.locked ? (
+                                    <DropdownMenu.Item
+                                      onSelect={() => {
+                                        setEditorType('technical')
+                                        handleViewOffer(offer)
+                                      }}
+                                    >
+                                      <Flex align="center" gap="2">
+                                        <Eye width={14} height={14} />
+                                        <Text>View</Text>
+                                      </Flex>
+                                    </DropdownMenu.Item>
+                                  ) : (
+                                    !isReadOnly && (
+                                      <DropdownMenu.Item
+                                        onSelect={() => {
+                                          setEditorType('technical')
+                                          handleEditOffer(offer)
+                                        }}
+                                      >
+                                        <Flex align="center" gap="2">
+                                          <Edit width={14} height={14} />
+                                          <Text>Edit</Text>
+                                        </Flex>
+                                      </DropdownMenu.Item>
+                                    )
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  {offer.locked ? (
+                                    <DropdownMenu.Item
+                                      onSelect={() => {
+                                        setEditorType('pretty')
+                                        handleViewOffer(offer)
+                                      }}
+                                    >
+                                      <Flex align="center" gap="2">
+                                        <Eye width={14} height={14} />
+                                        <Text>View</Text>
+                                      </Flex>
+                                    </DropdownMenu.Item>
+                                  ) : (
+                                    !isReadOnly && (
+                                      <DropdownMenu.Item
+                                        onSelect={() => {
+                                          setEditorType('pretty')
+                                          handleEditOffer(offer)
+                                        }}
+                                      >
+                                        <Flex align="center" gap="2">
+                                          <Edit width={14} height={14} />
+                                          <Text>Edit</Text>
+                                        </Flex>
+                                      </DropdownMenu.Item>
+                                    )
+                                  )}
+                                </>
+                              )}
+
+                              {canCopyLink && (
+                                <DropdownMenu.Item
+                                  onSelect={() => handleCopyLink(offer)}
+                                >
+                                  <Flex align="center" gap="2">
+                                    <Link width={14} height={14} />
+                                    <Text>Copy link</Text>
+                                  </Flex>
+                                </DropdownMenu.Item>
+                              )}
+
+                              {!isReadOnly && (
+                                <>
+                                  <DropdownMenu.Separator />
+                                  <DropdownMenu.Item
+                                    onSelect={() => handleDuplicateOffer(offer)}
+                                    disabled={duplicateOfferMutation.isPending}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Copy width={14} height={14} />
+                                      <Text>Duplicate</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
+                                  {!offer.locked && (
+                                    <DropdownMenu.Item
+                                      onSelect={() => handleLockOffer(offer)}
+                                      disabled={lockOfferMutation.isPending}
+                                    >
+                                      <Flex align="center" gap="2">
+                                        <Lock width={14} height={14} />
+                                        <Text>Lock &amp; send</Text>
+                                      </Flex>
+                                    </DropdownMenu.Item>
+                                  )}
+                                  {offer.status === 'accepted' && (
+                                    <DropdownMenu.Item
+                                      onSelect={() =>
+                                        handleCreateBookings(offer)
+                                      }
+                                      disabled={createBookingsMutation.isPending}
+                                    >
+                                      <Flex align="center" gap="2">
+                                        <Calendar width={14} height={14} />
+                                        <Text>Create bookings</Text>
+                                      </Flex>
+                                    </DropdownMenu.Item>
+                                  )}
+                                  {offer.offer_type === 'technical' && (
+                                    <DropdownMenu.Item
+                                      onSelect={() => handleSyncBookings(offer)}
+                                      disabled={syncBookingsMutation.isPending}
+                                    >
+                                      <Flex align="center" gap="2">
+                                        <Refresh width={14} height={14} />
+                                        <Text>Sync bookings</Text>
+                                      </Flex>
+                                    </DropdownMenu.Item>
+                                  )}
+                                  <DropdownMenu.Item
+                                    onSelect={() => handleExportPDF(offer)}
+                                    disabled={exportPdfMutation.isPending}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Download width={14} height={14} />
+                                      <Text>Export PDF</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
+                                  <DropdownMenu.Item
+                                    onSelect={() => openResponseDialog(offer)}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Edit width={14} height={14} />
+                                      <Text>Set response</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
+                                  <DropdownMenu.Separator />
+                                  <DropdownMenu.Item
+                                    onSelect={() => setDeleteOpen(offer)}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Trash width={14} height={14} />
+                                      <Text>Delete</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
+                                </>
+                              )}
+                            </DropdownMenu.Content>
+                          </DropdownMenu.Root>
+                        </Flex>
+                      )
+                    })()}
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -812,6 +1737,111 @@ export default function OffersTab({
                 disabled={deleteOfferMutation.isPending}
               >
                 {deleteOfferMutation.isPending ? 'Deleting...' : 'Delete'}
+              </Button>
+            </Flex>
+          </Dialog.Content>
+        </Dialog.Root>
+      )}
+
+      {/* Sync Confirmation Dialog (only when removals are detected) */}
+      {syncConfirm && (
+        <Dialog.Root
+          open={!!syncConfirm}
+          onOpenChange={(v) => !v && setSyncConfirm(null)}
+        >
+          <Dialog.Content maxWidth="560px">
+            <Dialog.Title>Sync bookings from this offer?</Dialog.Title>
+            <Separator my="3" />
+            <Callout.Root color="yellow">
+              <Callout.Icon>
+                <InfoCircle width={18} height={18} />
+              </Callout.Icon>
+              <Callout.Text>
+                This sync will <strong>remove or reduce</strong> existing bookings
+                so they match the offer.
+              </Callout.Text>
+            </Callout.Root>
+
+            <Box
+              mt="3"
+              p="3"
+              style={{
+                background: 'var(--gray-a2)',
+                border: '1px solid var(--gray-a6)',
+                borderRadius: 8,
+              }}
+            >
+              <Flex direction="column" gap="3">
+                {syncConfirm.removals.equipment.length > 0 && (
+                  <Box>
+                    <Text size="2" weight="bold">
+                      Equipment
+                    </Text>
+                    <Flex direction="column" gap="1" mt="2">
+                      {syncConfirm.removals.equipment.map((line, idx) => (
+                        <Text key={`equip-${idx}`} size="2">
+                          - {line.replace(/^Equipment:\s*/, '')}
+                        </Text>
+                      ))}
+                    </Flex>
+                  </Box>
+                )}
+
+                {syncConfirm.removals.crew.length > 0 && (
+                  <Box>
+                    <Text size="2" weight="bold">
+                      Crew
+                    </Text>
+                    <Flex direction="column" gap="1" mt="2">
+                      {syncConfirm.removals.crew.map((line, idx) => (
+                        <Text key={`crew-${idx}`} size="2">
+                          - {line}
+                        </Text>
+                      ))}
+                    </Flex>
+                  </Box>
+                )}
+
+                {syncConfirm.removals.transport.length > 0 && (
+                  <Box>
+                    <Text size="2" weight="bold">
+                      Vehicles
+                    </Text>
+                    <Flex direction="column" gap="1" mt="2">
+                      {syncConfirm.removals.transport.map((line, idx) => (
+                        <Text key={`transport-${idx}`} size="2">
+                          - {line.replace(/^Transport:\s*/, '')}
+                        </Text>
+                      ))}
+                    </Flex>
+                  </Box>
+                )}
+              </Flex>
+            </Box>
+
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button
+                  color="yellow"
+                  variant="soft"
+                  disabled={syncBookingsMutation.isPending}
+                >
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button
+                color="yellow"
+                variant="surface"
+                onClick={() => {
+                  setSyncingOfferId(syncConfirm.offer.id)
+                  syncBookingsMutation.mutate(syncConfirm.offer.id)
+                  setSyncConfirm(null)
+                }}
+                disabled={syncBookingsMutation.isPending}
+              >
+                {syncBookingsMutation.isPending
+                  ? 'Syncing…'
+                  : 'Sync & replace bookings'}
               </Button>
             </Flex>
           </Dialog.Content>
@@ -1017,6 +2047,29 @@ export default function OffersTab({
           offerId={editingOfferId}
           onSaved={() => {
             qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+          }}
+          onSyncBookingsAfterSave={async (offerId) => {
+            try {
+              // Ensure the new offer exists in the list, then run the exact same
+              // sync flow as the "Sync Bookings" action (including removal warnings
+              // and synced badge refresh).
+              await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+              const list = await qc.fetchQuery(jobOffersQuery(jobId))
+              const createdOffer = list.find((o) => o.id === offerId)
+              if (!createdOffer) {
+                toastError(
+                  'Offer not found',
+                  'The offer was saved but could not be found to sync bookings.',
+                )
+                return
+              }
+              await handleSyncBookings(createdOffer)
+            } catch (e: any) {
+              toastError(
+                'Failed to sync bookings',
+                e?.message || 'Please try again.',
+              )
+            }
           }}
         />
       )}

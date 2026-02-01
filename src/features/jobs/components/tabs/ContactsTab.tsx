@@ -2,6 +2,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertDialog,
+  Badge,
   Box,
   Button,
   Flex,
@@ -19,6 +20,29 @@ import { Edit, NavArrowDown, Plus, Trash } from 'iconoir-react'
 import AddContactDialog, {
   EditContactDialog,
 } from '../dialogs/AddContactDialog'
+
+const categoryColors = [
+  'violet',
+  'cyan',
+  'orange',
+  'red',
+  'green',
+  'yellow',
+  'blue',
+  'pink',
+  'teal',
+] as const
+
+type CategoryColor = (typeof categoryColors)[number]
+
+const getCategoryColor = (category: string): CategoryColor => {
+  const normalized = category.trim().toLowerCase()
+  let hash = 0
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) % categoryColors.length
+  }
+  return categoryColors[Math.abs(hash) % categoryColors.length]
+}
 
 export default function ContactsTab({
   jobId,
@@ -71,6 +95,35 @@ export default function ContactsTab({
     enabled: !!jobId,
   })
 
+  // Fetch customer main contact (same as in OverviewTab)
+  const { data: customerContactData } = useQuery({
+    queryKey: ['jobs.customer-contact', jobId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select(
+          `
+          customer_contact_id,
+          customer_contact:customer_contact_id ( id, name, email, phone, title )
+        `,
+        )
+        .eq('id', jobId)
+        .maybeSingle()
+      if (error) throw error
+      return data as {
+        customer_contact_id: string | null
+        customer_contact?: {
+          id: string
+          name: string | null
+          email: string | null
+          phone: string | null
+          title: string | null
+        } | null
+      } | null
+    },
+    enabled: !!jobId,
+  })
+
   const { data } = useQuery({
     queryKey: ['jobs.contacts', jobId],
     queryFn: async () => {
@@ -85,26 +138,85 @@ export default function ContactsTab({
           `,
             )
             .eq('job_id', jobId),
-          supabase.from('time_periods').select('id').eq('job_id', jobId),
+          supabase
+            .from('time_periods')
+            .select('id, title, role_category')
+            .eq('job_id', jobId)
+            .eq('category', 'crew'),
         ])
       if (e1) throw e1
       if (e2) throw e2
       const resIds =
         (res as Array<{ id: string }> | null)?.map((r) => r.id) ?? []
-      let crew: Array<{ name: string; email: string; phone: string | null }> =
-        []
+      const roleByTimePeriodId = new Map<string, { title: string; category: string | null }>()
+      for (const tp of (res as Array<{
+        id: string
+        title: string | null
+        role_category: string | null
+      }> | null) ?? []) {
+        roleByTimePeriodId.set(tp.id, {
+          title: tp.title ?? '—',
+          category: tp.role_category ?? null,
+        })
+      }
+
+      let crew: Array<{
+        name: string
+        email: string
+        phone: string | null
+        roles: Array<string>
+        categories: Array<string>
+      }> = []
       if (resIds.length) {
         const { data: rows, error } = await supabase
           .from('reserved_crew')
           .select(
-            'placeholder_name, user:user_id ( display_name, email, phone )',
+            'time_period_id, status, placeholder_name, user_id, user:user_id ( display_name, email, phone )',
           )
+          .eq('status', 'confirmed')
           .in('time_period_id', resIds)
         if (error) throw error
-        crew = rows.map((r: any) => ({
-          name: r.user?.display_name ?? r.placeholder_name ?? '—',
-          email: r.user?.email ?? '—',
-          phone: r.user?.phone ?? null,
+        const uniq = new Map<
+          string,
+          {
+            name: string
+            email: string
+            phone: string | null
+            roles: Set<string>
+            categories: Set<string>
+          }
+        >()
+        for (const r of rows as Array<any>) {
+          const key =
+            (r.user_id as string | null) ??
+            (r.placeholder_name as string | null) ??
+            (r.id as string)
+          const role =
+            roleByTimePeriodId.get(r.time_period_id as string) ?? null
+          const roleTitle = role?.title ?? '—'
+          const roleCategory = role?.category ?? null
+
+          const existing = uniq.get(key)
+          if (existing) {
+            if (roleTitle) existing.roles.add(roleTitle)
+            if (roleCategory) existing.categories.add(roleCategory)
+            continue
+          }
+
+          uniq.set(key, {
+            name: r.user?.display_name ?? r.placeholder_name ?? '—',
+            email: r.user?.email ?? '—',
+            phone: r.user?.phone ?? null,
+            roles: new Set(roleTitle ? [roleTitle] : []),
+            categories: new Set(roleCategory ? [roleCategory] : []),
+          })
+        }
+        crew = Array.from(uniq.values()).map((v) => ({
+          name: v.name,
+          email: v.email,
+          phone: v.phone,
+          roles: Array.from(v.roles),
+          categories: Array.from(v.categories),
         }))
       }
       return { jobContacts: jc, crew }
@@ -235,6 +347,84 @@ export default function ContactsTab({
       ) : (
         <Text size="2" color="gray" mb="4">
           No project lead assigned
+        </Text>
+      )}
+
+      <Heading size="2" mb="2" mt="4">
+        Customer main contact
+      </Heading>
+      {customerContactData?.customer_contact ? (
+        <Box
+          p="3"
+          mb="4"
+          style={{
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 8,
+            background: 'var(--gray-a2)',
+          }}
+        >
+          <Grid columns="2" gap="3">
+            <Box>
+              <Flex direction="column" gap="0">
+                <Text size="1" color="gray" mb="1">
+                  Name
+                </Text>
+                <Text size="2" weight="medium">
+                  {customerContactData.customer_contact.name ?? '—'}
+                </Text>
+                {customerContactData.customer_contact.title && (
+                  <Text size="1" color="gray">
+                    {customerContactData.customer_contact.title}
+                  </Text>
+                )}
+              </Flex>
+            </Box>
+            <Box>
+              <Flex direction="column" gap="0">
+                <Text size="1" color="gray" mb="1">
+                  Email
+                </Text>
+                {customerContactData.customer_contact.email ? (
+                  <a
+                    href={`mailto:${customerContactData.customer_contact.email}`}
+                    style={{
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Text size="2">{customerContactData.customer_contact.email}</Text>
+                  </a>
+                ) : (
+                  <Text size="2">—</Text>
+                )}
+              </Flex>
+            </Box>
+            {customerContactData.customer_contact.phone && (
+              <Box style={{ gridColumn: 'span 2' }}>
+                <Text size="1" color="gray" mb="1">
+                  Phone
+                </Text>
+                <Flex align="center" gap="2">
+                  <a
+                    href={`tel:${customerContactData.customer_contact.phone}`}
+                    style={{
+                      color: 'inherit',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    <Text size="2">
+                      {prettyPhone(customerContactData.customer_contact.phone)}
+                    </Text>
+                  </a>
+                  <CopyIconButton text={customerContactData.customer_contact.phone} />
+                </Flex>
+              </Box>
+            )}
+          </Grid>
+        </Box>
+      ) : (
+        <Text size="2" color="gray" mb="4">
+          No customer contact set
         </Text>
       )}
 
@@ -456,6 +646,8 @@ export default function ContactsTab({
         <Table.Header>
           <Table.Row>
             <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+            <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
             <Table.ColumnHeaderCell>Phone</Table.ColumnHeaderCell>
           </Table.Row>
@@ -464,12 +656,43 @@ export default function ContactsTab({
           {(data?.crew ?? []).map((c, i) => (
             <Table.Row key={i}>
               <Table.Cell>{c.name}</Table.Cell>
-              <Table.Cell>{c.email}</Table.Cell>
+              <Table.Cell>
+                {c.categories.length ? (
+                  <Flex gap="1" wrap="wrap">
+                    {c.categories.map((cat) => (
+                      <Badge
+                        key={cat}
+                        size="1"
+                        variant="outline"
+                        color={getCategoryColor(cat)}
+                        style={{ textTransform: 'capitalize' }}
+                      >
+                        {cat}
+                      </Badge>
+                    ))}
+                  </Flex>
+                ) : (
+                  '—'
+                )}
+              </Table.Cell>
+              <Table.Cell>{c.roles.length ? c.roles.join(', ') : '—'}</Table.Cell>
+              <Table.Cell>
+                {c.email && c.email !== '—' ? (
+                  <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>
+                    {c.email}
+                  </a>
+                ) : (
+                  '—'
+                )}
+              </Table.Cell>
               <Table.Cell>
                 {c.phone ? (
-                  <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>
-                    {prettyPhone(c.phone)}
-                  </a>
+                  <Flex align="center" gap="2">
+                    <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>
+                      {prettyPhone(c.phone)}
+                    </a>
+                    <CopyIconButton text={c.phone} />
+                  </Flex>
                 ) : (
                   '—'
                 )}
@@ -478,8 +701,8 @@ export default function ContactsTab({
           ))}
           {(data?.crew ?? []).length === 0 && (
             <Table.Row>
-              <Table.Cell colSpan={3}>
-                <Text color="gray">No crew</Text>
+              <Table.Cell colSpan={5}>
+                <Text color="gray">No confirmed crew</Text>
               </Table.Cell>
             </Table.Row>
           )}
