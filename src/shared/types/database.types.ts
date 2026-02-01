@@ -397,6 +397,51 @@ export type Database = {
           },
         ]
       }
+      company_user_internal_notes: {
+        Row: {
+          company_id: string
+          created_at: string
+          created_by_user_id: string | null
+          note: string | null
+          updated_at: string
+          updated_by_user_id: string | null
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          created_by_user_id?: string | null
+          note?: string | null
+          updated_at?: string
+          updated_by_user_id?: string | null
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          note?: string | null
+          updated_at?: string
+          updated_by_user_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_user_internal_notes_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_user_internal_notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           company_id: string

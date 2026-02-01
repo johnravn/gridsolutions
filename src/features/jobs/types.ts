@@ -418,6 +418,7 @@ export type OfferDetail = JobOffer & {
     vehicle_daily_rate: number | null
     vehicle_distance_rate: number | null
     vehicle_distance_increment: number | null
+    rental_factor_config?: unknown | null
   }
   customer?: {
     id: string

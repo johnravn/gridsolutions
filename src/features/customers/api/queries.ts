@@ -85,9 +85,9 @@ export function customersIndexQuery({
       if (search && search.trim()) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
         return fuzzySearch(
-          (data || []) as Array<CustomerRow>,
+          data as Array<CustomerRow>,
           search,
-          [(item) => item.name, (item) => item.email, (item) => item.phone],
+          [(item) => item.name, (item) => item.vat_number, (item) => item.address],
           0.25, // Lower threshold since we already filtered with ilike
         )
       }
@@ -146,16 +146,27 @@ export async function upsertCustomer(payload: {
   is_partner?: boolean
   logo_path?: string | null
 }) {
-  const body = {
+  const body: {
+    company_id: string
+    name: string
+    address: string | null
+    vat_number: string | null
+    is_partner: boolean
+    logo_path: string | null
+    email?: string | null
+    phone?: string | null
+  } = {
     company_id: payload.company_id,
     name: payload.name.trim(),
-    email: payload.email ?? null,
-    phone: payload.phone ?? null,
     address: payload.address ?? null,
     vat_number: payload.vat_number ?? null,
     is_partner: !!payload.is_partner,
     logo_path: payload.logo_path ?? null,
   }
+  // Important: only set email/phone if explicitly provided.
+  // This prevents unrelated updates (e.g., logo upload) from wiping existing values.
+  if (payload.email !== undefined) body.email = payload.email
+  if (payload.phone !== undefined) body.phone = payload.phone
   if (payload.id) {
     const { error } = await supabase
       .from('customers')
@@ -202,7 +213,20 @@ export async function updateContact(payload: {
   notes?: string | null
 }) {
   const { id, ...rest } = payload
-  const { error } = await supabase.from('contacts').update(rest).eq('id', id)
+  const update: {
+    name?: string
+    email?: string | null
+    phone?: string | null
+    title?: string | null
+    notes?: string | null
+  } = {}
+  if (rest.name !== undefined && rest.name !== null) update.name = rest.name
+  if (rest.email !== undefined) update.email = rest.email
+  if (rest.phone !== undefined) update.phone = rest.phone
+  if (rest.title !== undefined) update.title = rest.title
+  if (rest.notes !== undefined) update.notes = rest.notes
+
+  const { error } = await supabase.from('contacts').update(update).eq('id', id)
   if (error) throw error
 }
 
@@ -256,10 +280,10 @@ export function customerRecentJobsQuery({
         .select('id, title, status, start_at, end_at')
         .eq('company_id', companyId)
         .eq('customer_id', customerId)
-        .order('start_at', { ascending: false, nullsLast: true })
+        .order('start_at', { ascending: false, nullsFirst: false })
         .limit(3)
       if (error) throw error
-      return (data || []) as any
+      return data as any
     },
   }
 }

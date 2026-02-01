@@ -9,11 +9,17 @@ import {
   Flex,
   Grid,
   Heading,
+  IconButton,
   Separator,
   Tabs,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
-import { Plus, Sparks } from 'iconoir-react'
+import { Plus, Sparks, TransitionLeft } from 'iconoir-react'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import CompaniesTable from '../components/CompaniesTable'
@@ -68,13 +74,63 @@ export default function SuperPage() {
 
   // Resize state for Companies tab: default 40% for 2fr/3fr ratio
   const [companiesLeftWidth, setCompaniesLeftWidth] = React.useState<number>(40)
+  const [isCompaniesMinimized, setIsCompaniesMinimized] = React.useState(false)
+  const [companiesSavedWidth, setCompaniesSavedWidth] =
+    React.useState<number>(40)
   const [isResizingCompanies, setIsResizingCompanies] = React.useState(false)
   const companiesContainerRef = React.useRef<HTMLDivElement>(null)
 
   // Resize state for Users tab: default 50% for 1fr/1fr ratio
   const [usersLeftWidth, setUsersLeftWidth] = React.useState<number>(50)
+  const [isUsersMinimized, setIsUsersMinimized] = React.useState(false)
+  const [usersSavedWidth, setUsersSavedWidth] = React.useState<number>(50)
   const [isResizingUsers, setIsResizingUsers] = React.useState(false)
   const usersContainerRef = React.useRef<HTMLDivElement>(null)
+
+  const toggleCompaniesMinimize = React.useCallback(() => {
+    if (isCompaniesMinimized) {
+      setCompaniesLeftWidth(companiesSavedWidth || 40)
+      setIsCompaniesMinimized(false)
+    } else {
+      setCompaniesSavedWidth(companiesLeftWidth)
+      setIsCompaniesMinimized(true)
+    }
+  }, [companiesLeftWidth, companiesSavedWidth, isCompaniesMinimized])
+
+  const handleCompaniesGlowingBarClick = React.useCallback(() => {
+    if (isCompaniesMinimized) {
+      setCompaniesLeftWidth(companiesSavedWidth || 40)
+      setIsCompaniesMinimized(false)
+    }
+  }, [companiesSavedWidth, isCompaniesMinimized])
+
+  const toggleUsersMinimize = React.useCallback(() => {
+    if (isUsersMinimized) {
+      setUsersLeftWidth(usersSavedWidth || 50)
+      setIsUsersMinimized(false)
+    } else {
+      setUsersSavedWidth(usersLeftWidth)
+      setIsUsersMinimized(true)
+    }
+  }, [isUsersMinimized, usersLeftWidth, usersSavedWidth])
+
+  const handleUsersGlowingBarClick = React.useCallback(() => {
+    if (isUsersMinimized) {
+      setUsersLeftWidth(usersSavedWidth || 50)
+      setIsUsersMinimized(false)
+    }
+  }, [isUsersMinimized, usersSavedWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  const toggleActiveMinimize = React.useCallback(() => {
+    if (activeTab === 'companies') toggleCompaniesMinimize()
+    else toggleUsersMinimize()
+  }, [activeTab, toggleCompaniesMinimize, toggleUsersMinimize])
+  useModKeyShortcut({
+    key: 'b',
+    enabled: isLarge,
+    onTrigger: toggleActiveMinimize,
+  })
 
   // Handle mouse move for resizing Companies tab
   React.useEffect(() => {
@@ -654,88 +710,168 @@ export default function SuperPage() {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    width: `${companiesLeftWidth}%`,
+                    width: isCompaniesMinimized
+                      ? '60px'
+                      : `${companiesLeftWidth}%`,
                     height: isLarge ? '100%' : undefined,
-                    minWidth: '300px',
-                    maxWidth: '75%',
+                    minWidth: isCompaniesMinimized ? '60px' : '300px',
+                    maxWidth: isCompaniesMinimized ? '60px' : '75%',
                     minHeight: 0,
                     flexShrink: 0,
                     transition: isResizingCompanies
                       ? 'none'
                       : 'width 0.1s ease-out',
+                    position: 'relative',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Flex align="center" justify="between" mb="3">
-                    <Heading size="5">Companies</Heading>
-                    <Flex gap="2">
-                      <Button
-                        onClick={() => createDummyCompanyMutation.mutate()}
-                        disabled={createDummyCompanyMutation.isPending}
-                        variant="soft"
-                        color="purple"
+                  {isCompaniesMinimized ? (
+                    <Box
+                      onClick={handleCompaniesGlowingBarClick}
+                      onMouseEnter={(e) => {
+                        const bar = e.currentTarget.querySelector(
+                          '[data-glowing-bar]',
+                        ) as HTMLElement
+                        if (bar) bar.style.width = '24px'
+                      }}
+                      onMouseLeave={(e) => {
+                        const bar = e.currentTarget.querySelector(
+                          '[data-glowing-bar]',
+                        ) as HTMLElement
+                        if (bar) bar.style.width = '12px'
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        cursor: 'pointer',
+                        zIndex: 1,
+                      }}
+                    >
+                      <Box
+                        data-glowing-bar
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          top: '20px',
+                          bottom: '20px',
+                          transform: 'translateX(-50%)',
+                          width: '12px',
+                          borderRadius: '4px',
+                          background:
+                            'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                          pointerEvents: 'none',
+                          zIndex: 5,
+                          transition: 'all 0.2s ease-out',
+                          animation: 'glow-pulse 5s ease-in-out infinite',
+                        }}
+                      />
+                      <style>{`
+                        @keyframes glow-pulse {
+                          0%, 100% {
+                            box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                          }
+                          50% {
+                            box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                          }
+                        }
+                      `}</style>
+                    </Box>
+                  ) : (
+                    <>
+                      <Flex align="center" justify="between" mb="3">
+                        <Heading size="5">Companies</Heading>
+                        <Flex align="center" gap="2">
+                          <Flex gap="2">
+                            <Button
+                              onClick={() =>
+                                createDummyCompanyMutation.mutate()
+                              }
+                              disabled={createDummyCompanyMutation.isPending}
+                              variant="soft"
+                              color="purple"
+                            >
+                              <Sparks width={16} height={16} />
+                              {createDummyCompanyMutation.isPending
+                                ? 'Creating...'
+                                : 'Create Dummy'}
+                            </Button>
+                            <Button onClick={handleCreate}>
+                              <Plus width={16} height={16} />
+                              Create
+                            </Button>
+                          </Flex>
+                          <Tooltip
+                            content={`Collapse sidebar (${collapseShortcutLabel})`}
+                          >
+                            <IconButton
+                              size="3"
+                              variant="ghost"
+                              onClick={toggleCompaniesMinimize}
+                              style={{ flexShrink: 0 }}
+                            >
+                              <TransitionLeft width={22} height={22} />
+                            </IconButton>
+                          </Tooltip>
+                        </Flex>
+                      </Flex>
+                      <Separator size="4" mb="3" />
+                      <Box
+                        style={{
+                          flex: isLarge ? 1 : undefined,
+                          minHeight: isLarge ? 0 : undefined,
+                          overflowY: isLarge ? 'auto' : 'visible',
+                        }}
                       >
-                        <Sparks width={16} height={16} />
-                        {createDummyCompanyMutation.isPending
-                          ? 'Creating...'
-                          : 'Create Dummy'}
-                      </Button>
-                      <Button onClick={handleCreate}>
-                        <Plus width={16} height={16} />
-                        Create
-                      </Button>
-                    </Flex>
-                  </Flex>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <CompaniesTable
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
-                  </Box>
+                        <CompaniesTable
+                          selectedId={selectedId}
+                          onSelect={setSelectedId}
+                          onEdit={handleEdit}
+                          onDelete={handleDelete}
+                        />
+                      </Box>
+                    </>
+                  )}
                 </Card>
 
                 {/* RESIZER */}
-                <Box
-                  className="section-resizer"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    setIsResizingCompanies(true)
-                  }}
-                  style={{
-                    width: '6px',
-                    height: '20%',
-                    cursor: 'col-resize',
-                    backgroundColor: 'var(--gray-a4)',
-                    borderRadius: '4px',
-                    flexShrink: 0,
-                    alignSelf: 'center',
-                    userSelect: 'none',
-                    margin: '0 -4px',
-                    zIndex: 10,
-                    transition: isResizingCompanies
-                      ? 'none'
-                      : 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isResizingCompanies) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                      e.currentTarget.style.cursor = 'col-resize'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isResizingCompanies) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-                    }
-                  }}
-                />
+                {!isCompaniesMinimized && (
+                  <Box
+                    className="section-resizer"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setIsResizingCompanies(true)
+                    }}
+                    style={{
+                      width: '6px',
+                      height: '20%',
+                      cursor: 'col-resize',
+                      backgroundColor: 'var(--gray-a4)',
+                      borderRadius: '4px',
+                      flexShrink: 0,
+                      alignSelf: 'center',
+                      userSelect: 'none',
+                      margin: '0 -4px',
+                      zIndex: 10,
+                      transition: isResizingCompanies
+                        ? 'none'
+                        : 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isResizingCompanies) {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                        e.currentTarget.style.cursor = 'col-resize'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isResizingCompanies) {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+                      }
+                    }}
+                  />
+                )}
 
                 {/* RIGHT: Inspector */}
                 <Card
@@ -929,71 +1065,145 @@ export default function SuperPage() {
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    width: `${usersLeftWidth}%`,
+                    width: isUsersMinimized ? '60px' : `${usersLeftWidth}%`,
                     height: isLarge ? '100%' : undefined,
-                    minWidth: '300px',
-                    maxWidth: '75%',
+                    minWidth: isUsersMinimized ? '60px' : '300px',
+                    maxWidth: isUsersMinimized ? '60px' : '75%',
                     minHeight: 0,
                     flexShrink: 0,
                     transition: isResizingUsers
                       ? 'none'
                       : 'width 0.1s ease-out',
+                    position: 'relative',
+                    overflow: 'hidden',
                   }}
                 >
-                  <Flex align="center" justify="between" mb="3">
-                    <Heading size="5">Users</Heading>
-                  </Flex>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <UsersTable
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                      onEdit={handleEditUser}
-                      onDelete={handleDeleteUser}
-                    />
-                  </Box>
+                  {isUsersMinimized ? (
+                    <Box
+                      onClick={handleUsersGlowingBarClick}
+                      onMouseEnter={(e) => {
+                        const bar = e.currentTarget.querySelector(
+                          '[data-glowing-bar]',
+                        ) as HTMLElement
+                        if (bar) bar.style.width = '24px'
+                      }}
+                      onMouseLeave={(e) => {
+                        const bar = e.currentTarget.querySelector(
+                          '[data-glowing-bar]',
+                        ) as HTMLElement
+                        if (bar) bar.style.width = '12px'
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        cursor: 'pointer',
+                        zIndex: 1,
+                      }}
+                    >
+                      <Box
+                        data-glowing-bar
+                        style={{
+                          position: 'absolute',
+                          left: '50%',
+                          top: '20px',
+                          bottom: '20px',
+                          transform: 'translateX(-50%)',
+                          width: '12px',
+                          borderRadius: '4px',
+                          background:
+                            'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                          pointerEvents: 'none',
+                          zIndex: 5,
+                          transition: 'all 0.2s ease-out',
+                          animation: 'glow-pulse 5s ease-in-out infinite',
+                        }}
+                      />
+                      <style>{`
+                        @keyframes glow-pulse {
+                          0%, 100% {
+                            box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                          }
+                          50% {
+                            box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                          }
+                        }
+                      `}</style>
+                    </Box>
+                  ) : (
+                    <>
+                      <Flex align="center" justify="between" mb="3">
+                        <Heading size="5">Users</Heading>
+                        <Tooltip
+                          content={`Collapse sidebar (${collapseShortcutLabel})`}
+                        >
+                          <IconButton
+                            size="3"
+                            variant="ghost"
+                            onClick={toggleUsersMinimize}
+                            style={{ flexShrink: 0 }}
+                          >
+                            <TransitionLeft width={22} height={22} />
+                          </IconButton>
+                        </Tooltip>
+                      </Flex>
+                      <Separator size="4" mb="3" />
+                      <Box
+                        style={{
+                          flex: isLarge ? 1 : undefined,
+                          minHeight: isLarge ? 0 : undefined,
+                          overflowY: isLarge ? 'auto' : 'visible',
+                        }}
+                      >
+                        <UsersTable
+                          selectedId={selectedId}
+                          onSelect={setSelectedId}
+                          onEdit={handleEditUser}
+                          onDelete={handleDeleteUser}
+                        />
+                      </Box>
+                    </>
+                  )}
                 </Card>
 
                 {/* RESIZER */}
-                <Box
-                  className="section-resizer"
-                  onMouseDown={(e) => {
-                    e.preventDefault()
-                    setIsResizingUsers(true)
-                  }}
-                  style={{
-                    width: '6px',
-                    height: '20%',
-                    cursor: 'col-resize',
-                    backgroundColor: 'var(--gray-a4)',
-                    borderRadius: '4px',
-                    flexShrink: 0,
-                    alignSelf: 'center',
-                    userSelect: 'none',
-                    margin: '0 -4px',
-                    zIndex: 10,
-                    transition: isResizingUsers
-                      ? 'none'
-                      : 'background-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isResizingUsers) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                      e.currentTarget.style.cursor = 'col-resize'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isResizingUsers) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-                    }
-                  }}
-                />
+                {!isUsersMinimized && (
+                  <Box
+                    className="section-resizer"
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                      setIsResizingUsers(true)
+                    }}
+                    style={{
+                      width: '6px',
+                      height: '20%',
+                      cursor: 'col-resize',
+                      backgroundColor: 'var(--gray-a4)',
+                      borderRadius: '4px',
+                      flexShrink: 0,
+                      alignSelf: 'center',
+                      userSelect: 'none',
+                      margin: '0 -4px',
+                      zIndex: 10,
+                      transition: isResizingUsers
+                        ? 'none'
+                        : 'background-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isResizingUsers) {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                        e.currentTarget.style.cursor = 'col-resize'
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isResizingUsers) {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+                      }
+                    }}
+                  />
+                )}
 
                 {/* RIGHT: Inspector */}
                 <Card

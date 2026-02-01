@@ -10,17 +10,31 @@ import {
   Flex,
   Grid,
   Heading,
+  IconButton,
   Select,
   Spinner,
   Switch,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowDown, GoogleDocs, Message, RssFeed } from 'iconoir-react'
+import {
+  ArrowDown,
+  GoogleDocs,
+  Message,
+  RssFeed,
+  TransitionLeft,
+} from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
-import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
+import {
+  getInitialsFromNameOrEmail,
+} from '@shared/lib/generalFunctions'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import { formatDistanceToNow } from 'date-fns'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { latestFeedQuery } from '@features/latest/api/queries'
@@ -52,7 +66,7 @@ export default function HomePage() {
   // Fetch upcoming jobs
   const isFreelancer = companyRole === 'freelancer'
   const canSeeLatest = caps.has('visit:latest')
-  const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(false)
+  const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(true)
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
@@ -84,14 +98,104 @@ export default function HomePage() {
     })
   }, [jobsData, now, dateRangeEnd])
 
+  type MyJobRole = 'crew' | 'project_lead' | 'both'
+
+  const jobsForCrewLookup = React.useMemo(() => {
+    // We display all upcoming jobs, so we need roles for all of them.
+    return upcomingJobs
+  }, [showMyJobsOnly, upcomingJobs])
+
+  const jobIdsForCrewLookup = React.useMemo(
+    () => jobsForCrewLookup.map((j) => j.id),
+    [jobsForCrewLookup],
+  )
+
+  const { data: crewJobIds = [], isLoading: crewJobIdsLoading } = useQuery({
+    queryKey: [
+      'home',
+      'upcoming-jobs',
+      'crew-job-ids',
+      companyId,
+      userId,
+      jobIdsForCrewLookup,
+    ],
+    queryFn: async (): Promise<Array<string>> => {
+      if (!userId) return []
+      if (jobIdsForCrewLookup.length === 0) return []
+
+      const { data: timePeriods, error: tpError } = await supabase
+        .from('time_periods')
+        .select('id, job_id')
+        .in('job_id', jobIdsForCrewLookup)
+
+      if (tpError) throw tpError
+
+      const timePeriodIds = timePeriods.map((tp) => tp.id)
+      if (timePeriodIds.length === 0) return []
+
+      const { data: crewRes, error: crewError } = await supabase
+        .from('reserved_crew')
+        .select('time_period_id, status')
+        .eq('user_id', userId)
+        .in('time_period_id', timePeriodIds)
+        .in('status', ['planned', 'confirmed'])
+
+      if (crewError) throw crewError
+
+      const tpJobById = new Map<string, string>()
+      timePeriods.forEach((tp) => {
+        if (tp.job_id) tpJobById.set(tp.id, tp.job_id)
+      })
+
+      const crewJobIdSet = new Set<string>()
+      crewRes.forEach((c) => {
+        const jobId = tpJobById.get(c.time_period_id)
+        if (jobId) crewJobIdSet.add(jobId)
+      })
+
+      return Array.from(crewJobIdSet)
+    },
+    enabled:
+      !!companyId &&
+      !!userId &&
+      jobIdsForCrewLookup.length > 0 &&
+      !isFreelancer,
+    staleTime: 10_000,
+  })
+
+  const crewJobIdSet = React.useMemo(
+    () => new Set<string>(crewJobIds),
+    [crewJobIds],
+  )
+
+  const upcomingJobsWithMyRole = React.useMemo(() => {
+    return upcomingJobs.map((job) => {
+      const isProjectLead = !!userId && job.project_lead?.user_id === userId
+      const isCrew = isFreelancer || crewJobIdSet.has(job.id)
+
+      const my_job_role: MyJobRole | null = isProjectLead
+        ? isCrew
+          ? 'both'
+          : 'project_lead'
+        : isCrew
+          ? 'crew'
+          : null
+
+      return { ...job, my_job_role }
+    })
+  }, [upcomingJobs, crewJobIdSet, userId])
+
   // Filter to show only my jobs if toggle is on (but not for freelancers - they're already filtered)
   const filteredUpcomingJobs = React.useMemo(() => {
     // Freelancers are already filtered server-side to only show their booked jobs
-    if (isFreelancer) return upcomingJobs
+    if (isFreelancer) return upcomingJobsWithMyRole
     // For others, respect the toggle
-    if (!showMyJobsOnly || !userId) return upcomingJobs
-    return upcomingJobs.filter((job) => job.project_lead?.user_id === userId)
-  }, [upcomingJobs, showMyJobsOnly, userId, isFreelancer])
+    if (!showMyJobsOnly || !userId) return upcomingJobsWithMyRole
+    return upcomingJobsWithMyRole.filter((job) => job.my_job_role !== null)
+  }, [upcomingJobsWithMyRole, showMyJobsOnly, userId, isFreelancer])
+
+  const upcomingJobsLoading =
+    jobsLoading || (!isFreelancer && showMyJobsOnly && crewJobIdsLoading)
 
   // Fetch unread matters from all companies
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
@@ -137,10 +241,32 @@ export default function HomePage() {
 
   // Resize state: track left panel width as percentage (default 50% for 1fr/1fr ratio)
   const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(50)
+  const [isMinimized, setIsMinimized] = React.useState(false)
+  const [savedWidth, setSavedWidth] = React.useState<number>(50)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
   const rafIdRef = React.useRef<number | null>(null)
   const pendingWidthRef = React.useRef<number | null>(null)
+
+  const toggleMinimize = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 50)
+      setIsMinimized(false)
+    } else {
+      setSavedWidth(leftPanelWidth)
+      setIsMinimized(true)
+    }
+  }, [isMinimized, leftPanelWidth, savedWidth])
+
+  const handleGlowingBarClick = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 50)
+      setIsMinimized(false)
+    }
+  }, [isMinimized, savedWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
   React.useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -311,7 +437,7 @@ export default function HomePage() {
             <Box style={{ flex: 2, minHeight: 0 }}>
               <UpcomingJobsSection
                 jobs={filteredUpcomingJobs}
-                loading={jobsLoading}
+                loading={upcomingJobsLoading}
                 showMyJobsOnly={showMyJobsOnly}
                 onToggleMyJobsOnly={setShowMyJobsOnly}
                 getInitials={getInitials}
@@ -352,63 +478,139 @@ export default function HomePage() {
           direction="column"
           gap="4"
           style={{
-            width: `${leftPanelWidth}%`,
+            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
             height: '100%',
-            minWidth: '300px',
-            maxWidth: '75%',
+            minWidth: isMinimized ? '60px' : '300px',
+            maxWidth: isMinimized ? '60px' : '75%',
             minHeight: 0,
             flexShrink: 0,
             transition: isResizing ? 'none' : 'width 0.1s ease-out',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <Box style={{ minHeight: 0 }}>
-            <BibleVerseSection />
-          </Box>
-          {canSeeLatest && (
-            <Box style={{ flex: 1, minHeight: '40%' }}>
-              <LatestSection
-                activities={latestData?.items || []}
-                loading={latestLoading}
-                onActivityClick={handleLatestClick}
-                getInitials={getInitials}
-                getAvatarUrl={getAvatarUrl}
+          {isMinimized ? (
+            <Box
+              onClick={handleGlowingBarClick}
+              onMouseEnter={(e) => {
+                const bar =
+                  e.currentTarget.querySelector<HTMLElement>('[data-glowing-bar]')
+                if (bar) bar.style.width = '24px'
+              }}
+              onMouseLeave={(e) => {
+                const bar =
+                  e.currentTarget.querySelector<HTMLElement>('[data-glowing-bar]')
+                if (bar) bar.style.width = '12px'
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                cursor: 'pointer',
+                zIndex: 1,
+              }}
+            >
+              <Box
+                data-glowing-bar
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '20px',
+                  bottom: '20px',
+                  transform: 'translateX(-50%)',
+                  width: '12px',
+                  borderRadius: '4px',
+                  background:
+                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  transition: 'all 0.2s ease-out',
+                  animation: 'glow-pulse 5s ease-in-out infinite',
+                }}
               />
+              <style>{`
+                @keyframes glow-pulse {
+                  0%, 100% {
+                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                  }
+                  50% {
+                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                  }
+                }
+              `}</style>
             </Box>
+          ) : (
+            <>
+              <Box
+                style={{ position: 'absolute', top: 12, right: 12, zIndex: 5 }}
+              >
+                <Tooltip
+                  content={`Collapse sidebar (${collapseShortcutLabel})`}
+                >
+                  <IconButton
+                    size="3"
+                    variant="ghost"
+                    onClick={toggleMinimize}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <TransitionLeft width={22} height={22} />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+              <Box style={{ minHeight: 0 }}>
+                <BibleVerseSection />
+              </Box>
+              {canSeeLatest && (
+                <Box style={{ flex: 1, minHeight: '40%' }}>
+                  <LatestSection
+                    activities={latestData?.items || []}
+                    loading={latestLoading}
+                    onActivityClick={handleLatestClick}
+                    getInitials={getInitials}
+                    getAvatarUrl={getAvatarUrl}
+                  />
+                </Box>
+              )}
+            </>
           )}
         </Flex>
 
         {/* RESIZER */}
-        <Box
-          className="section-resizer"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          style={{
-            width: '6px',
-            height: '15%',
-            cursor: 'col-resize',
-            backgroundColor: 'var(--gray-a4)',
-            borderRadius: '4px',
-            flexShrink: 0,
-            alignSelf: 'center',
-            userSelect: 'none',
-            margin: '0 -4px', // Extend into gap for easier clicking
-            zIndex: 10,
-            transition: isResizing ? 'none' : 'background-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-              e.currentTarget.style.cursor = 'col-resize'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-            }
-          }}
-        />
+        {!isMinimized && (
+          <Box
+            className="section-resizer"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setIsResizing(true)
+            }}
+            style={{
+              width: '6px',
+              height: '15%',
+              cursor: 'col-resize',
+              backgroundColor: 'var(--gray-a4)',
+              borderRadius: '4px',
+              flexShrink: 0,
+              alignSelf: 'center',
+              userSelect: 'none',
+              margin: '0 -4px', // Extend into gap for easier clicking
+              zIndex: 10,
+              transition: isResizing ? 'none' : 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                e.currentTarget.style.cursor = 'col-resize'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+              }
+            }}
+          />
+        )}
 
         {/* Right Column: Notifications and Upcoming Jobs */}
         <Flex
@@ -437,7 +639,7 @@ export default function HomePage() {
           <Box style={{ flex: 2, minHeight: 0 }}>
             <UpcomingJobsSection
               jobs={filteredUpcomingJobs}
-              loading={jobsLoading}
+              loading={upcomingJobsLoading}
               showMyJobsOnly={showMyJobsOnly}
               onToggleMyJobsOnly={setShowMyJobsOnly}
               getInitials={getInitials}
@@ -534,6 +736,7 @@ function UpcomingJobsSection({
     status: string
     start_at: string | null
     end_at: string | null
+    my_job_role?: 'crew' | 'project_lead' | 'both' | null
     customer?: {
       id: string
       name: string | null
@@ -558,9 +761,6 @@ function UpcomingJobsSection({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const [showScrollIndicator, setShowScrollIndicator] = React.useState(false)
   const [isHovered, setIsHovered] = React.useState(false)
-
-  // Limit to 5 jobs
-  const displayJobs = jobs.slice(0, 5)
 
   // Check if scrolling is needed - the scrollable parent is DashboardCard's Box (direct parent)
   React.useEffect(() => {
@@ -597,7 +797,7 @@ function UpcomingJobsSection({
       }
     }
     return () => clearTimeout(timeoutId)
-  }, [displayJobs])
+  }, [jobs])
 
   const scrollToBottom = () => {
     if (scrollContainerRef.current) {
@@ -690,7 +890,7 @@ function UpcomingJobsSection({
           style={{ position: 'relative', height: '100%' }}
         >
           <Flex direction="column" gap="2">
-            {displayJobs.map((job) => {
+            {jobs.map((job) => {
               const avatarUrl = getAvatarUrl(
                 job.project_lead?.avatar_url ?? null,
               )
@@ -703,6 +903,24 @@ function UpcomingJobsSection({
                 job.project_lead?.email ?? '',
               )
               const customerName = job.customer?.name || 'No customer'
+              const myRoleLabel =
+                job.my_job_role === 'crew'
+                  ? 'You are crew'
+                  : job.my_job_role === 'project_lead'
+                    ? 'You are project lead'
+                    : job.my_job_role === 'both'
+                      ? 'You are project lead + crew'
+                      : null
+              const myRoleColor =
+                job.my_job_role === 'both'
+                  ? 'purple'
+                  : job.my_job_role === 'project_lead'
+                    ? 'blue'
+                    : job.my_job_role === 'crew'
+                      ? 'orange'
+                      : 'gray'
+              const isNotConfirmed =
+                job.status === 'planned' || job.status === 'requested'
 
               return (
                 <div
@@ -737,9 +955,14 @@ function UpcomingJobsSection({
                         <Text size="2" weight="medium">
                           {job.title}
                         </Text>
-                        {job.status === 'in_progress' && (
-                          <Badge size="1" color="green" variant="soft">
-                            In Progress
+                        {isNotConfirmed && (
+                          <Badge size="1" color="yellow" variant="outline">
+                            Not confirmed
+                          </Badge>
+                        )}
+                        {myRoleLabel && (
+                          <Badge size="1" color={myRoleColor} variant="soft">
+                            {myRoleLabel}
                           </Badge>
                         )}
                       </Flex>
@@ -760,9 +983,11 @@ function UpcomingJobsSection({
                       </Flex>
                     </Flex>
                     <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
-                      <Text size="1" color="gray">
-                        {displayName}
-                      </Text>
+                      <Flex direction="column" align="end" style={{ lineHeight: 1.2 }}>
+                        <Text size="1" color="gray">
+                          {displayName}
+                        </Text>
+                      </Flex>
                       <Avatar
                         size="2"
                         src={avatarUrl || undefined}

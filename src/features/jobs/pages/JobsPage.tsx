@@ -15,6 +15,10 @@ import { TransitionLeft } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import JobsTable from '../components/JobsTable'
 import JobInspector from '../components/JobInspector'
 
@@ -159,6 +163,9 @@ export default function JobsPage() {
       setIsMinimized(true)
     }
   }, [isMinimized, savedWidth, leftPanelWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
   // Expand when clicking on glowing bar
   const handleGlowingBarClick = React.useCallback(() => {
@@ -417,7 +424,9 @@ export default function JobsPage() {
             <>
               <Flex align="center" justify="between" mb="3">
                 <Heading size="5">Jobs</Heading>
-                <Tooltip content="Collapse sidebar">
+                <Tooltip
+                  content={`Collapse sidebar (${collapseShortcutLabel})`}
+                >
                   <IconButton
                     size="3"
                     variant="ghost"

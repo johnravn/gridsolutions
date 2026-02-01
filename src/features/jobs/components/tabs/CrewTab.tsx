@@ -23,6 +23,7 @@ import {
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { sendCrewInvite, sendCrewInvites } from '../../../matters/api/queries'
+import { crewInternalNotesQuery } from '../../../crew/api/queries'
 import AddRoleDialog from '../dialogs/AddRoleDialog'
 import EditRoleDialog from '../dialogs/EditRoleDialog'
 import AddCrewToRoleDialog from '../dialogs/AddCrewToRoleDialog'
@@ -64,7 +65,7 @@ export default function CrewTab({
   jobId: string
   companyId: string
 }) {
-  const { companyRole } = useAuthz()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const isReadOnly = companyRole === 'freelancer'
   const [addRoleOpen, setAddRoleOpen] = React.useState(false)
   const [expandedRoles, setExpandedRoles] = React.useState<Set<string>>(
@@ -100,6 +101,26 @@ export default function CrewTab({
 
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+
+  const canSeeInternalNotes =
+    !!isGlobalSuperuser ||
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    companyRole === 'super_user'
+
+  const { data: internalNotes = [] } = useQuery({
+    ...crewInternalNotesQuery({ companyId }),
+    enabled: canSeeInternalNotes,
+  })
+
+  const internalNotesByUserId = React.useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const n of internalNotes) {
+      if (n.note && n.note.trim()) m[n.user_id] = n.note
+    }
+    return m
+  }, [internalNotes])
+
   const { data } = useQuery({
     queryKey: ['jobs.crew', jobId],
     queryFn: async () => {
@@ -774,11 +795,22 @@ export default function CrewTab({
                                 crew.user?.email ??
                                 crew.placeholder_name ??
                                 'Unknown'
+                              const internalNote = crew.user_id
+                                ? internalNotesByUserId[crew.user_id]
+                                : undefined
                               return (
                                 <Table.Row key={crew.id}>
                                   <Table.Cell>
                                     <Flex align="center" gap="2" wrap="wrap">
-                                      <Text>{crewName}</Text>
+                                      <Box>
+                                        <Text>{crewName}</Text>
+                                        {internalNote && (
+                                          <Text as="div" size="1" color="gray">
+                                            <Text weight="medium">Internal:</Text>{' '}
+                                            {internalNote}
+                                          </Text>
+                                        )}
+                                      </Box>
                                       {!crew.user_id && (
                                         <Badge size="1" color="amber">
                                           Placeholder

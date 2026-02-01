@@ -6,7 +6,6 @@ import {
   Dialog,
   Flex,
   Heading,
-  SegmentedControl,
   Separator,
   Tabs,
   Text,
@@ -32,6 +31,7 @@ import OffersTab from './tabs/OffersTab'
 import InvoiceTab from './tabs/InvoiceTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
+import PackingTab from './tabs/PackingTab'
 import JobDialog from './dialogs/JobDialog'
 import type { JobDetail, JobStatus } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
@@ -50,18 +50,6 @@ function getDisplayStatus(
   return status
 }
 
-const ORDER: Array<JobDetail['status']> = [
-  'draft',
-  'planned',
-  'requested',
-  'canceled',
-  'confirmed',
-  'in_progress',
-  'completed',
-  'invoiced',
-  'paid',
-]
-
 export default function JobInspector({
   id,
   onDeleted,
@@ -72,24 +60,42 @@ export default function JobInspector({
   initialTab?: string
 }) {
   // ✅ hooks first
-  const { userId, companyRole } = useAuthz()
+  const { companyRole } = useAuthz()
+  const isFreelancer = companyRole === 'freelancer'
   const [editOpen, setEditOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [archiveOpen, setArchiveOpen] = React.useState(false)
-  const [statusTimelineOpen, setStatusTimelineOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<string>(
     initialTab || 'overview',
   )
   const filesTabRef = React.useRef<FilesTabHandle>(null)
 
+  const blockedFreelancerTabs = React.useMemo(
+    () => new Set(['bookings', 'offers', 'invoice', 'money', 'todo']),
+    [],
+  )
+
+  const isTabAllowed = React.useCallback(
+    (tabValue: string) => {
+      if (!isFreelancer) return true
+      return !blockedFreelancerTabs.has(tabValue)
+    },
+    [blockedFreelancerTabs, isFreelancer],
+  )
+
   // Update activeTab when initialTab changes
   React.useEffect(() => {
     if (initialTab) {
-      setActiveTab(initialTab)
+      setActiveTab(isTabAllowed(initialTab) ? initialTab : 'overview')
     }
-  }, [initialTab])
+  }, [initialTab, isTabAllowed])
+
+  // If role changes (or deep-link points to blocked tab), ensure activeTab is allowed.
+  React.useEffect(() => {
+    if (!isTabAllowed(activeTab)) setActiveTab('overview')
+  }, [activeTab, isTabAllowed])
   const qc = useQueryClient()
-  const { success, error } = useToast()
+  const { success, error: toastError } = useToast()
 
   const { data, isLoading } = useQuery({
     ...jobDetailQuery({ jobId: id ?? '__none__' }),
@@ -132,7 +138,7 @@ export default function JobInspector({
       onDeleted?.()
     },
     onError: (err: any) => {
-      error('Failed to delete job', err?.message || 'Please try again.')
+      toastError('Failed to delete job', err?.message || 'Please try again.')
     },
   })
 
@@ -163,7 +169,7 @@ export default function JobInspector({
       )
     },
     onError: (err: any) => {
-      error('Failed to update job', err?.message || 'Please try again.')
+      toastError('Failed to update job', err?.message || 'Please try again.')
     },
   })
 
@@ -260,6 +266,10 @@ export default function JobInspector({
         defaultValue="overview"
         value={activeTab}
         onValueChange={(newTab) => {
+          if (!isTabAllowed(newTab)) {
+            setActiveTab('overview')
+            return
+          }
           // If switching away from files tab, check for unsaved changes
           if (
             activeTab === 'files' &&
@@ -279,11 +289,12 @@ export default function JobInspector({
           <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
           <Tabs.Trigger value="program">Program</Tabs.Trigger>
           <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
-          <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
-          <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
-          <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
-          <Tabs.Trigger value="money">Money</Tabs.Trigger>
-          <Tabs.Trigger value="todo">To Do</Tabs.Trigger>
+          {!isFreelancer && <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>}
+          <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
+          {!isFreelancer && <Tabs.Trigger value="offers">Offers</Tabs.Trigger>}
+          {!isFreelancer && <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>}
+          {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
+          {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
           <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
           <Tabs.Trigger value="files">Files</Tabs.Trigger>
         </Tabs.List>
@@ -300,21 +311,38 @@ export default function JobInspector({
         <Tabs.Content value="calendar" mt={'10px'}>
           <CalendarTab jobId={job.id} />
         </Tabs.Content>
-        <Tabs.Content value="bookings" mt={'10px'}>
-          <BookingsTab jobId={job.id} />
+        {!isFreelancer && (
+          <Tabs.Content value="bookings" mt={'10px'}>
+            <BookingsTab jobId={job.id} />
+          </Tabs.Content>
+        )}
+        <Tabs.Content value="packing" mt={'10px'}>
+          <PackingTab jobId={job.id} />
         </Tabs.Content>
-        <Tabs.Content value="offers" mt={'10px'}>
-          <OffersTab jobId={job.id} companyId={job.company_id} />
-        </Tabs.Content>
-        <Tabs.Content value="invoice" mt={'10px'}>
-          <InvoiceTab jobId={job.id} job={job} />
-        </Tabs.Content>
-        <Tabs.Content value="money" mt={'10px'}>
-          <MoneyTab jobId={job.id} />
-        </Tabs.Content>
-        <Tabs.Content value="todo" mt={'10px'}>
-          <ToDoTab jobId={job.id} job={job} />
-        </Tabs.Content>
+        {!isFreelancer && (
+          <Tabs.Content value="offers" mt={'10px'}>
+            <OffersTab
+              jobId={job.id}
+              companyId={job.company_id}
+              isActive={activeTab === 'offers'}
+            />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="invoice" mt={'10px'}>
+            <InvoiceTab jobId={job.id} job={job} />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="money" mt={'10px'}>
+            <MoneyTab jobId={job.id} />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="todo" mt={'10px'}>
+            <ToDoTab jobId={job.id} job={job} />
+          </Tabs.Content>
+        )}
         <Tabs.Content value="contacts" mt={'10px'}>
           <ContactsTab jobId={job.id} companyId={job.company_id} />
         </Tabs.Content>
@@ -489,41 +517,5 @@ function ArchiveJobDialog({
         </Flex>
       </Dialog.Content>
     </Dialog.Root>
-  )
-}
-
-function StatusTimeline(job: JobDetail) {
-  return (
-    <Box mt="4">
-      <Heading size="3" mb="2">
-        Status timeline
-      </Heading>
-      <Flex gap="2" wrap="wrap" align="center">
-        {ORDER.map((s, i) => {
-          const active = s === job.status
-          const past = ORDER.indexOf(s) <= ORDER.indexOf(job.status)
-          return (
-            <Flex key={s} align="center" gap="2">
-              <Badge
-                color={active || past ? getJobStatusColor(s) : 'gray'}
-                variant={active ? 'solid' : 'soft'}
-                highContrast
-              >
-                {makeWordPresentable(s)}
-              </Badge>
-              {i < ORDER.length - 1 && (
-                <div
-                  style={{
-                    width: 24,
-                    height: 1,
-                    background: 'var(--gray-6)',
-                  }}
-                />
-              )}
-            </Flex>
-          )
-        })}
-      </Flex>
-    </Box>
   )
 }

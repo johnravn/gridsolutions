@@ -5,6 +5,8 @@ import type {
   OfferTransportItem,
 } from '../types'
 
+export type RentalFactorConfig = Record<number, number>
+
 export type OfferTotals = {
   equipmentSubtotal: number
   crewSubtotal: number
@@ -15,6 +17,81 @@ export type OfferTotals = {
   daysOfUse: number
   discountPercent: number
   vatPercent: number
+  equipmentRentalFactor: number
+  discountAmount: number
+}
+
+/**
+ * Default rental factors (stiffer values for better profitability)
+ */
+const DEFAULT_RENTAL_FACTORS: RentalFactorConfig = {
+  1: 1.0,
+  2: 1.6,
+  3: 2.0,
+  4: 2.3,
+  5: 2.5,
+  7: 2.8,
+  10: 3.2,
+  14: 3.5,
+  21: 4.0,
+  30: 4.5,
+}
+
+/**
+ * Calculate rental factor based on days of use.
+ * Uses company-specific config if provided, otherwise falls back to defaults.
+ * Based on industry standard rental rates where longer rentals
+ * have decreasing incremental costs.
+ */
+export function calculateRentalFactor(
+  days: number,
+  customConfig?: RentalFactorConfig | null,
+): number {
+  if (days <= 0) return 1.0
+
+  const factorMap = customConfig || DEFAULT_RENTAL_FACTORS
+
+  // Exact match
+  if (factorMap[days] !== undefined) {
+    return factorMap[days]
+  }
+
+  // Find the two closest values
+  const sortedDays = Object.keys(factorMap)
+    .map(Number)
+    .sort((a, b) => a - b)
+
+  // If days is less than minimum, use minimum
+  if (days < sortedDays[0]) {
+    return factorMap[sortedDays[0]]
+  }
+
+  // If days is greater than maximum, extrapolate
+  if (days > sortedDays[sortedDays.length - 1]) {
+    const maxDay = sortedDays[sortedDays.length - 1]
+    const maxFactor = factorMap[maxDay]
+    // For extended periods, use linear growth
+    const extraDays = days - maxDay
+    const growthRate = 0.025 // 2.5% per day after max (diminishing)
+    return maxFactor + extraDays * growthRate
+  }
+
+  // Interpolate between two points
+  let lowerDay = sortedDays[0]
+  let upperDay = sortedDays[sortedDays.length - 1]
+
+  for (let i = 0; i < sortedDays.length - 1; i++) {
+    if (days >= sortedDays[i] && days <= sortedDays[i + 1]) {
+      lowerDay = sortedDays[i]
+      upperDay = sortedDays[i + 1]
+      break
+    }
+  }
+
+  const lowerFactor = factorMap[lowerDay]
+  const upperFactor = factorMap[upperDay]
+  const ratio = (days - lowerDay) / (upperDay - lowerDay)
+  return lowerFactor + (upperFactor - lowerFactor) * ratio
 }
 
 export function calculateOfferTotals(
@@ -24,12 +101,15 @@ export function calculateOfferTotals(
   daysOfUse: number,
   discountPercent: number,
   vatPercent: number,
+  rentalFactorConfig?: RentalFactorConfig | null,
   vehicleDistanceRate?: number | null,
   vehicleDistanceIncrement?: number | null,
 ): OfferTotals {
-  // Calculate equipment subtotal
+  const equipmentRentalFactor = calculateRentalFactor(daysOfUse, rentalFactorConfig)
+
+  // Calculate equipment subtotal (unit price * qty * rental factor)
   const equipmentSubtotal = equipmentItems.reduce(
-    (sum, item) => sum + item.total_price,
+    (sum, item) => sum + item.unit_price * item.quantity * equipmentRentalFactor,
     0,
   )
 
@@ -70,8 +150,8 @@ export function calculateOfferTotals(
   const totalBeforeDiscount =
     equipmentSubtotal + crewSubtotal + transportSubtotal
 
-  // Apply discount
-  const discountAmount = (totalBeforeDiscount * discountPercent) / 100
+  // Apply discount (equipment only)
+  const discountAmount = (equipmentSubtotal * discountPercent) / 100
   const totalAfterDiscount = totalBeforeDiscount - discountAmount
 
   // Apply VAT
@@ -88,6 +168,8 @@ export function calculateOfferTotals(
     daysOfUse,
     discountPercent,
     vatPercent,
+    equipmentRentalFactor,
+    discountAmount,
   }
 }
 
