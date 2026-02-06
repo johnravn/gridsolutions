@@ -53,7 +53,7 @@ export default function HomePage() {
   // Calculate date range for upcoming jobs
   const now = new Date()
   const [daysFilter, setDaysFilter] = React.useState<'7' | '14' | '30' | 'all'>(
-    '14',
+    'all',
   )
 
   const dateRangeEnd = React.useMemo(() => {

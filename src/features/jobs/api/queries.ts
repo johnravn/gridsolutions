@@ -21,6 +21,7 @@ export function jobsIndexQuery({
   userId,
   companyRole,
   includeArchived = false,
+  onlyCrewForUserId = null,
 }: {
   companyId: string
   search: string
@@ -30,6 +31,7 @@ export function jobsIndexQuery({
   userId?: string | null
   companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
   includeArchived?: boolean
+  onlyCrewForUserId?: string | null
 }) {
   return {
     queryKey: [
@@ -43,6 +45,7 @@ export function jobsIndexQuery({
       userId,
       companyRole,
       includeArchived,
+      onlyCrewForUserId,
     ],
     queryFn: async (): Promise<Array<JobListRow>> => {
       let q = supabase
@@ -123,6 +126,7 @@ export function jobsIndexQuery({
           search,
           [
             (job) => job.title,
+            (job) => (job.jobnr != null ? String(job.jobnr) : null),
             (job) => job.customer?.name ?? null,
             (job) => job.customer_user?.display_name ?? null,
             (job) => job.customer_user?.email ?? null,
@@ -241,6 +245,43 @@ export function jobsIndexQuery({
         })
 
         results = results.filter((job) => visibleJobIds.has(job.id))
+      }
+
+      // Filter to jobs where onlyCrewForUserId is on crew (any status) for crew time periods
+      if (onlyCrewForUserId && results.length > 0) {
+        const jobIds = results.map((j) => j.id)
+        const { data: timePeriods, error: tpError } = await supabase
+          .from('time_periods')
+          .select('id, job_id')
+          .eq('category', 'crew')
+          .in('job_id', jobIds)
+
+        if (tpError) throw tpError
+
+        if (timePeriods && timePeriods.length > 0) {
+          const timePeriodIds = timePeriods.map((tp: { id: string }) => tp.id)
+          const { data: crewRes, error: crewError } = await supabase
+            .from('reserved_crew')
+            .select('time_period_id')
+            .eq('user_id', onlyCrewForUserId)
+            .in('time_period_id', timePeriodIds)
+
+          if (crewError) throw crewError
+
+          const jobIdsWithUserAsCrew = new Set<string>()
+          if (crewRes && timePeriods) {
+            crewRes.forEach((c: { time_period_id: string }) => {
+              const tp = timePeriods.find(
+                (t: { id: string; job_id: string | null }) =>
+                  t.id === c.time_period_id,
+              )
+              if (tp?.job_id) jobIdsWithUserAsCrew.add(tp.job_id)
+            })
+          }
+          results = results.filter((job) => jobIdsWithUserAsCrew.has(job.id))
+        } else {
+          results = []
+        }
       }
 
       return results

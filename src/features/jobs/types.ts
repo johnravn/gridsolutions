@@ -341,7 +341,25 @@ export type OfferEquipmentItem = {
     external_owner_id?: UUID | null
     external_owner_name?: string | null
   } | null
+  /** Nested contents when this line is a group (item group / bundle). Supports nested groups. */
+  group_contents?: Array<GroupContentEntry>
 }
+
+/** One entry in group_contents: either an item or a nested group with its own items. */
+export type GroupContentEntry =
+  | {
+      type: 'item'
+      name: string
+      brand_name?: string | null
+      model?: string | null
+      quantity: number
+    }
+  | {
+      type: 'group'
+      name: string
+      quantity: number
+      items: Array<GroupContentEntry>
+    }
 
 export type OfferCrewItem = {
   id: UUID
