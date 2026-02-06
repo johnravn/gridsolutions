@@ -13,6 +13,8 @@ import {
 import { supabase } from '@shared/api/supabase'
 import { Check } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
+import { crewInternalNotesQuery } from '../../../crew/api/queries'
 import type { UUID } from '../../types'
 
 export default function AddCrewToRoleDialog({
@@ -30,9 +32,29 @@ export default function AddCrewToRoleDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const [search, setSearch] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<UUID>>(new Set())
   const [placeholderName, setPlaceholderName] = React.useState('')
+
+  const canSeeInternalNotes =
+    !!isGlobalSuperuser ||
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    companyRole === 'super_user'
+
+  const { data: internalNotes = [] } = useQuery({
+    ...crewInternalNotesQuery({ companyId }),
+    enabled: open && canSeeInternalNotes,
+  })
+
+  const internalNotesByUserId = React.useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const n of internalNotes) {
+      if (n.note && n.note.trim()) m[n.user_id] = n.note
+    }
+    return m
+  }, [internalNotes])
 
   // Get existing crew for this role to filter them out
   const { data: existingCrew = [] } = useQuery({
@@ -230,6 +252,7 @@ export default function AddCrewToRoleDialog({
           {!isFetching &&
             people.map((p, idx) => {
               const isSelected = selectedIds.has(p.user_id)
+              const internalNote = internalNotesByUserId[p.user_id]
               return (
                 <React.Fragment key={p.user_id}>
                   <Box
@@ -261,6 +284,11 @@ export default function AddCrewToRoleDialog({
                               style={{ marginLeft: 6 }}
                             >
                               {p.email}
+                            </Text>
+                          )}
+                          {internalNote && (
+                            <Text as="div" size="1" color="gray" mt="1">
+                              <Text weight="medium">Internal:</Text> {internalNote}
                             </Text>
                           )}
                         </div>

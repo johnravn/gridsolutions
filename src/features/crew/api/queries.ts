@@ -1,5 +1,4 @@
 // src/features/crew/api/queries.ts
-import { QueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 
 export type CrewKind = 'employee' | 'freelancer' | 'owner'
@@ -10,6 +9,12 @@ export type CrewPerson = {
   first_name: string | null
   last_name: string | null
   role: CrewKind | 'super_user'
+}
+
+export type CrewInternalNote = {
+  user_id: string
+  note: string | null
+  updated_at: string
 }
 
 export type PendingInvite = {
@@ -66,6 +71,58 @@ export function crewIndexQuery({
       return rows as Array<CrewPerson>
     },
   }
+}
+
+export function crewInternalNotesQuery({ companyId }: { companyId: string }) {
+  return {
+    queryKey: ['company', companyId, 'crew-internal-notes'] as const,
+    queryFn: async (): Promise<Array<CrewInternalNote>> => {
+      const { data, error } = await supabase
+        .from('company_user_internal_notes')
+        .select('user_id, note, updated_at')
+        .eq('company_id', companyId)
+
+      if (error) throw error
+
+      return data as Array<CrewInternalNote>
+    },
+  }
+}
+
+export async function setCrewInternalNote({
+  companyId,
+  userId,
+  note,
+}: {
+  companyId: string
+  userId: string
+  note: string
+}) {
+  const trimmed = note.trim()
+
+  if (!trimmed) {
+    const { error } = await supabase
+      .from('company_user_internal_notes')
+      .delete()
+      .eq('company_id', companyId)
+      .eq('user_id', userId)
+
+    if (error) throw error
+    return
+  }
+
+  const { error } = await supabase
+    .from('company_user_internal_notes')
+    .upsert(
+      {
+        company_id: companyId,
+        user_id: userId,
+        note: trimmed,
+      },
+      { onConflict: 'company_id,user_id' },
+    )
+
+  if (error) throw error
 }
 
 export type CrewDetail = {
@@ -164,7 +221,7 @@ export function crewDetailQuery({
           | 'rate_updated_at'
         >),
         bio: prof?.bio ?? null,
-        preferences: prof?.preferences ?? null,
+        preferences: (prof?.preferences as unknown as CrewOptionalFields | null) ?? null,
         locale: prof?.locale ?? null,
         timezone: prof?.timezone ?? null,
         superuser: prof?.superuser ?? false,
@@ -242,11 +299,13 @@ export async function addMemberOrInvite({
   })
   if (error) throw error
 
-  if (data?.type === 'already_invited' && data.by_user_id) {
+  const res = data as any
+
+  if (res?.type === 'already_invited' && res.by_user_id) {
     const { data: inviterProf } = await supabase
       .from('profiles')
       .select('display_name, first_name, last_name')
-      .eq('user_id', data.by_user_id)
+      .eq('user_id', res.by_user_id)
       .maybeSingle()
 
     const by =
@@ -259,7 +318,7 @@ export async function addMemberOrInvite({
     return { type: 'already_invited', by }
   }
 
-  return data as AddInviteResult
+  return res as AddInviteResult
 }
 
 // Keep your existing API for freelancers to minimize refactors:

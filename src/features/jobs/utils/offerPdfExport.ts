@@ -1,6 +1,10 @@
 // src/features/jobs/utils/offerPdfExport.ts
 import jsPDF from 'jspdf'
 import type { OfferDetail } from '../types'
+import {
+  calculateRentalFactor,
+  type RentalFactorConfig,
+} from './offerCalculations'
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('nb-NO', {
@@ -158,6 +162,22 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     format: 'a4',
   })
 
+  let rentalFactorConfig: RentalFactorConfig | null = null
+  try {
+    const raw = offer.company_expansion?.rental_factor_config
+    if (typeof raw === 'string' && raw.trim()) {
+      rentalFactorConfig = JSON.parse(raw) as RentalFactorConfig
+    } else if (raw && typeof raw === 'object') {
+      rentalFactorConfig = raw as RentalFactorConfig
+    }
+  } catch {
+    rentalFactorConfig = null
+  }
+  const equipmentRentalFactor = calculateRentalFactor(
+    offer.days_of_use ?? 1,
+    rentalFactorConfig,
+  )
+
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 20
@@ -248,9 +268,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
       }
     })
     let xPos = margin
-    lineGroups.forEach((lines, index) => {
+    lineGroups.forEach((lines: Array<string>, index: number) => {
       const cell = cells[index]
-      lines.forEach((line, lineIndex) => {
+      lines.forEach((line: string, lineIndex: number) => {
         const textX = cell.align === 'right' ? xPos + cell.width - 1 : xPos + 1
         doc.text(line, textX, yPos + lineIndex * rowLineHeight, {
           align: cell.align || 'left',
@@ -420,7 +440,8 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
 
     for (const group of offer.groups) {
       const groupTotal = (group.items || []).reduce((sum, item) => {
-        return sum + (item.total_price ?? item.unit_price * item.quantity)
+        const lineTotal = item.unit_price * item.quantity * equipmentRentalFactor
+        return sum + lineTotal
       }, 0)
       ensureSpace(10, () => drawTableHeader(equipmentColumns, true))
       doc.setFontSize(9)
@@ -449,7 +470,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
           const qty = `${item.quantity}`
           const unitPrice = formatCurrency(item.unit_price)
           const total = formatCurrency(
-            item.total_price ?? item.unit_price * item.quantity,
+            item.unit_price * item.quantity * equipmentRentalFactor,
           )
 
           if (offer.show_price_per_line) {
@@ -485,12 +506,16 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   if (offer.crew_items && offer.crew_items.length > 0) {
     yPos += 4
     addSectionHeader('Crew')
-    const crewColumns = [
+    const crewColumns: Array<{
+      label: string
+      width: number
+      align?: 'left' | 'right'
+    }> = [
       { label: 'Role', width: 55 },
-      { label: 'Count', width: 12, align: 'right' },
+      { label: 'Count', width: 12, align: 'right' as const },
       { label: 'Dates', width: 45 },
-      { label: 'Rate', width: 30, align: 'right' },
-      { label: 'Total', width: 28, align: 'right' },
+      { label: 'Rate', width: 30, align: 'right' as const },
+      { label: 'Total', width: 28, align: 'right' as const },
     ]
     drawTableHeader(crewColumns)
 
@@ -505,7 +530,11 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         ? `${crew.role_title} - ${crew.role_category}`
         : crew.role_title
       let rateLabel = `${formatCurrency(crew.daily_rate)} x ${days} day`
-      if (crew.billing_type === 'hourly' && crew.hourly_rate !== null) {
+      if (
+        crew.billing_type === 'hourly' &&
+        crew.hourly_rate !== null &&
+        crew.hourly_rate !== undefined
+      ) {
         const hoursPart = hoursLabel ? `${hoursLabel}/day` : 'hours/day'
         rateLabel = `Hourly: ${formatCurrency(crew.hourly_rate)}/h x ${hoursPart} x ${days} day`
       } else if (hoursLabel) {
@@ -532,16 +561,19 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   if (offer.transport_items && offer.transport_items.length > 0) {
     yPos += 4
     addSectionHeader('Transport')
-    const transportColumns = [
+    const transportColumns: Array<{
+      label: string
+      width: number
+      align?: 'left' | 'right'
+    }> = [
       { label: 'Vehicle', width: 55 },
       { label: 'Dates', width: 45 },
-      { label: 'Rate', width: 35, align: 'right' },
-      { label: 'Total', width: 35, align: 'right' },
+      { label: 'Rate', width: 35, align: 'right' as const },
+      { label: 'Total', width: 35, align: 'right' as const },
     ]
     drawTableHeader(transportColumns)
 
     for (const transport of offer.transport_items) {
-      const days = calculateDays(transport.start_date, transport.end_date)
       const distanceIncrement =
         offer.company_expansion?.vehicle_distance_increment ?? 150
       const effectiveDailyRate =
@@ -657,7 +689,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   if (offer.discount_percent > 0) {
     const discountAmount =
       offer.total_before_discount - offer.total_after_discount
-    doc.text(`Discount (${offer.discount_percent}%)`, margin, yPos)
+    doc.text(`Equipment discount (${offer.discount_percent}%)`, margin, yPos)
     doc.text(`-${formatCurrency(discountAmount)}`, subtotalX, yPos, {
       align: 'right',
     })

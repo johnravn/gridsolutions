@@ -27,6 +27,7 @@ type Props = {
   showEmployees: boolean
   showFreelancers: boolean
   showMyPending: boolean
+  internalNotesByUserId?: Record<string, string>
 }
 
 type Row = {
@@ -47,6 +48,7 @@ export default function CrewTable({
   showEmployees,
   showFreelancers,
   showMyPending,
+  internalNotesByUserId,
 }: Props) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
@@ -137,7 +139,7 @@ export default function CrewTable({
       ? fuzzySearch(
           L,
           search,
-          [(r) => r.title, (r) => r.subtitle ?? '', (r) => r.email ?? ''],
+          [(r) => r.title, (r) => r.subtitle ?? '', (r) => r.email],
           0.3,
         )
       : L
@@ -224,14 +226,14 @@ export default function CrewTable({
       return
     }
 
-    const visibleRow = containerRef.current?.querySelector<HTMLTableRowElement>(
+    const visibleRow = containerRef.current.querySelector<HTMLTableRowElement>(
       'tbody tr:not([data-row-probe])',
     )
     const rowH = visibleRow?.getBoundingClientRect().height || 60
 
     // Allow one more row for crew table
-    const rows = Math.max(5, Math.min(50, Math.floor(available / rowH) + 1))
-    setPageSize(rows)
+    const nextPageSize = Math.max(5, Math.min(50, Math.floor(available / rowH) + 1))
+    setPageSize(nextPageSize)
   }, [])
 
   React.useEffect(() => {
@@ -414,6 +416,8 @@ export default function CrewTable({
             ) : (
               paginatedRows.map((r) => {
                 const active = r.kind !== 'invite' && r.id === selectedUserId
+                const internalNote =
+                  r.kind !== 'invite' ? internalNotesByUserId?.[r.id] : undefined
                 return (
                   <Table.Row
                     key={r.id}
@@ -431,6 +435,11 @@ export default function CrewTable({
                       {r.subtitle && (
                         <Text as="div" size="1" color="gray">
                           {r.subtitle}
+                        </Text>
+                      )}
+                      {internalNote && (
+                        <Text as="div" size="1" color="gray">
+                          <Text weight="medium">Internal:</Text> {internalNote}
                         </Text>
                       )}
                     </Table.Cell>

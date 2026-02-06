@@ -3,8 +3,10 @@ import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import {
   calculateOfferTotals,
+  calculateRentalFactor,
   generateSecureToken,
 } from '../utils/offerCalculations'
+import type { RentalFactorConfig } from '../utils/offerCalculations'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
 import type {
   JobOffer,
@@ -19,7 +21,6 @@ import type {
   OfferStatus,
   OfferTransportItem,
   OfferType,
-  PrettySectionType,
 } from '../types'
 
 // Query functions for offer management
@@ -372,7 +373,7 @@ export function offerDetailQuery(offerId: string) {
       const { data: expansion, error: expansionError } = await supabase
         .from('company_expansions')
         .select(
-          'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
+          'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
         )
         .eq('company_id', offer.company_id)
         .maybeSingle()
@@ -383,6 +384,7 @@ export function offerDetailQuery(offerId: string) {
           vehicle_distance_rate: expansion.vehicle_distance_rate ?? null,
           vehicle_distance_increment:
             expansion.vehicle_distance_increment ?? null,
+          rental_factor_config: (expansion as any).rental_factor_config ?? null,
         }
       }
 
@@ -515,10 +517,24 @@ export async function createTechnicalOfferFromBookings({
   const { data: companyExpansion } = await supabase
     .from('company_expansions')
     .select(
-      'crew_rate_per_day, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
+      'crew_rate_per_day, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
     )
     .eq('company_id', companyId)
     .maybeSingle()
+
+  let rentalFactorConfig: RentalFactorConfig | null = null
+  try {
+    const raw = (companyExpansion as any)?.rental_factor_config
+    if (typeof raw === 'string' && raw.trim()) {
+      rentalFactorConfig = JSON.parse(raw) as RentalFactorConfig
+    } else if (raw && typeof raw === 'object') {
+      rentalFactorConfig = raw as RentalFactorConfig
+    }
+  } catch {
+    rentalFactorConfig = null
+  }
+  const equipmentRentalFactor = calculateRentalFactor(daysOfUse, rentalFactorConfig)
+  const roundMoney = (value: number) => Math.round(value * 100) / 100
 
   const { data: timePeriods, error: timePeriodError } = await supabase
     .from('time_periods')
@@ -744,7 +760,7 @@ export async function createTechnicalOfferFromBookings({
           group_id: null,
           quantity,
           unit_price: unitPrice,
-          total_price: unitPrice * quantity,
+          total_price: roundMoney(unitPrice * quantity * equipmentRentalFactor),
           is_internal: itemInternalMap.get(itemId) ?? true,
           sort_order: itemIndex,
         }
@@ -761,7 +777,7 @@ export async function createTechnicalOfferFromBookings({
           group_id: groupId,
           quantity,
           unit_price: unitPrice,
-          total_price: unitPrice * quantity,
+          total_price: roundMoney(unitPrice * quantity * equipmentRentalFactor),
           is_internal: info?.internally_owned ?? true,
           sort_order: itemLines.length + groupIndex,
         }
@@ -939,15 +955,29 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
   // Fetch company expansion to get vehicle rates
   let vehicleDistanceRate: number | null = null
   let vehicleDistanceIncrement: number | null = null
+  let rentalFactorConfig: RentalFactorConfig | null = null
   if (offer.company_id) {
     const { data: expansion } = await supabase
       .from('company_expansions')
-      .select('vehicle_distance_rate, vehicle_distance_increment')
+      .select(
+        'vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
+      )
       .eq('company_id', offer.company_id)
       .maybeSingle()
     if (expansion) {
       vehicleDistanceRate = expansion.vehicle_distance_rate
       vehicleDistanceIncrement = expansion.vehicle_distance_increment ?? 150
+      try {
+        const raw = (expansion as any).rental_factor_config
+        if (typeof raw === 'string' && raw.trim()) {
+          rentalFactorConfig = JSON.parse(raw) as RentalFactorConfig
+        } else if (raw && typeof raw === 'object') {
+          // JSONB sometimes comes through as object
+          rentalFactorConfig = raw as RentalFactorConfig
+        }
+      } catch {
+        rentalFactorConfig = null
+      }
     }
   }
 
@@ -958,6 +988,7 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
     offer.days_of_use,
     offer.discount_percent,
     offer.vat_percent,
+    rentalFactorConfig,
     vehicleDistanceRate,
     vehicleDistanceIncrement,
   )

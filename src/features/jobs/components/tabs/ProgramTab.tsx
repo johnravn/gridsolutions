@@ -23,9 +23,12 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import { supabase } from '@shared/api/supabase'
 import { addThreeHours } from '@shared/lib/generalFunctions'
+import { useAuthz } from '@shared/auth/useAuthz'
 import type { TimePeriodLite } from '../../types'
 
 export default function ProgramTab({ jobId }: { jobId: string }) {
+  const { companyRole } = useAuthz()
+  const isReadOnly = companyRole === 'freelancer'
   const { data: job } = useQuery(jobDetailQuery({ jobId }))
   const { companyId } = useCompany()
   const { data: timePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))
@@ -165,14 +168,16 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
         }}
       >
         <Heading size="3">Program</Heading>
-        <Button
-          size="2"
-          onClick={() => {
-            setCreating(true)
-          }}
-        >
-          <Plus width={16} height={16} /> Add Period
-        </Button>
+        {!isReadOnly && (
+          <Button
+            size="2"
+            onClick={() => {
+              setCreating(true)
+            }}
+          >
+            <Plus width={16} height={16} /> Add Period
+          </Button>
+        )}
       </Box>
 
       {sortedPeriods.length > 0 && (
@@ -183,9 +188,11 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
               <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
               <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell style={{ width: '120px' }}>
-                Actions
-              </Table.ColumnHeaderCell>
+              {!isReadOnly && (
+                <Table.ColumnHeaderCell style={{ width: '120px' }}>
+                  Actions
+                </Table.ColumnHeaderCell>
+              )}
             </Table.Row>
           </Table.Header>
           <Table.Body>
@@ -227,25 +234,27 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
                       {durationText}
                     </Text>
                   </Table.Cell>
-                  <Table.Cell>
-                    <Flex gap="2">
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        onClick={() => setEditing(tp)}
-                      >
-                        <Edit />
-                      </IconButton>
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        color="red"
-                        onClick={() => setDeleting(tp)}
-                      >
-                        <Trash />
-                      </IconButton>
-                    </Flex>
-                  </Table.Cell>
+                  {!isReadOnly && (
+                    <Table.Cell>
+                      <Flex gap="2">
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          onClick={() => setEditing(tp)}
+                        >
+                          <Edit />
+                        </IconButton>
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          color="red"
+                          onClick={() => setDeleting(tp)}
+                        >
+                          <Trash />
+                        </IconButton>
+                      </Flex>
+                    </Table.Cell>
+                  )}
                 </Table.Row>
               )
             })}
@@ -253,35 +262,37 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
         </Table.Root>
       )}
 
-      <Box
-        p="4"
-        style={{
-          border: '2px dashed var(--gray-a6)',
-          borderRadius: 8,
-          textAlign: 'center',
-          cursor: 'pointer',
-          transition: 'all 100ms',
-        }}
-        onClick={() => setCreating(true)}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.borderColor = 'var(--gray-a8)'
-          e.currentTarget.style.background = 'var(--gray-a2)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.borderColor = 'var(--gray-a6)'
-          e.currentTarget.style.background = 'transparent'
-        }}
-      >
-        <Flex direction="column" align="center" gap="2">
-          <Plus width={24} height={24} />
-          <Text size="2" color="gray">
-            Add program period
-          </Text>
-        </Flex>
-      </Box>
+      {!isReadOnly && (
+        <Box
+          p="4"
+          style={{
+            border: '2px dashed var(--gray-a6)',
+            borderRadius: 8,
+            textAlign: 'center',
+            cursor: 'pointer',
+            transition: 'all 100ms',
+          }}
+          onClick={() => setCreating(true)}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = 'var(--gray-a8)'
+            e.currentTarget.style.background = 'var(--gray-a2)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = 'var(--gray-a6)'
+            e.currentTarget.style.background = 'transparent'
+          }}
+        >
+          <Flex direction="column" align="center" gap="2">
+            <Plus width={24} height={24} />
+            <Text size="2" color="gray">
+              Add program period
+            </Text>
+          </Flex>
+        </Box>
+      )}
 
       {/* Create Dialog */}
-      {creating && (
+      {!isReadOnly && creating && (
         <EditTimePeriodDialog
           open={creating}
           onOpenChange={(open) => {
@@ -306,7 +317,7 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
       )}
 
       {/* Edit Dialog */}
-      {editing && (
+      {!isReadOnly && editing && (
         <EditTimePeriodDialog
           open={!!editing}
           onOpenChange={(open) => {
@@ -321,7 +332,7 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
       )}
 
       {/* Delete Confirmation Dialog */}
-      {deleting && (
+      {!isReadOnly && deleting && (
         <Dialog.Root
           open={true}
           onOpenChange={(open) => {

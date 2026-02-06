@@ -1,7 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, Dialog, Flex, Switch, Text, TextField } from '@radix-ui/themes'
-import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
@@ -21,8 +20,6 @@ export default function AddCustomerDialog({
   const qc = useQueryClient()
   const [form, setForm] = React.useState({
     name: '',
-    email: '',
-    phone: '',
     vat_number: '',
     address_line: '',
     zip_code: '',
@@ -57,8 +54,6 @@ export default function AddCustomerDialog({
       const customerPayload = {
         company_id: companyId,
         name: form.name,
-        email: form.email || null,
-        phone: form.phone || null,
         vat_number: form.vat_number.trim() || null,
         address: addressString,
         is_partner: !!form.is_partner,
@@ -125,8 +120,6 @@ export default function AddCustomerDialog({
       // Reset form
       setForm({
         name: '',
-        email: '',
-        phone: '',
         vat_number: '',
         address_line: '',
         zip_code: '',
@@ -158,23 +151,6 @@ export default function AddCustomerDialog({
               onChange={(e) => set('name', e.target.value)}
               placeholder="Company or customer name"
               autoFocus
-            />
-          </Field>
-          <Field label="Email">
-            <TextField.Root
-              type="email"
-              value={form.email}
-              onChange={(e) => set('email', e.target.value)}
-              placeholder="email@example.com"
-            />
-          </Field>
-          <Field label="Phone">
-            <PhoneInputField
-              id="signup-phone"
-              value={form.phone}
-              onChange={(val) => set('phone', val ?? '')} // <-- fix
-              defaultCountry="NO"
-              placeholder="Enter phone number"
             />
           </Field>
           <Field label="VAT number">

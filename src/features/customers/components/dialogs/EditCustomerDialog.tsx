@@ -1,9 +1,8 @@
 import * as React from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation } from '@tanstack/react-query'
 import { Button, Dialog, Flex, Switch, Text, TextField } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { formatVATInput } from '@shared/lib/generalFunctions'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import { upsertCustomer } from '../../api/queries'
@@ -11,8 +10,6 @@ import { upsertCustomer } from '../../api/queries'
 type Initial = {
   id: string
   name: string
-  email: string
-  phone: string
   vat_number: string
   address: string
   is_partner: boolean
@@ -31,7 +28,6 @@ export default function EditCustomerDialog({
   onSaved?: () => void
 }) {
   const { companyId } = useCompany()
-  const qc = useQueryClient()
 
   // Parse address from comma-separated string
   const parseAddress = React.useCallback((addr: string | null) => {
@@ -62,8 +58,16 @@ export default function EditCustomerDialog({
       vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
       ...parseAddress(initial.address),
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initial.id])
+  }, [
+    open,
+    initial.id,
+    initial.name,
+    initial.vat_number,
+    initial.address,
+    initial.is_partner,
+    initial.logo_path,
+    parseAddress,
+  ])
 
   const set = (k: keyof typeof form, v: any) =>
     setForm((s) => ({ ...s, [k]: v }))
@@ -71,7 +75,7 @@ export default function EditCustomerDialog({
     k: 'address_line' | 'zip_code' | 'city' | 'country',
     v: any,
   ) => setForm((s) => ({ ...s, [k]: v }))
-  const { success, error } = useToast()
+  const { success } = useToast()
 
   const mut = useMutation({
     mutationFn: async () => {
@@ -92,15 +96,13 @@ export default function EditCustomerDialog({
         id: form.id,
         company_id: companyId,
         name: form.name,
-        email: form.email || null,
-        phone: form.phone || null,
         vat_number: form.vat_number.trim() || null,
         address: addressString,
         is_partner: !!form.is_partner,
         logo_path: form.logo_path ?? null,
       })
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       onOpenChange(false)
       onSaved?.()
       success('Success', 'Customer data saved')
@@ -117,22 +119,6 @@ export default function EditCustomerDialog({
               value={form.name}
               onChange={(e) => set('name', e.target.value)}
               autoFocus
-            />
-          </Field>
-          <Field label="Email">
-            <TextField.Root
-              type="email"
-              value={form.email}
-              onChange={(e) => set('email', e.target.value)}
-            />
-          </Field>
-          <Field label="Phone">
-            <PhoneInputField
-              id="signup-phone"
-              value={form.phone}
-              onChange={(val) => set('phone', val ?? '')} // <-- fix
-              defaultCountry="NO"
-              placeholder="Enter phone number"
             />
           </Field>
           <Field label="VAT number">

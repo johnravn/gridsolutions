@@ -8,22 +8,56 @@ import {
   Flex,
   Grid,
   Heading,
+  IconButton,
   Separator,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { NavArrowDown } from 'iconoir-react'
+import { useAuthz } from '@shared/auth/useAuthz'
+import { useQuery } from '@tanstack/react-query'
+import { NavArrowDown, TransitionLeft } from 'iconoir-react'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
+import { crewInternalNotesQuery } from '../api/queries'
 
 export default function CrewPage() {
   const { companyId } = useCompany()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const [selectedUserId, setSelectedUserId] = React.useState<string | null>(
     null,
   )
   const [showEmployees, setShowEmployees] = React.useState(true)
   const [showFreelancers, setShowFreelancers] = React.useState(true)
   const [showMyPending, setShowMyPending] = React.useState(true)
+
+  const canSeeInternalNotes =
+    !!isGlobalSuperuser ||
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    companyRole === 'super_user'
+
+  const { data: internalNotes = [] } = useQuery({
+    ...(companyId
+      ? crewInternalNotesQuery({ companyId })
+      : {
+          queryKey: ['company', 'none', 'crew-internal-notes'] as const,
+          queryFn: () => Promise.resolve([]),
+        }),
+    enabled: !!companyId && canSeeInternalNotes,
+  })
+
+  const internalNotesByUserId = React.useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const n of internalNotes) {
+      if (n.note && n.note.trim()) m[n.user_id] = n.note
+    }
+    return m
+  }, [internalNotes])
 
   // same responsive pattern as InventoryPage
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -45,8 +79,30 @@ export default function CrewPage() {
 
   // Resize state: track left panel width as percentage (default 66.67% for 2fr/1fr ratio)
   const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(66.67)
+  const [isMinimized, setIsMinimized] = React.useState(false)
+  const [savedWidth, setSavedWidth] = React.useState<number>(66.67)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+
+  const toggleMinimize = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 66.67)
+      setIsMinimized(false)
+    } else {
+      setSavedWidth(leftPanelWidth)
+      setIsMinimized(true)
+    }
+  }, [isMinimized, leftPanelWidth, savedWidth])
+
+  const handleGlowingBarClick = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 66.67)
+      setIsMinimized(false)
+    }
+  }, [isMinimized, savedWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
   // Handle mouse move for resizing
   React.useEffect(() => {
@@ -100,13 +156,12 @@ export default function CrewPage() {
   // On small screens, use Grid layout (stack)
   if (!isLarge) {
     return (
-      <section style={{ height: isLarge ? '100%' : undefined, minHeight: 0 }}>
+      <section style={{ minHeight: 0 }}>
         <Grid
           columns="1fr"
           gap="4"
           align="stretch"
           style={{
-            height: isLarge ? '100%' : undefined,
             minHeight: 0,
           }}
         >
@@ -116,7 +171,6 @@ export default function CrewPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
               minHeight: 0,
             }}
           >
@@ -134,9 +188,7 @@ export default function CrewPage() {
             <Separator size="4" mb="3" />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                overflowY: 'visible',
               }}
             >
               <CrewTable
@@ -145,6 +197,9 @@ export default function CrewPage() {
                 showEmployees={showEmployees}
                 showFreelancers={showFreelancers}
                 showMyPending={showMyPending}
+                internalNotesByUserId={
+                  canSeeInternalNotes ? internalNotesByUserId : undefined
+                }
               />
             </Box>
           </Card>
@@ -155,9 +210,7 @@ export default function CrewPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
-              maxHeight: isLarge ? '100%' : undefined,
-              overflow: isLarge ? 'hidden' : 'visible',
+              overflow: 'visible',
               minHeight: 0,
             }}
           >
@@ -167,12 +220,17 @@ export default function CrewPage() {
             <Separator size="4" mb="3" />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                overflowY: 'visible',
               }}
             >
-              <CrewInspector userId={selectedUserId} />
+              <CrewInspector
+                userId={selectedUserId}
+                internalNote={
+                  canSeeInternalNotes && selectedUserId
+                    ? (internalNotesByUserId[selectedUserId] ?? null)
+                    : null
+                }
+              />
             </Box>
           </Card>
         </Grid>
@@ -182,13 +240,13 @@ export default function CrewPage() {
 
   // On large screens, use resizable flex layout
   return (
-    <section style={{ height: isLarge ? '100%' : undefined, minHeight: 0 }}>
+    <section style={{ height: '100%', minHeight: 0 }}>
       <Flex
         ref={containerRef}
         gap="2"
         align="stretch"
         style={{
-          height: isLarge ? '100%' : undefined,
+          height: '100%',
           minHeight: 0,
           position: 'relative',
         }}
@@ -199,76 +257,155 @@ export default function CrewPage() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            width: `${leftPanelWidth}%`,
-            height: isLarge ? '100%' : undefined,
-            minWidth: '300px',
-            maxWidth: '75%',
+            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
+            height: '100%',
+            minWidth: isMinimized ? '60px' : '300px',
+            maxWidth: isMinimized ? '60px' : '75%',
             minHeight: 0,
             flexShrink: 0,
             transition: isResizing ? 'none' : 'width 0.1s ease-out',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <Flex align="center" justify="between" mb="3">
-            <Heading size="5">Crew</Heading>
-            <StatusDropdown
-              showEmployees={showEmployees}
-              showFreelancers={showFreelancers}
-              showMyPending={showMyPending}
-              onShowEmployeesChange={setShowEmployees}
-              onShowFreelancersChange={setShowFreelancers}
-              onShowMyPendingChange={setShowMyPending}
-            />
-          </Flex>
-          <Separator size="4" mb="3" />
-          <Box
-            style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
-            }}
-          >
-            <CrewTable
-              selectedUserId={selectedUserId}
-              onSelect={setSelectedUserId}
-              showEmployees={showEmployees}
-              showFreelancers={showFreelancers}
-              showMyPending={showMyPending}
-            />
-          </Box>
+          {isMinimized ? (
+            <Box
+              onClick={handleGlowingBarClick}
+              onMouseEnter={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '24px'
+              }}
+              onMouseLeave={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '12px'
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                cursor: 'pointer',
+                zIndex: 1,
+              }}
+            >
+              <Box
+                data-glowing-bar
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '20px',
+                  bottom: '20px',
+                  transform: 'translateX(-50%)',
+                  width: '12px',
+                  borderRadius: '4px',
+                  background:
+                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  transition: 'all 0.2s ease-out',
+                  animation: 'glow-pulse 5s ease-in-out infinite',
+                }}
+              />
+              <style>{`
+                @keyframes glow-pulse {
+                  0%, 100% {
+                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                  }
+                  50% {
+                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                  }
+                }
+              `}</style>
+            </Box>
+          ) : (
+            <>
+              <Flex align="center" justify="between" mb="3">
+                <Heading size="5">Crew</Heading>
+                <Flex align="center" gap="2">
+                  <StatusDropdown
+                    showEmployees={showEmployees}
+                    showFreelancers={showFreelancers}
+                    showMyPending={showMyPending}
+                    onShowEmployeesChange={setShowEmployees}
+                    onShowFreelancersChange={setShowFreelancers}
+                    onShowMyPendingChange={setShowMyPending}
+                  />
+                  <Tooltip
+                    content={`Collapse sidebar (${collapseShortcutLabel})`}
+                  >
+                    <IconButton
+                      size="3"
+                      variant="ghost"
+                      onClick={toggleMinimize}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <TransitionLeft width={22} height={22} />
+                    </IconButton>
+                  </Tooltip>
+                </Flex>
+              </Flex>
+              <Separator size="4" mb="3" />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                }}
+              >
+                <CrewTable
+                  selectedUserId={selectedUserId}
+                  onSelect={setSelectedUserId}
+                  showEmployees={showEmployees}
+                  showFreelancers={showFreelancers}
+                  showMyPending={showMyPending}
+                  internalNotesByUserId={
+                    canSeeInternalNotes ? internalNotesByUserId : undefined
+                  }
+                />
+              </Box>
+            </>
+          )}
         </Card>
 
         {/* RESIZER */}
-        <Box
-          className="section-resizer"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          style={{
-            width: '6px',
-            height: '20%',
-            cursor: 'col-resize',
-            backgroundColor: 'var(--gray-a4)',
-            borderRadius: '4px',
-            flexShrink: 0,
-            alignSelf: 'center',
-            userSelect: 'none',
-            margin: '0 -4px',
-            zIndex: 10,
-            transition: isResizing ? 'none' : 'background-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-              e.currentTarget.style.cursor = 'col-resize'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-            }
-          }}
-        />
+        {!isMinimized && (
+          <Box
+            className="section-resizer"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setIsResizing(true)
+            }}
+            style={{
+              width: '6px',
+              height: '20%',
+              cursor: 'col-resize',
+              backgroundColor: 'var(--gray-a4)',
+              borderRadius: '4px',
+              flexShrink: 0,
+              alignSelf: 'center',
+              userSelect: 'none',
+              margin: '0 -4px',
+              zIndex: 10,
+              transition: isResizing ? 'none' : 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                e.currentTarget.style.cursor = 'col-resize'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+              }
+            }}
+          />
+        )}
 
         {/* RIGHT */}
         <Card
@@ -277,9 +414,9 @@ export default function CrewPage() {
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            height: isLarge ? '100%' : undefined,
-            maxHeight: isLarge ? '100%' : undefined,
-            overflow: isLarge ? 'hidden' : 'visible',
+            height: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
             minWidth: '300px',
             minHeight: 0,
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
@@ -291,12 +428,19 @@ export default function CrewPage() {
           <Separator size="4" mb="3" />
           <Box
             style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
             }}
           >
-            <CrewInspector userId={selectedUserId} />
+            <CrewInspector
+              userId={selectedUserId}
+              internalNote={
+                canSeeInternalNotes && selectedUserId
+                  ? (internalNotesByUserId[selectedUserId] ?? null)
+                  : null
+              }
+            />
           </Box>
         </Card>
       </Flex>

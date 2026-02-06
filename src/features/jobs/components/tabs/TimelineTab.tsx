@@ -24,6 +24,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import { supabase } from '@shared/api/supabase'
 import { addThreeHours } from '@shared/lib/generalFunctions'
+import { useAuthz } from '@shared/auth/useAuthz'
 import type { TimePeriodLite } from '@features/jobs/types'
 
 export default function TimelineTab({ jobId }: { jobId: string }) {
@@ -54,6 +55,8 @@ function TimePeriodsManager({
   jobStartAt: string | null
   jobEndAt: string | null
 }) {
+  const { companyRole } = useAuthz()
+  const isReadOnly = companyRole === 'freelancer'
   const qc = useQueryClient()
   const { companyId } = useCompany()
   const { data: timePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))
@@ -108,13 +111,14 @@ function TimePeriodsManager({
   // Auto-create "Job duration" when component mounts if it's missing
   React.useEffect(() => {
     if (
+      isReadOnly ||
       !jobDuration &&
       timePeriods.length > 0 && // Only create if we've loaded time periods (avoid race condition)
       !createJobDuration.isPending
     ) {
       createJobDuration.mutate()
     }
-  }, [jobDuration, timePeriods.length, createJobDuration.isPending])
+  }, [isReadOnly, jobDuration, timePeriods.length, createJobDuration.isPending])
 
   // Group other time periods by category
   const groupedPeriods = React.useMemo(() => {
@@ -349,29 +353,31 @@ function TimePeriodsManager({
                         <Text size="2">{formatDateTime(tp.end_at)}</Text>
                       </Table.Cell>
                       <Table.Cell>
-                        <Flex gap="2">
-                          <IconButton
-                            size="1"
-                            variant="ghost"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditing(tp)
-                            }}
-                          >
-                            <Edit />
-                          </IconButton>
-                          <IconButton
-                            size="1"
-                            variant="ghost"
-                            color="red"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleting(tp)
-                            }}
-                          >
-                            <Trash />
-                          </IconButton>
-                        </Flex>
+                        {!isReadOnly && (
+                          <Flex gap="2">
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setEditing(tp)
+                              }}
+                            >
+                              <Edit />
+                            </IconButton>
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              color="red"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setDeleting(tp)
+                              }}
+                            >
+                              <Trash />
+                            </IconButton>
+                          </Flex>
+                        )}
                       </Table.Cell>
                     </Table.Row>
                   ))}

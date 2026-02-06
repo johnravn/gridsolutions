@@ -6,15 +6,21 @@ import {
   Flex,
   Grid,
   Heading,
+  IconButton,
   Select,
   Separator,
   Switch,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
-import { Plus } from 'iconoir-react'
+import { Plus, TransitionLeft } from 'iconoir-react'
+import {
+  getModShortcutLabel,
+  useModKeyShortcut,
+} from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
@@ -76,8 +82,30 @@ export default function MattersPage() {
   )
 
   const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(55)
+  const [isMinimized, setIsMinimized] = React.useState(false)
+  const [savedWidth, setSavedWidth] = React.useState<number>(55)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+
+  const toggleMinimize = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 55)
+      setIsMinimized(false)
+    } else {
+      setSavedWidth(leftPanelWidth)
+      setIsMinimized(true)
+    }
+  }, [isMinimized, leftPanelWidth, savedWidth])
+
+  const handleGlowingBarClick = React.useCallback(() => {
+    if (isMinimized) {
+      setLeftPanelWidth(savedWidth || 55)
+      setIsMinimized(false)
+    }
+  }, [isMinimized, savedWidth])
+
+  const collapseShortcutLabel = getModShortcutLabel('B')
+  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
   React.useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
@@ -286,108 +314,184 @@ export default function MattersPage() {
           style={{
             display: 'flex',
             flexDirection: 'column',
-            width: `${leftPanelWidth}%`,
+            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
             height: '100%',
-            minWidth: '300px',
-            maxWidth: '75%',
+            minWidth: isMinimized ? '60px' : '300px',
+            maxWidth: isMinimized ? '60px' : '75%',
             minHeight: 0,
             flexShrink: 0,
             transition: isResizing ? 'none' : 'width 0.1s ease-out',
+            position: 'relative',
+            overflow: 'hidden',
           }}
         >
-          <Box
-            mb="3"
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-            }}
-          >
-            <Heading size="5">Matters</Heading>
-            <Flex align="center" gap="3" wrap="wrap">
-              <Flex align="center" gap="2">
-                <Text size="2" weight="medium">
-                  Unread only
-                </Text>
-                <Switch
-                  checked={unreadFilter}
-                  onCheckedChange={setUnreadFilter}
-                  size="2"
+          {isMinimized ? (
+            <Box
+              onClick={handleGlowingBarClick}
+              onMouseEnter={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '24px'
+              }}
+              onMouseLeave={(e) => {
+                const bar = e.currentTarget.querySelector(
+                  '[data-glowing-bar]',
+                ) as HTMLElement
+                if (bar) bar.style.width = '12px'
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                cursor: 'pointer',
+                zIndex: 1,
+              }}
+            >
+              <Box
+                data-glowing-bar
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '20px',
+                  bottom: '20px',
+                  transform: 'translateX(-50%)',
+                  width: '12px',
+                  borderRadius: '4px',
+                  background:
+                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
+                  pointerEvents: 'none',
+                  zIndex: 5,
+                  transition: 'all 0.2s ease-out',
+                  animation: 'glow-pulse 5s ease-in-out infinite',
+                }}
+              />
+              <style>{`
+                @keyframes glow-pulse {
+                  0%, 100% {
+                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
+                  }
+                  50% {
+                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
+                  }
+                }
+              `}</style>
+            </Box>
+          ) : (
+            <>
+              <Box
+                mb="3"
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Heading size="5">Matters</Heading>
+                <Flex align="center" gap="2" wrap="wrap">
+                  <Flex align="center" gap="3" wrap="wrap">
+                    <Flex align="center" gap="2">
+                      <Text size="2" weight="medium">
+                        Unread only
+                      </Text>
+                      <Switch
+                        checked={unreadFilter}
+                        onCheckedChange={setUnreadFilter}
+                        size="2"
+                      />
+                    </Flex>
+                    {companies && companies.length > 0 && (
+                      <Select.Root
+                        value={companyFilter}
+                        size="3"
+                        onValueChange={(val) => setCompanyFilter(val)}
+                      >
+                        <Select.Trigger
+                          placeholder="Filter company…"
+                          style={{ minHeight: 'var(--space-7)' }}
+                        />
+                        <Select.Content>
+                          <Select.Item value="all">All Companies</Select.Item>
+                          {companies.map((c: any) => (
+                            <Select.Item key={c.id} value={c.id}>
+                              {c.name}
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                    <Button size="2" onClick={() => setCreateMatterOpen(true)}>
+                      <Plus /> New Matter
+                    </Button>
+                  </Flex>
+                  <Tooltip
+                    content={`Collapse sidebar (${collapseShortcutLabel})`}
+                  >
+                    <IconButton
+                      size="3"
+                      variant="ghost"
+                      onClick={toggleMinimize}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <TransitionLeft width={22} height={22} />
+                    </IconButton>
+                  </Tooltip>
+                </Flex>
+              </Box>
+              <Separator size="4" mb="3" />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                }}
+              >
+                <MatterList
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  unreadFilter={unreadFilter}
+                  companyFilter={companyFilter}
+                  companies={companies || []}
                 />
-              </Flex>
-              {companies && companies.length > 0 && (
-                <Select.Root
-                  value={companyFilter}
-                  size="3"
-                  onValueChange={(val) => setCompanyFilter(val)}
-                >
-                  <Select.Trigger
-                    placeholder="Filter company…"
-                    style={{ minHeight: 'var(--space-7)' }}
-                  />
-                  <Select.Content>
-                    <Select.Item value="all">All Companies</Select.Item>
-                    {companies.map((c: any) => (
-                      <Select.Item key={c.id} value={c.id}>
-                        {c.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              )}
-              <Button size="2" onClick={() => setCreateMatterOpen(true)}>
-                <Plus /> New Matter
-              </Button>
-            </Flex>
-          </Box>
-          <Separator size="4" mb="3" />
-          <Box
-            style={{
-              flex: 1,
-              minHeight: 0,
-            }}
-          >
-            <MatterList
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              unreadFilter={unreadFilter}
-              companyFilter={companyFilter}
-              companies={companies || []}
-            />
-          </Box>
+              </Box>
+            </>
+          )}
         </Card>
 
-        <Box
-          className="section-resizer"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            setIsResizing(true)
-          }}
-          style={{
-            width: '6px',
-            height: '20%',
-            cursor: 'col-resize',
-            backgroundColor: 'var(--gray-a4)',
-            borderRadius: '4px',
-            flexShrink: 0,
-            alignSelf: 'center',
-            userSelect: 'none',
-            margin: '0 -4px',
-            zIndex: 10,
-            transition: isResizing ? 'none' : 'background-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-              e.currentTarget.style.cursor = 'col-resize'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-            }
-          }}
-        />
+        {!isMinimized && (
+          <Box
+            className="section-resizer"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setIsResizing(true)
+            }}
+            style={{
+              width: '6px',
+              height: '20%',
+              cursor: 'col-resize',
+              backgroundColor: 'var(--gray-a4)',
+              borderRadius: '4px',
+              flexShrink: 0,
+              alignSelf: 'center',
+              userSelect: 'none',
+              margin: '0 -4px',
+              zIndex: 10,
+              transition: isResizing ? 'none' : 'background-color 0.2s',
+            }}
+            onMouseEnter={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
+                e.currentTarget.style.cursor = 'col-resize'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!isResizing) {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
+              }
+            }}
+          />
+        )}
 
         <Card
           size="3"

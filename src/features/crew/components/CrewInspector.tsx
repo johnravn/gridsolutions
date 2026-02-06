@@ -28,16 +28,23 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import {
   crewDetailQuery,
   crewIndexQuery,
+  setCrewInternalNote,
   updateCrewMemberRate,
 } from '../api/queries'
 import type { CrewDetail } from '../api/queries'
 import type { CompanyRole } from '@features/company/api/queries'
 
-export default function CrewInspector({ userId }: { userId: string | null }) {
+export default function CrewInspector({
+  userId,
+  internalNote,
+}: {
+  userId: string | null
+  internalNote?: string | null
+}) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
-  const { companyRole } = useAuthz()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const [changeRoleOpen, setChangeRoleOpen] = React.useState(false)
   const [roleChangeInfo, setRoleChangeInfo] = React.useState<{
     userId: string
@@ -54,23 +61,29 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
   )
   const [rate, setRate] = React.useState<string>('')
 
+  const canSeeInternalNotes =
+    !!isGlobalSuperuser ||
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    companyRole === 'super_user'
+  const [internalNoteDraft, setInternalNoteDraft] = React.useState('')
+
   const { data, isLoading, isError, error } = useQuery<CrewDetail | null>({
     ...(companyId && userId
       ? crewDetailQuery({ companyId, userId })
       : {
           queryKey: ['company', 'none', 'crew-detail', 'none'] as const,
-          queryFn: async () => null,
+          queryFn: () => Promise.resolve(null),
         }),
     enabled: !!companyId && !!userId,
   })
 
   // Get owners count to check if this is the last owner
-  const { data: owners = [] } = useQuery({
-    ...(companyId && data?.role === 'owner'
-      ? crewIndexQuery({ companyId, kind: 'owner' })
-      : { queryKey: ['crew-index', 'none'], queryFn: async () => [] }),
-    enabled: !!companyId && !!data && data.role === 'owner',
+  const ownersQuery = useQuery({
+    ...crewIndexQuery({ companyId: companyId ?? '', kind: 'owner' }),
+    enabled: !!companyId && data?.role === 'owner',
   })
+  const owners = ownersQuery.data ?? []
 
   const isLastOwner = data?.role === 'owner' && owners.length <= 1
 
@@ -97,15 +110,15 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
       (data.role === 'employee' || data.role === 'owner'),
     queryFn: async () => {
       if (!companyId) return null
-      const { data, error } = await supabase
+      const { data: companiesData, error: companiesError } = await supabase
         .from('companies')
         .select(
           'employee_daily_rate, employee_hourly_rate, owner_daily_rate, owner_hourly_rate',
         )
         .eq('id', companyId)
         .single()
-      if (error) throw error
-      return data
+      if (companiesError) throw companiesError
+      return companiesData
     },
   })
 
@@ -116,6 +129,30 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
       setRate(data.rate?.toString() ?? '')
     }
   }, [data])
+
+  React.useEffect(() => {
+    setInternalNoteDraft(internalNote?.toString() ?? '')
+  }, [userId, internalNote])
+
+  const saveInternalNoteMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId || !userId) throw new Error('Missing company or user ID')
+      await setCrewInternalNote({
+        companyId,
+        userId,
+        note: internalNoteDraft,
+      })
+    },
+    onSuccess: () => {
+      success('Success', 'Internal note saved')
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'crew-internal-notes'],
+      })
+    },
+    onError: (e: any) => {
+      toastError('Failed to save internal note', e?.message ?? 'Please try again.')
+    },
+  })
 
   // Rate update mutation
   const updateRateMutation = useMutation({
@@ -310,6 +347,51 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
       />
 
       <Separator my="2" />
+
+      {/* Internal one-liner (company-only) */}
+      {canSeeInternalNotes && (
+        <>
+          <SectionTitle>Internal one-liner</SectionTitle>
+          <Text size="1" color="gray" as="div" mb="2">
+            Only visible to employees and upwards inside this company.
+          </Text>
+          <Flex direction="column" gap="2" mb="3">
+            <TextField.Root
+              value={internalNoteDraft}
+              onChange={(e) => setInternalNoteDraft(e.target.value)}
+              placeholder='e.g. "Experienced in AV, knows some audio"'
+              maxLength={160}
+            />
+            <Flex gap="2">
+              <Button
+                size="2"
+                variant="solid"
+                onClick={() => saveInternalNoteMutation.mutate()}
+                disabled={saveInternalNoteMutation.isPending}
+              >
+                {saveInternalNoteMutation.isPending ? (
+                  <>
+                    <Spinner size="2" /> Saving...
+                  </>
+                ) : (
+                  'Save'
+                )}
+              </Button>
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() =>
+                  setInternalNoteDraft(internalNote?.toString() ?? '')
+                }
+                disabled={saveInternalNoteMutation.isPending}
+              >
+                Reset
+              </Button>
+            </Flex>
+          </Flex>
+          <Separator my="2" />
+        </>
+      )}
 
       {/* Primary info */}
       <DefinitionList>
@@ -586,9 +668,9 @@ export default function CrewInspector({ userId }: { userId: string | null }) {
       <InspectorCalendar
         events={events}
         calendarHref={`/calendar?userId=${userId}`}
-        onCreate={(e) => {}}
-        onUpdate={(id, patch) => {}}
-        onDelete={(id) => {}}
+        onCreate={() => {}}
+        onUpdate={() => {}}
+        onDelete={() => {}}
       />
     </Box>
   )

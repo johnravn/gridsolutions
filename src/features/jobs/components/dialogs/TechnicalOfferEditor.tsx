@@ -37,16 +37,15 @@ import {
   lockOffer,
   offerDetailQuery,
   recalculateOfferTotals,
-  syncBookingsFromOffer,
 } from '../../api/offerQueries'
-import { calculateOfferTotals } from '../../utils/offerCalculations'
+import { calculateOfferTotals, calculateRentalFactor } from '../../utils/offerCalculations'
+import type { RentalFactorConfig } from '../../utils/offerCalculations'
 import type {
   OfferCrewItem,
   OfferEquipmentItem,
   OfferTransportItem,
   UUID,
 } from '../../types'
-import type { RentalFactorConfig } from '@features/company/api/queries'
 
 type Props = {
   open: boolean
@@ -55,6 +54,7 @@ type Props = {
   companyId: string
   offerId?: string | null // If provided, edit mode; otherwise create mode
   onSaved?: (offerId: string) => void
+  onSyncBookingsAfterSave?: (offerId: string) => void
 }
 
 type LocalEquipmentGroup = {
@@ -184,79 +184,6 @@ function Field({
   )
 }
 
-/**
- * Default rental factors (stiffer values for better profitability)
- */
-const DEFAULT_RENTAL_FACTORS: RentalFactorConfig = {
-  1: 1.0,
-  2: 1.6,
-  3: 2.0,
-  4: 2.3,
-  5: 2.5,
-  7: 2.8,
-  10: 3.2,
-  14: 3.5,
-  21: 4.0,
-  30: 4.5,
-}
-
-/**
- * Calculate rental factor based on days of use.
- * Uses company-specific config if provided, otherwise falls back to defaults.
- * Based on industry standard rental rates where longer rentals
- * have decreasing incremental costs.
- */
-function calculateRentalFactor(
-  days: number,
-  customConfig?: RentalFactorConfig | null,
-): number {
-  if (days <= 0) return 1.0
-
-  const factorMap = customConfig || DEFAULT_RENTAL_FACTORS
-
-  // Exact match
-  if (factorMap[days] !== undefined) {
-    return factorMap[days]
-  }
-
-  // Find the two closest values
-  const sortedDays = Object.keys(factorMap)
-    .map(Number)
-    .sort((a, b) => a - b)
-
-  // If days is less than minimum, use minimum
-  if (days < sortedDays[0]) {
-    return factorMap[sortedDays[0]]
-  }
-
-  // If days is greater than maximum, extrapolate
-  if (days > sortedDays[sortedDays.length - 1]) {
-    const maxDay = sortedDays[sortedDays.length - 1]
-    const maxFactor = factorMap[maxDay]
-    // For extended periods, use logarithmic growth
-    const extraDays = days - maxDay
-    const growthRate = 0.025 // 2.5% per day after max (diminishing)
-    return maxFactor + extraDays * growthRate
-  }
-
-  // Interpolate between two points
-  let lowerDay = sortedDays[0]
-  let upperDay = sortedDays[sortedDays.length - 1]
-
-  for (let i = 0; i < sortedDays.length - 1; i++) {
-    if (days >= sortedDays[i] && days <= sortedDays[i + 1]) {
-      lowerDay = sortedDays[i]
-      upperDay = sortedDays[i + 1]
-      break
-    }
-  }
-
-  const lowerFactor = factorMap[lowerDay]
-  const upperFactor = factorMap[upperDay]
-  const ratio = (days - lowerDay) / (upperDay - lowerDay)
-  return lowerFactor + (upperFactor - lowerFactor) * ratio
-}
-
 export default function TechnicalOfferEditor({
   open,
   onOpenChange,
@@ -264,21 +191,24 @@ export default function TechnicalOfferEditor({
   companyId,
   offerId,
   onSaved,
+  onSyncBookingsAfterSave,
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
-  const invalidateBookingQueries = React.useCallback(() => {
-    qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-    qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
-    qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
-  }, [qc, jobId])
   const isEditMode = !!offerId
   const [currentOfferId, setCurrentOfferId] = React.useState<string | null>(
     offerId || null,
   )
 
+  type JobInfo = {
+    title: string | null
+    start_at: string | null
+    end_at: string | null
+    customer: { id: string; is_partner: boolean } | null
+  }
+
   // Fetch job title, duration, and customer for default offer name, time defaults, and discount
-  const { data: job } = useQuery({
+  const { data: jobData } = useQuery<JobInfo>({
     queryKey: ['job-title', jobId],
     enabled: open,
     queryFn: async () => {
@@ -298,8 +228,8 @@ export default function TechnicalOfferEditor({
 
       return {
         title: data.title,
-        start_at: (data.start_at ?? null),
-        end_at: (data.end_at ?? null),
+        start_at: data.start_at ?? null,
+        end_at: data.end_at ?? null,
         customer: customer
           ? ({
               id: customer.id,
@@ -310,19 +240,21 @@ export default function TechnicalOfferEditor({
     },
   })
 
+  const job: JobInfo = React.useMemo(
+    () =>
+      jobData ?? {
+        title: null,
+        start_at: null,
+        end_at: null,
+        customer: null,
+      },
+    [jobData],
+  )
+
   // Fetch company expansion for default rates and rental factors
   const { data: companyExpansion } = useQuery({
     ...companyExpansionQuery({ companyId }),
     enabled: open && !!companyId && typeof companyId === 'string',
-  })
-
-  const { data: user } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data } = await supabase.auth.getUser()
-      return data.user
-    },
-    enabled: open,
   })
 
   const defaultCrewRatePerDay = React.useMemo(() => {
@@ -364,17 +296,17 @@ export default function TechnicalOfferEditor({
   const isReadOnly = existingOffer?.locked || false
 
   // Default title based on job
-  const defaultTitle = job?.title ? `Offer for ${job.title}` : ''
+  const defaultTitle = job.title ? `Offer for ${job.title}` : ''
 
   // Calculate default days of use from job duration
   const defaultDaysOfUse = React.useMemo(() => {
-    if (!job?.start_at || !job?.end_at) return 1
+    if (!job.start_at || !job.end_at) return 1
     const start = new Date(job.start_at)
     const end = new Date(job.end_at)
     const diffTime = end.getTime() - start.getTime()
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
     return Math.max(1, diffDays) // Ensure at least 1 day
-  }, [job?.start_at, job?.end_at])
+  }, [job.start_at, job.end_at])
 
   // Offer metadata
   const [title, setTitle] = React.useState('')
@@ -421,10 +353,10 @@ export default function TechnicalOfferEditor({
 
   // Update daysOfUse when job duration becomes available (only for new offers)
   React.useEffect(() => {
-    if (!open || isEditMode || !job?.start_at || !job?.end_at) return
+    if (!open || isEditMode || !job.start_at || !job.end_at) return
     setDaysOfUse(defaultDaysOfUse)
     setDaysOfUseDraft(null)
-  }, [open, isEditMode, defaultDaysOfUse, job?.start_at, job?.end_at])
+  }, [open, isEditMode, defaultDaysOfUse, job.start_at, job.end_at])
 
   // Initialize from existing offer
   React.useEffect(() => {
@@ -444,7 +376,7 @@ export default function TechnicalOfferEditor({
           ? existingOffer.vat_percent
           : 25
       setVatPercent(normalizedVat)
-      setShowPricePerLine(existingOffer.show_price_per_line ?? true)
+      setShowPricePerLine(existingOffer.show_price_per_line)
 
       // Convert equipment groups
       const groups: Array<LocalEquipmentGroup> =
@@ -561,7 +493,7 @@ export default function TechnicalOfferEditor({
 
       // Set default discount based on customer type (partner vs regular customer)
       let defaultDiscount = 0
-      if (companyExpansion && job?.customer) {
+      if (companyExpansion && job.customer) {
         if (
           job.customer.is_partner &&
           companyExpansion.partner_discount_percent !== null
@@ -672,21 +604,33 @@ export default function TechnicalOfferEditor({
       return sum + dailyCost + distanceCost
     }, 0)
 
-    const totals = calculateOfferTotals(
+    const baseTotals = calculateOfferTotals(
       equipmentItems,
       crew,
       transport,
       daysOfUse,
       discountPercent,
       vatPercent,
+      rentalFactorConfig,
       companyExpansion?.vehicle_distance_rate,
       companyExpansion?.vehicle_distance_increment,
     )
 
     // Override transport subtotal with our custom calculation that uses item-specific rates
+    // and recompute dependent totals so the breakdown stays consistent.
+    const totalBeforeDiscount =
+      baseTotals.equipmentSubtotal + baseTotals.crewSubtotal + transportSubtotal
+    const discountAmount = baseTotals.discountAmount
+    const totalAfterDiscount = totalBeforeDiscount - discountAmount
+    const totalWithVAT = totalAfterDiscount + (totalAfterDiscount * vatPercent) / 100
+
     return {
-      ...totals,
+      ...baseTotals,
       transportSubtotal,
+      totalBeforeDiscount,
+      totalAfterDiscount,
+      totalWithVAT,
+      discountAmount,
     }
   }, [
     equipmentGroups,
@@ -695,6 +639,7 @@ export default function TechnicalOfferEditor({
     daysOfUse,
     discountPercent,
     vatPercent,
+    rentalFactorConfig,
     offerId,
     companyExpansion?.vehicle_distance_rate,
     companyExpansion?.vehicle_distance_increment,
@@ -778,6 +723,12 @@ export default function TechnicalOfferEditor({
         }
       }
 
+      const equipmentRentalFactor = calculateRentalFactor(
+        daysOfUse,
+        rentalFactorConfig,
+      )
+      const roundMoney = (value: number) => Math.round(value * 100) / 100
+
       // Save equipment groups and items
       for (const group of equipmentGroups) {
         const isExistingGroup = !group.id.startsWith('temp-')
@@ -796,7 +747,7 @@ export default function TechnicalOfferEditor({
             .single()
 
           if (groupErr) throw groupErr
-          groupId = upsertedGroup?.id ?? group.id
+          groupId = upsertedGroup.id
         } else {
           // Create new group
           const { data: newGroup, error: groupErr } = await supabase
@@ -827,7 +778,9 @@ export default function TechnicalOfferEditor({
                 group_id: item.group_id ?? null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
-                total_price: item.unit_price * item.quantity,
+                total_price: roundMoney(
+                  item.unit_price * item.quantity * equipmentRentalFactor,
+                ),
                 is_internal: item.is_internal,
                 sort_order: item.sort_order,
               })
@@ -843,7 +796,9 @@ export default function TechnicalOfferEditor({
                 group_id: item.group_id ?? null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
-                total_price: item.unit_price * item.quantity,
+                total_price: roundMoney(
+                  item.unit_price * item.quantity * equipmentRentalFactor,
+                ),
                 is_internal: item.is_internal,
                 sort_order: item.sort_order,
               })
@@ -981,7 +936,7 @@ export default function TechnicalOfferEditor({
 
           // Only include vehicle_id if it has a value
           // Omitting null vehicle_id avoids PostgREST relationship embedding issues
-          if (item.vehicle_id !== null && item.vehicle_id !== undefined) {
+          if (item.vehicle_id !== null) {
             insertPayload.vehicle_id = item.vehicle_id
           }
 
@@ -1012,34 +967,6 @@ export default function TechnicalOfferEditor({
       await qc.invalidateQueries({ queryKey: ['offer-detail', result.offerId] })
       // Update current offer ID so we can show preview/lock buttons
       setCurrentOfferId(result.offerId)
-      if (result.syncAfterSave) {
-        if (!user?.id) {
-          toastError(
-            'Authentication required',
-            'Please log in to sync bookings.',
-          )
-        } else {
-          try {
-            const warnings = await syncBookingsFromOffer(
-              result.offerId,
-              user.id,
-            )
-            invalidateBookingQueries()
-            await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-            await qc.invalidateQueries({
-              queryKey: ['offer-detail', result.offerId],
-            })
-            if (warnings?.length) {
-              info('Booking warnings', warnings.join('\n'), 6000)
-            }
-          } catch (syncError: any) {
-            toastError(
-              'Failed to sync bookings',
-              syncError?.message || 'Please try again.',
-            )
-          }
-        }
-      }
       success(
         isEditMode ? 'Offer updated' : 'Offer created',
         `Technical offer "${title.trim()}" was saved successfully.`,
@@ -1054,6 +981,9 @@ export default function TechnicalOfferEditor({
       // Close dialog after save
       onOpenChange(false)
       onSaved?.(result.offerId)
+      if (result.syncAfterSave) {
+        onSyncBookingsAfterSave?.(result.offerId)
+      }
     },
     onError: (e: any) => {
       setAfterSaveAction(null)
@@ -1210,73 +1140,89 @@ export default function TechnicalOfferEditor({
                   </Flex>
                 </Field>
 
-                <Flex gap="3" wrap="wrap">
-                  <Field label="Days of Use">
-                    <Flex direction="column" gap="1">
-                      <TextField.Root
-                        type="number"
-                        min="1"
-                        value={daysOfUseDraft ?? String(daysOfUse)}
-                        onChange={(e) => {
-                          const nextValue = e.target.value
-                          setDaysOfUseDraft(nextValue)
+                <Box
+                  p="3"
+                  style={{
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 8,
+                    background: 'var(--gray-a1)',
+                  }}
+                >
+                  <Flex direction="column" gap="2">
+                    <Text weight="medium">Equipment pricing</Text>
+                    <Text size="1" color="gray">
+                      Days of use and discount apply to equipment only.
+                    </Text>
 
-                          if (nextValue === '') return
-                          const parsed = Number(nextValue)
-                          if (Number.isNaN(parsed)) return
+                    <Flex gap="3" wrap="wrap" align="end">
+                      <Field label="Days of use">
+                        <TextField.Root
+                          type="number"
+                          min="1"
+                          value={daysOfUseDraft ?? String(daysOfUse)}
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            setDaysOfUseDraft(nextValue)
 
-                          setDaysOfUse(Math.max(1, parsed))
-                          setDaysOfUseDraft(null)
-                        }}
-                        onBlur={() => {
-                          if (daysOfUseDraft === '') {
+                            if (nextValue === '') return
+                            const parsed = Number(nextValue)
+                            if (Number.isNaN(parsed)) return
+
+                            setDaysOfUse(Math.max(1, parsed))
                             setDaysOfUseDraft(null)
-                          }
-                        }}
-                        readOnly={isReadOnly}
-                      />
-                      <Text
-                        size="1"
-                        color="gray"
-                        style={{ fontStyle: 'italic' }}
-                      >
-                        Rental factor:{' '}
-                        {calculateRentalFactor(
-                          daysOfUse,
-                          rentalFactorConfig,
-                        ).toFixed(2)}
-                        x
-                      </Text>
+                          }}
+                          onBlur={() => {
+                            if (daysOfUseDraft === '') {
+                              setDaysOfUseDraft(null)
+                            }
+                          }}
+                          readOnly={isReadOnly}
+                          style={{ width: 110 }}
+                        />
+                      </Field>
+
+                      <Field label="Discount (%)">
+                        <TextField.Root
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={discountPercentDraft ?? String(discountPercent)}
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            setDiscountPercentDraft(nextValue)
+
+                            if (nextValue === '') return
+                            const parsed = Number(nextValue)
+                            if (Number.isNaN(parsed)) return
+
+                            setDiscountPercent(
+                              Math.max(0, Math.min(100, parsed)),
+                            )
+                            setDiscountPercentDraft(null)
+                          }}
+                          onBlur={() => {
+                            if (discountPercentDraft === '') {
+                              setDiscountPercentDraft(null)
+                            }
+                          }}
+                          readOnly={isReadOnly}
+                          style={{ width: 110 }}
+                        />
+                      </Field>
                     </Flex>
-                  </Field>
 
-                  <Field label="Discount (%)">
-                    <TextField.Root
-                      type="number"
-                      min="0"
-                      max="100"
-                      value={discountPercentDraft ?? String(discountPercent)}
-                      onChange={(e) => {
-                        const nextValue = e.target.value
-                        setDiscountPercentDraft(nextValue)
+                    <Text
+                      size="1"
+                      color="gray"
+                      style={{ fontStyle: 'italic' }}
+                    >
+                      Rental factor: {totals.equipmentRentalFactor.toFixed(2)}x
+                    </Text>
+                  </Flex>
+                </Box>
 
-                        if (nextValue === '') return
-                        const parsed = Number(nextValue)
-                        if (Number.isNaN(parsed)) return
-
-                        setDiscountPercent(Math.max(0, Math.min(100, parsed)))
-                        setDiscountPercentDraft(null)
-                      }}
-                      onBlur={() => {
-                        if (discountPercentDraft === '') {
-                          setDiscountPercentDraft(null)
-                        }
-                      }}
-                      readOnly={isReadOnly}
-                    />
-                  </Field>
-
-                  <Field label="VAT (%)">
+                <Field label="VAT (%)">
+                  <Flex direction="column" gap="1">
                     <Select.Root
                       value={
                         vatPercent === 0 || vatPercent === 25
@@ -1286,14 +1232,24 @@ export default function TechnicalOfferEditor({
                       onValueChange={(value) => setVatPercent(Number(value))}
                       disabled={isReadOnly}
                     >
-                      <Select.Trigger placeholder="Select VAT" />
+                      <Select.Trigger
+                        placeholder="Select VAT"
+                        style={{ width: 110 }}
+                      />
                       <Select.Content style={{ zIndex: 10000 }}>
                         <Select.Item value="0">0%</Select.Item>
                         <Select.Item value="25">25%</Select.Item>
                       </Select.Content>
                     </Select.Root>
-                  </Field>
-                </Flex>
+                    <Text
+                      size="1"
+                      color="gray"
+                      style={{ fontStyle: 'italic' }}
+                    >
+                      Applies to the entire offer.
+                    </Text>
+                  </Flex>
+                </Field>
 
                 <Field label="Pricing Display">
                   <Flex align="center" gap="2">
@@ -1330,6 +1286,8 @@ export default function TechnicalOfferEditor({
                 expandedGroups={expandedGroups}
                 onExpandedGroupsChange={setExpandedGroups}
                 companyId={companyId}
+                equipmentDaysOfUse={daysOfUse}
+                equipmentRentalFactor={totals.equipmentRentalFactor}
                 readOnly={isReadOnly}
               />
             </Tabs.Content>
@@ -1341,8 +1299,8 @@ export default function TechnicalOfferEditor({
                 onItemsChange={setCrewItems}
                 companyId={companyId}
                 readOnly={isReadOnly}
-                jobStartAt={job?.start_at}
-                jobEndAt={job?.end_at}
+                jobStartAt={job.start_at}
+                jobEndAt={job.end_at}
                 defaultRatePerDay={defaultCrewRatePerDay}
                 defaultRatePerHour={defaultCrewRatePerHour}
               />
@@ -1355,8 +1313,8 @@ export default function TechnicalOfferEditor({
                 onItemsChange={setTransportItems}
                 companyId={companyId}
                 readOnly={isReadOnly}
-                jobStartAt={job?.start_at}
-                jobEndAt={job?.end_at}
+                jobStartAt={job.start_at}
+                jobEndAt={job.end_at}
                 vehicleDailyRate={companyExpansion?.vehicle_daily_rate ?? null}
                 vehicleDistanceRate={
                   companyExpansion?.vehicle_distance_rate ?? null
@@ -1654,6 +1612,8 @@ function EquipmentSection({
   expandedGroups,
   onExpandedGroupsChange,
   companyId,
+  equipmentDaysOfUse,
+  equipmentRentalFactor,
   readOnly = false,
 }: {
   groups: Array<LocalEquipmentGroup>
@@ -1661,6 +1621,8 @@ function EquipmentSection({
   expandedGroups: Set<string>
   onExpandedGroupsChange: (groups: Set<string>) => void
   companyId: string
+  equipmentDaysOfUse: number
+  equipmentRentalFactor: number
   readOnly?: boolean
 }) {
   // Track search state per group
@@ -1821,8 +1783,8 @@ function EquipmentSection({
       item_id: isGroup ? null : itemId || null,
       group_id: isGroup ? itemId || null : null,
       quantity: 1,
-      unit_price: selectedItem?.price || 0,
-      is_internal: selectedItem?.internally_owned ?? true,
+      unit_price: selectedItem.price ?? 0,
+      is_internal: selectedItem.internally_owned,
       sort_order: group.items.length,
       item: !isGroup
         ? {
@@ -1973,8 +1935,7 @@ function EquipmentSection({
         return
       }
 
-      const groupItems =
-        data?.map((row: any) => {
+      const groupItems = data.map((row: any) => {
           const rawItem = Array.isArray(row.item) ? row.item[0] : row.item
           const rawBrand = rawItem?.brand
           const brand = Array.isArray(rawBrand) ? rawBrand[0] : rawBrand
@@ -1985,7 +1946,7 @@ function EquipmentSection({
             model: rawItem?.model ?? null,
             quantity: row.quantity ?? 1,
           }
-        }) ?? []
+        })
 
       groupItemsCacheRef.current.set(groupId, groupItems)
       applyGroupItems(targetGroupId, groupItemId, groupItems)
@@ -2060,12 +2021,19 @@ function EquipmentSection({
         )}
       </Flex>
 
+      <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
+        Equipment totals are calculated as unit price × qty × rental factor (
+        {equipmentDaysOfUse} day{equipmentDaysOfUse === 1 ? '' : 's'} →{' '}
+        {equipmentRentalFactor.toFixed(2)}x).
+      </Text>
+
       {groups.length > 0 && (
         <Flex direction="column" gap="2">
           {groups.map((group) => {
             const isExpanded = expandedGroups.has(group.id)
             const groupTotal = group.items.reduce(
-              (sum, item) => sum + item.unit_price * item.quantity,
+              (sum, item) =>
+                sum + item.unit_price * item.quantity * equipmentRentalFactor,
               0,
             )
 
@@ -2186,7 +2154,7 @@ function EquipmentSection({
                             </Table.ColumnHeaderCell>
                             <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
                             <Table.ColumnHeaderCell>
-                              Unit Price
+                              Unit Price (/day)
                             </Table.ColumnHeaderCell>
                             <Table.ColumnHeaderCell>
                               Total
@@ -2358,7 +2326,9 @@ function EquipmentSection({
                                   <Table.Cell>
                                     <Text>
                                       {formatCurrency(
-                                        item.unit_price * item.quantity,
+                                        item.unit_price *
+                                          item.quantity *
+                                          equipmentRentalFactor,
                                       )}
                                     </Text>
                                   </Table.Cell>
@@ -3808,14 +3778,14 @@ function TotalsSection({
           </Table.Row>
           <Table.Row>
             <Table.Cell>
-              <Text weight="medium">Discount ({totals.discountPercent}%)</Text>
+              <Text weight="medium">
+                Equipment discount ({totals.discountPercent}%)
+              </Text>
             </Table.Cell>
             <Table.Cell align="right">
               <Text color="red">
                 -
-                {formatCurrency(
-                  totals.totalBeforeDiscount - totals.totalAfterDiscount,
-                )}
+                {formatCurrency(totals.discountAmount)}
               </Text>
             </Table.Cell>
           </Table.Row>
