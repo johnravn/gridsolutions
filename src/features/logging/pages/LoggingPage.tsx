@@ -10,6 +10,7 @@ import {
   SegmentedControl,
   Select,
   Separator,
+  Switch,
   Text,
   TextArea,
   TextField,
@@ -35,7 +36,7 @@ import {
   getRange,
 } from '../lib/timeEntryRange'
 import type { LoggingPeriod } from '../api/loggingPeriods'
-import type { TimeEntryWithProfile } from '../api/timeEntries'
+import type { TimeEntryInsert, TimeEntryWithProfile } from '../api/timeEntries'
 
 export default function LoggingPage() {
   const { companyId } = useCompany()
@@ -66,8 +67,11 @@ export default function LoggingPage() {
     () => getDefaultTimes(),
     [],
   )
-  const [entryMode, setEntryMode] = React.useState<'manual' | 'job'>('manual')
+  const [entryMode, setEntryMode] = React.useState<'manual' | 'job'>('job')
   const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
+  const [showOnlyMyJobs, setShowOnlyMyJobs] = React.useState(true)
+  const [jobSearch, setJobSearch] = React.useState('')
+  const [jobSearchOpen, setJobSearchOpen] = React.useState(false)
   const [title, setTitle] = React.useState('')
   const [jobNumber, setJobNumber] = React.useState('')
   const [note, setNote] = React.useState('')
@@ -96,26 +100,18 @@ export default function LoggingPage() {
   const { data: jobsData = [], isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: '',
+      search: jobSearch.trim(),
       sortBy: 'start_at',
       sortDir: 'desc',
       userId: userId ?? null,
       companyRole: companyRole ?? null,
       includeArchived: false,
+      onlyCrewForUserId: showOnlyMyJobs ? (userId ?? null) : null,
     }),
-    enabled,
+    enabled: enabled && entryMode === 'job',
   })
 
-  const recentJobs = React.useMemo(() => {
-    const todayStart = new Date()
-    todayStart.setHours(0, 0, 0, 0)
-    return jobsData
-      .filter((job) => {
-        if (!job.start_at) return false
-        return new Date(job.start_at).getTime() < todayStart.getTime()
-      })
-      .slice(0, 25)
-  }, [jobsData])
+  const jobsForPicker = React.useMemo(() => jobsData.slice(0, 50), [jobsData])
 
   const entryStartYear = React.useMemo(
     () => getYearFromIso(startAt) ?? new Date().getFullYear(),
@@ -197,25 +193,36 @@ export default function LoggingPage() {
   }, [endAt, lockedMonthSetForEntry, startAt])
 
   const handleJobSelect = React.useCallback(
-    (jobId: string) => {
+    (
+      jobId: string,
+      job?: {
+        id: string
+        title: string
+        jobnr: number | null
+        start_at: string | null
+        end_at: string | null
+      },
+    ) => {
       setSelectedJobId(jobId)
-      const job = recentJobs.find((item) => item.id === jobId)
-      if (!job) return
+      const resolved = job ?? jobsData.find((item) => item.id === jobId)
+      if (!resolved) return
 
-      setTitle(job.title || '')
-      setJobNumber(job.jobnr != null ? String(job.jobnr) : '')
+      setTitle(resolved.title || '')
+      setJobNumber(resolved.jobnr != null ? String(resolved.jobnr) : '')
 
-      const nextStart = job.start_at ?? ''
+      const nextStart = resolved.start_at ?? ''
       if (nextStart) {
         setStartAt(nextStart)
-        if (job.end_at) {
-          setEndAt(job.end_at)
+        if (resolved.end_at) {
+          setEndAt(resolved.end_at)
         } else {
           setEndAt(getEndFallback(nextStart))
         }
       }
+      setJobSearchOpen(false)
+      setJobSearch('')
     },
-    [recentJobs],
+    [jobsData],
   )
 
   const createEntry = useMutation({
@@ -245,7 +252,10 @@ export default function LoggingPage() {
         note: note.trim() || null,
         start_at: startAt,
         end_at: endAt,
-      })
+        ...(entryMode === 'job' && selectedJobId
+          ? { job_id: selectedJobId }
+          : {}),
+      } as TimeEntryInsert)
     },
     onSuccess: async () => {
       await invalidateEntries()
@@ -366,42 +376,131 @@ export default function LoggingPage() {
               setEntryMode(value as 'manual' | 'job')
               if (value === 'manual') {
                 setSelectedJobId(null)
+                setJobSearchOpen(false)
+              } else {
+                setJobSearchOpen(true)
               }
             }}
           >
-            <SegmentedControl.Item value="manual">Manual</SegmentedControl.Item>
             <SegmentedControl.Item value="job">
               Link to job
             </SegmentedControl.Item>
+            <SegmentedControl.Item value="manual">Manual</SegmentedControl.Item>
           </SegmentedControl.Root>
         </label>
         {entryMode === 'job' && (
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Recent job
-            </Text>
-            <Select.Root
-              value={selectedJobId || undefined}
-              onValueChange={handleJobSelect}
-              disabled={false}
-            >
-              <Select.Trigger
-                placeholder={jobsLoading ? 'Loading jobs…' : 'Select a job'}
-              />
-              <Select.Content>
-                {recentJobs.length === 0 && (
-                  <Select.Item value="none" disabled>
-                    No recent jobs
-                  </Select.Item>
-                )}
-                {recentJobs.map((job) => (
-                  <Select.Item key={job.id} value={job.id}>
-                    {formatJobOption(job)}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-          </label>
+          <>
+            <Flex direction="column" gap="2" style={{ gridColumn: '1 / -1' }}>
+              <Flex align="center" gap="2">
+                <Switch
+                  checked={showOnlyMyJobs}
+                  onCheckedChange={(v) => setShowOnlyMyJobs(Boolean(v))}
+                />
+                <Text size="2">Show only my jobs</Text>
+              </Flex>
+            </Flex>
+            <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
+              <Text as="div" size="2" mb="1" weight="medium">
+                Job
+              </Text>
+              {selectedJobId ? (
+                <Flex align="center" gap="2">
+                  <Text size="2" style={{ flex: 1 }}>
+                    {(() => {
+                      const job = jobsData.find((j) => j.id === selectedJobId)
+                      return job ? formatJobOption(job) : selectedJobId
+                    })()}
+                  </Text>
+                  <Button
+                    size="1"
+                    variant="soft"
+                    onClick={() => {
+                      setSelectedJobId(null)
+                      setJobSearchOpen(true)
+                    }}
+                  >
+                    Change
+                  </Button>
+                </Flex>
+              ) : (
+                <>
+                  <TextField.Root
+                    placeholder="Search by title, project lead, date, customer, job number"
+                    value={jobSearch}
+                    onChange={(e) => {
+                      setJobSearch(e.target.value)
+                      setJobSearchOpen(true)
+                    }}
+                    onFocus={() => setJobSearchOpen(true)}
+                    onBlur={() => {
+                      setTimeout(() => setJobSearchOpen(false), 150)
+                    }}
+                  />
+                  {jobSearchOpen && (
+                    <Box
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: '100%',
+                        marginTop: 4,
+                        zIndex: 10,
+                        maxHeight: 280,
+                        overflow: 'auto',
+                        background: 'var(--color-background)',
+                        border: '1px solid var(--gray-a6)',
+                        borderRadius: 'var(--radius-3)',
+                        boxShadow: 'var(--shadow-4)',
+                      }}
+                    >
+                      {jobsLoading ? (
+                        <Box p="3">
+                          <Text size="2" color="gray">
+                            Loading jobs…
+                          </Text>
+                        </Box>
+                      ) : jobsForPicker.length === 0 ? (
+                        <Box p="3">
+                          <Text size="2" color="gray">
+                            No jobs found. Try a different search or turn off
+                            &quot;Show only my jobs&quot;.
+                          </Text>
+                        </Box>
+                      ) : (
+                        jobsForPicker.map((job) => (
+                          <Box
+                            key={job.id}
+                            asChild
+                            p="2"
+                            style={{
+                              cursor: 'pointer',
+                            }}
+                            onClick={() => handleJobSelect(job.id, job)}
+                            onMouseDown={(e) => e.preventDefault()}
+                          >
+                            <div>
+                              <Text size="2">{formatJobOption(job)}</Text>
+                              {(job.customer?.name ??
+                                job.project_lead?.display_name) && (
+                                <Text size="1" color="gray" as="div">
+                                  {[
+                                    job.customer?.name,
+                                    job.project_lead?.display_name,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </Text>
+                              )}
+                            </div>
+                          </Box>
+                        ))
+                      )}
+                    </Box>
+                  )}
+                </>
+              )}
+            </Box>
+          </>
         )}
         <label>
           <Text as="div" size="2" mb="1" weight="medium">
@@ -492,15 +591,15 @@ export default function LoggingPage() {
 
   const entriesTable = (
     <>
-      <Flex align="center" justify="between" gap="3" mb="3" wrap="wrap">
-        <Heading size="4">Entries</Heading>
+      <Flex align="center" justify="between" gap="3" mb="2" wrap="wrap">
+        <Heading size="4">Entries for {label}</Heading>
         <Flex align="center" gap="3" wrap="wrap">
           <Text size="2" color="gray">
             {entries.length} total
           </Text>
           <Select.Root
             value={String(selectedYear)}
-            onValueChange={(value) => {
+            onValueChange={(value: string) => {
               const monthPart = selectedMonth.split('-')[1] ?? '01'
               setSelectedMonth(`${value}-${monthPart}`)
             }}
@@ -546,9 +645,6 @@ export default function LoggingPage() {
           </Box>
         </Flex>
       </Flex>
-      <Text size="2" color="gray" mb="3">
-        Showing entries for {label}
-      </Text>
       <Separator size="4" mb="3" />
 
       <TimeEntriesTable

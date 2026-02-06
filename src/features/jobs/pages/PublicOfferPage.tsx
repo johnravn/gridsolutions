@@ -17,7 +17,7 @@ import {
 } from '@radix-ui/themes'
 import { useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
-import { Download } from 'iconoir-react'
+import { Download, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { prettyPhone } from '@shared/phone/phone'
@@ -32,7 +32,9 @@ import {
 } from '../api/offerQueries'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
 import type {
+  GroupContentEntry,
   OfferAcceptance,
+  OfferEquipmentItem,
   OfferRejection,
   OfferRevisionRequest,
 } from '../types'
@@ -264,6 +266,229 @@ function AnimatedBackground({
   )
 }
 
+function EquipmentItemRows({
+  item,
+  offerGroupId,
+  showPrices,
+  formatCurrency,
+  expandedItemGroupKeys,
+  onToggleExpanded,
+  rowKeyPrefix,
+}: {
+  item: OfferEquipmentItem
+  offerGroupId: string
+  showPrices: boolean
+  formatCurrency: (n: number) => string
+  expandedItemGroupKeys: Set<string>
+  onToggleExpanded: (key: string) => void
+  rowKeyPrefix?: string
+}) {
+  const baseKey = rowKeyPrefix ?? `${offerGroupId}-${item.id}`
+  const isGroup = !!item.group
+  const hasContents =
+    isGroup && item.group_contents && item.group_contents.length > 0
+  const isExpanded = hasContents && expandedItemGroupKeys.has(baseKey)
+
+  return (
+    <>
+      <Table.Row key={item.id}>
+        <Table.Cell>
+          {isGroup ? (
+            <Flex align="center" gap="2">
+              {hasContents ? (
+                <Box
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onToggleExpanded(baseKey)}
+                >
+                  {isExpanded ? (
+                    <NavArrowDown width={16} height={16} />
+                  ) : (
+                    <NavArrowRight width={16} height={16} />
+                  )}
+                </Box>
+              ) : null}
+              <Text color={hasContents ? undefined : 'gray'}>
+                {item.group?.name ?? 'Group'} (Group)
+              </Text>
+            </Flex>
+          ) : (
+            item.item?.name || 'Unknown Item'
+          )}
+        </Table.Cell>
+        <Table.Cell>{item.item?.brand?.name ?? '—'}</Table.Cell>
+        <Table.Cell>{item.item?.model ?? '—'}</Table.Cell>
+        <Table.Cell style={{ textAlign: 'right' }}>{item.quantity}</Table.Cell>
+        {showPrices && (
+          <>
+            <Table.Cell style={{ textAlign: 'right' }}>
+              {formatCurrency(item.unit_price)}
+            </Table.Cell>
+            <Table.Cell style={{ textAlign: 'right' }}>
+              {formatCurrency(item.total_price)}
+            </Table.Cell>
+          </>
+        )}
+        {!showPrices && <Table.Cell style={{ textAlign: 'right' }} />}
+      </Table.Row>
+      {isGroup && isExpanded && item.group_contents && (
+        <GroupContentsRows
+          entries={item.group_contents}
+          parentQuantity={item.quantity}
+          showPrices={showPrices}
+          formatCurrency={formatCurrency}
+          expandedItemGroupKeys={expandedItemGroupKeys}
+          onToggleExpanded={onToggleExpanded}
+          rowKeyPrefix={baseKey}
+        />
+      )}
+    </>
+  )
+}
+
+function GroupContentsRows({
+  entries,
+  parentQuantity,
+  showPrices,
+  formatCurrency,
+  expandedItemGroupKeys,
+  onToggleExpanded,
+  rowKeyPrefix,
+  depth = 0,
+}: {
+  entries: Array<GroupContentEntry>
+  parentQuantity: number
+  showPrices: boolean
+  formatCurrency: (n: number) => string
+  expandedItemGroupKeys: Set<string>
+  onToggleExpanded: (key: string) => void
+  rowKeyPrefix: string
+  depth?: number
+}) {
+  const paddingLeft = 16 + depth * 16
+  return (
+    <>
+      {entries.map((entry, index) => {
+        const key = `${rowKeyPrefix}-${index}`
+        if (entry.type === 'item') {
+          const qty = entry.quantity * parentQuantity
+          return (
+            <Table.Row key={key} style={{ background: 'var(--gray-a2)' }}>
+              <Table.Cell>
+                <Text size="1" color="gray" style={{ paddingLeft }}>
+                  {entry.name}
+                </Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1" color="gray">
+                  {entry.brand_name ?? '—'}
+                </Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1" color="gray">
+                  {entry.model ?? '—'}
+                </Text>
+              </Table.Cell>
+              <Table.Cell style={{ textAlign: 'right' }}>
+                <Text size="1" color="gray">
+                  {qty}
+                </Text>
+              </Table.Cell>
+              {showPrices && (
+                <>
+                  <Table.Cell style={{ textAlign: 'right' }}>
+                    <Text size="1" color="gray">
+                      Included
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell style={{ textAlign: 'right' }}>
+                    <Text size="1" color="gray">
+                      Included
+                    </Text>
+                  </Table.Cell>
+                </>
+              )}
+              {!showPrices && <Table.Cell style={{ textAlign: 'right' }} />}
+            </Table.Row>
+          )
+        }
+        const isNestedExpanded = expandedItemGroupKeys.has(key)
+        const hasNested = entry.items.length > 0
+        return (
+          <React.Fragment key={key}>
+            <Table.Row style={{ background: 'var(--gray-a2)' }}>
+              <Table.Cell>
+                <Flex align="center" gap="2">
+                  {hasNested ? (
+                    <Box
+                      style={{ cursor: 'pointer', paddingLeft }}
+                      onClick={() => onToggleExpanded(key)}
+                    >
+                      {isNestedExpanded ? (
+                        <NavArrowDown width={14} height={14} />
+                      ) : (
+                        <NavArrowRight width={14} height={14} />
+                      )}
+                    </Box>
+                  ) : (
+                    <Text size="1" color="gray" style={{ paddingLeft }}>
+                      —
+                    </Text>
+                  )}
+                  <Text size="1" color="gray">
+                    {entry.name} (Group)
+                  </Text>
+                </Flex>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1" color="gray">
+                  —
+                </Text>
+              </Table.Cell>
+              <Table.Cell>
+                <Text size="1" color="gray">
+                  —
+                </Text>
+              </Table.Cell>
+              <Table.Cell style={{ textAlign: 'right' }}>
+                <Text size="1" color="gray">
+                  {entry.quantity * parentQuantity}
+                </Text>
+              </Table.Cell>
+              {showPrices && (
+                <>
+                  <Table.Cell style={{ textAlign: 'right' }}>
+                    <Text size="1" color="gray">
+                      Included
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell style={{ textAlign: 'right' }}>
+                    <Text size="1" color="gray">
+                      Included
+                    </Text>
+                  </Table.Cell>
+                </>
+              )}
+              {!showPrices && <Table.Cell style={{ textAlign: 'right' }} />}
+            </Table.Row>
+            {hasNested && isNestedExpanded && (
+              <GroupContentsRows
+                entries={entry.items}
+                parentQuantity={parentQuantity * entry.quantity}
+                showPrices={showPrices}
+                formatCurrency={formatCurrency}
+                expandedItemGroupKeys={expandedItemGroupKeys}
+                onToggleExpanded={onToggleExpanded}
+                rowKeyPrefix={key}
+                depth={depth + 1}
+              />
+            )}
+          </React.Fragment>
+        )
+      })}
+    </>
+  )
+}
+
 export default function PublicOfferPage() {
   const { accessToken } = useParams({ strict: false })
   const { success, error: toastError } = useToast()
@@ -308,6 +533,9 @@ export default function PublicOfferPage() {
   const [showRejectForm, setShowRejectForm] = React.useState(false)
   const [showRevisionForm, setShowRevisionForm] = React.useState(false)
   const [showTermsDialog, setShowTermsDialog] = React.useState(false)
+  const [expandedItemGroupKeys, setExpandedItemGroupKeys] = React.useState<
+    Set<string>
+  >(new Set())
 
   const {
     data: offer,
@@ -812,7 +1040,7 @@ export default function PublicOfferPage() {
                   </Box>
                 )}
 
-              {/* Equipment Groups (for technical offers) */}
+              {/* Equipment Groups (for technical offers) – item groups expandable */}
               {offer.offer_type === 'technical' &&
                 offer.groups &&
                 offer.groups.length > 0 && (
@@ -821,12 +1049,11 @@ export default function PublicOfferPage() {
                       Equipment
                     </Heading>
                     {offer.groups.map((group) => {
-                      const showPrices = offer.show_price_per_line ?? true
+                      const showPrices = offer.show_price_per_line !== false
                       const groupTotal = group.items.reduce(
                         (sum, item) => sum + item.total_price,
                         0,
                       )
-
                       return (
                         <Box key={group.id} mb="4">
                           <Heading size="3" mb="3">
@@ -874,43 +1101,23 @@ export default function PublicOfferPage() {
                             </Table.Header>
                             <Table.Body>
                               {group.items.map((item) => (
-                                <Table.Row key={item.id}>
-                                  <Table.Cell>
-                                    {item.group
-                                      ? `${item.group.name} (Group)`
-                                      : item.item?.name || 'Unknown Item'}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    {item.item?.brand?.name ?? '—'}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    {item.item?.model ?? '—'}
-                                  </Table.Cell>
-                                  <Table.Cell style={{ textAlign: 'right' }}>
-                                    {item.quantity}
-                                  </Table.Cell>
-                                  {showPrices && (
-                                    <>
-                                      <Table.Cell
-                                        style={{ textAlign: 'right' }}
-                                      >
-                                        {formatCurrency(item.unit_price)}
-                                      </Table.Cell>
-                                      <Table.Cell
-                                        style={{ textAlign: 'right' }}
-                                      >
-                                        {formatCurrency(item.total_price)}
-                                      </Table.Cell>
-                                    </>
-                                  )}
-                                  {!showPrices && (
-                                    <Table.Cell style={{ textAlign: 'right' }}>
-                                      {/* Empty cell when prices are hidden per line */}
-                                    </Table.Cell>
-                                  )}
-                                </Table.Row>
+                                <EquipmentItemRows
+                                  key={item.id}
+                                  item={item}
+                                  offerGroupId={group.id}
+                                  showPrices={showPrices}
+                                  formatCurrency={formatCurrency}
+                                  expandedItemGroupKeys={expandedItemGroupKeys}
+                                  onToggleExpanded={(key) => {
+                                    setExpandedItemGroupKeys((prev) => {
+                                      const next = new Set(prev)
+                                      if (next.has(key)) next.delete(key)
+                                      else next.add(key)
+                                      return next
+                                    })
+                                  }}
+                                />
                               ))}
-                              {/* Total row for each group */}
                               <Table.Row style={{ fontWeight: 'bold' }}>
                                 <Table.Cell colSpan={showPrices ? 5 : 4}>
                                   Total
@@ -1026,7 +1233,7 @@ export default function PublicOfferPage() {
                       Transportation
                     </Heading>
                     {(() => {
-                      const showPrices = offer.show_price_per_line ?? true
+                      const showPrices = offer.show_price_per_line !== false
                       const transportTotal = offer.transport_items.reduce(
                         (sum, item) => sum + item.total_price,
                         0,
