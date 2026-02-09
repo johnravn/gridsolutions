@@ -2606,6 +2606,7 @@ export type Database = {
           created_at: string
           end_at: string
           id: string
+          job_id: string | null
           job_number: string | null
           note: string | null
           start_at: string
@@ -2618,6 +2619,7 @@ export type Database = {
           created_at?: string
           end_at: string
           id?: string
+          job_id?: string | null
           job_number?: string | null
           note?: string | null
           start_at: string
@@ -2630,6 +2632,7 @@ export type Database = {
           created_at?: string
           end_at?: string
           id?: string
+          job_id?: string | null
           job_number?: string | null
           note?: string | null
           start_at?: string
@@ -2643,6 +2646,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "time_entries_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
           {

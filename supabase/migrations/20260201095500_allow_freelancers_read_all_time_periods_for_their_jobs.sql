@@ -57,6 +57,7 @@ $$;
 
 -- Replace the old freelancer time_periods policy with job-scoped access.
 DROP POLICY IF EXISTS "Freelancers can view time_periods they are invited to" ON public.time_periods;
+DROP POLICY IF EXISTS "Freelancers can view time_periods for their jobs" ON public.time_periods;
 CREATE POLICY "Freelancers can view time_periods for their jobs"
   ON public.time_periods
   FOR SELECT
