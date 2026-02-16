@@ -2,7 +2,6 @@
 import * as React from 'react'
 import {
   Box,
-  Button,
   Card,
   Checkbox,
   DropdownMenu,
@@ -16,7 +15,7 @@ import {
 } from '@radix-ui/themes'
 import { useLocation } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { NavArrowDown, TransitionLeft } from 'iconoir-react'
+import { Filter, TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -175,7 +174,7 @@ export default function InventoryPage() {
           >
             <Flex align="center" justify="between" mb="3">
               <Heading size="5">Overview</Heading>
-              <FiltersDropdown
+              <InventoryFilter
                 showActive={showActive}
                 showInactive={showInactive}
                 showInternal={showInternal}
@@ -212,7 +211,6 @@ export default function InventoryPage() {
                 showGroupOnlyItems={showGroupOnlyItems}
                 showGroups={showGroups}
                 showItems={showItems}
-                pageSizeOverride={!isLarge ? 12 : undefined}
               />
             </Box>
           </Card>
@@ -343,7 +341,7 @@ export default function InventoryPage() {
               <Flex align="center" justify="between" mb="3">
                 <Heading size="5">Overview</Heading>
                 <Flex align="center" gap="2">
-                  <FiltersDropdown
+                  <InventoryFilter
                     showActive={showActive}
                     showInactive={showInactive}
                     showInternal={showInternal}
@@ -393,7 +391,6 @@ export default function InventoryPage() {
                   showGroupOnlyItems={showGroupOnlyItems}
                   showGroups={showGroups}
                   showItems={showItems}
-                  pageSizeOverride={!isLarge ? 12 : undefined}
                 />
               </Box>
             </>
@@ -470,7 +467,7 @@ export default function InventoryPage() {
   )
 }
 
-function FiltersDropdown({
+function InventoryFilter({
   showActive,
   showInactive,
   showInternal,
@@ -501,6 +498,7 @@ function FiltersDropdown({
   onShowGroupsChange: (v: boolean) => void
   onShowItemsChange: (v: boolean) => void
 }) {
+  const [open, setOpen] = React.useState(false)
   const selectedCount = [
     showActive,
     showInactive,
@@ -510,23 +508,38 @@ function FiltersDropdown({
     showGroups,
     showItems,
   ].filter(Boolean).length
-
-  const label =
-    selectedCount === 7
-      ? 'All filters'
-      : selectedCount === 0
-        ? 'No filters'
-        : `${selectedCount} selected`
+  const activeFiltersCount = selectedCount < 7 ? selectedCount : 0
 
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" size="2">
-          <Text>{label}</Text>
-          <NavArrowDown width={14} height={14} />
-        </Button>
+        <Box style={{ position: 'relative', display: 'inline-block' }}>
+          <IconButton variant="soft" size="2">
+            <Filter width={16} height={16} />
+          </IconButton>
+          {activeFiltersCount > 0 && (
+            <Box
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--accent-9)',
+                color: 'white',
+                fontSize: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {activeFiltersCount}
+            </Box>
+          )}
+        </Box>
       </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
+      <DropdownMenu.Content align="end">
         <DropdownMenu.Label>Status</DropdownMenu.Label>
         <DropdownMenu.Item
           onSelect={(e) => {

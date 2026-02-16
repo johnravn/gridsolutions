@@ -624,13 +624,17 @@ export default function TechnicalOfferEditor({
     const totalAfterDiscount = totalBeforeDiscount - discountAmount
     const totalWithVAT = totalAfterDiscount + (totalAfterDiscount * vatPercent) / 100
 
+    // Round monetary values to 2 decimals to avoid floating-point display issues
+    const round2 = (n: number) => Math.round(n * 100) / 100
     return {
       ...baseTotals,
-      transportSubtotal,
-      totalBeforeDiscount,
-      totalAfterDiscount,
-      totalWithVAT,
-      discountAmount,
+      equipmentSubtotal: round2(baseTotals.equipmentSubtotal),
+      crewSubtotal: round2(baseTotals.crewSubtotal),
+      transportSubtotal: round2(transportSubtotal),
+      totalBeforeDiscount: round2(totalBeforeDiscount),
+      totalAfterDiscount: round2(totalAfterDiscount),
+      totalWithVAT: round2(totalWithVAT),
+      discountAmount: round2(discountAmount),
     }
   }, [
     equipmentGroups,
@@ -641,6 +645,7 @@ export default function TechnicalOfferEditor({
     vatPercent,
     rentalFactorConfig,
     offerId,
+    companyExpansion?.vehicle_daily_rate,
     companyExpansion?.vehicle_distance_rate,
     companyExpansion?.vehicle_distance_increment,
   ])
@@ -910,9 +915,10 @@ export default function TechnicalOfferEditor({
               vehicle_id: item.vehicle_id ?? null,
               vehicle_category: item.vehicle_category,
               distance_km: item.distance_km,
+              distance_rate: item.distance_rate ?? null,
               start_date: item.start_date,
               end_date: item.end_date,
-              daily_rate: item.daily_rate ?? 0,
+              daily_rate: effectiveDailyRate,
               total_price: totalPrice,
               is_internal: item.is_internal,
               sort_order: item.sort_order,
@@ -926,9 +932,10 @@ export default function TechnicalOfferEditor({
             vehicle_name: item.vehicle_name,
             vehicle_category: item.vehicle_category,
             distance_km: item.distance_km,
+            distance_rate: item.distance_rate ?? null,
             start_date: item.start_date,
             end_date: item.end_date,
-            daily_rate: item.daily_rate ?? 0,
+            daily_rate: effectiveDailyRate,
             total_price: totalPrice,
             is_internal: item.is_internal,
             sort_order: item.sort_order,

@@ -11,7 +11,8 @@ import {
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { TransitionLeft } from 'iconoir-react'
+import { CalendarXmark, TransitionLeft } from 'iconoir-react'
+import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
@@ -19,7 +20,8 @@ import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
-import JobsTable from '../components/JobsTable'
+import JobsList from '../components/JobsList'
+import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 
 export default function JobsPage() {
@@ -117,6 +119,9 @@ export default function JobsPage() {
   const [selectedId, setSelectedId] = React.useState<string | null>(
     jobId || null,
   )
+  const [statusFilter, setStatusFilter] = React.useState(DEFAULT_STATUS_FILTER)
+  const [showOnlyArchived, setShowOnlyArchived] = React.useState(false)
+  const [selectedDate, setSelectedDate] = React.useState<string>('')
 
   // Update selectedId when jobId from URL changes
   React.useEffect(() => {
@@ -143,10 +148,10 @@ export default function JobsPage() {
     }
   }, [])
 
-  // Resize state: track left panel width as percentage (default 45/55 split)
-  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(45)
+  // Resize state: track left panel width as percentage (default 60/40 split)
+  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(60)
   const [isMinimized, setIsMinimized] = React.useState(false)
-  const [savedWidth, setSavedWidth] = React.useState<number>(45) // Save width when minimizing
+  const [savedWidth, setSavedWidth] = React.useState<number>(60) // Save width when minimizing
   const [isResizing, setIsResizing] = React.useState(false)
   const [hasUserResized, setHasUserResized] = React.useState(false) // Track if user manually resized
   const containerRef = React.useRef<HTMLDivElement>(null)
@@ -155,7 +160,7 @@ export default function JobsPage() {
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
       // Expand
-      setLeftPanelWidth(savedWidth || 45)
+      setLeftPanelWidth(savedWidth || 60)
       setIsMinimized(false)
     } else {
       // Minimize
@@ -170,22 +175,11 @@ export default function JobsPage() {
   // Expand when clicking on glowing bar
   const handleGlowingBarClick = React.useCallback(() => {
     if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 45)
+      setLeftPanelWidth(savedWidth || 60)
       setIsMinimized(false)
     }
   }, [isMinimized, savedWidth])
 
-  // Handle optimal width change from table
-  const handleTableWidthChange = React.useCallback(
-    (width: number) => {
-      // Only auto-update width if user hasn't manually resized
-      if (!hasUserResized && !isMinimized) {
-        setLeftPanelWidth(width)
-        setSavedWidth(width)
-      }
-    },
-    [hasUserResized, isMinimized],
-  )
 
   // Handle mouse move for resizing
   React.useEffect(() => {
@@ -262,7 +256,7 @@ export default function JobsPage() {
             minHeight: 0,
           }}
         >
-          {/* LEFT: Jobs table */}
+          {/* LEFT: Jobs list */}
           <Card
             size="3"
             style={{
@@ -272,21 +266,62 @@ export default function JobsPage() {
               minHeight: 0,
             }}
           >
-            <Heading size="5" mb="3">
-              Jobs
-            </Heading>
+            <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
+              <Heading size="5">Jobs</Heading>
+              <Flex align="center" gap="2" wrap="wrap">
+                {selectedDate ? (
+                  <Tooltip
+                    content={`Filter: ${new Date(selectedDate).toLocaleDateString()}`}
+                  >
+                    <IconButton
+                      size="2"
+                      variant="soft"
+                      color="blue"
+                      onClick={() => setSelectedDate('')}
+                    >
+                      <CalendarXmark width={16} height={16} />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <DateTimePicker
+                    value=""
+                    onChange={(iso) => {
+                      if (iso) {
+                        const d = new Date(iso)
+                        setSelectedDate(
+                          `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+                        )
+                      }
+                    }}
+                    dateOnly
+                    iconButton
+                    iconButtonSize="2"
+                  />
+                )}
+                <JobsFilter
+                  statusFilter={statusFilter}
+                  onStatusFilterChange={setStatusFilter}
+                  showOnlyArchived={showOnlyArchived}
+                  onShowOnlyArchivedChange={setShowOnlyArchived}
+                />
+              </Flex>
+            </Flex>
             <Separator size="4" mb="3" />
             <Box
               style={{
                 flex: isLarge ? 1 : undefined,
                 minHeight: isLarge ? 0 : undefined,
                 overflowY: isLarge ? 'auto' : 'visible',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
-              <JobsTable
+              <JobsList
                 selectedId={selectedId}
                 onSelect={setSelectedId}
-                onWidthChange={isLarge ? handleTableWidthChange : undefined}
+                statusFilter={statusFilter}
+                showOnlyArchived={showOnlyArchived}
+                selectedDate={selectedDate}
               />
             </Box>
           </Card>
@@ -422,35 +457,76 @@ export default function JobsPage() {
             </Box>
           ) : (
             <>
-              <Flex align="center" justify="between" mb="3">
+              <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
                 <Heading size="5">Jobs</Heading>
-                <Tooltip
-                  content={`Collapse sidebar (${collapseShortcutLabel})`}
-                >
-                  <IconButton
-                    size="3"
-                    variant="ghost"
-                    onClick={toggleMinimize}
-                    style={{
-                      flexShrink: 0,
-                    }}
+                <Flex align="center" gap="2" wrap="wrap">
+                  {selectedDate ? (
+                    <Tooltip
+                      content={`Filter: ${new Date(selectedDate).toLocaleDateString()}`}
+                    >
+                      <IconButton
+                        size="2"
+                        variant="soft"
+                        color="blue"
+                        onClick={() => setSelectedDate('')}
+                      >
+                        <CalendarXmark width={16} height={16} />
+                      </IconButton>
+                    </Tooltip>
+                  ) : (
+                    <DateTimePicker
+                      value=""
+                      onChange={(iso) => {
+                        if (iso) {
+                          const d = new Date(iso)
+                          setSelectedDate(
+                            `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`,
+                          )
+                        }
+                      }}
+                      dateOnly
+                      iconButton
+                      iconButtonSize="2"
+                    />
+                  )}
+                  <JobsFilter
+                    statusFilter={statusFilter}
+                    onStatusFilterChange={setStatusFilter}
+                    showOnlyArchived={showOnlyArchived}
+                    onShowOnlyArchivedChange={setShowOnlyArchived}
+                  />
+                  <Tooltip
+                    content={`Collapse sidebar (${collapseShortcutLabel})`}
                   >
-                    <TransitionLeft width={22} height={22} />
-                  </IconButton>
-                </Tooltip>
+                    <IconButton
+                      size="3"
+                      variant="ghost"
+                      onClick={toggleMinimize}
+                      style={{
+                        flexShrink: 0,
+                      }}
+                    >
+                      <TransitionLeft width={22} height={22} />
+                    </IconButton>
+                  </Tooltip>
+                </Flex>
               </Flex>
               <Separator size="4" mb="3" />
               <Box
                 style={{
                   flex: isLarge ? 1 : undefined,
                   minHeight: isLarge ? 0 : undefined,
-                  overflowY: isLarge ? 'auto' : 'visible',
+                  overflow: isLarge ? 'hidden' : 'visible',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
-                <JobsTable
+                <JobsList
                   selectedId={selectedId}
                   onSelect={setSelectedId}
-                  onWidthChange={isLarge ? handleTableWidthChange : undefined}
+                  statusFilter={statusFilter}
+                  showOnlyArchived={showOnlyArchived}
+                  selectedDate={selectedDate}
                 />
               </Box>
             </>

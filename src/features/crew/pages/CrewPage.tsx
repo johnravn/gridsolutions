@@ -1,7 +1,6 @@
 import * as React from 'react'
 import {
   Box,
-  Button,
   Card,
   Checkbox,
   DropdownMenu,
@@ -16,7 +15,7 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useQuery } from '@tanstack/react-query'
-import { NavArrowDown, TransitionLeft } from 'iconoir-react'
+import { Filter, TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -176,7 +175,7 @@ export default function CrewPage() {
           >
             <Flex align="center" justify="between" mb="3">
               <Heading size="5">Crew</Heading>
-              <StatusDropdown
+              <CrewFilter
                 showEmployees={showEmployees}
                 showFreelancers={showFreelancers}
                 showMyPending={showMyPending}
@@ -188,7 +187,11 @@ export default function CrewPage() {
             <Separator size="4" mb="3" />
             <Box
               style={{
-                overflowY: 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <CrewTable
@@ -327,7 +330,7 @@ export default function CrewPage() {
               <Flex align="center" justify="between" mb="3">
                 <Heading size="5">Crew</Heading>
                 <Flex align="center" gap="2">
-                  <StatusDropdown
+                  <CrewFilter
                     showEmployees={showEmployees}
                     showFreelancers={showFreelancers}
                     showMyPending={showMyPending}
@@ -354,7 +357,9 @@ export default function CrewPage() {
                 style={{
                   flex: 1,
                   minHeight: 0,
-                  overflowY: 'auto',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 <CrewTable
@@ -448,7 +453,7 @@ export default function CrewPage() {
   )
 }
 
-function StatusDropdown({
+function CrewFilter({
   showEmployees,
   showFreelancers,
   showMyPending,
@@ -463,26 +468,42 @@ function StatusDropdown({
   onShowFreelancersChange: (v: boolean) => void
   onShowMyPendingChange: (v: boolean) => void
 }) {
+  const [open, setOpen] = React.useState(false)
   const selectedCount = [showEmployees, showFreelancers, showMyPending].filter(
     Boolean,
   ).length
-
-  const label =
-    selectedCount === 3
-      ? 'All statuses'
-      : selectedCount === 0
-        ? 'No statuses'
-        : `${selectedCount} selected`
+  const activeFiltersCount = selectedCount < 3 ? selectedCount : 0
 
   return (
-    <DropdownMenu.Root>
+    <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
-        <Button variant="soft" size="2">
-          <Text>{label}</Text>
-          <NavArrowDown width={14} height={14} />
-        </Button>
+        <Box style={{ position: 'relative', display: 'inline-block' }}>
+          <IconButton variant="soft" size="2">
+            <Filter width={16} height={16} />
+          </IconButton>
+          {activeFiltersCount > 0 && (
+            <Box
+              style={{
+                position: 'absolute',
+                top: '-4px',
+                right: '-4px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                backgroundColor: 'var(--accent-9)',
+                color: 'white',
+                fontSize: '10px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {activeFiltersCount}
+            </Box>
+          )}
+        </Box>
       </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
+      <DropdownMenu.Content align="end">
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()

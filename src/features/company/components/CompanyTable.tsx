@@ -1,12 +1,13 @@
 // src/features/company/components/CompanyTable.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Badge,
+  Box,
   Button,
   Flex,
   Spinner,
-  Table,
   Text,
   TextField,
 } from '@radix-ui/themes'
@@ -19,10 +20,8 @@ import {
   pendingInvitesQuery,
 } from '../../crew/api/queries'
 import AddFreelancerDialog from '../../crew/components/dialogs/AddFreelancerDialog'
-import { removeCompanyUser } from '../api/queries'
 import AddEmployeeDialog from './dialogs/AddEmployeeDialog'
 import RemoveUserConfirmDialog from './dialogs/RemoveUserConfirmDialog'
-import type { PendingInvite } from '../../crew/api/queries'
 
 type Row = {
   kind: 'employee' | 'freelancer' | 'invite' | 'owner'
@@ -31,6 +30,29 @@ type Row = {
   subtitle?: string
   role?: 'owner' | 'employee' | 'freelancer' | 'super_user'
   email?: string
+}
+
+type SortBy = 'name' | 'status'
+type SortDir = 'asc' | 'desc'
+
+const GRID_COLUMNS = 'minmax(160px, 2fr) minmax(120px, 1fr) 80px'
+
+const KIND_ORDER: Record<Row['kind'], number> = {
+  invite: 0,
+  owner: 1,
+  employee: 2,
+  freelancer: 3,
+}
+
+function compareRows(a: Row, b: Row, sortBy: SortBy, sortDir: SortDir): number {
+  let cmp = 0
+  if (sortBy === 'name') {
+    cmp = a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
+  } else {
+    cmp = KIND_ORDER[a.kind] - KIND_ORDER[b.kind]
+    if (cmp === 0) cmp = a.title.localeCompare(b.title)
+  }
+  return sortDir === 'asc' ? cmp : -cmp
 }
 
 export default function CompanyTable({
@@ -49,12 +71,17 @@ export default function CompanyTable({
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const [search, setSearch] = React.useState('')
-  const { success, error } = useToast()
+  const [sortBy, setSortBy] = React.useState<SortBy>('name')
+  const [sortDir, setSortDir] = React.useState<SortDir>('asc')
+  const { success } = useToast()
 
-  // Queries
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const controlsRef = React.useRef<HTMLDivElement>(null)
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+
   const { data: owners = [], isLoading: owLoading } = useQuery({
     ...crewIndexQuery({ companyId: companyId!, kind: 'owner' }),
-    enabled: !!companyId, // owners always shown (like Crew page)
+    enabled: !!companyId,
   })
 
   const { data: employees = [], isLoading: empLoading } = useQuery({
@@ -62,7 +89,7 @@ export default function CompanyTable({
     enabled: !!companyId && showEmployees,
   })
 
-  const { data: freelancers = [], isLoading: frLoading } = useQuery({
+  const { data: freelancers = [] } = useQuery({
     ...crewIndexQuery({ companyId: companyId!, kind: 'freelancer' }),
     enabled: !!companyId && showFreelancers,
   })
@@ -74,7 +101,6 @@ export default function CompanyTable({
 
   const rows = React.useMemo(() => {
     const L: Array<Row> = []
-
     owners.forEach((u) =>
       L.push({
         kind: 'owner',
@@ -84,7 +110,6 @@ export default function CompanyTable({
         email: u.email,
       }),
     )
-
     if (showEmployees) {
       employees.forEach((u) =>
         L.push({
@@ -96,7 +121,6 @@ export default function CompanyTable({
         }),
       )
     }
-
     if (showFreelancers) {
       freelancers.forEach((u) =>
         L.push({
@@ -108,7 +132,6 @@ export default function CompanyTable({
         }),
       )
     }
-
     if (showMyPending) {
       myInvites.forEach((i) =>
         L.push({
@@ -121,7 +144,6 @@ export default function CompanyTable({
         }),
       )
     }
-
     const term = search.trim().toLowerCase()
     const filtered = term
       ? L.filter(
@@ -130,14 +152,7 @@ export default function CompanyTable({
             (r.subtitle ?? '').toLowerCase().includes(term),
         )
       : L
-
-    const priority: Record<(typeof filtered)[number]['kind'], number> = {
-      invite: 0,
-      owner: 1,
-      employee: 2,
-      freelancer: 3,
-    }
-    return filtered.slice().sort((a, b) => priority[a.kind] - priority[b.kind])
+    return [...filtered].sort((a, b) => compareRows(a, b, sortBy, sortDir))
   }, [
     owners,
     employees,
@@ -147,7 +162,18 @@ export default function CompanyTable({
     showFreelancers,
     showMyPending,
     search,
+    sortBy,
+    sortDir,
   ])
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+    getItemKey: (index) => rows[index]?.id ?? index,
+    enabled: rows.length > 0,
+  })
 
   const [addEmployeeOpen, setAddEmployeeOpen] = React.useState(false)
   const [addFreelancerOpen, setAddFreelancerOpen] = React.useState(false)
@@ -162,7 +188,6 @@ export default function CompanyTable({
   const delInvite = useMutation({
     mutationFn: (inviteId: string) => deleteInvite({ inviteId }),
     onSuccess: () => {
-      // Invalidate any pending-invites queries for this company regardless of inviterId readiness
       qc.invalidateQueries({
         predicate: (q) =>
           Array.isArray(q.queryKey) &&
@@ -174,6 +199,15 @@ export default function CompanyTable({
     },
   })
 
+  const handleSort = (col: SortBy) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortBy(col)
+      setSortDir('asc')
+    }
+  }
+
   const roleColor = (role: Row['role'] | Row['kind']) =>
     role === 'owner'
       ? 'purple'
@@ -181,14 +215,19 @@ export default function CompanyTable({
         ? 'blue'
         : role === 'freelancer'
           ? 'green'
-          : 'amber' // super_user
-
-  // We can guard last owner in UI using owners.length, server will enforce too
-  const isLastOwner = (r: Row) => r.kind === 'owner' && owners.length <= 1
+          : 'amber'
 
   return (
-    <div style={{ height: '100%', minHeight: 0 }}>
-      <Flex gap="2" align="center" wrap="wrap">
+    <div
+      ref={containerRef}
+      style={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap">
         <TextField.Root
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -202,93 +241,118 @@ export default function CompanyTable({
           <TextField.Slot side="right">
             {(empLoading || invLoading || owLoading) && (
               <Flex align="center" gap="1">
-                <Text>Thinking</Text>
                 <Spinner size="2" />
               </Flex>
             )}
           </TextField.Slot>
         </TextField.Root>
-
-        {/* Add employee */}
         <Button variant="classic" onClick={() => setAddEmployeeOpen(true)}>
           Add employee
         </Button>
-
-        {/* Optional: keep inviting freelancers from here too */}
         <Button variant="soft" onClick={() => setAddFreelancerOpen(true)}>
           Add freelancer
         </Button>
-
-        <AddEmployeeDialog
-          open={addEmployeeOpen}
-          onOpenChange={setAddEmployeeOpen}
-          onAdded={() => {
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'crew-index', 'employee'],
-            })
-            // also refresh invites in case it was an invite outcome
-            qc.invalidateQueries({
-              predicate: (q) =>
-                Array.isArray(q.queryKey) &&
-                q.queryKey[0] === 'company' &&
-                q.queryKey[1] === companyId &&
-                q.queryKey[2] === 'pending-invites',
-            })
-          }}
-        />
-        <AddFreelancerDialog
-          open={addFreelancerOpen}
-          onOpenChange={setAddFreelancerOpen}
-          onAdded={() => {
-            qc.invalidateQueries({
-              predicate: (q) =>
-                Array.isArray(q.queryKey) &&
-                q.queryKey[0] === 'company' &&
-                q.queryKey[1] === companyId &&
-                q.queryKey[2] === 'pending-invites',
-            })
-          }}
-        />
       </Flex>
 
-      <RemoveUserConfirmDialog
-        open={removeUserOpen}
-        onOpenChange={setRemoveUserOpen}
-        onRemoved={() => {}}
-        userName={userToRemove?.name ?? ''}
-        userEmail={userToRemove?.email ?? ''}
-        userKind={userToRemove?.kind ?? 'employee'}
-        userId={userToRemove?.id ?? ''}
-      />
-      <Table.Root variant="surface" style={{ marginTop: 16 }}>
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Name / Email</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell
-              style={{ width: 120, textAlign: 'right' }}
-            />
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {rows.length === 0 ? (
-            <Table.Row>
-              <Table.Cell colSpan={3}>No results</Table.Cell>
-            </Table.Row>
-          ) : (
-            rows.map((r) => {
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: GRID_COLUMNS,
+          gap: 'var(--space-2)',
+          padding: 'var(--space-2) var(--space-3)',
+          backgroundColor: 'var(--gray-a2)',
+          borderRadius: 'var(--radius-2)',
+          marginTop: 16,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          onClick={() => handleSort('name')}
+          style={{
+            fontSize: 'var(--font-size-1)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+          title="Click to sort"
+        >
+          Name / Email{sortBy === 'name' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+        </div>
+        <div
+          onClick={() => handleSort('status')}
+          style={{
+            fontSize: 'var(--font-size-1)',
+            fontWeight: 600,
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}
+          title="Click to sort"
+        >
+          Status{sortBy === 'status' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+        </div>
+        <div style={{ fontSize: 'var(--font-size-1)', fontWeight: 600 }} />
+      </div>
+
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          marginTop: 8,
+        }}
+      >
+        {rows.length === 0 ? (
+          <Flex align="center" justify="center" py="6">
+            <Text size="2" color="gray">
+              No results
+            </Text>
+          </Flex>
+        ) : (
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const r = rows[virtualRow.index]
               const active = r.kind !== 'invite' && r.id === selectedUserId
+
               return (
-                <Table.Row
+                <div
                   key={r.id}
+                  data-index={virtualRow.index}
                   onClick={() => r.kind !== 'invite' && onSelectUser(r.id)}
                   style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                    display: 'grid',
+                    gridTemplateColumns: GRID_COLUMNS,
+                    gap: 'var(--space-2)',
+                    alignItems: 'center',
+                    padding: '0 var(--space-3)',
                     cursor: r.kind !== 'invite' ? 'pointer' : 'default',
-                    background: active ? 'var(--accent-a3)' : undefined,
+                    backgroundColor: active ? 'var(--accent-a3)' : 'transparent',
+                    borderRadius: 'var(--radius-2)',
                   }}
-                  data-state={active ? 'active' : undefined}
+                  onMouseEnter={(e) => {
+                    if (!active && r.kind !== 'invite') {
+                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }
+                  }}
                 >
-                  <Table.Cell>
+                  <Box>
                     <Text size="2" weight="medium">
                       {r.title}
                     </Text>
@@ -297,8 +361,8 @@ export default function CompanyTable({
                         {r.subtitle}
                       </Text>
                     )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
+                  </Box>
+                  <Box>
                     {r.kind === 'invite' ? (
                       <Flex gap="2" align="center">
                         <Badge variant="soft" color="amber">
@@ -322,24 +386,19 @@ export default function CompanyTable({
                         )}
                       </Flex>
                     ) : (
-                      <Badge
-                        asChild={false}
-                        variant="soft"
-                        color={roleColor(r.kind)}
-                      >
+                      <Badge variant="soft" color={roleColor(r.kind)}>
                         {r.kind}
                       </Badge>
                     )}
-                  </Table.Cell>
-                  <Table.Cell style={{ textAlign: 'right' }}>
+                  </Box>
+                  <Box style={{ textAlign: 'right' }}>
                     {r.kind === 'invite' && (
                       <Button
                         variant="soft"
                         color="red"
                         onClick={(e) => {
                           e.stopPropagation()
-                          const id = r.id.replace('invite:', '')
-                          delInvite.mutate(id)
+                          delInvite.mutate(r.id.replace('invite:', ''))
                         }}
                         disabled={delInvite.isPending}
                       >
@@ -356,7 +415,7 @@ export default function CompanyTable({
                             id: r.id,
                             name: r.title,
                             email: r.email ?? '',
-                            kind: r.kind,
+                            kind: r.kind as 'employee' | 'freelancer',
                           })
                           setRemoveUserOpen(true)
                         }}
@@ -364,13 +423,60 @@ export default function CompanyTable({
                         <Trash width={14} height={14} />
                       </Button>
                     )}
-                  </Table.Cell>
-                </Table.Row>
+                  </Box>
+                </div>
               )
-            })
-          )}
-        </Table.Body>
-      </Table.Root>
+            })}
+          </div>
+        )}
+      </div>
+
+      {rows.length > 0 && (
+        <Flex align="center" mt="2">
+          <Text size="2" color="gray">
+            {rows.length} user{rows.length !== 1 ? 's' : ''}
+          </Text>
+        </Flex>
+      )}
+
+      <AddEmployeeDialog
+        open={addEmployeeOpen}
+        onOpenChange={setAddEmployeeOpen}
+        onAdded={() => {
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'crew-index', 'employee'],
+          })
+          qc.invalidateQueries({
+            predicate: (q) =>
+              Array.isArray(q.queryKey) &&
+              q.queryKey[0] === 'company' &&
+              q.queryKey[1] === companyId &&
+              q.queryKey[2] === 'pending-invites',
+          })
+        }}
+      />
+      <AddFreelancerDialog
+        open={addFreelancerOpen}
+        onOpenChange={setAddFreelancerOpen}
+        onAdded={() => {
+          qc.invalidateQueries({
+            predicate: (q) =>
+              Array.isArray(q.queryKey) &&
+              q.queryKey[0] === 'company' &&
+              q.queryKey[1] === companyId &&
+              q.queryKey[2] === 'pending-invites',
+          })
+        }}
+      />
+      <RemoveUserConfirmDialog
+        open={removeUserOpen}
+        onOpenChange={setRemoveUserOpen}
+        onRemoved={() => {}}
+        userName={userToRemove?.name ?? ''}
+        userEmail={userToRemove?.email ?? ''}
+        userKind={userToRemove?.kind ?? 'employee'}
+        userId={userToRemove?.id ?? ''}
+      />
     </div>
   )
 }

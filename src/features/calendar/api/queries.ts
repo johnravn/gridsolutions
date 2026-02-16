@@ -378,6 +378,33 @@ export function companyCalendarQuery({
       if (itemsRes.error) throw itemsRes.error
       if (crewRes.error) throw crewRes.error
 
+      // Build job-level crew map (crew on any period for each job)
+      const jobCrewMap = new Map<
+        string,
+        Array<{ user_id: string; status: string }>
+      >()
+      data.forEach((tp) => {
+        if (!tp.job_id) return
+        const crewForPeriod = (crewRes.data || []).filter(
+          (c: any) => c.time_period_id === tp.id,
+        )
+        crewForPeriod.forEach((c: any) => {
+          if (!jobCrewMap.has(tp.job_id)) {
+            jobCrewMap.set(tp.job_id, [])
+          }
+          const existing = jobCrewMap.get(tp.job_id)!
+          const already = existing.find((x) => x.user_id === c.user_id)
+          if (!already) {
+            existing.push({ user_id: c.user_id, status: c.status })
+          } else if (
+            c.status === 'accepted' &&
+            already.status !== 'accepted'
+          ) {
+            already.status = 'accepted'
+          }
+        })
+      })
+
       // Create lookup maps
       const vehicleMap = new Map<string, string>()
       ;(vehiclesRes.data || []).forEach((v: any) => {
@@ -453,6 +480,19 @@ export function companyCalendarQuery({
             ? jobStatusMap.get(tp.job_id) || undefined
             : undefined
 
+          const crewForPeriod = crewMap.get(tp.id) || []
+          const crewUserIds = crewForPeriod.map((c) => c.user_id)
+          const crewStatusByUserId = Object.fromEntries(
+            crewForPeriod.map((c) => [c.user_id, c.status]),
+          )
+
+          const jobCrew =
+            tp.job_id ? jobCrewMap.get(tp.job_id) || [] : []
+          const jobCrewUserIds = jobCrew.map((c) => c.user_id)
+          const jobCrewStatusByUserId = Object.fromEntries(
+            jobCrew.map((c) => [c.user_id, c.status]),
+          )
+
           return {
             id: tp.id,
             title: tp.title || 'Event',
@@ -465,6 +505,10 @@ export function companyCalendarQuery({
             category: tp.category || undefined,
             jobTitle: jobTitle || undefined,
             status: jobStatus || undefined,
+            crewUserIds,
+            crewStatusByUserId,
+            jobCrewUserIds,
+            jobCrewStatusByUserId,
           }
         })
         .filter((record) => {

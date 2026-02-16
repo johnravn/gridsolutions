@@ -19,6 +19,7 @@ import {
 } from '@radix-ui/themes'
 import { Lock, TransitionLeft } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -93,6 +94,29 @@ export default function LoggingPage() {
   )
 
   const enabled = Boolean(companyId && userId)
+
+  const { data: myProfile } = useQuery({
+    queryKey: ['my-profile', userId],
+    enabled: !!userId,
+    queryFn: async () => {
+      const { data, error: err } = await supabase
+        .from('profiles')
+        .select('user_id, email, display_name, first_name, last_name')
+        .eq('user_id', userId!)
+        .maybeSingle()
+      if (err) throw err
+      return data
+    },
+  })
+  const userDisplayName = React.useMemo(() => {
+    if (!myProfile) return null
+    return (
+      myProfile.display_name ||
+      [myProfile.first_name, myProfile.last_name].filter(Boolean).join(' ') ||
+      myProfile.email
+    )
+  }, [myProfile])
+
   const { data: entries = [], isLoading } = useQuery({
     ...timeEntriesQuery({
       companyId: companyId ?? '',
@@ -597,102 +621,134 @@ export default function LoggingPage() {
 
   const entriesTable = (
     <>
-      <Flex align="center" justify="between" gap="3" mb="2" wrap="wrap">
-        <Heading size="4">Entries for {label}</Heading>
-        <Flex align="center" gap="3" wrap="wrap">
-          <Text size="2" color="gray">
-            {entries.length} total
-          </Text>
-          <Select.Root
-            value={String(selectedYear)}
-            onValueChange={(value: string) => {
-              const monthPart = selectedMonth.split('-')[1] ?? '01'
-              setSelectedMonth(`${value}-${monthPart}`)
-            }}
-          >
-            <Select.Trigger />
-            <Select.Content>
-              {yearOptions.map((year) => (
-                <Select.Item key={year} value={String(year)}>
-                  {year}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-          <Box style={{ maxWidth: '100%', overflowX: 'auto' }}>
-            <SegmentedControl.Root
-              value={selectedMonth}
-              onValueChange={(value) => setSelectedMonth(value)}
-              style={{ minWidth: 'max-content' }}
+      <Box
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          overflow: 'hidden',
+        }}
+      >
+        <Flex
+          align="center"
+          justify="between"
+          gap="3"
+          mb="2"
+          wrap="wrap"
+          style={{ flexShrink: 0 }}
+        >
+          <Heading size="4">
+            Entries for {userDisplayName ?? 'you'} – {label}
+          </Heading>
+          <Flex align="center" gap="3" wrap="wrap">
+            <Text size="2" color="gray">
+              {entries.length} total
+            </Text>
+            <Select.Root
+              value={String(selectedYear)}
+              onValueChange={(value: string) => {
+                const monthPart = selectedMonth.split('-')[1] ?? '01'
+                setSelectedMonth(`${value}-${monthPart}`)
+              }}
             >
-              {monthOptions.map((month) => {
-                const isLocked = lockedMonthSetForView.has(month.value)
-                return (
-                  <SegmentedControl.Item
-                    key={month.value}
-                    value={month.value}
-                    style={
-                      isLocked
-                        ? {
-                            backgroundColor: 'var(--green-3)',
-                            color: 'var(--green-11)',
-                          }
-                        : undefined
-                    }
-                  >
-                    <Flex align="center" gap="1">
-                      <Text size="1">{month.label}</Text>
-                      {isLocked && <Lock width={12} height={12} />}
-                    </Flex>
-                  </SegmentedControl.Item>
-                )
-              })}
-            </SegmentedControl.Root>
-          </Box>
+              <Select.Trigger />
+              <Select.Content>
+                {yearOptions.map((year) => (
+                  <Select.Item key={year} value={String(year)}>
+                    {year}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
+            <Box style={{ maxWidth: '100%', overflowX: 'auto' }}>
+              <SegmentedControl.Root
+                value={selectedMonth}
+                onValueChange={(value) => setSelectedMonth(value)}
+                style={{ minWidth: 'max-content' }}
+              >
+                {monthOptions.map((month) => {
+                  const isLocked = lockedMonthSetForView.has(month.value)
+                  return (
+                    <SegmentedControl.Item
+                      key={month.value}
+                      value={month.value}
+                      style={
+                        isLocked
+                          ? {
+                              backgroundColor: 'var(--green-3)',
+                              color: 'var(--green-11)',
+                            }
+                          : undefined
+                      }
+                    >
+                      <Flex align="center" gap="1">
+                        <Text size="1">{month.label}</Text>
+                        {isLocked && <Lock width={12} height={12} />}
+                      </Flex>
+                    </SegmentedControl.Item>
+                  )
+                })}
+              </SegmentedControl.Root>
+            </Box>
+          </Flex>
         </Flex>
-      </Flex>
-      <Separator size="4" mb="3" />
+        <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
 
-      <TimeEntriesTable
-        entries={entries}
-        isLoading={isLoading}
-        onEditEntry={(entry) => setEditingEntry(entry)}
-        canEditEntry={(entry) => {
-          if (
-            isRangeOverlappingLockedPeriod({
-              startAt: entry.start_at,
-              endAt: entry.end_at,
-              lockedMonthSet: lockedMonthSetForView,
-            })
-          )
-            return false
-          if (!userId) return false
-          if (isGlobalSuperuser) return true
-          return entry.user_id === userId
-        }}
-        onDeleteEntry={(entry) => {
-          setDeleteCandidate(entry)
-        }}
-        canDeleteEntry={(entry) => {
-          if (
-            isRangeOverlappingLockedPeriod({
-              startAt: entry.start_at,
-              endAt: entry.end_at,
-              lockedMonthSet: lockedMonthSetForView,
-            })
-          )
-            return false
-          if (!userId) return false
-          if (isGlobalSuperuser) return true
-          return entry.user_id === userId && !deleteEntry.isPending
-        }}
-      />
+        <Box
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+          }}
+        >
+          <TimeEntriesTable
+            entries={entries}
+            isLoading={isLoading}
+            showEmployeeColumn={false}
+            onEditEntry={(entry) => setEditingEntry(entry)}
+            canEditEntry={(entry) => {
+              if (
+                isRangeOverlappingLockedPeriod({
+                  startAt: entry.start_at,
+                  endAt: entry.end_at,
+                  lockedMonthSet: lockedMonthSetForView,
+                })
+              )
+                return false
+              if (!userId) return false
+              if (isGlobalSuperuser) return true
+              return entry.user_id === userId
+            }}
+            onDeleteEntry={(entry) => {
+              setDeleteCandidate(entry)
+            }}
+            canDeleteEntry={(entry) => {
+              if (
+                isRangeOverlappingLockedPeriod({
+                  startAt: entry.start_at,
+                  endAt: entry.end_at,
+                  lockedMonthSet: lockedMonthSetForView,
+                })
+              )
+                return false
+              if (!userId) return false
+              if (isGlobalSuperuser) return true
+              return entry.user_id === userId && !deleteEntry.isPending
+            }}
+          />
+        </Box>
 
-      <Flex justify="end" mt="3">
-        <Text size="4" weight="bold">
-          Total: {totalHours.toFixed(2)} hours
-        </Text>
-      </Flex>
+        <Flex
+          justify="end"
+          mt="3"
+          style={{ flexShrink: 0 }}
+        >
+          <Text size="4" weight="bold">
+            Total: {totalHours.toFixed(2)} hours
+          </Text>
+        </Flex>
+      </Box>
       <EditTimeEntryDialog
         open={Boolean(editingEntry)}
         onOpenChange={(open) => {
@@ -893,16 +949,12 @@ export default function LoggingPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
+                if (bar instanceof HTMLElement) bar.style.setProperty('width', '24px')
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
+                if (bar instanceof HTMLElement) bar.style.setProperty('width', '12px')
               }}
               style={{
                 position: 'absolute',
@@ -1028,8 +1080,9 @@ export default function LoggingPage() {
             style={{
               flex: 1,
               minHeight: 0,
-              overflowY: 'auto',
-              overflowX: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
             }}
           >
             {entriesTable}

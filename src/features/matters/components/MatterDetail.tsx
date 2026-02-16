@@ -367,6 +367,7 @@ export default function MatterDetail({
       vote: { color: 'purple', label: 'Vote' },
       announcement: { color: 'gray', label: 'Announcement' },
       chat: { color: 'green', label: 'Chat' },
+      update: { color: 'amber', label: 'Update' },
     }
     const v = variants[matter.matter_type] ?? variants.announcement
     return (

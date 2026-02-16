@@ -145,9 +145,11 @@ export default function CustomerPage() {
             <Separator size="4" mb="3" />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <CustomerTable
@@ -297,9 +299,11 @@ export default function CustomerPage() {
               <Separator size="4" mb="3" />
               <Box
                 style={{
-                  flex: isLarge ? 1 : undefined,
-                  minHeight: isLarge ? 0 : undefined,
-                  overflowY: isLarge ? 'auto' : 'visible',
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 <CustomerTable

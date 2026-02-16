@@ -271,17 +271,29 @@ export default function AddressDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content
         maxWidth="1200px"
-        style={{ display: 'flex', flexDirection: 'column', height: 'auto' }}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: '80vh',
+          overflow: 'hidden',
+        }}
       >
         <Dialog.Title>Manage address</Dialog.Title>
 
         <Grid
           columns={{ initial: '1', sm: '2', md: '3' }}
           gap="4"
-          style={{ minHeight: 0, flex: 1 }}
+          style={{ minHeight: 0, flex: 1, overflow: 'hidden' }}
         >
           {/* ── Column 1: List + Search */}
-          <Box>
+          <Box
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              minHeight: 0,
+              flex: 1,
+            }}
+          >
             <TextField.Root
               placeholder="Search addresses…"
               value={search}
@@ -299,7 +311,7 @@ export default function AddressDialog({
             <ScrollArea
               type="auto"
               scrollbars="vertical"
-              style={{ height: 'calc(100% - 50px)' }}
+              style={{ flex: 1, minHeight: 0 }}
             >
               <Flex direction="column" gap="1" mt="2" p="1">
                 {rows.map((r) => (
@@ -340,8 +352,12 @@ export default function AddressDialog({
               ) : null}
             </Flex>
 
-            {/* Content area (fills available height) */}
-            <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
+            {/* Content area (fills available height, scrolls if needed) */}
+            <Flex
+              direction="column"
+              gap="3"
+              style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+            >
               {panelMode === 'view' ? (
                 <DetailFieldGroup form={form} />
               ) : (
@@ -422,8 +438,9 @@ export default function AddressDialog({
           <Box
             style={{
               maxWidth: '100%',
-              height: '100%',
-              minHeight: '170px',
+              minHeight: 170,
+              maxHeight: 320,
+              flex: 1,
               overflow: 'hidden',
               borderRadius: 8,
             }}

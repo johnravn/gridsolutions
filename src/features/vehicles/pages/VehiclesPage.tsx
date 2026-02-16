@@ -6,10 +6,7 @@ import {
   Grid,
   Heading,
   IconButton,
-  SegmentedControl,
   Separator,
-  Switch,
-  Text,
   Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -20,15 +17,13 @@ import {
 } from '@shared/lib/keyboardShortcuts'
 import VehiclesView from '../components/VehiclesView'
 import VehicleInspector from '../components/VehicleInspector'
-
-type ViewMode = 'grid' | 'list'
+import VehiclesFilter from '../components/VehiclesFilter'
 
 export default function VehiclesPage() {
   const { companyId } = useCompany()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
 
-  const [includeExternal, setIncludeExternal] = React.useState(true) // default true
-  const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
+  const [includeExternal, setIncludeExternal] = React.useState(true)
   const [search, setSearch] = React.useState('')
 
   // 50/50 split; same responsive pattern as you use elsewhere
@@ -147,27 +142,10 @@ export default function VehiclesPage() {
           >
             <Flex align="center" justify="between" mb="3" wrap="wrap" gap="3">
               <Heading size="5">Vehicles</Heading>
-              <Flex align="center" gap="3" wrap="wrap">
-                <Text size="2" color="gray">
-                  Show external
-                </Text>
-                <Switch
-                  checked={includeExternal}
-                  onCheckedChange={(v) => setIncludeExternal(Boolean(v))}
-                />
-
-                <SegmentedControl.Root
-                  value={viewMode}
-                  onValueChange={(v) => setViewMode(v as ViewMode)}
-                >
-                  <SegmentedControl.Item value="grid">
-                    Grid
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="list">
-                    List
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
-              </Flex>
+              <VehiclesFilter
+                includeExternal={includeExternal}
+                onIncludeExternalChange={setIncludeExternal}
+              />
             </Flex>
             <Separator size="4" mb="3" />
 
@@ -183,7 +161,6 @@ export default function VehiclesPage() {
                 selectedId={selectedId}
                 onSelect={setSelectedId}
                 includeExternal={includeExternal}
-                viewMode={viewMode}
                 search={search}
                 onSearch={setSearch}
               />
@@ -310,27 +287,10 @@ export default function VehiclesPage() {
               <Flex align="center" justify="between" mb="3" wrap="wrap" gap="3">
                 <Heading size="5">Vehicles</Heading>
                 <Flex align="center" gap="2" wrap="wrap">
-                  <Flex align="center" gap="3" wrap="wrap">
-                    <Text size="2" color="gray">
-                      Show external
-                    </Text>
-                    <Switch
-                      checked={includeExternal}
-                      onCheckedChange={(v) => setIncludeExternal(Boolean(v))}
-                    />
-
-                    <SegmentedControl.Root
-                      value={viewMode}
-                      onValueChange={(v) => setViewMode(v as ViewMode)}
-                    >
-                      <SegmentedControl.Item value="grid">
-                        Grid
-                      </SegmentedControl.Item>
-                      <SegmentedControl.Item value="list">
-                        List
-                      </SegmentedControl.Item>
-                    </SegmentedControl.Root>
-                  </Flex>
+                  <VehiclesFilter
+                    includeExternal={includeExternal}
+                    onIncludeExternalChange={setIncludeExternal}
+                  />
                   <Tooltip
                     content={`Collapse sidebar (${collapseShortcutLabel})`}
                   >
@@ -359,7 +319,6 @@ export default function VehiclesPage() {
                   selectedId={selectedId}
                   onSelect={setSelectedId}
                   includeExternal={includeExternal}
-                  viewMode={viewMode}
                   search={search}
                   onSearch={setSearch}
                 />
