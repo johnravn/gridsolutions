@@ -95,11 +95,30 @@
   border-radius: 8px;
   border: none;
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.06);
+  overflow: hidden;
 }
 .companyCalendar .fc .fc-event .fc-event-main,
 .jobCalendar .fc .fc-event .fc-event-main {
   padding: 4px 6px;
   font-size: 12px;
+  overflow: hidden;
+  min-width: 0;
+}
+.companyCalendar .fc .fc-event .fc-event-main-frame,
+.jobCalendar .fc .fc-event .fc-event-main-frame {
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Canceled job events - disabled look */
+.companyCalendar .fc .fc-event.fc-event-canceled,
+.jobCalendar .fc .fc-event.fc-event-canceled {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.companyCalendar .fc .fc-event.fc-event-canceled .fc-event-main,
+.jobCalendar .fc .fc-event.fc-event-canceled .fc-event-main {
+  text-decoration: line-through;
 }
 
 /* Now indicator */

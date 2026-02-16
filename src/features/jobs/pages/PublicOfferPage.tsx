@@ -666,13 +666,16 @@ export default function PublicOfferPage() {
     if (!dateString) return '—'
     const date = new Date(dateString)
     if (Number.isNaN(date.getTime())) return '—'
-    return date.toLocaleString('nb-NO', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    const time = date.toLocaleTimeString('nb-NO', {
       hour: '2-digit',
       minute: '2-digit',
     })
+    const datePart = date.toLocaleDateString('nb-NO', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    })
+    return `${time}, ${datePart}`
   }
 
   const formatDuration = (startString: string, endString: string) => {
@@ -856,6 +859,53 @@ export default function PublicOfferPage() {
                 </Flex>
               )}
             </Flex>
+
+            {/* Job info section: two columns — start/end times, address */}
+            {(offer.job_start_at ||
+              offer.job_end_at ||
+              offer.job_address) && (
+              <Box mt="4">
+                <Flex
+                  direction="row"
+                  gap="6"
+                  wrap="wrap"
+                  align="start"
+                >
+                  <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
+                    {offer.job_start_at && (
+                      <Flex direction="column" gap="1">
+                        <Text size="1" color="gray" weight="medium">
+                          Start
+                        </Text>
+                        <Text size="2">
+                          {formatDateTimeShort(offer.job_start_at)}
+                        </Text>
+                      </Flex>
+                    )}
+                    {offer.job_end_at && (
+                      <Flex direction="column" gap="1">
+                        <Text size="1" color="gray" weight="medium">
+                          End
+                        </Text>
+                        <Text size="2">
+                          {formatDateTimeShort(offer.job_end_at)}
+                        </Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                  {offer.job_address && (
+                    <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
+                      <Text size="1" color="gray" weight="medium">
+                        Address
+                      </Text>
+                      <Text size="2" as="div" style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                        {offer.job_address.replace(/, /g, ',\n')}
+                      </Text>
+                    </Flex>
+                  )}
+                </Flex>
+              </Box>
+            )}
 
             <Separator my="6" />
 
@@ -1550,8 +1600,33 @@ export default function PublicOfferPage() {
 
             {/* Bottom Section: Two Columns */}
             <Flex direction={{ initial: 'column', md: 'row' }} gap="6" mb="6">
-              {/* Left Column: Download Button + From/To */}
+              {/* Left Column: Terms link + Download Button + From/To */}
               <Flex direction="column" gap="4" style={{ flex: 1 }}>
+                {/* Terms and conditions (open without Accept Offer) */}
+                {hasTerms && (
+                  <Box>
+                    <Button
+                      size="1"
+                      variant="ghost"
+                      color="gray"
+                      onClick={() => setShowTermsDialog(true)}
+                      style={{
+                        cursor: 'pointer',
+                        padding: 0,
+                        height: 'auto',
+                        alignSelf: 'flex-start',
+                      }}
+                    >
+                      <Text
+                        size="2"
+                        color="gray"
+                        style={{ textDecoration: 'underline' }}
+                      >
+                        View terms and conditions
+                      </Text>
+                    </Button>
+                  </Box>
+                )}
                 {/* Download PDF Button */}
                 <Button
                   size="2"

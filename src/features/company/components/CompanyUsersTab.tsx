@@ -2,26 +2,23 @@
 import * as React from 'react'
 import {
   Box,
-  Button,
   Card,
-  Checkbox,
-  DropdownMenu,
   Flex,
   Grid,
   Heading,
   IconButton,
   Separator,
-  Text,
   Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { NavArrowDown, TransitionLeft } from 'iconoir-react'
+import { TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import CrewInspector from '../../crew/components/CrewInspector'
 import CompanyTable from './CompanyTable'
+import CompanyUsersFilter from './CompanyUsersFilter'
 
 type Selection = { kind: 'user'; userId: string } | { kind: 'none' }
 
@@ -153,7 +150,7 @@ export default function CompanyUsersTab() {
         >
           <Flex align="center" justify="between" mb="3">
             <Heading size="5">Users</Heading>
-            <StatusDropdown
+            <CompanyUsersFilter
               showEmployees={showEmployees}
               showFreelancers={showFreelancers}
               showMyPending={showMyPending}
@@ -164,12 +161,13 @@ export default function CompanyUsersTab() {
           </Flex>
           <Separator size="4" mb="3" />
 
-          {/* Employees/Freelancers/Invites table */}
           <Box
             style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <CompanyTable
@@ -309,7 +307,7 @@ export default function CompanyUsersTab() {
             <Flex align="center" justify="between" mb="3">
               <Heading size="5">Users</Heading>
               <Flex align="center" gap="2">
-                <StatusDropdown
+                <CompanyUsersFilter
                   showEmployees={showEmployees}
                   showFreelancers={showFreelancers}
                   showMyPending={showMyPending}
@@ -333,12 +331,13 @@ export default function CompanyUsersTab() {
             </Flex>
             <Separator size="4" mb="3" />
 
-            {/* Employees/Freelancers/Invites table */}
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <CompanyTable
@@ -428,87 +427,5 @@ export default function CompanyUsersTab() {
         </Box>
       </Card>
     </Flex>
-  )
-}
-
-function StatusDropdown({
-  showEmployees,
-  showFreelancers,
-  showMyPending,
-  onShowEmployeesChange,
-  onShowFreelancersChange,
-  onShowMyPendingChange,
-}: {
-  showEmployees: boolean
-  showFreelancers: boolean
-  showMyPending: boolean
-  onShowEmployeesChange: (v: boolean) => void
-  onShowFreelancersChange: (v: boolean) => void
-  onShowMyPendingChange: (v: boolean) => void
-}) {
-  const selectedCount = [showEmployees, showFreelancers, showMyPending].filter(
-    Boolean,
-  ).length
-
-  const label =
-    selectedCount === 3
-      ? 'All statuses'
-      : selectedCount === 0
-        ? 'No statuses'
-        : `${selectedCount} selected`
-
-  return (
-    <DropdownMenu.Root>
-      <DropdownMenu.Trigger>
-        <Button variant="soft" size="2">
-          <Text>{label}</Text>
-          <NavArrowDown width={14} height={14} />
-        </Button>
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Content>
-        <DropdownMenu.Item
-          onSelect={(e) => {
-            e.preventDefault()
-            onShowEmployeesChange(!showEmployees)
-          }}
-        >
-          <Flex align="center" gap="2">
-            <Checkbox
-              checked={showEmployees}
-              onCheckedChange={onShowEmployeesChange}
-            />
-            <Text>Employees</Text>
-          </Flex>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          onSelect={(e) => {
-            e.preventDefault()
-            onShowFreelancersChange(!showFreelancers)
-          }}
-        >
-          <Flex align="center" gap="2">
-            <Checkbox
-              checked={showFreelancers}
-              onCheckedChange={onShowFreelancersChange}
-            />
-            <Text>Freelancers</Text>
-          </Flex>
-        </DropdownMenu.Item>
-        <DropdownMenu.Item
-          onSelect={(e) => {
-            e.preventDefault()
-            onShowMyPendingChange(!showMyPending)
-          }}
-        >
-          <Flex align="center" gap="2">
-            <Checkbox
-              checked={showMyPending}
-              onCheckedChange={onShowMyPendingChange}
-            />
-            <Text>Pending invites</Text>
-          </Flex>
-        </DropdownMenu.Item>
-      </DropdownMenu.Content>
-    </DropdownMenu.Root>
   )
 }

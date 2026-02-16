@@ -47,6 +47,13 @@ export type CalendarRecord = {
   category?: 'program' | 'equipment' | 'crew' | 'transport' | undefined
   // Job title for events that belong to a job
   jobTitle?: string | undefined
+  // Crew user IDs on this time period (for "Crew" badge)
+  crewUserIds?: Array<string>
+  // Crew status by user ID (accepted = confirmed, planned, requested, declined)
+  crewStatusByUserId?: Record<string, string>
+  // Crew on any period for this job (for job duration events)
+  jobCrewUserIds?: Array<string>
+  jobCrewStatusByUserId?: Record<string, string>
 }
 
 /** Convert our normalized records to FullCalendar EventInput[] */
@@ -66,6 +73,10 @@ export function toEventInputs(rows: Array<CalendarRecord>): Array<EventInput> {
       projectLead: r.projectLead,
       category: r.category,
       jobTitle: r.jobTitle,
+      crewUserIds: r.crewUserIds,
+      crewStatusByUserId: r.crewStatusByUserId,
+      jobCrewUserIds: r.jobCrewUserIds,
+      jobCrewStatusByUserId: r.jobCrewStatusByUserId,
       ...r.meta,
     },
   }))

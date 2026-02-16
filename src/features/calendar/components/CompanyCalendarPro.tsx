@@ -2,9 +2,11 @@
 import * as React from 'react'
 import {
   Avatar,
+  Badge,
   Box,
   Button,
   Flex,
+  HoverCard,
   IconButton,
   Select,
   Separator,
@@ -21,8 +23,9 @@ import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
 import { Calendar, List } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
-import { supabase } from '@shared/api/supabase'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { getInitials } from '@shared/lib/generalFunctions'
+import { supabase } from '@shared/api/supabase'
 import { applyCalendarFilter } from './domain'
 import type { CalendarFilter, CalendarKind } from './domain'
 import type {
@@ -64,6 +67,7 @@ export default function CompanyCalendarPro({
   onListModeChange,
 }: Props) {
   const navigate = useNavigate()
+  const { userId } = useAuthz()
   // UI state
   const [kinds, setKinds] = React.useState<Array<CalendarKind>>(defaultKinds)
   const [scopeKind, setScopeKind] = React.useState<'none' | CalendarKind>(
@@ -232,12 +236,18 @@ export default function CompanyCalendarPro({
     }
   }
 
-  // Small event UI (time · title · kind badge · project lead)
+  function formatTimeRange(start: Date | null, end: Date | null): string {
+    const fmt = (d: Date) =>
+      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+    if (!start) return ''
+    if (!end || start.getTime() === end.getTime()) return fmt(start)
+    return `${fmt(start)}–${fmt(end)}`
+  }
+
+  // Compact event UI (time xx:xx, job title). Hover shows HoverCard with details.
   function renderEvent(arg: EventContentArg) {
-    const kind = (arg.event.extendedProps as any)?.kind as
-      | CalendarKind
-      | undefined
-    const projectLead = (arg.event.extendedProps as any)?.projectLead as
+    const props = arg.event.extendedProps as any
+    const projectLead = props?.projectLead as
       | {
           user_id: string
           display_name: string | null
@@ -246,92 +256,150 @@ export default function CompanyCalendarPro({
         }
       | null
       | undefined
-    // Get avatar URL if available
+    const jobTitle = props?.jobTitle as string | undefined
+    const status = props?.status as string | undefined
+    const category = props?.category as string | undefined
+    const crewUserIds =
+      (props?.crewUserIds as Array<string> | undefined) || []
+    const crewStatusByUserId =
+      (props?.crewStatusByUserId as Record<string, string> | undefined) || {}
+    const jobCrewUserIds =
+      (props?.jobCrewUserIds as Array<string> | undefined) || []
+    const jobCrewStatusByUserId =
+      (props?.jobCrewStatusByUserId as Record<string, string> | undefined) ||
+      {}
+    const ref = props?.ref as { userId?: string } | undefined
+
+    const displayTitle = jobTitle || arg.event.title
+    const timeStr = formatTimeRange(
+      arg.event.start ? new Date(arg.event.start) : null,
+      arg.event.end ? new Date(arg.event.end) : null,
+    )
+
+    const isProjectLead = !!userId && projectLead?.user_id === userId
+    const isCrewOnPeriod =
+      !!userId &&
+      (crewUserIds.includes(userId) || ref?.userId === userId)
+    const isCrewOnJob =
+      !!userId && jobCrewUserIds.length > 0 && jobCrewUserIds.includes(userId)
+    const isCrew = isCrewOnPeriod || isCrewOnJob
+    const crewStatus = isCrew && userId
+      ? crewStatusByUserId[userId] ?? jobCrewStatusByUserId[userId]
+      : undefined
+    const isConfirmedCrew = isCrew && crewStatus === 'accepted'
+
     const avatarUrl = projectLead?.avatar_url
       ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url)
           .data.publicUrl
       : null
-
     const leadName = projectLead
       ? projectLead.display_name || projectLead.email
       : null
 
-    const jobTitle = (arg.event.extendedProps as any)?.jobTitle as
-      | string
-      | undefined
-
-    // Combine job title with event title
-    const displayTitle = jobTitle
-      ? `${jobTitle} - ${arg.event.title}`
-      : arg.event.title
+    const hoverContent = (
+      <HoverCard.Content size="1" side="top" minWidth="280px">
+        <Box p="2">
+          <Text as="div" size="2" weight="bold" mb="2">
+            {displayTitle}
+          </Text>
+          <Flex direction="column" gap="2">
+            {arg.event.title && arg.event.title !== displayTitle && (
+              <Text size="1" color="gray">
+                {arg.event.title}
+              </Text>
+            )}
+            {timeStr && (
+              <Text size="1">Time: {timeStr}</Text>
+            )}
+            {projectLead && (
+              <Flex align="center" gap="2">
+                <Avatar
+                  size="1"
+                  radius="full"
+                  src={avatarUrl ?? undefined}
+                  fallback={getInitials(leadName)}
+                  style={{ border: '1px solid var(--gray-a6)' }}
+                />
+                <Flex direction="column" gap="0">
+                  <Text size="1">Project lead</Text>
+                  <Text size="1" weight="medium">
+                    {leadName}
+                  </Text>
+                </Flex>
+              </Flex>
+            )}
+            {(isProjectLead || isCrew) && (
+              <Badge
+                size="1"
+                color={isProjectLead ? 'blue' : isConfirmedCrew ? 'green' : 'amber'}
+                variant="outline"
+              >
+                You are{' '}
+                {isProjectLead
+                  ? 'project lead'
+                  : isConfirmedCrew
+                    ? 'crew (confirmed)'
+                    : 'crew'}
+              </Badge>
+            )}
+            {status && (
+              <Text size="1" style={{ textTransform: 'capitalize' }}>
+                Status: {status.replace(/_/g, ' ')}
+              </Text>
+            )}
+            {category && (
+              <Text size="1" style={{ textTransform: 'capitalize' }}>
+                Type: {category}
+              </Text>
+            )}
+            <Text size="1" color="gray" mt="1">
+              Click to open job
+            </Text>
+          </Flex>
+        </Box>
+      </HoverCard.Content>
+    )
 
     return (
-      <div
-        style={{ display: 'flex', gap: 6, alignItems: 'center', width: '100%' }}
-      >
-        {arg.timeText && (
-          <span style={{ fontWeight: 600, fontSize: 12, flexShrink: 0 }}>
-            {arg.timeText}
-          </span>
-        )}
-        <span
-          style={{
-            fontSize: 12,
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            flex: 1,
-            minWidth: 0,
-          }}
-        >
-          {displayTitle}
-        </span>
-        {projectLead && (
+      <HoverCard.Root openDelay={0} closeDelay={100}>
+        <HoverCard.Trigger>
           <div
             style={{
               display: 'flex',
+              gap: 6,
               alignItems: 'center',
-              gap: 4,
-              flexShrink: 0,
+              width: '100%',
+              minWidth: 0,
+              overflow: 'hidden',
             }}
           >
-            <Avatar
-              size="1"
-              radius="full"
-              src={avatarUrl ?? undefined}
-              fallback={getInitials(leadName)}
-              style={{ border: '1px solid var(--gray-a6)' }}
-            />
-            {leadName && (
+            {timeStr && (
               <span
                 style={{
-                  fontSize: 10,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: 80,
+                  fontWeight: 600,
+                  fontSize: 12,
+                  flexShrink: 0,
                 }}
               >
-                {leadName}
+                {timeStr}
               </span>
             )}
+            <span
+              style={{
+                fontSize: 12,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                flex: 1,
+                minWidth: 0,
+              }}
+            >
+              {displayTitle}
+            </span>
           </div>
-        )}
-        {kind && (
-          <span
-            style={{
-              fontSize: 10,
-              padding: '1px 6px',
-              borderRadius: 999,
-              background: 'var(--accent-4)',
-              color: 'var(--accent-11)',
-              flexShrink: 0,
-            }}
-          >
-            {kind}
-          </span>
-        )}
-      </div>
+        </HoverCard.Trigger>
+        {hoverContent}
+      </HoverCard.Root>
     )
   }
 
@@ -462,14 +530,26 @@ export default function CompanyCalendarPro({
           eventClick={handleEventClick}
           eventContent={renderEvent}
           events={filtered.map((event) => {
-            const category = (event.extendedProps as any)?.category
+            const props = event.extendedProps as any
+            const category = props?.category
+            const status = props?.status
             const title = event.title || ''
-            const colors = getRadixColorsForPeriod(title, category)
+            const isCanceled = status === 'canceled'
+            const colors = isCanceled
+              ? {
+                  bg: 'var(--gray-a3)',
+                  border: 'var(--gray-a5)',
+                  text: 'var(--gray-9)',
+                }
+              : getRadixColorsForPeriod(title, category)
             return {
               ...event,
               backgroundColor: colors.bg,
               borderColor: colors.border,
               textColor: colors.text,
+              classNames: isCanceled
+                ? [...((event.classNames as string[]) || []), 'fc-event-canceled']
+                : event.classNames,
             }
           })}
           height="auto"
@@ -498,14 +578,26 @@ export default function CompanyCalendarPro({
           eventClick={handleEventClick}
           eventContent={renderEvent}
           events={filtered.map((event) => {
-            const eventCategory = (event.extendedProps as any)?.category
+            const props = event.extendedProps as any
+            const eventCategory = props?.category
+            const status = props?.status
             const title = event.title || ''
-            const colors = getRadixColorsForPeriod(title, eventCategory)
+            const isCanceled = status === 'canceled'
+            const colors = isCanceled
+              ? {
+                  bg: 'var(--gray-a3)',
+                  border: 'var(--gray-a5)',
+                  text: 'var(--gray-9)',
+                }
+              : getRadixColorsForPeriod(title, eventCategory)
             return {
               ...event,
               backgroundColor: colors.bg,
               borderColor: colors.border,
               textColor: colors.text,
+              classNames: isCanceled
+                ? [...((event.classNames as string[]) || []), 'fc-event-canceled']
+                : event.classNames,
             }
           })}
           height="auto"

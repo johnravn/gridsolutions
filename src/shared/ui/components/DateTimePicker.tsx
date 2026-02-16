@@ -50,11 +50,28 @@ export default function DateTimePicker({
   const [showYearPicker, setShowYearPicker] = React.useState(false)
   const yearPickerRef = React.useRef<HTMLDivElement>(null)
 
-  // Parse ISO string to local date/time components
-  const dateValue = value ? toLocalDate(value) : ''
-  const selectedDate = value ? new Date(value) : null
-  const hour = value ? new Date(value).getHours() : 9
-  const minute = value ? new Date(value).getMinutes() : 0
+  // Single parsed date from value so display and picker always match (avoids mismatch when
+  // parent sets value programmatically, e.g. end time from start time)
+  const parsedDate = React.useMemo(() => {
+    if (!value) return null
+    const d = new Date(value)
+    return Number.isNaN(d.getTime()) ? null : d
+  }, [value])
+
+  // Parse ISO string to local date/time components (all from parsedDate for consistency)
+  const dateValue = parsedDate ? toLocalDate(parsedDate.toISOString()) : ''
+  const selectedDate = parsedDate
+  const hour = parsedDate ? parsedDate.getHours() : 9
+  const minute = parsedDate ? parsedDate.getMinutes() : 0
+
+  // Keep calendar month in sync when value changes (e.g. auto-set end time)
+  React.useEffect(() => {
+    if (parsedDate) {
+      setCurrentMonth(
+        new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1),
+      )
+    }
+  }, [parsedDate?.getTime()])
 
   // Get calendar days for current month
   const calendarDays = React.useMemo(() => {
@@ -152,8 +169,8 @@ export default function DateTimePicker({
   }
 
   const formatDisplayValue = () => {
-    if (!value) return finalPlaceholder
-    const d = new Date(value)
+    if (!parsedDate) return finalPlaceholder
+    const d = parsedDate
     const monthNames = [
       'jan',
       'feb',
@@ -253,7 +270,7 @@ export default function DateTimePicker({
         borderRadius: 'var(--radius-3)',
         border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
         background: 'var(--color-panel-solid)',
-        color: value ? 'var(--gray-12)' : 'var(--gray-9)',
+        color: parsedDate ? 'var(--gray-12)' : 'var(--gray-9)',
         fontSize: 'var(--font-size-3)',
         lineHeight: 'var(--line-height-3)',
         fontFamily: 'inherit',

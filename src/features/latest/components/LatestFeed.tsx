@@ -1,14 +1,15 @@
 // src/features/latest/components/LatestFeed.tsx
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Avatar, Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
-import { formatDistanceToNow } from 'date-fns'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { latestFeedQuery } from '../api/queries'
 import { groupInventoryActivities } from '../utils/groupInventoryActivities'
 import { getActivityGenericMessage } from '../utils/activityNavigation'
+import { formatActivityDate } from '../utils/formatActivityDate'
 import type { ActivityType, GroupedInventoryActivity } from '../types'
 
 // Using shared getInitialsFromNameOrEmail from generalFunctions
@@ -69,6 +70,24 @@ export default function LatestFeed({
     enabled: !!companyId,
   })
 
+  // Compute before any returns so hook order is stable (Rules of Hooks)
+  const groupedActivities = React.useMemo(
+    () =>
+      data?.items?.length
+        ? groupInventoryActivities(data.items)
+        : [],
+    [data?.items],
+  )
+  const parentRef = React.useRef<HTMLDivElement>(null)
+  const rowVirtualizer = useVirtualizer({
+    count: groupedActivities.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 80,
+    overscan: 5,
+    getItemKey: (index) => groupedActivities[index]?.id ?? index,
+    enabled: groupedActivities.length > 0,
+  })
+
   if (isLoading) {
     return (
       <Flex align="center" justify="center" py="6">
@@ -95,121 +114,151 @@ export default function LatestFeed({
     )
   }
 
-  // Group inventory activities
-  const groupedActivities = groupInventoryActivities(data.items)
-
   return (
-    <Box>
-      {groupedActivities.map((activity) => {
-        // Calculate avatar URL without using hooks
-        const avatarUrl = activity.created_by.avatar_url
-          ? supabase.storage
-              .from('avatars')
-              .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
-          : null
+    <Box
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+    >
+      <Box
+        ref={parentRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+        }}
+      >
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+            const activity = groupedActivities[virtualRow.index]
+            const avatarUrl = activity.created_by.avatar_url
+              ? supabase.storage
+                  .from('avatars')
+                  .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
+              : null
 
-        const displayName =
-          activity.created_by.display_name || activity.created_by.email
-        const timeAgo = formatDistanceToNow(new Date(activity.created_at), {
-          addSuffix: true,
-        })
+            const displayName =
+              activity.created_by.display_name || activity.created_by.email
+            const timeLabel = formatActivityDate(activity.created_at)
 
-        const isSelected = selectedId === activity.id
-        const isHovered = hoveredId === activity.id
+            const isSelected = selectedId === activity.id
+            const isHovered = hoveredId === activity.id
 
-        return (
-          <React.Fragment key={activity.id}>
-            <Box
-              style={{
-                cursor: 'pointer',
-                padding: 'var(--space-3)',
-                borderRadius: 'var(--radius-3)',
-                backgroundColor: isSelected
-                  ? 'var(--accent-3)'
-                  : isHovered
-                    ? 'var(--gray-2)'
-                    : 'transparent',
-                border: isSelected
-                  ? '1px solid transparent'
-                  : isHovered
-                    ? '1px solid var(--gray-a6)'
-                    : '1px solid transparent',
-                transition:
-                  'background-color 0.15s ease, border-color 0.15s ease',
-              }}
-              onClick={() => onSelect(activity.id)}
-              onMouseEnter={() => setHoveredId(activity.id)}
-              onMouseLeave={() => setHoveredId(null)}
-            >
-              <Flex gap="3" align="start" justify="between">
-                <Flex gap="3" align="start" style={{ flex: 1, minWidth: 0 }}>
-                  <Flex
-                    align="center"
-                    justify="center"
-                    style={{
-                      width: '32px',
-                      height: '32px',
-                      borderRadius: 'var(--radius-2)',
-                      backgroundColor: 'var(--accent-3)',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Text size="4">
-                      {getActivityIcon(activity.activity_type)}
-                    </Text>
-                  </Flex>
-
-                  <Box style={{ flex: 1, minWidth: 0 }}>
-                    {/* Title only */}
-                    <Text size="2" style={{ lineHeight: 1.5 }} mb="1">
-                      {getActivityGenericMessage(
-                        'isGrouped' in activity
-                          ? 'grouped_inventory'
-                          : activity.activity_type,
-                      )}
-                    </Text>
-
-                    <Flex align="center" gap="3" mt="2">
-                      <Text size="1" color="gray">
-                        {timeAgo}
-                      </Text>
-                      {activity.like_count > 0 && (
-                        <Text size="1" color="gray">
-                          ❤️ {activity.like_count}
-                        </Text>
-                      )}
-                      {activity.comment_count > 0 && (
-                        <Text size="1" color="gray">
-                          💬 {activity.comment_count}
-                        </Text>
-                      )}
-                    </Flex>
-                  </Box>
-                </Flex>
-
-                <Flex
-                  align="center"
-                  gap="2"
-                  style={{ flexShrink: 0, marginLeft: 'var(--space-2)' }}
+            return (
+              <div
+                key={activity.id}
+                data-index={virtualRow.index}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <Box
+                  style={{
+                    cursor: 'pointer',
+                    padding: 'var(--space-3)',
+                    borderRadius: 'var(--radius-3)',
+                    backgroundColor: isSelected
+                      ? 'var(--accent-3)'
+                      : isHovered
+                        ? 'var(--gray-2)'
+                        : 'transparent',
+                    border: isSelected
+                      ? '1px solid transparent'
+                      : isHovered
+                        ? '1px solid var(--gray-a6)'
+                        : '1px solid transparent',
+                    transition:
+                      'background-color 0.15s ease, border-color 0.15s ease',
+                    height: '100%',
+                  }}
+                  onClick={() => onSelect(activity.id)}
+                  onMouseEnter={() => setHoveredId(activity.id)}
+                  onMouseLeave={() => setHoveredId(null)}
                 >
-                  <Text size="2" weight="medium">
-                    {displayName}
-                  </Text>
-                  <Avatar
-                    size="1"
-                    radius="full"
-                    src={avatarUrl ?? undefined}
-                    fallback={getInitials(
-                      activity.created_by.display_name,
-                      activity.created_by.email,
-                    )}
-                  />
-                </Flex>
-              </Flex>
-            </Box>
-          </React.Fragment>
-        )
-      })}
+                  <Flex gap="3" align="start" justify="between">
+                    <Flex gap="3" align="start" style={{ flex: 1, minWidth: 0 }}>
+                      <Flex
+                        align="center"
+                        justify="center"
+                        style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: 'var(--radius-2)',
+                          backgroundColor: 'var(--accent-3)',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <Text size="4">
+                          {getActivityIcon(activity.activity_type)}
+                        </Text>
+                      </Flex>
+
+                      <Box style={{ flex: 1, minWidth: 0 }}>
+                        <Text size="2" style={{ lineHeight: 1.5 }} mb="1">
+                          {getActivityGenericMessage(
+                            'isGrouped' in activity
+                              ? 'grouped_inventory'
+                              : activity.activity_type,
+                          )}
+                        </Text>
+
+                        <Flex align="center" gap="3" mt="2">
+                          <Text size="1" color="gray">
+                            {timeLabel}
+                          </Text>
+                          {activity.like_count > 0 && (
+                            <Text size="1" color="gray">
+                              ❤️ {activity.like_count}
+                            </Text>
+                          )}
+                          {activity.comment_count > 0 && (
+                            <Text size="1" color="gray">
+                              💬 {activity.comment_count}
+                            </Text>
+                          )}
+                        </Flex>
+                      </Box>
+                    </Flex>
+
+                    <Flex
+                      align="center"
+                      gap="2"
+                      style={{ flexShrink: 0, marginLeft: 'var(--space-2)' }}
+                    >
+                      <Text size="2" weight="medium">
+                        {displayName}
+                      </Text>
+                      <Avatar
+                        size="1"
+                        radius="full"
+                        src={avatarUrl ?? undefined}
+                        fallback={getInitials(
+                          activity.created_by.display_name,
+                          activity.created_by.email,
+                        )}
+                      />
+                    </Flex>
+                  </Flex>
+                </Box>
+              </div>
+            )
+          })}
+        </div>
+      </Box>
     </Box>
   )
 }

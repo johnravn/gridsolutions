@@ -427,6 +427,9 @@ export type OfferDetail = JobOffer & {
   transport_items?: Array<OfferTransportItem>
   pretty_sections?: Array<OfferPrettySection>
   job_title?: string | null
+  job_start_at?: string | null
+  job_end_at?: string | null
+  job_address?: string | null
   company_terms?: {
     type: 'pdf' | 'text' | null
     text: string | null

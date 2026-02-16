@@ -7,11 +7,11 @@ import {
   Flex,
   Select,
   Spinner,
-  Table,
   Text,
   TextField,
   Tooltip,
 } from '@radix-ui/themes'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { InfoCircle, Search } from 'iconoir-react'
@@ -19,6 +19,8 @@ import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
 
 type CustomerTypeFilter = 'all' | 'customer' | 'partner'
+
+const GRID_COLUMNS = 'minmax(180px, 2fr) 120px'
 
 export default function CustomerTable({
   selectedId,
@@ -36,15 +38,11 @@ export default function CustomerTable({
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [addOpen, setAddOpen] = React.useState(false)
-  const [page, setPage] = React.useState(1)
-  const [pageSize, setPageSize] = React.useState(10)
 
   const containerRef = React.useRef<HTMLDivElement>(null)
   const controlsRef = React.useRef<HTMLDivElement>(null)
-  const theadRef = React.useRef<HTMLTableSectionElement>(null)
-  const pagerRef = React.useRef<HTMLDivElement>(null)
+  const scrollRef = React.useRef<HTMLDivElement>(null)
 
-  // Initialize filter state based on props
   const [customerTypeFilter, setCustomerTypeFilter] =
     React.useState<CustomerTypeFilter>(() => {
       if (showRegular && showPartner) return 'all'
@@ -53,7 +51,6 @@ export default function CustomerTable({
       return 'all'
     })
 
-  // Derive showRegular/showPartner from filter state
   const derivedShowRegular =
     customerTypeFilter === 'all' || customerTypeFilter === 'customer'
   const derivedShowPartner =
@@ -74,92 +71,24 @@ export default function CustomerTable({
     staleTime: 10_000,
   })
 
-  // Recompute page size based on available space
-  const recomputePageSize = React.useCallback(() => {
-    if (!containerRef.current) return
-
-    const containerRect = containerRef.current.getBoundingClientRect()
-    const screenH = containerRect.height
-
-    if (screenH === 0) return
-
-    const controlsH = controlsRef.current?.offsetHeight ?? 0
-    const theadH = theadRef.current?.offsetHeight ?? 0
-    const pagerH = pagerRef.current?.offsetHeight ?? 0
-
-    const miscPadding = 48 // Increased to account for pagination controls
-
-    const available = Math.max(
-      0,
-      screenH - controlsH - theadH - pagerH - miscPadding,
-    )
-
-    if (available < 100) {
-      setPageSize(5)
-      return
-    }
-
-    const visibleRow = containerRef.current.querySelector<HTMLTableRowElement>(
-      'tbody tr:not([data-row-probe])',
-    )
-    const rowH = visibleRow?.getBoundingClientRect().height || 60
-
-    // Be conservative - don't add extra rows, and use floor to ensure we don't overflow
-    const nextPageSize = Math.max(5, Math.min(50, Math.floor(available / rowH)))
-    setPageSize(nextPageSize)
-  }, [])
-
-  React.useEffect(() => {
-    if (!containerRef.current) return
-
-    const onResize = () => recomputePageSize()
-    window.addEventListener('resize', onResize)
-
-    const resizeObserver = new ResizeObserver(() => {
-      recomputePageSize()
-    })
-
-    resizeObserver.observe(containerRef.current)
-
-    const timeoutId = setTimeout(() => {
-      recomputePageSize()
-    }, 0)
-
-    const rafId = requestAnimationFrame(() => {
-      recomputePageSize()
-    })
-
-    return () => {
-      window.removeEventListener('resize', onResize)
-      resizeObserver.disconnect()
-      clearTimeout(timeoutId)
-      cancelAnimationFrame(rafId)
-    }
-  }, [recomputePageSize])
-
-  React.useEffect(() => {
-    if (!isLoading && rows.length > 0) {
-      requestAnimationFrame(() => {
-        recomputePageSize()
-      })
-    }
-  }, [isLoading, rows.length, recomputePageSize])
-
-  // Reset to page 1 when filters change
-  React.useEffect(() => {
-    setPage(1)
-  }, [search, customerTypeFilter])
-
-  // Paginate the rows
-  const totalPages = Math.ceil(rows.length / pageSize)
-  const startIndex = (page - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const paginatedRows = rows.slice(startIndex, endIndex)
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+    getItemKey: (index) => rows[index]?.id ?? index,
+    enabled: rows.length > 0,
+  })
 
   return (
     <Box
       ref={containerRef}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      style={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
       <div ref={controlsRef}>
         <Flex gap="2" align="center" wrap="wrap">
@@ -217,103 +146,134 @@ export default function CustomerTable({
         </Flex>
       </div>
 
-      <Box style={{ flex: 1, minHeight: 0 }}>
-        <Table.Root variant="surface" style={{ marginTop: 16 }}>
-          <Table.Header ref={theadRef}>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Address</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>
-                <Flex gap={'1'}>
-                  Type
-                  <Tooltip content="Customer: normal customer, Partner: supplier & customer">
-                    <InfoCircle width={'1em'} />
-                  </Tooltip>
-                </Flex>
-              </Table.ColumnHeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {paginatedRows.length === 0 ? (
-              <Table.Row>
-                <Table.Cell colSpan={3}>No results</Table.Cell>
-              </Table.Row>
-            ) : (
-              paginatedRows.map((r) => {
-                const active = r.id === selectedId
-                return (
-                  <Table.Row
-                    key={r.id}
-                    onClick={() => onSelect(r.id)}
-                    style={{
-                      cursor: 'pointer',
-                      background: active ? 'var(--accent-a3)' : undefined,
-                    }}
-                    data-state={active ? 'active' : undefined}
-                  >
-                    <Table.Cell>
-                      <Text size="2" weight="medium">
-                        {r.name}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Text size="2" color="gray">
-                        {r.address || '—'}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {r.is_partner ? (
-                        <Badge variant="soft" color="green">
-                          Partner
-                        </Badge>
-                      ) : (
-                        <Badge variant="soft">Customer</Badge>
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                )
-              })
-            )}
-            {/* Probe row for height measurement */}
-            <Table.Row
-              data-row-probe
-              style={{
-                display: 'none',
-              }}
-            >
-              <Table.Cell colSpan={3}>probe</Table.Cell>
-            </Table.Row>
-          </Table.Body>
-        </Table.Root>
-      </Box>
-
-      {rows.length > 0 && (
-        <div ref={pagerRef}>
-          <Flex align="center" justify="between" mt="3">
-            <Text size="2" color="gray">
-              Showing {startIndex + 1}-{Math.min(endIndex, rows.length)} of{' '}
-              {rows.length} customers
-            </Text>
-            <Flex gap="2">
-              <Button
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-                variant="classic"
-                size="2"
-              >
-                Prev
-              </Button>
-              <Button
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                variant="classic"
-                size="2"
-              >
-                Next
-              </Button>
-            </Flex>
+      {/* Table header */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: GRID_COLUMNS,
+          gap: 'var(--space-2)',
+          padding: 'var(--space-2) var(--space-3)',
+          backgroundColor: 'var(--gray-a2)',
+          borderRadius: 'var(--radius-2)',
+          marginTop: 16,
+          flexShrink: 0,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 'var(--font-size-1)',
+            fontWeight: 600,
+          }}
+        >
+          Name
+        </div>
+        <div
+          style={{
+            fontSize: 'var(--font-size-1)',
+            fontWeight: 600,
+          }}
+        >
+          <Flex gap="1" align="center">
+            Type
+            <Tooltip content="Customer: normal customer, Partner: supplier & customer">
+              <InfoCircle width="1em" height="1em" />
+            </Tooltip>
           </Flex>
         </div>
+      </div>
+
+      {/* Virtualized list body */}
+      <div
+        ref={scrollRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          marginTop: 8,
+        }}
+      >
+        {isLoading ? (
+          <Flex align="center" justify="center" py="6">
+            <Spinner size="2" />
+          </Flex>
+        ) : rows.length === 0 ? (
+          <Flex align="center" justify="center" py="6">
+            <Text size="2" color="gray">
+              No results
+            </Text>
+          </Flex>
+        ) : (
+          <div
+            style={{
+              height: `${rowVirtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+              const r = rows[virtualRow.index]
+
+              const active = r.id === selectedId
+
+              return (
+                <div
+                  key={r.id}
+                  data-index={virtualRow.index}
+                  onClick={() => onSelect(r.id)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                    display: 'grid',
+                    gridTemplateColumns: GRID_COLUMNS,
+                    gap: 'var(--space-2)',
+                    alignItems: 'center',
+                    padding: '0 var(--space-3)',
+                    cursor: 'pointer',
+                    backgroundColor: active ? 'var(--accent-a3)' : 'transparent',
+                    borderRadius: 'var(--radius-2)',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!active) {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }
+                  }}
+                >
+                  <div>
+                    <Text size="2" weight="medium">
+                      {r.name}
+                    </Text>
+                  </div>
+                  <div>
+                    {r.is_partner ? (
+                      <Badge variant="soft" color="green">
+                        Partner
+                      </Badge>
+                    ) : (
+                      <Badge variant="soft">Customer</Badge>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {rows.length > 0 && (
+        <Flex align="center" mt="2">
+          <Text size="2" color="gray">
+            {rows.length} customer{rows.length !== 1 ? 's' : ''}
+          </Text>
+        </Flex>
       )}
     </Box>
   )

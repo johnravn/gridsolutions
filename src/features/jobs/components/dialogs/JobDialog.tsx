@@ -20,6 +20,7 @@ import {
 } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
 import { Sparks } from 'iconoir-react'
 import type { JobDetail, JobStatus, UUID } from '../../types'
@@ -54,6 +55,7 @@ export default function JobDialog({
   )
   const [startAt, setStartAt] = React.useState(initialData?.start_at ?? '')
   const [endAt, setEndAt] = React.useState(initialData?.end_at ?? '')
+  const [syncTimePeriods, setSyncTimePeriods] = React.useState(false)
   const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
   const [projectLead, setProjectLead] = React.useState<UUID | ''>(
     initialData?.project_lead_user_id ?? '',
@@ -101,6 +103,7 @@ export default function JobDialog({
     setStatus(initialData.status)
     setStartAt(initialData.start_at ?? '')
     setEndAt(initialData.end_at ?? '')
+    setSyncTimePeriods(false)
     setAutoSetEndTime(false) // Don't auto-set when loading existing data
     setProjectLead(initialData.project_lead_user_id ?? '')
     setIsCompanyCustomer(Boolean(initialData.customer_user_id))
@@ -218,12 +221,6 @@ export default function JobDialog({
       }>
     },
   })
-
-  const contactLabel = (c: {
-    name: string
-    email: string | null
-    phone: string | null
-  }) => [c.name, c.email, c.phone].filter(Boolean).join(' · ')
 
   const cascadeBookingStatus = async (jobId: UUID, nextStatus: JobStatus) => {
     if (nextStatus !== 'confirmed' && nextStatus !== 'canceled') return
@@ -383,6 +380,36 @@ export default function JobDialog({
           start_at: periodStart,
           end_at: periodEnd,
         })
+
+        // Optionally sync crew, equipment and vehicle time periods to the new job times (shift by delta)
+        if (syncTimePeriods && initialData.start_at && startAt) {
+          const oldStartMs = new Date(initialData.start_at).getTime()
+          const newStartMs = new Date(startAt).getTime()
+          const deltaMs = newStartMs - oldStartMs
+          if (deltaMs !== 0) {
+            const { data: periodsToShift, error: listErr } = await supabase
+              .from('time_periods')
+              .select('id, start_at, end_at')
+              .eq('job_id', initialData.id)
+              .neq('title', 'Job duration')
+              .in('category', ['crew', 'equipment', 'transport'])
+              .or('deleted.is.null,deleted.eq.false')
+            if (listErr) throw listErr
+            if (periodsToShift.length > 0) {
+              for (const tp of periodsToShift) {
+                const tpStart = new Date(tp.start_at).getTime()
+                const tpEnd = new Date(tp.end_at).getTime()
+                const newTpStart = new Date(tpStart + deltaMs).toISOString()
+                const newTpEnd = new Date(tpEnd + deltaMs).toISOString()
+                const { error: upErr } = await supabase
+                  .from('time_periods')
+                  .update({ start_at: newTpStart, end_at: newTpEnd })
+                  .eq('id', tp.id)
+                if (upErr) throw upErr
+              }
+            }
+          }
+        }
 
         if (
           previousStatus !== status &&
@@ -552,6 +579,20 @@ export default function JobDialog({
       <Dialog.Content
         maxWidth="820px"
         style={{ display: 'flex', flexDirection: 'column' }}
+        onPointerDownOutside={(e) => {
+          const ev = e as unknown as { detail?: { originalEvent?: PointerEvent } }
+          const el = (ev.detail?.originalEvent?.target ?? e.target) as HTMLElement
+          if (el.closest('[data-searchable-select-dropdown]')) {
+            e.preventDefault()
+          }
+        }}
+        onInteractOutside={(e) => {
+          const ev = e as unknown as { detail?: { originalEvent?: FocusEvent } }
+          const el = (ev.detail?.originalEvent?.target ?? e.target) as HTMLElement
+          if (el.closest('[data-searchable-select-dropdown]')) {
+            e.preventDefault()
+          }
+        }}
       >
         <Flex align="center" justify="between">
           <Dialog.Title>
@@ -623,23 +664,20 @@ export default function JobDialog({
               </Field>
 
               <Field label="Project lead">
-                <Select.Root
+                <SearchableSelect
+                  options={leads.map((u) => ({
+                    value: u.user_id,
+                    label: u.display_name ?? u.email,
+                  }))}
                   value={projectLead}
                   onValueChange={(v) => setProjectLead(v)}
-                >
-                  <Select.Trigger placeholder="None" />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {leads.map((u) => (
-                      <Select.Item key={u.user_id} value={u.user_id}>
-                        {u.display_name ?? u.email}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
+                  placeholder="Search project lead…"
+                  emptyMessage="No project leads found"
+                />
               </Field>
             </Flex>
 
-            <Flex wrap={'wrap'}>
+            <Flex wrap={'wrap'} direction="column" gap="2">
               <label
                 style={{
                   display: 'flex',
@@ -664,39 +702,46 @@ export default function JobDialog({
                 />
                 <Text size="2">Customer is a member of the company</Text>
               </label>
-              <Field label="Customer">
-                <Select.Root
-                  value={customerId}
-                  onValueChange={(v) => setCustomerId(v)}
-                  disabled={isCompanyCustomer}
-                >
-                  <Select.Trigger
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 12,
+                  width: '100%',
+                }}
+              >
+                <Field label="Customer">
+                  <SearchableSelect
+                    options={customers.map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                    }))}
+                    value={customerId}
+                    onValueChange={(v) => setCustomerId(v)}
+                    disabled={isCompanyCustomer}
                     placeholder={
-                      isCompanyCustomer ? 'Disabled for company member' : 'None'
+                      isCompanyCustomer
+                        ? 'Disabled for company member'
+                        : 'Search customer…'
                     }
+                    emptyMessage="No customers found"
                   />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {customers.map((c) => (
-                      <Select.Item key={c.id} value={c.id}>
-                        {c.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </Field>
+                </Field>
 
-              <Field label="Main contact">
-                <Select.Root
-                  value={contactId}
-                  onValueChange={(v) => setContactId(v)}
-                  disabled={
-                    isCompanyCustomer ||
-                    !customerId ||
-                    contactsLoading ||
-                    contacts.length === 0
-                  }
-                >
-                  <Select.Trigger
+                <Field label="Main contact">
+                  <SearchableSelect
+                    options={contacts.map((c) => ({
+                      value: c.id,
+                      label: c.name,
+                    }))}
+                    value={contactId}
+                    onValueChange={(v) => setContactId(v)}
+                    disabled={
+                      isCompanyCustomer ||
+                      !customerId ||
+                      contactsLoading ||
+                      contacts.length === 0
+                    }
                     placeholder={
                       isCompanyCustomer
                         ? 'Disabled for company member'
@@ -704,36 +749,25 @@ export default function JobDialog({
                           ? 'Select a customer first'
                           : contactsLoading
                             ? 'Loading…'
-                            : contacts.length === 0
-                              ? 'No contacts found'
-                              : 'None'
+                            : 'Search contact…'
                     }
+                    emptyMessage="No contacts found"
                   />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {contacts.map((c) => (
-                      <Select.Item key={c.id} value={c.id}>
-                        {contactLabel(c)}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </Field>
+                </Field>
+              </div>
 
               {isCompanyCustomer && (
                 <Field label="Customer from company">
-                  <Select.Root
+                  <SearchableSelect
+                    options={companyUsers.map((u) => ({
+                      value: u.user_id,
+                      label: u.display_name ?? u.email,
+                    }))}
                     value={customerUserId}
                     onValueChange={(v) => setCustomerUserId(v)}
-                  >
-                    <Select.Trigger placeholder="None" />
-                    <Select.Content style={{ zIndex: 10000 }}>
-                      {companyUsers.map((u) => (
-                        <Select.Item key={u.user_id} value={u.user_id}>
-                          {u.display_name ?? u.email}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
+                    placeholder="Search company member…"
+                    emptyMessage="No company members found"
+                  />
                 </Field>
               )}
             </Flex>
@@ -757,6 +791,30 @@ export default function JobDialog({
                 setAutoSetEndTime(false)
               }}
             />
+            {mode === 'edit' &&
+              initialData &&
+              (startAt !== (initialData.start_at ?? '') ||
+                endAt !== (initialData.end_at ?? '')) && (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <Checkbox
+                  checked={syncTimePeriods}
+                  onCheckedChange={(checked) =>
+                    setSyncTimePeriods(checked === true)
+                  }
+                />
+                <Text size="2">
+                  Sync crew, equipment and vehicle bookings to new times
+                </Text>
+              </label>
+            )}
             <Field label="Notes">
               <TextArea
                 rows={5}

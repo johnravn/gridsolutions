@@ -362,41 +362,6 @@ export type Database = {
           },
         ]
       }
-      company_users: {
-        Row: {
-          company_id: string
-          rate: number | null
-          rate_type: string | null
-          rate_updated_at: string | null
-          role: Database["public"]["Enums"]["company_role"]
-          user_id: string
-        }
-        Insert: {
-          company_id: string
-          rate?: number | null
-          rate_type?: string | null
-          rate_updated_at?: string | null
-          role: Database["public"]["Enums"]["company_role"]
-          user_id: string
-        }
-        Update: {
-          company_id?: string
-          rate?: number | null
-          rate_type?: string | null
-          rate_updated_at?: string | null
-          role?: Database["public"]["Enums"]["company_role"]
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "company_users_company_id_fkey"
-            columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       company_user_internal_notes: {
         Row: {
           company_id: string
@@ -439,6 +404,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      company_users: {
+        Row: {
+          company_id: string
+          rate: number | null
+          rate_type: string | null
+          rate_updated_at: string | null
+          role: Database["public"]["Enums"]["company_role"]
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          rate?: number | null
+          rate_type?: string | null
+          rate_updated_at?: string | null
+          role: Database["public"]["Enums"]["company_role"]
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          rate?: number | null
+          rate_type?: string | null
+          rate_updated_at?: string | null
+          role?: Database["public"]["Enums"]["company_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_users_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2128,6 +2128,7 @@ export type Database = {
         Row: {
           daily_rate: number
           distance_km: number | null
+          distance_rate: number | null
           end_date: string
           id: string
           is_internal: boolean
@@ -2144,6 +2145,7 @@ export type Database = {
         Insert: {
           daily_rate?: number
           distance_km?: number | null
+          distance_rate?: number | null
           end_date: string
           id?: string
           is_internal?: boolean
@@ -2160,6 +2162,7 @@ export type Database = {
         Update: {
           daily_rate?: number
           distance_km?: number | null
+          distance_rate?: number | null
           end_date?: string
           id?: string
           is_internal?: boolean
@@ -3309,6 +3312,14 @@ export type Database = {
         Returns: Json
       }
       auto_update_jobs_to_in_progress: { Args: never; Returns: undefined }
+      can_freelancer_view_job: {
+        Args: { p_company_id: string; p_job_id: string }
+        Returns: boolean
+      }
+      can_freelancer_view_time_period: {
+        Args: { p_company_id: string; p_time_period_id: string }
+        Returns: boolean
+      }
       check_circular_group_reference: {
         Args: { p_child_group_id: string; p_parent_group_id: string }
         Returns: boolean
@@ -3405,6 +3416,10 @@ export type Database = {
       get_accounting_api_environment: { Args: never; Returns: string }
       get_accounting_read_only: { Args: never; Returns: boolean }
       get_conta_api_key: { Args: never; Returns: string }
+      get_group_contents_for_display: {
+        Args: { p_group_id: string }
+        Returns: Json
+      }
       is_superuser: { Args: { p_user_id: string }; Returns: boolean }
       item_available_qty: {
         Args: {

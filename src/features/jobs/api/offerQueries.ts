@@ -952,19 +952,21 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
   const crewItems = offer.crew_items || []
   const transportItems = offer.transport_items || []
 
-  // Fetch company expansion to get vehicle rates
+  // Fetch company expansion to get vehicle rates (including daily rate for transport subtotal)
   let vehicleDistanceRate: number | null = null
   let vehicleDistanceIncrement: number | null = null
+  let vehicleDailyRate: number | null = null
   let rentalFactorConfig: RentalFactorConfig | null = null
   if (offer.company_id) {
     const { data: expansion } = await supabase
       .from('company_expansions')
       .select(
-        'vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
+        'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
       )
       .eq('company_id', offer.company_id)
       .maybeSingle()
     if (expansion) {
+      vehicleDailyRate = expansion.vehicle_daily_rate ?? null
       vehicleDistanceRate = expansion.vehicle_distance_rate
       vehicleDistanceIncrement = expansion.vehicle_distance_increment ?? 150
       try {
@@ -991,6 +993,7 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
     rentalFactorConfig,
     vehicleDistanceRate,
     vehicleDistanceIncrement,
+    vehicleDailyRate,
   )
 
   // Update offer with new totals
@@ -1191,6 +1194,7 @@ export async function duplicateOffer(offerId: string): Promise<string> {
       vehicle_id: item.vehicle_id,
       vehicle_category: item.vehicle_category,
       distance_km: item.distance_km,
+      distance_rate: item.distance_rate ?? null,
       start_date: item.start_date,
       end_date: item.end_date,
       daily_rate: item.daily_rate,

@@ -31,8 +31,6 @@ import {
   User,
   UserLove,
 } from 'iconoir-react'
-import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
-import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -40,6 +38,8 @@ import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
 import { companyExpansionQuery } from '@features/company/api/queries'
+import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
+import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useTheme } from '../hooks/useTheme'
 import { APP_VERSION } from '../config/version'

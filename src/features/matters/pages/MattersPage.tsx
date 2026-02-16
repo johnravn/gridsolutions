@@ -1,22 +1,18 @@
 import * as React from 'react'
 import {
   Box,
-  Button,
   Card,
   Flex,
   Grid,
   Heading,
   IconButton,
-  Select,
   Separator,
-  Switch,
-  Text,
   Tooltip,
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
-import { Plus, TransitionLeft } from 'iconoir-react'
+import { TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -25,15 +21,16 @@ import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
+import MattersFilter from '../components/MattersFilter'
+import type { MatterType } from '../types'
 
 export default function MattersPage() {
   const { companyId } = useCompany()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [createMatterOpen, setCreateMatterOpen] = React.useState(false)
   const [unreadFilter, setUnreadFilter] = React.useState(false)
-  const [companyFilter, setCompanyFilter] = React.useState<string | 'all'>(
-    'all',
-  )
+  const [companyFilter, setCompanyFilter] = React.useState<Array<string>>([])
+  const [typeFilter, setTypeFilter] = React.useState<Array<MatterType>>([])
 
   // Fetch all companies the user is a member of for the filter
   const { data: user } = useQuery({
@@ -184,55 +181,28 @@ export default function MattersPage() {
               minHeight: 0,
             }}
           >
-            <Box
-              mb="3"
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-              }}
-            >
+            <Flex align="center" justify="between" mb="3">
               <Heading size="5">Matters</Heading>
-              <Flex align="center" gap="3" wrap="wrap">
-                <Flex align="center" gap="2">
-                  <Text size="2" weight="medium">
-                    Unread only
-                  </Text>
-                  <Switch
-                    checked={unreadFilter}
-                    onCheckedChange={setUnreadFilter}
-                    size="2"
-                  />
-                </Flex>
-                {companies && companies.length > 0 && (
-                  <Select.Root
-                    value={companyFilter}
-                    size="3"
-                    onValueChange={(val) => setCompanyFilter(val)}
-                  >
-                    <Select.Trigger
-                      placeholder="Filter company…"
-                      style={{ minHeight: 'var(--space-7)' }}
-                    />
-                    <Select.Content>
-                      <Select.Item value="all">All Companies</Select.Item>
-                      {companies.map((c: any) => (
-                        <Select.Item key={c.id} value={c.id}>
-                          {c.name}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                )}
-                <Button size="2" onClick={() => setCreateMatterOpen(true)}>
-                  <Plus /> New Matter
-                </Button>
+              <Flex align="center" gap="2" wrap="wrap">
+                <MattersFilter
+                  unreadFilter={unreadFilter}
+                  onUnreadFilterChange={setUnreadFilter}
+                  companyFilter={companyFilter}
+                  onCompanyFilterChange={setCompanyFilter}
+                  typeFilter={typeFilter}
+                  onTypeFilterChange={setTypeFilter}
+                  companies={companies || []}
+                />
               </Flex>
-            </Box>
+            </Flex>
             <Separator size="4" mb="3" />
             <Box
               style={{
-                overflowY: 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflow: 'hidden',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <MatterList
@@ -240,7 +210,9 @@ export default function MattersPage() {
                 onSelect={setSelectedId}
                 unreadFilter={unreadFilter}
                 companyFilter={companyFilter}
+                typeFilter={typeFilter}
                 companies={companies || []}
+                onCreateMatter={() => setCreateMatterOpen(true)}
               />
             </Box>
           </Card>
@@ -381,51 +353,18 @@ export default function MattersPage() {
             </Box>
           ) : (
             <>
-              <Box
-                mb="3"
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
+              <Flex align="center" justify="between" mb="3">
                 <Heading size="5">Matters</Heading>
                 <Flex align="center" gap="2" wrap="wrap">
-                  <Flex align="center" gap="3" wrap="wrap">
-                    <Flex align="center" gap="2">
-                      <Text size="2" weight="medium">
-                        Unread only
-                      </Text>
-                      <Switch
-                        checked={unreadFilter}
-                        onCheckedChange={setUnreadFilter}
-                        size="2"
-                      />
-                    </Flex>
-                    {companies && companies.length > 0 && (
-                      <Select.Root
-                        value={companyFilter}
-                        size="3"
-                        onValueChange={(val) => setCompanyFilter(val)}
-                      >
-                        <Select.Trigger
-                          placeholder="Filter company…"
-                          style={{ minHeight: 'var(--space-7)' }}
-                        />
-                        <Select.Content>
-                          <Select.Item value="all">All Companies</Select.Item>
-                          {companies.map((c: any) => (
-                            <Select.Item key={c.id} value={c.id}>
-                              {c.name}
-                            </Select.Item>
-                          ))}
-                        </Select.Content>
-                      </Select.Root>
-                    )}
-                    <Button size="2" onClick={() => setCreateMatterOpen(true)}>
-                      <Plus /> New Matter
-                    </Button>
-                  </Flex>
+                  <MattersFilter
+                    unreadFilter={unreadFilter}
+                    onUnreadFilterChange={setUnreadFilter}
+                    companyFilter={companyFilter}
+                    onCompanyFilterChange={setCompanyFilter}
+                    typeFilter={typeFilter}
+                    onTypeFilterChange={setTypeFilter}
+                    companies={companies || []}
+                  />
                   <Tooltip
                     content={`Collapse sidebar (${collapseShortcutLabel})`}
                   >
@@ -439,12 +378,15 @@ export default function MattersPage() {
                     </IconButton>
                   </Tooltip>
                 </Flex>
-              </Box>
+              </Flex>
               <Separator size="4" mb="3" />
               <Box
                 style={{
                   flex: 1,
                   minHeight: 0,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
                 }}
               >
                 <MatterList
@@ -452,7 +394,9 @@ export default function MattersPage() {
                   onSelect={setSelectedId}
                   unreadFilter={unreadFilter}
                   companyFilter={companyFilter}
+                  typeFilter={typeFilter}
                   companies={companies || []}
+                  onCreateMatter={() => setCreateMatterOpen(true)}
                 />
               </Box>
             </>

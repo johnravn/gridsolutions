@@ -21,6 +21,7 @@ export function jobsIndexQuery({
   userId,
   companyRole,
   includeArchived = false,
+  showOnlyArchived = false,
   onlyCrewForUserId = null,
 }: {
   companyId: string
@@ -31,6 +32,7 @@ export function jobsIndexQuery({
   userId?: string | null
   companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
   includeArchived?: boolean
+  showOnlyArchived?: boolean
   onlyCrewForUserId?: string | null
 }) {
   return {
@@ -45,6 +47,7 @@ export function jobsIndexQuery({
       userId,
       companyRole,
       includeArchived,
+      showOnlyArchived,
       onlyCrewForUserId,
     ],
     queryFn: async (): Promise<Array<JobListRow>> => {
@@ -60,9 +63,14 @@ export function jobsIndexQuery({
         )
         .eq('company_id', companyId)
 
-      // Filter out archived jobs by default
-      if (!includeArchived) {
-        q = q.eq('archived', false)
+      // Visibility: show only archived, or only non-archived
+      if (showOnlyArchived) {
+        q = q.eq('archived', true)
+      } else {
+        // When showOnlyArchived not set, respect includeArchived for backward compatibility (e.g. JobsTable, LoggingPage)
+        if (!includeArchived) {
+          q = q.eq('archived', false)
+        }
       }
 
       // Note: We don't filter server-side when searching because we need to search
