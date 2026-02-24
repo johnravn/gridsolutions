@@ -40,7 +40,7 @@ function randomToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-const MAX_SUBSCRIPTIONS_PER_USER = 3
+const MAX_SUBSCRIPTIONS_PER_USER = 10
 
 /** List all calendar subscriptions for the current user in the company */
 export async function getCalendarSubscriptions(
@@ -58,7 +58,7 @@ export async function getCalendarSubscriptions(
   return (data ?? []) as CalendarSubscriptionRow[]
 }
 
-/** Create a new calendar subscription. Fails if user already has 3. */
+/** Create a new calendar subscription. Fails if user already has 10. */
 export async function createCalendarSubscription(
   companyId: string,
   userId: string,

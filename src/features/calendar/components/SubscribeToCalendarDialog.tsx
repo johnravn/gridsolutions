@@ -16,6 +16,8 @@ import {
   Copy,
   Group,
   Leaderboard,
+  NavArrowDown,
+  NavArrowRight,
   Trash,
   Truck,
 } from 'iconoir-react'
@@ -94,6 +96,7 @@ export default function SubscribeToCalendarDialog({
 
   const [addKind, setAddKind] = React.useState<CalendarSubscriptionKind | null>(null)
   const [addVehicleId, setAddVehicleId] = React.useState<string | null>(null)
+  const [instructionsOpen, setInstructionsOpen] = React.useState(false)
 
   const { data: subscriptions = [], isLoading } = useQuery({
     queryKey: ['calendar-subscriptions', companyId ?? '', userId ?? ''],
@@ -117,7 +120,7 @@ export default function SubscribeToCalendarDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['calendar-subscriptions', companyId, userId] })
-      success('Calendar added', 'Copy the link below to add this calendar to your phone.')
+      success('Calendar added', 'Copy the link below to add this calendar to your device.')
       setAddKind(null)
       setAddVehicleId(null)
     },
@@ -161,7 +164,7 @@ export default function SubscribeToCalendarDialog({
     ? PREMADE_OPTIONS.filter((o) => o.kind === 'crew_jobs')
     : PREMADE_OPTIONS
 
-  const canAddMore = subscriptions.length < 3
+  const canAddMore = subscriptions.length < 10
 
   const getSubscriptionLabel = (row: CalendarSubscriptionRow): string => {
     if (row.kind === 'transport_vehicle' && row.vehicle_id && vehicles.length > 0) {
@@ -180,13 +183,13 @@ export default function SubscribeToCalendarDialog({
       <Dialog.Content maxWidth="540px">
         <Dialog.Title>Subscribe to calendar</Dialog.Title>
         <Text size="2" color="gray" as="p" mt="1">
-          Add calendar feeds to your phone (iPhone or Android). You can have up to 3 subscriptions. Choose a type below and copy the link.
+          Add calendar feeds to your phone or computer. You can have up to 10 subscriptions. Choose a type below and copy the link.
         </Text>
 
         {/* Your calendar subscriptions – always visible, not inside scroll */}
         <Box mt="4">
           <Text size="2" weight="medium" as="p" mb="2">
-            Your calendar subscriptions ({subscriptions.length}/3)
+            Your calendar subscriptions ({subscriptions.length}/10)
           </Text>
           {isLoading ? (
             <Text size="2" color="gray">Loading…</Text>
@@ -389,15 +392,37 @@ export default function SubscribeToCalendarDialog({
             )}
 
             <Box mt="2">
-              <Text size="1" color="gray" as="p">
-                <strong>iPhone:</strong> Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the link.
-              </Text>
-              <Text size="1" color="gray" as="p" mt="1">
-                <strong>Android:</strong> Google Calendar → Settings → Add account → Subscribe to calendar → paste the link.
-              </Text>
-              <Text size="1" color="gray" as="p" mt="1">
-                The calendar may take up to an hour to refresh on your device.
-              </Text>
+              <Flex
+                align="center"
+                gap="2"
+                style={{ cursor: 'pointer', userSelect: 'none' }}
+                onClick={() => setInstructionsOpen((o) => !o)}
+              >
+                {instructionsOpen ? (
+                  <NavArrowDown width={16} height={16} />
+                ) : (
+                  <NavArrowRight width={16} height={16} />
+                )}
+                <Text size="1" color="gray" weight="medium">
+                  How to add the calendar
+                </Text>
+              </Flex>
+              {instructionsOpen && (
+                <Box pl="5" mt="2">
+                  <Text size="1" color="gray" as="p">
+                    <strong>Mac:</strong> Open Calendar → File → New Calendar Subscription… → paste the link → Subscribe.
+                  </Text>
+                  <Text size="1" color="gray" as="p" mt="1">
+                    <strong>iPhone:</strong> Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the link.
+                  </Text>
+                  <Text size="1" color="gray" as="p" mt="1">
+                    <strong>Android:</strong> Google Calendar → Settings → Add account → Subscribe to calendar → paste the link.
+                  </Text>
+                  <Text size="1" color="gray" as="p" mt="1">
+                    The calendar may take up to an hour to refresh on your device.
+                  </Text>
+                </Box>
+              )}
             </Box>
           </Flex>
         </ScrollArea>
