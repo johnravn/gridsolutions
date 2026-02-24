@@ -1,21 +1,20 @@
-// Calendar subscription: preferences and feed URL for phone/external calendars
+// Calendar subscription: premade kinds and feed URL for phone/external calendars
 import { supabase } from '@shared/api/supabase'
 
-export type CalendarSubscriptionCategory =
-  | 'program'
-  | 'equipment'
-  | 'crew'
-  | 'transport'
+export type CalendarSubscriptionKind =
+  | 'all_jobs'
+  | 'project_lead_jobs'
+  | 'crew_jobs'
+  | 'transport_vehicle'
+  | 'transport_all'
 
 export type CalendarSubscriptionRow = {
   id: string
   company_id: string
   user_id: string
   token: string
-  categories: string[]
-  only_my_assignments: boolean
-  include_project_lead_jobs: boolean
-  vehicle_ids: string[] | null
+  kind: CalendarSubscriptionKind
+  vehicle_id: string | null
   created_at: string
   updated_at: string
 }
@@ -24,20 +23,12 @@ export type CalendarSubscriptionInsert = {
   company_id: string
   user_id: string
   token: string
-  categories: string[]
-  only_my_assignments: boolean
-  include_project_lead_jobs?: boolean
-  vehicle_ids?: string[] | null
+  kind: CalendarSubscriptionKind
+  vehicle_id?: string | null
 }
 
-export type CalendarSubscriptionPreferences = {
-  categories: CalendarSubscriptionCategory[]
-  onlyMyAssignments: boolean
-  includeProjectLeadJobs: boolean
-  vehicleIds: string[] | null
-}
-
-const DEFAULT_CATEGORIES: CalendarSubscriptionCategory[] = ['program']
+const SELECT_COLS =
+  'id, company_id, user_id, token, kind, vehicle_id, created_at, updated_at'
 
 function randomToken(): string {
   const bytes = new Uint8Array(24)
@@ -49,58 +40,73 @@ function randomToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
-/** Get subscription for current user and company, if any */
-export async function getCalendarSubscription(
+const MAX_SUBSCRIPTIONS_PER_USER = 3
+
+/** List all calendar subscriptions for the current user in the company */
+export async function getCalendarSubscriptions(
   companyId: string,
   userId: string,
-): Promise<CalendarSubscriptionRow | null> {
+): Promise<CalendarSubscriptionRow[]> {
   const { data, error } = await supabase
     .from('calendar_subscriptions')
-    .select('id, company_id, user_id, token, categories, only_my_assignments, include_project_lead_jobs, vehicle_ids, created_at, updated_at')
+    .select(SELECT_COLS)
     .eq('company_id', companyId)
     .eq('user_id', userId)
-    .maybeSingle()
+    .order('created_at', { ascending: true })
 
   if (error) throw error
-  return data as CalendarSubscriptionRow | null
+  return (data ?? []) as CalendarSubscriptionRow[]
 }
 
-/** Upsert subscription: create or update preferences; returns row with token */
-export async function upsertCalendarSubscription(
+/** Create a new calendar subscription. Fails if user already has 3. */
+export async function createCalendarSubscription(
   companyId: string,
   userId: string,
-  preferences: CalendarSubscriptionPreferences,
+  params: { kind: CalendarSubscriptionKind; vehicleId?: string | null },
 ): Promise<CalendarSubscriptionRow> {
-  const existing = await getCalendarSubscription(companyId, userId)
-  const token = existing?.token ?? randomToken()
-  const categories = preferences.categories.length > 0 ? preferences.categories : DEFAULT_CATEGORIES
+  const existing = await getCalendarSubscriptions(companyId, userId)
+  if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) {
+    throw new Error(`You can have at most ${MAX_SUBSCRIPTIONS_PER_USER} calendar subscriptions. Remove one to add another.`)
+  }
 
   const row: CalendarSubscriptionInsert = {
     company_id: companyId,
     user_id: userId,
-    token,
-    categories: [...categories],
-    only_my_assignments: preferences.onlyMyAssignments,
-    include_project_lead_jobs: preferences.includeProjectLeadJobs,
-    vehicle_ids: preferences.vehicleIds?.length ? preferences.vehicleIds : null,
+    token: randomToken(),
+    kind: params.kind,
+    vehicle_id: params.kind === 'transport_vehicle' ? params.vehicleId ?? null : null,
   }
 
   const { data, error } = await supabase
     .from('calendar_subscriptions')
-    .upsert(row, { onConflict: 'company_id,user_id' })
-    .select('id, company_id, user_id, token, categories, only_my_assignments, include_project_lead_jobs, vehicle_ids, created_at, updated_at')
+    .insert(row)
+    .select(SELECT_COLS)
     .single()
 
   if (error) throw error
   return data as CalendarSubscriptionRow
 }
 
-/** Public app URL used for calendar feed link (set in env so link works on phone when dev runs on localhost) */
+/** Delete a calendar subscription by id */
+export async function deleteCalendarSubscription(
+  subscriptionId: string,
+  userId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('calendar_subscriptions')
+    .delete()
+    .eq('id', subscriptionId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+/** Public app URL used for calendar feed link */
 const PUBLIC_BASE_URL =
   (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_APP_PUBLIC_URL as string) ||
   ''
 
-/** Build the feed URL for a given token. Uses VITE_APP_PUBLIC_URL when set (e.g. production URL), otherwise current origin. */
+/** Build the feed URL for a given token */
 export function getCalendarFeedUrl(token: string, baseUrl?: string): string {
   const base =
     baseUrl ??

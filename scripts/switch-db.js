@@ -63,6 +63,9 @@ function showCurrent() {
   } else {
     log('Current: Unknown configuration', 'yellow')
   }
+  log('', 'reset')
+  log('Note: The app badge (bottom left) uses env from when the dev server started.', 'yellow')
+  log('If the badge and status disagree, restart the dev server: npm run dev', 'yellow')
 }
 
 function switchToLocal() {
