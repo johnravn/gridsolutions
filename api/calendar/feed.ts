@@ -189,6 +189,8 @@ export default async function handler(req: any, res: any) {
         periodList = periodList.filter((p: { id: string }) => allowedIds.has(p.id))
       }
 
+      periodList = await filterNonArchivedJobPeriods(supabase, periodList)
+
       const periodIds = periodList.map((p: { id: string }) => p.id)
       const jobIds = Array.from(new Set(periodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
 
@@ -230,12 +232,14 @@ export default async function handler(req: any, res: any) {
               ? `${vehicle.name}${vehicle.registration_no ? ` (${vehicle.registration_no})` : ''}`
               : 'Transport'
             const title = `${vehicleLabel}: ${rest}`.trim() || 'Transport'
+            const jobNo = info ? formatJobNumber(info.jobnr) : ''
+            const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
             events.push({
               id: `${p.id}-${vid}`,
               title,
               start: p.start_at,
               end: p.end_at,
-              description: p.job_id ? `Job ID: ${p.job_id}` : undefined,
+              description: descParts.length > 0 ? descParts.join('\n') : undefined,
             })
           }
         }
@@ -260,12 +264,14 @@ export default async function handler(req: any, res: any) {
         const parts = [jobTitle, customer, projectLead].filter(Boolean)
         const rest = parts.join(' · ')
         const title = vehicleLabel ? `${vehicleLabel}: ${rest}` : rest || 'Transport'
+        const jobNo = info ? formatJobNumber(info.jobnr) : ''
+        const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
         return {
           id: p.id,
           title,
           start: p.start_at,
           end: p.end_at,
-          description: p.job_id ? `Job ID: ${p.job_id}` : undefined,
+          description: descParts.length > 0 ? descParts.join('\n') : undefined,
         }
       })
 
@@ -327,30 +333,54 @@ export default async function handler(req: any, res: any) {
       )
     }
 
+    periodList = await filterNonArchivedJobPeriods(supabase, periodList)
+
     const jobIds = Array.from(new Set(periodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
     const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
 
     const prefix =
-      kind === 'project_lead_jobs'
-        ? 'PROJECT LEAD: '
-        : kind === 'crew_jobs'
-          ? 'CREW: '
-          : ''
+      kind === 'all_jobs'
+        ? 'JOB: '
+        : kind === 'project_lead_jobs'
+          ? 'PROJECT LEAD: '
+          : kind === 'crew_jobs'
+            ? 'CREW: '
+            : ''
 
     const events = periodList.map((p: { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }) => {
       const info = p.job_id ? jobInfo.get(p.job_id) : null
       const jobTitle = info?.title ?? p.title ?? 'Job'
+      const jobNo = info ? formatJobNumber(info.jobnr) : ''
+      const statusLabel = info ? formatJobStatus(info.status) : ''
+
+      if (kind === 'all_jobs') {
+        const title = prefix + jobTitle
+        const descLines: string[] = []
+        if (jobNo) descLines.push(`Job no: ${jobNo}`)
+        if (statusLabel) descLines.push(`Status: ${statusLabel}`)
+        if (info?.projectLeadName) descLines.push(`Project lead: ${info.projectLeadName}`)
+        if (info?.customerName) descLines.push(`Customer: ${info.customerName}`)
+        if (info?.location) descLines.push(`Location: ${info.location}`)
+        if (p.job_id) descLines.push(`Job ID: ${p.job_id}`)
+        return {
+          id: p.id,
+          title: title || 'Event',
+          start: p.start_at,
+          end: p.end_at,
+          description: descLines.length > 0 ? descLines.join('\n') : undefined,
+        }
+      }
+
       const projectLead = info?.projectLeadName ?? ''
-      const customer = info?.customerName ?? ''
-      const location = info?.location ?? ''
-      const parts = [jobTitle, projectLead, customer, location].filter(Boolean)
+      const parts = [jobTitle, projectLead].filter(Boolean)
       const title = prefix + parts.join(' · ')
+      const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
       return {
         id: p.id,
         title: title || 'Event',
         start: p.start_at,
         end: p.end_at,
-        description: p.job_id ? `Job ID: ${p.job_id}` : undefined,
+        description: descParts.length > 0 ? descParts.join('\n') : undefined,
       }
     })
 
@@ -369,17 +399,36 @@ export default async function handler(req: any, res: any) {
   }
 }
 
+function formatJobNumber(jobnr: number | null | undefined): string {
+  if (jobnr == null) return ''
+  return '#' + String(jobnr).padStart(6, '0')
+}
+
+function formatJobStatus(status: string | null | undefined): string {
+  if (!status) return ''
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
+}
+
+type JobInfo = {
+  title: string
+  projectLeadName: string
+  customerName: string
+  location: string
+  jobnr: number | null
+  status: string
+}
+
 async function fetchJobInfo(
   supabase: ReturnType<typeof createClient<Database>>,
   companyId: string,
   jobIds: string[],
-): Promise<Map<string, { title: string; projectLeadName: string; customerName: string; location: string }>> {
-  const out = new Map<string, { title: string; projectLeadName: string; customerName: string; location: string }>()
+): Promise<Map<string, JobInfo>> {
+  const out = new Map<string, JobInfo>()
   if (jobIds.length === 0) return out
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, project_lead_user_id, customer_id, job_address_id')
+    .select('id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status')
     .in('id', jobIds)
 
   if (!jobs || jobs.length === 0) return out
@@ -413,13 +462,31 @@ async function fetchJobInfo(
     addressMap.set(a.id, formatLocation(a))
   })
 
-  jobs.forEach((j: { id: string; title: string; project_lead_user_id: string | null; customer_id: string | null; job_address_id: string | null }) => {
+  jobs.forEach((j: { id: string; title: string; project_lead_user_id: string | null; customer_id: string | null; job_address_id: string | null; jobnr: number | null; status: string }) => {
     out.set(j.id, {
       title: j.title || 'Job',
       projectLeadName: j.project_lead_user_id ? leadNames.get(j.project_lead_user_id) ?? '' : '',
       customerName: j.customer_id ? customerNames.get(j.customer_id) ?? '' : '',
       location: j.job_address_id ? addressMap.get(j.job_address_id) ?? '' : '',
+      jobnr: j.jobnr ?? null,
+      status: j.status || '',
     })
   })
   return out
+}
+
+/** Filter periodList to only include periods whose job is not archived (or has no job). */
+async function filterNonArchivedJobPeriods(
+  supabase: ReturnType<typeof createClient<Database>>,
+  periodList: Array<{ job_id: string | null }>,
+): Promise<Array<{ job_id: string | null }>> {
+  const jobIds = Array.from(new Set(periodList.map((p) => p.job_id).filter(Boolean))) as string[]
+  if (jobIds.length === 0) return periodList
+  const { data: jobs } = await supabase
+    .from('jobs')
+    .select('id')
+    .in('id', jobIds)
+    .eq('archived', false)
+  const allowedIds = new Set((jobs || []).map((j: { id: string }) => j.id))
+  return periodList.filter((p) => !p.job_id || allowedIds.has(p.job_id))
 }
