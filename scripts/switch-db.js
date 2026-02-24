@@ -7,9 +7,29 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { join } from 'path'
 
-const ENV_FILE = '.env.local'
-const LOCAL_ENV = '.env.local.db'
-const REMOTE_ENV = '.env.remote.db'
+const ROOT = process.cwd()
+const ENV_FILE = join(ROOT, '.env.local')
+const LOCAL_ENV = join(ROOT, '.env.local.db')
+const REMOTE_ENV = join(ROOT, '.env.remote.db')
+
+const SUPABASE_KEYS = [
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_ANON_KEY',
+  'SUPABASE_PROJECT_REF',
+  'SUPABASE_SERVICE_ROLE_KEY',
+]
+
+function lineIsSupabaseKey(line) {
+  const trimmed = line.trim()
+  return SUPABASE_KEYS.some((key) => trimmed.startsWith(key + '='))
+}
+
+function getSupabaseLines(configContent) {
+  return configContent
+    .split(/\r?\n/)
+    .filter((line) => lineIsSupabaseKey(line))
+    .map((line) => line.trim())
+}
 
 // Colors for terminal output
 const colors = {
@@ -74,27 +94,21 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
   const localConfig = readFileSync(LOCAL_ENV, 'utf-8')
 
   // Merge: use local config for Supabase vars, keep other vars from existing
-  const lines = existingEnv.split('\n')
+  const lines = existingEnv.split(/\r?\n/)
   const otherVars = lines.filter(
-    (line) =>
-      !line.startsWith('VITE_SUPABASE_URL') &&
-      !line.startsWith('VITE_SUPABASE_ANON_KEY') &&
-      !line.startsWith('SUPABASE_PROJECT_REF') &&
-      line.trim() !== '',
+    (line) => !lineIsSupabaseKey(line) && line.trim() !== '',
   )
-
-  const localLines = localConfig.split('\n')
-  const supabaseVars = localLines.filter(
-    (line) =>
-      line.startsWith('VITE_SUPABASE') ||
-      line.startsWith('SUPABASE_PROJECT_REF'),
-  )
-
+  const supabaseVars = getSupabaseLines(localConfig)
+  if (supabaseVars.length === 0) {
+    log(`No Supabase vars found in ${LOCAL_ENV}`, 'yellow')
+    return
+  }
   const merged = [...supabaseVars, '', ...otherVars].join('\n')
   writeFileSync(ENV_FILE, merged)
 
   log('✓ Switched to LOCAL database', 'green')
   log('Make sure Supabase is running: npm run supabase:start', 'blue')
+  log('Restart your dev server (npm run dev) if it is running.', 'blue')
 }
 
 function switchToRemote() {
@@ -106,6 +120,8 @@ function switchToRemote() {
 VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
 VITE_SUPABASE_ANON_KEY=YOUR_REMOTE_ANON_KEY_HERE
 SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
+# Optional: for calendar feed and other server-side use
+# SUPABASE_SERVICE_ROLE_KEY=your_remote_service_role_key
 
 # Keep your other environment variables below
 `
@@ -123,26 +139,24 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
   const remoteConfig = readFileSync(REMOTE_ENV, 'utf-8')
 
   // Merge: use remote config for Supabase vars, keep other vars from existing
-  const lines = existingEnv.split('\n')
+  const lines = existingEnv.split(/\r?\n/)
   const otherVars = lines.filter(
-    (line) =>
-      !line.startsWith('VITE_SUPABASE_URL') &&
-      !line.startsWith('VITE_SUPABASE_ANON_KEY') &&
-      !line.startsWith('SUPABASE_PROJECT_REF') &&
-      line.trim() !== '',
+    (line) => !lineIsSupabaseKey(line) && line.trim() !== '',
   )
-
-  const remoteLines = remoteConfig.split('\n')
-  const supabaseVars = remoteLines.filter(
-    (line) =>
-      line.startsWith('VITE_SUPABASE') ||
-      line.startsWith('SUPABASE_PROJECT_REF'),
-  )
-
+  const supabaseVars = getSupabaseLines(remoteConfig)
+  if (supabaseVars.length === 0) {
+    log(`No Supabase vars found in ${REMOTE_ENV}. Add at least VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.`, 'yellow')
+    return
+  }
+  const hasUrl = supabaseVars.some((line) => line.startsWith('VITE_SUPABASE_URL='))
+  if (!hasUrl) {
+    log('Warning: VITE_SUPABASE_URL not found in remote config.', 'yellow')
+  }
   const merged = [...supabaseVars, '', ...otherVars].join('\n')
   writeFileSync(ENV_FILE, merged)
 
   log('✓ Switched to REMOTE database', 'green')
+  log('Restart your dev server (npm run dev) if it is running.', 'blue')
 }
 
 // Main

@@ -36,6 +36,13 @@ export default function AppShell() {
     import.meta.env.DEV ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
 
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
+  const isLocalDb =
+    typeof supabaseUrl === 'string' &&
+    (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost'))
+  const dbBadgeLabel = isLocalDb ? 'Local DB' : 'Remote DB'
+  const dbBadgeColor = isLocalDb ? 'green' : 'blue'
+
   // Get user from shared query (already fetched by CompanyProvider)
   const { data: authUser } = useQuery({
     queryKey: ['auth', 'user'],
@@ -270,7 +277,11 @@ export default function AppShell() {
         </Flex>
       </Box>
       {isLocal && (
-        <Box style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}>
+        <Flex
+          direction="column"
+          gap="2"
+          style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}
+        >
           <Badge
             role="status"
             aria-live="polite"
@@ -280,7 +291,16 @@ export default function AppShell() {
           >
             Dev environment
           </Badge>
-        </Box>
+          <Badge
+            role="status"
+            aria-live="polite"
+            color={dbBadgeColor}
+            variant="surface"
+            size="3"
+          >
+            {dbBadgeLabel}
+          </Badge>
+        </Flex>
       )}
     </Flex>
   )

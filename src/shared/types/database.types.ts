@@ -196,6 +196,60 @@ export type Database = {
           },
         ]
       }
+      calendar_subscriptions: {
+        Row: {
+          categories: string[]
+          company_id: string
+          created_at: string
+          id: string
+          include_project_lead_jobs: boolean
+          only_my_assignments: boolean
+          token: string
+          updated_at: string
+          user_id: string
+          vehicle_ids: string[] | null
+        }
+        Insert: {
+          categories?: string[]
+          company_id: string
+          created_at?: string
+          id?: string
+          include_project_lead_jobs?: boolean
+          only_my_assignments?: boolean
+          token: string
+          updated_at?: string
+          user_id: string
+          vehicle_ids?: string[] | null
+        }
+        Update: {
+          categories?: string[]
+          company_id?: string
+          created_at?: string
+          id?: string
+          include_project_lead_jobs?: boolean
+          only_my_assignments?: boolean
+          token?: string
+          updated_at?: string
+          user_id?: string
+          vehicle_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calendar_subscriptions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_subscriptions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           accent_color: string | null
