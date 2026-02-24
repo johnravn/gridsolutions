@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   Box,
+  Button,
   Card,
   Flex,
   IconButton,
@@ -10,10 +11,11 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { Calendar, List, Search } from 'iconoir-react'
+import { Calendar, List, Search, ShareAndroid } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro'
+import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeToCalendarDialog'
 import {
   applyCalendarFilter,
   toEventInputs,
@@ -37,6 +39,7 @@ export default function CalendarPage() {
   )
   const [showSuggestions, setShowSuggestions] = React.useState(false)
   const [listMode, setListMode] = React.useState(false)
+  const [subscribeDialogOpen, setSubscribeDialogOpen] = React.useState(false)
   const searchRef = React.useRef<HTMLDivElement>(null)
 
   // Set default category based on role
@@ -368,6 +371,17 @@ export default function CalendarPage() {
             </Flex>
           )}
 
+          {/* Subscribe to calendar */}
+          <Button
+            type="button"
+            variant="soft"
+            size="2"
+            onClick={() => setSubscribeDialogOpen(true)}
+            title="Subscribe to calendar"
+          >
+            <ShareAndroid /> Subscribe to calendar
+          </Button>
+
           {/* View Toggle */}
           <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
             <IconButton
@@ -388,6 +402,11 @@ export default function CalendarPage() {
             </IconButton>
           </Flex>
         </Flex>
+
+        <SubscribeToCalendarDialog
+          open={subscribeDialogOpen}
+          onOpenChange={setSubscribeDialogOpen}
+        />
 
         {/* Calendar */}
         <CompanyCalendarPro

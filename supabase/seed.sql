@@ -40,6 +40,8 @@
 
 -- Seed data for time_periods
 
+-- Seed data for calendar_subscriptions
+
 -- Seed data for activity_log
 
 -- Seed data for matters

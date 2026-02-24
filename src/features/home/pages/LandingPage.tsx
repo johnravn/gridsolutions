@@ -1,7 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Box, Button, Container, Flex, Heading, Text } from '@radix-ui/themes'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import {
   Activity,
   ArrowRight,
@@ -19,6 +19,8 @@ import {
   Sparks,
   User,
 } from 'iconoir-react'
+import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
+import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useTheme } from '@app/hooks/useTheme'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 
@@ -36,6 +38,23 @@ export default function LandingPage() {
     ['var(--color-panel-translucent)', 'var(--color-panel-solid)'],
   )
 
+  const scrollToSection = (id: string) => {
+    if (id.startsWith('/')) {
+      navigate({ to: id as '/' })
+      return
+    }
+    const el = document.getElementById(id)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
+  const [navHovered, setNavHovered] = useState<string | null>(null)
+  const navItems: Array<{ label: string; id: string }> = [
+    { label: 'Features', id: 'features' },
+    { label: 'Why Grid', id: 'why' },
+    { label: 'Get Started', id: 'get-started' },
+    { label: 'Sign In', id: '/login' },
+  ]
+
   return (
     <Box
       ref={containerRef}
@@ -51,18 +70,18 @@ export default function LandingPage() {
       {/* Background geometrics with parallax */}
       <GeometricBackground />
 
-      {/* Header */}
-      <motion.div
+      {/* Header – minimal nav */}
+      <motion.header
         style={{
           position: 'fixed',
           top: 0,
           left: 0,
           right: 0,
           zIndex: 100,
-          padding: isMd ? '1rem 2rem' : '0.75rem 1rem',
+          padding: isMd ? '0.75rem 2rem' : '0.625rem 1rem',
           background: headerBackground,
-          backdropFilter: 'blur(10px)',
-          borderBottom: '1px solid var(--gray-3)',
+          backdropFilter: 'blur(12px)',
+          borderBottom: '1px solid var(--gray-a3)',
           opacity: headerOpacity,
         }}
         initial={{ y: -100 }}
@@ -70,40 +89,71 @@ export default function LandingPage() {
         transition={{ duration: 0.5, ease: 'easeOut' }}
       >
         <Container size="4">
-          <Flex align="center" justify="between">
+          <Flex align="center" justify="between" gap="4">
             <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.98 }}
               transition={{ type: 'spring', stiffness: 400, damping: 17 }}
             >
-              <Flex align="center" gap="3" style={{ cursor: 'pointer' }}>
-                <Box
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'var(--gray-12)',
-                  }}
-                >
-                  <ReportColumns
-                    width={isMd ? 40 : 32}
-                    height={isMd ? 40 : 32}
-                  />
-                </Box>
+              <Flex
+                align="center"
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate({ to: '/' })}
+              >
+                <img
+                  src={isDark ? logoWhite : logoBlack}
+                  alt="Grid"
+                  style={{ height: isMd ? 26 : 22, width: 'auto' }}
+                />
               </Flex>
             </motion.div>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                size={isMd ? '3' : '2'}
-                variant="classic"
-                onClick={() => navigate({ to: '/login' })}
-              >
-                Sign In
-              </Button>
-            </motion.div>
+            <Flex align="center" gap={isMd ? '6' : '3'} wrap="wrap" justify="end">
+              {navItems.map((item) => (
+                <motion.button
+                  key={item.id}
+                  type="button"
+                  onClick={() => scrollToSection(item.id)}
+                  onMouseEnter={() => setNavHovered(item.id)}
+                  onMouseLeave={() => setNavHovered(null)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '0.35rem 0',
+                    fontFamily: 'inherit',
+                    fontSize: isMd ? 14 : 13,
+                    fontWeight: 500,
+                    letterSpacing: '0.02em',
+                    position: 'relative',
+                  }}
+                  whileTap={{ scale: 0.98 }}
+                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                >
+                  <span
+                    style={{
+                      color:
+                        navHovered === item.id
+                          ? 'transparent'
+                          : 'var(--gray-11)',
+                      background:
+                        navHovered === item.id
+                          ? 'linear-gradient(135deg, var(--accent-9) 0%, var(--accent-11) 100%)'
+                          : 'none',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor:
+                        navHovered === item.id ? 'transparent' : undefined,
+                      backgroundClip: 'text',
+                      transition: 'color 0.2s ease, background 0.2s ease',
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                </motion.button>
+              ))}
+            </Flex>
           </Flex>
         </Container>
-      </motion.div>
+      </motion.header>
 
       {/* Hero Section */}
       <Box
@@ -121,12 +171,15 @@ export default function LandingPage() {
           overflow: 'hidden',
         }}
       >
-        <Container size="4" style={{ width: '100%', maxWidth: '100%' }}>
+        {/* 3D flight cases with parallax – behind content */}
+        <FlightCasesParallax />
+
+        <Container size="4" style={{ width: '100%', maxWidth: '100%', position: 'relative', zIndex: 2 }}>
           <Flex
             direction="column"
             align="center"
             justify="center"
-            gap={{ initial: '4', md: '6' }}
+            gap={{ initial: '5', md: '7' }}
             style={{ textAlign: 'center', width: '100%' }}
           >
             <motion.div
@@ -136,10 +189,11 @@ export default function LandingPage() {
               style={{ width: '100%', padding: isMd ? 0 : '0 0.5rem' }}
             >
               <Heading
-                size={{ initial: '7', sm: '8', md: '9' }}
+                size={{ initial: '8', sm: '9', md: '9' }}
                 style={{
-                  fontWeight: 800,
-                  lineHeight: 1.2,
+                  fontWeight: 900,
+                  lineHeight: 1.1,
+                  letterSpacing: '-0.03em',
                   marginBottom: '1rem',
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
@@ -161,6 +215,8 @@ export default function LandingPage() {
                       display: 'block',
                       wordBreak: 'break-word',
                       overflowWrap: 'break-word',
+                      fontWeight: 900,
+                      letterSpacing: '-0.03em',
                     }}
                   >
                     Complete Operations Management
@@ -177,6 +233,8 @@ export default function LandingPage() {
                       color: 'var(--gray-12)',
                       wordBreak: 'break-word',
                       overflowWrap: 'break-word',
+                      fontWeight: 900,
+                      letterSpacing: '-0.02em',
                     }}
                   >
                     for Modern Companies
@@ -191,7 +249,7 @@ export default function LandingPage() {
               transition={{ duration: 0.8, delay: 0.6, ease: 'easeOut' }}
               style={{
                 width: '100%',
-                maxWidth: '700px',
+                maxWidth: '680px',
                 padding: isMd ? 0 : '0 0.5rem',
               }}
             >
@@ -199,10 +257,11 @@ export default function LandingPage() {
                 size={{ initial: '3', sm: '4', md: '5' }}
                 style={{
                   color: 'var(--gray-11)',
-                  maxWidth: '700px',
-                  lineHeight: 1.6,
+                  maxWidth: '680px',
+                  lineHeight: 1.65,
                   wordBreak: 'break-word',
                   overflowWrap: 'break-word',
+                  fontWeight: 500,
                 }}
               >
                 Streamline your entire operation with a unified platform for
@@ -285,6 +344,7 @@ export default function LandingPage() {
 
       {/* Features Grid Section */}
       <Box
+        id="features"
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
@@ -341,6 +401,7 @@ export default function LandingPage() {
 
       {/* Problem/Solution Section */}
       <Box
+        id="why"
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
@@ -481,6 +542,7 @@ export default function LandingPage() {
 
       {/* CTA Section */}
       <Box
+        id="get-started"
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
@@ -696,6 +758,272 @@ export default function LandingPage() {
           </Flex>
         </Container>
       </Box>
+    </Box>
+  )
+}
+
+const FLIGHT_SILVER = 'linear-gradient(145deg, #c0c4c8 0%, #8a8e92 50%, #a8acb0 100%)'
+const FLIGHT_BLACK = '#1a1b1c'
+
+function FlightCaseFace({
+  w,
+  h,
+  face,
+  depth,
+  showHandle,
+  showLatches,
+}: {
+  w: number
+  h: number
+  face: 'front' | 'top' | 'right'
+  depth: number
+  showHandle?: boolean
+  showLatches?: boolean
+}) {
+  const isFront = face === 'front'
+  const strip = 3
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: face === 'right' ? depth : w,
+        height: face === 'top' ? depth : h,
+        background: FLIGHT_BLACK,
+        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
+        backfaceVisibility: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {/* Silver edge strip (aluminum profile) */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          border: `${strip}px solid #9ca0a4`,
+          boxSizing: 'border-box',
+          borderRadius: 3,
+          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(0,0,0,0.15)',
+        }}
+      />
+      {/* Ball corners (silver, at vertices) */}
+      {[
+        { left: 0, top: 0 },
+        { left: '100%', top: 0 },
+        { left: '100%', top: '100%' },
+        { left: 0, top: '100%' },
+      ].map((pos, i) => (
+        <div
+          key={i}
+          style={{
+            position: 'absolute',
+            ...pos,
+            width: strip * 2.2,
+            height: strip * 2.2,
+            marginLeft: pos.left === '100%' ? -strip * 2.2 : 0,
+            marginTop: pos.top === '100%' ? -strip * 2.2 : 0,
+            borderRadius: '50%',
+            background: FLIGHT_SILVER,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.25)',
+          }}
+        />
+      ))}
+      {isFront && showHandle && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '22%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: Math.max(w * 0.32, 28),
+            height: 5,
+            borderRadius: 3,
+            background: 'linear-gradient(180deg, #909498 0%, #606468 100%)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 2px #1a1b1c',
+          }}
+        />
+      )}
+      {isFront && showLatches && (
+        <>
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '28%',
+              left: '25%',
+              width: Math.max(w * 0.12, 12),
+              height: Math.max(h * 0.08, 8),
+              borderRadius: 2,
+              background: 'linear-gradient(145deg, #a0a4a8 0%, #606468 100%)',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.2)',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              bottom: '28%',
+              right: '25%',
+              width: Math.max(w * 0.12, 12),
+              height: Math.max(h * 0.08, 8),
+              borderRadius: 2,
+              background: 'linear-gradient(145deg, #a0a4a8 0%, #606468 100%)',
+              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.2)',
+            }}
+          />
+        </>
+      )}
+    </div>
+  )
+}
+
+function SingleFlightCase({
+  w,
+  h,
+  d,
+  showHandle,
+  showLatches,
+  transform,
+}: {
+  w: number
+  h: number
+  d: number
+  showHandle?: boolean
+  showLatches?: boolean
+  transform: string
+}) {
+  return (
+    <div
+      style={{
+        position: 'relative',
+        width: w,
+        height: h,
+        transformStyle: 'preserve-3d',
+        transform,
+      }}
+    >
+      {/* Front */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: w,
+          height: h,
+          transform: 'translateZ(0)',
+        }}
+      >
+        <FlightCaseFace w={w} h={h} face="front" depth={d} showHandle={showHandle} showLatches={showLatches} />
+      </div>
+      {/* Top */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: w,
+          height: d,
+          transform: 'rotateX(-90deg)',
+          transformOrigin: 'top center',
+        }}
+      >
+        <FlightCaseFace w={w} h={d} face="top" depth={d} />
+      </div>
+      {/* Right */}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          width: d,
+          height: h,
+          transform: `rotateY(90deg) translateX(${w}px)`,
+          transformOrigin: 'left center',
+        }}
+      >
+        <FlightCaseFace w={d} h={h} face="right" depth={d} />
+      </div>
+    </div>
+  )
+}
+
+function FlightCasesParallax() {
+  const { scrollY } = useScroll()
+  const wallY = useTransform(scrollY, [0, 500], [0, 60])
+
+  /* Wall: from middle to right. Each row is a horizontal strip; cases stack. Right = closer (origin). */
+  const wallCells: Array<{ w: number; h: number; d: number; showHandle?: boolean; showLatches?: boolean }> = [
+    { w: 72, h: 52, d: 28, showHandle: true, showLatches: true },
+    { w: 68, h: 48, d: 26, showLatches: true },
+    { w: 76, h: 50, d: 30, showHandle: true, showLatches: true },
+    { w: 70, h: 46, d: 26, showLatches: true },
+    { w: 64, h: 44, d: 24, showHandle: true },
+    { w: 74, h: 54, d: 28, showLatches: true },
+    { w: 68, h: 48, d: 26, showHandle: true, showLatches: true },
+    { w: 72, h: 50, d: 26, showLatches: true },
+    { w: 70, h: 46, d: 28, showHandle: true, showLatches: true },
+    { w: 66, h: 44, d: 24, showLatches: true },
+    { w: 78, h: 52, d: 30, showHandle: true, showLatches: true },
+    { w: 68, h: 48, d: 26 },
+  ]
+
+  return (
+    <Box
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 1,
+        overflow: 'hidden',
+        pointerEvents: 'none',
+        perspective: '1400px',
+      }}
+    >
+      {/* Wall container: spans center (50%) to right; origin at right so right is closer */}
+      <motion.div
+        style={{
+          position: 'absolute',
+          right: 0,
+          top: '50%',
+          transformOrigin: '100% 50%',
+          transform: 'translateY(-50%) rotateY(-20deg)',
+          y: wallY,
+          width: '58%',
+          maxWidth: 720,
+          height: '75%',
+          maxHeight: 520,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, 1fr)',
+          gridTemplateRows: 'repeat(3, 1fr)',
+          gap: 6,
+          alignContent: 'center',
+          justifyContent: 'center',
+          padding: 12,
+          boxSizing: 'border-box',
+        }}
+      >
+        {wallCells.map((cell, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transformStyle: 'preserve-3d',
+            }}
+          >
+            <SingleFlightCase
+              w={cell.w}
+              h={cell.h}
+              d={cell.d}
+              showHandle={cell.showHandle}
+              showLatches={cell.showLatches}
+              transform="translateZ(0)"
+            />
+          </div>
+        ))}
+      </motion.div>
     </Box>
   )
 }

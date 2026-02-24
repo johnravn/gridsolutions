@@ -113,9 +113,9 @@ export default function ThemePreview({
           <Separator mb="3" />
           <div
             style={{
-              transform: `scale(${Math.min(scaleFactor, 0.85)})`,
+              transform: `scale(${scaleFactor})`,
               transformOrigin: 'top left',
-              width: `${100 / Math.min(scaleFactor, 0.85)}%`,
+              width: `${100 / scaleFactor}%`,
             }}
           >
             {/* Wrap preview in Theme component to show actual theme effects */}
