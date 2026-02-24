@@ -198,40 +198,34 @@ export type Database = {
       }
       calendar_subscriptions: {
         Row: {
-          categories: string[]
           company_id: string
           created_at: string
           id: string
-          include_project_lead_jobs: boolean
-          only_my_assignments: boolean
+          kind: string
           token: string
           updated_at: string
           user_id: string
-          vehicle_ids: string[] | null
+          vehicle_id: string | null
         }
         Insert: {
-          categories?: string[]
           company_id: string
           created_at?: string
           id?: string
-          include_project_lead_jobs?: boolean
-          only_my_assignments?: boolean
+          kind: string
           token: string
           updated_at?: string
           user_id: string
-          vehicle_ids?: string[] | null
+          vehicle_id?: string | null
         }
         Update: {
-          categories?: string[]
           company_id?: string
           created_at?: string
           id?: string
-          include_project_lead_jobs?: boolean
-          only_my_assignments?: boolean
+          kind?: string
           token?: string
           updated_at?: string
           user_id?: string
-          vehicle_ids?: string[] | null
+          vehicle_id?: string | null
         }
         Relationships: [
           {

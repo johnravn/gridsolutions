@@ -382,7 +382,7 @@ export default function SignupPage() {
 
               <Button
                 type="submit"
-                size="3"
+                size="2"
                 disabled={loading}
                 variant="classic"
               >
@@ -392,7 +392,7 @@ export default function SignupPage() {
               <Button
                 type="button"
                 variant="outline"
-                size="3"
+                size="2"
                 onClick={() => navigate({ to: '/login' })}
                 disabled={loading}
               >

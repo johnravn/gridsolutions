@@ -159,24 +159,25 @@ export default function LoginPage() {
 
               {error && <Text color="red">{error}</Text>}
 
-              <Button
-                type="submit"
-                size="3"
-                disabled={loading}
-                variant="classic"
-              >
-                {loading ? 'Signing in…' : 'Sign in'}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="3"
-                onClick={() => navigate({ to: '/signup' })}
-                disabled={loading}
-              >
-                Create account
-              </Button>
+              <Flex gap="3" align="center">
+                <Button
+                  type="submit"
+                  size="2"
+                  disabled={loading}
+                  variant="classic"
+                >
+                  {loading ? 'Signing in…' : 'Sign in'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="2"
+                  onClick={() => navigate({ to: '/signup' })}
+                  disabled={loading}
+                >
+                  Create account
+                </Button>
+              </Flex>
             </Flex>
           </form>
         </Flex>

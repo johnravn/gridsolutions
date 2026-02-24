@@ -63,13 +63,12 @@ export default function LandingPage() {
         width: '100%',
         position: 'relative',
         overflow: 'hidden',
-        background: 'var(--color-background)',
+        background:
+          'linear-gradient(160deg, var(--color-background) 0%, var(--gray-2) 35%, var(--accent-a1) 70%, var(--gray-2) 100%)',
+        backgroundAttachment: 'fixed',
         maxWidth: '100vw',
       }}
     >
-      {/* Background geometrics with parallax */}
-      <GeometricBackground />
-
       {/* Header – minimal nav */}
       <motion.header
         style={{
@@ -107,7 +106,12 @@ export default function LandingPage() {
                 />
               </Flex>
             </motion.div>
-            <Flex align="center" gap={isMd ? '6' : '3'} wrap="wrap" justify="end">
+            <Flex
+              align="center"
+              gap={isMd ? '6' : '3'}
+              wrap="wrap"
+              justify="end"
+            >
               {navItems.map((item) => (
                 <motion.button
                   key={item.id}
@@ -155,14 +159,13 @@ export default function LandingPage() {
         </Container>
       </motion.header>
 
-      {/* Hero Section */}
+      {/* Hero Section – two columns */}
       <Box
         style={{
           position: 'relative',
           minHeight: '100vh',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
           paddingTop: isMd ? '80px' : '60px',
           paddingBottom: '2rem',
           paddingLeft: isMd ? 0 : '1rem',
@@ -171,38 +174,39 @@ export default function LandingPage() {
           overflow: 'hidden',
         }}
       >
-        {/* 3D flight cases with parallax – behind content */}
-        <FlightCasesParallax />
-
-        <Container size="4" style={{ width: '100%', maxWidth: '100%', position: 'relative', zIndex: 2 }}>
+        <Container size="4" style={{ width: '100%', maxWidth: '100%' }}>
           <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            gap={{ initial: '5', md: '7' }}
-            style={{ textAlign: 'center', width: '100%' }}
+            direction={{ initial: 'column', md: 'row' }}
+            align={{ initial: 'center', md: 'center' }}
+            justify="between"
+            gap={{ initial: '6', md: '8' }}
+            style={{ width: '100%', textAlign: isMd ? 'left' : 'center' }}
           >
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-              style={{ width: '100%', padding: isMd ? 0 : '0 0.5rem' }}
+            {/* Left: large header, lighter weight */}
+            <Flex
+              direction="column"
+              align={{ initial: 'center', md: 'start' }}
+              gap="4"
+              style={{
+                flex: '1 1 50%',
+                maxWidth: isMd ? 'none' : 520,
+              }}
             >
-              <Heading
-                size={{ initial: '8', sm: '9', md: '9' }}
-                style={{
-                  fontWeight: 900,
-                  lineHeight: 1.1,
-                  letterSpacing: '-0.03em',
-                  marginBottom: '1rem',
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                }}
+              <motion.div
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, ease: 'easeOut' }}
               >
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.2, ease: 'easeOut' }}
+                <Heading
+                  size={{ initial: '8', sm: '9', md: '9' }}
+                  style={{
+                    fontWeight: 300,
+                    lineHeight: 1.2,
+                    letterSpacing: '-0.02em',
+                    marginBottom: 0,
+                    wordBreak: 'break-word',
+                    overflowWrap: 'break-word',
+                  }}
                 >
                   <Text
                     style={{
@@ -211,133 +215,88 @@ export default function LandingPage() {
                       WebkitBackgroundClip: 'text',
                       WebkitTextFillColor: 'transparent',
                       backgroundClip: 'text',
-                      backgroundSize: '200% auto',
                       display: 'block',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      fontWeight: 900,
-                      letterSpacing: '-0.03em',
+                      fontWeight: 300,
                     }}
                   >
                     Complete Operations Management
                   </Text>
-                </motion.div>
-                <br />
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.8, delay: 0.4, ease: 'easeOut' }}
-                >
                   <Text
+                    as="span"
                     style={{
+                      display: 'block',
                       color: 'var(--gray-12)',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                      fontWeight: 900,
+                      fontWeight: 300,
                       letterSpacing: '-0.02em',
+                      marginTop: '0.15em',
                     }}
                   >
                     for Modern Companies
                   </Text>
-                </motion.div>
-              </Heading>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.6, ease: 'easeOut' }}
-              style={{
-                width: '100%',
-                maxWidth: '680px',
-                padding: isMd ? 0 : '0 0.5rem',
-              }}
-            >
-              <Text
-                size={{ initial: '3', sm: '4', md: '5' }}
+                </Heading>
+              </motion.div>
+              <motion.p
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
                 style={{
+                  margin: 0,
+                  fontSize: isMd ? 18 : 16,
+                  lineHeight: 1.6,
                   color: 'var(--gray-11)',
-                  maxWidth: '680px',
-                  lineHeight: 1.65,
-                  wordBreak: 'break-word',
-                  overflowWrap: 'break-word',
-                  fontWeight: 500,
+                  maxWidth: 480,
                 }}
               >
                 Streamline your entire operation with a unified platform for
                 inventory, crew management, job scheduling, and customer
                 relations—all in one place.
-              </Text>
-            </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.8, delay: 0.8, ease: 'easeOut' }}
-              style={{ width: '100%' }}
-            >
-              <Flex
-                gap="3"
-                align="center"
-                justify="center"
-                direction={{ initial: 'column', sm: 'row' }}
-                style={{
-                  width: '100%',
-                  maxWidth: '500px',
-                  padding: isMd ? 0 : '0 0.5rem',
-                  marginLeft: 'auto',
-                  marginRight: 'auto',
-                }}
+              </motion.p>
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
               >
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                  style={{ width: isSm ? 'auto' : '100%' }}
+                <Flex
+                  gap="3"
+                  wrap="wrap"
+                  justify={{ initial: 'center', md: 'start' }}
                 >
                   <Button
                     size={isMd ? '4' : '3'}
                     variant="classic"
                     onClick={() => navigate({ to: '/signup' })}
-                    style={{
-                      padding: '0.75rem 2rem',
-                      width: isSm ? 'auto' : '100%',
-                    }}
+                    style={{ padding: '0.75rem 1.75rem' }}
                   >
                     Get Started
-                    <motion.span
-                      animate={{ x: [0, 4, 0] }}
-                      transition={{
-                        duration: 1.5,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      }}
-                      style={{ display: 'inline-flex', marginLeft: '0.5rem' }}
-                    >
-                      <ArrowRight />
-                    </motion.span>
+                    <ArrowRight
+                      style={{ marginLeft: 8, verticalAlign: 'middle' }}
+                    />
                   </Button>
-                </motion.div>
-                <motion.div
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                  style={{ width: isSm ? 'auto' : '100%' }}
-                >
                   <Button
                     size={isMd ? '4' : '3'}
                     variant="outline"
                     onClick={() => navigate({ to: '/login' })}
-                    style={{
-                      padding: '0.75rem 2rem',
-                      width: isSm ? 'auto' : '100%',
-                    }}
+                    style={{ padding: '0.75rem 1.75rem' }}
                   >
                     Sign In
                   </Button>
-                </motion.div>
-              </Flex>
-            </motion.div>
+                </Flex>
+              </motion.div>
+            </Flex>
+
+            {/* Right: representational graphic cards */}
+            <Flex
+              align="center"
+              justify="center"
+              gap="4"
+              style={{
+                flex: '1 1 45%',
+                maxWidth: isMd ? 560 : 420,
+                minHeight: 340,
+              }}
+            >
+              <HeroGraphicCards />
+            </Flex>
           </Flex>
         </Container>
       </Box>
@@ -367,16 +326,6 @@ export default function LandingPage() {
             >
               Everything You Need
             </Heading>
-            <Text
-              size={isSm ? '4' : '3'}
-              style={{
-                textAlign: 'center',
-                color: 'var(--gray-11)',
-                marginBottom: isMd ? '4rem' : '2rem',
-              }}
-            >
-              Powerful tools designed to simplify your workflow
-            </Text>
           </motion.div>
 
           <Box
@@ -762,374 +711,185 @@ export default function LandingPage() {
   )
 }
 
-const FLIGHT_SILVER = 'linear-gradient(145deg, #c0c4c8 0%, #8a8e92 50%, #a8acb0 100%)'
-const FLIGHT_BLACK = '#1a1b1c'
-
-function FlightCaseFace({
-  w,
-  h,
-  face,
-  depth,
-  showHandle,
-  showLatches,
-}: {
-  w: number
-  h: number
-  face: 'front' | 'top' | 'right'
-  depth: number
-  showHandle?: boolean
-  showLatches?: boolean
-}) {
-  const isFront = face === 'front'
-  const strip = 3
+function HeroGraphicCards() {
   return (
-    <div
+    <Flex
+      gap="4"
+      align="center"
+      justify="center"
+      wrap="wrap"
       style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        width: face === 'right' ? depth : w,
-        height: face === 'top' ? depth : h,
-        background: FLIGHT_BLACK,
-        boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.03)',
-        backfaceVisibility: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: '100%',
+        maxWidth: 520,
+        perspective: '800px',
       }}
     >
-      {/* Silver edge strip (aluminum profile) */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          border: `${strip}px solid #9ca0a4`,
-          boxSizing: 'border-box',
-          borderRadius: 3,
-          boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35), 0 1px 0 rgba(0,0,0,0.15)',
-        }}
-      />
-      {/* Ball corners (silver, at vertices) */}
-      {[
-        { left: 0, top: 0 },
-        { left: '100%', top: 0 },
-        { left: '100%', top: '100%' },
-        { left: 0, top: '100%' },
-      ].map((pos, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            ...pos,
-            width: strip * 2.2,
-            height: strip * 2.2,
-            marginLeft: pos.left === '100%' ? -strip * 2.2 : 0,
-            marginTop: pos.top === '100%' ? -strip * 2.2 : 0,
-            borderRadius: '50%',
-            background: FLIGHT_SILVER,
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.25)',
-          }}
-        />
-      ))}
-      {isFront && showHandle && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '22%',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: Math.max(w * 0.32, 28),
-            height: 5,
-            borderRadius: 3,
-            background: 'linear-gradient(180deg, #909498 0%, #606468 100%)',
-            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.3), 0 0 0 2px #1a1b1c',
-          }}
-        />
-      )}
-      {isFront && showLatches && (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '28%',
-              left: '25%',
-              width: Math.max(w * 0.12, 12),
-              height: Math.max(h * 0.08, 8),
-              borderRadius: 2,
-              background: 'linear-gradient(145deg, #a0a4a8 0%, #606468 100%)',
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.2)',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '28%',
-              right: '25%',
-              width: Math.max(w * 0.12, 12),
-              height: Math.max(h * 0.08, 8),
-              borderRadius: 2,
-              background: 'linear-gradient(145deg, #a0a4a8 0%, #606468 100%)',
-              boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.4), inset 0 0 0 1px rgba(255,255,255,0.2)',
-            }}
-          />
-        </>
-      )}
-    </div>
-  )
-}
-
-function SingleFlightCase({
-  w,
-  h,
-  d,
-  showHandle,
-  showLatches,
-  transform,
-}: {
-  w: number
-  h: number
-  d: number
-  showHandle?: boolean
-  showLatches?: boolean
-  transform: string
-}) {
-  return (
-    <div
-      style={{
-        position: 'relative',
-        width: w,
-        height: h,
-        transformStyle: 'preserve-3d',
-        transform,
-      }}
-    >
-      {/* Front */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: w,
-          height: h,
-          transform: 'translateZ(0)',
-        }}
-      >
-        <FlightCaseFace w={w} h={h} face="front" depth={d} showHandle={showHandle} showLatches={showLatches} />
-      </div>
-      {/* Top */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: w,
-          height: d,
-          transform: 'rotateX(-90deg)',
-          transformOrigin: 'top center',
-        }}
-      >
-        <FlightCaseFace w={w} h={d} face="top" depth={d} />
-      </div>
-      {/* Right */}
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: d,
-          height: h,
-          transform: `rotateY(90deg) translateX(${w}px)`,
-          transformOrigin: 'left center',
-        }}
-      >
-        <FlightCaseFace w={d} h={h} face="right" depth={d} />
-      </div>
-    </div>
-  )
-}
-
-function FlightCasesParallax() {
-  const { scrollY } = useScroll()
-  const wallY = useTransform(scrollY, [0, 500], [0, 60])
-
-  /* Wall: from middle to right. Each row is a horizontal strip; cases stack. Right = closer (origin). */
-  const wallCells: Array<{ w: number; h: number; d: number; showHandle?: boolean; showLatches?: boolean }> = [
-    { w: 72, h: 52, d: 28, showHandle: true, showLatches: true },
-    { w: 68, h: 48, d: 26, showLatches: true },
-    { w: 76, h: 50, d: 30, showHandle: true, showLatches: true },
-    { w: 70, h: 46, d: 26, showLatches: true },
-    { w: 64, h: 44, d: 24, showHandle: true },
-    { w: 74, h: 54, d: 28, showLatches: true },
-    { w: 68, h: 48, d: 26, showHandle: true, showLatches: true },
-    { w: 72, h: 50, d: 26, showLatches: true },
-    { w: 70, h: 46, d: 28, showHandle: true, showLatches: true },
-    { w: 66, h: 44, d: 24, showLatches: true },
-    { w: 78, h: 52, d: 30, showHandle: true, showLatches: true },
-    { w: 68, h: 48, d: 26 },
-  ]
-
-  return (
-    <Box
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 1,
-        overflow: 'hidden',
-        pointerEvents: 'none',
-        perspective: '1400px',
-      }}
-    >
-      {/* Wall container: spans center (50%) to right; origin at right so right is closer */}
+      {/* Card 1: Dashboard / overview */}
       <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.25 }}
         style={{
-          position: 'absolute',
-          right: 0,
-          top: '50%',
-          transformOrigin: '100% 50%',
-          transform: 'translateY(-50%) rotateY(-20deg)',
-          y: wallY,
-          width: '58%',
-          maxWidth: 720,
-          height: '75%',
-          maxHeight: 520,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gridTemplateRows: 'repeat(3, 1fr)',
-          gap: 6,
-          alignContent: 'center',
-          justifyContent: 'center',
-          padding: 12,
-          boxSizing: 'border-box',
+          width: 200,
+          height: 148,
+          borderRadius: 16,
+          background: 'var(--color-panel-solid)',
+          border: '1px solid var(--gray-5)',
+          boxShadow: '0 12px 32px var(--gray-a5)',
+          padding: 18,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
         }}
       >
-        {wallCells.map((cell, i) => (
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: 'var(--accent-5)',
+            }}
+          />
+          <div
+            style={{
+              height: 10,
+              width: 72,
+              borderRadius: 5,
+              background: 'var(--gray-5)',
+            }}
+          />
+        </div>
+        <div
+          style={{
+            height: 10,
+            width: '100%',
+            borderRadius: 5,
+            background: 'var(--gray-4)',
+          }}
+        />
+        <div
+          style={{
+            height: 10,
+            width: '80%',
+            borderRadius: 5,
+            background: 'var(--gray-4)',
+          }}
+        />
+        <div
+          style={{
+            flex: 1,
+            minHeight: 36,
+            borderRadius: 10,
+            background: 'var(--gray-3)',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 8,
+            padding: 8,
+          }}
+        >
+          {[1, 2, 3, 4].map((i) => (
+            <div
+              key={i}
+              style={{
+                borderRadius: 6,
+                background: 'var(--gray-4)',
+              }}
+            />
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Card 2: Calendar / schedule */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.35 }}
+        style={{
+          width: 176,
+          height: 176,
+          borderRadius: 16,
+          background: 'var(--color-panel-solid)',
+          border: '1px solid var(--gray-5)',
+          boxShadow: '0 12px 32px var(--gray-a5)',
+          padding: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            height: 12,
+            width: 88,
+            borderRadius: 6,
+            background: 'var(--gray-5)',
+            alignSelf: 'center',
+          }}
+        />
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <div
+              key={i}
+              style={{
+                width: 32,
+                height: 26,
+                borderRadius: 6,
+                background:
+                  i === 3 || i === 7 ? 'var(--accent-5)' : 'var(--gray-4)',
+              }}
+            />
+          ))}
+        </div>
+      </motion.div>
+
+      {/* Card 3: List / jobs */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.45 }}
+        style={{
+          width: 228,
+          height: 132,
+          borderRadius: 16,
+          background: 'var(--color-panel-solid)',
+          border: '1px solid var(--gray-5)',
+          boxShadow: '0 12px 32px var(--gray-a5)',
+          padding: 16,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}
+      >
+        {[1, 2, 3].map((i) => (
           <div
             key={i}
             style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              transformStyle: 'preserve-3d',
+              gap: 12,
             }}
           >
-            <SingleFlightCase
-              w={cell.w}
-              h={cell.h}
-              d={cell.d}
-              showHandle={cell.showHandle}
-              showLatches={cell.showLatches}
-              transform="translateZ(0)"
+            <div
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 6,
+                background: 'var(--gray-5)',
+              }}
+            />
+            <div
+              style={{
+                height: 10,
+                flex: 1,
+                borderRadius: 5,
+                background: i === 1 ? 'var(--accent-4)' : 'var(--gray-4)',
+              }}
             />
           </div>
         ))}
       </motion.div>
-    </Box>
-  )
-}
-
-function GeometricBackground() {
-  return (
-    <Box
-      style={{
-        position: 'absolute',
-        inset: 0,
-        zIndex: 0,
-        overflow: 'hidden',
-        opacity: 0.4,
-        willChange: 'transform',
-      }}
-    >
-      <motion.svg
-        width="100%"
-        height="100%"
-        viewBox="0 0 1200 1600"
-        preserveAspectRatio="none"
-        style={{ display: 'block', transform: 'translateZ(0)' }}
-        animate={{
-          y: [0, -20, 0],
-        }}
-        transition={{
-          duration: 20,
-          repeat: Infinity,
-          ease: 'easeInOut',
-        }}
-      >
-        <defs>
-          <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop
-              offset="0%"
-              style={{ stopColor: 'var(--accent-a2)', stopOpacity: 1 }}
-            />
-            <stop
-              offset="100%"
-              style={{ stopColor: 'var(--gray-a2)', stopOpacity: 1 }}
-            />
-          </linearGradient>
-        </defs>
-        {/* Large intersecting bands */}
-        <motion.rect
-          x="250"
-          y="-100"
-          width="200"
-          height="1800"
-          fill="var(--gray-a1)"
-          transform="rotate(12 600 800)"
-          animate={{
-            y: [0, 30, 0],
-          }}
-          transition={{
-            duration: 15,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-        <motion.rect
-          x="-100"
-          y="300"
-          width="600"
-          height="100"
-          fill="var(--gray-a1)"
-          transform="rotate(-10 600 800)"
-          animate={{
-            x: [0, 20, 0],
-          }}
-          transition={{
-            duration: 18,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-        {/* Large polygon spanning most of the view */}
-        <motion.polygon
-          points="50,50 1100,50 1050,800 200,850"
-          fill="url(#grad1)"
-          opacity="0.3"
-          animate={{
-            scale: [1, 1.02, 1],
-          }}
-          transition={{
-            duration: 25,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-        {/* Single large accent shape */}
-        <motion.polygon
-          points="800,200 1200,150 1000,1200 600,1100"
-          fill="var(--indigo-a2)"
-          animate={{
-            y: [0, -30, 0],
-            opacity: [0.6, 0.8, 0.6],
-          }}
-          transition={{
-            duration: 22,
-            repeat: Infinity,
-            ease: 'easeInOut',
-          }}
-        />
-      </motion.svg>
-    </Box>
+    </Flex>
   )
 }
 
