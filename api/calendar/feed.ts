@@ -371,10 +371,11 @@ export default async function handler(req: any, res: any) {
         }
       }
 
-      const projectLead = info?.projectLeadName ?? ''
-      const parts = [jobTitle, projectLead].filter(Boolean)
-      const title = prefix + parts.join(' · ')
-      const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
+      const title = prefix + jobTitle
+      const descParts: string[] = []
+      if (jobNo) descParts.push(`Job no: ${jobNo}`)
+      if (info?.projectLeadName) descParts.push(`Project lead: ${info.projectLeadName}`)
+      if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
       return {
         id: p.id,
         title: title || 'Event',
