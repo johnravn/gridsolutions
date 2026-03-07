@@ -13,6 +13,7 @@ import {
 import { GoogleDocs } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { DashboardCard } from './DashboardCard'
@@ -52,6 +53,7 @@ export function UpcomingJobsSection({
   const parentRef = React.useRef<HTMLDivElement>(null)
   const [showScrollIndicator, setShowScrollIndicator] = React.useState(false)
   const [isHovered, setIsHovered] = React.useState(false)
+  const isSmallScreen = !useMediaQuery('(min-width: 1024px)')
 
   useScrollButtonStyles()
 
@@ -169,6 +171,10 @@ export function UpcomingJobsSection({
               flex: 1,
               minHeight: 0,
               overflow: 'auto',
+              ...(isSmallScreen && {
+                maxHeight: 320,
+                minHeight: 240,
+              }),
             }}
           >
             <div

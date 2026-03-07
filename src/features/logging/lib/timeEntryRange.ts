@@ -6,6 +6,21 @@ export type RangeInfo = {
   label: string
 }
 
+/** Format date for logging page: "3. aug 2026" */
+export function formatLoggingDate(iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  const day = d.getDate()
+  const month = LOGGING_MONTHS_ABBREV[d.getMonth()]
+  const year = d.getFullYear()
+  return `${day}. ${month} ${year}`
+}
+
+const LOGGING_MONTHS_ABBREV = [
+  'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
+  'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+]
+
 export function getRange(
   range: RangeOption,
   selectedMonth?: string,
@@ -17,10 +32,7 @@ export function getRange(
     const { month, year: selectedYear } = parseMonthInput(selectedMonth, now)
     const start = new Date(selectedYear, month, 1)
     const end = new Date(selectedYear, month + 1, 1)
-    const label = start.toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    })
+    const label = `${LOGGING_MONTHS_ABBREV[month]} ${start.getFullYear()}`
     return { from: start.toISOString(), to: end.toISOString(), label }
   }
 
@@ -46,22 +58,7 @@ export function formatMonthInput(date: Date) {
 }
 
 export function getMonthOptions(year: number) {
-  const months = [
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ]
-
-  return months.map((label, index) => {
+  return LOGGING_MONTHS_ABBREV.map((label, index) => {
     const month = String(index + 1).padStart(2, '0')
     return {
       label,

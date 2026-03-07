@@ -21,6 +21,7 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import InventoryTable from '../components/InventoryTable'
 import InventoryInspector from '../components/InventoryInspector'
 
@@ -28,7 +29,7 @@ export default function InventoryPage() {
   const { companyId } = useCompany()
   const location = useLocation()
   const search = location.search as { inventoryId?: string }
-  const inventoryId = search?.inventoryId
+  const inventoryId = search.inventoryId
 
   const [selectedId, setSelectedId] = React.useState<string | null>(
     inventoryId || null,
@@ -61,6 +62,8 @@ export default function InventoryPage() {
   const [savedWidth, setSavedWidth] = React.useState<number>(66.67)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
@@ -142,63 +145,42 @@ export default function InventoryPage() {
     }
   }, [isResizing])
 
+  // On small screens: when an item is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedId])
+
   if (!companyId) return <PageSkeleton columns="2fr 1fr" />
 
-  // On small screens, use Grid layout (stack)
+  // On small screens, use Grid layout (stack): list fills viewport, inspector below
   if (!isLarge) {
     return (
-      <section
-        style={{
-          height: isLarge ? '100%' : undefined,
-          minHeight: 0,
-        }}
-      >
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{
-            height: isLarge ? '100%' : undefined,
-            minHeight: 0,
-          }}
-        >
-          {/* LEFT */}
+      <section ref={listRef} style={{ minHeight: 0 }}>
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
+          {/* LEFT: list — viewport height minus app top bar and margin */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
+              height: 'calc(100vh - 56px - 16px)',
               minHeight: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3">
+            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0, gap: 'var(--space-2)', flexWrap: 'wrap' }}>
               <Heading size="5">Overview</Heading>
-              <InventoryFilter
-                showActive={showActive}
-                showInactive={showInactive}
-                showInternal={showInternal}
-                showExternal={showExternal}
-                showGroupOnlyItems={showGroupOnlyItems}
-                showGroups={showGroups}
-                showItems={showItems}
-                onShowActiveChange={setShowActive}
-                onShowInactiveChange={setShowInactive}
-                onShowInternalChange={setShowInternal}
-                onShowExternalChange={setShowExternal}
-                onShowGroupOnlyItemsChange={setShowGroupOnlyItems}
-                onShowGroupsChange={setShowGroups}
-                onShowItemsChange={setShowItems}
-              />
+              {/* Filter dropdown hidden on small screens so search + Add item/group fit */}
             </Flex>
-
-            <Separator size="4" mb="3" />
-
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
               }}
             >
               <InventoryTable
@@ -215,34 +197,50 @@ export default function InventoryPage() {
             </Box>
           </Card>
 
-          {/* RIGHT */}
-          <Card
-            size="3"
+          {/* RIGHT: Inspector — below the fold on mobile; scroll into view when item selected */}
+          <div
+            ref={inspectorRef}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
-              maxHeight: isLarge ? '100%' : undefined,
-              overflow: isLarge ? 'hidden' : 'visible',
               minHeight: 0,
+              maxWidth: '100%',
+              width: '100%',
+              height: 'calc(100vh - 56px - 16px)',
             }}
           >
-            <Heading size="5" mb="3">
-              Inspector
-            </Heading>
-            <Separator size="4" mb="3" />
-
-            <Box
+            <Card
+              size="3"
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 56px - 16px)',
+                overflow: 'hidden',
+                minHeight: 0,
+                maxWidth: '100%',
               }}
             >
-              <InventoryInspector id={selectedId} />
-            </Box>
-          </Card>
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Inspector
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <InventoryInspector id={selectedId} />
+              </Box>
+            </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
       </section>
     )
   }
@@ -251,7 +249,7 @@ export default function InventoryPage() {
   return (
     <section
       style={{
-        height: isLarge ? '100%' : undefined,
+        height: '100%',
         minHeight: 0,
       }}
     >
@@ -260,7 +258,7 @@ export default function InventoryPage() {
         gap="2"
         align="stretch"
         style={{
-          height: isLarge ? '100%' : undefined,
+          height: '100%',
           minHeight: 0,
           position: 'relative',
         }}
@@ -272,7 +270,7 @@ export default function InventoryPage() {
             display: 'flex',
             flexDirection: 'column',
             width: isMinimized ? '60px' : `${leftPanelWidth}%`,
-            height: isLarge ? '100%' : undefined,
+            height: '100%',
             minWidth: isMinimized ? '60px' : '300px', // Prevent panel from getting too small
             maxWidth: isMinimized ? '60px' : '75%', // Enforce max width
             minHeight: 0,
@@ -288,14 +286,14 @@ export default function InventoryPage() {
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
                 position: 'absolute',
@@ -376,9 +374,9 @@ export default function InventoryPage() {
 
               <Box
                 style={{
-                  flex: isLarge ? 1 : undefined,
-                  minHeight: isLarge ? 0 : undefined,
-                  overflowY: isLarge ? 'auto' : 'visible',
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
                 }}
               >
                 <InventoryTable
@@ -439,9 +437,9 @@ export default function InventoryPage() {
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            height: isLarge ? '100%' : undefined,
-            maxHeight: isLarge ? '100%' : undefined,
-            overflow: isLarge ? 'hidden' : 'visible',
+            height: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
             minWidth: '300px', // Prevent panel from getting too small
             minHeight: 0,
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
@@ -454,9 +452,9 @@ export default function InventoryPage() {
 
           <Box
             style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
             }}
           >
             <InventoryInspector id={selectedId} />

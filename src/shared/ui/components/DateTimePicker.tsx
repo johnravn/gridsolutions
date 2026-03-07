@@ -15,6 +15,8 @@ type Props = {
   iconButton?: boolean
   /** Icon button size (only used when iconButton is true) */
   iconButtonSize?: '1' | '2' | '3'
+  /** Use Norwegian date format (e.g. 3. aug 2026 with mai, okt) */
+  locale?: 'en' | 'nb'
   disabled?: boolean
 }
 
@@ -33,8 +35,12 @@ export default function DateTimePicker({
   dateOnly = false,
   iconButton = false,
   iconButtonSize = '2',
+  locale = 'en',
   disabled = false,
 }: Props) {
+  const monthNames = locale === 'nb'
+    ? ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']
+    : ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
   const defaultPlaceholder = dateOnly ? 'Select date' : 'Select date and time'
   const finalPlaceholder = placeholder || defaultPlaceholder
 
@@ -171,20 +177,6 @@ export default function DateTimePicker({
   const formatDisplayValue = () => {
     if (!parsedDate) return finalPlaceholder
     const d = parsedDate
-    const monthNames = [
-      'jan',
-      'feb',
-      'mar',
-      'apr',
-      'may',
-      'jun',
-      'jul',
-      'aug',
-      'sep',
-      'oct',
-      'nov',
-      'dec',
-    ]
     const day = d.getDate()
     const month = monthNames[d.getMonth()]
     const year = d.getFullYear()

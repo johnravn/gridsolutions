@@ -20,6 +20,7 @@ import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
 import { crewInternalNotesQuery } from '../api/queries'
@@ -82,6 +83,8 @@ export default function CrewPage() {
   const [savedWidth, setSavedWidth] = React.useState<number>(66.67)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
@@ -150,30 +153,31 @@ export default function CrewPage() {
     }
   }, [isResizing])
 
+  // On small screens: when a crew member is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedUserId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedUserId])
+
   if (!companyId) return <div>No company selected.</div>
 
-  // On small screens, use Grid layout (stack)
+  // On small screens, use Grid layout (stack): list fills viewport, inspector below
   if (!isLarge) {
     return (
-      <section style={{ minHeight: 0 }}>
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{
-            minHeight: 0,
-          }}
-        >
-          {/* LEFT */}
+      <section ref={listRef} style={{ minHeight: 0 }}>
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
+          {/* LEFT: list — viewport height minus app top bar and margin */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
+              height: 'calc(100vh - 56px - 16px)',
               minHeight: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3">
+            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
               <Heading size="5">Crew</Heading>
               <CrewFilter
                 showEmployees={showEmployees}
@@ -184,12 +188,12 @@ export default function CrewPage() {
                 onShowMyPendingChange={setShowMyPending}
               />
             </Flex>
-            <Separator size="4" mb="3" />
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
                 flex: 1,
                 minHeight: 0,
-                overflow: 'hidden',
+                overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -207,36 +211,57 @@ export default function CrewPage() {
             </Box>
           </Card>
 
-          {/* RIGHT */}
-          <Card
-            size="3"
+          {/* RIGHT: Inspector — below the fold on mobile; scroll into view when item selected */}
+          <div
+            ref={inspectorRef}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'visible',
               minHeight: 0,
+              maxWidth: '100%',
+              width: '100%',
+              height: 'calc(100vh - 56px - 16px)',
             }}
           >
-            <Heading size="5" mb="3">
-              Inspector
-            </Heading>
-            <Separator size="4" mb="3" />
-            <Box
+            <Card
+              size="3"
               style={{
-                overflowY: 'visible',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 56px - 16px)',
+                overflow: 'hidden',
+                minHeight: 0,
+                maxWidth: '100%',
               }}
             >
-              <CrewInspector
-                userId={selectedUserId}
-                internalNote={
-                  canSeeInternalNotes && selectedUserId
-                    ? (internalNotesByUserId[selectedUserId] ?? null)
-                    : null
-                }
-              />
-            </Box>
-          </Card>
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Inspector
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <CrewInspector
+                  userId={selectedUserId}
+                  internalNote={
+                    canSeeInternalNotes && selectedUserId
+                      ? (internalNotesByUserId[selectedUserId] ?? null)
+                      : null
+                  }
+                />
+              </Box>
+            </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
       </section>
     )
   }
@@ -277,14 +302,14 @@ export default function CrewPage() {
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
                 position: 'absolute',

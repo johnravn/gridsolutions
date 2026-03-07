@@ -529,25 +529,13 @@ function InternalEquipmentTable({
                 </Button>
               </>
             )}
-            <Button
-              size="2"
-              disabled={!canBook}
-              onClick={() => setBookItemsOpen(true)}
-            >
-              <Plus width={16} height={16} /> Book items
-            </Button>
-            <SegmentedControl.Root
-              value={view}
-              onValueChange={handleViewChange}
-              size="2"
-            >
-              <SegmentedControl.Item value="internal">
-                Internal equipment
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="external">
-                External equipment
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
+            <Select.Root value={view} onValueChange={handleViewChange}>
+              <Select.Trigger style={{ minWidth: 120 }} />
+              <Select.Content>
+                <Select.Item value="internal">Internal</Select.Item>
+                <Select.Item value="external">External</Select.Item>
+              </Select.Content>
+            </Select.Root>
           </Flex>
         )}
         {canBook && companyId && (
@@ -753,7 +741,7 @@ function InternalEquipmentTable({
                                                       setStatusPopoverOpen(null)
                                                     }}
                                                   >
-                                                    <Select.Trigger size="2" />
+                                                    <Select.Trigger />
                                                     <Select.Content>
                                                       <Select.Item value="planned">
                                                         Planned
@@ -1098,10 +1086,10 @@ function InternalEquipmentTable({
         })}
       </Flex>
 
-      {/* Empty State */}
-      {rows.length === 0 && canBook && (
+      {/* Add items area - always visible when canBook */}
+      {canBook && (
         <Box
-          p="4"
+          p={rows.length === 0 ? '4' : '2'}
           mt="3"
           style={{
             border: '2px dashed var(--gray-a6)',
@@ -1120,10 +1108,16 @@ function InternalEquipmentTable({
             e.currentTarget.style.background = 'transparent'
           }}
         >
-          <Flex direction="column" align="center" gap="2">
-            <Plus width={24} height={24} />
+          <Flex
+            direction="column"
+            align="center"
+            gap="2"
+            justify="center"
+            style={rows.length > 0 ? { flexDirection: 'row' } : undefined}
+          >
+            <Plus width={rows.length === 0 ? 24 : 16} height={rows.length === 0 ? 24 : 16} />
             <Text size="2" color="gray">
-              Book items
+              {rows.length === 0 ? 'Book items' : 'Add items'}
             </Text>
           </Flex>
         </Box>
@@ -1569,18 +1563,13 @@ function ExternalEquipmentTable({
             </Select.Root>
           )}
           {companyRole !== 'freelancer' && (
-            <SegmentedControl.Root
-              value={view}
-              onValueChange={handleViewChange}
-              size="2"
-            >
-              <SegmentedControl.Item value="internal">
-                Internal equipment
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="external">
-                External equipment
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
+            <Select.Root value={view} onValueChange={handleViewChange}>
+              <Select.Trigger style={{ minWidth: 120 }} />
+              <Select.Content>
+                <Select.Item value="internal">Internal</Select.Item>
+                <Select.Item value="external">External</Select.Item>
+              </Select.Content>
+            </Select.Root>
           )}
         </Flex>
       </Box>

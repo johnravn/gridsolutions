@@ -1,5 +1,6 @@
 import * as React from 'react'
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -17,7 +18,7 @@ import {
   TextField,
   Tooltip,
 } from '@radix-ui/themes'
-import { Lock, TransitionLeft } from 'iconoir-react'
+import { InfoCircle, Lock, TransitionLeft } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -38,6 +39,7 @@ import { loggingPeriodsQuery } from '../api/loggingPeriods'
 import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
 import TimeEntriesTable from '../components/TimeEntriesTable'
 import {
+  formatLoggingDate,
   formatMonthInput,
   getMonthOptions,
   getRange,
@@ -76,9 +78,10 @@ export default function LoggingPage() {
   )
   const [entryMode, setEntryMode] = React.useState<'manual' | 'job'>('job')
   const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
-  const [showOnlyMyJobs, setShowOnlyMyJobs] = React.useState(true)
+  const [showAllJobs, setShowAllJobs] = React.useState(false)
   const [jobSearch, setJobSearch] = React.useState('')
   const [jobSearchOpen, setJobSearchOpen] = React.useState(false)
+  const jobSearchInputRef = React.useRef<HTMLDivElement>(null)
   const [title, setTitle] = React.useState('')
   const [jobNumber, setJobNumber] = React.useState('')
   const [note, setNote] = React.useState('')
@@ -94,6 +97,16 @@ export default function LoggingPage() {
   )
 
   const enabled = Boolean(companyId && userId)
+
+  // Default focus: when in "Link to job" mode with no job selected, focus the job search field
+  React.useEffect(() => {
+    if (entryMode === 'job' && !selectedJobId) {
+      const input = jobSearchInputRef.current?.querySelector('input')
+      if (input instanceof HTMLInputElement) {
+        input.focus()
+      }
+    }
+  }, [entryMode, selectedJobId])
 
   const { data: myProfile } = useQuery({
     queryKey: ['my-profile', userId],
@@ -136,12 +149,22 @@ export default function LoggingPage() {
       userId: userId ?? null,
       companyRole: companyRole ?? null,
       includeArchived: false,
-      onlyCrewForUserId: showOnlyMyJobs ? (userId ?? null) : null,
+      onlyCrewForUserId: showAllJobs ? null : (userId ?? null),
     }),
     enabled: enabled && entryMode === 'job',
   })
 
-  const jobsForPicker = React.useMemo(() => jobsData.slice(0, 50), [jobsData])
+  // Show newest first; only jobs that start on or before end of "today + 2 days" (today + next 2 days = 3 days total)
+  const jobsForPicker = React.useMemo(() => {
+    const now = new Date()
+    const endOfWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 23, 59, 59, 999)
+    return jobsData
+      .filter(
+        (job) =>
+          !job.start_at || new Date(job.start_at).getTime() <= endOfWindow.getTime(),
+      )
+      .slice(0, 50)
+  }, [jobsData])
 
   const entryStartYear = React.useMemo(
     () => getYearFromIso(startAt) ?? new Date().getFullYear(),
@@ -221,6 +244,13 @@ export default function LoggingPage() {
       lockedMonthSet: lockedMonthSetForEntry,
     })
   }, [endAt, lockedMonthSetForEntry, startAt])
+
+  // When "Link to job" is selected and no job chosen, focus the job search field
+  React.useEffect(() => {
+    if (entryMode === 'job' && !selectedJobId && jobSearchInputRef.current) {
+      jobSearchInputRef.current.focus()
+    }
+  }, [entryMode, selectedJobId])
 
   const handleJobSelect = React.useCallback(
     (
@@ -365,6 +395,11 @@ export default function LoggingPage() {
 
   const lastSelectedMonthRef = React.useRef(selectedMonth)
   React.useEffect(() => {
+    if (entryMode === 'job' && !selectedJobId && jobSearchInputRef.current) {
+      jobSearchInputRef.current.focus()
+    }
+  }, [entryMode, selectedJobId])
+  React.useEffect(() => {
     if (lastSelectedMonthRef.current === selectedMonth) return
     lastSelectedMonthRef.current = selectedMonth
     const shifted = shiftRangeToMonth({
@@ -423,10 +458,23 @@ export default function LoggingPage() {
             <Flex direction="column" gap="2" style={{ gridColumn: '1 / -1' }}>
               <Flex align="center" gap="2">
                 <Switch
-                  checked={showOnlyMyJobs}
-                  onCheckedChange={(v) => setShowOnlyMyJobs(Boolean(v))}
+                  checked={showAllJobs}
+                  onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
                 />
-                <Text size="2">Show only my jobs</Text>
+                <Text size="2">Show all jobs</Text>
+                <Tooltip
+                  content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range."
+                >
+                  <IconButton
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    style={{ cursor: 'help' }}
+                    aria-label="Explain job list options"
+                  >
+                    <InfoCircle width={16} height={16} />
+                  </IconButton>
+                </Tooltip>
               </Flex>
             </Flex>
             <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
@@ -454,18 +502,20 @@ export default function LoggingPage() {
                 </Flex>
               ) : (
                 <>
-                  <TextField.Root
-                    placeholder="Search by title, project lead, date, customer, job number"
-                    value={jobSearch}
-                    onChange={(e) => {
-                      setJobSearch(e.target.value)
-                      setJobSearchOpen(true)
-                    }}
-                    onFocus={() => setJobSearchOpen(true)}
-                    onBlur={() => {
-                      setTimeout(() => setJobSearchOpen(false), 150)
-                    }}
-                  />
+                  <Box ref={jobSearchInputRef}>
+                    <TextField.Root
+                      placeholder="Search by title, project lead, date, customer, job number"
+                      value={jobSearch}
+                      onChange={(e) => {
+                        setJobSearch(e.target.value)
+                        setJobSearchOpen(true)
+                      }}
+                      onFocus={() => setJobSearchOpen(true)}
+                      onBlur={() => {
+                        setTimeout(() => setJobSearchOpen(false), 150)
+                      }}
+                    />
+                  </Box>
                   {jobSearchOpen && (
                     <Box
                       style={{
@@ -492,8 +542,8 @@ export default function LoggingPage() {
                       ) : jobsForPicker.length === 0 ? (
                         <Box p="3">
                           <Text size="2" color="gray">
-                            No jobs found. Try a different search or turn off
-                            &quot;Show only my jobs&quot;.
+                            No jobs found. Try a different search or turn on
+                            &quot;Show all jobs&quot;.
                           </Text>
                         </Box>
                       ) : (
@@ -509,7 +559,14 @@ export default function LoggingPage() {
                             onMouseDown={(e) => e.preventDefault()}
                           >
                             <div>
-                              <Text size="2">{formatJobOption(job)}</Text>
+                              <Flex align="center" gap="2" wrap="wrap">
+                                <Text size="2">{formatJobOption(job)}</Text>
+                                {isJobOnToday(job) && (
+                                  <Badge size="1" color="blue" variant="soft">
+                                    Today
+                                  </Badge>
+                                )}
+                              </Flex>
                               {(job.customer?.name ??
                                 job.project_lead?.display_name) && (
                                 <Text size="1" color="gray" as="div">
@@ -540,7 +597,6 @@ export default function LoggingPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Time entry title"
-            autoFocus
             disabled={false}
           />
         </label>
@@ -560,6 +616,7 @@ export default function LoggingPage() {
           value={startAt}
           onChange={handleStartChange}
           disabled={false}
+          locale="nb"
         />
         <DateTimePicker
           label="End"
@@ -567,6 +624,7 @@ export default function LoggingPage() {
           onChange={(value) => setEndAt(value)}
           disabled={false}
           invalid={hasInvalidTimeRange}
+          locale="nb"
         />
       </Box>
 
@@ -1196,14 +1254,26 @@ function formatJobOption(job: {
 }) {
   const numberPart = job.jobnr != null ? `#${job.jobnr}` : 'Job'
   const titlePart = job.title ? ` — ${job.title}` : ''
-  const datePart = job.start_at ? ` (${formatJobDate(job.start_at)})` : ''
+  const datePart = job.start_at ? ` (${formatLoggingDate(job.start_at)})` : ''
   return `${numberPart}${titlePart}${datePart}`
 }
 
-function formatJobDate(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return date.toLocaleDateString()
+function isJobOnToday(job: {
+  start_at: string | null
+  end_at: string | null
+}): boolean {
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1
+  if (job.start_at) {
+    const t = new Date(job.start_at).getTime()
+    if (t >= todayStart && t < todayEnd) return true
+  }
+  if (job.end_at) {
+    const t = new Date(job.end_at).getTime()
+    if (t >= todayStart && t < todayEnd) return true
+  }
+  return false
 }
 
 function getEndFallback(startAt: string) {

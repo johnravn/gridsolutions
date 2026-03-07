@@ -15,6 +15,7 @@ import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
 
@@ -46,6 +47,8 @@ export default function CustomerPage() {
   const [savedWidth, setSavedWidth] = React.useState<number>(50)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
@@ -114,40 +117,39 @@ export default function CustomerPage() {
     }
   }, [isResizing])
 
+  // On small screens: when an item is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedId])
+
   if (!companyId) return <div>No company selected.</div>
 
-  // On small screens, use Grid layout (stack)
+  // On small screens, use Grid layout (stack): list fills viewport, inspector below
   if (!isLarge) {
     return (
-      <section style={{ height: isLarge ? '100%' : undefined, minHeight: 0 }}>
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{
-            height: isLarge ? '100%' : undefined,
-            minHeight: 0,
-          }}
-        >
-          {/* LEFT */}
+      <section ref={listRef} style={{ minHeight: 0 }}>
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
+          {/* LEFT: list — viewport height minus app top bar and margin */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
+              height: 'calc(100vh - 56px - 16px)',
               minHeight: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3">
+            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
               <Heading size="5">Customers</Heading>
             </Flex>
-            <Separator size="4" mb="3" />
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
                 flex: 1,
                 minHeight: 0,
-                overflow: 'hidden',
+                overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -161,49 +163,66 @@ export default function CustomerPage() {
             </Box>
           </Card>
 
-          {/* RIGHT */}
-          <Card
-            size="3"
+          {/* RIGHT: Inspector — below the fold on mobile; scroll into view when item selected */}
+          <div
+            ref={inspectorRef}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
-              maxHeight: isLarge ? '100%' : undefined,
-              overflow: isLarge ? 'hidden' : 'visible',
               minHeight: 0,
+              maxWidth: '100%',
+              width: '100%',
+              height: 'calc(100vh - 56px - 16px)',
             }}
           >
-            <Heading size="5" mb="3">
-              Inspector
-            </Heading>
-            <Separator size="4" mb="3" />
-            <Box
+            <Card
+              size="3"
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 56px - 16px)',
+                overflow: 'hidden',
+                minHeight: 0,
+                maxWidth: '100%',
               }}
             >
-              <CustomerInspector
-                id={selectedId}
-                onDeleted={() => setSelectedId(null)}
-              />
-            </Box>
-          </Card>
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Inspector
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <CustomerInspector
+                  id={selectedId}
+                  onDeleted={() => setSelectedId(null)}
+                />
+              </Box>
+            </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
       </section>
     )
   }
 
   // On large screens, use resizable flex layout
   return (
-    <section style={{ height: isLarge ? '100%' : undefined, minHeight: 0 }}>
+    <section style={{ height: '100%', minHeight: 0 }}>
       <Flex
         ref={containerRef}
         gap="2"
         align="stretch"
         style={{
-          height: isLarge ? '100%' : undefined,
+          height: '100%',
           minHeight: 0,
           position: 'relative',
         }}
@@ -215,7 +234,7 @@ export default function CustomerPage() {
             display: 'flex',
             flexDirection: 'column',
             width: isMinimized ? '60px' : `${leftPanelWidth}%`,
-            height: isLarge ? '100%' : undefined,
+            height: '100%',
             minWidth: isMinimized ? '60px' : '300px',
             maxWidth: isMinimized ? '60px' : '75%',
             minHeight: 0,
@@ -231,14 +250,14 @@ export default function CustomerPage() {
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
                 position: 'absolute',
@@ -359,9 +378,9 @@ export default function CustomerPage() {
             display: 'flex',
             flexDirection: 'column',
             flex: 1,
-            height: isLarge ? '100%' : undefined,
-            maxHeight: isLarge ? '100%' : undefined,
-            overflow: isLarge ? 'hidden' : 'visible',
+            height: '100%',
+            maxHeight: '100%',
+            overflow: 'hidden',
             minWidth: '300px',
             minHeight: 0,
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
@@ -373,9 +392,9 @@ export default function CustomerPage() {
           <Separator size="4" mb="3" />
           <Box
             style={{
-              flex: isLarge ? 1 : undefined,
-              minHeight: isLarge ? 0 : undefined,
-              overflowY: isLarge ? 'auto' : 'visible',
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto',
             }}
           >
             <CustomerInspector

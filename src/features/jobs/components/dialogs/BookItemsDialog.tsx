@@ -17,6 +17,7 @@ import { Search } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { addThreeHours } from '@shared/lib/generalFunctions'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
@@ -112,6 +113,7 @@ export default function BookItemsDialog({
   } | null>(null)
   const lastItemNameMapRef = React.useRef<Map<string, string>>(new Map())
   const { success, error, info } = useToast()
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
 
   // State for custom time pickers when no equipment period exists
   const [customStartTime, setCustomStartTime] = React.useState<string | null>(
@@ -949,8 +951,15 @@ export default function BookItemsDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content
-        maxWidth="90%"
-        style={{ height: '80vh', display: 'flex', flexDirection: 'column' }}
+        maxWidth={isSmallScreen ? '100%' : '90%'}
+        style={{
+          height: isSmallScreen ? '100vh' : '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          ...(isSmallScreen
+            ? { margin: 0, borderRadius: 0, maxHeight: '100vh' }
+            : {}),
+        }}
       >
         <Dialog.Title>Book equipment</Dialog.Title>
 
@@ -958,7 +967,7 @@ export default function BookItemsDialog({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '65fr 35fr',
+            gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
             gap: 16,
             marginTop: 8,
             alignItems: 'stretch',
@@ -1004,8 +1013,14 @@ export default function BookItemsDialog({
                         ? 'Default times match job duration. Adjust if needed.'
                         : 'Set start and end times for equipment booking.'}
                   </Text>
-                  <Flex gap="2" wrap="wrap" align="center">
-                    <Box style={{ flex: 1, minWidth: 200 }}>
+                  <Flex
+                    gap="2"
+                    wrap="wrap"
+                    align="center"
+                    direction={isSmallScreen ? 'column' : 'row'}
+                    style={{ alignItems: isSmallScreen ? 'stretch' : undefined }}
+                  >
+                    <Box style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}>
                       <Text size="1" color="gray" mb="1" as="div">
                         Start time
                       </Text>
@@ -1018,7 +1033,7 @@ export default function BookItemsDialog({
                         }}
                       />
                     </Box>
-                    <Box style={{ flex: 1, minWidth: 200 }}>
+                    <Box style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}>
                       <Text size="1" color="gray" mb="1" as="div">
                         End time
                       </Text>
@@ -1112,7 +1127,7 @@ export default function BookItemsDialog({
           style={{
             marginTop: 8,
             display: 'grid',
-            gridTemplateColumns: '65fr 35fr',
+            gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
             gap: 16,
             flex: 1,
             minHeight: 0,
@@ -1170,6 +1185,100 @@ export default function BookItemsDialog({
               </Flex>
             ) : groupedPicker.length === 0 ? (
               <Text color="gray">No results</Text>
+            ) : isSmallScreen ? (
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+              >
+                {groupedPicker.map((group) => (
+                  <Box
+                    key={group.category}
+                    p="2"
+                    style={{
+                      border: '1px solid var(--gray-a6)',
+                      borderRadius: 8,
+                      background: 'var(--gray-a1)',
+                    }}
+                  >
+                    <Text size="2" weight="medium" mb="2">
+                      {group.category}
+                    </Text>
+                    <Flex direction="column" gap="2">
+                      {group.rows.map((r) => (
+                        <Box
+                          key={`${r.kind}:${r.id}`}
+                          p="2"
+                          style={{
+                            border: '1px solid var(--gray-a5)',
+                            borderRadius: 6,
+                            background: 'var(--gray-a2)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                          }}
+                        >
+                          <Flex
+                            justify="between"
+                            align="center"
+                            gap="2"
+                            wrap="wrap"
+                            style={{ flexWrap: 'wrap' }}
+                          >
+                            <Flex align="center" gap="2" wrap="wrap" style={{ minWidth: 0, flex: 1 }}>
+                              <Text size="2" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {r.name}
+                              </Text>
+                              {r.is_group && (
+                                <Badge size="1" variant="soft" color="pink">
+                                  Group
+                                </Badge>
+                              )}
+                              {r.internally_owned ? (
+                                <Badge size="1" variant="soft" color="indigo">
+                                  Internal
+                                </Badge>
+                              ) : (
+                                <Badge size="1" variant="soft" color="amber">
+                                  {r.external_owner_name ?? 'External'}
+                                </Badge>
+                              )}
+                            </Flex>
+                            <Button
+                              size="1"
+                              variant="classic"
+                              onClick={() => addRow(r)}
+                              style={{ flexShrink: 0 }}
+                            >
+                              Add
+                            </Button>
+                          </Flex>
+                          <Flex gap="3" wrap="wrap" style={{ fontSize: 12, color: 'var(--gray-11)' }}>
+                            {r.category_name && (
+                              <Text size="1" color="gray">
+                                {r.category_name}
+                              </Text>
+                            )}
+                            {r.brand_name && (
+                              <Text size="1" color="gray">
+                                {r.brand_name}
+                              </Text>
+                            )}
+                            {r.on_hand != null && (
+                              <Text size="1" color="gray">
+                                On hand: {r.on_hand}
+                              </Text>
+                            )}
+                            {r.current_price != null && (
+                              <Text size="1" color="gray">
+                                {formatNOK(r.current_price)}
+                              </Text>
+                            )}
+                          </Flex>
+                        </Box>
+                      ))}
+                    </Flex>
+                  </Box>
+                ))}
+              </div>
             ) : (
               <div
                 style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
@@ -1206,7 +1315,6 @@ export default function BookItemsDialog({
                       <Table.Body>
                         {group.rows.map((r) => (
                           <Table.Row key={`${r.kind}:${r.id}`}>
-                            {/* Name + badges */}
                             <Table.Cell>
                               <Flex align="center" gap="2">
                                 <Text size="2" weight="medium">
@@ -1229,32 +1337,22 @@ export default function BookItemsDialog({
                                 )}
                               </Flex>
                             </Table.Cell>
-
-                            {/* Category */}
                             <Table.Cell>
                               <Text size="2" color="gray">
                                 {r.category_name ?? ''}
                               </Text>
                             </Table.Cell>
-
-                            {/* Brand */}
                             <Table.Cell>
                               <Text size="2" color="gray">
                                 {r.brand_name ?? ''}
                               </Text>
                             </Table.Cell>
-
-                            {/* On hand */}
                             <Table.Cell>{r.on_hand ?? ''}</Table.Cell>
-
-                            {/* Price */}
                             <Table.Cell>
                               {r.current_price != null
                                 ? formatNOK(r.current_price)
                                 : ''}
                             </Table.Cell>
-
-                            {/* Owner */}
                             <Table.Cell>
                               {r.internally_owned ? (
                                 <Badge size="1" variant="soft" color="indigo">
@@ -1266,8 +1364,6 @@ export default function BookItemsDialog({
                                 </Badge>
                               )}
                             </Table.Cell>
-
-                            {/* Add */}
                             <Table.Cell align="right">
                               <Button
                                 size="1"

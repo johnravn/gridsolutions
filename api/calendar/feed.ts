@@ -284,7 +284,76 @@ export default async function handler(req: any, res: any) {
       return res.end(ics)
     }
 
-    // Job-based kinds: program (and for crew_jobs we filter by reserved_crew)
+    // Job-based kinds: program (all_jobs, project_lead_jobs); crew_jobs uses crew time_periods
+    if (kind === 'crew_jobs') {
+      // Crew calendar: one event per crew time_period (actual work slot), not per job.
+      // So a job spanning two days with two crew bookings → two events with correct times.
+      const { data: crewRes } = await supabase
+        .from('reserved_crew')
+        .select('time_period_id')
+        .eq('user_id', userId)
+      const crewPeriodIds = Array.from(new Set((crewRes ?? []).map((r: { time_period_id: string }) => r.time_period_id)))
+      if (crewPeriodIds.length === 0) {
+        const ics = buildICS([])
+        res.statusCode = 200
+        res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
+        res.setHeader('Content-Disposition', 'inline; filename="calendar.ics"')
+        res.setHeader('Cache-Control', 'private, max-age=300')
+        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+        return res.end(ics)
+      }
+
+      const { data: crewPeriods, error: crewErr } = await supabase
+        .from('time_periods')
+        .select('id, title, start_at, end_at, job_id, category')
+        .eq('company_id', companyId)
+        .eq('category', 'crew')
+        .in('id', crewPeriodIds)
+        .eq('deleted', false)
+        .gte('start_at', fromIso)
+        .lte('start_at', toIso)
+        .order('start_at', { ascending: true })
+
+      if (crewErr) {
+        res.statusCode = 500
+        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+        res.setHeader('Content-Type', 'application/json')
+        return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
+      }
+
+      let crewPeriodList = crewPeriods || []
+      crewPeriodList = await filterNonArchivedJobPeriods(supabase, crewPeriodList)
+
+      const jobIds = Array.from(new Set(crewPeriodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
+      const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
+
+      const events = crewPeriodList.map((p: { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }) => {
+        const info = p.job_id ? jobInfo.get(p.job_id) : null
+        const jobTitle = info?.title ?? p.title ?? 'Crew assignment'
+        const jobNo = info ? formatJobNumber(info.jobnr) : ''
+        const descParts: string[] = []
+        if (jobNo) descParts.push(`Job no: ${jobNo}`)
+        if (info?.projectLeadName) descParts.push(`Project lead: ${info.projectLeadName}`)
+        if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
+        return {
+          id: p.id,
+          title: 'CREW: ' + (jobTitle || 'Event'),
+          start: p.start_at,
+          end: p.end_at,
+          description: descParts.length > 0 ? descParts.join('\n') : undefined,
+        }
+      })
+
+      const ics = buildICS(events)
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
+      res.setHeader('Content-Disposition', 'inline; filename="calendar.ics"')
+      res.setHeader('Cache-Control', 'private, max-age=300')
+      Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+      return res.end(ics)
+    }
+
+    // all_jobs / project_lead_jobs: use program time_periods (job duration)
     let q = supabase
       .from('time_periods')
       .select('id, title, start_at, end_at, job_id, category')
@@ -313,24 +382,6 @@ export default async function handler(req: any, res: any) {
         .eq('project_lead_user_id', userId)
       const leadJobIds = new Set((jobIdsData || []).map((j: { id: string }) => j.id))
       periodList = periodList.filter((p: { job_id: string | null }) => p.job_id && leadJobIds.has(p.job_id))
-    } else if (kind === 'crew_jobs') {
-      const { data: crewRes } = await supabase
-        .from('reserved_crew')
-        .select('time_period_id')
-        .eq('user_id', userId)
-      const crewPeriodIds = new Set((crewRes || []).map((r: { time_period_id: string }) => r.time_period_id))
-      const periodIdsForCrew = Array.from(crewPeriodIds)
-      const { data: crewPeriods } = await supabase
-        .from('time_periods')
-        .select('id, job_id')
-        .in('id', periodIdsForCrew)
-        .eq('company_id', companyId)
-      const crewJobIds = new Set(
-        (crewPeriods || []).map((p: { job_id: string | null }) => p.job_id).filter(Boolean),
-      )
-      periodList = periodList.filter(
-        (p: { job_id: string | null }) => p.job_id && crewJobIds.has(p.job_id),
-      )
     }
 
     periodList = await filterNonArchivedJobPeriods(supabase, periodList)
@@ -477,10 +528,10 @@ async function fetchJobInfo(
 }
 
 /** Filter periodList to only include periods whose job is not archived (or has no job). */
-async function filterNonArchivedJobPeriods(
+async function filterNonArchivedJobPeriods<T extends { job_id: string | null }>(
   supabase: ReturnType<typeof createClient<Database>>,
-  periodList: Array<{ job_id: string | null }>,
-): Promise<Array<{ job_id: string | null }>> {
+  periodList: Array<T>,
+): Promise<Array<T>> {
   const jobIds = Array.from(new Set(periodList.map((p) => p.job_id).filter(Boolean))) as string[]
   if (jobIds.length === 0) return periodList
   const { data: jobs } = await supabase
