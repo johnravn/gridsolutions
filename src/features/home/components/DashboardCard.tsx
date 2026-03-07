@@ -26,6 +26,7 @@ export function DashboardCard({
   footer,
   headerAction,
   notFullHeight,
+  scrollContainerStyle,
 }: {
   title: string
   icon: React.ReactNode
@@ -33,6 +34,8 @@ export function DashboardCard({
   footer?: React.ReactNode
   headerAction?: React.ReactNode
   notFullHeight?: boolean
+  /** Optional style for the scroll container (when notFullHeight is false) */
+  scrollContainerStyle?: React.CSSProperties
 }) {
   return (
     <Card size="3" style={notFullHeight ? undefined : { height: '100%' }}>
@@ -53,7 +56,12 @@ export function DashboardCard({
           style={
             notFullHeight
               ? undefined
-              : { flex: 1, minHeight: 0, overflowY: 'auto' }
+              : {
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  ...scrollContainerStyle,
+                }
           }
         >
           {children}

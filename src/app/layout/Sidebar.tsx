@@ -289,7 +289,14 @@ function SidebarContent({
       {/* Mobile user panel */}
       {isMobile && (
         <>
-          <Flex align="center" justify="between" px="3" py="3" gap="3">
+          <Flex
+            align="center"
+            justify="between"
+            pl="5"
+            pr="3"
+            py="3"
+            gap="3"
+          >
             <Flex align="center" gap="3" style={{ minWidth: 0, flex: 1 }}>
               <Button
                 variant="ghost"

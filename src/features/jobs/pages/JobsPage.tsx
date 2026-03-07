@@ -20,6 +20,7 @@ import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
@@ -148,19 +149,21 @@ export default function JobsPage() {
     }
   }, [])
 
-  // Resize state: track left panel width as percentage (default 60/40 split)
-  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(60)
+  // Resize state: track left panel width as percentage (default 50/50 split)
+  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(50)
   const [isMinimized, setIsMinimized] = React.useState(false)
-  const [savedWidth, setSavedWidth] = React.useState<number>(60) // Save width when minimizing
+  const [savedWidth, setSavedWidth] = React.useState<number>(50) // Save width when minimizing
   const [isResizing, setIsResizing] = React.useState(false)
   const [hasUserResized, setHasUserResized] = React.useState(false) // Track if user manually resized
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   // Toggle minimize state
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
       // Expand
-      setLeftPanelWidth(savedWidth || 60)
+      setLeftPanelWidth(savedWidth || 50)
       setIsMinimized(false)
     } else {
       // Minimize
@@ -175,7 +178,7 @@ export default function JobsPage() {
   // Expand when clicking on glowing bar
   const handleGlowingBarClick = React.useCallback(() => {
     if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 60)
+      setLeftPanelWidth(savedWidth || 50)
       setIsMinimized(false)
     }
   }, [isMinimized, savedWidth])
@@ -236,37 +239,36 @@ export default function JobsPage() {
     }
   }, [isResizing])
 
+  // On phone: when a job is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedId])
+
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
-  // On small screens, use Grid layout (stack)
+  // On small screens, use Grid layout (stack): jobs card fills viewport, inspector below
   if (!isLarge) {
     return (
-      <section
-        style={{
-          height: isLarge ? '100%' : undefined,
-          minHeight: 0,
-        }}
-      >
+      <section ref={listRef} style={{ minHeight: 0 }}>
         <Grid
           columns="1fr"
           gap="4"
           align="stretch"
-          style={{
-            height: isLarge ? '100%' : undefined,
-            minHeight: 0,
-          }}
+          style={{ minHeight: 0 }}
         >
-          {/* LEFT: Jobs list */}
+          {/* Jobs list + top bar: viewport height minus app top bar so bottom aligns with screen */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
+              height: 'calc(100vh - 56px - 16px)',
               minHeight: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
+            <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2" style={{ flexShrink: 0 }}>
               <Heading size="5">Jobs</Heading>
               <Flex align="center" gap="2" wrap="wrap">
                 {selectedDate ? (
@@ -306,12 +308,12 @@ export default function JobsPage() {
                 />
               </Flex>
             </Flex>
-            <Separator size="4" mb="3" />
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -322,31 +324,36 @@ export default function JobsPage() {
                 statusFilter={statusFilter}
                 showOnlyArchived={showOnlyArchived}
                 selectedDate={selectedDate}
+                compact
               />
             </Box>
           </Card>
 
-          {/* RIGHT: Inspector */}
+          {/* Inspector: below the fold on mobile; same height as list so layout doesn't jump before content loads */}
+          <div ref={inspectorRef} style={{ minHeight: 0, maxWidth: '100%', width: '100%', height: 'calc(100vh - 56px - 16px)' }}>
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : undefined,
+              height: isLarge ? '100%' : 'calc(100vh - 56px - 16px)',
               maxHeight: isLarge ? '100%' : undefined,
-              overflow: isLarge ? 'hidden' : 'visible',
+              overflow: isLarge ? 'hidden' : 'hidden',
               minHeight: 0,
+              maxWidth: '100%',
             }}
           >
-            <Heading size="5" mb="3">
+            <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
               Inspector
             </Heading>
-            <Separator size="4" mb="3" />
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
-                flex: isLarge ? 1 : undefined,
-                minHeight: isLarge ? 0 : undefined,
-                overflowY: isLarge ? 'auto' : 'visible',
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                minWidth: 0,
+                maxWidth: '100%',
               }}
             >
               <JobInspector
@@ -356,7 +363,13 @@ export default function JobsPage() {
               />
             </Box>
           </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
       </section>
     )
   }

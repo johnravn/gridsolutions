@@ -18,6 +18,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { prettyPhone } from '@shared/phone/phone'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { Edit } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
@@ -90,7 +91,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
   const [contactOpen, setContactOpen] = React.useState(false)
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
       {/* Job Status Timeline - Hidden for freelancers */}
       {!isReadOnly && (
         <Card mb="4" style={{ background: 'var(--gray-a2)' }}>
@@ -229,7 +230,8 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
               <Box
                 mb="3"
                 style={{
-                  maxWidth: 400,
+                  maxWidth: 'min(400px, 100%)',
+                  width: '100%',
                   height: '100%',
                   overflow: 'hidden',
                   borderRadius: 8,
@@ -425,10 +427,184 @@ function JobStatusTimeline({
   // Find current position in flow
   const currentFlowIndex = flowStatuses.indexOf(displayStatus)
 
+  const isMobile = useMediaQuery('(max-width: 768px)')
+  const mobileSplit = 4
+  const row1Statuses = flowStatuses.slice(0, mobileSplit)
+  const row2Statuses = flowStatuses.slice(mobileSplit)
+
+  const renderStatusRow = (statusesInRow: Array<JobStatus>) =>
+    statusesInRow.map((status, idx) => {
+      const isActive = status === displayStatus && !isCanceled
+      const statusIndex = flowStatuses.indexOf(status)
+      const isPast = !isCanceled && statusIndex < currentFlowIndex && statusIndex >= 0
+      const isFuture = statusIndex > currentFlowIndex
+      const colors = STATUS_COLORS[status]
+      const nextInRow = statusesInRow[idx + 1]
+      const nextColors = nextInRow ? STATUS_COLORS[nextInRow] : null
+      return (
+        <React.Fragment key={status}>
+          <Flex
+            direction="column"
+            align="center"
+            style={{
+              flex: 1,
+              position: 'relative',
+              cursor: companyRole === 'freelancer' ? 'default' : 'pointer',
+              opacity: updateStatus.isPending ? 0.5 : 1,
+              pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
+              minWidth: 0,
+            }}
+            onClick={() => {
+              if (companyRole !== 'freelancer' && !updateStatus.isPending && status !== displayStatus) {
+                setPendingStatusChange(status)
+              }
+            }}
+          >
+            {idx < statusesInRow.length - 1 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '14px',
+                  left: 'calc(50% + 14px)',
+                  width: 'calc(100% - 28px)',
+                  height: '2px',
+                  background:
+                    isPast || isActive
+                      ? nextColors
+                        ? `linear-gradient(to right, ${colors.dotBg}, ${nextColors.dotBg})`
+                        : colors.dotBg
+                      : 'var(--gray-a4)',
+                  zIndex: 0,
+                  borderRadius: '1px',
+                  transition: 'background 0.4s ease',
+                  opacity: isFuture ? 0.4 : 1,
+                  transform: 'translateY(-1px)',
+                }}
+              />
+            )}
+            <Box
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: isActive ? colors.dotBg : isPast ? colors.dotBg : 'var(--gray-a3)',
+                border: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1,
+                position: 'relative',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+              className="status-dot"
+            >
+              {(isPast || (isActive && status === 'paid')) && (
+                <Text size="1" weight="bold" style={{ color: 'white', fontSize: '12px' }}>✓</Text>
+              )}
+              {isActive && status !== 'paid' && (
+                <Box style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'white' }} />
+              )}
+            </Box>
+            <Text
+              size="1"
+              mt="2"
+              weight={isActive ? 'medium' : 'regular'}
+              style={{
+                color: isActive || isPast ? colors.text : 'var(--gray-a9)',
+                textAlign: 'center',
+                transition: 'color 0.3s ease',
+                fontSize: '11px',
+                opacity: isFuture ? 0.5 : 1,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {makeWordPresentable(status)}
+            </Text>
+          </Flex>
+        </React.Fragment>
+      )
+    })
+
   return (
     <Box>
       {/* Main Flow Timeline */}
       <Flex direction="column" gap="3" mb="4">
+        {isMobile ? (
+          <>
+            <Flex align="center" gap="1" style={{ position: 'relative' }}>
+              <Flex align="center" style={{ flex: 1 }} gap="0">
+                {renderStatusRow(row1Statuses)}
+              </Flex>
+            </Flex>
+            <Flex align="center" gap="1" style={{ position: 'relative' }}>
+              <Flex align="center" style={{ flex: 1 }} gap="0">
+                {renderStatusRow(row2Statuses)}
+              </Flex>
+              {!isCanceled && (
+                <Box
+                  style={{
+                    width: '1px',
+                    height: '50px',
+                    background: 'var(--gray-a4)',
+                    margin: '0 5px',
+                    opacity: 0.5,
+                  }}
+                />
+              )}
+              <Flex
+                direction="column"
+                align="center"
+                style={{
+                  cursor: companyRole === 'freelancer' ? 'default' : 'pointer',
+                  opacity: updateStatus.isPending ? 0.5 : 1,
+                  pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
+                  minWidth: '70px',
+                }}
+                onClick={() => {
+                  if (companyRole !== 'freelancer' && !updateStatus.isPending && !isCanceled) {
+                    setPendingStatusChange('canceled')
+                  }
+                }}
+              >
+                <Box
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: isCanceled ? STATUS_COLORS.canceled.dotBg : 'var(--gray-a3)',
+                    border: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1,
+                    position: 'relative',
+                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                  className="status-dot"
+                >
+                  {isCanceled && (
+                    <Text size="1" weight="bold" style={{ color: 'white', fontSize: '12px' }}>✕</Text>
+                  )}
+                </Box>
+                <Text
+                  size="1"
+                  mt="2"
+                  weight={isCanceled ? 'medium' : 'regular'}
+                  style={{
+                    color: isCanceled ? STATUS_COLORS.canceled.text : 'var(--gray-a9)',
+                    textAlign: 'center',
+                    transition: 'color 0.3s ease',
+                    fontSize: '11px',
+                    opacity: !isCanceled ? 0.5 : 1,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {makeWordPresentable('canceled')}
+                </Text>
+              </Flex>
+            </Flex>
+          </>
+        ) : (
         <Flex align="center" gap="1" style={{ position: 'relative' }}>
           {/* Main Flow Statuses */}
           <Flex align="center" style={{ flex: 1 }} gap="0">
@@ -640,6 +816,7 @@ function JobStatusTimeline({
             </Text>
           </Flex>
         </Flex>
+        )}
       </Flex>
 
       {/* Current Status Badge */}

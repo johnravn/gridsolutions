@@ -8,6 +8,7 @@ import {
   Flex,
   Heading,
   SegmentedControl,
+  Select,
   Table,
   Text,
 } from '@radix-ui/themes'
@@ -22,6 +23,7 @@ import {
 } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { sendCrewInvite, sendCrewInvites } from '../../../matters/api/queries'
 import { crewInternalNotesQuery } from '../../../crew/api/queries'
 import AddRoleDialog from '../dialogs/AddRoleDialog'
@@ -67,6 +69,7 @@ export default function CrewTab({
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
   const isReadOnly = companyRole === 'freelancer'
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [addRoleOpen, setAddRoleOpen] = React.useState(false)
   const [expandedRoles, setExpandedRoles] = React.useState<Set<string>>(
     new Set(),
@@ -638,33 +641,43 @@ export default function CrewTab({
                     style={{
                       cursor: 'pointer',
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'stretch',
                       justifyContent: 'space-between',
+                      gap: 12,
+                      minWidth: 0,
                     }}
                     onClick={() => toggleRole(role.id)}
                   >
-                    <Flex align="center" gap="2">
+                    <Flex align="center" gap="2" style={{ minWidth: 0, flex: '1 1 auto' }}>
                       {isExpanded ? (
-                        <NavArrowDown width={18} height={18} />
+                        <NavArrowDown width={18} height={18} style={{ flexShrink: 0 }} />
                       ) : (
-                        <NavArrowRight width={18} height={18} />
+                        <NavArrowRight width={18} height={18} style={{ flexShrink: 0 }} />
                       )}
-                      <Text weight="bold">{role.title ?? '—'}</Text>
-                      {role.role_category && (
-                        <Badge
-                          size="1"
-                          variant="outline"
-                          color={getCategoryColor(role.role_category)}
-                          style={{ textTransform: 'capitalize' }}
-                        >
-                          {role.role_category}
-                        </Badge>
-                      )}
-                      <Text size="2" color="gray">
-                        {role.start_at && role.end_at
-                          ? `${formatDateTime(role.start_at)} - ${formatDateTime(role.end_at)}`
-                          : '—'}
-                      </Text>
+                      <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                        <Flex align="center" gap="2" wrap="wrap">
+                          <Text weight="bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {role.title ?? '—'}
+                          </Text>
+                          {role.role_category && (
+                            <Badge
+                              size="1"
+                              variant="outline"
+                              color={getCategoryColor(role.role_category)}
+                              style={{ textTransform: 'capitalize', flexShrink: 0 }}
+                            >
+                              {role.role_category}
+                            </Badge>
+                          )}
+                        </Flex>
+                        <Text size="2" color="gray" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {role.start_at && role.end_at
+                            ? `${formatDateTime(role.start_at)} - ${formatDateTime(role.end_at)}`
+                            : '—'}
+                        </Text>
+                      </Flex>
+                    </Flex>
+                    <Flex direction="column" align="end" gap="2" style={{ flexShrink: 0 }}>
                       <Badge
                         radius="full"
                         highContrast
@@ -672,54 +685,54 @@ export default function CrewTab({
                       >
                         {roleStatus.label}
                       </Badge>
+                      {!isReadOnly && (
+                        <Flex gap="2">
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setAddCrewToRole(role.id)
+                            }}
+                          >
+                            <Plus width={14} height={14} /> Add crew
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setEditRole({
+                                id: role.id,
+                                title: role.title ?? null,
+                                start_at: role.start_at ?? null,
+                                end_at: role.end_at ?? null,
+                                needed_count: role.needed_count ?? 1,
+                                role_category: role.role_category ?? null,
+                              })
+                            }}
+                          >
+                            <Edit width={14} height={14} />
+                          </Button>
+                          <Button
+                            size="1"
+                            variant="soft"
+                            color="red"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setDeleteRoleConfirm({
+                                roleId: role.id,
+                                roleTitle: role.title || 'Untitled Role',
+                                crewCount: roleCrew.length,
+                              })
+                            }}
+                            disabled={removeRole.isPending}
+                          >
+                            <Trash width={14} height={14} />
+                          </Button>
+                        </Flex>
+                      )}
                     </Flex>
-                    {!isReadOnly && (
-                      <Flex gap="2">
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setAddCrewToRole(role.id)
-                          }}
-                        >
-                          <Plus width={14} height={14} /> Add crew
-                        </Button>
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setEditRole({
-                              id: role.id,
-                              title: role.title ?? null,
-                              start_at: role.start_at ?? null,
-                              end_at: role.end_at ?? null,
-                              needed_count: role.needed_count ?? 1,
-                              role_category: role.role_category ?? null,
-                            })
-                          }}
-                        >
-                          <Edit width={14} height={14} />
-                        </Button>
-                        <Button
-                          size="1"
-                          variant="soft"
-                          color="red"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeleteRoleConfirm({
-                              roleId: role.id,
-                              roleTitle: role.title || 'Untitled Role',
-                              crewCount: roleCrew.length,
-                            })
-                          }}
-                          disabled={removeRole.isPending}
-                        >
-                          <Trash width={14} height={14} />
-                        </Button>
-                      </Flex>
-                    )}
                   </Box>
 
                   {isExpanded && (
@@ -834,6 +847,31 @@ export default function CrewTab({
                                         >
                                           {crew.status}
                                         </Badge>
+                                      ) : isSmallScreen ? (
+                                        <Select.Root
+                                          value={crew.status}
+                                          onValueChange={(v) =>
+                                            handleStatusChange(
+                                              crew.id,
+                                              crewName,
+                                              crew.status,
+                                              v as BookingStatus,
+                                            )
+                                          }
+                                        >
+                                          <Select.Trigger style={{ minWidth: 100 }} />
+                                          <Select.Content>
+                                            <Select.Item value="planned">
+                                              Planned
+                                            </Select.Item>
+                                            <Select.Item value="confirmed">
+                                              Confirmed
+                                            </Select.Item>
+                                            <Select.Item value="canceled">
+                                              Canceled
+                                            </Select.Item>
+                                          </Select.Content>
+                                        </Select.Root>
                                       ) : (
                                         <SegmentedControl.Root
                                           size="1"

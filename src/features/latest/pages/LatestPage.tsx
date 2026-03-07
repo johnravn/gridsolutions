@@ -18,6 +18,7 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import LatestFeed from '../components/LatestFeed'
 import LatestInspector from '../components/LatestInspector'
 import ActivityFilter from '../components/ActivityFilter'
@@ -66,6 +67,8 @@ export default function LatestPage() {
   const [savedWidth, setSavedWidth] = React.useState<number>(37)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
@@ -127,24 +130,47 @@ export default function LatestPage() {
     }
   }, [isResizing])
 
+  // On small screens: when an item is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedId])
+
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
-  // On small screens, use Grid layout (stack)
+  // On small screens, use Grid layout (stack): feed fills viewport, inspector below
   if (!isLarge) {
     return (
-      <section>
-        <Grid columns="1fr" gap="4" align="stretch">
-          {/* LEFT: Feed */}
-          <Card size="3" style={{ display: 'flex', flexDirection: 'column' }}>
-            <Flex align="center" justify="between" mb="3">
+      <section ref={listRef} style={{ minHeight: 0 }}>
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
+          {/* LEFT: Feed — viewport height minus app top bar and margin */}
+          <Card
+            size="3"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: 'calc(100vh - 56px - 16px)',
+              minHeight: 0,
+            }}
+          >
+            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
               <Heading size="5">Latest</Heading>
               <ActivityFilter
                 selectedTypes={activityTypes}
                 onTypesChange={setActivityTypes}
               />
             </Flex>
-            <Separator size="4" mb="3" />
-            <Box>
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+            <Box
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
               <LatestFeed
                 selectedId={selectedId}
                 onSelect={setSelectedId}
@@ -155,17 +181,50 @@ export default function LatestPage() {
             </Box>
           </Card>
 
-          {/* RIGHT: Inspector */}
-          <Card size="3" style={{ display: 'flex', flexDirection: 'column' }}>
-            <Heading size="5" mb="3">
-              Details
-            </Heading>
-            <Separator size="4" mb="3" />
-            <Box>
-              <LatestInspector activityId={selectedId} />
-            </Box>
-          </Card>
+          {/* RIGHT: Inspector — below the fold on mobile; scroll into view when item selected */}
+          <div
+            ref={inspectorRef}
+            style={{
+              minHeight: 0,
+              maxWidth: '100%',
+              width: '100%',
+              height: 'calc(100vh - 56px - 16px)',
+            }}
+          >
+            <Card
+              size="3"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 56px - 16px)',
+                overflow: 'hidden',
+                minHeight: 0,
+                maxWidth: '100%',
+              }}
+            >
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Details
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <LatestInspector activityId={selectedId} />
+              </Box>
+            </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
       </section>
     )
   }
@@ -212,14 +271,14 @@ export default function LatestPage() {
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
                 position: 'absolute',

@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   Dialog,
+  DropdownMenu,
   Flex,
   Heading,
   Separator,
@@ -11,12 +12,13 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { Archive, Edit, Trash } from 'iconoir-react'
+import { Archive, Edit, NavArrowDown, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
@@ -94,6 +96,27 @@ export default function JobInspector({
   React.useEffect(() => {
     if (!isTabAllowed(activeTab)) setActiveTab('overview')
   }, [activeTab, isTabAllowed])
+
+  const isMobile = useMediaQuery('(max-width: 768px)')
+
+  const tabOptions = React.useMemo(() => {
+    const list: Array<{ value: string; label: string }> = [
+      { value: 'overview', label: 'Overview' },
+      { value: 'timeline', label: 'Time Periods' },
+      { value: 'program', label: 'Program' },
+      { value: 'calendar', label: 'Calendar' },
+      { value: 'bookings', label: 'Bookings' },
+      { value: 'packing', label: 'Packing' },
+      { value: 'offers', label: 'Offers' },
+      { value: 'invoice', label: 'Invoice' },
+      { value: 'money', label: 'Money' },
+      { value: 'todo', label: 'To Do' },
+      { value: 'contacts', label: 'Contacts' },
+      { value: 'files', label: 'Files' },
+    ]
+    return list.filter((t) => isTabAllowed(t.value))
+  }, [isTabAllowed])
+
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
 
@@ -180,24 +203,28 @@ export default function JobInspector({
   const job = data
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       <Box
         mb="3"
         style={{
           display: 'flex',
+          flexWrap: 'wrap',
           alignItems: 'center',
           justifyContent: 'space-between',
+          gap: 8,
         }}
       >
-        <Flex align="center" gap="3">
-          <Heading size="4">{job.title}</Heading>
+        <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0, flex: '1 1 auto' }}>
+          <Heading size="4" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {job.title}
+          </Heading>
           {job.jobnr && (
             <Text size="3" color="gray" weight="medium">
               #{String(job.jobnr).padStart(6, '0')}
             </Text>
           )}
         </Flex>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {(() => {
             const displayStatus = getDisplayStatus(job.status, companyRole)
             return (
@@ -284,20 +311,72 @@ export default function JobInspector({
           }
         }}
       >
-        <Tabs.List wrap="wrap" mb="2">
-          <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
-          <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
-          <Tabs.Trigger value="program">Program</Tabs.Trigger>
-          <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
-          {!isFreelancer && <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>}
-          <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
-          {!isFreelancer && <Tabs.Trigger value="offers">Offers</Tabs.Trigger>}
-          {!isFreelancer && <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>}
-          {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
-          {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
-          <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
-          <Tabs.Trigger value="files">Files</Tabs.Trigger>
-        </Tabs.List>
+        {isMobile ? (
+          <Flex direction="column" gap="2" mb="2">
+            <Text size="2" color="gray" weight="medium">
+              Tab
+            </Text>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Button
+                  variant="soft"
+                  color="gray"
+                  size="3"
+                  style={{
+                    width: '100%',
+                    minHeight: 44,
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {tabOptions.find((o) => o.value === activeTab)?.label ?? 'Overview'}
+                  <NavArrowDown width={18} height={18} />
+                </Button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content
+                align="start"
+                style={{ minWidth: 'var(--radix-dropdown-menu-trigger-width)', maxHeight: 'min(70vh, 400px)', overflowY: 'auto' }}
+              >
+                {tabOptions.map((opt) => (
+                  <DropdownMenu.Item
+                    key={opt.value}
+                    onSelect={() => {
+                      if (!isTabAllowed(opt.value)) return
+                      if (
+                        activeTab === 'files' &&
+                        opt.value !== 'files' &&
+                        filesTabRef.current
+                      ) {
+                        filesTabRef.current.checkUnsavedChanges(() => {
+                          setActiveTab(opt.value)
+                        })
+                      } else {
+                        setActiveTab(opt.value)
+                      }
+                    }}
+                    style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
+                  >
+                    {opt.label}
+                  </DropdownMenu.Item>
+                ))}
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Flex>
+        ) : (
+          <Tabs.List wrap="wrap" mb="2">
+            <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
+            <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
+            <Tabs.Trigger value="program">Program</Tabs.Trigger>
+            <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
+            {!isFreelancer && <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>}
+            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
+            {!isFreelancer && <Tabs.Trigger value="offers">Offers</Tabs.Trigger>}
+            {!isFreelancer && <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>}
+            {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
+            {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
+            <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
+            <Tabs.Trigger value="files">Files</Tabs.Trigger>
+          </Tabs.List>
+        )}
 
         <Tabs.Content value="overview" mt={'10px'}>
           <OverviewTab job={job} />

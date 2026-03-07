@@ -18,6 +18,7 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
@@ -83,6 +84,8 @@ export default function MattersPage() {
   const [savedWidth, setSavedWidth] = React.useState<number>(55)
   const [isResizing, setIsResizing] = React.useState(false)
   const containerRef = React.useRef<HTMLDivElement>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const toggleMinimize = React.useCallback(() => {
     if (isMinimized) {
@@ -156,32 +159,30 @@ export default function MattersPage() {
     }
   }, [isResizing])
 
+  // On small screens: when a matter is selected, scroll to the inspector
+  React.useEffect(() => {
+    if (!isLarge && selectedId != null && inspectorRef.current) {
+      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isLarge, selectedId])
+
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
   if (!isLarge) {
     return (
-      <section
-        style={{
-          minHeight: 0,
-        }}
-      >
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{
-            minHeight: 0,
-          }}
-        >
+      <section ref={listRef} style={{ minHeight: 0 }}>
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
+          {/* LEFT: list — viewport height minus app top bar and margin */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
+              height: 'calc(100vh - 56px - 16px)',
               minHeight: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3">
+            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
               <Heading size="5">Matters</Heading>
               <Flex align="center" gap="2" wrap="wrap">
                 <MattersFilter
@@ -195,12 +196,12 @@ export default function MattersPage() {
                 />
               </Flex>
             </Flex>
-            <Separator size="4" mb="3" />
+            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
               style={{
                 flex: 1,
                 minHeight: 0,
-                overflow: 'hidden',
+                overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -217,44 +218,67 @@ export default function MattersPage() {
             </Box>
           </Card>
 
-          <Card
-            size="3"
+          {/* RIGHT: Detail — below the fold on mobile; scroll into view when item selected */}
+          <div
+            ref={inspectorRef}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
               minHeight: 0,
+              maxWidth: '100%',
+              width: '100%',
+              height: 'calc(100vh - 56px - 16px)',
             }}
           >
-            <Heading size="5" mb="3">
-              Detail
-            </Heading>
-            <Separator size="4" mb="3" />
-            <Box
+            <Card
+              size="3"
               style={{
-                overflowY: 'visible',
+                display: 'flex',
+                flexDirection: 'column',
+                height: 'calc(100vh - 56px - 16px)',
+                overflow: 'hidden',
+                minHeight: 0,
+                maxWidth: '100%',
               }}
             >
-              {selectedId ? (
-                <MatterDetail
-                  matterId={selectedId}
-                  onDeleted={() => setSelectedId(null)}
-                />
-              ) : (
-                <Box p="4">
-                  <Box style={{ textAlign: 'center' }}>
-                    <Heading size="4" mb="2">
-                      Select a matter
-                    </Heading>
-                    <p style={{ color: 'var(--gray-11)' }}>
-                      Choose a matter from the list to view details, responses,
-                      and chat.
-                    </p>
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Detail
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                {selectedId ? (
+                  <MatterDetail
+                    matterId={selectedId}
+                    onDeleted={() => setSelectedId(null)}
+                  />
+                ) : (
+                  <Box p="4">
+                    <Box style={{ textAlign: 'center' }}>
+                      <Heading size="4" mb="2">
+                        Select a matter
+                      </Heading>
+                      <p style={{ color: 'var(--gray-11)' }}>
+                        Choose a matter from the list to view details, responses,
+                        and chat.
+                      </p>
+                    </Box>
                   </Box>
-                </Box>
-              )}
-            </Box>
-          </Card>
+                )}
+              </Box>
+            </Card>
+          </div>
         </Grid>
+        <ScrollToTopButton
+          listRef={listRef}
+          inspectorRef={inspectorRef}
+          visible={!isLarge}
+        />
 
         <CreateMatterDialog
           open={createMatterOpen}
@@ -303,14 +327,14 @@ export default function MattersPage() {
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '24px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector(
                   '[data-glowing-bar]',
-                ) as HTMLElement
-                if (bar) bar.style.width = '12px'
+                )
+                if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
                 position: 'absolute',

@@ -13,6 +13,7 @@ import { Edit, Trash } from 'iconoir-react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
+import { formatLoggingDate } from '../lib/timeEntryRange'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
 
 const GRID_COLUMNS_WITH_EMPLOYEE =
@@ -58,11 +59,7 @@ function getAvatarUrl(avatarPath: string | null | undefined): string | null {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  })
+  return formatLoggingDate(iso)
 }
 
 function formatTime(iso: string) {

@@ -181,7 +181,17 @@ export default function AppShell() {
           style={{ height: isPublic ? 'auto' : '100%', minHeight: 0 }}
         >
           {/* Top bar */}
-          <Flex align="center" justify="between" px="4" py="3">
+          <Flex
+            align="center"
+            justify="between"
+            px="4"
+            py="3"
+            style={
+              !isPublic && isMobile && open
+                ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
+                : undefined
+            }
+          >
             {!isPublic && isMobile && (
               <IconButton
                 size="2"

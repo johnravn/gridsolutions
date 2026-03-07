@@ -16,13 +16,14 @@ import {
   Text,
   TextArea,
   TextField,
+  Tooltip,
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { Camera } from 'iconoir-react'
+import { Camera, Palette } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
 import ThemeToggle from '@shared/theme/ThemeToggle'
@@ -364,8 +365,14 @@ export default function ProfilePage() {
   return (
     <Card size="4" style={{ minHeight: 0, overflow: 'auto' }}>
       {/* Header */}
-      <Flex align="center" justify="between" wrap="wrap" gap="3">
-        <Flex align="center" wrap="wrap" gap="3">
+      <Flex
+        direction={{ initial: 'column', md: 'row' }}
+        align={{ initial: 'stretch', md: 'center' }}
+        justify="between"
+        wrap="wrap"
+        gap="3"
+      >
+        <Flex align="center" wrap="wrap" gap="3" style={{ minWidth: 0 }}>
           <Flex align="center" gap="3">
             <Avatar
               src={avatarUrl ?? undefined}
@@ -380,10 +387,14 @@ export default function ProfilePage() {
           </Flex>
 
           <Flex
-            direction="column"
-            align="end"
+            direction={{ initial: 'column', sm: 'row' }}
+            align={{ initial: 'stretch', sm: 'end' }}
             gap="2"
-            style={{ minWidth: 180 }}
+            wrap="wrap"
+            style={{
+              minWidth: 0,
+              flexBasis: '100%',
+            }}
           >
             <input
               ref={fileInputRef}
@@ -414,31 +425,47 @@ export default function ProfilePage() {
               variant="soft"
               onClick={() => fileInputRef.current?.click()}
               disabled={uploading}
+              style={{ width: '100%', minWidth: 0 }}
             >
-              <Flex gap="2" align="center">
+              <Flex gap="2" align="center" justify="center">
                 <Camera width={16} height={16} />
                 {uploading ? 'Uploading…' : 'Change photo'}
               </Flex>
             </Button>
 
             {uploading && (
-              <Box style={{ width: 200 }}>
+              <Box style={{ width: '100%', maxWidth: 200 }}>
                 <Progress />
               </Box>
             )}
           </Flex>
         </Flex>
-        <Flex align="center" gap="4" wrap="wrap">
+
+        <Flex
+          align="center"
+          justify={{ initial: 'start', md: 'end' }}
+          gap="2"
+          style={{ minWidth: 0 }}
+        >
           <Popover.Root
             open={stylingMenuOpen}
             onOpenChange={setStylingMenuOpen}
           >
-            <Popover.Trigger>
-              <Button size="2" variant="soft">
-                Styling
-              </Button>
-            </Popover.Trigger>
-            <Popover.Content size="2" style={{ maxWidth: 400 }}>
+            <Tooltip content="Theme, background and appearance" delayDuration={300}>
+              <Popover.Trigger>
+                <Button
+                  size="2"
+                  variant="soft"
+                  style={{ width: '100%', minWidth: 0 }}
+                >
+                  <Flex gap="2" align="center" justify="center">
+                    <Palette width={16} height={16} />
+                    Theme & background
+                  </Flex>
+                </Button>
+              </Popover.Trigger>
+            </Tooltip>
+              <Popover.Content size="2" style={{ maxWidth: 400 }}>
               <Flex direction="column" gap="4">
                 <Box>
                   <Text

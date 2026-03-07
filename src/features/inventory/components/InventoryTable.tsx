@@ -11,18 +11,17 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { Plus, Search } from 'iconoir-react'
-import {
-  categoryNamesQuery,
-  inventoryIndexQueryAll,
-} from '../api/queries'
+import { Package, Packages, Search } from 'iconoir-react'
+import { categoryNamesQuery, inventoryIndexQueryAll } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
 import type { InventoryIndexRow, SortBy, SortDir } from '../api/queries'
 
-const GRID_COLUMNS = 'minmax(180px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) 80px 100px 100px'
+const GRID_COLUMNS =
+  'minmax(180px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) 80px 100px 100px'
 
 type Props = {
   selectedId: string | null
@@ -60,6 +59,7 @@ export default function InventoryTable({
   const [addItemOpen, setAddItemOpen] = React.useState(false)
   const [addGroupDialog, setAddGroupDialog] = React.useState(false)
 
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const controlsRef = React.useRef<HTMLDivElement | null>(null)
   const scrollRef = React.useRef<HTMLDivElement | null>(null)
@@ -205,7 +205,7 @@ export default function InventoryTable({
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search items, groups…"
           size="3"
-          style={{ flex: '1 1 260px' }}
+          style={{ flex: '1 1 min(260px, 100%)', minWidth: 0 }}
         >
           <TextField.Slot side="left">
             <Search />
@@ -215,37 +215,51 @@ export default function InventoryTable({
           </TextField.Slot>
         </TextField.Root>
 
-        <Select.Root
-          value={categoryFilter ?? ''}
-          size="3"
-          onValueChange={(val) =>
-            setCategoryFilter(val === '' ? null : val)
-          }
-        >
-          <Select.Trigger
-            placeholder="Filter category…"
-            style={{ minHeight: 'var(--space-7)' }}
-          />
-          <Select.Content>
-            <Select.Item value="all">All</Select.Item>
-            {categories.map((name) => (
-              <Select.Item key={name} value={name}>
-                {name.toUpperCase()}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
+        {!isSmallScreen && (
+          <Select.Root
+            value={categoryFilter ?? ''}
+            size="3"
+            onValueChange={(val) => setCategoryFilter(val === '' ? null : val)}
+          >
+            <Select.Trigger
+              placeholder="Filter category…"
+              style={{ minHeight: 'var(--space-7)' }}
+            />
+            <Select.Content>
+              <Select.Item value="all">All</Select.Item>
+              {categories.map((name) => (
+                <Select.Item key={name} value={name}>
+                  {name.toUpperCase()}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        )}
 
-        <Button size="2" variant="solid" onClick={() => setAddItemOpen(true)}>
-          <Plus width={16} height={16} /> Add item
-        </Button>
-        <Button
-          size="2"
-          variant="solid"
-          onClick={() => setAddGroupDialog(true)}
+        <Flex
+          gap="2"
+          style={{
+            width: isSmallScreen ? '100%' : undefined,
+            flex: isSmallScreen ? '1 1 100%' : undefined,
+          }}
         >
-          <Plus width={16} height={16} /> Add group
-        </Button>
+          <Button
+            size={isSmallScreen ? '3' : '2'}
+            variant="outline"
+            onClick={() => setAddGroupDialog(true)}
+            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+          >
+            <Packages width={isSmallScreen ? 20 : 16} height={isSmallScreen ? 20 : 16} /> Add group
+          </Button>
+          <Button
+            size={isSmallScreen ? '3' : '2'}
+            variant="solid"
+            onClick={() => setAddItemOpen(true)}
+            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+          >
+            <Package width={isSmallScreen ? 20 : 16} height={isSmallScreen ? 20 : 16} /> Add item
+          </Button>
+        </Flex>
       </Flex>
 
       {/* Table header */}
@@ -262,7 +276,8 @@ export default function InventoryTable({
         }}
       >
         {columns.map((col) => {
-          const canSort = col.sortable && sortableCols.includes(col.id as SortBy)
+          const canSort =
+            col.sortable && sortableCols.includes(col.id as SortBy)
           const isActive = sortBy === col.id
           const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
 
@@ -336,7 +351,9 @@ export default function InventoryTable({
                     alignItems: 'center',
                     padding: '0 var(--space-3)',
                     cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--accent-a3)' : 'transparent',
+                    backgroundColor: isActive
+                      ? 'var(--accent-a3)'
+                      : 'transparent',
                     borderRadius: 'var(--radius-2)',
                   }}
                   onMouseEnter={(e) => {

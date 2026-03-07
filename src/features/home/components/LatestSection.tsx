@@ -8,6 +8,7 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { RssFeed } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useNavigate } from '@tanstack/react-router'
 import { groupInventoryActivities } from '@features/latest/utils/groupInventoryActivities'
 import { formatActivityDate } from '@features/latest/utils/formatActivityDate'
@@ -15,6 +16,7 @@ import type {
   ActivityFeedItem,
   GroupedInventoryActivity,
 } from '@features/latest/types'
+import { APP_SHELL_TOP_BAR_HEIGHT } from '../constants'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
@@ -135,6 +137,7 @@ export function LatestSection({
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const [showScrollIndicator, setShowScrollIndicator] = React.useState(false)
   const [isHovered, setIsHovered] = React.useState(false)
+  const isSmallScreen = !useMediaQuery('(min-width: 1024px)')
 
   useScrollButtonStyles()
 
@@ -190,6 +193,11 @@ export function LatestSection({
     <DashboardCard
       title="Latest"
       icon={<RssFeed width={18} height={18} />}
+      scrollContainerStyle={
+        isSmallScreen
+          ? { height: `calc(100svh - ${APP_SHELL_TOP_BAR_HEIGHT}px)` }
+          : undefined
+      }
       headerAction={
         <Button
           size="2"

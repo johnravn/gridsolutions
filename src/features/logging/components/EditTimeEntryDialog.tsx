@@ -138,6 +138,7 @@ export default function EditTimeEntryDialog({
             value={form.startAt}
             onChange={(value) => set('startAt', value)}
             disabled={disabled}
+            locale="nb"
           />
           <DateTimePicker
             label="End"
@@ -145,6 +146,7 @@ export default function EditTimeEntryDialog({
             onChange={(value) => set('endAt', value)}
             disabled={disabled}
             invalid={hasInvalidTimeRange}
+            locale="nb"
           />
 
           <label>

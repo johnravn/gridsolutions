@@ -14,14 +14,14 @@ export default function BookingsTab({
 }) {
   const { companyId } = useCompany()
   const [activeSubTab, setActiveSubTab] = React.useState<string>(
-    initialSubTab || 'equipment',
+    initialSubTab || 'crew',
   )
 
   return (
     <Tabs.Root value={activeSubTab} onValueChange={setActiveSubTab}>
       <Tabs.List mb="3">
-        <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>
         <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
+        <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>
         <Tabs.Trigger value="transport">Transport</Tabs.Trigger>
       </Tabs.List>
 

@@ -57,6 +57,8 @@ export default function JobDialog({
   const [endAt, setEndAt] = React.useState(initialData?.end_at ?? '')
   const [syncTimePeriods, setSyncTimePeriods] = React.useState(false)
   const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
+  const [createCrewBookingForProjectLead, setCreateCrewBookingForProjectLead] =
+    React.useState(true)
   const [projectLead, setProjectLead] = React.useState<UUID | ''>(
     initialData?.project_lead_user_id ?? '',
   )
@@ -79,6 +81,7 @@ export default function JobDialog({
     setStartAt('')
     setEndAt('')
     setAutoSetEndTime(true)
+    setCreateCrewBookingForProjectLead(true)
     setProjectLead('')
     setIsCompanyCustomer(false)
     setCustomerId('')
@@ -316,6 +319,52 @@ export default function JobDialog({
           console.error('Failed to create Job duration time period', e)
           // Note: We don't show a toast here because success() will fire from onSuccess
           // and we don't want to confuse the user with an error after showing success
+        }
+
+        // Optionally create crew booking for project lead (job duration)
+        if (
+          createCrewBookingForProjectLead &&
+          projectLead &&
+          (startAt || endAt)
+        ) {
+          try {
+            const periodStart = startAt || new Date().toISOString()
+            const periodEnd =
+              endAt || new Date(Date.now() + 86400000).toISOString()
+
+            const { data: crewPeriod, error: crewTpError } = await supabase
+              .from('time_periods')
+              .insert({
+                job_id: data.id,
+                company_id: companyId,
+                title: 'Project lead',
+                category: 'crew',
+                start_at: periodStart,
+                end_at: periodEnd,
+                needed_count: 1,
+              })
+              .select('id')
+              .single()
+
+            if (crewTpError) throw crewTpError
+
+            const { error: crewBookingError } = await supabase
+              .from('reserved_crew')
+              .insert({
+                time_period_id: crewPeriod.id,
+                user_id: projectLead,
+                status: 'confirmed',
+                notes: null,
+              })
+
+            if (crewBookingError) throw crewBookingError
+          } catch (e: any) {
+            console.error(
+              'Failed to create crew booking for project lead',
+              e,
+            )
+            // Don't fail the whole job create
+          }
         }
 
         // Log activity for job creation
@@ -618,7 +667,7 @@ export default function JobDialog({
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
             gap: 12,
             flex: 1,
             minHeight: 0,
@@ -705,7 +754,7 @@ export default function JobDialog({
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
                   gap: 12,
                   width: '100%',
                 }}
@@ -791,6 +840,27 @@ export default function JobDialog({
                 setAutoSetEndTime(false)
               }}
             />
+            {mode === 'create' && (
+              <label
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-2)',
+                  cursor: 'pointer',
+                  width: '100%',
+                }}
+              >
+                <Checkbox
+                  checked={createCrewBookingForProjectLead}
+                  onCheckedChange={(checked) =>
+                    setCreateCrewBookingForProjectLead(checked === true)
+                  }
+                />
+                <Text size="2">
+                  Create crew booking for project lead (job duration)
+                </Text>
+              </label>
+            )}
             {mode === 'edit' &&
               initialData &&
               (startAt !== (initialData.start_at ?? '') ||
