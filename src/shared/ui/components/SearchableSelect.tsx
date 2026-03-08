@@ -1,5 +1,6 @@
 // src/shared/ui/components/SearchableSelect.tsx
 import * as React from 'react'
+import { createPortal } from 'react-dom'
 import { Box, Text, TextField } from '@radix-ui/themes'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 
@@ -16,6 +17,11 @@ type Props = {
   disabled?: boolean
   emptyMessage?: string
   'data-testid'?: string
+  /** Restrict dropdown width; defaults to matching input. Use e.g. 260 for natural width. */
+  dropdownMaxWidth?: number
+  style?: React.CSSProperties
+  /** When inside a Dialog, pass the container element (or getter) to portal the dropdown into. Avoids inert/focus-trap issues. */
+  portalContainer?: HTMLElement | null | (() => HTMLElement | null)
 }
 
 function useDropdownPosition(
@@ -67,6 +73,9 @@ export function SearchableSelect({
   disabled,
   emptyMessage = 'No results',
   'data-testid': dataTestId,
+  dropdownMaxWidth = 320,
+  style,
+  portalContainer,
 }: Props) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
@@ -84,12 +93,7 @@ export function SearchableSelect({
 
   const filteredOptions = React.useMemo(() => {
     if (!inputValue.trim()) return options
-    return fuzzySearch(
-      options,
-      inputValue.trim(),
-      [(o) => o.label],
-      0.25,
-    )
+    return fuzzySearch(options, inputValue.trim(), [(o) => o.label], 0.25)
   }, [options, inputValue])
 
   React.useEffect(() => {
@@ -145,8 +149,76 @@ export function SearchableSelect({
     }
   }
 
+  const resolvedContainer =
+    typeof portalContainer === 'function' ? portalContainer() : portalContainer
+  const portalTarget = resolvedContainer ?? document.body
+
+  const dropdownEl =
+    open && dropdownPosition ? (
+      <Box
+        ref={listRef}
+        data-searchable-select-dropdown
+        onPointerDownCapture={(e) => e.preventDefault()}
+        onMouseDown={(e) => e.preventDefault()}
+        style={{
+          position: 'fixed',
+          top: dropdownPosition.top,
+          left: dropdownPosition.left,
+          width: Math.min(dropdownPosition.width, dropdownMaxWidth),
+          zIndex: 2147483647,
+          backgroundColor: 'var(--color-background)',
+          border: '1px solid var(--gray-a6)',
+          borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          maxHeight: 160,
+          overflowY: 'auto',
+        }}
+      >
+        {filteredOptions.length === 0 ? (
+          <Box px="3" py="2">
+            <Text size="2" color="gray">
+              {emptyMessage}
+            </Text>
+          </Box>
+        ) : (
+          filteredOptions.map((option) => (
+            <Box
+              key={option.value}
+              data-searchable-select-option
+              onPointerDown={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                selectingRef.current = true
+                handleSelect(option)
+              }}
+              style={{
+                padding: '6px 10px',
+                cursor: 'pointer',
+                borderBottom: '1px solid var(--gray-a4)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+            >
+              <Text size="2">{option.label}</Text>
+            </Box>
+          ))
+        )}
+      </Box>
+    ) : null
+
   return (
-    <Box style={{ position: 'relative', width: '100%' }}>
+    <Box
+      style={{
+        position: 'relative',
+        width: '100%',
+        maxWidth: style?.maxWidth ?? 320,
+        ...style,
+      }}
+    >
       <TextField.Root
         ref={inputRef}
         value={displayValue}
@@ -158,65 +230,7 @@ export function SearchableSelect({
         placeholder={placeholder}
         data-testid={dataTestId}
       />
-      {open && dropdownPosition && (
-        <Box
-          ref={listRef}
-          data-searchable-select-dropdown
-          onPointerDown={(e) => e.preventDefault()}
-          onMouseDown={(e) => e.preventDefault()}
-          style={{
-            position: 'fixed',
-            top: dropdownPosition.top,
-            left: dropdownPosition.left,
-            width: dropdownPosition.width,
-            zIndex: 10000,
-            backgroundColor: 'var(--color-background)',
-            border: '1px solid var(--gray-a6)',
-            borderRadius: 8,
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-            maxHeight: 220,
-            overflowY: 'auto',
-          }}
-        >
-          {filteredOptions.length === 0 ? (
-            <Box px="3" py="2">
-              <Text size="2" color="gray">
-                {emptyMessage}
-              </Text>
-            </Box>
-          ) : (
-            filteredOptions.map((option) => (
-              <Box
-                key={option.value}
-                data-searchable-select-option
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleSelect(option)
-                }}
-                onMouseDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  handleSelect(option)
-                }}
-                style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  borderBottom: '1px solid var(--gray-a4)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                }}
-              >
-                <Text size="2">{option.label}</Text>
-              </Box>
-            ))
-          )}
-        </Box>
-      )}
+      {dropdownEl && createPortal(dropdownEl, portalTarget)}
     </Box>
   )
 }

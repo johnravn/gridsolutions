@@ -12,8 +12,15 @@ import {
   Separator,
   Table,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
-import { Edit, NavArrowDown, NavArrowRight, Trash } from 'iconoir-react'
+import {
+  Edit,
+  NavArrowDown,
+  NavArrowRight,
+  Refresh,
+  Trash,
+} from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { prettyPhone } from '@shared/phone/phone'
@@ -23,6 +30,7 @@ import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import MapEmbed from '@shared/maps/MapEmbed'
 import LogoUpload from '@shared/ui/components/LogoUpload'
+import { companyExpansionQuery } from '@features/company/api/queries'
 import {
   customerDetailQuery,
   customerRecentJobsQuery,
@@ -31,9 +39,32 @@ import {
   upsertCustomer,
 } from '../api/queries'
 import EditCustomerDialog from './dialogs/EditCustomerDialog'
+import ContaCustomerCheckDialog from './dialogs/ContaCustomerCheckDialog'
 import AddContactDialog from './dialogs/AddContactDialog'
 import EditContactDialog from './dialogs/EditContactDialog'
 import type { ContactRow } from '../api/queries'
+
+function formatContaDate(iso: string): string {
+  const d = new Date(iso)
+  return d
+    .toLocaleDateString('nb-NO', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+    .replace(/\.\s/g, ' ')
+}
+
+function formatDisplayDate(iso: string): string {
+  const d = new Date(iso)
+  const s = d.toLocaleDateString('nb-NO', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+  // Remove period after month (e.g. "aug." -> "aug") to get "3. aug 2026"
+  return s.replace(/([a-zæøå]{2,4})\./i, '$1')
+}
 
 export default function CustomerInspector({
   id,
@@ -52,6 +83,7 @@ export default function CustomerInspector({
   const [addOpen, setAddOpen] = React.useState(false)
   const [editContactOpen, setEditContactOpen] = React.useState(false)
   const [editTarget, setEditTarget] = React.useState<ContactRow | null>(null)
+  const [contaCheckOpen, setContaCheckOpen] = React.useState(false)
 
   const { success, error: toastError } = useToast()
   const [confirmOpen, setConfirmOpen] = React.useState(false)
@@ -75,6 +107,14 @@ export default function CustomerInspector({
       customerId: id ?? '',
     }),
     enabled,
+  })
+
+  const { data: companyExpansion } = useQuery({
+    ...companyExpansionQuery({ companyId: companyId ?? '' }),
+    enabled:
+      enabled &&
+      !!data &&
+      (!data.crew_pricing_level_id || data.conta_customer_id != null),
   })
 
   const deleteContactMut = useMutation({
@@ -216,6 +256,13 @@ export default function CustomerInspector({
           ) : (
             <Badge variant="soft">Customer</Badge>
           )}
+          {c.conta_customer_id != null && (
+            <Tooltip content="Synced with Conta">
+              <Badge variant="soft" color="green">
+                Conta
+              </Badge>
+            </Tooltip>
+          )}
           <EditCustomerDialog
             open={editOpen}
             onOpenChange={setEditOpen}
@@ -226,6 +273,7 @@ export default function CustomerInspector({
               vat_number: c.vat_number ?? '',
               is_partner: c.is_partner,
               logo_path: c.logo_path ?? null,
+              crew_pricing_level_id: c.crew_pricing_level_id ?? null,
             }}
             onSaved={() => {
               qc.invalidateQueries({
@@ -238,6 +286,14 @@ export default function CustomerInspector({
           />
           <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
             <Edit />
+          </Button>
+          <Button
+            size="2"
+            variant="soft"
+            onClick={() => setContaCheckOpen(true)}
+            title="Check if customer exists in Conta"
+          >
+            <Refresh />
           </Button>
           <Button
             size="2"
@@ -296,6 +352,179 @@ export default function CustomerInspector({
           />
         )}
       </Box>
+
+      <Separator my="3" />
+
+      {/* Crew pricing */}
+      <Box mb="4">
+        <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
+          Crew pricing
+        </Text>
+        <Flex direction="column" gap="2">
+          <Flex align="center" gap="2">
+            <Text size="2" weight="medium">
+              Level:
+            </Text>
+            <Badge variant="soft" size="2">
+              {c.crew_pricing_level?.name ?? 'Standard'}
+            </Badge>
+          </Flex>
+          <Flex gap="4" align="center" wrap="wrap">
+            <Text size="1" color="gray">
+              Daily:
+            </Text>
+            <Text size="2">
+              {c.crew_pricing_level?.crew_rate_per_day != null
+                ? new Intl.NumberFormat('nb-NO', {
+                    style: 'currency',
+                    currency: 'NOK',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(Number(c.crew_pricing_level.crew_rate_per_day))
+                : companyExpansion?.crew_rate_per_day != null
+                  ? new Intl.NumberFormat('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(Number(companyExpansion.crew_rate_per_day))
+                  : '—'}
+            </Text>
+            <Text size="1" color="gray">
+              Hourly:
+            </Text>
+            <Text size="2">
+              {c.crew_pricing_level?.crew_rate_per_hour != null
+                ? new Intl.NumberFormat('nb-NO', {
+                    style: 'currency',
+                    currency: 'NOK',
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 0,
+                  }).format(Number(c.crew_pricing_level.crew_rate_per_hour))
+                : companyExpansion?.crew_rate_per_hour != null
+                  ? new Intl.NumberFormat('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(Number(companyExpansion.crew_rate_per_hour))
+                  : '—'}
+            </Text>
+          </Flex>
+        </Flex>
+      </Box>
+
+      {/* Conta (read-only) */}
+      {(c.conta_customer_id != null ||
+        c.conta_days_until_payment_reminder != null ||
+        c.conta_days_until_estimate_overdue != null ||
+        c.conta_invoice_delivery_method != null ||
+        c.conta_invoice_count != null ||
+        c.conta_total_invoiced != null ||
+        c.conta_total_unpaid != null ||
+        c.conta_last_synced_at != null) && (
+        <>
+          <Separator my="3" />
+          <Box mb="4">
+            <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
+              Conta (read-only)
+            </Text>
+            <Text size="1" color="gray" as="p" mb="2">
+              This data is synced from Conta. Edit in Conta only.
+            </Text>
+            <Flex direction="column" gap="2" wrap="wrap">
+              {c.conta_customer_id != null && (
+                <Tooltip content="Edit in Conta only">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Conta ID:</Text>
+                    <Text size="2">{c.conta_customer_id}</Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {(c.conta_customer_id != null &&
+                (c.conta_days_until_payment_reminder != null ||
+                  companyExpansion?.default_invoice_days_until_due != null)) && (
+                <Tooltip content="Standard payment terms: days from invoice date to due date. Edit in Conta only.">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Standard invoice due (days):</Text>
+                    <Text size="2">
+                      {(c.conta_days_until_payment_reminder ??
+                        companyExpansion?.default_invoice_days_until_due) !=
+                      null
+                        ? `${c.conta_days_until_payment_reminder ?? companyExpansion?.default_invoice_days_until_due} days`
+                        : '—'}
+                    </Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_days_until_estimate_overdue != null && (
+                <Tooltip content="Edit in Conta only">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Days until estimate overdue:</Text>
+                    <Text size="2">{c.conta_days_until_estimate_overdue} days</Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_invoice_delivery_method != null && (
+                <Tooltip content="Edit in Conta only">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Invoice delivery:</Text>
+                    <Text size="2">{c.conta_invoice_delivery_method}</Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_invoice_count != null && (
+                <Tooltip content="Synced from Conta">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Invoices sent:</Text>
+                    <Text size="2">{c.conta_invoice_count}</Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_total_invoiced != null && (
+                <Tooltip content="Synced from Conta">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Total invoiced:</Text>
+                    <Text size="2">
+                      {new Intl.NumberFormat('nb-NO', {
+                        style: 'currency',
+                        currency: 'NOK',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(Number(c.conta_total_invoiced))}
+                    </Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_total_unpaid != null && (
+                <Tooltip content="Synced from Conta">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Total not paid:</Text>
+                    <Text size="2" color={Number(c.conta_total_unpaid) > 0 ? 'red' : undefined}>
+                      {new Intl.NumberFormat('nb-NO', {
+                        style: 'currency',
+                        currency: 'NOK',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(Number(c.conta_total_unpaid))}
+                    </Text>
+                  </Flex>
+                </Tooltip>
+              )}
+              {c.conta_last_synced_at != null && (
+                <Tooltip content="Synced from Conta">
+                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                    <Text size="1" color="gray">Last synced:</Text>
+                    <Text size="2">
+                      {formatContaDate(c.conta_last_synced_at)}
+                    </Text>
+                  </Flex>
+                </Tooltip>
+              )}
+            </Flex>
+          </Box>
+        </>
+      )}
 
       <Separator my="3" />
 
@@ -528,14 +757,14 @@ export default function CustomerInspector({
                   <Table.Cell>
                     <Text size="2">
                       {job.start_at
-                        ? new Date(job.start_at).toLocaleDateString()
+                        ? formatDisplayDate(job.start_at)
                         : '—'}
                     </Text>
                   </Table.Cell>
                   <Table.Cell>
                     <Text size="2">
                       {job.end_at
-                        ? new Date(job.end_at).toLocaleDateString()
+                        ? formatDisplayDate(job.end_at)
                         : '—'}
                     </Text>
                   </Table.Cell>
@@ -632,6 +861,36 @@ export default function CustomerInspector({
           </Flex>
         </AlertDialog.Content>
       </AlertDialog.Root>
+
+      <ContaCustomerCheckDialog
+        open={contaCheckOpen}
+        onOpenChange={setContaCheckOpen}
+        companyId={companyId}
+        customer={{
+          id: c.id,
+          name: c.name,
+          vat_number: c.vat_number,
+          address: c.address,
+          email: c.email,
+          phone: c.phone,
+        }}
+        onCreatedInConta={() => {
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'customer-detail', id],
+          })
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'customers-index'],
+          })
+        }}
+        onFetchedFromConta={() => {
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'customer-detail', id],
+          })
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'customers-index'],
+          })
+        }}
+      />
     </Box>
   )
 }

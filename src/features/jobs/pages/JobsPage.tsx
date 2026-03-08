@@ -32,90 +32,19 @@ export default function JobsPage() {
   const jobId = search?.jobId
   const tab = search?.tab
 
-  // Fetch company expansion for vehicle/transport rates with extensive logging
+  // Fetch company expansion for vehicle/transport rates
   const expansionQueryOptions = React.useMemo(() => {
     if (!companyId) return null
-    const baseOptions = companyExpansionQuery({ companyId })
-    return {
-      ...baseOptions,
-      queryFn: async () => {
-        const timestamp = new Date().toISOString()
-        console.log('[JobsPage] Fetching company expansion', {
-          companyId,
-          timestamp,
-          queryKey: baseOptions.queryKey,
-        })
-        try {
-          const result = await baseOptions.queryFn()
-          console.log('[JobsPage] Fetched company expansion result', {
-            companyId,
-            timestamp: new Date().toISOString(),
-            result,
-          })
-          return result
-        } catch (err) {
-          console.error('[JobsPage] Company expansion fetch failed', {
-            companyId,
-            timestamp: new Date().toISOString(),
-            error: err,
-          })
-          throw err
-        }
-      },
-    }
+    return companyExpansionQuery({ companyId })
   }, [companyId])
 
-  const {
-    data: companyExpansion,
-    status: companyExpansionStatus,
-    error: companyExpansionError,
-    isFetching: isCompanyExpansionFetching,
-    isLoading: isCompanyExpansionLoading,
-    isError: isCompanyExpansionError,
-  } = useQuery({
+  useQuery({
     ...(expansionQueryOptions ?? {
       queryKey: ['company-expansion', 'no-company'],
       queryFn: async () => null,
     }),
     enabled: !!companyId,
   })
-
-  React.useEffect(() => {
-    console.log('[JobsPage] companyId updated', {
-      companyId,
-      timestamp: new Date().toISOString(),
-    })
-  }, [companyId])
-
-  React.useEffect(() => {
-    console.log('[JobsPage] Company expansion query status changed', {
-      status: companyExpansionStatus,
-      isLoading: isCompanyExpansionLoading,
-      isFetching: isCompanyExpansionFetching,
-      isError: isCompanyExpansionError,
-      error: companyExpansionError ?? null,
-      timestamp: new Date().toISOString(),
-    })
-  }, [
-    companyExpansionStatus,
-    isCompanyExpansionLoading,
-    isCompanyExpansionFetching,
-    isCompanyExpansionError,
-    companyExpansionError,
-  ])
-
-  // Log vehicle/transport rates when fetched
-  React.useEffect(() => {
-    if (companyExpansion) {
-      console.log('[JobsPage] Vehicle/Transport Rates fetched', {
-        vehicle_daily_rate: companyExpansion.vehicle_daily_rate,
-        vehicle_distance_rate: companyExpansion.vehicle_distance_rate,
-        vehicle_distance_increment: companyExpansion.vehicle_distance_increment,
-        raw: companyExpansion,
-        timestamp: new Date().toISOString(),
-      })
-    }
-  }, [companyExpansion])
 
   const [selectedId, setSelectedId] = React.useState<string | null>(
     jobId || null,

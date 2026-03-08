@@ -481,11 +481,24 @@ export async function createTechnicalOfferFromBookings({
 }): Promise<string> {
   const { data: job, error: jobError } = await supabase
     .from('jobs')
-    .select('title, start_at, end_at')
+    .select(
+      `title, start_at, end_at,
+      customer:customers!jobs_customer_id_fkey (
+        crew_pricing_level_id,
+        crew_pricing_level:crew_pricing_level_id ( crew_rate_per_day, crew_rate_per_hour )
+      )`,
+    )
     .eq('id', jobId)
     .single()
 
   if (jobError) throw jobError
+
+  const customer = Array.isArray((job as any)?.customer)
+    ? (job as any).customer[0]
+    : (job as any)?.customer
+  const level = Array.isArray(customer?.crew_pricing_level)
+    ? customer?.crew_pricing_level[0]
+    : customer?.crew_pricing_level
 
   const jobTitle = job?.title?.trim()
   const title = jobTitle
@@ -796,6 +809,10 @@ export async function createTechnicalOfferFromBookings({
   }
 
   // Crew roles (time periods with needed_count)
+  const crewDailyRate =
+    level?.crew_rate_per_day != null
+      ? Number(level.crew_rate_per_day)
+      : (companyExpansion?.crew_rate_per_day ?? 0)
   const crewPeriods = timePeriods.filter((period) => period.category === 'crew')
   for (const [index, period] of crewPeriods.entries()) {
     const crewCount = Math.max(0, period.needed_count ?? 0)
@@ -804,7 +821,7 @@ export async function createTechnicalOfferFromBookings({
     const startDate =
       period.start_at || job?.start_at || new Date().toISOString()
     const endDate = period.end_at || job?.end_at || new Date().toISOString()
-    const dailyRate = companyExpansion?.crew_rate_per_day ?? 0
+    const dailyRate = crewDailyRate
     const totalPrice = dailyRate * crewCount * calculateDays(startDate, endDate)
 
     const { error: crewInsertError } = await supabase

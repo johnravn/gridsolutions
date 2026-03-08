@@ -2,11 +2,14 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertDialog,
   Box,
   Button,
   Card,
+  Dialog,
   Flex,
   Heading,
+  SegmentedControl,
   Spinner,
   Table,
   Text,
@@ -15,13 +18,21 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { NavArrowDown, NavArrowRight } from 'iconoir-react'
+import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 
-import type { RentalFactorConfig } from '../api/queries'
+import {
+  type RentalFactorConfig,
+  crewPricingLevelsQuery,
+  createCrewPricingLevel,
+  updateCrewPricingLevel,
+  deleteCrewPricingLevel,
+  type CrewPricingLevelRow,
+} from '../api/queries'
 
 type CompanyRates = {
   crew_rate_per_day: number | null
   crew_rate_per_hour: number | null
+  default_crew_billing_unit: 'day' | 'hour'
   vehicle_daily_rate: number | null
   vehicle_distance_rate: number | null
   vehicle_distance_increment: number | null
@@ -44,7 +55,7 @@ export default function CompanyRatesTab() {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'crew_rate_per_day, crew_rate_per_hour, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -66,6 +77,8 @@ export default function CompanyRatesTab() {
       return {
         crew_rate_per_day: rawData.crew_rate_per_day ?? null,
         crew_rate_per_hour: rawData.crew_rate_per_hour ?? null,
+        default_crew_billing_unit:
+          rawData.default_crew_billing_unit === 'day' ? 'day' : 'hour',
         vehicle_daily_rate: rawData.vehicle_daily_rate ?? null,
         vehicle_distance_rate: rawData.vehicle_distance_rate ?? null,
         vehicle_distance_increment: rawData.vehicle_distance_increment ?? 150,
@@ -106,6 +119,8 @@ export default function CompanyRatesTab() {
           initialRates={{
             crew_rate_per_day: expansion?.crew_rate_per_day ?? null,
             crew_rate_per_hour: expansion?.crew_rate_per_hour ?? null,
+            default_crew_billing_unit:
+              expansion?.default_crew_billing_unit ?? 'hour',
           }}
         />
 
@@ -208,7 +223,7 @@ function CollapsibleCard({
   )
 }
 
-// Crew Rates Card
+// Crew Rates Card (includes Standard level + additional pricing levels)
 function CrewRatesCard({
   companyId,
   initialRates,
@@ -217,12 +232,24 @@ function CrewRatesCard({
   initialRates: {
     crew_rate_per_day: number | null
     crew_rate_per_hour: number | null
+    default_crew_billing_unit: 'day' | 'hour'
   }
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [rates, setRates] = React.useState(initialRates)
   const [isExpanded, setIsExpanded] = React.useState(false)
+  const [addOpen, setAddOpen] = React.useState(false)
+  const [editLevel, setEditLevel] = React.useState<CrewPricingLevelRow | null>(
+    null,
+  )
+  const [deleteLevel, setDeleteLevel] =
+    React.useState<CrewPricingLevelRow | null>(null)
+
+  const { data: levels = [], isLoading: levelsLoading } = useQuery({
+    ...crewPricingLevelsQuery(companyId),
+    enabled: !!companyId,
+  })
 
   React.useEffect(() => {
     setRates(initialRates)
@@ -242,23 +269,22 @@ function CrewRatesCard({
     <Flex gap="4" align="center" wrap="wrap">
       <Flex align="center" gap="2">
         <Text size="1" color="gray">
-          Day:
+          Standard:
         </Text>
         <Text size="3" weight="bold">
-          {formatCurrency(rates.crew_rate_per_day)}
+          {formatCurrency(rates.crew_rate_per_day)} / day
         </Text>
       </Flex>
-      <Text size="1" color="gray">
-        •
-      </Text>
-      <Flex align="center" gap="2">
-        <Text size="1" color="gray">
-          Hour:
-        </Text>
-        <Text size="3" weight="bold">
-          {formatCurrency(rates.crew_rate_per_hour)}
-        </Text>
-      </Flex>
+      {levels.length > 0 && (
+        <>
+          <Text size="1" color="gray">
+            •
+          </Text>
+          <Text size="2" color="gray">
+            + {levels.length} additional level{levels.length !== 1 ? 's' : ''}
+          </Text>
+        </>
+      )}
     </Flex>
   )
 
@@ -275,6 +301,7 @@ function CrewRatesCard({
           company_id: companyId,
           crew_rate_per_day: rates.crew_rate_per_day,
           crew_rate_per_hour: rates.crew_rate_per_hour,
+          default_crew_billing_unit: rates.default_crew_billing_unit,
           accounting_software: current?.accounting_software ?? 'none',
           accounting_api_key_encrypted:
             current?.accounting_api_key_encrypted ?? null,
@@ -294,7 +321,6 @@ function CrewRatesCard({
         queryKey: ['company', companyId, 'expansion'],
       })
       success('Crew rates updated', 'Crew rates have been saved.')
-      setIsExpanded(false) // Collapse after save
     },
     onError: (error: any) => {
       toastError(
@@ -311,9 +337,394 @@ function CrewRatesCard({
       expanded={isExpanded}
       onExpandedChange={setIsExpanded}
     >
-      <Flex direction="column" gap="4">
-        <Flex gap="4" align="start">
-          <Box style={{ flex: 1, maxWidth: 200 }}>
+      <Flex direction="column" gap="6">
+        {/* Standard level - cannot be removed */}
+        <Box
+          p="4"
+          style={{
+            background: 'var(--gray-a2)',
+            borderRadius: 8,
+          }}
+        >
+          <Text
+            as="div"
+            size="2"
+            weight="bold"
+            mb="3"
+            style={{ display: 'block' }}
+          >
+            Standard (applies to all customers)
+          </Text>
+          <Flex gap="4" align="start">
+            <Box style={{ flex: 1, maxWidth: 200 }}>
+              <Text
+                as="label"
+                size="2"
+                color="gray"
+                style={{ display: 'block', marginBottom: 6 }}
+              >
+                Rate (per day)
+              </Text>
+              <TextField.Root
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 5000"
+                value={
+                  rates.crew_rate_per_day !== null
+                    ? String(rates.crew_rate_per_day)
+                    : ''
+                }
+                onChange={(e) =>
+                  setRates({
+                    ...rates,
+                    crew_rate_per_day:
+                      e.target.value === ''
+                        ? null
+                        : Number(e.target.value) || 0,
+                  })
+                }
+              />
+            </Box>
+            <Box style={{ flex: 1, maxWidth: 200 }}>
+              <Text
+                as="label"
+                size="2"
+                color="gray"
+                style={{ display: 'block', marginBottom: 6 }}
+              >
+                Rate (per hour)
+              </Text>
+              <TextField.Root
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="e.g., 650"
+                value={
+                  rates.crew_rate_per_hour !== null
+                    ? String(rates.crew_rate_per_hour)
+                    : ''
+                }
+                onChange={(e) =>
+                  setRates({
+                    ...rates,
+                    crew_rate_per_hour:
+                      e.target.value === ''
+                        ? null
+                        : Number(e.target.value) || 0,
+                  })
+                }
+              />
+            </Box>
+          </Flex>
+          <Box mt="3">
+            <Text
+              as="label"
+              size="2"
+              color="gray"
+              style={{ display: 'block', marginBottom: 6 }}
+            >
+              Default billing for customers
+            </Text>
+            <SegmentedControl.Root
+              value={rates.default_crew_billing_unit}
+              onValueChange={(value: 'day' | 'hour') =>
+                setRates({ ...rates, default_crew_billing_unit: value })
+              }
+            >
+              <SegmentedControl.Item value="day">
+                Per day
+              </SegmentedControl.Item>
+              <SegmentedControl.Item value="hour">
+                Per hour
+              </SegmentedControl.Item>
+            </SegmentedControl.Root>
+            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+              Used as default when adding crew in technical offers and when
+              invoicing from bookings.
+            </Text>
+          </Box>
+          <Flex justify="end" mt="3">
+            <Button
+              variant="classic"
+              onClick={() => saveMutation.mutate()}
+              disabled={saveMutation.isPending}
+            >
+              {saveMutation.isPending ? 'Saving...' : 'Save Standard Rate'}
+            </Button>
+          </Flex>
+        </Box>
+
+        {/* Additional pricing levels */}
+        <Box>
+          <Flex align="center" justify="between" mb="3">
+            <Text size="2" weight="medium">
+              Additional pricing levels
+            </Text>
+            <Button size="2" variant="soft" onClick={() => setAddOpen(true)}>
+              <Plus width={16} height={16} />
+              Add level
+            </Button>
+          </Flex>
+          <Text size="1" color="gray" mb="3" style={{ display: 'block' }}>
+            Assign customers to levels in the customer inspector. Deleting a
+            level assigns its customers to Standard.
+          </Text>
+          {levelsLoading ? (
+            <Spinner size="2" />
+          ) : levels.length === 0 ? (
+            <Text size="2" color="gray" style={{ fontStyle: 'italic' }}>
+              No additional levels.
+            </Text>
+          ) : (
+            <Table.Root variant="surface" size="2">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Level</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Daily rate</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Hourly rate</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Default billing</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: 100 }} />
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {levels.map((level) => (
+                  <Table.Row key={level.id}>
+                    <Table.Cell>
+                      <Text weight="medium">{level.name}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {formatCurrency(level.crew_rate_per_day)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {formatCurrency(level.crew_rate_per_hour)}
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">
+                        {level.default_crew_billing_unit === 'hour'
+                          ? 'Per hour'
+                          : 'Per day'}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Flex gap="2">
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => setEditLevel(level)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          size="1"
+                          color="red"
+                          variant="soft"
+                          onClick={() => setDeleteLevel(level)}
+                        >
+                          <Trash width={14} height={14} />
+                        </Button>
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          )}
+        </Box>
+      </Flex>
+
+      <CrewPricingLevelDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        companyId={companyId}
+        onSaved={() => {
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'crew-pricing-levels'],
+          })
+          success('Level added', 'Crew pricing level has been created.')
+          setAddOpen(false)
+        }}
+        onError={(msg) => toastError('Failed to add level', msg)}
+      />
+
+      <CrewPricingLevelDialog
+        open={!!editLevel}
+        onOpenChange={(open) => !open && setEditLevel(null)}
+        companyId={companyId}
+        initial={editLevel ?? undefined}
+        onSaved={() => {
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'crew-pricing-levels'],
+          })
+          success('Level updated', 'Crew pricing level has been saved.')
+          setEditLevel(null)
+        }}
+        onError={(msg) => toastError('Failed to update level', msg)}
+      />
+
+      <AlertDialog.Root
+        open={!!deleteLevel}
+        onOpenChange={(open) => !open && setDeleteLevel(null)}
+      >
+        <AlertDialog.Content maxWidth="400px">
+          <AlertDialog.Title>Delete level?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            This will remove &quot;{deleteLevel?.name}&quot;. Customers on this
+            level will be assigned to Standard. This cannot be undone.
+          </AlertDialog.Description>
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button variant="soft">Cancel</Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                variant="solid"
+                onClick={async () => {
+                  if (!deleteLevel) return
+                  try {
+                    await deleteCrewPricingLevel(deleteLevel.id)
+                    qc.invalidateQueries({
+                      queryKey: ['company', companyId, 'crew-pricing-levels'],
+                    })
+                    qc.invalidateQueries({
+                      queryKey: ['company', companyId, 'customer-detail'],
+                      exact: false,
+                    })
+                    qc.invalidateQueries({
+                      queryKey: ['company', companyId, 'customers-index'],
+                    })
+                    success(
+                      'Level deleted',
+                      'Customers have been assigned to Standard.',
+                    )
+                    setDeleteLevel(null)
+                  } catch (e: any) {
+                    toastError(
+                      'Failed to delete',
+                      e?.message ?? 'Please try again.',
+                    )
+                  }
+                }}
+              >
+                Delete
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
+    </CollapsibleCard>
+  )
+}
+
+function CrewPricingLevelDialog({
+  open,
+  onOpenChange,
+  companyId,
+  initial,
+  onSaved,
+  onError,
+}: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  companyId: string
+  initial?: CrewPricingLevelRow
+  onSaved: () => void
+  onError: (msg: string) => void
+}) {
+  const [name, setName] = React.useState(initial?.name ?? '')
+  const [crewRatePerDay, setCrewRatePerDay] = React.useState<string>(
+    initial?.crew_rate_per_day != null ? String(initial.crew_rate_per_day) : '',
+  )
+  const [crewRatePerHour, setCrewRatePerHour] = React.useState<string>(
+    initial?.crew_rate_per_hour != null
+      ? String(initial.crew_rate_per_hour)
+      : '',
+  )
+  const [defaultCrewBillingUnit, setDefaultCrewBillingUnit] = React.useState<
+    'day' | 'hour'
+  >(initial?.default_crew_billing_unit === 'day' ? 'day' : 'hour')
+  const [isPending, setIsPending] = React.useState(false)
+
+  React.useEffect(() => {
+    if (open) {
+      setName(initial?.name ?? '')
+      setCrewRatePerDay(
+        initial?.crew_rate_per_day != null
+          ? String(initial.crew_rate_per_day)
+          : '',
+      )
+      setCrewRatePerHour(
+        initial?.crew_rate_per_hour != null
+          ? String(initial.crew_rate_per_hour)
+          : '',
+      )
+      setDefaultCrewBillingUnit(
+        initial?.default_crew_billing_unit === 'day' ? 'day' : 'hour',
+      )
+    }
+  }, [open, initial])
+
+  const handleSave = async () => {
+    const nameTrimmed = name.trim()
+    if (!nameTrimmed) {
+      onError('Level name is required.')
+      return
+    }
+    setIsPending(true)
+    try {
+      if (initial) {
+        await updateCrewPricingLevel({
+          id: initial.id,
+          name: nameTrimmed,
+          crewRatePerDay:
+            crewRatePerDay === '' ? null : Number(crewRatePerDay) || 0,
+          crewRatePerHour:
+            crewRatePerHour === '' ? null : Number(crewRatePerHour) || 0,
+          defaultCrewBillingUnit,
+        })
+      } else {
+        await createCrewPricingLevel({
+          companyId,
+          name: nameTrimmed,
+          crewRatePerDay:
+            crewRatePerDay === '' ? null : Number(crewRatePerDay) || 0,
+          crewRatePerHour:
+            crewRatePerHour === '' ? null : Number(crewRatePerHour) || 0,
+          defaultCrewBillingUnit,
+        })
+      }
+      onSaved()
+    } catch (e: any) {
+      onError(e?.message ?? 'Please try again.')
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content maxWidth="400px">
+        <Dialog.Title>
+          {initial ? 'Edit pricing level' : 'Add pricing level'}
+        </Dialog.Title>
+        <Flex direction="column" gap="4" mt="2">
+          <Box>
+            <Text
+              as="label"
+              size="2"
+              color="gray"
+              style={{ display: 'block', marginBottom: 6 }}
+            >
+              Name
+            </Text>
+            <TextField.Root
+              placeholder="e.g. Premium, Partner discount"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Box>
+          <Box>
             <Text
               as="label"
               size="2"
@@ -326,22 +737,12 @@ function CrewRatesCard({
               type="number"
               min="0"
               step="0.01"
-              placeholder="e.g., 5000"
-              value={
-                rates.crew_rate_per_day !== null
-                  ? String(rates.crew_rate_per_day)
-                  : ''
-              }
-              onChange={(e) =>
-                setRates({
-                  ...rates,
-                  crew_rate_per_day:
-                    e.target.value === '' ? null : Number(e.target.value) || 0,
-                })
-              }
+              placeholder="e.g., 6000"
+              value={crewRatePerDay}
+              onChange={(e) => setCrewRatePerDay(e.target.value)}
             />
           </Box>
-          <Box style={{ flex: 1, maxWidth: 200 }}>
+          <Box>
             <Text
               as="label"
               size="2"
@@ -354,36 +755,47 @@ function CrewRatesCard({
               type="number"
               min="0"
               step="0.01"
-              placeholder="e.g., 650"
-              value={
-                rates.crew_rate_per_hour !== null
-                  ? String(rates.crew_rate_per_hour)
-                  : ''
-              }
-              onChange={(e) =>
-                setRates({
-                  ...rates,
-                  crew_rate_per_hour:
-                    e.target.value === '' ? null : Number(e.target.value) || 0,
-                })
-              }
+              placeholder="e.g., 750"
+              value={crewRatePerHour}
+              onChange={(e) => setCrewRatePerHour(e.target.value)}
             />
           </Box>
+          <Box>
+            <Text
+              as="label"
+              size="2"
+              color="gray"
+              style={{ display: 'block', marginBottom: 6 }}
+            >
+              Default billing for customers
+            </Text>
+            <SegmentedControl.Root
+              value={defaultCrewBillingUnit}
+              onValueChange={(value: 'day' | 'hour') =>
+                setDefaultCrewBillingUnit(value)
+              }
+            >
+              <SegmentedControl.Item value="day">Per day</SegmentedControl.Item>
+              <SegmentedControl.Item value="hour">
+                Per hour
+              </SegmentedControl.Item>
+            </SegmentedControl.Root>
+          </Box>
         </Flex>
-        <Text size="1" color="gray">
-          Default rates for crew members in technical offers
-        </Text>
-        <Flex justify="end">
+        <Flex gap="2" justify="end" mt="4">
+          <Dialog.Close>
+            <Button variant="soft">Cancel</Button>
+          </Dialog.Close>
           <Button
             variant="classic"
-            onClick={() => saveMutation.mutate()}
-            disabled={saveMutation.isPending}
+            onClick={handleSave}
+            disabled={isPending || !name.trim()}
           >
-            {saveMutation.isPending ? 'Saving...' : 'Save Crew Rates'}
+            {isPending ? 'Saving...' : initial ? 'Save' : 'Add'}
           </Button>
         </Flex>
-      </Flex>
-    </CollapsibleCard>
+      </Dialog.Content>
+    </Dialog.Root>
   )
 }
 

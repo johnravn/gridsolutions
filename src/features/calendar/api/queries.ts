@@ -10,12 +10,15 @@ export function vehicleCalendarQuery({
   limit,
   offset = 0,
   fromDate,
+  includeInProgress = false,
 }: {
   companyId: string
   vehicleId: string
   limit?: number
   offset?: number
   fromDate?: string // ISO date string to filter to future events
+  /** When true and fromDate is set, filters by end_at >= fromDate to include in-progress bookings */
+  includeInProgress?: boolean
 }) {
   return queryOptions<Array<CalendarRecord>>({
     queryKey: [
@@ -26,6 +29,7 @@ export function vehicleCalendarQuery({
       limit,
       offset,
       fromDate,
+      includeInProgress,
     ] as const,
     queryFn: async () => {
       // First, find all reserved_vehicles for this vehicle
@@ -51,7 +55,12 @@ export function vehicleCalendarQuery({
 
       // Filter to future events if fromDate is provided
       if (fromDate) {
-        query = query.gte('start_at', fromDate)
+        // Include in-progress bookings (started before now, not yet ended) when requested
+        if (includeInProgress) {
+          query = query.gte('end_at', fromDate)
+        } else {
+          query = query.gte('start_at', fromDate)
+        }
       }
 
       // Apply pagination
@@ -109,6 +118,85 @@ export function vehicleCalendarQuery({
   })
 }
 
+/** Fetch past vehicle bookings (start_at < toDate), ordered by start_at DESC (most recent first) */
+export function vehiclePastCalendarQuery({
+  companyId,
+  vehicleId,
+  toDate,
+  limit,
+}: {
+  companyId: string
+  vehicleId: string
+  toDate: string // ISO date - only bookings that started before this
+  limit?: number
+}) {
+  return queryOptions<Array<CalendarRecord>>({
+    queryKey: [
+      'company',
+      companyId,
+      'vehicle-calendar-past',
+      vehicleId,
+      toDate,
+      limit,
+    ] as const,
+    queryFn: async () => {
+      const { data: reservations, error: resErr } = await supabase
+        .from('reserved_vehicles')
+        .select('time_period_id')
+        .eq('vehicle_id', vehicleId)
+
+      if (resErr) throw resErr
+      if (!reservations || reservations.length === 0) return []
+
+      const timePeriodIds = reservations.map((r) => r.time_period_id)
+
+      let query = supabase
+        .from('time_periods')
+        .select('id, title, start_at, end_at, job_id, category')
+        .eq('company_id', companyId)
+        .eq('category', 'transport')
+        .in('id', timePeriodIds)
+        .eq('deleted', false)
+        .lt('start_at', toDate)
+        .order('start_at', { ascending: false })
+
+      if (limit) {
+        query = query.limit(limit)
+      }
+
+      const { data, error } = await query
+      if (error) throw error
+      if (!data || data.length === 0) return []
+
+      const jobIds = Array.from(
+        new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
+      )
+      const jobTitles = new Map<string, string>()
+      if (jobIds.length > 0) {
+        const { data: jobsData, error: jobsError } = await supabase
+          .from('jobs')
+          .select('id, title')
+          .in('id', jobIds)
+        if (jobsError) throw jobsError
+        ;(jobsData || []).forEach((job: any) => {
+          if (job.id && job.title) jobTitles.set(job.id, job.title)
+        })
+      }
+
+      return data.map((tp: any): CalendarRecord => ({
+        id: tp.id,
+        title: tp.title || 'Transport',
+        start: tp.start_at,
+        end: tp.end_at ?? undefined,
+        kind: 'vehicle',
+        ref: { vehicleId, jobId: tp.job_id || undefined },
+        notes: undefined,
+        jobTitle: tp.job_id ? jobTitles.get(tp.job_id) || undefined : undefined,
+      }))
+    },
+  })
+}
+
 /** Fetch time periods for a specific item (category = 'equipment') */
 export function itemCalendarQuery({
   companyId,
@@ -146,6 +234,25 @@ export function itemCalendarQuery({
 
       if (!data || data.length === 0) return []
 
+      // Fetch job titles for display (user wants job title, not time period name)
+      const jobIds = Array.from(
+        new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
+      )
+      const jobTitles = new Map<string, string>()
+      if (jobIds.length > 0) {
+        const { data: jobsData, error: jobsError } = await supabase
+          .from('jobs')
+          .select('id, title')
+          .in('id', jobIds)
+
+        if (jobsError) throw jobsError
+        ;(jobsData || []).forEach((job: any) => {
+          if (job.id && job.title) {
+            jobTitles.set(job.id, job.title)
+          }
+        })
+      }
+
       // Fetch all items for each time period to populate itemIds array
       const { data: allItemsRes, error: itemsError } = await supabase
         .from('reserved_items')
@@ -164,19 +271,25 @@ export function itemCalendarQuery({
       })
 
       return (data || []).map(
-        (tp: any): CalendarRecord => ({
-          id: tp.id,
-          title: tp.title || 'Equipment',
-          start: tp.start_at,
-          end: tp.end_at ?? undefined,
-          kind: 'item',
-          ref: {
-            itemId, // Keep backward compatibility
-            itemIds: itemMap.get(tp.id) || [], // All items in this period
-            jobId: tp.job_id || undefined,
-          },
-          notes: undefined,
-        }),
+        (tp: any): CalendarRecord => {
+          const jobTitle = tp.job_id
+            ? jobTitles.get(tp.job_id) || undefined
+            : undefined
+          return {
+            id: tp.id,
+            title: jobTitle || tp.title || 'Equipment',
+            start: tp.start_at,
+            end: tp.end_at ?? undefined,
+            kind: 'item',
+            ref: {
+              itemId, // Keep backward compatibility
+              itemIds: itemMap.get(tp.id) || [], // All items in this period
+              jobId: tp.job_id || undefined,
+            },
+            notes: undefined,
+            jobTitle: jobTitle || undefined,
+          }
+        },
       )
     },
   })
@@ -217,19 +330,46 @@ export function crewCalendarQuery({
 
       if (error) throw error
 
-      return (data || []).map(
-        (tp: any): CalendarRecord => ({
-          id: tp.id,
-          title: tp.title || 'Crew assignment',
-          start: tp.start_at,
-          end: tp.end_at ?? undefined,
-          kind: 'crew',
-          ref: {
-            userId,
-            jobId: tp.job_id || undefined,
-          },
-          notes: undefined,
-        }),
+      if (!data || data.length === 0) return []
+
+      // Fetch job titles for display (user wants job title, not time period name)
+      const jobIds = Array.from(
+        new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
+      )
+      const jobTitles = new Map<string, string>()
+      if (jobIds.length > 0) {
+        const { data: jobsData, error: jobsError } = await supabase
+          .from('jobs')
+          .select('id, title')
+          .in('id', jobIds)
+
+        if (jobsError) throw jobsError
+        ;(jobsData || []).forEach((job: any) => {
+          if (job.id && job.title) {
+            jobTitles.set(job.id, job.title)
+          }
+        })
+      }
+
+      return data.map(
+        (tp: any): CalendarRecord => {
+          const jobTitle = tp.job_id
+            ? jobTitles.get(tp.job_id) || undefined
+            : undefined
+          return {
+            id: tp.id,
+            title: jobTitle || tp.title || 'Crew assignment',
+            start: tp.start_at,
+            end: tp.end_at ?? undefined,
+            kind: 'crew',
+            ref: {
+              userId,
+              jobId: tp.job_id || undefined,
+            },
+            notes: undefined,
+            jobTitle: jobTitle || undefined,
+          }
+        },
       )
     },
   })

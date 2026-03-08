@@ -1,5 +1,12 @@
 import { supabase } from '@shared/api/supabase'
 
+export type CrewPricingLevelInfo = {
+  id: string
+  name: string
+  crew_rate_per_day: number | null
+  crew_rate_per_hour: number | null
+}
+
 export type CustomerRow = {
   id: string
   company_id: string
@@ -10,7 +17,17 @@ export type CustomerRow = {
   vat_number: string | null
   is_partner: boolean
   logo_path: string | null
+  crew_pricing_level_id: string | null
+  crew_pricing_level?: CrewPricingLevelInfo | null
   created_at: string
+  conta_customer_id?: number | null
+  conta_days_until_payment_reminder?: number | null
+  conta_days_until_estimate_overdue?: number | null
+  conta_invoice_delivery_method?: string | null
+  conta_invoice_count?: number | null
+  conta_total_invoiced?: number | null
+  conta_total_unpaid?: number | null
+  conta_last_synced_at?: string | null
 }
 
 export type ContactRow = {
@@ -49,7 +66,8 @@ export function customersIndexQuery({
       let q = supabase
         .from('customers')
         .select(
-          'id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, created_at',
+          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, crew_pricing_level_id, created_at, conta_customer_id,
+          crew_pricing_level:crew_pricing_level_id (id, name, crew_rate_per_day, crew_rate_per_hour)`,
         )
         .eq('company_id', companyId)
         .or('deleted.is.null,deleted.eq.false')
@@ -80,19 +98,28 @@ export function customersIndexQuery({
       const { data, error } = await q
       if (error) throw error
 
+      // Normalize crew_pricing_level (PostgREST may return as array)
+      const rows = Array.isArray(data) ? data : []
+      const normalized = rows.map((row: any) => {
+        const level = Array.isArray(row.crew_pricing_level)
+          ? (row.crew_pricing_level[0] ?? null)
+          : (row.crew_pricing_level ?? null)
+        return { ...row, crew_pricing_level: level }
+      })
+
       // Apply client-side fuzzy matching for better results
       // This handles cases where database ilike isn't fuzzy enough
       if (search && search.trim()) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
         return fuzzySearch(
-          data as Array<CustomerRow>,
+          normalized as Array<CustomerRow>,
           search,
           [(item) => item.name, (item) => item.vat_number, (item) => item.address],
           0.25, // Lower threshold since we already filtered with ilike
         )
       }
 
-      return data as any
+      return normalized as any
     },
   }
 }
@@ -113,7 +140,11 @@ export function customerDetailQuery({
       const { data: c, error } = await supabase
         .from('customers')
         .select(
-          'id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, created_at',
+          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, crew_pricing_level_id, created_at,
+          conta_customer_id, conta_days_until_payment_reminder, conta_days_until_estimate_overdue,
+          conta_invoice_delivery_method, conta_invoice_count, conta_total_invoiced, conta_total_unpaid,
+          conta_last_synced_at,
+          crew_pricing_level:crew_pricing_level_id (id, name, crew_rate_per_day, crew_rate_per_hour)`,
         )
         .eq('company_id', companyId)
         .eq('id', id)
@@ -129,7 +160,15 @@ export function customerDetailQuery({
         .order('name', { ascending: true })
       if (cErr) throw cErr
 
-      return { ...(c as any), contacts: contacts as any }
+      const raw = c as any
+      const crewPricingLevel = Array.isArray(raw.crew_pricing_level)
+        ? raw.crew_pricing_level[0] ?? null
+        : raw.crew_pricing_level ?? null
+      return {
+        ...raw,
+        crew_pricing_level: crewPricingLevel,
+        contacts: contacts as any,
+      }
     },
   }
 }
@@ -145,6 +184,7 @@ export async function upsertCustomer(payload: {
   vat_number?: string | null
   is_partner?: boolean
   logo_path?: string | null
+  crew_pricing_level_id?: string | null
 }) {
   const body: {
     company_id: string
@@ -153,6 +193,7 @@ export async function upsertCustomer(payload: {
     vat_number: string | null
     is_partner: boolean
     logo_path: string | null
+    crew_pricing_level_id?: string | null
     email?: string | null
     phone?: string | null
   } = {
@@ -167,6 +208,8 @@ export async function upsertCustomer(payload: {
   // This prevents unrelated updates (e.g., logo upload) from wiping existing values.
   if (payload.email !== undefined) body.email = payload.email
   if (payload.phone !== undefined) body.phone = payload.phone
+  if (payload.crew_pricing_level_id !== undefined)
+    body.crew_pricing_level_id = payload.crew_pricing_level_id
   if (payload.id) {
     const { error } = await supabase
       .from('customers')

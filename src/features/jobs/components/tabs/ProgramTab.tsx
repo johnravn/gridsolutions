@@ -55,12 +55,33 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
     )
   }, [programPeriods])
 
+  // Group periods by program_group; sort groups by earliest period start
+  const groupedPeriods = React.useMemo(() => {
+    const groups = new Map<string | null, typeof sortedPeriods>()
+    for (const p of sortedPeriods) {
+      const key = p.program_group?.trim() || null
+      const list = groups.get(key) ?? []
+      list.push(p)
+      groups.set(key, list)
+    }
+    const entries = Array.from(groups.entries())
+    // Sort: ungrouped first, then by earliest start_at within each group
+    return entries.sort(([keyA, listA], [keyB, listB]) => {
+      if (keyA === null) return -1
+      if (keyB === null) return 1
+      const minA = Math.min(...listA.map((p) => new Date(p.start_at).getTime()))
+      const minB = Math.min(...listB.map((p) => new Date(p.start_at).getTime()))
+      return minA - minB
+    })
+  }, [sortedPeriods])
+
   const save = useMutation({
     mutationFn: async (p: {
       id?: string
       title: string
       start_at: string
       end_at: string
+      program_group?: string | null
     }) => {
       if (!companyId) throw new Error('No companyId')
       const id = await upsertTimePeriod({
@@ -71,6 +92,7 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
         start_at: p.start_at,
         end_at: p.end_at,
         category: 'program',
+        program_group: p.program_group ?? null,
       })
       return id
     },
@@ -180,87 +202,106 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
         )}
       </Box>
 
-      {sortedPeriods.length > 0 && (
-        <Table.Root variant="surface" mb="3">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-              {!isReadOnly && (
-                <Table.ColumnHeaderCell style={{ width: '120px' }}>
-                  Actions
-                </Table.ColumnHeaderCell>
-              )}
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {sortedPeriods.map((tp) => {
-              const start = new Date(tp.start_at)
-              const end = new Date(tp.end_at)
-              const durationMs = end.getTime() - start.getTime()
-              const durationHours = durationMs / (1000 * 60 * 60)
-              const durationMins = durationMs / (1000 * 60)
-
-              let durationText = ''
-              if (durationHours >= 1) {
-                const hours = Math.floor(durationHours)
-                const mins = Math.floor(
-                  (durationMs % (1000 * 60 * 60)) / (1000 * 60),
-                )
-                if (mins > 0) {
-                  durationText = `${hours}h ${mins}m`
-                } else {
-                  durationText = `${hours}h`
-                }
-              } else {
-                durationText = `${Math.floor(durationMins)}m`
-              }
-
-              return (
-                <Table.Row key={tp.id}>
-                  <Table.Cell>
-                    <Text weight="medium">{tp.title || '(untitled)'}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2">{formatTime(tp.start_at)}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2">{formatTime(tp.end_at)}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2" color="gray">
-                      {durationText}
-                    </Text>
-                  </Table.Cell>
+      {sortedPeriods.length > 0 &&
+        groupedPeriods.map(([groupName, periods]) => (
+          <Box key={groupName ?? '_ungrouped'} mb="4">
+            {groupName && (
+              <Flex
+                align="center"
+                gap="2"
+                mb="2"
+                py="2"
+                style={{
+                  borderBottom: '2px solid var(--accent-9)',
+                  borderLeft: '4px solid var(--accent-9)',
+                  paddingLeft: 12,
+                  borderRadius: '0 0 0 4px',
+                }}
+              >
+                <Heading size="3">{groupName}</Heading>
+              </Flex>
+            )}
+            <Table.Root variant="surface" mb={groupName ? '3' : undefined}>
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
                   {!isReadOnly && (
-                    <Table.Cell>
-                      <Flex gap="2">
-                        <IconButton
-                          size="1"
-                          variant="ghost"
-                          onClick={() => setEditing(tp)}
-                        >
-                          <Edit />
-                        </IconButton>
-                        <IconButton
-                          size="1"
-                          variant="ghost"
-                          color="red"
-                          onClick={() => setDeleting(tp)}
-                        >
-                          <Trash />
-                        </IconButton>
-                      </Flex>
-                    </Table.Cell>
+                    <Table.ColumnHeaderCell style={{ width: '120px' }}>
+                      Actions
+                    </Table.ColumnHeaderCell>
                   )}
                 </Table.Row>
-              )
-            })}
-          </Table.Body>
-        </Table.Root>
-      )}
+              </Table.Header>
+              <Table.Body>
+                {periods.map((tp) => {
+                  const start = new Date(tp.start_at)
+                  const end = new Date(tp.end_at)
+                  const durationMs = end.getTime() - start.getTime()
+                  const durationHours = durationMs / (1000 * 60 * 60)
+                  const durationMins = durationMs / (1000 * 60)
+
+                  let durationText = ''
+                  if (durationHours >= 1) {
+                    const hours = Math.floor(durationHours)
+                    const mins = Math.floor(
+                      (durationMs % (1000 * 60 * 60)) / (1000 * 60),
+                    )
+                    if (mins > 0) {
+                      durationText = `${hours}h ${mins}m`
+                    } else {
+                      durationText = `${hours}h`
+                    }
+                  } else {
+                    durationText = `${Math.floor(durationMins)}m`
+                  }
+
+                  return (
+                    <Table.Row key={tp.id}>
+                      <Table.Cell>
+                        <Text weight="medium">{tp.title || '(untitled)'}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2">{formatTime(tp.start_at)}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2">{formatTime(tp.end_at)}</Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color="gray">
+                          {durationText}
+                        </Text>
+                      </Table.Cell>
+                      {!isReadOnly && (
+                        <Table.Cell>
+                          <Flex gap="2">
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              onClick={() => setEditing(tp)}
+                            >
+                              <Edit />
+                            </IconButton>
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              color="red"
+                              onClick={() => setDeleting(tp)}
+                            >
+                              <Trash />
+                            </IconButton>
+                          </Flex>
+                        </Table.Cell>
+                      )}
+                    </Table.Row>
+                  )
+                })}
+              </Table.Body>
+            </Table.Root>
+          </Box>
+        ))}
 
       {!isReadOnly && (
         <Box
@@ -309,8 +350,16 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
               start_at: getDefaultStartTime(),
               end_at: getDefaultEndTime(getDefaultStartTime()),
               category: 'program',
+              program_group: null,
             } as TimePeriodLite
           }
+          existingGroupNames={[
+            ...new Set(
+              programPeriods
+                .map((p) => p.program_group?.trim())
+                .filter((g): g is string => !!g),
+            ),
+          ]}
           onSave={(data) => save.mutate(data)}
           isSaving={save.isPending}
         />
@@ -326,6 +375,13 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
             }
           }}
           timePeriod={editing}
+          existingGroupNames={[
+            ...new Set(
+              programPeriods
+                .map((p) => p.program_group?.trim())
+                .filter((g): g is string => !!g),
+            ),
+          ]}
           onSave={(data) => save.mutate(data)}
           isSaving={save.isPending}
         />
@@ -375,23 +431,29 @@ function EditTimePeriodDialog({
   open,
   onOpenChange,
   timePeriod,
+  existingGroupNames = [],
   onSave,
   isSaving,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   timePeriod: TimePeriodLite
+  existingGroupNames?: Array<string>
   onSave: (data: {
     id?: string
     title: string
     start_at: string
     end_at: string
+    program_group?: string | null
   }) => void
   isSaving: boolean
 }) {
   const [title, setTitle] = React.useState(timePeriod.title || '')
   const [startAt, setStartAt] = React.useState(timePeriod.start_at)
   const [endAt, setEndAt] = React.useState(timePeriod.end_at)
+  const [programGroup, setProgramGroup] = React.useState(
+    timePeriod.program_group || '',
+  )
   const [autoSetEndTime, setAutoSetEndTime] = React.useState(!timePeriod.id)
   const getDateMs = (value: string) => {
     const ms = new Date(value).getTime()
@@ -416,6 +478,7 @@ function EditTimePeriodDialog({
       setTitle(timePeriod.title || '')
       setStartAt(timePeriod.start_at)
       setEndAt(timePeriod.end_at)
+      setProgramGroup(timePeriod.program_group || '')
       setAutoSetEndTime(!timePeriod.id)
     }
   }, [timePeriod, open])
@@ -429,9 +492,21 @@ function EditTimePeriodDialog({
       title: title.trim(),
       start_at: startAt,
       end_at: endAt,
+      program_group: programGroup.trim() || null,
     })
   }
 
+  const groupSuggestions = [
+    'Day 1',
+    'Day 2',
+    'Day 3',
+    'Setup',
+    'Show',
+    'Teardown',
+    'Morning',
+    'Afternoon',
+    'Evening',
+  ]
   const commonSuggestions = [
     'Load In',
     'Rigging',
@@ -456,6 +531,37 @@ function EditTimePeriodDialog({
         <Separator my="3" />
 
         <Flex direction="column" gap="3">
+          <Box>
+            <Text as="div" size="2" mb="1" weight="medium">
+              Group (optional)
+            </Text>
+            <TextField.Root
+              value={programGroup}
+              onChange={(e) => setProgramGroup(e.target.value)}
+              placeholder="e.g. Day 1, Setup, Morning"
+            />
+            {(existingGroupNames.length > 0 || !timePeriod.id) && (
+              <Flex gap="2" wrap="wrap" mt="2">
+                <Text size="1" color="gray" style={{ width: '100%' }}>
+                  Quick pick:
+                </Text>
+                {[
+                  ...new Set([...existingGroupNames, ...groupSuggestions]),
+                ].map((g) => (
+                  <Button
+                    key={g}
+                    size="1"
+                    variant="soft"
+                    color="gray"
+                    onClick={() => setProgramGroup(g)}
+                  >
+                    {g}
+                  </Button>
+                ))}
+              </Flex>
+            )}
+          </Box>
+
           <Box>
             <label>
               <Text as="div" size="2" mb="1" weight="medium">

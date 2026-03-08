@@ -1,26 +1,46 @@
 // src/features/jobs/components/tabs/MoneyTab.tsx
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Badge,
   Box,
   Button,
   Card,
+  Checkbox,
+  DropdownMenu,
   Flex,
   Heading,
+  IconButton,
   SegmentedControl,
   Table,
   Text,
 } from '@radix-ui/themes'
-import { CheckCircle, InfoCircle, XmarkCircle } from 'iconoir-react'
+import {
+  CheckCircle,
+  Edit,
+  Filter,
+  InfoCircle,
+  Plus,
+  Trash,
+  XmarkCircle,
+} from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   ChartTypeSelector,
   IncomeExpensesChart,
 } from '@shared/ui/components/IncomeExpensesChart'
 import { contaClient } from '@shared/api/conta/client'
 import { findContaProjectId } from '../../utils/contaProjects'
+import {
+  deleteJobMoneyItem,
+  jobMoneyItemsQuery,
+  type JobMoneyItem,
+  type JobMoneyItemSource,
+} from '../../api/moneyQueries'
+import MoneyItemEditDialog from '../dialogs/MoneyItemEditDialog'
+import MoneyItemsFilter from './MoneyItemsFilter'
 import type { JobOffer } from '../../types'
 
 type ContaLedgerLine = {
@@ -35,24 +55,37 @@ type ContaLedgerLine = {
   supplierName?: string
 }
 
-type MoneyItemSource = 'offer' | 'crew' | 'conta'
-
-type MoneyItem = {
+type Suggestion = {
   id: string
+  sourceId: string
+  type: 'income' | 'expense'
   description: string
-  date: string | null
   amount: number
-  source: MoneyItemSource
+  date: string | null
   reference?: string
+  source: JobMoneyItemSource
 }
 
 export default function MoneyTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
+  const qc = useQueryClient()
+  const { success, error: toastError } = useToast()
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('area')
-  const [listView, setListView] = React.useState<'income' | 'expenses'>(
-    'income',
+  const [showIncome, setShowIncome] = React.useState(true)
+  const [showExpenses, setShowExpenses] = React.useState(true)
+  /** User choice for crew expense/income calculation (hour vs day rate) */
+  const [crewExpenseBillingUnit, setCrewExpenseBillingUnit] = React.useState<
+    'hour' | 'day'
+  >('hour')
+  const [editDialogOpen, setEditDialogOpen] = React.useState(false)
+  const [editMode, setEditMode] = React.useState<'add' | 'edit'>('add')
+  const [editingItem, setEditingItem] = React.useState<JobMoneyItem | null>(
+    null,
+  )
+  const [addSuggestion, setAddSuggestion] = React.useState<Suggestion | null>(
+    null,
   )
 
   const formatDate = (dateString: string | null) => {
@@ -64,8 +97,13 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     })
   }
 
-  // Fetch accepted offers for this job
-  const { data: acceptedOffers = [], isLoading } = useQuery({
+  // Fetch confirmed money items
+  const { data: confirmedItems = [], isLoading: isItemsLoading } = useQuery(
+    jobMoneyItemsQuery(jobId),
+  )
+
+  // Fetch accepted offers for suggestions
+  const { data: acceptedOffers = [], isLoading: isOffersLoading } = useQuery({
     queryKey: ['jobs', jobId, 'money', 'accepted-offers'],
     queryFn: async (): Promise<Array<JobOffer>> => {
       const { data, error } = await supabase
@@ -99,7 +137,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
-  // Get accounting organization ID from company_expansions
   const { data: accountingConfig } = useQuery({
     queryKey: ['company', companyId, 'accounting-config'],
     queryFn: async () => {
@@ -228,7 +265,61 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       (!!contaProjectId || jobNumberTokens.length > 0),
   })
 
-  // Fetch company general rates
+  const { data: jobCrewPricing } = useQuery({
+    queryKey: ['jobs', jobId, 'money', 'crew-pricing'],
+    queryFn: async () => {
+      const { data: jobData } = await supabase
+        .from('jobs')
+        .select(
+          `customer_id,
+          customer:customers!jobs_customer_id_fkey (
+            crew_pricing_level_id,
+            crew_pricing_level:crew_pricing_level_id (
+              crew_rate_per_day,
+              crew_rate_per_hour,
+              default_crew_billing_unit
+            )
+          )`,
+        )
+        .eq('id', jobId)
+        .maybeSingle()
+
+      const customer = Array.isArray((jobData as any)?.customer)
+        ? (jobData as any)?.customer?.[0]
+        : (jobData as any)?.customer
+      const crewLevel = Array.isArray(customer?.crew_pricing_level)
+        ? customer?.crew_pricing_level?.[0]
+        : customer?.crew_pricing_level
+
+      const { data: companyExpansion } = await supabase
+        .from('company_expansions')
+        .select('crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit')
+        .eq('company_id', companyId!)
+        .maybeSingle()
+
+      const billingUnit: 'day' | 'hour' =
+        (crewLevel?.default_crew_billing_unit ??
+          (companyExpansion as { default_crew_billing_unit?: string })
+            ?.default_crew_billing_unit ??
+          'hour') === 'hour'
+          ? 'hour'
+          : 'day'
+      const crewRatePerDay =
+        crewLevel?.crew_rate_per_day ??
+        (companyExpansion?.crew_rate_per_day ?? 0)
+      const crewRatePerHour =
+        crewLevel?.crew_rate_per_hour ??
+        (companyExpansion?.crew_rate_per_hour ?? 0)
+
+      return {
+        crewRatePerDay: Number(crewRatePerDay) || 0,
+        crewRatePerHour: Number(crewRatePerHour) || 0,
+        crewBillingUnit: billingUnit,
+      }
+    },
+    enabled: !!companyId && !!jobId,
+  })
+
   const { data: companyRates } = useQuery({
     queryKey: ['company', companyId, 'general-rates'] as const,
     enabled: !!companyId,
@@ -246,12 +337,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
-  // Fetch crew bookings with user info and rates
   const { data: crewBookings } = useQuery({
     queryKey: ['jobs', jobId, 'money', 'crew-expenses'],
     enabled: !!companyId,
     queryFn: async () => {
-      // Get all crew time periods for this job
       const { data: timePeriods, error: tpError } = await supabase
         .from('time_periods')
         .select('id, start_at, end_at')
@@ -262,8 +351,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       if (!timePeriods || timePeriods.length === 0) return []
 
       const timePeriodIds = timePeriods.map((tp) => tp.id)
-
-      // Get reserved_crew with user info
       const { data: reservedCrew, error: crewError } = await supabase
         .from('reserved_crew')
         .select(
@@ -284,12 +371,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       if (crewError) throw crewError
       if (!reservedCrew || reservedCrew.length === 0) return []
 
-      // Get user IDs to fetch company_user rates
       const userIds = reservedCrew
         .map((rc: any) => rc.user_id)
         .filter((id: string | null): id is string => !!id)
 
-      // Fetch company_user rates for these users
       let companyUsers: Array<any> = []
       if (userIds.length > 0) {
         const { data, error: cuError } = await supabase
@@ -297,22 +382,18 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           .select('user_id, role, rate_type, rate')
           .eq('company_id', companyId!)
           .in('user_id', userIds)
-
         if (cuError) throw cuError
         companyUsers = data || []
       }
 
-      // Create a map of user_id to company_user data
       const userRatesMap = new Map(
         (companyUsers || []).map((cu: any) => [cu.user_id, cu]),
       )
 
-      // Map to include time period info and rates
       return (reservedCrew || []).map((rc: any) => {
         const timePeriod = timePeriods.find((tp) => tp.id === rc.time_period_id)
         const user = Array.isArray(rc.user) ? rc.user[0] : rc.user
         const companyUser = userRatesMap.get(rc.user_id)
-
         return {
           id: rc.id,
           user_id: rc.user_id,
@@ -324,7 +405,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           role: companyUser?.role || null,
           rate_type: companyUser?.rate_type || null,
           rate: companyUser?.rate ? Number(companyUser.rate) : null,
-          time_period_id: rc.time_period_id,
           start_at: timePeriod?.start_at || null,
           end_at: timePeriod?.end_at || null,
         }
@@ -332,31 +412,34 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
-  // Calculate crew expenses
-  const crewExpenses = React.useMemo(() => {
+  const crewExpenseSuggestionsRaw = React.useMemo(() => {
     if (!crewBookings || !companyRates) return []
-
     return crewBookings
       .map((booking) => {
         if (!booking.start_at || !booking.end_at) return null
-
         const start = new Date(booking.start_at)
         const end = new Date(booking.end_at)
-        const durationMs = end.getTime() - start.getTime()
-        const durationHours = durationMs / (1000 * 60 * 60)
+        const durationHours =
+          (end.getTime() - start.getTime()) / (1000 * 60 * 60)
         const durationDays = durationHours / 24
 
         let rate: number | null = null
         let rateType: 'daily' | 'hourly' | null = null
-
-        // Determine rate based on role
         if (booking.role === 'freelancer') {
-          // Use individual freelancer rate
           rate = booking.rate
           rateType = booking.rate_type
         } else if (booking.role === 'employee') {
-          // Use general employee rates (prefer daily if both exist)
-          if (companyRates.employee_daily_rate) {
+          const useHourly =
+            crewExpenseBillingUnit === 'hour' && companyRates.employee_hourly_rate
+          const useDaily =
+            crewExpenseBillingUnit === 'day' && companyRates.employee_daily_rate
+          if (useHourly) {
+            rate = Number(companyRates.employee_hourly_rate)
+            rateType = 'hourly'
+          } else if (useDaily) {
+            rate = Number(companyRates.employee_daily_rate)
+            rateType = 'daily'
+          } else if (companyRates.employee_daily_rate) {
             rate = Number(companyRates.employee_daily_rate)
             rateType = 'daily'
           } else if (companyRates.employee_hourly_rate) {
@@ -364,8 +447,17 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             rateType = 'hourly'
           }
         } else if (booking.role === 'owner') {
-          // Use general owner rates (prefer daily if both exist)
-          if (companyRates.owner_daily_rate) {
+          const useHourly =
+            crewExpenseBillingUnit === 'hour' && companyRates.owner_hourly_rate
+          const useDaily =
+            crewExpenseBillingUnit === 'day' && companyRates.owner_daily_rate
+          if (useHourly) {
+            rate = Number(companyRates.owner_hourly_rate)
+            rateType = 'hourly'
+          } else if (useDaily) {
+            rate = Number(companyRates.owner_daily_rate)
+            rateType = 'daily'
+          } else if (companyRates.owner_daily_rate) {
             rate = Number(companyRates.owner_daily_rate)
             rateType = 'daily'
           } else if (companyRates.owner_hourly_rate) {
@@ -373,39 +465,35 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             rateType = 'hourly'
           }
         }
-
         if (!rate || !rateType) return null
-
-        // Calculate expense amount
-        let amount = 0
-        if (rateType === 'daily') {
-          amount = rate * Math.ceil(durationDays) // Round up to full days
-        } else {
-          // hourly
-          amount = rate * durationHours
-        }
-
+        const amount =
+          rateType === 'daily'
+            ? rate * Math.ceil(durationDays)
+            : rate * durationHours
         return {
-          id: `crew-${booking.id}`,
-          type: 'crew' as const,
+          id: `crew-expense-${booking.id}`,
+          sourceId: `crew-${booking.id}`,
+          type: 'expense' as const,
           description: `${booking.user_name} (${booking.role || 'unknown'})`,
           amount,
           date: booking.start_at,
-          reference: undefined,
-          booking,
+          reference: undefined as string | undefined,
+          source: 'crew' as JobMoneyItemSource,
         }
       })
       .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
-  }, [crewBookings, companyRates])
+  }, [crewBookings, companyRates, crewExpenseBillingUnit])
 
-  const accountingExpenses = React.useMemo(() => {
+  const contaExpenseSuggestionsRaw = React.useMemo(() => {
     return contaLedgerLines
       .map((line) => {
         const amount = Number(line.amount ?? 0)
         if (!amount) return null
+        const sourceId = `conta-${line.id ?? `${line.description}-${line.date}`}`
         return {
-          id: `conta-${line.id ?? `${line.description}-${line.date}`}`,
-          type: 'conta' as const,
+          id: sourceId,
+          sourceId,
+          type: 'expense' as const,
           description:
             line.description ||
             line.bookkeepingAccountName ||
@@ -414,39 +502,138 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           amount: Math.abs(amount),
           date: line.date || line.dueDate || null,
           reference: line.invoiceNo || undefined,
-          line,
+          source: 'conta' as JobMoneyItemSource,
         }
       })
       .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
   }, [contaLedgerLines])
 
-  // Combine all expenses
-  const expenses = React.useMemo(() => {
-    return [...crewExpenses, ...accountingExpenses]
-  }, [crewExpenses, accountingExpenses])
+  const confirmedSourceIds = React.useMemo(
+    () =>
+      new Set(
+        confirmedItems
+          .filter((i) => i.source_id)
+          .map((i) => i.source_id as string),
+      ),
+    [confirmedItems],
+  )
 
-  const incomeItems = React.useMemo<Array<MoneyItem>>(() => {
-    return acceptedOffers.map((offer) => ({
-      id: `offer-${offer.id}`,
-      description: offer.title || `Offer v${offer.version_number}`,
-      amount: offer.total_with_vat,
-      date: offer.accepted_at || null,
-      source: 'offer',
-    }))
-  }, [acceptedOffers])
+  const crewIncomeSuggestionsRaw = React.useMemo<Suggestion[]>(() => {
+    if (!crewBookings || !jobCrewPricing) return []
+    const { crewRatePerDay, crewRatePerHour } = jobCrewPricing
+    if (crewRatePerDay <= 0 && crewRatePerHour <= 0) return []
 
-  const expenseItems = React.useMemo<Array<MoneyItem>>(() => {
-    return expenses.map((expense) => ({
-      id: expense.id,
-      description: expense.description,
-      amount: expense.amount,
-      date: expense.date || null,
-      source: expense.type === 'crew' ? 'crew' : 'conta',
-      reference: expense.reference,
-    }))
-  }, [expenses])
+    return crewBookings
+      .map((booking) => {
+        if (!booking.start_at || !booking.end_at) return null
+        const start = new Date(booking.start_at)
+        const end = new Date(booking.end_at)
+        const durationHours =
+          (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+        const durationDays = durationHours / 24
 
-  const visibleItems = listView === 'income' ? incomeItems : expenseItems
+        const unitPrice =
+          crewExpenseBillingUnit === 'hour' ? crewRatePerHour : crewRatePerDay
+        const amount =
+          crewExpenseBillingUnit === 'hour'
+            ? unitPrice * durationHours
+            : unitPrice * Math.ceil(durationDays)
+
+        if (amount <= 0) return null
+
+        return {
+          id: `crew-income-${booking.id}`,
+          sourceId: `crew-income-${booking.id}`,
+          type: 'income' as const,
+          description: `${booking.user_name} – income (customer rate)`,
+          amount,
+          date: booking.start_at,
+          reference: undefined as string | undefined,
+          source: 'crew' as JobMoneyItemSource,
+        }
+      })
+      .filter((s): s is NonNullable<typeof s> => s !== null)
+  }, [crewBookings, jobCrewPricing, crewExpenseBillingUnit])
+
+  const incomeSuggestions = React.useMemo<Suggestion[]>(() => {
+    const offers = acceptedOffers
+      .filter((o) => !confirmedSourceIds.has(`offer-${o.id}`))
+      .map((offer) => ({
+        id: `offer-${offer.id}`,
+        sourceId: `offer-${offer.id}`,
+        type: 'income' as const,
+        description: offer.title || `Offer v${offer.version_number}`,
+        amount: offer.total_with_vat,
+        date: offer.accepted_at || null,
+        reference: undefined as string | undefined,
+        source: 'offer' as JobMoneyItemSource,
+      }))
+    const crew = crewIncomeSuggestionsRaw.filter(
+      (s) => !confirmedSourceIds.has(s.sourceId),
+    )
+    return [...offers, ...crew]
+  }, [acceptedOffers, crewIncomeSuggestionsRaw, confirmedSourceIds])
+
+  const expenseSuggestions = React.useMemo<Suggestion[]>(() => {
+    const crew = crewExpenseSuggestionsRaw.filter(
+      (e) => !confirmedSourceIds.has(e.sourceId),
+    )
+    const conta = contaExpenseSuggestionsRaw.filter(
+      (e) => !confirmedSourceIds.has(e.sourceId),
+    )
+    return [...crew, ...conta]
+  }, [
+    crewExpenseSuggestionsRaw,
+    contaExpenseSuggestionsRaw,
+    confirmedSourceIds,
+  ])
+
+  const suggestions: Suggestion[] = React.useMemo(
+    () => [...incomeSuggestions, ...expenseSuggestions],
+    [incomeSuggestions, expenseSuggestions],
+  )
+
+  const confirmedIncomeItems = confirmedItems.filter((i) => i.type === 'income')
+  const confirmedExpenseItems = confirmedItems.filter(
+    (i) => i.type === 'expense',
+  )
+  const visibleConfirmedItems = React.useMemo(
+    () =>
+      confirmedItems.filter(
+        (i) =>
+          (i.type === 'income' && showIncome) ||
+          (i.type === 'expense' && showExpenses),
+      ),
+    [confirmedItems, showIncome, showExpenses],
+  )
+  const visibleSuggestions = React.useMemo(
+    () =>
+      suggestions.filter(
+        (s) =>
+          (s.type === 'income' && showIncome) ||
+          (s.type === 'expense' && showExpenses),
+      ),
+    [suggestions, showIncome, showExpenses],
+  )
+
+  const totalIncome = confirmedIncomeItems.reduce(
+    (sum, i) => sum + i.amount,
+    0,
+  )
+  const totalExpenses = confirmedExpenseItems.reduce(
+    (sum, i) => sum + i.amount,
+    0,
+  )
+  const profitLoss = totalIncome - totalExpenses
+
+  const crewIncomeItems = confirmedIncomeItems.filter((i) => i.source === 'crew')
+  const crewExpenseItems = confirmedExpenseItems.filter(
+    (i) => i.source === 'crew',
+  )
+  const crewMargin =
+    crewIncomeItems.reduce((s, i) => s + i.amount, 0) -
+    crewExpenseItems.reduce((s, i) => s + i.amount, 0)
+  const hasCrewItems = crewIncomeItems.length > 0 || crewExpenseItems.length > 0
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('nb-NO', {
@@ -456,58 +643,19 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     }).format(amount)
   }
 
-  // Calculate total income from accepted offers
-  const totalIncome = acceptedOffers.reduce(
-    (sum, offer) => sum + offer.total_with_vat,
-    0,
-  )
-
-  const totalExpenseCount = expenses.length
-  const crewExpenseCount = crewExpenses.length
-  const contaExpenseCount = accountingExpenses.length
-
-  // Calculate total expenses
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0)
-
-  // Calculate profit/loss
-  const profitLoss = totalIncome - totalExpenses
-
-  // Prepare chart data (monthly breakdown)
   const chartData = React.useMemo(() => {
-    // For now, aggregate by month from accepted offers
     const monthlyData = new Map<string, { income: number; expenses: number }>()
-
-    // Add income from accepted offers
-    acceptedOffers.forEach((offer) => {
-      if (offer.accepted_at) {
-        const date = new Date(offer.accepted_at)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        const monthName = date.toLocaleDateString('nb-NO', {
-          month: 'long',
-          year: 'numeric',
-        })
-
-        if (!monthlyData.has(monthKey)) {
-          monthlyData.set(monthKey, { income: 0, expenses: 0 })
-        }
-        const data = monthlyData.get(monthKey)!
-        data.income += offer.total_with_vat
-      }
-    })
-
-    // Add expenses (placeholder - will come from accounting API)
-    expenses.forEach((exp) => {
-      const date = new Date(exp.date)
+    confirmedItems.forEach((item) => {
+      const d = item.date || item.created_at
+      const date = new Date(d)
       const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-
       if (!monthlyData.has(monthKey)) {
         monthlyData.set(monthKey, { income: 0, expenses: 0 })
       }
       const data = monthlyData.get(monthKey)!
-      data.expenses += exp.amount
+      if (item.type === 'income') data.income += item.amount
+      else data.expenses += item.amount
     })
-
-    // Convert to array and sort by month
     return Array.from(monthlyData.entries())
       .map(([key, data]) => {
         const [year, month] = key.split('-')
@@ -521,22 +669,62 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           expenses: data.expenses,
         }
       })
-      .sort((a, b) => {
-        // Simple sort by month name (will work for recent months)
-        return a.month.localeCompare(b.month)
-      })
-  }, [acceptedOffers, expenses])
+      .sort((a, b) => a.month.localeCompare(b.month))
+  }, [confirmedItems])
 
-  if (isLoading) {
-    return (
-      <Box>
-        <Heading size="3" mb="3">
-          Money
-        </Heading>
-        <Text>Loading financial data...</Text>
-      </Box>
-    )
+  const deleteMutation = useMutation({
+    mutationFn: deleteJobMoneyItem,
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+      success('Item removed')
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to remove item',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
+  const handleAddFromSuggestion = (s: Suggestion) => {
+    setAddSuggestion(s)
+    setEditMode('add')
+    setEditingItem(null)
+    setEditDialogOpen(true)
   }
+
+  const handleAddCustom = () => {
+    setAddSuggestion(null)
+    setEditMode('add')
+    setEditingItem(null)
+    setEditDialogOpen(true)
+  }
+
+  const handleEditItem = (item: JobMoneyItem) => {
+    setAddSuggestion(null)
+    setEditMode('edit')
+    setEditingItem(item)
+    setEditDialogOpen(true)
+  }
+
+  const isLoading = isOffersLoading || isItemsLoading
+
+  const getSourceBadgeColor = (source: string) =>
+    source === 'offer'
+      ? 'green'
+      : source === 'crew'
+        ? 'red'
+        : source === 'conta'
+          ? 'blue'
+          : 'gray'
+  const getSourceLabel = (source: string) =>
+    source === 'offer'
+      ? 'Offer'
+      : source === 'crew'
+        ? 'Crew'
+        : source === 'conta'
+          ? 'Conta'
+          : 'Manual'
 
   return (
     <Box>
@@ -550,7 +738,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         )}
       </Flex>
 
-      {/* Financial Summary Cards */}
+      {/* Financial Summary Cards - from confirmed items only */}
       <Flex gap="3" mb="4" wrap="wrap">
         <Card style={{ flex: 1, minWidth: 200 }}>
           <Flex direction="column" gap="2">
@@ -561,12 +749,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               {formatCurrency(totalIncome)}
             </Heading>
             <Text size="1" color="gray">
-              {acceptedOffers.length} accepted offer
-              {acceptedOffers.length !== 1 ? 's' : ''}
+              {confirmedIncomeItems.length} item
+              {confirmedIncomeItems.length !== 1 ? 's' : ''}
             </Text>
           </Flex>
         </Card>
-
         <Card style={{ flex: 1, minWidth: 200 }}>
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
@@ -576,15 +763,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               {formatCurrency(totalExpenses)}
             </Heading>
             <Text size="1" color="gray">
-              {totalExpenseCount > 0
-                ? `${totalExpenseCount} expense${totalExpenseCount !== 1 ? 's' : ''} (${crewExpenseCount} crew, ${contaExpenseCount} Conta)`
-                : accountingConfig?.accounting_organization_id
-                  ? 'No Conta expenses yet'
-                  : 'No expenses yet'}
+              {confirmedExpenseItems.length} item
+              {confirmedExpenseItems.length !== 1 ? 's' : ''}
             </Text>
           </Flex>
         </Card>
-
         <Card style={{ flex: 1, minWidth: 200 }}>
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
@@ -603,17 +786,48 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 {profitLoss >= 0 ? 'Profit' : 'Loss'}
               </Text>
             </Flex>
+            {hasCrewItems && (
+              <Text size="1" color="gray" mt="1">
+                Crew margin: {formatCurrency(crewMargin)}
+              </Text>
+            )}
           </Flex>
         </Card>
       </Flex>
 
-      {/* Income / Expense Items */}
-      <Card mb="4">
-        <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
-          <Heading size="4">Items</Heading>
-          <Flex align="center" gap="2" wrap="wrap">
-            {listView === 'expenses' &&
-              accountingConfig?.accounting_organization_id && (
+      {/* Suggestions section */}
+      {suggestions.length > 0 && (
+        <Card mb="4">
+          <Flex justify="between" align="center" mb="3" wrap="wrap" gap="3">
+            <Heading size="4">
+              Suggestions{' '}
+              <Badge size="1" variant="soft">
+                {visibleSuggestions.length}
+              </Badge>
+            </Heading>
+            {(crewExpenseSuggestionsRaw.length > 0 ||
+              crewIncomeSuggestionsRaw.length > 0) && (
+              <Flex align="center" gap="2">
+                <Text size="2" color="gray">
+                  Crew rates:
+                </Text>
+                <SegmentedControl.Root
+                  value={crewExpenseBillingUnit}
+                  onValueChange={(v) =>
+                    setCrewExpenseBillingUnit(v as 'hour' | 'day')
+                  }
+                  size="1"
+                >
+                  <SegmentedControl.Item value="day">
+                    Day rate
+                  </SegmentedControl.Item>
+                  <SegmentedControl.Item value="hour">
+                    Hour rate
+                  </SegmentedControl.Item>
+                </SegmentedControl.Root>
+              </Flex>
+            )}
+            {accountingConfig?.accounting_organization_id && (
                 <Button
                   size="2"
                   variant="soft"
@@ -623,85 +837,167 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                   Sync Conta
                 </Button>
               )}
-            <SegmentedControl.Root
-              value={listView}
-              onValueChange={(value) =>
-                setListView(value as 'income' | 'expenses')
-              }
-              size="2"
-            >
-              <SegmentedControl.Item value="income">
-                Income ({incomeItems.length})
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="expenses">
-                Expenses ({expenseItems.length})
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
           </Flex>
-        </Flex>
-
-        {listView === 'expenses' &&
-          accountingConfig?.accounting_organization_id &&
-          !contaProjectId && (
-            <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
-              <Text size="2" color="gray">
-                {jobNumberTokens.length > 0
-                  ? 'No Conta project linked yet. Showing expenses that match the job number in invoice reference or description.'
-                  : 'No Conta project linked yet. Create a Conta invoice to link the job number, or ensure the project exists in Conta.'}
-              </Text>
-            </Card>
-          )}
-
-        {visibleItems.length === 0 ? (
-          <Text size="2" color="gray">
-            {listView === 'income'
-              ? 'No income items yet.'
-              : 'No expense items yet.'}
+          <Text size="2" color="gray" mb="3">
+            Add items from real events. You can edit before adding.
           </Text>
-        ) : (
-          <Table.Root variant="surface">
+          <Table.Root variant="surface" size="1">
             <Table.Header>
               <Table.Row>
+                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell align="right">
-                  Amount
-                </Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell align="right">Amount</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell style={{ width: 80 }} />
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {visibleItems.map((item) => (
-                <Table.Row key={item.id}>
-                  <Table.Cell>{item.description}</Table.Cell>
-                  <Table.Cell>{formatDate(item.date)}</Table.Cell>
-                  <Table.Cell>{item.reference || '—'}</Table.Cell>
+              {visibleSuggestions.map((s) => (
+                <Table.Row key={s.id}>
                   <Table.Cell>
                     <Badge
-                      color={
-                        item.source === 'offer'
-                          ? 'green'
-                          : item.source === 'crew'
-                            ? 'red'
-                            : 'blue'
-                      }
+                      size="1"
                       variant="soft"
+                      color={s.type === 'income' ? 'green' : 'red'}
                     >
-                      {item.source === 'offer'
-                        ? 'Offer'
-                        : item.source === 'crew'
-                          ? 'Crew'
-                          : 'Conta'}
+                      {s.type === 'income' ? 'Income' : 'Expense'}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell>{s.description}</Table.Cell>
+                  <Table.Cell>{formatDate(s.date)}</Table.Cell>
+                  <Table.Cell>
+                    <Badge
+                      color={getSourceBadgeColor(s.source)}
+                      variant="soft"
+                      size="1"
+                    >
+                      {getSourceLabel(s.source)}
                     </Badge>
                   </Table.Cell>
                   <Table.Cell align="right">
                     <Text
                       weight="medium"
-                      color={item.source === 'offer' ? 'green' : 'red'}
+                      size="2"
+                      color={s.type === 'income' ? 'green' : 'red'}
+                    >
+                      {formatCurrency(s.amount)}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Button
+                      size="1"
+                      variant="soft"
+                      onClick={() => handleAddFromSuggestion(s)}
+                    >
+                      Add
+                    </Button>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Root>
+        </Card>
+      )}
+
+      {/* Confirmed Items */}
+      <Card mb="4">
+        <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
+          <Heading size="4">Items</Heading>
+          <Flex align="center" gap="2" wrap="wrap">
+            <Button size="2" variant="soft" onClick={handleAddCustom}>
+              <Plus width={16} height={16} />
+              Add item
+            </Button>
+            <MoneyItemsFilter
+              showIncome={showIncome}
+              showExpenses={showExpenses}
+              onShowIncomeChange={setShowIncome}
+              onShowExpensesChange={setShowExpenses}
+            />
+          </Flex>
+        </Flex>
+
+        {accountingConfig?.accounting_organization_id &&
+          accountingConfig?.accounting_organization_id &&
+          !contaProjectId && (
+            <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
+              <Text size="2" color="gray">
+                {jobNumberTokens.length > 0
+                  ? 'No Conta project linked yet. Suggestions may show expenses that match the job number.'
+                  : 'No Conta project linked yet. Create a Conta invoice to link the job number.'}
+              </Text>
+            </Card>
+          )}
+
+        {visibleConfirmedItems.length === 0 ? (
+          <Text size="2" color="gray">
+            No items yet. Add from suggestions or add item.
+          </Text>
+        ) : (
+          <Table.Root variant="surface">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell align="right">Amount</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell style={{ width: 90 }} />
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {visibleConfirmedItems.map((item) => (
+                <Table.Row key={item.id}>
+                  <Table.Cell>
+                    <Badge
+                      size="1"
+                      variant="soft"
+                      color={item.type === 'income' ? 'green' : 'red'}
+                    >
+                      {item.type === 'income' ? 'Income' : 'Expense'}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell>{item.description}</Table.Cell>
+                  <Table.Cell>{formatDate(item.date)}</Table.Cell>
+                  <Table.Cell>{item.reference || '—'}</Table.Cell>
+                  <Table.Cell>
+                    <Badge
+                      color={getSourceBadgeColor(item.source)}
+                      variant="soft"
+                    >
+                      {getSourceLabel(item.source)}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell align="right">
+                    <Text
+                      weight="medium"
+                      color={item.type === 'income' ? 'green' : 'red'}
                     >
                       {formatCurrency(item.amount)}
                     </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Flex gap="2">
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="gray"
+                        onClick={() => handleEditItem(item)}
+                      >
+                        <Edit width={14} height={14} />
+                      </IconButton>
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="red"
+                        onClick={() => deleteMutation.mutate(item.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash width={14} height={14} />
+                      </IconButton>
+                    </Flex>
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -738,8 +1034,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               No financial data yet
             </Text>
             <Text size="2" color="gray" align="center">
-              Once offers are accepted, they will appear here along with
-              expenses from your accounting software.
+              Add income and expense items from suggestions or manually. Totals
+              and chart will update.
             </Text>
           </Flex>
         </Card>
@@ -757,18 +1053,39 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 Connect Accounting Software
               </Heading>
               <Text size="2" color="gray" mb="2">
-                Connect your accounting software in Company settings to
-                automatically pull expenses and get a complete financial
-                overview of your jobs.
-              </Text>
-              <Text size="1" color="gray">
-                Once connected, expenses will be automatically synchronized and
-                displayed in charts and summaries.
+                Connect your accounting software in Company settings to get
+                expense suggestions from Conta.
               </Text>
             </Box>
           </Flex>
         </Card>
       )}
+
+      <MoneyItemEditDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        jobId={jobId}
+        companyId={companyId ?? ''}
+        mode={editMode}
+        initialData={
+          addSuggestion
+            ? {
+                type: addSuggestion.type,
+                description: addSuggestion.description,
+                amount: addSuggestion.amount,
+                date: addSuggestion.date,
+                reference: addSuggestion.reference,
+                source: addSuggestion.source,
+                sourceId: addSuggestion.sourceId,
+              }
+            : undefined
+        }
+        existingItem={editingItem}
+        onSaved={() => {
+          setAddSuggestion(null)
+          setEditingItem(null)
+        }}
+      />
     </Box>
   )
 }

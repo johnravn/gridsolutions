@@ -79,6 +79,20 @@ code {
   z-index: 101 !important;
 }
 
+/* Invoice line number inputs - hide spin buttons, fix clipping */
+[data-invoice-lines] input[type="number"]::-webkit-outer-spin-button,
+[data-invoice-lines] input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+[data-invoice-lines] input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+  box-sizing: border-box;
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
 /* Section resizer cursor - ensure cursor changes on hover */
 .section-resizer,
 .section-resizer * {

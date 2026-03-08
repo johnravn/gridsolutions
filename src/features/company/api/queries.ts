@@ -365,6 +365,8 @@ export async function updateCompanyTheme({
 
 export type RentalFactorConfig = Record<number, number>
 
+export type DefaultCrewBillingUnit = 'day' | 'hour'
+
 export type CompanyExpansion = {
   id: string
   company_id: string
@@ -376,6 +378,7 @@ export type CompanyExpansion = {
   accounting_api_read_only: boolean
   crew_rate_per_day: number | null
   crew_rate_per_hour: number | null
+  default_crew_billing_unit: DefaultCrewBillingUnit
   vehicle_daily_rate: number | null
   vehicle_distance_rate: number | null
   vehicle_distance_increment: number | null
@@ -384,6 +387,7 @@ export type CompanyExpansion = {
   rental_factor_config: RentalFactorConfig | string | null // JSON string or object
   fixed_rate_start_day: number | null
   fixed_rate_per_day: number | null
+  default_invoice_days_until_due: number | null
   created_at: string
   updated_at: string
 }
@@ -398,7 +402,7 @@ export function companyExpansionQuery({ companyId }: { companyId: string }) {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, crew_rate_per_day, crew_rate_per_hour, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, created_at, updated_at',
+          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -513,4 +517,119 @@ export async function updateCompanyExpansion({
 
   if (error) throw error
   return data
+}
+
+export async function updateCompanyInvoiceDefaults({
+  companyId,
+  defaultInvoiceDaysUntilDue,
+}: {
+  companyId: string
+  defaultInvoiceDaysUntilDue: number | null
+}) {
+  const { data, error } = await supabase
+    .from('company_expansions')
+    .update({ default_invoice_days_until_due: defaultInvoiceDaysUntilDue })
+    .eq('company_id', companyId)
+    .select()
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+// Crew pricing levels (customer-specific crew rates)
+
+export type CrewPricingLevelRow = {
+  id: string
+  company_id: string
+  name: string
+  crew_rate_per_day: number | null
+  crew_rate_per_hour: number | null
+  default_crew_billing_unit: DefaultCrewBillingUnit
+  sort_order: number
+  created_at: string
+}
+
+export function crewPricingLevelsQuery(companyId: string) {
+  return {
+    queryKey: ['company', companyId, 'crew-pricing-levels'] as const,
+    queryFn: async (): Promise<Array<CrewPricingLevelRow>> => {
+      if (!companyId) return []
+      const { data, error } = await supabase
+        .from('crew_pricing_levels')
+        .select(
+          'id, company_id, name, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, sort_order, created_at',
+        )
+        .eq('company_id', companyId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true })
+      if (error) throw error
+      return (Array.isArray(data) ? data : []) as Array<CrewPricingLevelRow>
+    },
+  }
+}
+
+export async function createCrewPricingLevel({
+  companyId,
+  name,
+  crewRatePerDay,
+  crewRatePerHour,
+  defaultCrewBillingUnit = 'hour',
+}: {
+  companyId: string
+  name: string
+  crewRatePerDay: number | null
+  crewRatePerHour: number | null
+  defaultCrewBillingUnit?: 'day' | 'hour'
+}) {
+  const { data, error } = await supabase
+    .from('crew_pricing_levels')
+    .insert({
+      company_id: companyId,
+      name: name.trim(),
+      crew_rate_per_day: crewRatePerDay,
+      crew_rate_per_hour: crewRatePerHour,
+      default_crew_billing_unit: defaultCrewBillingUnit,
+      sort_order: 0,
+    })
+    .select()
+    .single()
+  if (error) throw error
+  return data as CrewPricingLevelRow
+}
+
+export async function updateCrewPricingLevel({
+  id,
+  name,
+  crewRatePerDay,
+  crewRatePerHour,
+  defaultCrewBillingUnit = 'hour',
+}: {
+  id: string
+  name: string
+  crewRatePerDay: number | null
+  crewRatePerHour: number | null
+  defaultCrewBillingUnit?: 'day' | 'hour'
+}) {
+  const { data, error } = await supabase
+    .from('crew_pricing_levels')
+    .update({
+      name: name.trim(),
+      crew_rate_per_day: crewRatePerDay,
+      crew_rate_per_hour: crewRatePerHour,
+      default_crew_billing_unit: defaultCrewBillingUnit,
+    })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data as CrewPricingLevelRow
+}
+
+export async function deleteCrewPricingLevel(id: string) {
+  const { error } = await supabase
+    .from('crew_pricing_levels')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
 }

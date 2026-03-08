@@ -83,6 +83,8 @@ export type JobDetail = {
     phone: string | null
     address: string | null
     vat_number: string | null
+    conta_customer_id?: number | null
+    conta_days_until_payment_reminder?: number | null
   } | null
 
   customer_user?: {
@@ -199,6 +201,7 @@ export type TimePeriodLite = {
   start_at: string // ISO
   end_at: string // ISO
   category?: 'program' | 'equipment' | 'crew' | 'transport' | null
+  program_group?: string | null
 }
 
 /* ---------- Crew tab ---------- */

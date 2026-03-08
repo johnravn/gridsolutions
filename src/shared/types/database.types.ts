@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -211,7 +231,7 @@ export type Database = {
           company_id: string
           created_at?: string
           id?: string
-          kind: string
+          kind?: string
           token: string
           updated_at?: string
           user_id: string
@@ -241,6 +261,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicle_index_mat"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
+            isOneToOne: false
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -343,6 +391,8 @@ export type Database = {
           crew_rate_per_day: number | null
           crew_rate_per_hour: number | null
           customer_discount_percent: number | null
+          default_crew_billing_unit: string
+          default_invoice_days_until_due: number | null
           fixed_rate_per_day: number | null
           fixed_rate_start_day: number | null
           id: string
@@ -366,6 +416,8 @@ export type Database = {
           crew_rate_per_day?: number | null
           crew_rate_per_hour?: number | null
           customer_discount_percent?: number | null
+          default_crew_billing_unit?: string
+          default_invoice_days_until_due?: number | null
           fixed_rate_per_day?: number | null
           fixed_rate_start_day?: number | null
           id?: string
@@ -389,6 +441,8 @@ export type Database = {
           crew_rate_per_day?: number | null
           crew_rate_per_hour?: number | null
           customer_discount_percent?: number | null
+          default_crew_billing_unit?: string
+          default_invoice_days_until_due?: number | null
           fixed_rate_per_day?: number | null
           fixed_rate_start_day?: number | null
           id?: string
@@ -544,11 +598,53 @@ export type Database = {
           },
         ]
       }
+      crew_pricing_levels: {
+        Row: {
+          company_id: string
+          created_at: string
+          crew_rate_per_day: number | null
+          crew_rate_per_hour: number | null
+          default_crew_billing_unit: string
+          id: string
+          name: string
+          sort_order: number
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          crew_rate_per_day?: number | null
+          crew_rate_per_hour?: number | null
+          default_crew_billing_unit?: string
+          id?: string
+          name: string
+          sort_order?: number
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          crew_rate_per_day?: number | null
+          crew_rate_per_hour?: number | null
+          default_crew_billing_unit?: string
+          id?: string
+          name?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "crew_pricing_levels_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
           company_id: string
           created_at: string
+          crew_pricing_level_id: string | null
           deleted: boolean
           email: string | null
           id: string
@@ -563,6 +659,7 @@ export type Database = {
           address?: string | null
           company_id: string
           created_at?: string
+          crew_pricing_level_id?: string | null
           deleted?: boolean
           email?: string | null
           id?: string
@@ -577,6 +674,7 @@ export type Database = {
           address?: string | null
           company_id?: string
           created_at?: string
+          crew_pricing_level_id?: string | null
           deleted?: boolean
           email?: string | null
           id?: string
@@ -593,6 +691,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "customers_crew_pricing_level_id_fkey"
+            columns: ["crew_pricing_level_id"]
+            isOneToOne: false
+            referencedRelation: "crew_pricing_levels"
             referencedColumns: ["id"]
           },
         ]
@@ -1256,6 +1361,66 @@ export type Database = {
             columns: ["offer_id"]
             isOneToOne: false
             referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_money_items: {
+        Row: {
+          amount: number
+          company_id: string
+          created_at: string
+          date: string | null
+          description: string
+          id: string
+          job_id: string
+          reference: string | null
+          source: string
+          source_id: string | null
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          company_id: string
+          created_at?: string
+          date?: string | null
+          description: string
+          id?: string
+          job_id: string
+          reference?: string | null
+          source: string
+          source_id?: string | null
+          type: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          company_id?: string
+          created_at?: string
+          date?: string | null
+          description?: string
+          id?: string
+          job_id?: string
+          reference?: string | null
+          source?: string
+          source_id?: string | null
+          type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_money_items_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_money_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
             referencedColumns: ["id"]
           },
         ]
@@ -3782,6 +3947,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       activity_type: [
@@ -3874,3 +4042,4 @@ export const Constants = {
     },
   },
 } as const
+

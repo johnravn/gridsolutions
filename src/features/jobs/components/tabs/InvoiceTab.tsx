@@ -12,6 +12,7 @@ import {
   Table,
   Text,
   TextArea,
+  Tooltip,
 } from '@radix-ui/themes'
 import {
   CheckCircle,
@@ -26,11 +27,15 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { contaClient } from '@shared/api/conta/client'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { companyDetailQuery } from '@features/company/api/queries'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
 import { ensureContaProjectId } from '../../utils/contaProjects'
-import type { BookingsForInvoice } from '../../api/invoiceQueries'
+import type {
+  BookingInvoiceLine,
+  BookingsForInvoice,
+} from '../../api/invoiceQueries'
 import type { InvoiceBasis, JobDetail, JobOffer } from '../../types'
 
 type InvoiceRecipient = { type: string; ehfRecipient?: string }
@@ -41,7 +46,14 @@ type InvoiceRecipientResult = {
 }
 type PendingInvoiceAction =
   | { kind: 'offer'; offer: JobOffer; invoiceMessage: string }
-  | { kind: 'bookings'; bookings: BookingsForInvoice; invoiceMessage: string }
+  | {
+      kind: 'bookings'
+      bookings: BookingsForInvoice
+      invoiceMessage: string
+      orgReferenceOverride?: string
+      theirRefOverride?: string
+      lineDiscountOverrides?: Record<string, number>
+    }
   | { kind: 'all-offers'; invoiceMessage: string }
 
 export default function InvoiceTab({
@@ -73,6 +85,7 @@ export default function InvoiceTab({
   const [invoiceMessageDraft, setInvoiceMessageDraft] = React.useState('')
   const [invoiceMessageAction, setInvoiceMessageAction] =
     React.useState<PendingInvoiceAction | null>(null)
+  const [invoiceWithVat, setInvoiceWithVat] = React.useState(true)
 
   // Get current user ID for tracking
   const { data: authUser } = useQuery({
@@ -107,19 +120,90 @@ export default function InvoiceTab({
   })
 
   // Fetch bookings for invoice (only when bookings basis is selected)
-  const { data: bookings, isLoading: isLoadingBookings } = useQuery({
+  const {
+    data: bookings,
+    isLoading: isLoadingBookings,
+    refetch: refetchBookings,
+  } = useQuery({
     ...jobBookingsForInvoiceQuery({
       jobId,
       companyId: companyId ?? '',
-      defaultVatPercent: 25, // Default to 25% VAT (high rate in Norway)
+      defaultVatPercent: invoiceWithVat ? 25 : 0,
     }),
     enabled: invoiceBasis === 'bookings' && !!companyId,
+  })
+
+  // EHF status for bookings preview (checked when preview opens)
+  const [ehfStatus, setEhfStatus] = React.useState<{
+    canReceive: boolean
+    reason?: string
+  } | null>(null)
+
+  // Invoice preview editable fields (for bookings)
+  const [invoicePreviewMessage, setInvoicePreviewMessage] = React.useState('')
+  const [invoicePreviewOurRef, setInvoicePreviewOurRef] = React.useState('')
+  const [invoicePreviewTheirRef, setInvoicePreviewTheirRef] = React.useState('')
+  const [lineDiscountOverrides, setLineDiscountOverrides] = React.useState<
+    Record<string, number>
+  >({})
+  const [editedInvoiceLines, setEditedInvoiceLines] = React.useState<
+    Array<BookingsForInvoice['all'][0]>
+  >([])
+  const invoicePreviewPortalRef = React.useRef<HTMLElement | null>(null)
+
+  // Company detail for invoice preview (sender info)
+  const { data: companyDetail } = useQuery({
+    ...companyDetailQuery({ companyId: companyId ?? '' }),
+    enabled: !!companyId && (!!previewOffer || !!previewBookings),
+  })
+
+  // Company employees for "our ref" dropdown
+  const { data: companyEmployees = [] } = useQuery({
+    queryKey: ['company', companyId, 'employees-for-invoice'],
+    enabled: !!companyId && !!previewBookings,
+    queryFn: async () => {
+      if (!companyId) return []
+      const { data, error } = await supabase
+        .from('company_user_profiles')
+        .select('user_id, display_name')
+        .eq('company_id', companyId)
+        .in('role', ['employee', 'owner', 'super_user'])
+        .order('display_name', { ascending: true })
+      if (error) throw error
+      return (Array.isArray(data) ? data : []) as Array<{
+        user_id: string
+        display_name: string | null
+      }>
+    },
+  })
+
+  // Customer contacts for "their ref" dropdown
+  const { data: customerContacts = [] } = useQuery({
+    queryKey: ['customer', job.customer_id, 'contacts'],
+    enabled: !!job.customer_id && !!previewBookings,
+    queryFn: async () => {
+      if (!job.customer_id) return []
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, name')
+        .eq('customer_id', job.customer_id)
+        .order('name', { ascending: true })
+      if (error) throw error
+      return (Array.isArray(data) ? data : []) as Array<{ id: string; name: string }>
+    },
   })
 
   React.useEffect(() => {
     setBasisSelectionDirty(false)
     setInvoiceBasis(job.invoice_basis ?? null)
   }, [jobId])
+
+  // Sync preview bookings when VAT toggle changes (query refetches with new defaultVatPercent)
+  React.useEffect(() => {
+    if (previewBookings && bookings && bookings.all.length > 0) {
+      setPreviewBookings(bookings)
+    }
+  }, [bookings])
 
   React.useEffect(() => {
     if (basisSelectionDirty) return
@@ -172,14 +256,16 @@ export default function InvoiceTab({
     })
   }
 
-  // Get accounting organization ID from company_expansions
+  // Get accounting config and invoice defaults from company_expansions
   const { data: accountingConfig } = useQuery({
     queryKey: ['company', companyId, 'accounting-config'],
     queryFn: async () => {
       if (!companyId) return null
       const { data, error } = await supabase
         .from('company_expansions')
-        .select('accounting_organization_id, accounting_software')
+        .select(
+          'accounting_organization_id, accounting_software, default_invoice_days_until_due',
+        )
         .eq('company_id', companyId)
         .maybeSingle()
 
@@ -187,68 +273,19 @@ export default function InvoiceTab({
       return data as {
         accounting_organization_id: string | null
         accounting_software: string | null
+        default_invoice_days_until_due: number | null
       } | null
     },
     enabled: !!companyId,
   })
 
-  // Helper function to find or create a customer in Conta
-  const parseCustomerAddress = (address: string) => {
-    const normalized = address.replace(/\r/g, '').trim()
-    let addressLine1 = ''
-    let addressPostcode = ''
-    let addressCity = ''
-    let addressCountry = ''
+  const getDaysUntilDue = (): number =>
+    job.customer?.conta_days_until_payment_reminder ??
+    accountingConfig?.default_invoice_days_until_due ??
+    14
 
-    const postcodeMatch = normalized.match(/\b(\d{4,5})\b/)
-    if (postcodeMatch && postcodeMatch.index !== undefined) {
-      addressPostcode = postcodeMatch[1]
-      const before = normalized.slice(0, postcodeMatch.index).trim()
-      const after = normalized
-        .slice(postcodeMatch.index + postcodeMatch[1].length)
-        .trim()
-      const beforeParts = before
-        .split(/[,\n]+/)
-        .map((part) => part.trim())
-        .filter(Boolean)
-      addressLine1 = beforeParts[0] || before
-      const afterParts = after
-        .split(/[,\n]+/)
-        .map((part) => part.trim())
-        .filter(Boolean)
-      addressCity = afterParts[0] || ''
-      if (afterParts.length > 1) {
-        addressCountry = afterParts[afterParts.length - 1] || ''
-      }
-    } else {
-      const parts = normalized
-        .split(/[,\n]+/)
-        .map((part) => part.trim())
-        .filter(Boolean)
-      addressLine1 = parts[0] || ''
-      const zipPart = parts.find((part) => /\d{4,5}/.test(part))
-      if (zipPart) {
-        const zipMatch = zipPart.match(/\b(\d{4,5})\b/)
-        if (zipMatch) {
-          addressPostcode = zipMatch[1]
-          addressCity = zipPart.replace(zipMatch[1], '').trim()
-        }
-      }
-      if (!addressCity && parts.length > 1) {
-        addressCity = parts[1] || ''
-      }
-      if (parts.length > 2) {
-        addressCountry = parts[parts.length - 1] || ''
-      }
-    }
-
-    return {
-      addressLine1,
-      addressPostcode,
-      addressCity,
-      addressCountry,
-    }
-  }
+  const canSendInvoice =
+    job.customer != null && job.customer.conta_customer_id != null
 
   const resolveInvoiceRecipients = async (
     customer: JobDetail['customer'],
@@ -418,73 +455,14 @@ export default function InvoiceTab({
     }
   }
 
-  const findOrCreateContaCustomer = async (
-    organizationId: string,
-    customer: JobDetail['customer'],
-  ): Promise<number | null> => {
-    if (!customer) return null
-    const customerName = customer.name?.trim() || ''
-    const fallbackName =
-      customerName || customer.email?.trim() || customer.phone?.trim() || ''
-    if (!fallbackName) {
+  const getContaCustomerId = (): number => {
+    const id = job.customer?.conta_customer_id
+    if (id == null) {
       throw new Error(
-        'Conta requires a customer name, email, or phone number to create an invoice.',
+        'Customer must be linked to Conta before sending invoices. Sync the customer with Conta in the customer settings, or use the Conta check dialog to link or create the customer in Conta.',
       )
     }
-    const customerAddress = customer.address?.trim() || ''
-    if (!customerAddress) {
-      throw new Error(
-        'Conta requires a customer address. Add an address to the customer record before invoicing.',
-      )
-    }
-    const { addressLine1, addressPostcode, addressCity, addressCountry } =
-      parseCustomerAddress(customerAddress)
-    if (!addressLine1 || !addressPostcode || !addressCity) {
-      throw new Error(
-        'Conta requires a customer address with line, postal code, and city. Update the customer address (e.g. "Street 1, 1234 City").',
-      )
-    }
-
-    try {
-      // First, try to search for the customer by name
-      if (customerName.length > 0) {
-        const searchResponse = (await contaClient.get(
-          `/invoice/organizations/${organizationId}/customers?q=${encodeURIComponent(customerName)}`,
-        )) as {
-          hits?: Array<{ id?: number }>
-        }
-
-        const hits = Array.isArray(searchResponse.hits)
-          ? searchResponse.hits
-          : []
-        if (hits.length) {
-          const hitId = hits[0]?.id
-          if (hitId) return hitId
-        }
-      }
-
-      // Customer not found, create a new one
-      const createResponse = (await contaClient.post(
-        `/invoice/organizations/${organizationId}/customers`,
-        {
-          name: fallbackName,
-          customerType: 'ORGANIZATION',
-          orgNo: customer.vat_number?.trim() || undefined,
-          emailAddress: customer.email?.trim() || undefined,
-          phoneNo: customer.phone?.trim() || undefined,
-          customerAddressLine1: addressLine1,
-          customerAddressPostcode: addressPostcode,
-          customerAddressCity: addressCity,
-          customerAddressCountry: addressCountry || undefined,
-          // Additional fields can be added based on Conta API requirements
-        },
-      )) as { id: number }
-
-      return createResponse.id
-    } catch (error: any) {
-      console.error('Failed to find/create Conta customer:', error)
-      throw error
-    }
+    return id
   }
 
   // Helper to map VAT percent to Conta VAT code
@@ -512,16 +490,7 @@ export default function InvoiceTab({
       downloadPdfAfterCreate?: boolean
       invoiceMessage?: string
     }) => {
-      // Find or create the customer in Conta
-      const contaCustomerId = await findOrCreateContaCustomer(
-        organizationId,
-        job.customer,
-      )
-      if (!contaCustomerId) {
-        throw new Error(
-          'Conta customer could not be created or found. Check customer name and address.',
-        )
-      }
+      const contaCustomerId = getContaCustomerId()
 
       let contaProjectId: number | null = null
       try {
@@ -536,14 +505,17 @@ export default function InvoiceTab({
       }
 
       // Create invoice with single line for the offer
+      const daysUntilDue = getDaysUntilDue()
       const shouldSendEhf =
         invoiceRecipients[0] && invoiceRecipients[0].type === 'EHF'
       const invoiceData = {
         customerId: contaCustomerId,
         invoiceDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        invoiceDueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+        invoiceDueDate: new Date(
+          Date.now() + daysUntilDue * 24 * 60 * 60 * 1000,
+        )
           .toISOString()
-          .split('T')[0], // 14 days from now
+          .split('T')[0],
         invoiceCurrency: 'NOK',
         ...(contaProjectId ? { projectId: contaProjectId } : {}),
         ...(shouldSendEhf ? { invoiceRecipients } : {}),
@@ -682,23 +654,20 @@ export default function InvoiceTab({
       invoiceRecipients,
       downloadPdfAfterCreate: _downloadPdfAfterCreate,
       invoiceMessage,
+      orgReferenceOverride,
+      theirRefOverride,
+      lineDiscountOverrides: lineDiscountOverridesParam = {},
     }: {
       bookingsData: BookingsForInvoice
       organizationId: string
       invoiceRecipients: Array<InvoiceRecipient>
       downloadPdfAfterCreate?: boolean
       invoiceMessage?: string
+      orgReferenceOverride?: string
+      theirRefOverride?: string
+      lineDiscountOverrides?: Record<string, number>
     }) => {
-      // Find or create the customer in Conta
-      const contaCustomerId = await findOrCreateContaCustomer(
-        organizationId,
-        job.customer,
-      )
-      if (!contaCustomerId) {
-        throw new Error(
-          'Conta customer could not be created or found. Check customer name and address.',
-        )
-      }
+      const contaCustomerId = getContaCustomerId()
 
       let contaProjectId: number | null = null
       try {
@@ -721,26 +690,35 @@ export default function InvoiceTab({
         description: line.description,
         quantity: line.quantity,
         price: line.unitPrice, // Price ex VAT per unit
-        discount: 0, // No discount per line for bookings
+        discount: lineDiscountOverridesParam[line.id] ?? 0,
         vatCode: getVatCode(line.vatPercent),
         lineNo: index + 1,
       }))
 
+      const daysUntilDue = getDaysUntilDue()
       const shouldSendEhf =
         invoiceRecipients[0] && invoiceRecipients[0].type === 'EHF'
+      const orgRef = orgReferenceOverride?.trim()
+        ? orgReferenceOverride.trim()
+        : getOrgReference()
       const invoiceData = {
         customerId: contaCustomerId,
         invoiceDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        invoiceDueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+        invoiceDueDate: new Date(
+          Date.now() + daysUntilDue * 24 * 60 * 60 * 1000,
+        )
           .toISOString()
-          .split('T')[0], // 14 days from now
+          .split('T')[0],
         invoiceCurrency: 'NOK',
         ...(contaProjectId ? { projectId: contaProjectId } : {}),
         ...(shouldSendEhf ? { invoiceRecipients } : {}),
         ...(shouldSendEhf ? { ehfOrderReference: getEhfOrderReference() } : {}),
-        ...(getOrgReference() ? { orgReference: getOrgReference() } : {}),
-        ...(getCustomerContactReference()
-          ? { customerReference: getCustomerContactReference() }
+        ...(orgRef ? { orgReference: orgRef } : {}),
+        ...((theirRefOverride?.trim() ?? getCustomerContactReference())
+          ? {
+              customerReference:
+                theirRefOverride?.trim() || getCustomerContactReference() || '',
+            }
           : {}),
         personalMessage:
           invoiceMessage?.trim() ||
@@ -890,6 +868,11 @@ export default function InvoiceTab({
         invoiceRecipients: pendingInvoiceRecipients,
         downloadPdfAfterCreate: true,
         invoiceMessage: pendingInvoiceAction.invoiceMessage,
+        orgReferenceOverride: pendingInvoiceAction.orgReferenceOverride,
+        theirRefOverride:
+          pendingInvoiceAction.theirRefOverride ??
+          job.customer_contact?.name?.trim(),
+        lineDiscountOverrides: pendingInvoiceAction.lineDiscountOverrides,
       })
     }
     setManualSendDialogOpen(false)
@@ -920,6 +903,14 @@ export default function InvoiceTab({
       info(
         'Accounting Software Not Supported',
         'Currently only Conta accounting software is supported for invoice creation.',
+      )
+      return
+    }
+
+    if (!canSendInvoice) {
+      info(
+        'Customer Not Linked to Conta',
+        'The customer must be linked to Conta with Conta customer data before sending invoices. Sync or link the customer in customer settings, or use the Conta check dialog.',
       )
       return
     }
@@ -963,7 +954,7 @@ export default function InvoiceTab({
     })
   }
 
-  const handleCreateInvoiceFromBookings = (showPreview = false) => {
+  const handleCreateInvoiceFromBookings = async () => {
     if (!bookings || bookings.all.length === 0) {
       info('No Bookings', 'There are no bookings available to invoice.')
       return
@@ -985,20 +976,102 @@ export default function InvoiceTab({
       return
     }
 
-    if (showPreview) {
-      setPreviewBookings(bookings)
+    if (!canSendInvoice) {
+      info(
+        'Customer Not Linked to Conta',
+        'The customer must be linked to Conta with Conta customer data before sending invoices. Sync or link the customer in customer settings, or use the Conta check dialog.',
+      )
       return
     }
-    openInvoiceMessageDialog({
-      kind: 'bookings',
-      bookings,
-      invoiceMessage: '',
+
+    // Check EHF status before opening preview
+    const recipientResult = await resolveInvoiceRecipients(job.customer)
+    setEhfStatus({
+      canReceive: !recipientResult.requiresManualSend,
+      reason: recipientResult.reason,
+    })
+    setPreviewBookings(bookings)
+    // Default message: job name, start/end date, job number
+    const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
+    const startFmt = job.start_at
+      ? new Date(job.start_at).toLocaleDateString('nb-NO', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : ''
+    const endFmt = job.end_at
+      ? new Date(job.end_at).toLocaleDateString('nb-NO', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        })
+      : ''
+    const datesPart =
+      startFmt && endFmt ? `, ${startFmt} - ${endFmt}` : ''
+    setInvoicePreviewMessage(`Job: ${jobLabel}${datesPart}`)
+    setInvoicePreviewOurRef(
+      job.project_lead?.display_name || job.project_lead?.email || '',
+    )
+    setInvoicePreviewTheirRef(
+      job.customer_contact?.name?.trim() || '',
+    )
+    setLineDiscountOverrides({})
+    setEditedInvoiceLines(bookings.all)
+  }
+
+  const handleAddInvoiceLine = () => {
+    const newLine: BookingInvoiceLine = {
+      id: `custom-${crypto.randomUUID()}`,
+      type: 'equipment',
+      description: 'New line',
+      quantity: 1,
+      unitPrice: 0,
+      totalPrice: 0,
+      vatPercent: 25,
+      timePeriodId: '',
+      timePeriodTitle: null,
+      startAt: '',
+      endAt: '',
+    }
+    setEditedInvoiceLines((prev) => [...prev, newLine])
+  }
+
+  const handleRemoveInvoiceLine = (lineId: string) => {
+    setEditedInvoiceLines((prev) => prev.filter((l) => l.id !== lineId))
+  }
+
+  const handleLineChange = (
+    lineId: string,
+    updates: {
+      description?: string
+      unitPrice?: number
+      quantity?: number
+    },
+  ) => {
+    setEditedInvoiceLines((prev) => {
+      const base = prev.length > 0 ? prev : (previewBookings?.all ?? [])
+      const idx = base.findIndex((l) => l.id === lineId)
+      if (idx < 0) return prev
+      const line = { ...base[idx] }
+      if (updates.description !== undefined) line.description = updates.description
+      if (updates.unitPrice !== undefined) line.unitPrice = updates.unitPrice
+      if (updates.quantity !== undefined) line.quantity = updates.quantity
+      if (updates.unitPrice !== undefined || updates.quantity !== undefined) {
+        line.totalPrice = line.unitPrice * line.quantity
+      }
+      const next = [...base]
+      next[idx] = line
+      return next
     })
   }
 
   const createInvoiceFromBookingsWithMessage = async (
     bookingsData: BookingsForInvoice,
     message: string,
+    orgReferenceOverride?: string,
+    theirRefOverride?: string,
+    lineDiscountOverridesParam?: Record<string, number>,
   ) => {
     if (!accountingConfig?.accounting_organization_id) return
     const hasBankAccount = await ensureContaBankAccount(
@@ -1009,7 +1082,14 @@ export default function InvoiceTab({
     const recipientResult = await resolveInvoiceRecipients(job.customer)
     if (recipientResult.requiresManualSend) {
       openManualSendDialog(
-        { kind: 'bookings', bookings: bookingsData, invoiceMessage: message },
+        {
+          kind: 'bookings',
+          bookings: bookingsData,
+          invoiceMessage: message,
+          orgReferenceOverride,
+          theirRefOverride,
+          lineDiscountOverrides: lineDiscountOverridesParam,
+        },
         recipientResult.recipients,
         recipientResult.reason,
       )
@@ -1021,6 +1101,9 @@ export default function InvoiceTab({
       organizationId: accountingConfig.accounting_organization_id,
       invoiceRecipients: recipientResult.recipients,
       invoiceMessage: message,
+      orgReferenceOverride,
+      theirRefOverride,
+      lineDiscountOverrides: lineDiscountOverridesParam,
     })
   }
 
@@ -1042,6 +1125,14 @@ export default function InvoiceTab({
       info(
         'Accounting Software Not Supported',
         'Currently only Conta accounting software is supported for invoice creation.',
+      )
+      return
+    }
+
+    if (!canSendInvoice) {
+      info(
+        'Customer Not Linked to Conta',
+        'The customer must be linked to Conta with Conta customer data before sending invoices. Sync or link the customer in customer settings, or use the Conta check dialog.',
       )
       return
     }
@@ -1503,7 +1594,9 @@ export default function InvoiceTab({
                         <Table.Cell style={{ textAlign: 'right' }}>
                           <Text>
                             {line.type === 'crew' || line.type === 'transport'
-                              ? `${line.quantity} day${line.quantity !== 1 ? 's' : ''}`
+                              ? line.unit === 'hour'
+                                ? `${line.quantity} hour${line.quantity !== 1 ? 's' : ''}`
+                                : `${line.quantity} day${line.quantity !== 1 ? 's' : ''}`
                               : line.quantity}
                           </Text>
                         </Table.Cell>
@@ -1574,20 +1667,37 @@ export default function InvoiceTab({
                 <Button
                   size="3"
                   variant="soft"
-                  onClick={() => handleCreateInvoiceFromBookings(true)}
-                  disabled={createInvoiceFromBookingsMutation.isPending}
+                  onClick={async () => {
+                    const result = await refetchBookings()
+                    if (result.data && result.data.all.length > 0) {
+                      setPreviewBookings(result.data)
+                      success('Updated', 'Bookings refreshed.')
+                    }
+                  }}
                 >
-                  <Eye width={16} height={16} />
-                  Preview Invoice
+                  Update with current bookings
                 </Button>
-                <Button
-                  size="3"
-                  onClick={() => handleCreateInvoiceFromBookings()}
-                  disabled={createInvoiceFromBookingsMutation.isPending}
+                <Tooltip
+                  content={
+                    !canSendInvoice
+                      ? 'Customer must be linked to Conta before sending invoices. Link the customer in customer settings.'
+                      : undefined
+                  }
                 >
-                  <GoogleDocs width={16} height={16} />
-                  Create Invoice from Bookings
-                </Button>
+                  <span style={{ display: 'inline-block' }}>
+                    <Button
+                      size="3"
+                      onClick={() => handleCreateInvoiceFromBookings()}
+                      disabled={
+                        createInvoiceFromBookingsMutation.isPending ||
+                        !canSendInvoice
+                      }
+                    >
+                      <Eye width={16} height={16} />
+                      Verify & Send Invoice
+                    </Button>
+                  </span>
+                </Tooltip>
               </Flex>
             </Card>
           ) : (
@@ -1635,28 +1745,6 @@ export default function InvoiceTab({
           </Flex>
         </Card>
       )}
-
-      {/* Accounting Software Integration Info */}
-      <Card mt="4" style={{ background: 'var(--blue-a2)' }}>
-        <Flex gap="3" align="start">
-          <Box style={{ paddingTop: '2px' }}>
-            <GoogleDocs width={20} height={20} color="var(--blue-9)" />
-          </Box>
-          <Box style={{ flex: 1 }}>
-            <Heading size="3" mb="1">
-              Accounting Software Integration
-            </Heading>
-            <Text size="2" color="gray" mb="2">
-              Connect your accounting software in Company settings to enable
-              automatic invoice creation and synchronization.
-            </Text>
-            <Text size="1" color="gray">
-              Once connected, you'll be able to create invoices directly from
-              accepted offers and track their payment status.
-            </Text>
-          </Box>
-        </Flex>
-      </Card>
 
       {/* Manual send confirmation dialog */}
       <Dialog.Root
@@ -1750,37 +1838,141 @@ export default function InvoiceTab({
           if (!open) {
             setPreviewOffer(null)
             setPreviewBookings(null)
+            setEhfStatus(null)
           }
         }}
       >
         <Dialog.Content size="4" style={{ maxWidth: '800px' }}>
-          <Dialog.Title>Invoice Preview</Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="4">
-            Review the invoice details before creating it in your accounting
-            software.
-          </Dialog.Description>
+          <Box
+            ref={(el) => {
+              invoicePreviewPortalRef.current = el
+            }}
+            style={{ position: 'relative' }}
+          >
+            <Dialog.Title>Invoice Preview</Dialog.Title>
+            <Dialog.Description size="2" color="gray" mb="4">
+              Review the invoice details before creating it in your accounting
+              software.
+            </Dialog.Description>
 
           {previewOffer && (
             <InvoicePreview
               basis="offer"
               offer={previewOffer}
               customerName={job.customer?.name || 'Unknown Customer'}
+              daysUntilDue={getDaysUntilDue()}
             />
           )}
 
           {previewBookings && (
-            <InvoicePreview
-              basis="bookings"
-              bookings={previewBookings}
-              customerName={job.customer?.name || 'Unknown Customer'}
-            />
+            <>
+              {ehfStatus !== null && (
+                <Box
+                  mb="4"
+                  p="3"
+                  style={{
+                    borderRadius: 8,
+                    background: ehfStatus.canReceive
+                      ? 'var(--green-a2)'
+                      : 'var(--orange-a2)',
+                    border: `1px solid ${ehfStatus.canReceive ? 'var(--green-a6)' : 'var(--orange-a6)'}`,
+                  }}
+                >
+                  <Text
+                    size="2"
+                    weight="medium"
+                    color={ehfStatus.canReceive ? 'green' : 'orange'}
+                  >
+                    {ehfStatus.canReceive
+                      ? '✓ Customer can receive EHF invoices'
+                      : 'EHF not available'}
+                  </Text>
+                  {ehfStatus.reason && (
+                    <Text size="2" color="gray" as="p" mt="1">
+                      {ehfStatus.reason}
+                    </Text>
+                  )}
+                </Box>
+              )}
+              <InvoicePreview
+                basis="bookings"
+                bookings={previewBookings}
+                customerName={job.customer?.name || 'Unknown Customer'}
+                customerAddress={job.customer?.address ?? null}
+                companyName={companyDetail?.name ?? '—'}
+                companyAddress={companyDetail?.address ?? null}
+                job={job}
+                employees={companyEmployees}
+                contacts={customerContacts}
+                vatIncluded={invoiceWithVat}
+                onVatIncludedChange={setInvoiceWithVat}
+                message={invoicePreviewMessage}
+                onMessageChange={setInvoicePreviewMessage}
+                ourRef={invoicePreviewOurRef}
+                onOurRefChange={setInvoicePreviewOurRef}
+                theirRef={invoicePreviewTheirRef}
+                onTheirRefChange={setInvoicePreviewTheirRef}
+                daysUntilDue={getDaysUntilDue()}
+                lineDiscountOverrides={lineDiscountOverrides}
+                onLineDiscountChange={(lineId, pct) =>
+                  setLineDiscountOverrides((prev) => ({
+                    ...prev,
+                    [lineId]: pct,
+                  }))
+                }
+                editedLines={editedInvoiceLines}
+                onLineChange={handleLineChange}
+                onAddLine={handleAddInvoiceLine}
+                onRemoveLine={handleRemoveInvoiceLine}
+                refFieldPortalContainer={() => invoicePreviewPortalRef.current}
+              />
+            </>
           )}
 
           <Flex gap="3" mt="4" justify="end">
+            {previewBookings && (
+              <Tooltip
+                content={
+                  !canSendInvoice
+                    ? 'Customer must be linked to Conta before sending invoices.'
+                    : undefined
+                }
+              >
+                <span style={{ display: 'inline-block' }}>
+                  <Button
+                  onClick={() => {
+                    createInvoiceFromBookingsWithMessage(
+                      {
+                        ...previewBookings,
+                        all:
+                          editedInvoiceLines.length > 0
+                            ? editedInvoiceLines
+                            : previewBookings.all,
+                      },
+                      invoicePreviewMessage,
+                      invoicePreviewOurRef || undefined,
+                      invoicePreviewTheirRef || undefined,
+                      lineDiscountOverrides,
+                    )
+                    setPreviewBookings(null)
+                    setPreviewOffer(null)
+                    setEhfStatus(null)
+                  }}
+                  disabled={
+                    createInvoiceFromBookingsMutation.isPending || !canSendInvoice
+                  }
+                >
+                  <GoogleDocs width={16} height={16} />
+                  Send Invoice
+                </Button>
+                </span>
+              </Tooltip>
+            )}
             <Dialog.Close>
               <Button variant="soft">Close</Button>
             </Dialog.Close>
           </Flex>
+          </Box>
         </Dialog.Content>
       </Dialog.Root>
     </Box>

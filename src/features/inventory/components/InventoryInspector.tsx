@@ -403,7 +403,6 @@ export default function InventoryInspector({ id }: { id: string | null }) {
           {/* Calendar */}
           <InspectorCalendar
             events={events}
-            calendarHref={`/calendar?itemId=${id}`}
             onCreate={(e) => {}}
             onUpdate={(id, patch) => {}}
             onDelete={(id) => {}}

@@ -20,7 +20,7 @@ import AddCustomerDialog from './dialogs/AddCustomerDialog'
 
 type CustomerTypeFilter = 'all' | 'customer' | 'partner'
 
-const GRID_COLUMNS = 'minmax(180px, 2fr) 120px'
+const GRID_COLUMNS = 'minmax(180px, 2fr) 100px 100px'
 
 export default function CustomerTable({
   selectedId,
@@ -180,6 +180,14 @@ export default function CustomerTable({
             </Tooltip>
           </Flex>
         </div>
+        <div
+          style={{
+            fontSize: 'var(--font-size-1)',
+            fontWeight: 600,
+          }}
+        >
+          Crew rate
+        </div>
       </div>
 
       {/* Virtualized list body */}
@@ -260,6 +268,11 @@ export default function CustomerTable({
                     ) : (
                       <Badge variant="soft">Customer</Badge>
                     )}
+                  </div>
+                  <div>
+                    <Text size="1" color="gray">
+                      {(r as any).crew_pricing_level?.name ?? 'Standard'}
+                    </Text>
                   </div>
                 </div>
               )

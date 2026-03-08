@@ -1,6 +1,8 @@
 import * as React from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
+  Button,
   Card,
   Flex,
   Grid,
@@ -10,7 +12,10 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { TransitionLeft } from 'iconoir-react'
+import { Refresh, TransitionLeft } from 'iconoir-react'
+import { supabase } from '@shared/api/supabase'
+import { useToast } from '@shared/ui/toast/ToastProvider'
+import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -21,7 +26,64 @@ import CustomerInspector from '../components/CustomerInspector'
 
 export default function CustomerPage() {
   const { companyId } = useCompany()
+  const qc = useQueryClient()
+  const { success, error: toastError } = useToast()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+
+  const { data: accountingConfig } = useQuery({
+    queryKey: ['company', companyId, 'accounting-config'],
+    queryFn: async () => {
+      if (!companyId) return null
+      const { data, error } = await supabase
+        .from('company_expansions')
+        .select('accounting_organization_id, accounting_software')
+        .eq('company_id', companyId)
+        .maybeSingle()
+      if (error) throw error
+      return data as {
+        accounting_organization_id: string | null
+        accounting_software: string | null
+      } | null
+    },
+    enabled: !!companyId,
+  })
+
+  const syncMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId || !accountingConfig?.accounting_organization_id)
+        throw new Error('Accounting not configured')
+      if (accountingConfig.accounting_software !== 'conta')
+        throw new Error('Only Conta is supported')
+      return syncCustomersWithConta(
+        companyId,
+        accountingConfig.accounting_organization_id,
+      )
+    },
+    onSuccess: (res) => {
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'customer-detail'],
+        exact: false,
+      })
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'customers-index'],
+        exact: false,
+      })
+      const msg = [
+        res.updated && `${res.updated} updated`,
+        res.created && `${res.created} created in Conta`,
+        res.skipped && `${res.skipped} skipped`,
+      ]
+        .filter(Boolean)
+        .join(', ')
+      success('Sync complete', msg || 'No changes.')
+      if (res.errors.length > 0) {
+        toastError('Some errors', res.errors.slice(0, 3).join('; '))
+      }
+    },
+    onError: (e: any) => {
+      toastError('Sync failed', e?.message ?? 'Please try again.')
+    },
+  })
 
   // responsive (>= 1024px)
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -143,6 +205,18 @@ export default function CustomerPage() {
           >
             <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
               <Heading size="5">Customers</Heading>
+              {accountingConfig?.accounting_software === 'conta' &&
+                accountingConfig?.accounting_organization_id && (
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => syncMutation.mutate()}
+                    disabled={syncMutation.isPending}
+                  >
+                    <Refresh width={14} height={14} />
+                    {syncMutation.isPending ? 'Syncing…' : 'Sync with Conta'}
+                  </Button>
+                )}
             </Flex>
             <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
             <Box
@@ -300,20 +374,34 @@ export default function CustomerPage() {
             </Box>
           ) : (
             <>
-              <Flex align="center" justify="between" mb="3">
+              <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
                 <Heading size="5">Customers</Heading>
-                <Tooltip
-                  content={`Collapse sidebar (${collapseShortcutLabel})`}
-                >
-                  <IconButton
-                    size="3"
-                    variant="ghost"
-                    onClick={toggleMinimize}
-                    style={{ flexShrink: 0 }}
+                <Flex gap="2" align="center">
+                  {accountingConfig?.accounting_software === 'conta' &&
+                    accountingConfig?.accounting_organization_id && (
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => syncMutation.mutate()}
+                        disabled={syncMutation.isPending}
+                      >
+                        <Refresh width={14} height={14} />
+                        {syncMutation.isPending ? 'Syncing…' : 'Sync with Conta'}
+                      </Button>
+                    )}
+                  <Tooltip
+                    content={`Collapse sidebar (${collapseShortcutLabel})`}
                   >
-                    <TransitionLeft width={22} height={22} />
-                  </IconButton>
-                </Tooltip>
+                    <IconButton
+                      size="3"
+                      variant="ghost"
+                      onClick={toggleMinimize}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <TransitionLeft width={22} height={22} />
+                    </IconButton>
+                  </Tooltip>
+                </Flex>
               </Flex>
               <Separator size="4" mb="3" />
               <Box

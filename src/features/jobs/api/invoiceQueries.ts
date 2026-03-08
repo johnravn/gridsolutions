@@ -12,6 +12,8 @@ export type BookingInvoiceLine = {
   unitPrice: number // Price ex VAT per unit
   totalPrice: number // Total ex VAT
   vatPercent: number
+  /** Billing unit for crew/transport: 'day' or 'hour'. Equipment has no unit. */
+  unit?: 'day' | 'hour'
   timePeriodId: string
   timePeriodTitle: string | null
   startAt: string
@@ -43,14 +45,52 @@ export function jobBookingsForInvoiceQuery({
   return queryOptions<BookingsForInvoice>({
     queryKey: ['jobs', jobId, 'invoice', 'bookings', defaultVatPercent],
     queryFn: async (): Promise<BookingsForInvoice> => {
-      // Fetch company expansion for rates
+      // Fetch job with customer and crew_pricing_level for crew rates
+      const { data: jobData } = await supabase
+        .from('jobs')
+        .select(
+          `customer_id,
+          customer:customers!jobs_customer_id_fkey (
+            crew_pricing_level_id,
+            crew_pricing_level:crew_pricing_level_id (
+              crew_rate_per_day,
+              crew_rate_per_hour,
+              default_crew_billing_unit
+            )
+          )`,
+        )
+        .eq('id', jobId)
+        .maybeSingle()
+
+      const customer = Array.isArray((jobData as any)?.customer)
+        ? (jobData as any)?.customer?.[0]
+        : (jobData as any)?.customer
+      const crewLevel = Array.isArray(customer?.crew_pricing_level)
+        ? customer?.crew_pricing_level?.[0]
+        : customer?.crew_pricing_level
+
+      // Fetch company expansion for rates (crew standard + vehicle)
       const { data: companyExpansion } = await supabase
         .from('company_expansions')
         .select(
-          'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
         )
         .eq('company_id', companyId)
         .maybeSingle()
+
+      const crewBillingUnit: 'day' | 'hour' =
+        (crewLevel?.default_crew_billing_unit ??
+          (companyExpansion as { default_crew_billing_unit?: string })
+            ?.default_crew_billing_unit ??
+          'hour') === 'hour'
+          ? 'hour'
+          : 'day'
+      const crewRatePerDay =
+        crewLevel?.crew_rate_per_day ??
+        (companyExpansion?.crew_rate_per_day ?? 0)
+      const crewRatePerHour =
+        crewLevel?.crew_rate_per_hour ??
+        (companyExpansion?.crew_rate_per_hour ?? 0)
 
       const vehicleDailyRate = companyExpansion?.vehicle_daily_rate ?? 0
       const vehicleDistanceRate = companyExpansion?.vehicle_distance_rate ?? 0
@@ -90,6 +130,13 @@ export function jobBookingsForInvoiceQuery({
         return Math.max(1, diffDays) // At least 1 day
       }
 
+      const calculateHours = (start: string, end: string): number => {
+        const startDate = new Date(start)
+        const endDate = new Date(end)
+        const diffMs = endDate.getTime() - startDate.getTime()
+        return Math.round((diffMs / (1000 * 60 * 60)) * 10) / 10
+      }
+
       // Fetch equipment bookings
       const { data: equipmentBookings, error: eqError } = await supabase
         .from('reserved_items')
@@ -127,37 +174,19 @@ export function jobBookingsForInvoiceQuery({
         }
       }
 
-      // Fetch crew bookings (include all statuses for invoice purposes)
-      const { data: crewBookings, error: crewError } = await supabase
-        .from('reserved_crew')
-        .select('id, time_period_id, user_id')
-        .in('time_period_id', timePeriodIds)
+      // Fetch crew roles (time_periods with category='crew') - invoice uses roles, not assigned crew
+      const crewTimePeriodIds = timePeriods
+        .filter((tp) => tp.category === 'crew')
+        .map((tp) => tp.id)
+      const { data: crewRoles, error: crewError } =
+        crewTimePeriodIds.length > 0
+          ? await supabase
+              .from('time_periods')
+              .select('id, title, role_category, needed_count, start_at, end_at')
+              .in('id', crewTimePeriodIds)
+          : { data: [], error: null }
 
       if (crewError) throw crewError
-
-      // Fetch user data separately from profiles
-      const userIds =
-        crewBookings
-          ?.map((b) => b.user_id)
-          .filter((id): id is string => !!id) ?? []
-      const usersMap = new Map<
-        string,
-        { user_id: string; display_name: string | null; email: string }
-      >()
-      if (userIds.length > 0) {
-        const { data: users, error: usersError } = await supabase
-          .from('profiles')
-          .select('user_id, display_name, email')
-          .in('user_id', userIds)
-
-        if (usersError) throw usersError
-
-        if (users) {
-          for (const user of users) {
-            usersMap.set(user.user_id, user)
-          }
-        }
-      }
 
       // Fetch transport bookings
       const { data: transportBookings, error: transError } = await supabase
@@ -177,7 +206,7 @@ export function jobBookingsForInvoiceQuery({
 
       if (transError) throw transError
 
-      // Process equipment bookings
+      // Process equipment bookings - description = brand + model
       const equipmentLines: Array<BookingInvoiceLine> = []
       if (equipmentBookings) {
         for (const booking of equipmentBookings) {
@@ -187,6 +216,12 @@ export function jobBookingsForInvoiceQuery({
           const timePeriod = timePeriodMap.get(booking.time_period_id)
           if (!item || !timePeriod) continue
           const brand = Array.isArray(item.brand) ? item.brand[0] : item.brand
+          const brandName = brand?.name ?? null
+          const model = item.model ?? null
+          const desc =
+            [brandName, model].filter(Boolean).join(' ') ||
+            item.name ||
+            'Equipment'
 
           const unitPrice = pricesMap.get(booking.item_id) ?? 0
           const quantity = booking.quantity
@@ -195,9 +230,9 @@ export function jobBookingsForInvoiceQuery({
           equipmentLines.push({
             id: booking.id,
             type: 'equipment',
-            description: item.name || 'Equipment',
-            brandName: brand?.name ?? null,
-            model: item.model ?? null,
+            description: desc,
+            brandName,
+            model,
             quantity,
             unitPrice,
             totalPrice,
@@ -210,40 +245,53 @@ export function jobBookingsForInvoiceQuery({
         }
       }
 
-      // Process crew bookings
+      // Process crew roles (one line per role, using role title/category - not assigned crew)
       const crewLines: Array<BookingInvoiceLine> = []
-      if (crewBookings) {
-        // Default crew daily rate (could be fetched from company settings)
-        // For now, using a placeholder - this should ideally come from company_expansions or a crew rate table
-        // Note: Crew rates are not currently stored in the database, so this defaults to 0
-        // Users should set prices manually or configure crew rates in company settings
-        const defaultCrewDailyRate = 0 // TODO: Fetch from company settings
+      if (crewRoles) {
+        for (const role of crewRoles) {
+          const timePeriod = timePeriodMap.get(role.id)
+          if (!timePeriod) continue
 
-        for (const booking of crewBookings) {
-          const user = usersMap.get(booking.user_id)
-          const timePeriod = timePeriodMap.get(booking.time_period_id)
-          if (!user || !timePeriod) continue
+          const startAt = role.start_at
+          const endAt = role.end_at
+          const neededCount = Math.max(1, role.needed_count ?? 1)
+          const roleLabel =
+            role.title?.trim() ||
+            role.role_category?.trim() ||
+            'technician'
+          const unitLabel =
+            crewBillingUnit === 'hour'
+              ? 'per hour'
+              : 'per day'
+          const roleDescription = `Crew - ${roleLabel} - ${unitLabel}`
 
-          // Use time period times (reserved_crew doesn't have start_at/end_at columns)
-          const startAt = timePeriod.start_at
-          const endAt = timePeriod.end_at
-          const days = calculateDays(startAt, endAt)
+          let quantity: number
+          let unitPrice: number
+          const unit: 'day' | 'hour' = crewBillingUnit
 
-          const unitPrice = defaultCrewDailyRate
-          const quantity = days
+          if (crewBillingUnit === 'hour') {
+            quantity =
+              neededCount *
+              Math.max(0.1, calculateHours(startAt, endAt))
+            unitPrice = crewRatePerHour
+          } else {
+            quantity = neededCount * calculateDays(startAt, endAt)
+            unitPrice = crewRatePerDay
+          }
           const totalPrice = unitPrice * quantity
 
           crewLines.push({
-            id: booking.id,
+            id: role.id,
             type: 'crew',
-            description: `${user.display_name || user.email || 'Crew member'}`,
+            description: roleDescription,
             brandName: null,
             model: null,
             quantity,
             unitPrice,
             totalPrice,
             vatPercent: defaultVatPercent,
-            timePeriodId: booking.time_period_id,
+            unit,
+            timePeriodId: role.id,
             timePeriodTitle: timePeriod.title,
             startAt,
             endAt,
@@ -277,13 +325,14 @@ export function jobBookingsForInvoiceQuery({
           transportLines.push({
             id: booking.id,
             type: 'transport',
-            description: vehicle.name || 'Vehicle',
+            description: `Transport - ${vehicle.name || 'Vehicle'} - per day`,
             brandName: null,
             model: null,
             quantity,
             unitPrice,
             totalPrice,
             vatPercent: defaultVatPercent,
+            unit: 'day',
             timePeriodId: booking.time_period_id,
             timePeriodTitle: timePeriod.title || null,
             startAt,

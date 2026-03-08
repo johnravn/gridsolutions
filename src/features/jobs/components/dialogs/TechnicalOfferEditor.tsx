@@ -200,14 +200,25 @@ export default function TechnicalOfferEditor({
     offerId || null,
   )
 
-  type JobInfo = {
-    title: string | null
-    start_at: string | null
-    end_at: string | null
-    customer: { id: string; is_partner: boolean } | null
-  }
+type JobInfo = {
+  title: string | null
+  start_at: string | null
+  end_at: string | null
+  customer: {
+    id: string
+    is_partner: boolean
+    crew_pricing_level_id: string | null
+    crew_pricing_level: {
+      id: string
+      name: string
+      crew_rate_per_day: number | null
+      crew_rate_per_hour: number | null
+      default_crew_billing_unit: 'day' | 'hour' | null
+    } | null
+  } | null
+}
 
-  // Fetch job title, duration, and customer for default offer name, time defaults, and discount
+  // Fetch job title, duration, and customer (incl. crew pricing level) for default rates
   const { data: jobData } = useQuery<JobInfo>({
     queryKey: ['job-title', jobId],
     enabled: open,
@@ -215,7 +226,13 @@ export default function TechnicalOfferEditor({
       const { data, error } = await supabase
         .from('jobs')
         .select(
-          'title, start_at, end_at, customer_id, customer:customers!jobs_customer_id_fkey ( id, is_partner )',
+          `title, start_at, end_at, customer_id,
+          customer:customers!jobs_customer_id_fkey (
+            id,
+            is_partner,
+            crew_pricing_level_id,
+            crew_pricing_level:crew_pricing_level_id ( id, name, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit )
+          )`,
         )
         .eq('id', jobId)
         .single()
@@ -234,7 +251,22 @@ export default function TechnicalOfferEditor({
           ? ({
               id: customer.id,
               is_partner: customer.is_partner ?? false,
-            } as { id: string; is_partner: boolean })
+              crew_pricing_level_id: customer.crew_pricing_level_id ?? null,
+              crew_pricing_level: Array.isArray(customer.crew_pricing_level)
+                ? customer.crew_pricing_level[0]
+                : customer.crew_pricing_level ?? null,
+            } as {
+              id: string
+              is_partner: boolean
+              crew_pricing_level_id: string | null
+              crew_pricing_level: {
+                id: string
+                name: string
+                crew_rate_per_day: number | null
+                crew_rate_per_hour: number | null
+                default_crew_billing_unit: 'day' | 'hour' | null
+              } | null
+            })
           : null,
       }
     },
@@ -257,19 +289,46 @@ export default function TechnicalOfferEditor({
     enabled: open && !!companyId && typeof companyId === 'string',
   })
 
+  // Effective crew rates: use customer's pricing level if set, else standard
   const defaultCrewRatePerDay = React.useMemo(() => {
-    const value = companyExpansion?.crew_rate_per_day ?? null
+    const level = job.customer?.crew_pricing_level
+    const value =
+      level?.crew_rate_per_day != null
+        ? level.crew_rate_per_day
+        : (companyExpansion?.crew_rate_per_day ?? null)
     if (value === null) return null
     const numeric = Number(value)
     return Number.isFinite(numeric) ? numeric : null
-  }, [companyExpansion?.crew_rate_per_day])
+  }, [
+    job.customer?.crew_pricing_level?.crew_rate_per_day,
+    companyExpansion?.crew_rate_per_day,
+  ])
 
   const defaultCrewRatePerHour = React.useMemo(() => {
-    const value = companyExpansion?.crew_rate_per_hour ?? null
+    const level = job.customer?.crew_pricing_level
+    const value =
+      level?.crew_rate_per_hour != null
+        ? level.crew_rate_per_hour
+        : (companyExpansion?.crew_rate_per_hour ?? null)
     if (value === null) return null
     const numeric = Number(value)
     return Number.isFinite(numeric) ? numeric : null
-  }, [companyExpansion?.crew_rate_per_hour])
+  }, [
+    job.customer?.crew_pricing_level?.crew_rate_per_hour,
+    companyExpansion?.crew_rate_per_hour,
+  ])
+
+  const defaultCrewBillingUnit = React.useMemo((): 'day' | 'hour' => {
+    const level = job.customer?.crew_pricing_level
+    const value =
+      level?.default_crew_billing_unit ??
+      companyExpansion?.default_crew_billing_unit ??
+      'hour'
+    return value === 'hour' ? 'hour' : 'day'
+  }, [
+    job.customer?.crew_pricing_level?.default_crew_billing_unit,
+    companyExpansion?.default_crew_billing_unit,
+  ])
 
   // Parse rental factor config from company expansion
   const rentalFactorConfig = React.useMemo(() => {
@@ -1310,6 +1369,7 @@ export default function TechnicalOfferEditor({
                 jobEndAt={job.end_at}
                 defaultRatePerDay={defaultCrewRatePerDay}
                 defaultRatePerHour={defaultCrewRatePerHour}
+                defaultBillingUnit={defaultCrewBillingUnit}
               />
             </Tabs.Content>
 
@@ -2468,6 +2528,7 @@ function CrewSection({
   jobEndAt,
   defaultRatePerDay,
   defaultRatePerHour,
+  defaultBillingUnit = 'hour',
 }: {
   items: Array<LocalCrewItem>
   onItemsChange: (items: Array<LocalCrewItem>) => void
@@ -2477,6 +2538,7 @@ function CrewSection({
   jobEndAt?: string | null
   defaultRatePerDay?: number | null
   defaultRatePerHour?: number | null
+  defaultBillingUnit?: 'day' | 'hour'
 }) {
   const [expandedItems, setExpandedItems] = React.useState<Set<string>>(
     new Set(),
@@ -2552,27 +2614,44 @@ function CrewSection({
       ? new Date(jobEndAt)
       : new Date(startDate.getTime() + 24 * 60 * 60 * 1000) // +1 day if no job end
 
-    // Ensure we preserve the full date-time from the job
     const startIso = startDate.toISOString()
     const endIso = endDate.toISOString()
     const hasProvidedWindow = Boolean(jobStartAt && jobEndAt)
     const computedHours = calculateHoursPerDay(startIso, endIso)
     const hoursPerDay = hasProvidedWindow ? (computedHours ?? 8) : 8
-    const hourlyRate = defaultRatePerHour ?? 0
-    const dailyRate = hourlyRate * hoursPerDay
 
-    const newItem: LocalCrewItem = {
-      id: `temp-${Date.now()}`,
-      role_title: '',
-      crew_count: 1,
-      start_date: startIso,
-      end_date: endIso,
-      daily_rate: dailyRate,
-      hourly_rate: hourlyRate,
-      hours_per_day: hoursPerDay,
-      billing_type: 'hourly',
-      sort_order: items.length,
-      role_category: null,
+    let newItem: LocalCrewItem
+    if (defaultBillingUnit === 'day') {
+      const dailyRate = defaultRatePerDay ?? 0
+      newItem = {
+        id: `temp-${Date.now()}`,
+        role_title: '',
+        crew_count: 1,
+        start_date: startIso,
+        end_date: endIso,
+        daily_rate: dailyRate,
+        hourly_rate: null,
+        hours_per_day: null,
+        billing_type: 'daily',
+        sort_order: items.length,
+        role_category: null,
+      }
+    } else {
+      const hourlyRate = defaultRatePerHour ?? 0
+      const dailyRate = hourlyRate * hoursPerDay
+      newItem = {
+        id: `temp-${Date.now()}`,
+        role_title: '',
+        crew_count: 1,
+        start_date: startIso,
+        end_date: endIso,
+        daily_rate: dailyRate,
+        hourly_rate: hourlyRate,
+        hours_per_day: hoursPerDay,
+        billing_type: 'hourly',
+        sort_order: items.length,
+        role_category: null,
+      }
     }
     onItemsChange([...items, newItem])
     setExpandedItems((prev) => new Set([...prev, newItem.id]))

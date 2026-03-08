@@ -2,6 +2,7 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Box,
   Button,
   Checkbox,
   Dialog,
@@ -74,6 +75,7 @@ export default function JobDialog({
   const [contactId, setContactId] = React.useState<UUID | ''>(
     initialData?.customer_contact_id ?? '',
   )
+  const jobDialogPortalRef = React.useRef<HTMLElement | null>(null)
   const resetCreateFields = React.useCallback(() => {
     setTitle('')
     setDescription('')
@@ -722,6 +724,9 @@ export default function JobDialog({
                   onValueChange={(v) => setProjectLead(v)}
                   placeholder="Search project lead…"
                   emptyMessage="No project leads found"
+                  dropdownMaxWidth={280}
+                  style={{ width: '100%', minWidth: 0 }}
+                  portalContainer={() => jobDialogPortalRef.current}
                 />
               </Field>
             </Flex>
@@ -751,74 +756,90 @@ export default function JobDialog({
                 />
                 <Text size="2">Customer is a member of the company</Text>
               </label>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                  gap: 12,
-                  width: '100%',
+              <Box
+                ref={(el: HTMLElement | null) => {
+                  jobDialogPortalRef.current = el
                 }}
+                style={{ position: 'relative' }}
               >
-                <Field label="Customer">
-                  <SearchableSelect
-                    options={customers.map((c) => ({
-                      value: c.id,
-                      label: c.name,
-                    }))}
-                    value={customerId}
-                    onValueChange={(v) => setCustomerId(v)}
-                    disabled={isCompanyCustomer}
-                    placeholder={
-                      isCompanyCustomer
-                        ? 'Disabled for company member'
-                        : 'Search customer…'
-                    }
-                    emptyMessage="No customers found"
-                  />
-                </Field>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gap: 12,
+                    width: '100%',
+                  }}
+                >
+                  <Field label="Customer">
+                    <SearchableSelect
+                      options={customers.map((c) => ({
+                        value: c.id,
+                        label: c.name,
+                      }))}
+                      value={customerId}
+                      onValueChange={(v) => setCustomerId(v)}
+                      disabled={isCompanyCustomer}
+                      placeholder={
+                        isCompanyCustomer
+                          ? 'Disabled for company member'
+                          : 'Search customer…'
+                      }
+                      emptyMessage="No customers found"
+                      dropdownMaxWidth={280}
+                      style={{ width: '100%', minWidth: 0 }}
+                      portalContainer={() => jobDialogPortalRef.current}
+                    />
+                  </Field>
 
-                <Field label="Main contact">
-                  <SearchableSelect
-                    options={contacts.map((c) => ({
-                      value: c.id,
-                      label: c.name,
-                    }))}
-                    value={contactId}
-                    onValueChange={(v) => setContactId(v)}
-                    disabled={
-                      isCompanyCustomer ||
-                      !customerId ||
-                      contactsLoading ||
-                      contacts.length === 0
-                    }
-                    placeholder={
-                      isCompanyCustomer
-                        ? 'Disabled for company member'
-                        : !customerId
-                          ? 'Select a customer first'
-                          : contactsLoading
-                            ? 'Loading…'
-                            : 'Search contact…'
-                    }
-                    emptyMessage="No contacts found"
-                  />
-                </Field>
-              </div>
+                  <Field label="Main contact">
+                    <SearchableSelect
+                      options={contacts.map((c) => ({
+                        value: c.id,
+                        label: c.name,
+                      }))}
+                      value={contactId}
+                      onValueChange={(v) => setContactId(v)}
+                      disabled={
+                        isCompanyCustomer ||
+                        !customerId ||
+                        contactsLoading ||
+                        contacts.length === 0
+                      }
+                      placeholder={
+                        isCompanyCustomer
+                          ? 'Disabled for company member'
+                          : !customerId
+                            ? 'Select a customer first'
+                            : contactsLoading
+                              ? 'Loading…'
+                              : 'Search contact…'
+                      }
+                      emptyMessage="No contacts found"
+                      dropdownMaxWidth={280}
+                      style={{ width: '100%', minWidth: 0 }}
+                      portalContainer={() => jobDialogPortalRef.current}
+                    />
+                  </Field>
+                </div>
 
-              {isCompanyCustomer && (
-                <Field label="Customer from company">
-                  <SearchableSelect
-                    options={companyUsers.map((u) => ({
-                      value: u.user_id,
-                      label: u.display_name ?? u.email,
-                    }))}
-                    value={customerUserId}
-                    onValueChange={(v) => setCustomerUserId(v)}
-                    placeholder="Search company member…"
-                    emptyMessage="No company members found"
-                  />
-                </Field>
-              )}
+                {isCompanyCustomer && (
+                  <Field label="Customer from company">
+                    <SearchableSelect
+                      options={companyUsers.map((u) => ({
+                        value: u.user_id,
+                        label: u.display_name ?? u.email,
+                      }))}
+                      value={customerUserId}
+                      onValueChange={(v) => setCustomerUserId(v)}
+                      placeholder="Search company member…"
+                      emptyMessage="No company members found"
+                      dropdownMaxWidth={280}
+                      style={{ width: '100%', minWidth: 0 }}
+                      portalContainer={() => jobDialogPortalRef.current}
+                    />
+                  </Field>
+                )}
+              </Box>
             </Flex>
           </div>
 

@@ -1,10 +1,19 @@
 import * as React from 'react'
-import { useMutation } from '@tanstack/react-query'
-import { Button, Dialog, Flex, Switch, Text, TextField } from '@radix-ui/themes'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import {
+  Button,
+  Dialog,
+  Flex,
+  Select,
+  Switch,
+  Text,
+  TextField,
+} from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { formatVATInput } from '@shared/lib/generalFunctions'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
+import { crewPricingLevelsQuery } from '@features/company/api/queries'
 import { upsertCustomer } from '../../api/queries'
 
 type Initial = {
@@ -14,6 +23,7 @@ type Initial = {
   address: string
   is_partner: boolean
   logo_path?: string | null
+  crew_pricing_level_id?: string | null
 }
 
 export default function EditCustomerDialog({
@@ -47,14 +57,21 @@ export default function EditCustomerDialog({
 
   const [form, setForm] = React.useState({
     ...initial,
+    crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
     ...parseAddress(initial.address),
+  })
+
+  const { data: levels = [] } = useQuery({
+    ...crewPricingLevelsQuery(companyId ?? ''),
+    enabled: !!companyId && open,
   })
 
   React.useEffect(() => {
     if (!open) return
     setForm({
       ...initial,
+      crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
       vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
       ...parseAddress(initial.address),
     })
@@ -66,6 +83,7 @@ export default function EditCustomerDialog({
     initial.address,
     initial.is_partner,
     initial.logo_path,
+    initial.crew_pricing_level_id,
     parseAddress,
   ])
 
@@ -100,6 +118,7 @@ export default function EditCustomerDialog({
         address: addressString,
         is_partner: !!form.is_partner,
         logo_path: form.logo_path ?? null,
+        crew_pricing_level_id: form.crew_pricing_level_id ?? null,
       })
     },
     onSuccess: () => {
@@ -160,6 +179,27 @@ export default function EditCustomerDialog({
               value={form.country}
               onChange={(e) => setAddr('country', e.target.value)}
             />
+          </Field>
+          <Field label="Crew pricing level">
+            <Select.Root
+              value={form.crew_pricing_level_id ?? '__standard__'}
+              onValueChange={(v) =>
+                set(
+                  'crew_pricing_level_id',
+                  v === '__standard__' ? null : v,
+                )
+              }
+            >
+              <Select.Trigger placeholder="Standard" />
+              <Select.Content style={{ zIndex: 10000 }}>
+                <Select.Item value="__standard__">Standard</Select.Item>
+                {levels.map((level) => (
+                  <Select.Item key={level.id} value={level.id}>
+                    {level.name}
+                  </Select.Item>
+                ))}
+              </Select.Content>
+            </Select.Root>
           </Field>
           <Flex align="center" gap="2">
             <Text size="2" color="gray">

@@ -381,7 +381,7 @@ export function jobDetailQuery({ jobId }: { jobId: string }) {
           `
           id, company_id, title, jobnr, description, status, start_at, end_at, archived, invoice_basis,
           project_lead_user_id, customer_id, customer_user_id, customer_contact_id, job_address_id,
-          customer:customer_id ( id, name, email, phone, address, vat_number ),
+          customer:customer_id ( id, name, email, phone, address, vat_number, conta_customer_id, conta_days_until_payment_reminder ),
           customer_user:customer_user_id ( user_id, display_name, email, phone ),
           project_lead:project_lead_user_id ( user_id, display_name, email ),
           customer_contact:customer_contact_id ( id, name, email, phone, title ),
@@ -403,7 +403,7 @@ export function jobTimePeriodsQuery({ jobId }: { jobId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('time_periods')
-        .select('id, company_id, job_id, title, start_at, end_at, category')
+        .select('id, company_id, job_id, title, start_at, end_at, category, program_group')
         .eq('job_id', jobId)
         .order('start_at', { ascending: true })
       if (error) throw error
@@ -421,6 +421,7 @@ export async function upsertTimePeriod(payload: {
   start_at: string // ISO
   end_at: string // ISO
   category?: 'program' | 'equipment' | 'crew' | 'transport'
+  program_group?: string | null
 }) {
   if (payload.id) {
     const { error } = await supabase
@@ -429,6 +430,7 @@ export async function upsertTimePeriod(payload: {
         title: payload.title,
         start_at: payload.start_at,
         end_at: payload.end_at,
+        program_group: payload.program_group ?? null,
         // Don't update category on edit (preserve existing)
       })
       .eq('id', payload.id)
@@ -444,6 +446,7 @@ export async function upsertTimePeriod(payload: {
         start_at: payload.start_at,
         end_at: payload.end_at,
         category: payload.category ?? 'program',
+        program_group: payload.program_group ?? null,
       })
       .select('id')
       .single()

@@ -352,8 +352,7 @@ function JobStatusTimeline({
   const { companyRole } = useAuthz()
   const displayStatus = getDisplayStatus(currentStatus, companyRole)
   const isCanceled = displayStatus === 'canceled'
-  const [pendingStatusChange, setPendingStatusChange] =
-    React.useState<JobStatus | null>(null)
+  const [showArchivePrompt, setShowArchivePrompt] = React.useState(false)
 
   const updateStatus = useMutation({
     mutationFn: async (newStatus: JobStatus) => {
@@ -410,11 +409,46 @@ function JobStatusTimeline({
         'Status updated',
         `Job status changed to ${makeWordPresentable(newStatus)}`,
       )
+      if (newStatus === 'canceled') {
+        setShowArchivePrompt(true)
+      }
     },
     onError: (err: any) => {
       error('Failed to update status', err?.message || 'Please try again.')
     },
   })
+
+  const archiveJob = useMutation({
+    mutationFn: async () => {
+      const { error: updateError } = await supabase
+        .from('jobs')
+        .update({ archived: true })
+        .eq('id', jobId)
+      if (updateError) throw updateError
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] }),
+        qc.invalidateQueries({ queryKey: ['company'] }),
+        qc.invalidateQueries({ queryKey: ['jobs-index'] }),
+      ])
+      setShowArchivePrompt(false)
+      success('Job archived', 'The job has been archived.')
+    },
+    onError: (err: any) => {
+      error('Failed to archive job', err?.message || 'Please try again.')
+    },
+  })
+
+  const handleStatusClick = (status: JobStatus) => {
+    if (companyRole === 'freelancer' || updateStatus.isPending || status === displayStatus) return
+    updateStatus.mutate(status)
+  }
+
+  const handleCanceledClick = () => {
+    if (companyRole === 'freelancer' || updateStatus.isPending || isCanceled) return
+    updateStatus.mutate('canceled')
+  }
 
   // Filter statuses for freelancers - only show up to 'completed'
   const flowStatuses = React.useMemo(() => {
@@ -439,8 +473,8 @@ function JobStatusTimeline({
       const isPast = !isCanceled && statusIndex < currentFlowIndex && statusIndex >= 0
       const isFuture = statusIndex > currentFlowIndex
       const colors = STATUS_COLORS[status]
-      const nextInRow = statusesInRow[idx + 1]
-      const nextColors = nextInRow ? STATUS_COLORS[nextInRow] : null
+      const nextInRow = statusesInRow[idx + 1] as JobStatus | undefined
+      const nextColors = nextInRow != null ? STATUS_COLORS[nextInRow] : null
       return (
         <React.Fragment key={status}>
           <Flex
@@ -454,11 +488,7 @@ function JobStatusTimeline({
               pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
               minWidth: 0,
             }}
-            onClick={() => {
-              if (companyRole !== 'freelancer' && !updateStatus.isPending && status !== displayStatus) {
-                setPendingStatusChange(status)
-              }
-            }}
+            onClick={() => handleStatusClick(status)}
           >
             {idx < statusesInRow.length - 1 && (
               <div
@@ -560,11 +590,7 @@ function JobStatusTimeline({
                   pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
                   minWidth: '70px',
                 }}
-                onClick={() => {
-                  if (companyRole !== 'freelancer' && !updateStatus.isPending && !isCanceled) {
-                    setPendingStatusChange('canceled')
-                  }
-                }}
+                onClick={handleCanceledClick}
               >
                 <Box
                   style={{
@@ -637,15 +663,7 @@ function JobStatusTimeline({
                         companyRole === 'freelancer' ? 'none' : 'auto',
                       minWidth: 0,
                     }}
-                    onClick={() => {
-                      if (
-                        companyRole !== 'freelancer' &&
-                        !updateStatus.isPending &&
-                        status !== displayStatus
-                      ) {
-                        setPendingStatusChange(status)
-                      }
-                    }}
+                    onClick={() => handleStatusClick(status)}
                   >
                     {/* Connector line to next status */}
                     {idx < flowStatuses.length - 1 && (
@@ -759,15 +777,7 @@ function JobStatusTimeline({
               pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
               minWidth: '70px',
             }}
-            onClick={() => {
-              if (
-                companyRole !== 'freelancer' &&
-                !updateStatus.isPending &&
-                !isCanceled
-              ) {
-                setPendingStatusChange('canceled')
-              }
-            }}
+            onClick={handleCanceledClick}
           >
             <Box
               style={{
@@ -851,47 +861,36 @@ function JobStatusTimeline({
         }
       `}</style>
 
-      {/* Confirmation Dialog */}
-      {pendingStatusChange && (
+      {/* Archive prompt when job is canceled */}
+      {showArchivePrompt && (
         <Dialog.Root
-          open={!!pendingStatusChange}
+          open={showArchivePrompt}
           onOpenChange={(open) => {
-            if (!open && !updateStatus.isPending) {
-              setPendingStatusChange(null)
+            if (!open && !archiveJob.isPending) {
+              setShowArchivePrompt(false)
             }
           }}
         >
           <Dialog.Content maxWidth="450px">
-            <Dialog.Title>Change Job Status?</Dialog.Title>
+            <Dialog.Title>Archive job?</Dialog.Title>
             <Dialog.Description size="2" mb="4">
-              Are you sure you want to change the job status from{' '}
-              <strong>{makeWordPresentable(displayStatus)}</strong> to{' '}
-              <strong>{makeWordPresentable(pendingStatusChange)}</strong>?
+              Do you want to archive this job? Archived jobs are hidden from the
+              default jobs list but can be viewed by enabling &quot;Show
+              archived&quot; in the filter.
             </Dialog.Description>
             <Flex gap="3" justify="end">
               <Button
                 variant="soft"
-                onClick={() => setPendingStatusChange(null)}
-                disabled={updateStatus.isPending}
+                onClick={() => setShowArchivePrompt(false)}
+                disabled={archiveJob.isPending}
               >
-                Cancel
+                No
               </Button>
               <Button
-                onClick={() => {
-                  if (pendingStatusChange) {
-                    updateStatus.mutate(pendingStatusChange, {
-                      onSuccess: () => {
-                        setPendingStatusChange(null)
-                      },
-                      onError: () => {
-                        // Keep dialog open on error so user can try again
-                      },
-                    })
-                  }
-                }}
-                disabled={updateStatus.isPending}
+                onClick={() => archiveJob.mutate()}
+                disabled={archiveJob.isPending}
               >
-                {updateStatus.isPending ? 'Updating...' : 'Confirm'}
+                {archiveJob.isPending ? 'Archiving...' : 'Yes'}
               </Button>
             </Flex>
           </Dialog.Content>

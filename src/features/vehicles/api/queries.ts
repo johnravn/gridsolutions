@@ -212,6 +212,85 @@ export async function markVehicleDeleted({
   if (error) throw error
 }
 
+/* -------------------- Personal vehicle bookings (outside jobs) -------------------- */
+export type PersonalBookingInput = {
+  companyId: string
+  vehicleId: string
+  title: string
+  startAt: string
+  endAt: string
+}
+
+/** Create a personal vehicle booking (time_period with job_id=null + reserved_vehicles). */
+export async function createPersonalVehicleBooking(
+  input: PersonalBookingInput,
+): Promise<string> {
+  const { data: tp, error: tpErr } = await supabase
+    .from('time_periods')
+    .insert({
+      company_id: input.companyId,
+      job_id: null,
+      title: input.title,
+      start_at: input.startAt,
+      end_at: input.endAt,
+      category: 'transport',
+      deleted: false,
+    })
+    .select('id')
+    .single()
+  if (tpErr) throw tpErr
+
+  const { error: rvErr } = await supabase.from('reserved_vehicles').insert({
+    time_period_id: tp.id,
+    vehicle_id: input.vehicleId,
+  })
+  if (rvErr) throw rvErr
+  return tp.id
+}
+
+export type UpdatePersonalBookingInput = {
+  timePeriodId: string
+  title?: string
+  startAt?: string
+  endAt?: string
+}
+
+/** Update a personal vehicle booking. Caller must ensure job_id is null. */
+export async function updatePersonalVehicleBooking(
+  input: UpdatePersonalBookingInput,
+): Promise<void> {
+  const payload: Record<string, unknown> = {}
+  if (input.title !== undefined) payload.title = input.title
+  if (input.startAt !== undefined) payload.start_at = input.startAt
+  if (input.endAt !== undefined) payload.end_at = input.endAt
+  if (Object.keys(payload).length === 0) return
+  const { error } = await supabase
+    .from('time_periods')
+    .update(payload)
+    .eq('id', input.timePeriodId)
+  if (error) throw error
+}
+
+/** Delete a personal vehicle booking (hard-delete; cascade removes reserved_vehicles). Caller must ensure job_id is null. */
+export async function deletePersonalVehicleBooking(timePeriodId: string): Promise<void> {
+  const { error } = await supabase
+    .from('time_periods')
+    .delete()
+    .eq('id', timePeriodId)
+  if (error) throw error
+}
+
+/** Check if a time period is a personal booking (job_id is null) */
+export async function isPersonalBooking(timePeriodId: string): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('time_periods')
+    .select('job_id')
+    .eq('id', timePeriodId)
+    .single()
+  if (error) throw error
+  return data.job_id == null
+}
+
 /* -------------------- Partners for owner dropdown -------------------- */
 export function partnerCustomersQuery({ companyId }: { companyId: string }) {
   return {

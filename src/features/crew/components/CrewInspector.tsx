@@ -667,7 +667,6 @@ export default function CrewInspector({
       {/* Calendar */}
       <InspectorCalendar
         events={events}
-        calendarHref={`/calendar?userId=${userId}`}
         onCreate={() => {}}
         onUpdate={() => {}}
         onDelete={() => {}}

@@ -299,7 +299,17 @@ export default function BookVehicleDialog({
       onOpenChange(false)
     },
     onError: (err: any) => {
-      showError('Failed to book vehicle', err?.message || 'Please try again.')
+      const msg = err?.message ?? 'Please try again.'
+      const isOverlap =
+        msg.includes('no_overlapping_vehicle_bookings') ||
+        msg.includes('exclusion constraint') ||
+        /conflicting key value violates exclusion/.test(msg)
+      showError(
+        'Failed to book vehicle',
+        isOverlap
+          ? 'This vehicle is already booked for this period (including personal bookings).'
+          : msg,
+      )
     },
   })
 

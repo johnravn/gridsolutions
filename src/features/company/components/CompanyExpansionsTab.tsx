@@ -22,7 +22,11 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { getAvailableOrganizations } from '@features/home/api/queries'
 import { contaClient } from '@shared/api/conta/client'
-import { companyExpansionQuery, updateCompanyExpansion } from '../api/queries'
+import {
+  companyExpansionQuery,
+  updateCompanyExpansion,
+  updateCompanyInvoiceDefaults,
+} from '../api/queries'
 import DeleteAccountingConfigDialog from './dialogs/DeleteAccountingConfigDialog'
 import RemoveApiKeyDialog from './dialogs/RemoveApiKeyDialog'
 
@@ -75,6 +79,10 @@ export default function CompanyExpansionsTab() {
 
   // Track if permissions toggle has been changed (to show save button)
   const [permissionsChanged, setPermissionsChanged] = React.useState(false)
+  const [invoiceDaysLocal, setInvoiceDaysLocal] = React.useState<
+    number | null | ''
+  >(null)
+  const [invoiceDaysChanged, setInvoiceDaysChanged] = React.useState(false)
 
   // Determine configuration state
   const apiEnvironment: AccountingEnvironment =
@@ -156,6 +164,15 @@ export default function CompanyExpansionsTab() {
     staleTime: 60 * 1000,
     retry: 0,
   })
+
+  React.useEffect(() => {
+    if (expansionData?.default_invoice_days_until_due != null) {
+      setInvoiceDaysLocal(expansionData.default_invoice_days_until_due)
+    } else {
+      setInvoiceDaysLocal('')
+    }
+    setInvoiceDaysChanged(false)
+  }, [expansionData?.default_invoice_days_until_due])
 
   // Hydrate form from query data
   React.useEffect(() => {
@@ -344,6 +361,30 @@ export default function CompanyExpansionsTab() {
       toastError(
         'Failed to delete configuration',
         e?.message ?? 'Please try again.',
+      )
+    },
+  })
+
+  const saveInvoiceDaysMutation = useMutation({
+    mutationFn: async (days: number | null) => {
+      if (!companyId) throw new Error('No company selected')
+      return updateCompanyInvoiceDefaults({
+        companyId,
+        defaultInvoiceDaysUntilDue: days,
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['company', companyId, 'expansion'] })
+      success(
+        'Invoice settings saved',
+        'Default invoice due days have been updated.',
+      )
+      setInvoiceDaysChanged(false)
+    },
+    onError: (e: any) => {
+      toastError(
+        'Failed to save invoice settings',
+        e?.message ?? 'Could not update default invoice days.',
       )
     },
   })
@@ -611,6 +652,11 @@ export default function CompanyExpansionsTab() {
                           (org) =>
                             org.id === expansionData.accounting_organization_id,
                         )?.name || expansionData.accounting_organization_id}
+                      </Text>
+                    )}
+                    {expansionData.default_invoice_days_until_due != null && (
+                      <Text as="div" size="2" color="gray">
+                        Default invoice due: {expansionData.default_invoice_days_until_due} days
                       </Text>
                     )}
                     <Text as="div" size="2" color="gray">
@@ -968,6 +1014,73 @@ export default function CompanyExpansionsTab() {
                       </Field>
                     </Box>
                   )}
+
+                {/* Invoice settings - default days until due */}
+                {isContaSelected && (
+                  <Box
+                    style={{
+                      padding: 16,
+                      background: 'var(--gray-a2)',
+                      borderRadius: 6,
+                      border: '1px solid var(--gray-a6)',
+                    }}
+                  >
+                    <Text as="div" size="2" weight="medium" mb="2">
+                      Invoice settings
+                    </Text>
+                    <Text as="div" size="1" color="gray" mb="3">
+                      Default days from invoice date to due date. Used when a
+                      customer has no override in Conta. Customer-specific
+                      payment terms from Conta take precedence.
+                    </Text>
+                    <Flex align="center" gap="3" wrap="wrap">
+                      <TextField.Root
+                        type="number"
+                        min={1}
+                        max={365}
+                        placeholder="14"
+                        value={
+                          invoiceDaysLocal === ''
+                            ? ''
+                            : String(invoiceDaysLocal)
+                        }
+                        onChange={(e) => {
+                          const v = e.target.value.trim()
+                          if (v === '') {
+                            setInvoiceDaysLocal('')
+                          } else {
+                            const n = parseInt(v, 10)
+                            if (!isNaN(n) && n >= 1 && n <= 365) {
+                              setInvoiceDaysLocal(n)
+                            }
+                          }
+                          setInvoiceDaysChanged(true)
+                        }}
+                        style={{ width: 80 }}
+                      />
+                      <Text size="2" color="gray">
+                        days until due
+                      </Text>
+                      {invoiceDaysChanged && (
+                        <Button
+                          size="2"
+                          onClick={() => {
+                            const val =
+                              invoiceDaysLocal === ''
+                                ? null
+                                : (invoiceDaysLocal as number)
+                            saveInvoiceDaysMutation.mutate(val)
+                          }}
+                          disabled={saveInvoiceDaysMutation.isPending}
+                        >
+                          {saveInvoiceDaysMutation.isPending
+                            ? 'Saving...'
+                            : 'Save'}
+                        </Button>
+                      )}
+                    </Flex>
+                  </Box>
+                )}
 
                 {/* Security Note */}
                 <Box

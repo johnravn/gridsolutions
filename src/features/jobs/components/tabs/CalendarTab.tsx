@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Box, Checkbox, Flex, Text } from '@radix-ui/themes'
+import { Box, Button, Checkbox, Flex, Text } from '@radix-ui/themes'
 import FullCalendar from '@fullcalendar/react'
 import '@shared/calendar/fullcalendar.radix.css'
 import dayGridPlugin from '@fullcalendar/daygrid'
@@ -138,7 +138,7 @@ export default function CalendarTab({ jobId }: { jobId: string }) {
           border: '1px solid var(--gray-a4)',
         }}
       >
-        <Flex align="center" gap="4" wrap="wrap">
+        <Flex align="center" gap="4" wrap="wrap" style={{ width: '100%' }}>
           <Text
             size="2"
             weight="medium"
@@ -214,6 +214,17 @@ export default function CalendarTab({ jobId }: { jobId: string }) {
               </Flex>
             )
           })}
+          {selectedFilters.size > 0 && (
+            <Button
+              size="1"
+              variant="ghost"
+              color="gray"
+              onClick={() => setSelectedFilters(new Set())}
+              style={{ marginLeft: 'auto' }}
+            >
+              Remove all
+            </Button>
+          )}
         </Flex>
       </Box>
 

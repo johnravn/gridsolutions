@@ -1,13 +1,6 @@
 // src/features/calendar/InspectorCalendar.tsx
 import * as React from 'react'
-import {
-  Box,
-  Button,
-  Flex,
-  IconButton,
-  Link as RLink,
-  Text,
-} from '@radix-ui/themes'
+import { Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
 import { ArrowRight, Calendar, List } from 'iconoir-react'
 import FullCalendar from '@fullcalendar/react'
 import nbLocale from '@fullcalendar/core/locales/nb'
@@ -23,7 +16,6 @@ import type {
 
 type Props = {
   events: Array<EventInput>
-  calendarHref: string // link to your full calendar route
   onCreate?: (e: {
     title: string
     start: string
@@ -40,7 +32,6 @@ type Props = {
 
 export default function InspectorCalendar({
   events,
-  calendarHref,
   onCreate,
   onUpdate,
   onDelete,
@@ -115,12 +106,6 @@ export default function InspectorCalendar({
           >
             <List />
           </IconButton>
-          <RLink href={calendarHref}>
-            <Flex align="center" gap="1">
-              <Text>Open calendar</Text>
-              <ArrowRight />
-            </Flex>
-          </RLink>
         </Flex>
       </Flex>
 
