@@ -3628,7 +3628,7 @@ export type Database = {
       }
       get_accounting_api_environment: { Args: never; Returns: string }
       get_accounting_read_only: { Args: never; Returns: boolean }
-      get_conta_api_key: { Args: never; Returns: string }
+      get_conta_api_key: { Args: { p_force_production?: boolean }; Returns: string }
       get_group_contents_for_display: {
         Args: { p_group_id: string }
         Returns: Json

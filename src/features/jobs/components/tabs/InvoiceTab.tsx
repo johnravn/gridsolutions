@@ -591,10 +591,9 @@ export default function InvoiceTab({
       return { response, invoiceRecord }
     },
     onSuccess: async (data, variables) => {
-      const invoiceId = data.response?.id || data.response?.invoiceId
       success(
-        'Invoice Created',
-        `Invoice has been successfully created${isTestMode ? ' (TEST MODE)' : ''}${invoiceId ? ` with ID: ${invoiceId}` : ''}.`,
+        'Invoice created and sent through Conta.',
+        isTestMode ? 'Test mode' : undefined,
       )
 
       // Update job status to 'invoiced' if not already
@@ -780,10 +779,9 @@ export default function InvoiceTab({
       return { response, invoiceRecord }
     },
     onSuccess: async (data, variables) => {
-      const invoiceId = data.response?.id || data.response?.invoiceId
       success(
-        'Invoice Created',
-        `Invoice has been successfully created${isTestMode ? ' (TEST MODE)' : ''}${invoiceId ? ` with ID: ${invoiceId}` : ''}.`,
+        'Invoice created and sent through Conta.',
+        isTestMode ? 'Test mode' : undefined,
       )
 
       // Update job status to 'invoiced' if not already

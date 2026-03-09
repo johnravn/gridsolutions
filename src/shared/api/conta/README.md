@@ -38,6 +38,14 @@ This directory contains the integration with Conta accounting software.
 
    Note: API keys are stored per-company in the database, not in environment variables.
 
+5. **Use production Conta in local dev** (optional): To hit production Conta API when running locally (e.g. `npm run dev`), set:
+
+   ```env
+   VITE_CONTA_USE_PRODUCTION_IN_DEV=true
+   ```
+
+   The app will then use the company’s **production** API key and production URL regardless of the company’s “Sandbox / Production” setting. Only has effect when running in development mode.
+
 ## Usage
 
 Import the client in your features:

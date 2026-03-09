@@ -1,12 +1,27 @@
 import path from 'node:path'
+import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load .env / .env.local so API middleware (e.g. calendar feed) can read SUPABASE_SERVICE_ROLE_KEY
+  // Load .env / .env.local so API middleware (e.g. calendar feed) can read SUPABASE_SERVICE_ROLE_KEY.
   const env = loadEnv(mode, process.cwd(), '')
+  // Also load .env.local.db so Conta/other vars (e.g. VITE_CONTA_USE_PRODUCTION_IN_DEV) are used when running with local Supabase
+  const localDbPath = path.resolve(process.cwd(), '.env.local.db')
+  if (fs.existsSync(localDbPath)) {
+    const content = fs.readFileSync(localDbPath, 'utf-8')
+    for (const line of content.split('\n')) {
+      const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/)
+      if (match) {
+        const key = match[1]
+        const value = match[2].replace(/^["']|["']$/g, '').trim()
+        env[key] = value
+        if (!process.env[key]) process.env[key] = value
+      }
+    }
+  }
   if (env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY
   }
@@ -101,6 +116,10 @@ export default defineConfig(({ mode }) => {
       '@shared': path.resolve(__dirname, 'src/shared'),
       '@features': path.resolve(__dirname, 'src/features'),
     },
+  },
+  optimizeDeps: {
+    // Avoid stale chunk errors when devtools (or other deps) are re-optimized
+    exclude: ['@tanstack/react-router-devtools'],
   },
   preview: {
     // Ensure preview server handles SPA routing correctly

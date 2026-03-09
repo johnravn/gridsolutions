@@ -14,19 +14,33 @@ const contaApiUrlProd =
   'https://api.gateway.conta.no'
 const contaApiUrlSandbox =
   import.meta.env.VITE_CONTA_API_URL_SANDBOX ||
-  import.meta.env.VITE_CONTA_API_URL ||
-  'https://api.gateway.conta.no'
+  'https://api.gateway.conta-sandbox.no'
+
+/** When true in local dev, use production Conta API key and URL regardless of company setting */
+const useProductionInDev =
+  import.meta.env.DEV &&
+  import.meta.env.VITE_CONTA_USE_PRODUCTION_IN_DEV === 'true'
 
 /**
  * Get the Conta API key for the current user's company
- * The key is stored encrypted in company_expansions table and decrypted server-side
+ * The key is stored encrypted in company_expansions table and decrypted server-side.
+ * When VITE_CONTA_USE_PRODUCTION_IN_DEV=true in local dev, returns production key.
+ * If the DB doesn't support p_force_production yet (migration not applied), we fall back
+ * to company environment so key and URL always match.
  */
-async function getContaApiKey(): Promise<string | null> {
-  const { data, error } = await supabase.rpc('get_conta_api_key')
-
+async function getContaApiKey(): Promise<{ key: string; forceProductionUsed: boolean }> {
+  if (useProductionInDev) {
+    const { data, error } = await supabase.rpc('get_conta_api_key', {
+      p_force_production: true,
+    })
+    if (!error && data != null) {
+      return { key: data as string, forceProductionUsed: true }
+    }
+    // Migration not applied or other error: fall back to company env so key and URL match
+  }
+  const { data, error } = await supabase.rpc('get_conta_api_key', {})
   if (error) throw error
-
-  return data as string | null
+  return { key: data as string, forceProductionUsed: false }
 }
 
 /**
@@ -58,12 +72,13 @@ export async function contaRequest(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<Response> {
-  const apiKey = await getContaApiKey()
+  const { key: apiKey, forceProductionUsed } = await getContaApiKey()
   if (!apiKey) {
     throw new Error('No Conta API key configured for this company')
   }
 
-  const environment = await getAccountingEnvironment()
+  const environment =
+    forceProductionUsed ? 'production' : await getAccountingEnvironment()
   const baseUrl =
     environment === 'sandbox' ? contaApiUrlSandbox : contaApiUrlProd
   const url = `${baseUrl}${endpoint}`
@@ -122,7 +137,7 @@ async function buildContaErrorMessage(response: Response): Promise<string> {
 
   if (response.status === 401) {
     errorMessage +=
-      ' - Check that your API key matches the Conta environment (sandbox vs production) and that VITE_CONTA_API_URL is set correctly.'
+      ' Use a production key with https://api.gateway.conta.no and a sandbox key with https://api.gateway.conta-sandbox.no. In local dev with production key, set VITE_CONTA_USE_PRODUCTION_IN_DEV=true and VITE_CONTA_API_URL_PROD=https://api.gateway.conta.no in .env.local (not .env.local.db), then run: npm run db:reset.'
   }
 
   return errorMessage
