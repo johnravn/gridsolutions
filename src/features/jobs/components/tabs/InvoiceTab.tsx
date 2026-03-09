@@ -8,18 +8,14 @@ import {
   Dialog,
   Flex,
   Heading,
-  Separator,
-  Table,
   Text,
   TextArea,
   Tooltip,
 } from '@radix-ui/themes'
 import {
   CheckCircle,
-  Edit,
   Eye,
   GoogleDocs,
-  Plus,
   XmarkCircle,
 } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
@@ -36,7 +32,7 @@ import type {
   BookingInvoiceLine,
   BookingsForInvoice,
 } from '../../api/invoiceQueries'
-import type { InvoiceBasis, JobDetail, JobOffer } from '../../types'
+import type { JobDetail, JobOffer } from '../../types'
 
 type InvoiceRecipient = { type: string; ehfRecipient?: string }
 type InvoiceRecipientResult = {
@@ -44,8 +40,58 @@ type InvoiceRecipientResult = {
   requiresManualSend: boolean
   reason?: string
 }
+/** Return a copy of bookings with 0% VAT (for display when VAT is toggled off without refetching). */
+function withZeroVat(b: BookingsForInvoice): BookingsForInvoice {
+  return {
+    ...b,
+    equipment: b.equipment.map((l) => ({ ...l, vatPercent: 0 })),
+    crew: b.crew.map((l) => ({ ...l, vatPercent: 0 })),
+    transport: b.transport.map((l) => ({ ...l, vatPercent: 0 })),
+    all: b.all.map((l) => ({ ...l, vatPercent: 0 })),
+    totalVat: 0,
+    totalWithVat: b.totalExVat,
+  }
+}
+
+/** Build a one-line BookingsForInvoice from an accepted offer for the unified preview. */
+function offerToBookingsForInvoice(offer: JobOffer): BookingsForInvoice {
+  const line: BookingInvoiceLine = {
+    id: offer.id,
+    type: 'equipment',
+    description:
+      offer.title.trim() ||
+      `Invoice for Job offer v${offer.version_number}`,
+    quantity: 1,
+    unitPrice: offer.total_after_discount,
+    totalPrice: offer.total_after_discount,
+    vatPercent: offer.vat_percent,
+    timePeriodId: '',
+    timePeriodTitle: null,
+    startAt: '',
+    endAt: '',
+  }
+  const totalExVat = line.totalPrice
+  const totalVat = (totalExVat * offer.vat_percent) / 100
+  return {
+    equipment: [line],
+    crew: [],
+    transport: [],
+    all: [line],
+    totalExVat,
+    totalVat,
+    totalWithVat: offer.total_with_vat,
+  }
+}
+
 type PendingInvoiceAction =
-  | { kind: 'offer'; offer: JobOffer; invoiceMessage: string }
+  | {
+      kind: 'offer'
+      offer: JobOffer
+      invoiceMessage: string
+      orgReferenceOverride?: string
+      theirRefOverride?: string
+      invoiceWithVat?: boolean
+    }
   | {
       kind: 'bookings'
       bookings: BookingsForInvoice
@@ -53,8 +99,8 @@ type PendingInvoiceAction =
       orgReferenceOverride?: string
       theirRefOverride?: string
       lineDiscountOverrides?: Record<string, number>
+      invoiceWithVat?: boolean
     }
-  | { kind: 'all-offers'; invoiceMessage: string }
 
 export default function InvoiceTab({
   jobId,
@@ -66,14 +112,12 @@ export default function InvoiceTab({
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { info, success, error: toastError } = useToast()
-  const [invoiceBasis, setInvoiceBasis] = React.useState<InvoiceBasis | null>(
-    job.invoice_basis ?? null,
-  )
-  const [basisSelectionDirty, setBasisSelectionDirty] =
-    React.useState<boolean>(false)
   const [previewOffer, setPreviewOffer] = React.useState<JobOffer | null>(null)
   const [previewBookings, setPreviewBookings] =
     React.useState<BookingsForInvoice | null>(null)
+  /** When set, the preview was opened from "From accepted offer"; send uses offer mutation. */
+  const [previewSourceOffer, setPreviewSourceOffer] =
+    React.useState<JobOffer | null>(null)
   const [manualSendDialogOpen, setManualSendDialogOpen] = React.useState(false)
   const [manualSendReason, setManualSendReason] = React.useState('')
   const [pendingInvoiceAction, setPendingInvoiceAction] =
@@ -120,17 +164,17 @@ export default function InvoiceTab({
   })
 
   // Fetch bookings for invoice (only when bookings basis is selected)
+  // Use a stable query key (always 25%) so toggling VAT doesn't refetch and cause dialog to glitch
   const {
     data: bookings,
     isLoading: isLoadingBookings,
-    refetch: refetchBookings,
   } = useQuery({
     ...jobBookingsForInvoiceQuery({
       jobId,
       companyId: companyId ?? '',
-      defaultVatPercent: invoiceWithVat ? 25 : 0,
+      defaultVatPercent: 25,
     }),
-    enabled: invoiceBasis === 'bookings' && !!companyId,
+    enabled: !!companyId,
   })
 
   // EHF status for bookings preview (checked when preview opens)
@@ -193,68 +237,17 @@ export default function InvoiceTab({
     },
   })
 
+  // Sync preview from query only when in bookings mode (not from offer)
   React.useEffect(() => {
-    setBasisSelectionDirty(false)
-    setInvoiceBasis(job.invoice_basis ?? null)
-  }, [jobId])
-
-  // Sync preview bookings when VAT toggle changes (query refetches with new defaultVatPercent)
-  React.useEffect(() => {
-    if (previewBookings && bookings && bookings.all.length > 0) {
+    if (
+      !previewSourceOffer &&
+      previewBookings &&
+      bookings &&
+      bookings.all.length > 0
+    ) {
       setPreviewBookings(bookings)
     }
-  }, [bookings])
-
-  React.useEffect(() => {
-    if (basisSelectionDirty) return
-    setInvoiceBasis(job.invoice_basis ?? null)
-  }, [job.invoice_basis, basisSelectionDirty])
-
-  const saveInvoiceBasisMutation = useMutation({
-    mutationFn: async (basis: InvoiceBasis) => {
-      const { error } = await supabase
-        .from('jobs')
-        .update({ invoice_basis: basis } as any)
-        .eq('id', jobId)
-      if (error) throw error
-      return basis
-    },
-    onSuccess: (basis) => {
-      setInvoiceBasis(basis)
-      setBasisSelectionDirty(false)
-      qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
-    },
-    onError: (err: any) => {
-      setBasisSelectionDirty(true)
-      toastError(
-        'Failed to Save Invoice Basis',
-        err?.message ||
-          'An error occurred while saving your selection. Please try again.',
-      )
-    },
-  })
-
-  const handleChooseInvoiceBasis = (basis: InvoiceBasis) => {
-    setBasisSelectionDirty(true)
-    saveInvoiceBasisMutation.mutate(basis)
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '—'
-    return new Date(dateString).toLocaleDateString('nb-NO', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  }
+  }, [bookings, previewSourceOffer])
 
   // Get accounting config and invoice defaults from company_expansions
   const { data: accountingConfig } = useQuery({
@@ -364,23 +357,6 @@ export default function InvoiceTab({
     return `Job: ${jobLabel}\nInvoice based on bookings (${lineCount} line${lineCount !== 1 ? 's' : ''})`
   }
 
-  const openInvoiceMessageDialog = (action: PendingInvoiceAction) => {
-    setInvoiceMessageAction(action)
-    const defaultMessage =
-      action.kind === 'offer'
-        ? getDefaultPersonalMessage({
-            type: 'offer',
-            offerTitle: action.offer.title || `v${action.offer.version_number}`,
-          })
-        : action.kind === 'bookings'
-          ? getDefaultPersonalMessage({
-              type: 'bookings',
-              bookingsCount: action.bookings.all.length,
-            })
-          : getDefaultPersonalMessage({ type: 'offer' })
-    setInvoiceMessageDraft(defaultMessage)
-    setInvoiceMessageDialogOpen(true)
-  }
 
   const getProjectLeadReference = () =>
     job.project_lead?.display_name || job.project_lead?.email || undefined
@@ -483,12 +459,18 @@ export default function InvoiceTab({
       invoiceRecipients,
       downloadPdfAfterCreate: _downloadPdfAfterCreate,
       invoiceMessage,
+      orgReferenceOverride,
+      theirRefOverride,
+      invoiceWithVat: includeVat = true,
     }: {
       offer: JobOffer
       organizationId: string
       invoiceRecipients: Array<InvoiceRecipient>
       downloadPdfAfterCreate?: boolean
       invoiceMessage?: string
+      orgReferenceOverride?: string
+      theirRefOverride?: string
+      invoiceWithVat?: boolean
     }) => {
       const contaCustomerId = getContaCustomerId()
 
@@ -503,6 +485,11 @@ export default function InvoiceTab({
       } catch (projectError) {
         console.warn('Failed to resolve Conta project for job', projectError)
       }
+
+      const orgRef = orgReferenceOverride?.trim() || getOrgReference()
+      const customerRef =
+        theirRefOverride?.trim() || getCustomerContactReference() || ''
+      const vatCode = getVatCode(includeVat ? 25 : 0)
 
       // Create invoice with single line for the offer
       const daysUntilDue = getDaysUntilDue()
@@ -520,10 +507,8 @@ export default function InvoiceTab({
         ...(contaProjectId ? { projectId: contaProjectId } : {}),
         ...(shouldSendEhf ? { invoiceRecipients } : {}),
         ...(shouldSendEhf ? { ehfOrderReference: getEhfOrderReference() } : {}),
-        ...(getOrgReference() ? { orgReference: getOrgReference() } : {}),
-        ...(getCustomerContactReference()
-          ? { customerReference: getCustomerContactReference() }
-          : {}),
+        ...(orgRef ? { orgReference: orgRef } : {}),
+        ...(customerRef ? { customerReference: customerRef } : {}),
         personalMessage:
           invoiceMessage?.trim() ||
           getDefaultPersonalMessage({
@@ -536,7 +521,7 @@ export default function InvoiceTab({
             quantity: 1,
             price: offer.total_after_discount, // Price ex VAT
             discount: offer.discount_percent,
-            vatCode: getVatCode(offer.vat_percent),
+            vatCode,
             lineNo: 1,
           },
         ],
@@ -657,6 +642,7 @@ export default function InvoiceTab({
       orgReferenceOverride,
       theirRefOverride,
       lineDiscountOverrides: lineDiscountOverridesParam = {},
+      invoiceWithVat: includeVat = true,
     }: {
       bookingsData: BookingsForInvoice
       organizationId: string
@@ -666,6 +652,7 @@ export default function InvoiceTab({
       orgReferenceOverride?: string
       theirRefOverride?: string
       lineDiscountOverrides?: Record<string, number>
+      invoiceWithVat?: boolean
     }) => {
       const contaCustomerId = getContaCustomerId()
 
@@ -685,13 +672,14 @@ export default function InvoiceTab({
         throw new Error('No bookings available to invoice')
       }
 
-      // Create invoice lines from bookings (one line per booking)
+      // Use VAT choice at send time so the toggle is the source of truth (fixes bug where turning off VAT still sent with VAT)
+      const vatPercentForLines = includeVat ? 25 : 0
       const invoiceLines = bookingsData.all.map((line, index) => ({
         description: line.description,
         quantity: line.quantity,
         price: line.unitPrice, // Price ex VAT per unit
         discount: lineDiscountOverridesParam[line.id] ?? 0,
-        vatCode: getVatCode(line.vatPercent),
+        vatCode: getVatCode(vatPercentForLines),
         lineNo: index + 1,
       }))
 
@@ -860,8 +848,13 @@ export default function InvoiceTab({
         invoiceRecipients: pendingInvoiceRecipients,
         downloadPdfAfterCreate: true,
         invoiceMessage: pendingInvoiceAction.invoiceMessage,
+        orgReferenceOverride: pendingInvoiceAction.orgReferenceOverride,
+        theirRefOverride:
+          pendingInvoiceAction.theirRefOverride ??
+          job.customer_contact?.name?.trim(),
+        invoiceWithVat: pendingInvoiceAction.invoiceWithVat ?? true,
       })
-    } else if (pendingInvoiceAction.kind === 'bookings') {
+    } else {
       createInvoiceFromBookingsMutation.mutate({
         bookingsData: pendingInvoiceAction.bookings,
         organizationId,
@@ -873,6 +866,7 @@ export default function InvoiceTab({
           pendingInvoiceAction.theirRefOverride ??
           job.customer_contact?.name?.trim(),
         lineDiscountOverrides: pendingInvoiceAction.lineDiscountOverrides,
+        invoiceWithVat: pendingInvoiceAction.invoiceWithVat ?? true,
       })
     }
     setManualSendDialogOpen(false)
@@ -881,16 +875,11 @@ export default function InvoiceTab({
     setManualSendReason('')
   }
 
-  const handleCreateInvoiceFromOffer = (
-    offerId: string,
-    showPreview = false,
-  ) => {
-    const offer = acceptedOffers.find((o) => o.id === offerId)
-    if (!offer) {
-      toastError('Error', 'Offer not found')
-      return
-    }
-
+  /** Open the unified invoice preview from the accepted offer (one line = offer total). */
+  const handleCreateInvoiceFromOffer = async () => {
+    const offer = acceptedOffers[0]
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard for type safety when button is enabled
+    if (!offer) return
     if (!accountingConfig?.accounting_organization_id) {
       info(
         'Accounting Integration Required',
@@ -915,20 +904,33 @@ export default function InvoiceTab({
       return
     }
 
-    if (showPreview) {
-      setPreviewOffer(offer)
-      return
-    }
-    openInvoiceMessageDialog({
-      kind: 'offer',
-      offer,
-      invoiceMessage: '',
+    const recipientResult = await resolveInvoiceRecipients(job.customer)
+    setEhfStatus({
+      canReceive: !recipientResult.requiresManualSend,
+      reason: recipientResult.reason,
     })
+    const oneLineBookings = offerToBookingsForInvoice(offer)
+    setPreviewSourceOffer(offer)
+    setPreviewOffer(null)
+    setPreviewBookings(oneLineBookings)
+    const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
+    setInvoicePreviewMessage(
+      `Job: ${jobLabel}\nInvoice from accepted offer: ${offer.title || `v${offer.version_number}`}`,
+    )
+    setInvoicePreviewOurRef(
+      job.project_lead?.display_name || job.project_lead?.email || '',
+    )
+    setInvoicePreviewTheirRef(job.customer_contact?.name?.trim() || '')
+    setLineDiscountOverrides({})
+    setEditedInvoiceLines(oneLineBookings.all)
   }
 
   const createInvoiceFromOfferWithMessage = async (
     offer: JobOffer,
     message: string,
+    orgReferenceOverride?: string,
+    theirRefOverride?: string,
+    invoiceWithVatParam: boolean = true,
   ) => {
     if (!accountingConfig?.accounting_organization_id) return
     const hasBankAccount = await ensureContaBankAccount(
@@ -939,7 +941,14 @@ export default function InvoiceTab({
     const recipientResult = await resolveInvoiceRecipients(job.customer)
     if (recipientResult.requiresManualSend) {
       openManualSendDialog(
-        { kind: 'offer', offer, invoiceMessage: message },
+        {
+          kind: 'offer',
+          offer,
+          invoiceMessage: message,
+          orgReferenceOverride,
+          theirRefOverride,
+          invoiceWithVat: invoiceWithVatParam,
+        },
         recipientResult.recipients,
         recipientResult.reason,
       )
@@ -951,6 +960,9 @@ export default function InvoiceTab({
       organizationId: accountingConfig.accounting_organization_id,
       invoiceRecipients: recipientResult.recipients,
       invoiceMessage: message,
+      orgReferenceOverride,
+      theirRefOverride,
+      invoiceWithVat: invoiceWithVatParam,
     })
   }
 
@@ -990,6 +1002,7 @@ export default function InvoiceTab({
       canReceive: !recipientResult.requiresManualSend,
       reason: recipientResult.reason,
     })
+    setPreviewSourceOffer(null)
     setPreviewBookings(bookings)
     // Default message: job name, start/end date, job number
     const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
@@ -1072,6 +1085,7 @@ export default function InvoiceTab({
     orgReferenceOverride?: string,
     theirRefOverride?: string,
     lineDiscountOverridesParam?: Record<string, number>,
+    invoiceWithVatParam: boolean = true,
   ) => {
     if (!accountingConfig?.accounting_organization_id) return
     const hasBankAccount = await ensureContaBankAccount(
@@ -1089,6 +1103,7 @@ export default function InvoiceTab({
           orgReferenceOverride,
           theirRefOverride,
           lineDiscountOverrides: lineDiscountOverridesParam,
+          invoiceWithVat: invoiceWithVatParam,
         },
         recipientResult.recipients,
         recipientResult.reason,
@@ -1104,108 +1119,28 @@ export default function InvoiceTab({
       orgReferenceOverride,
       theirRefOverride,
       lineDiscountOverrides: lineDiscountOverridesParam,
+      invoiceWithVat: invoiceWithVatParam,
     })
   }
 
-  const handleCreateInvoiceForAllOffers = () => {
-    if (offersNeedingInvoice.length === 0) {
-      info('No Offers', 'There are no offers ready to invoice.')
-      return
-    }
-
-    if (!accountingConfig?.accounting_organization_id) {
-      info(
-        'Accounting Integration Required',
-        'Please configure your accounting software organization ID in Company settings before creating invoices.',
-      )
-      return
-    }
-
-    if (accountingConfig.accounting_software !== 'conta') {
-      info(
-        'Accounting Software Not Supported',
-        'Currently only Conta accounting software is supported for invoice creation.',
-      )
-      return
-    }
-
-    if (!canSendInvoice) {
-      info(
-        'Customer Not Linked to Conta',
-        'The customer must be linked to Conta with Conta customer data before sending invoices. Sync or link the customer in customer settings, or use the Conta check dialog.',
-      )
-      return
-    }
-
-    openInvoiceMessageDialog({
-      kind: 'all-offers',
-      invoiceMessage: '',
-    })
-  }
-
-  const createInvoicesForAllOffersWithMessage = async (message: string) => {
-    if (!accountingConfig?.accounting_organization_id) return
-    try {
-      const hasBankAccount = await ensureContaBankAccount(
-        accountingConfig.accounting_organization_id,
-      )
-      if (!hasBankAccount) return
-
-      const recipientResult = await resolveInvoiceRecipients(job.customer)
-      if (recipientResult.requiresManualSend) {
-        openManualSendDialog(
-          {
-            kind: 'offer',
-            offer: offersNeedingInvoice[0],
-            invoiceMessage: message,
-          },
-          recipientResult.recipients,
-          recipientResult.reason,
-        )
-        return
-      }
-      for (const offer of offersNeedingInvoice) {
-        await createInvoiceFromOfferMutation.mutateAsync({
-          offer,
-          organizationId: accountingConfig.accounting_organization_id,
-          invoiceRecipients: recipientResult.recipients,
-          invoiceMessage: message,
-        })
-      }
-      success(
-        'All Invoices Created',
-        `Successfully created ${offersNeedingInvoice.length} invoice(s).`,
-      )
-    } catch (error: any) {
-      toastError(
-        'Error Creating Invoices',
-        error?.message ||
-          'An error occurred while creating some invoices. Please check and retry if needed.',
-      )
-    }
-  }
+  // Display version of preview bookings: when VAT is off, show zero-VAT totals without refetching
+  const displayBookings = React.useMemo(() => {
+    if (!previewBookings) return null
+    if (invoiceWithVat) return previewBookings
+    return withZeroVat(previewBookings)
+  }, [previewBookings, invoiceWithVat])
 
   // Check if job has been invoiced (status is 'invoiced' or 'paid')
   const isInvoiced = job.status === 'invoiced' || job.status === 'paid'
   const isCompleted = job.status === 'completed'
 
-  // Offers that need invoicing (accepted but not yet invoiced)
-  // For now, we'll assume all accepted offers need invoicing
-  // In the future, we might track invoice status per offer
-  const offersNeedingInvoice = acceptedOffers
   const hasAcceptedOffers = acceptedOffers.length > 0
 
-  const totalToInvoice = offersNeedingInvoice.reduce(
-    (sum, offer) => sum + offer.total_with_vat,
-    0,
-  )
-
-  const isLoading =
-    isLoadingOffers || (invoiceBasis === 'bookings' && isLoadingBookings)
+  const isLoading = isLoadingOffers || isLoadingBookings
 
   if (isLoading) {
     return (
-      <Box>
+      <Box style={{ overflowX: 'hidden', maxWidth: '100%' }}>
         <Heading size="3" mb="3">
           Invoice
         </Heading>
@@ -1214,71 +1149,10 @@ export default function InvoiceTab({
     )
   }
 
-  if (!invoiceBasis) {
-    return (
-      <Box>
-        <Flex justify="between" align="center" mb="4">
-          <Heading size="3">Invoice</Heading>
-        </Flex>
-        <Card>
-          <Flex direction="column" gap="4">
-            <Box>
-              <Heading size="4" mb="1">
-                How do you want to create the invoice?
-              </Heading>
-              <Text size="2" color="gray">
-                Choose whether to invoice from the accepted offer or from
-                bookings on the job.
-              </Text>
-            </Box>
-            <Flex gap="3" wrap="wrap">
-              <Button
-                size="3"
-                variant="soft"
-                onClick={() => handleChooseInvoiceBasis('offer')}
-                disabled={saveInvoiceBasisMutation.isPending}
-              >
-                Accepted Offer
-              </Button>
-              <Button
-                size="3"
-                variant="soft"
-                onClick={() => handleChooseInvoiceBasis('bookings')}
-                disabled={saveInvoiceBasisMutation.isPending}
-              >
-                Bookings on Job
-              </Button>
-            </Flex>
-            {!hasAcceptedOffers && (
-              <Text size="2" color="gray">
-                No accepted offers for this job yet. You can still choose offers
-                and create the invoice once an offer is accepted.
-              </Text>
-            )}
-          </Flex>
-        </Card>
-      </Box>
-    )
-  }
-
   return (
-    <Box>
+    <Box style={{ overflowX: 'hidden', maxWidth: '100%' }}>
       <Flex justify="between" align="center" mb="4">
         <Heading size="3">Invoice</Heading>
-        <Button
-          size="1"
-          variant="ghost"
-          onClick={() => {
-            setBasisSelectionDirty(true)
-            setInvoiceBasis(null)
-          }}
-        >
-          <Text size="2" color="gray">
-            Invoicing based on{' '}
-            {invoiceBasis === 'offer' ? 'offers' : 'bookings'}
-          </Text>
-          <Edit width={14} height={14} />
-        </Button>
       </Flex>
 
       {/* Job Invoice Status */}
@@ -1326,400 +1200,69 @@ export default function InvoiceTab({
         )}
       </Card>
 
-      {/* Invoice Basis: Accepted Offer */}
-      {invoiceBasis === 'offer' && (
-        <>
-          {/* Accepted Offers Section */}
-          {acceptedOffers.length > 0 ? (
-            <Card mb="4">
-              <Flex justify="between" align="center" mb="3">
-                <Heading size="4">Accepted Offers</Heading>
-                {offersNeedingInvoice.length > 0 && !isInvoiced && (
-                  <Text size="2" color="gray">
-                    {offersNeedingInvoice.length} offer
-                    {offersNeedingInvoice.length !== 1 ? 's' : ''} ready to
-                    invoice
-                  </Text>
-                )}
-              </Flex>
-
-              {offersNeedingInvoice.length > 0 ? (
-                <>
-                  <Box style={{ overflowX: 'auto' }}>
-                    <Table.Root style={{ width: '100%', minWidth: 720 }}>
-                      <Table.Header>
-                        <Table.Row>
-                          <Table.ColumnHeaderCell>Offer</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>
-                            Accepted
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell
-                            style={{ textAlign: 'right' }}
-                          >
-                            Amount
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell
-                            style={{ textAlign: 'center' }}
-                          >
-                            Invoice Status
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell
-                            style={{ textAlign: 'right' }}
-                          >
-                            Actions
-                          </Table.ColumnHeaderCell>
-                        </Table.Row>
-                      </Table.Header>
-                      <Table.Body>
-                        {acceptedOffers.map((offer) => {
-                          const needsInvoice = offersNeedingInvoice.some(
-                            (o) => o.id === offer.id,
-                          )
-                          return (
-                            <Table.Row key={offer.id}>
-                              <Table.Cell>
-                                <Text weight="medium">{offer.title}</Text>
-                                <Text
-                                  size="1"
-                                  color="gray"
-                                  style={{ display: 'block' }}
-                                >
-                                  {offer.offer_type === 'technical'
-                                    ? 'Technical'
-                                    : 'Pretty'}{' '}
-                                  • v{offer.version_number}
-                                </Text>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text size="2">
-                                  {formatDate(offer.accepted_at)}
-                                </Text>
-                                {offer.accepted_by_name && (
-                                  <Text
-                                    size="1"
-                                    color="gray"
-                                    style={{ display: 'block' }}
-                                  >
-                                    by {offer.accepted_by_name}
-                                  </Text>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text
-                                  size="3"
-                                  weight="medium"
-                                  style={{ textAlign: 'right' }}
-                                >
-                                  {formatCurrency(offer.total_with_vat)}
-                                </Text>
-                              </Table.Cell>
-                              <Table.Cell style={{ textAlign: 'center' }}>
-                                {needsInvoice ? (
-                                  <Text size="2" color="orange">
-                                    Pending
-                                  </Text>
-                                ) : (
-                                  <Flex align="center" justify="center" gap="1">
-                                    <CheckCircle
-                                      width={16}
-                                      height={16}
-                                      color="var(--green-9)"
-                                    />
-                                    <Text size="2" color="green">
-                                      Invoiced
-                                    </Text>
-                                  </Flex>
-                                )}
-                              </Table.Cell>
-                              <Table.Cell style={{ textAlign: 'right' }}>
-                                {needsInvoice && (
-                                  <Flex gap="2" justify="end">
-                                    <Button
-                                      size="2"
-                                      variant="ghost"
-                                      onClick={() =>
-                                        handleCreateInvoiceFromOffer(
-                                          offer.id,
-                                          true,
-                                        )
-                                      }
-                                      disabled={
-                                        createInvoiceFromOfferMutation.isPending
-                                      }
-                                    >
-                                      <Eye width={14} height={14} />
-                                      Preview
-                                    </Button>
-                                    <Button
-                                      size="2"
-                                      variant="soft"
-                                      onClick={() =>
-                                        handleCreateInvoiceFromOffer(offer.id)
-                                      }
-                                      disabled={
-                                        createInvoiceFromOfferMutation.isPending
-                                      }
-                                    >
-                                      <GoogleDocs width={14} height={14} />
-                                      Create Invoice
-                                    </Button>
-                                  </Flex>
-                                )}
-                              </Table.Cell>
-                            </Table.Row>
-                          )
-                        })}
-                      </Table.Body>
-                    </Table.Root>
-                  </Box>
-
-                  {offersNeedingInvoice.length > 0 && !isInvoiced && (
-                    <>
-                      <Separator my="4" />
-                      <Flex justify="between" align="center">
-                        <Box>
-                          <Text size="2" color="gray" mb="1">
-                            Total to Invoice
-                          </Text>
-                          <Heading size="5">
-                            {formatCurrency(totalToInvoice)}
-                          </Heading>
-                        </Box>
-                        <Button
-                          size="3"
-                          onClick={handleCreateInvoiceForAllOffers}
-                          disabled={createInvoiceFromOfferMutation.isPending}
-                        >
-                          <Plus width={16} height={16} />
-                          Create Invoice for All
-                        </Button>
-                      </Flex>
-                    </>
-                  )}
-                </>
-              ) : (
-                <Box
-                  p="4"
-                  style={{
-                    border: '2px dashed var(--green-a6)',
-                    borderRadius: 8,
-                    textAlign: 'center',
-                  }}
-                >
-                  <CheckCircle width={32} height={32} color="var(--green-9)" />
-                  <Text
-                    size="3"
-                    weight="medium"
-                    mt="2"
-                    style={{ display: 'block' }}
-                  >
-                    All offers have been invoiced
-                  </Text>
-                </Box>
-              )}
-            </Card>
-          ) : (
-            <Card>
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                gap="3"
-                style={{ minHeight: '200px', padding: '40px' }}
-              >
-                <Text size="4" color="gray" align="center">
-                  No accepted offers yet
-                </Text>
-                <Text size="2" color="gray" align="center">
-                  Once offers are accepted, they will appear here and can be
-                  invoiced.
-                </Text>
-              </Flex>
-            </Card>
-          )}
-        </>
-      )}
-
-      {/* Invoice Basis: Bookings on Job */}
-      {invoiceBasis === 'bookings' && (
-        <>
-          {bookings && bookings.all.length > 0 ? (
-            <Card mb="4">
-              <Flex justify="between" align="center" mb="3">
-                <Heading size="4">Bookings on Job</Heading>
-                <Text size="2" color="gray">
-                  {bookings.all.length} booking
-                  {bookings.all.length !== 1 ? 's' : ''} ready to invoice
-                </Text>
-              </Flex>
-
-              <Box style={{ overflowX: 'auto' }}>
-                <Table.Root mb="4" style={{ width: '100%', minWidth: 720 }}>
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Model</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>
-                        Description
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                        Quantity
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                        Unit Price
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                        Total (ex VAT)
-                      </Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {bookings.all.map((line) => (
-                      <Table.Row key={line.id}>
-                        <Table.Cell>
-                          <Text size="2" weight="medium">
-                            {makeWordPresentable(line.type)}
-                          </Text>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Text>{line.brandName || '—'}</Text>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Text>{line.model || '—'}</Text>
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Text>{line.description}</Text>
-                        </Table.Cell>
-                        <Table.Cell style={{ textAlign: 'right' }}>
-                          <Text>
-                            {line.type === 'crew' || line.type === 'transport'
-                              ? line.unit === 'hour'
-                                ? `${line.quantity} hour${line.quantity !== 1 ? 's' : ''}`
-                                : `${line.quantity} day${line.quantity !== 1 ? 's' : ''}`
-                              : line.quantity}
-                          </Text>
-                        </Table.Cell>
-                        <Table.Cell style={{ textAlign: 'right' }}>
-                          <Text>{formatCurrency(line.unitPrice)}</Text>
-                        </Table.Cell>
-                        <Table.Cell style={{ textAlign: 'right' }}>
-                          <Text weight="medium">
-                            {formatCurrency(line.totalPrice)}
-                          </Text>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              </Box>
-
-              <Separator my="4" />
-
-              <Flex justify="between" align="center" mb="3">
-                <Box>
-                  <Text size="2" color="gray" mb="1">
-                    Subtotal (ex VAT)
-                  </Text>
-                  <Heading size="5">
-                    {formatCurrency(bookings.totalExVat)}
-                  </Heading>
-                </Box>
-                <Box style={{ textAlign: 'right' }}>
-                  <Text size="2" color="gray" mb="1">
-                    VAT (25%)
-                  </Text>
-                  <Heading size="5">
-                    {formatCurrency(bookings.totalVat)}
-                  </Heading>
-                </Box>
-                <Box style={{ textAlign: 'right' }}>
-                  <Text size="2" color="gray" mb="1">
-                    Total (incl. VAT)
-                  </Text>
-                  <Heading size="5">
-                    {formatCurrency(bookings.totalWithVat)}
-                  </Heading>
-                </Box>
-              </Flex>
-
-              {/* Warning for bookings with zero prices */}
-              {(bookings.equipment.some((b) => b.unitPrice === 0) ||
-                bookings.crew.some((b) => b.unitPrice === 0) ||
-                bookings.transport.some((b) => b.unitPrice === 0)) && (
-                <Box
-                  p="3"
-                  mb="3"
-                  style={{
-                    background: 'var(--orange-a2)',
-                    borderRadius: 8,
-                    border: '1px solid var(--orange-a6)',
-                  }}
-                >
-                  <Text size="2" color="orange" weight="medium">
-                    Warning: Some bookings have zero prices. Please verify
-                    prices before creating the invoice.
-                  </Text>
-                </Box>
-              )}
-
-              <Flex justify="end" gap="3">
+      {/* Create invoice: unified flow (offer or bookings) */}
+      {!isInvoiced && (
+        <Card mb="4">
+          <Heading size="4" mb="2">
+            Create invoice
+          </Heading>
+          <Text size="2" color="gray" mb="3">
+            Choose to invoice from the accepted offer (one line with the offer
+            total) or from bookings on the job (one line per booking).
+          </Text>
+          <Flex gap="3" wrap="wrap">
+            <Tooltip
+              content={
+                !hasAcceptedOffers
+                  ? 'No accepted offers. Accept an offer first.'
+                  : !canSendInvoice
+                    ? 'Customer must be linked to Conta before sending invoices.'
+                    : undefined
+              }
+            >
+              <span style={{ display: 'inline-block' }}>
                 <Button
                   size="3"
                   variant="soft"
-                  onClick={async () => {
-                    const result = await refetchBookings()
-                    if (result.data && result.data.all.length > 0) {
-                      setPreviewBookings(result.data)
-                      success('Updated', 'Bookings refreshed.')
-                    }
-                  }}
-                >
-                  Update with current bookings
-                </Button>
-                <Tooltip
-                  content={
-                    !canSendInvoice
-                      ? 'Customer must be linked to Conta before sending invoices. Link the customer in customer settings.'
-                      : undefined
+                  onClick={handleCreateInvoiceFromOffer}
+                  disabled={
+                    !hasAcceptedOffers ||
+                    !canSendInvoice ||
+                    createInvoiceFromOfferMutation.isPending
                   }
                 >
-                  <span style={{ display: 'inline-block' }}>
-                    <Button
-                      size="3"
-                      onClick={() => handleCreateInvoiceFromBookings()}
-                      disabled={
-                        createInvoiceFromBookingsMutation.isPending ||
-                        !canSendInvoice
-                      }
-                    >
-                      <Eye width={16} height={16} />
-                      Verify & Send Invoice
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Flex>
-            </Card>
-          ) : (
-            <Card>
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                gap="3"
-                style={{ minHeight: '200px', padding: '40px' }}
-              >
-                <Text size="4" color="gray" align="center">
-                  No bookings available
-                </Text>
-                <Text size="2" color="gray" align="center">
-                  Book equipment, crew, or transport on this job to create an
-                  invoice based on bookings.
-                </Text>
-              </Flex>
-            </Card>
-          )}
-        </>
+                  <Eye width={16} height={16} />
+                  From accepted offer
+                </Button>
+              </span>
+            </Tooltip>
+            <Tooltip
+              content={
+                !bookings?.all.length
+                  ? 'No bookings on this job. Add equipment, crew or transport first.'
+                  : !canSendInvoice
+                    ? 'Customer must be linked to Conta before sending invoices.'
+                    : undefined
+              }
+            >
+              <span style={{ display: 'inline-block' }}>
+                <Button
+                  size="3"
+                  variant="soft"
+                  onClick={() => handleCreateInvoiceFromBookings()}
+                  disabled={
+                    !bookings?.all.length ||
+                    !canSendInvoice ||
+                    createInvoiceFromBookingsMutation.isPending
+                  }
+                >
+                  <Eye width={16} height={16} />
+                  From bookings
+                </Button>
+              </span>
+            </Tooltip>
+          </Flex>
+        </Card>
       )}
 
       {/* Invoice History */}
@@ -1813,13 +1356,11 @@ export default function InvoiceTab({
                     invoiceMessageAction.offer,
                     message,
                   )
-                } else if (invoiceMessageAction.kind === 'bookings') {
+                } else {
                   await createInvoiceFromBookingsWithMessage(
                     invoiceMessageAction.bookings,
                     message,
                   )
-                } else {
-                  await createInvoicesForAllOffersWithMessage(message)
                 }
                 setInvoiceMessageDialogOpen(false)
                 setInvoiceMessageAction(null)
@@ -1838,6 +1379,7 @@ export default function InvoiceTab({
           if (!open) {
             setPreviewOffer(null)
             setPreviewBookings(null)
+            setPreviewSourceOffer(null)
             setEhfStatus(null)
           }
         }}
@@ -1864,7 +1406,7 @@ export default function InvoiceTab({
             />
           )}
 
-          {previewBookings && (
+          {previewBookings && displayBookings && (
             <>
               {ehfStatus !== null && (
                 <Box
@@ -1896,7 +1438,7 @@ export default function InvoiceTab({
               )}
               <InvoicePreview
                 basis="bookings"
-                bookings={previewBookings}
+                bookings={displayBookings}
                 customerName={job.customer?.name || 'Unknown Customer'}
                 customerAddress={job.customer?.address ?? null}
                 companyName={companyDetail?.name ?? '—'}
@@ -1940,26 +1482,40 @@ export default function InvoiceTab({
               >
                 <span style={{ display: 'inline-block' }}>
                   <Button
-                  onClick={() => {
-                    createInvoiceFromBookingsWithMessage(
-                      {
-                        ...previewBookings,
-                        all:
-                          editedInvoiceLines.length > 0
-                            ? editedInvoiceLines
-                            : previewBookings.all,
-                      },
-                      invoicePreviewMessage,
-                      invoicePreviewOurRef || undefined,
-                      invoicePreviewTheirRef || undefined,
-                      lineDiscountOverrides,
-                    )
+                  onClick={async () => {
+                    if (previewSourceOffer) {
+                      await createInvoiceFromOfferWithMessage(
+                        previewSourceOffer,
+                        invoicePreviewMessage,
+                        invoicePreviewOurRef || undefined,
+                        invoicePreviewTheirRef || undefined,
+                        invoiceWithVat,
+                      )
+                    } else {
+                      createInvoiceFromBookingsWithMessage(
+                        {
+                          ...previewBookings,
+                          all:
+                            editedInvoiceLines.length > 0
+                              ? editedInvoiceLines
+                              : previewBookings.all,
+                        },
+                        invoicePreviewMessage,
+                        invoicePreviewOurRef || undefined,
+                        invoicePreviewTheirRef || undefined,
+                        lineDiscountOverrides,
+                        invoiceWithVat,
+                      )
+                    }
                     setPreviewBookings(null)
                     setPreviewOffer(null)
+                    setPreviewSourceOffer(null)
                     setEhfStatus(null)
                   }}
                   disabled={
-                    createInvoiceFromBookingsMutation.isPending || !canSendInvoice
+                    createInvoiceFromBookingsMutation.isPending ||
+                    createInvoiceFromOfferMutation.isPending ||
+                    !canSendInvoice
                   }
                 >
                   <GoogleDocs width={16} height={16} />
