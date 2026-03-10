@@ -12,8 +12,8 @@ import {
 } from '@radix-ui/themes'
 import { GoogleDocs } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { DashboardCard } from './DashboardCard'
@@ -53,16 +53,19 @@ export function UpcomingJobsSection({
   const parentRef = React.useRef<HTMLDivElement>(null)
   const [showScrollIndicator, setShowScrollIndicator] = React.useState(false)
   const [isHovered, setIsHovered] = React.useState(false)
-  const isSmallScreen = !useMediaQuery('(min-width: 1024px)')
+  const isMobile = !useMediaQuery('(min-width: 1024px)')
 
   useScrollButtonStyles()
+
+  const rowHeight = isMobile ? 112 : 72
+  const rowGap = isMobile ? 16 : 8
 
   const rowVirtualizer = useVirtualizer({
     count: jobs.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 72,
+    estimateSize: () => rowHeight,
     overscan: 5,
-    gap: 8,
+    gap: rowGap,
     getItemKey: (index) => jobs[index]?.id ?? index,
     enabled: jobs.length > 0,
   })
@@ -125,11 +128,15 @@ export function UpcomingJobsSection({
       icon={<GoogleDocs width={18} height={18} />}
       headerAction={
         !isFreelancer ? (
-          <Flex gap="2" align="center">
+          <Flex
+            gap={isMobile ? '3' : '2'}
+            direction={isMobile ? 'column' : 'row'}
+            align={isMobile ? 'end' : 'center'}
+          >
             {daysFilterSelect}
             <Flex gap="2" align="center">
               <Text size="1" color="gray">
-                My jobs only
+                {isMobile ? 'My jobs' : 'My jobs only'}
               </Text>
               <Switch
                 checked={showMyJobsOnly}
@@ -171,10 +178,6 @@ export function UpcomingJobsSection({
               flex: 1,
               minHeight: 0,
               overflow: 'auto',
-              ...(isSmallScreen && {
-                maxHeight: 320,
-                minHeight: 240,
-              }),
             }}
           >
             <div
@@ -200,11 +203,11 @@ export function UpcomingJobsSection({
                 const customerName = job.customer?.name || 'No customer'
                 const myRoleLabel =
                   job.my_job_role === 'crew'
-                    ? 'You are crew'
+                    ? 'Crew'
                     : job.my_job_role === 'project_lead'
-                      ? 'You are project lead'
+                      ? 'Lead'
                       : job.my_job_role === 'both'
-                        ? 'You are project lead + crew'
+                        ? 'Lead + Crew'
                         : null
                 const myRoleColor =
                   job.my_job_role === 'both'
@@ -233,11 +236,18 @@ export function UpcomingJobsSection({
                     <div
                       style={{
                         cursor: 'pointer',
-                        padding: '8px',
-                        borderRadius: '8px',
+                        padding: isMobile ? '14px 14px 20px 14px' : '8px',
+                        borderRadius: isMobile ? '12px' : '8px',
+                        ...(isMobile &&
+                          virtualRow.index < jobs.length - 1 && {
+                            borderBottom:
+                              '1px solid var(--gray-a5)',
+                          }),
                         transition: 'background-color 0.15s',
                         backgroundColor: 'transparent',
                         height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
                       }}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
@@ -252,34 +262,46 @@ export function UpcomingJobsSection({
                         })
                       }
                     >
-                      <Flex gap="2" align="center" justify="between">
                         <Flex
-                          direction="column"
-                          gap="1"
-                          style={{ flex: 1, minWidth: 0 }}
+                          gap={isMobile ? '3' : '2'}
+                          align="center"
+                          justify="between"
+                          direction="row"
+                          style={{ width: '100%', minWidth: 0 }}
                         >
-                          <Flex gap="2" align="center">
+                          <Flex
+                            direction="column"
+                            gap={isMobile ? '2' : '1'}
+                            style={{ flex: 1, minWidth: 0 }}
+                          >
+                            {isMobile ? (
+                              <>
+                                <Text
+                                  size="3"
+                                  weight="medium"
+                                  style={{ lineHeight: 1.3 }}
+                                >
+                                  {job.title}
+                                </Text>
+                            </>
+                          ) : (
                             <Text size="2" weight="medium">
                               {job.title}
                             </Text>
-                            {isNotConfirmed && (
-                              <Badge size="1" color="yellow" variant="outline">
-                                Not confirmed
-                              </Badge>
-                            )}
-                            {myRoleLabel && (
-                              <Badge size="1" color={myRoleColor} variant="soft">
-                                {myRoleLabel}
-                              </Badge>
-                            )}
-                          </Flex>
-                          <Flex gap="2" align="center">
+                          )}
+                          <Flex
+                            gap="2"
+                            direction={isMobile ? 'column' : 'row'}
+                            align={isMobile ? 'start' : 'center'}
+                          >
                             <Text size="2" color="gray" weight="medium">
                               {customerName}
                             </Text>
-                            <Text size="1" color="gray">
-                              •
-                            </Text>
+                            {!isMobile && (
+                              <Text size="1" color="gray">
+                                •
+                              </Text>
+                            )}
                             <Text size="1" color="gray">
                               {job.start_at
                                 ? format(new Date(job.start_at), 'd. MMM yyyy', {
@@ -289,22 +311,105 @@ export function UpcomingJobsSection({
                             </Text>
                           </Flex>
                         </Flex>
-                        <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
-                          <Flex
-                            direction="column"
-                            align="end"
-                            style={{ lineHeight: 1.2 }}
-                          >
-                            <Text size="1" color="gray">
-                              {displayName}
-                            </Text>
-                          </Flex>
-                          <Avatar
-                            size="2"
-                            src={avatarUrl || undefined}
-                            fallback={initials}
-                            radius="full"
-                          />
+                        <Flex
+                          gap="2"
+                          align="center"
+                          direction={isMobile ? 'column' : 'row'}
+                          style={{ flexShrink: 0 }}
+                        >
+                          {isMobile ? (
+                            <Flex gap="2" align="center">
+                              <Flex
+                                direction="column"
+                                align="end"
+                                gap="1"
+                                style={{ lineHeight: 1.2 }}
+                              >
+                                <Text size="1" color="gray">
+                                  {displayName}
+                                </Text>
+                                {(isNotConfirmed || myRoleLabel) && (
+                                  <Flex
+                                    gap="2"
+                                    align="center"
+                                    justify="end"
+                                    wrap="wrap"
+                                  >
+                                    {isNotConfirmed && (
+                                      <Badge
+                                        size="1"
+                                        color="yellow"
+                                        variant="outline"
+                                      >
+                                        Not confirmed
+                                      </Badge>
+                                    )}
+                                    {myRoleLabel && (
+                                      <Badge
+                                        size="1"
+                                        color={myRoleColor}
+                                        variant="soft"
+                                      >
+                                        {myRoleLabel}
+                                      </Badge>
+                                    )}
+                                  </Flex>
+                                )}
+                              </Flex>
+                              <Avatar
+                                size="3"
+                                src={avatarUrl || undefined}
+                                fallback={initials}
+                                radius="full"
+                              />
+                            </Flex>
+                          ) : (
+                            <Flex gap="2" align="center">
+                              <Flex
+                                direction="column"
+                                align="end"
+                                gap="1"
+                                style={{ lineHeight: 1.2 }}
+                              >
+                                <Text size="1" color="gray">
+                                  {displayName}
+                                </Text>
+                                {(isNotConfirmed || myRoleLabel) && (
+                                  <Flex
+                                    gap="2"
+                                    align="center"
+                                    justify="end"
+                                    wrap="wrap"
+                                  >
+                                    {isNotConfirmed && (
+                                      <Badge
+                                        size="1"
+                                        color="yellow"
+                                        variant="outline"
+                                      >
+                                        Not confirmed
+                                      </Badge>
+                                    )}
+                                    {myRoleLabel && (
+                                      <Badge
+                                        size="1"
+                                        color={myRoleColor}
+                                        variant="soft"
+                                      >
+                                        {myRoleLabel}
+                                      </Badge>
+                                    )}
+                                  </Flex>
+                                )}
+                              </Flex>
+                              <Avatar
+                                size="2"
+                                src={avatarUrl || undefined}
+                                fallback={initials}
+                                radius="full"
+                              />
+                            </Flex>
+                          )}
                         </Flex>
                       </Flex>
                     </div>

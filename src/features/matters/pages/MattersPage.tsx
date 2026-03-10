@@ -9,6 +9,7 @@ import {
   Separator,
   Tooltip,
 } from '@radix-ui/themes'
+import { useSearch } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
@@ -27,6 +28,7 @@ import type { MatterType } from '../types'
 
 export default function MattersPage() {
   const { companyId } = useCompany()
+  const search = useSearch({ strict: false })
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [createMatterOpen, setCreateMatterOpen] = React.useState(false)
   const [unreadFilter, setUnreadFilter] = React.useState(false)
@@ -107,6 +109,13 @@ export default function MattersPage() {
   const collapseShortcutLabel = getModShortcutLabel('B')
   useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
 
+  // Open matter from URL search param (e.g. from notification click)
+  React.useEffect(() => {
+    if (search.matterId) {
+      setSelectedId(search.matterId)
+    }
+  }, [search.matterId])
+
   React.useEffect(() => {
     const mq = window.matchMedia('(min-width: 1024px)')
     const onChange = (e: MediaQueryListEvent) => setIsLarge(e.matches)
@@ -168,18 +177,21 @@ export default function MattersPage() {
 
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
+  // Card height accounts for: top bar (~56px) + content padding (32px)
+  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
         <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
-          {/* LEFT: list — viewport height minus app top bar and margin */}
+          {/* LEFT: list — viewport height minus app chrome and padding */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: 'calc(100vh - 56px - 16px)',
+              height: mobileCardHeight,
               minHeight: 0,
+              minWidth: 0,
             }}
           >
             <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
@@ -201,7 +213,9 @@ export default function MattersPage() {
               style={{
                 flex: 1,
                 minHeight: 0,
+                minWidth: 0,
                 overflowY: 'auto',
+                overflowX: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -225,7 +239,7 @@ export default function MattersPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: 'calc(100vh - 56px - 16px)',
+              height: mobileCardHeight,
             }}
           >
             <Card
@@ -233,7 +247,7 @@ export default function MattersPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 56px - 16px)',
+                height: mobileCardHeight,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

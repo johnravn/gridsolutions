@@ -16,7 +16,6 @@ import type {
   ActivityFeedItem,
   GroupedInventoryActivity,
 } from '@features/latest/types'
-import { APP_SHELL_TOP_BAR_HEIGHT } from '../constants'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
@@ -195,7 +194,7 @@ export function LatestSection({
       icon={<RssFeed width={18} height={18} />}
       scrollContainerStyle={
         isSmallScreen
-          ? { height: `calc(100svh - ${APP_SHELL_TOP_BAR_HEIGHT}px)` }
+          ? { height: '100%', maxHeight: '60vh', minHeight: 0 }
           : undefined
       }
       headerAction={

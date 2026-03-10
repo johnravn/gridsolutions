@@ -19,3 +19,6 @@ dist/
 # Lockfiles (use npm, ignore pnpm/yarn)
 pnpm-lock.yaml
 yarn.lock
+
+# Edge function secrets
+functions/.env

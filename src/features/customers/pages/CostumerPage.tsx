@@ -189,18 +189,34 @@ export default function CustomerPage() {
   if (!companyId) return <div>No company selected.</div>
 
   // On small screens, use Grid layout (stack): list fills viewport, inspector below
+  // Card height accounts for: top bar (~56px) + content padding (32px)
+  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
-      <section ref={listRef} style={{ minHeight: 0 }}>
-        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
-          {/* LEFT: list — viewport height minus app top bar and margin */}
+      <section
+        ref={listRef}
+        style={{
+          minHeight: 0,
+          minWidth: 0,
+          maxWidth: '100%',
+          overflowX: 'hidden',
+        }}
+      >
+        <Grid
+          columns="1fr"
+          gap="4"
+          align="stretch"
+          style={{ minHeight: 0, minWidth: 0, maxWidth: '100%' }}
+        >
+          {/* LEFT: list — viewport height minus app chrome and padding */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: 'calc(100vh - 56px - 16px)',
+              height: mobileCardHeight,
               minHeight: 0,
+              minWidth: 0,
             }}
           >
             <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
@@ -223,7 +239,9 @@ export default function CustomerPage() {
               style={{
                 flex: 1,
                 minHeight: 0,
+                minWidth: 0,
                 overflowY: 'auto',
+                overflowX: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -242,9 +260,11 @@ export default function CustomerPage() {
             ref={inspectorRef}
             style={{
               minHeight: 0,
+              minWidth: 0,
               maxWidth: '100%',
               width: '100%',
-              height: 'calc(100vh - 56px - 16px)',
+              height: mobileCardHeight,
+              overflow: 'hidden',
             }}
           >
             <Card
@@ -252,7 +272,7 @@ export default function CustomerPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: 'calc(100vh - 56px - 16px)',
+                height: mobileCardHeight,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',
@@ -267,6 +287,7 @@ export default function CustomerPage() {
                   flex: 1,
                   minHeight: 0,
                   overflowY: 'auto',
+                  overflowX: 'hidden',
                   minWidth: 0,
                   maxWidth: '100%',
                 }}
@@ -482,7 +503,9 @@ export default function CustomerPage() {
             style={{
               flex: 1,
               minHeight: 0,
+              minWidth: 0,
               overflowY: 'auto',
+              overflowX: 'hidden',
             }}
           >
             <CustomerInspector

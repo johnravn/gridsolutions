@@ -1,4 +1,9 @@
 import { supabase } from '@shared/api/supabase'
+import {
+  createNotificationAndSendEmail,
+  getUnreadMatterEntityIds,
+  markNotificationReadByEntity,
+} from '@features/notifications/api/queries'
 import type {
   CreateMatterInput,
   CreateVoteInput,
@@ -60,12 +65,20 @@ export function mattersIndexQueryAll() {
         (recipientMatters || []).map((r) => r.matter_id as string),
       )
 
-      // Track which matters are unread
-      const unreadMatterIds = new Set<string>(
+      // Track which matters are unread (from matter_recipients + notifications for sync with bell)
+      const unreadFromRecipients = new Set<string>(
         (recipientMatters || [])
           .filter((r) => !r.viewed_at)
           .map((r) => r.matter_id as string),
       )
+      const unreadFromNotifications = await getUnreadMatterEntityIds(
+        user.id,
+        null,
+      )
+      const unreadMatterIds = new Set<string>([
+        ...unreadFromRecipients,
+        ...unreadFromNotifications,
+      ])
 
       // Now fetch matters from all companies the user is a member of
       // User must be either creator OR recipient
@@ -172,12 +185,8 @@ export function mattersIndexQueryAll() {
         recipient_count: recipientCounts.get(m.id) || 0,
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
-        // Matter is unread if user is a recipient and hasn't viewed it
-        // Matters created by the user are considered "read" unless they were created_as_company
-        // (company-created matters should still be treated as unread if delivered to the inbox)
-        is_unread:
-          unreadMatterIds.has(m.id) &&
-          (m.created_by_user_id !== user.id || m.created_as_company),
+        // Matter is unread if it has an unread recipient row or an unread notification (synced with bell)
+        is_unread: unreadMatterIds.has(m.id),
       })) as Array<Matter>
     },
   }
@@ -207,12 +216,20 @@ export function mattersIndexQuery(companyId: string) {
         (recipientMatters || []).map((r) => r.matter_id as string),
       )
 
-      // Track which matters are unread
-      const unreadMatterIds = new Set<string>(
+      // Track which matters are unread (from matter_recipients + notifications for sync with bell)
+      const unreadFromRecipients = new Set<string>(
         (recipientMatters || [])
           .filter((r) => !r.viewed_at)
           .map((r) => r.matter_id as string),
       )
+      const unreadFromNotifications = await getUnreadMatterEntityIds(
+        user.id,
+        companyId,
+      )
+      const unreadMatterIds = new Set<string>([
+        ...unreadFromRecipients,
+        ...unreadFromNotifications,
+      ])
 
       // Now fetch matters that:
       // 1. Belong to the company
@@ -320,12 +337,8 @@ export function mattersIndexQuery(companyId: string) {
         recipient_count: recipientCounts.get(m.id) || 0,
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
-        // Matter is unread if user is a recipient and hasn't viewed it
-        // Matters created by the user are considered "read" unless they were created_as_company
-        // (company-created matters should still be treated as unread if delivered to the inbox)
-        is_unread:
-          unreadMatterIds.has(m.id) &&
-          (m.created_by_user_id !== user.id || m.created_as_company),
+        // Matter is unread if it has an unread recipient row or an unread notification (synced with bell)
+        is_unread: unreadMatterIds.has(m.id),
       })) as Array<Matter>
     },
   }
@@ -596,6 +609,41 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
     }
   }
 
+  // Create in-app notifications and send emails per recipient
+  if (recipientUserIds.length > 0) {
+    const forceEmail = input.forceEmailAll ?? false
+    const notifType =
+      input.matter_type === 'crew_invite'
+        ? 'crew_invite'
+        : input.matter_type === 'announcement'
+          ? 'announcement'
+          : 'matter_reply'
+    const actionUrl =
+      input.matter_type === 'crew_invite' && input.job_id
+        ? `/jobs?jobId=${input.job_id}`
+        : `/matters?matterId=${matter.id}`
+
+    for (const recipientUserId of recipientUserIds) {
+      try {
+        await createNotificationAndSendEmail(
+          {
+            company_id: input.company_id,
+            user_id: recipientUserId,
+            type: notifType,
+            title: input.title.trim(),
+            body_text: input.content?.trim() ?? null,
+            action_url: actionUrl,
+            entity_type: 'matter',
+            entity_id: matter.id,
+          },
+          { forceEmail }
+        )
+      } catch {
+        // Non-blocking
+      }
+    }
+  }
+
   return matter.id
 }
 
@@ -606,6 +654,51 @@ export async function createVote(input: CreateVoteInput): Promise<string> {
     is_anonymous: input.is_anonymous ?? false,
     allow_custom_responses: input.allow_custom_responses ?? true,
     files: input.files,
+  })
+}
+
+/**
+ * Create an announcement matter and send it to all company members (Matters inbox).
+ * Also creates in-app notifications and sends email (respecting preferences unless forceEmailAll).
+ */
+export async function createAnnouncementMatter({
+  companyId,
+  title,
+  message,
+  forceEmailAll,
+}: {
+  companyId: string
+  title: string
+  message: string
+  forceEmailAll?: boolean
+}): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: members, error: membersError } = await supabase
+    .from('company_users')
+    .select('user_id')
+    .eq('company_id', companyId)
+
+  if (membersError) throw membersError
+
+  const recipientUserIds = (members ?? [])
+    .map((m) => m.user_id)
+    .filter((id): id is string => !!id && id !== user.id)
+
+  if (recipientUserIds.length === 0) {
+    throw new Error('No other company members to send the announcement to')
+  }
+
+  return createMatter({
+    company_id: companyId,
+    matter_type: 'announcement',
+    title: title.trim(),
+    content: message.trim(),
+    recipient_user_ids: recipientUserIds,
+    forceEmailAll: forceEmailAll ?? false,
   })
 }
 
@@ -997,6 +1090,13 @@ export async function markMatterAsViewed(matterId: string): Promise<void> {
     .eq('user_id', user.id)
 
   if (error) throw error
+
+  // Sync: mark the corresponding notification as read so the bell count updates
+  try {
+    await markNotificationReadByEntity(user.id, 'matter', matterId)
+  } catch {
+    // Non-blocking
+  }
 }
 
 export function matterFilesQuery(matterId: string) {

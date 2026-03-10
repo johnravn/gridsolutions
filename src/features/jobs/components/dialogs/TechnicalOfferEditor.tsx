@@ -1473,7 +1473,7 @@ type JobInfo = {
             </Dialog.Close>
             {!isReadOnly && (
               <Button
-                variant="classic"
+                variant="solid"
                 onClick={handleSaveClick}
                 disabled={saveMutation.isPending || !title.trim()}
               >

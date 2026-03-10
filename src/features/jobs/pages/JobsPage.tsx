@@ -177,6 +177,8 @@ export default function JobsPage() {
 
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
+  // Card height accounts for: top bar (~56px) + content padding (32px)
+  const mobileCardHeight = 'calc(100dvh - 88px)'
   // On small screens, use Grid layout (stack): jobs card fills viewport, inspector below
   if (!isLarge) {
     return (
@@ -187,14 +189,15 @@ export default function JobsPage() {
           align="stretch"
           style={{ minHeight: 0 }}
         >
-          {/* Jobs list + top bar: viewport height minus app top bar so bottom aligns with screen */}
+          {/* Jobs list + top bar: viewport height minus app chrome and padding */}
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: 'calc(100vh - 56px - 16px)',
+              height: mobileCardHeight,
               minHeight: 0,
+              minWidth: 0,
             }}
           >
             <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2" style={{ flexShrink: 0 }}>
@@ -242,7 +245,9 @@ export default function JobsPage() {
               style={{
                 flex: 1,
                 minHeight: 0,
+                minWidth: 0,
                 overflowY: 'auto',
+                overflowX: 'hidden',
                 display: 'flex',
                 flexDirection: 'column',
               }}
@@ -259,13 +264,13 @@ export default function JobsPage() {
           </Card>
 
           {/* Inspector: below the fold on mobile; same height as list so layout doesn't jump before content loads */}
-          <div ref={inspectorRef} style={{ minHeight: 0, maxWidth: '100%', width: '100%', height: 'calc(100vh - 56px - 16px)' }}>
+          <div ref={inspectorRef} style={{ minHeight: 0, maxWidth: '100%', width: '100%', height: mobileCardHeight }}>
           <Card
             size="3"
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: isLarge ? '100%' : 'calc(100vh - 56px - 16px)',
+              height: isLarge ? '100%' : mobileCardHeight,
               maxHeight: isLarge ? '100%' : undefined,
               overflow: isLarge ? 'hidden' : 'hidden',
               minHeight: 0,

@@ -7,6 +7,7 @@ import {
   Badge,
   Box,
   Button,
+  Dialog,
   Flex,
   IconButton,
   Select,
@@ -28,6 +29,7 @@ import {
   Message,
   Potion,
   RssFeed,
+  StatsUpSquare,
   User,
   UserLove,
 } from 'iconoir-react'
@@ -36,8 +38,8 @@ import { canVisit } from '@shared/auth/permissions'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
-import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
 import { companyExpansionQuery } from '@features/company/api/queries'
+import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -64,6 +66,7 @@ export const NAV: Array<Array<NavItem>> = [
   [
     { to: '/matters', label: 'Matters', icon: <Message /> },
     { to: '/company', label: 'Company', icon: <Building /> },
+    { to: '/reporting', label: 'Reporting', icon: <StatsUpSquare /> },
     { to: '/profile', label: 'Profile', icon: <User /> },
   ],
   [{ to: '/super', label: 'Super', icon: <Potion /> }],
@@ -105,47 +108,40 @@ export function Sidebar({
 
       {/* Actual sidebar content */}
       {isMobile ? (
-        open && (
-          <>
-            {/* Backdrop */}
-            <Box
-              onClick={() => onToggle(false)}
-              style={{
-                position: 'fixed',
-                inset: 0,
-                background: 'var(--black-a7)',
-                zIndex: 50,
-              }}
+        <Dialog.Root open={open} onOpenChange={(next) => onToggle(next)}>
+          <Dialog.Content
+            aria-describedby={undefined}
+            style={{
+              position: 'fixed',
+              left: 0,
+              top: 0,
+              height: '100dvh',
+              width: 'min(320px, 85vw)',
+              maxWidth: '85vw',
+              margin: 0,
+              borderRadius: 0,
+              borderRight: '1px solid var(--gray-a5)',
+              boxShadow: 'var(--shadow-4)',
+              padding: 0,
+              overflow: 'hidden',
+            }}
+          >
+            <Dialog.Title style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+              Navigation
+            </Dialog.Title>
+            <SidebarContent
+              open={open}
+              onToggle={onToggle}
+              currentPath={currentPath}
+              isMobile={isMobile}
+              showCollapseButton
+              userDisplayName={userDisplayName}
+              userEmail={userEmail}
+              userAvatarUrl={userAvatarUrl}
+              onLogout={onLogout}
             />
-            {/* Drawer */}
-            <Box
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                height: '100dvh',
-                width: Math.min(320, Math.floor(window.innerWidth * 0.85)),
-                background: 'var(--black-a9)',
-                borderRight: '1px solid var(--gray-a6)',
-                zIndex: 51,
-                boxShadow: '0 10px 40px var(--black-a6)',
-              }}
-            >
-              <SidebarContent
-                open={open}
-                onToggle={onToggle}
-                currentPath={currentPath}
-                isMobile={isMobile}
-                showCollapseButton
-                // NEW:
-                userDisplayName={userDisplayName}
-                userEmail={userEmail}
-                userAvatarUrl={userAvatarUrl}
-                onLogout={onLogout}
-              />
-            </Box>
-          </>
-        )
+          </Dialog.Content>
+        </Dialog.Root>
       ) : (
         <Box
           style={{
@@ -247,6 +243,7 @@ function SidebarContent({
       Latest: 'visit:latest',
       Matters: 'visit:matters',
       Company: 'visit:company',
+      Reporting: 'visit:company',
       Profile: 'visit:profile',
       Super: 'visit:super',
     }
@@ -306,7 +303,7 @@ function SidebarContent({
                 onClick={() => onToggle(false)}
                 aria-label="Go to profile"
               >
-                <Link to="/profile">
+                <Link to="/profile" style={{ textDecoration: 'none' }}>
                   <Flex align="center" gap="2">
                     <Avatar
                       size="3"
@@ -331,6 +328,14 @@ function SidebarContent({
                 </Link>
               </Button>
             </Flex>
+
+            {user?.id && (
+              <NotificationCenter
+                userId={user.id}
+                companyId={companyId}
+                onNavigateClick={() => onToggle(false)}
+              />
+            )}
 
             {onLogout && (
               <Button size="2" variant="soft" onClick={onLogout}>
@@ -421,11 +426,6 @@ function SidebarContent({
                     currentPath={currentPath}
                     isMobile={isMobile}
                     onCloseMobile={() => onToggle(false)}
-                    badge={
-                      n.label === 'Matters' ? (
-                        <MattersUnreadBadge isCollapsed={!open} />
-                      ) : undefined
-                    }
                   />
                 ))}
               {(() => {
@@ -444,11 +444,6 @@ function SidebarContent({
                         currentPath={currentPath}
                         isMobile={isMobile}
                         onCloseMobile={() => onToggle(false)}
-                        badge={
-                          n.label === 'Matters' ? (
-                            <MattersUnreadBadge isCollapsed={!open} />
-                          ) : undefined
-                        }
                       />
                     ))}
                   </>
@@ -492,51 +487,13 @@ function SidebarContent({
               alt="Grid Logo"
               style={{ maxWidth: '70%', height: 'auto', borderRadius: 6 }}
             />
-            <Text
-              size="1"
-              style={{
-                color: 'var(--gray-9)',
-                opacity: 0.6,
-                fontSize: '10px',
-                letterSpacing: '0.5px',
-              }}
-            >
+            <Text size="1" color="gray" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
               v{APP_VERSION}
             </Text>
           </Flex>
         </Box>
       )}
     </aside>
-  )
-}
-
-function MattersUnreadBadge({ isCollapsed }: { isCollapsed?: boolean }) {
-  const { data: unreadCount = 0 } = useQuery({
-    ...unreadMattersCountQueryAll(),
-  })
-
-  if (unreadCount === 0) return null
-
-  return (
-    <Badge
-      radius="full"
-      size="1"
-      color="blue"
-      highContrast={false}
-      style={{
-        minWidth: 18,
-        height: 18,
-        padding: '0 6px',
-        ...(isCollapsed
-          ? {
-              backgroundColor: 'var(--blue-7)',
-              color: 'var(--blue-12)',
-            }
-          : {}),
-      }}
-    >
-      {unreadCount > 99 ? '99+' : unreadCount}
-    </Badge>
   )
 }
 

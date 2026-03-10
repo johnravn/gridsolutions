@@ -111,7 +111,7 @@ function TimePeriodsManager({
   // Auto-create "Job duration" when component mounts if it's missing
   React.useEffect(() => {
     if (
-      isReadOnly ||
+      !isReadOnly &&
       !jobDuration &&
       timePeriods.length > 0 && // Only create if we've loaded time periods (avoid race condition)
       !createJobDuration.isPending

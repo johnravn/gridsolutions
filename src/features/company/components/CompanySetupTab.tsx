@@ -260,7 +260,7 @@ function CategoriesDialogContent({
           <Button
             onClick={() => createMutation.mutate({ name: form.name })}
             disabled={!form.name.trim() || createMutation.isPending}
-            variant="classic"
+            variant="solid"
           >
             {createMutation.isPending ? 'Saving…' : 'Create'}
           </Button>
@@ -577,7 +577,7 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
             </Button>
             <Button
               size="2"
-              variant="classic"
+              variant="solid"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
             >
@@ -1286,7 +1286,7 @@ export default function CompanySetupTab() {
                       </Button>
                       <Button
                         size="2"
-                        variant="classic"
+                        variant="solid"
                         onClick={() => {
                           saveTermsMutation.mutate()
                           setShowEditForm(false)

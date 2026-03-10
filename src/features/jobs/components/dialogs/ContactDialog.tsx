@@ -237,7 +237,7 @@ export default function ContactDialog({
               <Button variant="soft">Cancel</Button>
             </Dialog.Close>
             <Button
-              variant="classic"
+              variant="solid"
               disabled={!selectedContactId || useContactMutation.isPending}
               onClick={() => useContactMutation.mutate()}
             >

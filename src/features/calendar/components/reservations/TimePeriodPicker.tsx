@@ -170,7 +170,7 @@ export default function TimePeriodPicker({
               </Button>
               <Button
                 size="1"
-                variant="classic"
+                variant="solid"
                 onClick={() =>
                   save.mutate({
                     id: editing.id || undefined,
@@ -372,7 +372,7 @@ export function FixedTimePeriodEditor({
                   </Button>
                   <Button
                     size="1"
-                    variant="classic"
+                    variant="solid"
                     onClick={() => save.mutate()}
                     disabled={save.isPending}
                   >

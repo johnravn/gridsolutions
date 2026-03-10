@@ -108,7 +108,7 @@ export default function EditVehicleBookingDialog({
               <Button variant="soft">Cancel</Button>
             </Dialog.Close>
             <Button
-              variant="classic"
+              variant="solid"
               onClick={() => save.mutate()}
               disabled={save.isPending}
             >

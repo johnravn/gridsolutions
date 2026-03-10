@@ -1,11 +1,13 @@
 import * as React from 'react'
 import { Box, Flex } from '@radix-ui/themes'
+import type { ActivityFeedItem } from '@features/latest/types'
+import type { CrewConflictRow, VehicleConflictRow } from '@features/conflicts/api/queries'
+import { ConflictsSection } from '@features/conflicts/components/ConflictsSection'
 import { BibleVerseSection } from './BibleVerseSection'
 import { LatestSection } from './LatestSection'
 import { MattersSection } from './MattersSection'
 import { UpcomingJobsSection } from './UpcomingJobsSection'
 import type { HomeMatter, UpcomingJob } from '../types'
-import type { ActivityFeedItem } from '@features/latest/types'
 
 type HomeDesktopLayoutProps = {
   // Resize state
@@ -29,6 +31,9 @@ type HomeDesktopLayoutProps = {
   onDaysFilterChange: (value: '7' | '14' | '30' | 'all') => void
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
+  crewConflicts: Array<CrewConflictRow>
+  vehicleConflicts: Array<VehicleConflictRow>
+  conflictsLoading: boolean
 }
 
 export function HomeDesktopLayout({
@@ -51,6 +56,9 @@ export function HomeDesktopLayout({
   onDaysFilterChange,
   getInitials,
   getAvatarUrl,
+  crewConflicts,
+  vehicleConflicts,
+  conflictsLoading,
 }: HomeDesktopLayoutProps) {
   return (
     <Box
@@ -154,6 +162,15 @@ export function HomeDesktopLayout({
                 loading={mattersLoading}
                 getInitials={getInitials}
                 getAvatarUrl={getAvatarUrl}
+              />
+            </Box>
+          )}
+          {(crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
+            <Box style={{ minHeight: 0 }}>
+              <ConflictsSection
+                crewConflicts={crewConflicts}
+                vehicleConflicts={vehicleConflicts}
+                loading={conflictsLoading}
               />
             </Box>
           )}

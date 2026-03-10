@@ -20,6 +20,7 @@ import { supabase } from '@shared/api/supabase'
 // add
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -31,7 +32,7 @@ export default function AppShell() {
   const currentPath = routerState.location.pathname
   const isMobile = useMediaQuery('(max-width: 768px)')
   const navigate = useNavigate()
-  const { companies, loading: companyLoading } = useCompany()
+  const { companies, companyId, loading: companyLoading } = useCompany()
   const isLocal =
     import.meta.env.DEV ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
@@ -52,6 +53,25 @@ export default function AppShell() {
       return data.user
     },
   })
+
+  /** In dev, we may force production Conta key via env; or company may have production key configured. */
+  const useProductionContaInDev =
+    import.meta.env.VITE_CONTA_USE_PRODUCTION_IN_DEV === 'true'
+
+  // Only in dev: detect if current company uses production Conta (so real invoices are possible)
+  const { data: accountingEnvironment } = useQuery({
+    queryKey: ['accounting-api-environment', authUser?.id, companyId],
+    enabled: isLocal && !!authUser?.id,
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_accounting_api_environment')
+      if (error) return null
+      return typeof data === 'string' ? data : null
+    },
+  })
+
+  const isProductionContaInDev =
+    isLocal &&
+    (useProductionContaInDev || accountingEnvironment === 'production')
 
   // Load my profile row
   const { data: myProfile } = useQuery({
@@ -209,6 +229,10 @@ export default function AppShell() {
             )}
             {!isPublic && !isMobile && (
               <Flex align="center" gap="3">
+                <NotificationCenter
+                  userId={authUser?.id ?? ''}
+                  companyId={companyId}
+                />
                 <Link to="/profile" style={{ textDecoration: 'none' }}>
                   <Flex
                     align="center"
@@ -292,14 +316,36 @@ export default function AppShell() {
           gap="2"
           style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}
         >
+          {isProductionContaInDev && (
+            <Badge
+              role="alert"
+              aria-live="assertive"
+              color="red"
+              variant="solid"
+              size="3"
+              highContrast
+              className="dev-badge"
+              style={{
+                fontWeight: 700,
+                boxShadow: '0 0 0 2px var(--red-9)',
+              }}
+            >
+              <DevBadgeContent marqueeClassName="dev-badge-marquee">
+                ⚠️ Production Conta in dev — real invoices possible
+              </DevBadgeContent>
+            </Badge>
+          )}
           <Badge
             role="status"
             aria-live="polite"
             color="yellow"
             variant="surface"
             size="3"
+            className="dev-badge"
           >
-            Dev environment
+            <DevBadgeContent marqueeClassName="dev-badge-marquee">
+              Dev environment
+            </DevBadgeContent>
           </Badge>
           <Badge
             role="status"
@@ -307,8 +353,11 @@ export default function AppShell() {
             color={dbBadgeColor}
             variant="surface"
             size="3"
+            className="dev-badge"
           >
-            {dbBadgeLabel}
+            <DevBadgeContent marqueeClassName="dev-badge-marquee">
+              {dbBadgeLabel}
+            </DevBadgeContent>
           </Badge>
         </Flex>
       )}
@@ -317,7 +366,43 @@ export default function AppShell() {
 }
 
 /* ------- helpers ------- */
+function DevBadgeContent({
+  children,
+  marqueeClassName,
+}: {
+  children: React.ReactNode
+  marqueeClassName?: string
+}) {
+  const contentRef = React.useRef<HTMLSpanElement>(null)
+  const [needsMarquee, setNeedsMarquee] = React.useState(false)
+  const prevChildrenRef = React.useRef(children)
+
+  React.useLayoutEffect(() => {
+    if (prevChildrenRef.current !== children) {
+      prevChildrenRef.current = children
+      setNeedsMarquee(false)
+      return
+    }
+    const el = contentRef.current
+    if (!el) return
+    const parent = el.parentElement
+    if (!parent) return
+    setNeedsMarquee(el.scrollWidth > parent.clientWidth)
+  }, [children])
+
+  if (needsMarquee) {
+    return (
+      <span className={marqueeClassName}>
+        <span>{children}</span>
+        <span>{children}</span>
+      </span>
+    )
+  }
+  return <span ref={contentRef}>{children}</span>
+}
+
 function getPageTitle(path: string) {
+  if (path === '/notifications') return 'Notifications'
   const NAVinfo = NAV
 
   for (const section of NAVinfo) {

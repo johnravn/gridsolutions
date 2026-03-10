@@ -1,8 +1,9 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Search } from 'iconoir-react'
+import { Plus, Search } from 'iconoir-react'
 import { Badge, Box, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { vehiclesIndexQuery } from '../api/queries'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
@@ -65,6 +66,7 @@ export default function VehiclesView({
   onSearch,
 }: Props) {
   const { companyId } = useCompany()
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const [addOpen, setAddOpen] = React.useState(false)
   const [sortBy, setSortBy] = React.useState<SortBy>('name')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
@@ -119,13 +121,19 @@ export default function VehiclesView({
         flexDirection: 'column',
       }}
     >
-      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap">
+      <Flex
+        ref={controlsRef}
+        gap="2"
+        align="center"
+        wrap="wrap"
+        direction={isMobile ? 'column' : 'row'}
+      >
         <TextField.Root
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Search vehicles…"
           size="3"
-          style={{ flex: '1 1 260px' }}
+          style={{ flex: isMobile ? undefined : '1 1 260px', width: '100%' }}
         >
           <TextField.Slot side="left">
             <Search />
@@ -135,25 +143,42 @@ export default function VehiclesView({
           </TextField.Slot>
         </TextField.Root>
 
-        <Button variant="classic" onClick={() => setAddOpen(true)}>
+        <Button
+          variant="solid"
+          onClick={() => setAddOpen(true)}
+          style={isMobile ? { width: '100%' } : undefined}
+          size={isMobile ? '3' : '2'}
+        >
+          <Plus width={18} height={18} />
           Add vehicle
         </Button>
       </Flex>
 
-      {/* Table header */}
+      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflowX: 'auto',
+          overflowY: 'hidden',
           marginTop: 16,
-          flexShrink: 0,
         }}
       >
-        {SORTABLE_COLUMNS.map((col) => {
+        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Table header */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--gray-a2)',
+              borderRadius: 'var(--radius-2)',
+              flexShrink: 0,
+            }}
+          >
+            {SORTABLE_COLUMNS.map((col) => {
           const isActive = sortBy === col.id
           const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
           return (
@@ -173,18 +198,18 @@ export default function VehiclesView({
             </div>
           )
         })}
-      </div>
+          </div>
 
-      {/* Virtualized list body */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          marginTop: 8,
-        }}
-      >
+          {/* Virtualized list body */}
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              marginTop: 8,
+            }}
+          >
         {isLoading ? (
           <Flex align="center" justify="center" py="6">
             <Spinner size="2" />
@@ -279,6 +304,8 @@ export default function VehiclesView({
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {rows.length > 0 && (

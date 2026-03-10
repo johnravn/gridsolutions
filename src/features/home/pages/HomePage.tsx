@@ -17,6 +17,10 @@ import {
 } from '@features/home/components'
 import { useUpcomingJobs } from '@features/home/hooks/useUpcomingJobs'
 import { useHomeResizeLayout } from '@features/home/hooks/useHomeResizeLayout'
+import {
+  crewConflictsQuery,
+  vehicleConflictsQuery,
+} from '@features/conflicts/api/queries'
 import type { HomeMatter } from '@features/home/types'
 
 export default function HomePage() {
@@ -59,6 +63,27 @@ export default function HomePage() {
     }),
     enabled: !!companyId && canSeeLatest,
   })
+
+  const now = new Date()
+  const conflictFrom = now.toISOString()
+  const conflictTo = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: crewConflicts = [], isLoading: crewConflictsLoading } = useQuery({
+    ...crewConflictsQuery({
+      companyId: companyId ?? '',
+      from: conflictFrom,
+      to: conflictTo,
+    }),
+    enabled: !!companyId,
+  })
+  const { data: vehicleConflicts = [], isLoading: vehicleConflictsLoading } = useQuery({
+    ...vehicleConflictsQuery({
+      companyId: companyId ?? '',
+      from: conflictFrom,
+      to: conflictTo,
+    }),
+    enabled: !!companyId,
+  })
+  const conflictsLoading = crewConflictsLoading || vehicleConflictsLoading
 
   const handleLatestClick = (activityId: string) => {
     navigate({
@@ -109,6 +134,9 @@ export default function HomePage() {
         onDaysFilterChange={setDaysFilter}
         getInitials={getInitials}
         getAvatarUrl={getAvatarUrl}
+        crewConflicts={crewConflicts}
+        vehicleConflicts={vehicleConflicts}
+        conflictsLoading={conflictsLoading}
       />
     )
   }
@@ -134,6 +162,9 @@ export default function HomePage() {
       onDaysFilterChange={setDaysFilter}
       getInitials={getInitials}
       getAvatarUrl={getAvatarUrl}
+      crewConflicts={crewConflicts}
+      vehicleConflicts={vehicleConflicts}
+      conflictsLoading={conflictsLoading}
     />
   )
 }

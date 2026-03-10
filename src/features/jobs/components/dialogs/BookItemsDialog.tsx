@@ -1244,7 +1244,7 @@ export default function BookItemsDialog({
                             </Flex>
                             <Button
                               size="1"
-                              variant="classic"
+                              variant="solid"
                               onClick={() => addRow(r)}
                               style={{ flexShrink: 0 }}
                             >
@@ -1367,7 +1367,7 @@ export default function BookItemsDialog({
                             <Table.Cell align="right">
                               <Button
                                 size="1"
-                                variant="classic"
+                                variant="solid"
                                 onClick={() => addRow(r)}
                               >
                                 Add
@@ -1506,7 +1506,7 @@ export default function BookItemsDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => save.mutate()}
             disabled={
               save.isPending ||

@@ -364,7 +364,7 @@ export default function JobsTable({
           {companyRole !== 'freelancer' && (
             <Button
               size="2"
-              variant="classic"
+              variant="solid"
               onClick={() => setCreateOpen(true)}
               style={{ gap: '4px' }}
             >
@@ -632,7 +632,7 @@ export default function JobsTable({
               <Button
                 disabled={page === 1}
                 onClick={() => setPage((p) => p - 1)}
-                variant="classic"
+                variant="solid"
                 size="2"
               >
                 Prev
@@ -640,7 +640,7 @@ export default function JobsTable({
               <Button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => p + 1)}
-                variant="classic"
+                variant="solid"
                 size="2"
               >
                 Next

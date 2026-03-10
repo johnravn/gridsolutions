@@ -432,9 +432,7 @@ function CrewRatesCard({
                 setRates({ ...rates, default_crew_billing_unit: value })
               }
             >
-              <SegmentedControl.Item value="day">
-                Per day
-              </SegmentedControl.Item>
+              <SegmentedControl.Item value="day">Per day</SegmentedControl.Item>
               <SegmentedControl.Item value="hour">
                 Per hour
               </SegmentedControl.Item>
@@ -446,7 +444,7 @@ function CrewRatesCard({
           </Box>
           <Flex justify="end" mt="3">
             <Button
-              variant="classic"
+              variant="solid"
               onClick={() => saveMutation.mutate()}
               disabled={saveMutation.isPending}
             >
@@ -483,7 +481,9 @@ function CrewRatesCard({
                   <Table.ColumnHeaderCell>Level</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Daily rate</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Hourly rate</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Default billing</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>
+                    Default billing
+                  </Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell style={{ width: 100 }} />
                 </Table.Row>
               </Table.Header>
@@ -787,7 +787,7 @@ function CrewPricingLevelDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={handleSave}
             disabled={isPending || !name.trim()}
           >
@@ -1013,7 +1013,7 @@ function VehicleRatesCard({
         </Text>
         <Flex justify="end">
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >
@@ -1193,7 +1193,7 @@ function DiscountsCard({
         </Text>
         <Flex justify="end">
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >
@@ -1424,7 +1424,7 @@ function RentalFactorsCard({
 
         <Flex justify="end">
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
           >

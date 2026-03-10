@@ -103,3 +103,30 @@ code {
 .section-resizer:hover * {
   cursor: col-resize !important;
 }
+
+/* Dev badges: constrained width, horizontal scroll loop when text overflows */
+.dev-badge {
+  max-width: 120px;
+  overflow: hidden;
+}
+.dev-badge-marquee {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: dev-badge-scroll 10s linear infinite;
+}
+.dev-badge-marquee span {
+  flex-shrink: 0;
+  padding-right: 1.5em;
+}
+@keyframes dev-badge-scroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dev-badge-marquee {
+    animation: none;
+  }
+  .dev-badge-marquee span:last-child {
+    display: none;
+  }
+}

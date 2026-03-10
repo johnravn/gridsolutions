@@ -5,20 +5,18 @@ import {
   Box,
   Button,
   Flex,
-  Select,
   Spinner,
   Text,
   TextField,
   Tooltip,
 } from '@radix-ui/themes'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { InfoCircle, Search } from 'iconoir-react'
+import { InfoCircle, Plus, Search } from 'iconoir-react'
 import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
-
-type CustomerTypeFilter = 'all' | 'customer' | 'partner'
 
 const GRID_COLUMNS = 'minmax(180px, 2fr) 100px 100px'
 
@@ -35,6 +33,7 @@ export default function CustomerTable({
 }) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [addOpen, setAddOpen] = React.useState(false)
@@ -42,19 +41,6 @@ export default function CustomerTable({
   const containerRef = React.useRef<HTMLDivElement>(null)
   const controlsRef = React.useRef<HTMLDivElement>(null)
   const scrollRef = React.useRef<HTMLDivElement>(null)
-
-  const [customerTypeFilter, setCustomerTypeFilter] =
-    React.useState<CustomerTypeFilter>(() => {
-      if (showRegular && showPartner) return 'all'
-      if (showRegular && !showPartner) return 'customer'
-      if (!showRegular && showPartner) return 'partner'
-      return 'all'
-    })
-
-  const derivedShowRegular =
-    customerTypeFilter === 'all' || customerTypeFilter === 'customer'
-  const derivedShowPartner =
-    customerTypeFilter === 'all' || customerTypeFilter === 'partner'
 
   const {
     data: rows = [],
@@ -64,8 +50,8 @@ export default function CustomerTable({
     ...customersIndexQuery({
       companyId: companyId ?? '__none__',
       search: debouncedSearch,
-      showRegular: derivedShowRegular,
-      showPartner: derivedShowPartner,
+      showRegular,
+      showPartner,
     }),
     enabled: !!companyId,
     staleTime: 10_000,
@@ -86,18 +72,24 @@ export default function CustomerTable({
       style={{
         height: '100%',
         minHeight: 0,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
-      <div ref={controlsRef}>
-        <Flex gap="2" align="center" wrap="wrap">
+      <div ref={controlsRef} style={{ minWidth: 0 }}>
+        <Flex
+          gap="2"
+          align="center"
+          wrap="wrap"
+          direction={isMobile ? 'column' : 'row'}
+        >
           <TextField.Root
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search customers…"
             size="3"
-            style={{ flex: '1 1 260px' }}
+            style={{ flex: isMobile ? undefined : '1 1 260px', width: '100%' }}
           >
             <TextField.Slot side="left">
               <Search />
@@ -112,25 +104,13 @@ export default function CustomerTable({
             </TextField.Slot>
           </TextField.Root>
 
-          <Select.Root
-            value={customerTypeFilter}
-            size="3"
-            onValueChange={(val) =>
-              setCustomerTypeFilter(val as CustomerTypeFilter)
-            }
+          <Button
+            variant="solid"
+            onClick={() => setAddOpen(true)}
+            style={isMobile ? { width: '100%' } : undefined}
+            size={isMobile ? '3' : '2'}
           >
-            <Select.Trigger
-              placeholder="Filter type…"
-              style={{ minHeight: 'var(--space-7)' }}
-            />
-            <Select.Content>
-              <Select.Item value="all">All</Select.Item>
-              <Select.Item value="customer">Customer</Select.Item>
-              <Select.Item value="partner">Partner</Select.Item>
-            </Select.Content>
-          </Select.Root>
-
-          <Button variant="classic" onClick={() => setAddOpen(true)}>
+            <Plus width={18} height={18} />
             Add customer
           </Button>
 
@@ -146,20 +126,31 @@ export default function CustomerTable({
         </Flex>
       </div>
 
-      {/* Table header */}
+      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflowX: 'auto',
+          overflowY: 'hidden',
           marginTop: 16,
-          flexShrink: 0,
         }}
       >
-        <div
+        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Table header */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--gray-a2)',
+              borderRadius: 'var(--radius-2)',
+              flexShrink: 0,
+            }}
+          >
+            <div
           style={{
             fontSize: 'var(--font-size-1)',
             fontWeight: 600,
@@ -187,19 +178,19 @@ export default function CustomerTable({
           }}
         >
           Crew rate
-        </div>
-      </div>
+            </div>
+          </div>
 
-      {/* Virtualized list body */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          marginTop: 8,
-        }}
-      >
+          {/* Virtualized list body */}
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              marginTop: 8,
+            }}
+          >
         {isLoading ? (
           <Flex align="center" justify="center" py="6">
             <Spinner size="2" />
@@ -279,6 +270,8 @@ export default function CustomerTable({
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {rows.length > 0 && (

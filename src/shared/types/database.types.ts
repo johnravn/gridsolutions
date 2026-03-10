@@ -643,6 +643,14 @@ export type Database = {
         Row: {
           address: string | null
           company_id: string
+          conta_customer_id: number | null
+          conta_days_until_estimate_overdue: number | null
+          conta_days_until_payment_reminder: number | null
+          conta_invoice_count: number | null
+          conta_invoice_delivery_method: string | null
+          conta_last_synced_at: string | null
+          conta_total_invoiced: number | null
+          conta_total_unpaid: number | null
           created_at: string
           crew_pricing_level_id: string | null
           deleted: boolean
@@ -658,6 +666,14 @@ export type Database = {
         Insert: {
           address?: string | null
           company_id: string
+          conta_customer_id?: number | null
+          conta_days_until_estimate_overdue?: number | null
+          conta_days_until_payment_reminder?: number | null
+          conta_invoice_count?: number | null
+          conta_invoice_delivery_method?: string | null
+          conta_last_synced_at?: string | null
+          conta_total_invoiced?: number | null
+          conta_total_unpaid?: number | null
           created_at?: string
           crew_pricing_level_id?: string | null
           deleted?: boolean
@@ -673,6 +689,14 @@ export type Database = {
         Update: {
           address?: string | null
           company_id?: string
+          conta_customer_id?: number | null
+          conta_days_until_estimate_overdue?: number | null
+          conta_days_until_payment_reminder?: number | null
+          conta_invoice_count?: number | null
+          conta_invoice_delivery_method?: string | null
+          conta_last_synced_at?: string | null
+          conta_total_invoiced?: number | null
+          conta_total_unpaid?: number | null
           created_at?: string
           crew_pricing_level_id?: string | null
           deleted?: boolean
@@ -2083,6 +2107,117 @@ export type Database = {
           },
         ]
       }
+      notification_preferences: {
+        Row: {
+          company_id: string
+          created_at: string
+          email_announcements: boolean
+          email_crew_invites: boolean
+          email_matter_replies: boolean
+          email_offer_updates: boolean
+          email_reminders: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          email_announcements?: boolean
+          email_crew_invites?: boolean
+          email_matter_replies?: boolean
+          email_offer_updates?: boolean
+          email_reminders?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          email_announcements?: boolean
+          email_crew_invites?: boolean
+          email_matter_replies?: boolean
+          email_offer_updates?: boolean
+          email_reminders?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notification_preferences_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      notifications: {
+        Row: {
+          action_url: string | null
+          body_text: string | null
+          company_id: string
+          created_at: string
+          email_sent_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          read_at: string | null
+          title: string
+          type: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Insert: {
+          action_url?: string | null
+          body_text?: string | null
+          company_id: string
+          created_at?: string
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          title: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id: string
+        }
+        Update: {
+          action_url?: string | null
+          body_text?: string | null
+          company_id?: string
+          created_at?: string
+          email_sent_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: Database["public"]["Enums"]["notification_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       offer_crew_items: {
         Row: {
           billing_type: string | null
@@ -2892,6 +3027,7 @@ export type Database = {
           job_id: string | null
           needed_count: number | null
           notes: string | null
+          program_group: string | null
           reserved_by_user_id: string | null
           role_category: string | null
           start_at: string
@@ -2910,6 +3046,7 @@ export type Database = {
           job_id?: string | null
           needed_count?: number | null
           notes?: string | null
+          program_group?: string | null
           reserved_by_user_id?: string | null
           role_category?: string | null
           start_at: string
@@ -2928,6 +3065,7 @@ export type Database = {
           job_id?: string | null
           needed_count?: number | null
           notes?: string | null
+          program_group?: string | null
           reserved_by_user_id?: string | null
           role_category?: string | null
           start_at?: string
@@ -3628,7 +3766,48 @@ export type Database = {
       }
       get_accounting_api_environment: { Args: never; Returns: string }
       get_accounting_read_only: { Args: never; Returns: boolean }
-      get_conta_api_key: { Args: { p_force_production?: boolean }; Returns: string }
+      get_conflicts_crew: {
+        Args: { p_company_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          end_1: string
+          end_2: string
+          job_id_1: string
+          job_id_2: string
+          job_title_1: string
+          job_title_2: string
+          period_id_1: string
+          period_id_2: string
+          start_1: string
+          start_2: string
+          user_display_name: string
+          user_id: string
+        }[]
+      }
+      get_conflicts_vehicle: {
+        Args: { p_company_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          end_1: string
+          end_2: string
+          job_id_1: string
+          job_id_2: string
+          job_title_1: string
+          job_title_2: string
+          period_id_1: string
+          period_id_2: string
+          start_1: string
+          start_2: string
+          vehicle_id: string
+          vehicle_name: string
+        }[]
+      }
+      get_conta_api_key: {
+        Args: { p_force_production?: boolean }
+        Returns: string
+      }
+      get_conta_api_key_for_sync: {
+        Args: { p_company_id: string }
+        Returns: string
+      }
       get_group_contents_for_display: {
         Args: { p_group_id: string }
         Returns: Json
@@ -3787,6 +3966,17 @@ export type Database = {
         | "declined"
         | "accepted"
       matter_type: "crew_invite" | "vote" | "announcement" | "chat" | "update"
+      notification_type:
+        | "offer_sent"
+        | "offer_accepted"
+        | "offer_rejected"
+        | "offer_revision_requested"
+        | "crew_invite"
+        | "matter_reply"
+        | "matter_mention"
+        | "reminder"
+        | "announcement"
+        | "other"
       offer_status:
         | "draft"
         | "sent"
@@ -4000,6 +4190,18 @@ export const Constants = {
         "accepted",
       ],
       matter_type: ["crew_invite", "vote", "announcement", "chat", "update"],
+      notification_type: [
+        "offer_sent",
+        "offer_accepted",
+        "offer_rejected",
+        "offer_revision_requested",
+        "crew_invite",
+        "matter_reply",
+        "matter_mention",
+        "reminder",
+        "announcement",
+        "other",
+      ],
       offer_status: [
         "draft",
         "sent",

@@ -384,7 +384,7 @@ export default function SignupPage() {
                 type="submit"
                 size="2"
                 disabled={loading}
-                variant="classic"
+                variant="solid"
               >
                 {loading ? 'Creating account…' : 'Create account'}
               </Button>

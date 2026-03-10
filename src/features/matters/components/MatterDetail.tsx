@@ -239,33 +239,20 @@ export default function MatterDetail({
 
   // Mark as viewed when component mounts (only once per matterId)
   React.useEffect(() => {
-    // Skip if we've already marked this matter as viewed
     if (hasMarkedAsViewedRef.current === matterId) return
-
-    // Skip if matter is not loaded yet
     if (!matter) return
 
-    // Skip if user is the creator AND it was not created as company.
-    // Company-created matters can be delivered to the creator's inbox and should be markable as read.
-    if (user?.id === matter.created_by_user_id && !matter.created_as_company) {
-      hasMarkedAsViewedRef.current = matterId
-      return
-    }
-
-    // Mark that we're processing this matter
     hasMarkedAsViewedRef.current = matterId
 
-    // Mark as viewed and then invalidate queries
+    // Always mark as viewed when opening: updates matter_recipients (if row exists) and
+    // marks any notification for this matter as read so the bell and matters list stay in sync.
     markMatterAsViewed(matterId)
       .then(async () => {
-        // Invalidate and refetch queries to ensure UI updates immediately
         await Promise.all([
           qc.invalidateQueries({ queryKey: ['matters'] }),
+          qc.invalidateQueries({ queryKey: ['notifications'] }),
         ])
-        // Force refetch to ensure fresh data
-        await Promise.all([
-          qc.refetchQueries({ queryKey: ['matters'] }),
-        ])
+        await qc.refetchQueries({ queryKey: ['matters'] })
       })
       .catch((error) => {
         // If marking as viewed fails, reset the ref so we can try again
