@@ -516,7 +516,7 @@ export default function LoggingPage() {
                       }}
                     />
                   </Box>
-                  {jobSearchOpen && (
+                  {jobSearchOpen && jobSearch.trim().length > 0 && (
                     <Box
                       style={{
                         position: 'absolute',

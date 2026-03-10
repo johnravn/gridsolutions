@@ -30,6 +30,7 @@ import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import MapEmbed from '@shared/maps/MapEmbed'
 import LogoUpload from '@shared/ui/components/LogoUpload'
+import { supabase } from '@shared/api/supabase'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import {
   customerDetailQuery,
@@ -115,6 +116,24 @@ export default function CustomerInspector({
       enabled &&
       !!data &&
       (!data.crew_pricing_level_id || data.conta_customer_id != null),
+  })
+
+  const { data: accountingConfig } = useQuery({
+    queryKey: ['company', companyId, 'accounting-config'],
+    queryFn: async () => {
+      if (!companyId) return null
+      const { data: expData, error: expErr } = await supabase
+        .from('company_expansions')
+        .select('accounting_organization_id, accounting_software')
+        .eq('company_id', companyId)
+        .maybeSingle()
+      if (expErr) throw expErr
+      return expData as {
+        accounting_organization_id: string | null
+        accounting_software: string | null
+      } | null
+    },
+    enabled: !!companyId && !!data,
   })
 
   const deleteContactMut = useMutation({
@@ -240,28 +259,27 @@ export default function CustomerInspector({
   const addrParts = parseAddress(c.address)
 
   return (
-    <Box>
+    <Box
+      style={{
+        minWidth: 0,
+        maxWidth: '100%',
+        overflowX: 'hidden',
+      }}
+    >
       {/* Header */}
-      <Flex align="center" justify="between" gap="2">
-        <div>
-          <Text as="div" size="4" weight="bold">
+      <Flex align="center" justify="between" gap="2" wrap="wrap">
+        <Box style={{ minWidth: 0, flexShrink: 1 }}>
+          <Text as="div" size="4" weight="bold" truncate>
             {c.name}
           </Text>
-        </div>
-        <Flex gap="2" align="center">
+        </Box>
+        <Flex gap="2" align="center" wrap="wrap" style={{ flexShrink: 0 }}>
           {c.is_partner ? (
             <Badge variant="soft" color="green">
               Partner
             </Badge>
           ) : (
             <Badge variant="soft">Customer</Badge>
-          )}
-          {c.conta_customer_id != null && (
-            <Tooltip content="Synced with Conta">
-              <Badge variant="soft" color="green">
-                Conta
-              </Badge>
-            </Tooltip>
           )}
           <EditCustomerDialog
             open={editOpen}
@@ -414,24 +432,40 @@ export default function CustomerInspector({
         </Flex>
       </Box>
 
-      {/* Conta (read-only) */}
-      {(c.conta_customer_id != null ||
-        c.conta_days_until_payment_reminder != null ||
-        c.conta_days_until_estimate_overdue != null ||
-        c.conta_invoice_delivery_method != null ||
-        c.conta_invoice_count != null ||
-        c.conta_total_invoiced != null ||
-        c.conta_total_unpaid != null ||
-        c.conta_last_synced_at != null) && (
+      {/* Conta — show when company uses Conta */}
+      {accountingConfig?.accounting_software === 'conta' &&
+        accountingConfig.accounting_organization_id && (
         <>
           <Separator my="3" />
           <Box mb="4">
-            <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
-              Conta (read-only)
-            </Text>
-            <Text size="1" color="gray" as="p" mb="2">
-              This data is synced from Conta. Edit in Conta only.
-            </Text>
+            <Flex align="center" gap="2" mb="2" wrap="wrap">
+              <Text as="div" size="1" color="gray">
+                {c.conta_customer_id != null ? 'Conta (read-only)' : 'Conta'}
+              </Text>
+              {c.conta_customer_id != null ? (
+                <Tooltip content="Synced with Conta">
+                  <Badge variant="soft" color="green">
+                    Conta
+                  </Badge>
+                </Tooltip>
+              ) : (
+                <Tooltip content="This customer is not yet synced with Conta">
+                  <Badge variant="soft" color="amber">
+                    Not synced to Conta
+                  </Badge>
+                </Tooltip>
+              )}
+            </Flex>
+            {c.conta_customer_id != null ? (
+              <Text size="1" color="gray" as="p" mb="2">
+                This data is synced from Conta. Edit in Conta only.
+              </Text>
+            ) : (
+              <Text size="1" color="gray" as="p" mb="2">
+                Use the refresh button above to check if this customer exists in
+                Conta, or sync all customers from the list.
+              </Text>
+            )}
             <Flex direction="column" gap="2" wrap="wrap">
               {c.conta_customer_id != null && (
                 <Tooltip content="Edit in Conta only">
@@ -628,16 +662,19 @@ export default function CustomerInspector({
         <Text as="div" size="2" color="gray">
           Contacts
         </Text>
-        <Button size="2" variant="classic" onClick={() => setAddOpen(true)}>
+        <Button size="2" variant="solid" onClick={() => setAddOpen(true)}>
           Add contact
         </Button>
       </Flex>
 
       <Box
         style={{
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           border: '1px solid var(--gray-a6)',
           borderRadius: 8,
-          overflow: 'hidden',
+          overflowX: 'auto',
         }}
       >
         <Table.Root variant="surface">
@@ -715,9 +752,12 @@ export default function CustomerInspector({
 
       <Box
         style={{
+          width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           border: '1px solid var(--gray-a6)',
           borderRadius: 8,
-          overflow: 'hidden',
+          overflowX: 'auto',
         }}
       >
         <Table.Root variant="surface">

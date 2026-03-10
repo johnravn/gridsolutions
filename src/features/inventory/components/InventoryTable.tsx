@@ -194,12 +194,13 @@ export default function InventoryTable({
       style={{
         height: '100%',
         minHeight: 0,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
       {/* Search bar */}
-      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap">
+      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
         <TextField.Root
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -262,20 +263,31 @@ export default function InventoryTable({
         </Flex>
       </Flex>
 
-      {/* Table header */}
+      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflowX: 'auto',
+          overflowY: 'hidden',
           marginTop: 16,
-          flexShrink: 0,
         }}
       >
-        {columns.map((col) => {
+        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Table header */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--gray-a2)',
+              borderRadius: 'var(--radius-2)',
+              flexShrink: 0,
+            }}
+          >
+            {columns.map((col) => {
           const canSort =
             col.sortable && sortableCols.includes(col.id as SortBy)
           const isActive = sortBy === col.id
@@ -298,18 +310,18 @@ export default function InventoryTable({
             </div>
           )
         })}
-      </div>
+          </div>
 
-      {/* Virtualized list body */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          marginTop: 8,
-        }}
-      >
+          {/* Virtualized list body */}
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              marginTop: 8,
+            }}
+          >
         {isLoading ? (
           <Flex align="center" justify="center" py="6">
             <Spinner size="2" />
@@ -375,6 +387,8 @@ export default function InventoryTable({
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {/* Item count */}

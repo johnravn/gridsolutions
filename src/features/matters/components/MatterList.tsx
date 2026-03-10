@@ -19,6 +19,7 @@ import {
   Search,
   Xmark,
 } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { mattersIndexQueryAll } from '../api/queries'
 import type { Matter, MatterType } from '../types'
 
@@ -36,7 +37,7 @@ type SortBy = 'type' | 'title' | 'created' | 'response' | 'company'
 type SortDir = 'asc' | 'desc'
 
 const GRID_COLUMNS =
-  'minmax(100px, 1fr) minmax(140px, 2fr) minmax(80px, 1fr) 44px minmax(100px, 1fr)'
+  'minmax(100px, 1fr) minmax(140px, 2fr) minmax(80px, 1fr) 44px minmax(100px, 1fr) 24px'
 
 const SORTABLE_COLUMNS: Array<{ id: SortBy; header: React.ReactNode }> = [
   { id: 'type', header: 'Type' },
@@ -63,6 +64,7 @@ export default function MatterList({
   companies: Array<{ id: string; name: string }>
   onCreateMatter?: () => void
 }) {
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('created')
   const [sortDir, setSortDir] = React.useState<SortDir>('desc')
@@ -243,13 +245,20 @@ export default function MatterList({
         flexDirection: 'column',
       }}
     >
-      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap" mb="2">
+      <Flex
+        ref={controlsRef}
+        gap="2"
+        align="center"
+        wrap="wrap"
+        mb="2"
+        direction={isMobile && onCreateMatter ? 'column' : 'row'}
+      >
         <TextField.Root
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search matters…"
           size="3"
-          style={{ flex: '1 1 260px' }}
+          style={{ flex: isMobile && onCreateMatter ? undefined : '1 1 260px', width: '100%' }}
         >
           <TextField.Slot side="left">
             <Search />
@@ -259,25 +268,42 @@ export default function MatterList({
           </TextField.Slot>
         </TextField.Root>
         {onCreateMatter && (
-          <Button size="2" onClick={onCreateMatter}>
-            <Plus /> New Matter
+          <Button
+            variant="solid"
+            size={isMobile ? '3' : '2'}
+            onClick={onCreateMatter}
+            style={isMobile ? { width: '100%' } : undefined}
+          >
+            <Plus width={18} height={18} />
+            New Matter
           </Button>
         )}
       </Flex>
 
-      {/* Table header */}
+      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
-          flexShrink: 0,
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflowX: 'auto',
+          overflowY: 'hidden',
         }}
       >
-        {SORTABLE_COLUMNS.map((col) => {
+        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {/* Table header */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--gray-a2)',
+              borderRadius: 'var(--radius-2)',
+              flexShrink: 0,
+            }}
+          >
+            {SORTABLE_COLUMNS.map((col) => {
           const isActive = sortBy === col.id
           const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
           return (
@@ -300,18 +326,19 @@ export default function MatterList({
             </div>
           )
         })}
-      </div>
+            <div /> {/* Spacer for unread-dot column */}
+          </div>
 
-      {/* Virtualized list body */}
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          marginTop: 8,
-        }}
-      >
+          {/* Virtualized list body */}
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              marginTop: 8,
+            }}
+          >
         {rows.length === 0 ? (
           <Flex align="center" justify="center" py="6">
             <Text size="2" color="gray">
@@ -368,16 +395,6 @@ export default function MatterList({
                 >
                   <Flex align="center" gap="2">
                     {getTypeBadge(matter.matter_type)}
-                    {matter.is_unread && (
-                      <Box
-                        style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: 'var(--blue-9)',
-                        }}
-                      />
-                    )}
                   </Flex>
 
                   <Box style={{ minWidth: 0 }}>
@@ -411,11 +428,6 @@ export default function MatterList({
                           </Text>
                         </Box>
                       </Tooltip>
-                      {matter.is_unread && (
-                        <Badge radius="full" size="1" color="blue">
-                          New
-                        </Badge>
-                      )}
                     </Flex>
                     {matter.job && (
                       <Text
@@ -448,11 +460,28 @@ export default function MatterList({
                   <Text size="2" color="gray">
                     {matter.company?.name || '—'}
                   </Text>
+
+                  <Flex align="center" justify="end">
+                    {matter.is_unread && (
+                      <Box
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          backgroundColor: 'var(--blue-9)',
+                          flexShrink: 0,
+                        }}
+                        title="Unread"
+                      />
+                    )}
+                  </Flex>
                 </div>
               )
-            })}
+            }        )}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {rows.length > 0 && (

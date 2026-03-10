@@ -222,7 +222,7 @@ export default function AddRoleDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => save.mutate()}
             disabled={disabled}
           >

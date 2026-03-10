@@ -158,8 +158,13 @@ export default function JobsList({
           </TextField.Slot>
         </TextField.Root>
         {companyRole !== 'freelancer' && (
-          <Button size="2" variant="classic" onClick={() => setCreateOpen(true)}>
-            <Plus width={16} height={16} />
+          <Button
+            variant="solid"
+            size={compact ? '3' : '2'}
+            onClick={() => setCreateOpen(true)}
+            style={compact ? { width: '100%' } : undefined}
+          >
+            <Plus width={18} height={18} />
             New job
           </Button>
         )}
@@ -176,20 +181,30 @@ export default function JobsList({
         }}
       />
 
-      {/* Table header - hidden on compact (mobile) */}
-      {!compact && (
+      {/* Table: header + body in horizontal scroll when !compact (so headers scroll with rows) */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
-          flexShrink: 0,
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          overflowX: compact ? 'hidden' : 'auto',
+          overflowY: 'hidden',
         }}
       >
-        <div
+        <div style={{ minWidth: compact ? undefined : 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+          {!compact && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: GRID_COLUMNS,
+              gap: 'var(--space-2)',
+              padding: 'var(--space-2) var(--space-3)',
+              backgroundColor: 'var(--gray-a2)',
+              borderRadius: 'var(--radius-2)',
+              flexShrink: 0,
+            }}
+          >
+            <div
           onClick={() => handleSort('start_at')}
           style={{
             fontSize: 'var(--font-size-1)',
@@ -222,18 +237,18 @@ export default function JobsList({
         >
           Lead
         </div>
-      </div>
-      )}
+          </div>
+          )}
 
-      <div
-        ref={scrollRef}
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflow: 'auto',
-          marginTop: 8,
-        }}
-      >
+          <div
+            ref={scrollRef}
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'auto',
+              marginTop: 8,
+            }}
+          >
         {rows.length === 0 ? (
           <Flex align="center" justify="center" py="6">
             <Text size="2" color="gray">
@@ -483,6 +498,8 @@ export default function JobsList({
             })}
           </div>
         )}
+          </div>
+        </div>
       </div>
 
       {rows.length > 0 && (

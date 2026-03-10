@@ -39,7 +39,7 @@ export default function ConfirmStatusChangeDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             color={newStatus === 'canceled' ? 'red' : undefined}
             onClick={() => {
               onConfirm()

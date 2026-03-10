@@ -2,7 +2,9 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  Box,
   Button,
+  Checkbox,
   Dialog,
   Flex,
   Text,
@@ -11,7 +13,7 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { createAnnouncement } from '../api/queries'
+import { createAnnouncementMatter } from '@features/matters/api/queries'
 
 export default function CreateAnnouncementDialog({
   open,
@@ -25,26 +27,25 @@ export default function CreateAnnouncementDialog({
   const { success, error: toastError } = useToast()
   const [title, setTitle] = React.useState('')
   const [message, setMessage] = React.useState('')
+  const [forceEmailAll, setForceEmailAll] = React.useState(false)
 
   const mutation = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error('No company selected')
-      return createAnnouncement({
+      return createAnnouncementMatter({
         companyId,
         title,
         message,
+        forceEmailAll,
       })
     },
     onSuccess: async () => {
       setTitle('')
       setMessage('')
-      await qc.invalidateQueries({
-        queryKey: ['company', companyId, 'latest-feed'],
-        exact: false,
-      })
+      await qc.invalidateQueries({ queryKey: ['matters'] })
       success(
-        'Announcement posted',
-        'Your announcement has been added to the feed.',
+        'Announcement sent',
+        'Your announcement has been sent to everyone in the Matters inbox.',
       )
       onOpenChange(false)
     },
@@ -58,7 +59,34 @@ export default function CreateAnnouncementDialog({
       <Dialog.Content maxWidth="600px">
         <Dialog.Title>Create Announcement</Dialog.Title>
 
-        <Flex direction="column" gap="3" mt="3">
+        <Box
+          mb="3"
+          p="3"
+          style={{
+            borderRadius: 8,
+            backgroundColor: 'var(--gray-a2)',
+          }}
+        >
+          <Text size="2" color="gray">
+            This will be sent to every company member (owners, employees, admins,
+            and freelancers). They will see it in their Matters inbox. Users who
+            have enabled &quot;Announcements&quot; in their email preferences
+            will also receive an email.
+          </Text>
+        </Box>
+
+        <Flex mt="3" mb="3" align="center" gap="2">
+          <Checkbox
+            id="force-email-all"
+            checked={forceEmailAll}
+            onCheckedChange={(v) => setForceEmailAll(v === true)}
+          />
+          <Text as="label" size="2" htmlFor="force-email-all">
+            Send email to everyone (override individual preferences)
+          </Text>
+        </Flex>
+
+        <Flex direction="column" gap="3">
           <Flex direction="column" gap="1">
             <Text as="label" size="2" weight="medium">
               Title
@@ -91,7 +119,7 @@ export default function CreateAnnouncementDialog({
           <Button
             onClick={() => mutation.mutate()}
             disabled={!title.trim() || !message.trim() || mutation.isPending}
-            variant="classic"
+            variant="solid"
           >
             {mutation.isPending ? 'Posting…' : 'Post Announcement'}
           </Button>

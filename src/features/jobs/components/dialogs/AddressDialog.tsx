@@ -423,7 +423,7 @@ export default function AddressDialog({
                     <Xmark /> Cancel
                   </Button>
                   <Button
-                    variant="classic"
+                    variant="solid"
                     disabled={!canSave || saveMutation.isPending}
                     onClick={() => saveMutation.mutate()}
                   >
@@ -455,7 +455,7 @@ export default function AddressDialog({
           </Dialog.Close>
           {/* ➕ New: Use button */}
           <Button
-            variant="classic"
+            variant="solid"
             disabled={!selectedId || useAddressMutation.isPending}
             onClick={() => useAddressMutation.mutate()}
           >

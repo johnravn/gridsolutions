@@ -921,7 +921,7 @@ export default function JobDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => {
               if (!title.trim()) {
                 return showError('Missing title', 'Please enter a job title.')

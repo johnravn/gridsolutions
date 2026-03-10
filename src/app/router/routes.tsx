@@ -27,6 +27,8 @@ import CustomerPage from '@features/customers/pages/CostumerPage'
 import LatestPage from '@features/latest/pages/LatestPage'
 import PublicOfferPage from '@features/jobs/pages/PublicOfferPage'
 import LoggingPage from '@features/logging/pages/LoggingPage'
+import NotificationsPage from '@features/notifications/pages/NotificationsPage'
+import ReportingPage from '@features/reporting/pages/ReportingPage'
 import AppShell from '../layout/AppShell'
 import RequireCap from './guards/RequireCap'
 import type { Capability } from '@shared/auth/permissions'
@@ -165,6 +167,9 @@ const crewRoute = createRoute({
 const mattersRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'matters',
+  validateSearch: (search: Record<string, unknown>) => ({
+    matterId: (search.matterId as string | undefined) || undefined,
+  }),
   component: guarded('visit:matters', MattersPage),
 })
 
@@ -196,6 +201,18 @@ const profileRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'profile',
   component: guarded('visit:profile', ProfilePage),
+})
+
+const notificationsRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: 'notifications',
+  component: guarded('visit:profile', NotificationsPage),
+})
+
+const reportingRoute = createRoute({
+  getParentRoute: () => authedRoute,
+  path: 'reporting',
+  component: guarded('visit:company', ReportingPage),
 })
 
 const superRoute = createRoute({
@@ -232,6 +249,8 @@ const routeTree = rootRoute.addChildren([
     customersRoute,
     latestRoute,
     profileRoute,
+    notificationsRoute,
+    reportingRoute,
     superRoute,
   ]),
   notFoundRoute,

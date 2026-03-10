@@ -164,7 +164,7 @@ export default function LoginPage() {
                   type="submit"
                   size="2"
                   disabled={loading}
-                  variant="classic"
+                  variant="solid"
                 >
                   {loading ? 'Signing in…' : 'Sign in'}
                 </Button>

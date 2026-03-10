@@ -263,7 +263,7 @@ export default function LandingPage() {
                 >
                   <Button
                     size={isMd ? '4' : '3'}
-                    variant="classic"
+                    variant="solid"
                     onClick={() => navigate({ to: '/signup' })}
                     style={{ padding: '0.75rem 1.75rem' }}
                   >
@@ -583,7 +583,7 @@ export default function LandingPage() {
                     >
                       <Button
                         size={isMd ? '4' : '3'}
-                        variant="classic"
+                        variant="solid"
                         onClick={() => navigate({ to: '/signup' })}
                         style={{
                           background: 'var(--accent-9)',

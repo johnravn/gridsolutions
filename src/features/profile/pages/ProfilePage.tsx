@@ -4,30 +4,29 @@ import {
   Box,
   Button,
   Card,
+  Dialog,
   Flex,
   Grid,
   Heading,
-  Popover,
   Progress,
   Avatar as RadixAvatar,
   Separator,
   Slider,
-  Switch,
   Text,
   TextArea,
   TextField,
-  Tooltip,
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { Camera, Palette } from 'iconoir-react'
+import { Camera, Lock, Palette } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
 import ThemeToggle from '@shared/theme/ThemeToggle'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
+import ChangePasswordDialog from '@features/profile/components/ChangePasswordDialog'
 
 type ProfileRow = {
   user_id: string
@@ -76,7 +75,8 @@ export default function ProfilePage() {
   const { info, success, error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = React.useState(false)
-  const [stylingMenuOpen, setStylingMenuOpen] = React.useState(false)
+  const [themeDialogOpen, setThemeDialogOpen] = React.useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
 
   // 1) get current user
   const { data: authUser } = useQuery({
@@ -364,109 +364,112 @@ export default function ProfilePage() {
 
   return (
     <Card size="4" style={{ minHeight: 0, overflow: 'auto' }}>
-      {/* Header */}
-      <Flex
-        direction={{ initial: 'column', md: 'row' }}
-        align={{ initial: 'stretch', md: 'center' }}
-        justify="between"
-        wrap="wrap"
-        gap="3"
-      >
-        <Flex align="center" wrap="wrap" gap="3" style={{ minWidth: 0 }}>
-          <Flex align="center" gap="3">
-            <Avatar
-              src={avatarUrl ?? undefined}
-              initials={getInitials(form.display_name || data.email)}
-            />
-            <Box>
-              <Heading size="4">{form.display_name || data.email}</Heading>
-              <Text as="div" color="gray" size="2">
-                {data.email}
-              </Text>
-            </Box>
+      {/* Header: three columns matching content below */}
+      <Box p="4" pb="0">
+        <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4">
+          {/* Left: name, email, avatar, change photo */}
+          <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
+            <Flex align="center" gap="3" wrap="wrap">
+              <Avatar
+                src={avatarUrl ?? undefined}
+                initials={getInitials(form.display_name || data.email)}
+              />
+              <Box style={{ minWidth: 0 }}>
+                <Heading size="4">{form.display_name || data.email}</Heading>
+                <Text as="div" color="gray" size="2">
+                  {data.email}
+                </Text>
+              </Box>
+            </Flex>
+            <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                style={{ display: 'none' }}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setUploading(true)
+                  try {
+                    const path = await uploadAvatar(file)
+                    set('avatarPath', path)
+                    info('Photo uploaded', 'Remember to hit Save to apply.')
+                  } catch (err: any) {
+                    toastError(
+                      'Upload failed',
+                      err?.message ?? 'Try another image.',
+                    )
+                  } finally {
+                    setUploading(false)
+                    e.currentTarget.value = ''
+                  }
+                }}
+              />
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                style={{ width: '100%', minWidth: 0 }}
+              >
+                <Flex gap="2" align="center" justify="center">
+                  <Camera width={16} height={16} />
+                  {uploading ? 'Uploading…' : 'Change photo'}
+                </Flex>
+              </Button>
+              {uploading && (
+                <Box style={{ width: '100%', maxWidth: 200 }}>
+                  <Progress />
+                </Box>
+              )}
+            </Flex>
           </Flex>
 
+          {/* Middle: empty */}
+          <Box style={{ minWidth: 0 }} />
+
+          {/* Right: theme and change password */}
           <Flex
-            direction={{ initial: 'column', sm: 'row' }}
-            align={{ initial: 'stretch', sm: 'end' }}
+            direction="column"
             gap="2"
-            wrap="wrap"
-            style={{
-              minWidth: 0,
-              flexBasis: '100%',
-            }}
+            justify={{ initial: 'start', md: 'end' }}
+            style={{ minWidth: 0 }}
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: 'none' }}
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file) return
-                setUploading(true)
-                try {
-                  const path = await uploadAvatar(file)
-                  set('avatarPath', path)
-                  info('Photo uploaded', 'Remember to hit Save to apply.')
-                } catch (e: any) {
-                  toastError(
-                    'Upload failed',
-                    e?.message ?? 'Try another image.',
-                  )
-                } finally {
-                  setUploading(false)
-                  e.currentTarget.value = ''
-                }
-              }}
-            />
             <Button
               size="2"
               variant="soft"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+              onClick={() => setThemeDialogOpen(true)}
               style={{ width: '100%', minWidth: 0 }}
             >
               <Flex gap="2" align="center" justify="center">
-                <Camera width={16} height={16} />
-                {uploading ? 'Uploading…' : 'Change photo'}
+                <Palette width={16} height={16} />
+                Theme & background
               </Flex>
             </Button>
-
-            {uploading && (
-              <Box style={{ width: '100%', maxWidth: 200 }}>
-                <Progress />
-              </Box>
-            )}
+            <Button
+              size="2"
+              variant="soft"
+              onClick={() => setChangePasswordOpen(true)}
+              style={{ width: '100%', minWidth: 0 }}
+            >
+              <Flex gap="2" align="center" justify="center">
+                <Lock width={16} height={16} />
+                Change password
+              </Flex>
+            </Button>
           </Flex>
-        </Flex>
+        </Grid>
+      </Box>
 
-        <Flex
-          align="center"
-          justify={{ initial: 'start', md: 'end' }}
-          gap="2"
-          style={{ minWidth: 0 }}
-        >
-          <Popover.Root
-            open={stylingMenuOpen}
-            onOpenChange={setStylingMenuOpen}
-          >
-            <Tooltip content="Theme, background and appearance" delayDuration={300}>
-              <Popover.Trigger>
-                <Button
-                  size="2"
-                  variant="soft"
-                  style={{ width: '100%', minWidth: 0 }}
-                >
-                  <Flex gap="2" align="center" justify="center">
-                    <Palette width={16} height={16} />
-                    Theme & background
-                  </Flex>
-                </Button>
-              </Popover.Trigger>
-            </Tooltip>
-              <Popover.Content size="2" style={{ maxWidth: 400 }}>
-              <Flex direction="column" gap="4">
+      {/* Theme dialog (replaces popover) */}
+      <Dialog.Root open={themeDialogOpen} onOpenChange={setThemeDialogOpen}>
+        <Dialog.Content size="2" style={{ maxWidth: 400 }}>
+          <Dialog.Title>Theme & background</Dialog.Title>
+          <Dialog.Description size="2">
+            Choose theme and background style.
+          </Dialog.Description>
+          <Flex direction="column" gap="4" mt="4">
                 <Box>
                   <Text
                     size="2"
@@ -685,10 +688,15 @@ export default function ProfilePage() {
                   </Flex>
                 </Box>
               </Flex>
-            </Popover.Content>
-          </Popover.Root>
-        </Flex>
-      </Flex>
+          <Flex gap="3" justify="end" mt="4">
+            <Dialog.Close>
+              <Button type="button" variant="soft">
+                Done
+              </Button>
+            </Dialog.Close>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
 
       {/* Three columns: personal (left), address (middle), optional (right) */}
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
@@ -856,6 +864,11 @@ export default function ProfilePage() {
           {mut.isPending ? 'Saving…' : 'Save'}
         </Button>
       </Flex>
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+        userEmail={data.email}
+      />
     </Card>
   )
 }

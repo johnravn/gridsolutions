@@ -222,7 +222,7 @@ export default function AddCrewDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => save.mutate()}
             disabled={disabled}
           >
@@ -300,7 +300,7 @@ export function EditCrewDialog({
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
           <Button
-            variant="classic"
+            variant="solid"
             onClick={() => save.mutate()}
             disabled={save.isPending}
           >

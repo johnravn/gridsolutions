@@ -121,6 +121,8 @@ export type CreateMatterInput = {
   allow_custom_responses?: boolean
   created_as_company?: boolean
   files?: Array<File>
+  /** When true, send email to all recipients regardless of their notification preferences (e.g. announcements). */
+  forceEmailAll?: boolean
 }
 
 export type MatterFile = {

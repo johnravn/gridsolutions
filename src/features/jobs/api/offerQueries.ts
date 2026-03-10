@@ -1,6 +1,7 @@
 // src/features/jobs/api/offerQueries.ts
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { createNotificationAndSendEmail } from '@features/notifications/api/queries'
 import {
   calculateOfferTotals,
   calculateRentalFactor,
@@ -1063,6 +1064,29 @@ export async function lockOffer(offerId: string): Promise<void> {
     .in('status', ['draft', 'sent', 'viewed'])
 
   if (supersedeError) throw supersedeError
+
+  const { data: job } = await supabase
+    .from('jobs')
+    .select('company_id, project_lead_user_id, title')
+    .eq('id', offer.job_id)
+    .single()
+
+  if (job?.project_lead_user_id && job?.company_id) {
+    try {
+      await createNotificationAndSendEmail({
+        company_id: job.company_id,
+        user_id: job.project_lead_user_id,
+        type: 'offer_sent',
+        title: 'Offer sent',
+        body_text: `Offer for job "${job.title ?? 'Job'}" has been locked and sent.`,
+        action_url: `/jobs?jobId=${offer.job_id}`,
+        entity_type: 'job',
+        entity_id: offer.job_id,
+      })
+    } catch {
+      // Non-blocking
+    }
+  }
 }
 
 /**

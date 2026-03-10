@@ -117,6 +117,17 @@ export function MattersSection({
                 onClick={() => navigate({ to: '/matters' })}
               >
                 <Flex gap="2" align="center">
+                  {matter.is_unread && (
+                    <Box
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--blue-9)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  )}
                   <Avatar
                     size="2"
                     src={avatarUrl || undefined}
@@ -124,7 +135,10 @@ export function MattersSection({
                     radius="full"
                   />
                   <Box style={{ flex: 1 }}>
-                    <Text size="2" weight="medium">
+                    <Text
+                      size="2"
+                      weight={matter.is_unread ? 'bold' : 'medium'}
+                    >
                       {matter.title}
                     </Text>
                     <Flex gap="2" align="center">

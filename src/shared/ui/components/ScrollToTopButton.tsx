@@ -35,7 +35,18 @@ export default function ScrollToTopButton({
   }, [visible, inspectorRef])
 
   const handleClick = React.useCallback(() => {
-    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    // Find the scroll container (AppShell content Box) and scroll it to top
+    let el: HTMLElement | null = listRef.current
+    while (el?.parentElement) {
+      const p = el.parentElement
+      const style = getComputedStyle(p)
+      const overflowY = style.overflowY
+      if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+        p.scrollTo({ top: 0, behavior: 'smooth' })
+        break
+      }
+      el = p
+    }
   }, [listRef])
 
   const show = visible && isInspectorInView
@@ -48,7 +59,7 @@ export default function ScrollToTopButton({
         variant="soft"
         style={{
           position: 'fixed',
-          top: '72px',
+          bottom: '24px',
           right: '16px',
           width: '44px',
           height: '44px',
