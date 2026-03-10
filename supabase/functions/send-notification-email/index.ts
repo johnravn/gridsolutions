@@ -11,6 +11,14 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+const DEBUG_LOG = (m: string, d: Record<string, unknown>) => {
+  fetch('http://127.0.0.1:7242/ingest/2d91110b-5d7c-457b-b926-3a30c5abf539', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '63b6c4' },
+    body: JSON.stringify({ sessionId: '63b6c4', location: 'send-notification-email', message: m, data: d, timestamp: Date.now() }),
+  }).catch(() => {})
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -22,6 +30,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
+      DEBUG_LOG('Env vars missing', { hasResend: !!resendApiKey, hasUrl: !!supabaseUrl, hasServiceKey: !!supabaseServiceKey, hypothesisId: 'H3' })
       return new Response(
         JSON.stringify({
           error: 'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
@@ -39,6 +48,8 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    DEBUG_LOG('Edge Function entry', { notificationId, forceEmail, hypothesisId: 'H3' })
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
@@ -70,6 +81,7 @@ Deno.serve(async (req) => {
 
     const toEmail = profile?.email
     if (!toEmail) {
+      DEBUG_LOG('User email not found', { userId: notification.user_id, hypothesisId: 'H4' })
       return new Response(
         JSON.stringify({ error: 'User email not found' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -100,6 +112,7 @@ Deno.serve(async (req) => {
     const sendEmail = forceEmail || prefsRow[prefKey] !== false
 
     if (!sendEmail) {
+      DEBUG_LOG('Skipped by preferences', { type: notification.type, prefKey, prefValue: prefsRow[prefKey], forceEmail, hypothesisId: 'H4' })
       return new Response(
         JSON.stringify({ ok: true, skipped: 'preferences' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -142,11 +155,14 @@ Deno.serve(async (req) => {
 
     if (!res.ok) {
       const errText = await res.text()
+      DEBUG_LOG('Resend API failed', { status: res.status, errText, hypothesisId: 'H5' })
       return new Response(
         JSON.stringify({ error: 'Resend failed', details: errText }),
         { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    DEBUG_LOG('Email sent successfully', { toEmail, hypothesisId: 'H5' })
 
     const { error: updateError } = await supabase
       .from('notifications')
