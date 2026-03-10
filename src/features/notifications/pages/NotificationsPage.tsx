@@ -19,6 +19,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { markMatterAsViewed } from '@features/matters/api/queries'
 import {
+  createNotificationAndSendEmail,
   getUnreadMatterEntityIds,
   markAllNotificationsRead,
   markNotificationRead,
@@ -99,6 +100,33 @@ export default function NotificationsPage() {
     },
     onError: (e: Error) => {
       toastError('Failed to save preferences', e.message || 'Please try again.')
+    },
+  })
+
+  const sendTestEmailMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId) throw new Error('No company')
+      await createNotificationAndSendEmail(
+        {
+          company_id: companyId,
+          user_id: userId,
+          type: 'announcement',
+          title: 'Test email from Grid',
+          body_text:
+            'If you received this email, your notification delivery is working. Check your inbox (and spam/junk) to confirm emails reach you.',
+          action_url: '/notifications',
+        },
+        { forceEmail: true }
+      )
+    },
+    onSuccess: () => {
+      success(
+        'Test email sent',
+        'Check your inbox. If you don’t see it, check spam or promotions.',
+      )
+    },
+    onError: (e: Error) => {
+      toastError('Failed to send test email', e.message || 'Please try again.')
     },
   })
 
@@ -321,14 +349,23 @@ export default function NotificationsPage() {
           }
         />
       </Flex>
-      <Button
-        size="2"
-        mt="4"
-        onClick={() => savePrefsMutation.mutate()}
-        disabled={savePrefsMutation.isPending}
-      >
-        {savePrefsMutation.isPending ? 'Saving…' : 'Save preferences'}
-      </Button>
+      <Flex gap="2" mt="4" wrap="wrap">
+        <Button
+          size="2"
+          onClick={() => savePrefsMutation.mutate()}
+          disabled={savePrefsMutation.isPending}
+        >
+          {savePrefsMutation.isPending ? 'Saving…' : 'Save preferences'}
+        </Button>
+        <Button
+          size="2"
+          variant="soft"
+          onClick={() => sendTestEmailMutation.mutate()}
+          disabled={sendTestEmailMutation.isPending}
+        >
+          {sendTestEmailMutation.isPending ? 'Sending…' : 'Send test email'}
+        </Button>
+      </Flex>
     </>
   )
 

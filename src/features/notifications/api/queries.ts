@@ -248,14 +248,23 @@ export async function createNotificationAndSendEmail(
   options?: { forceEmail?: boolean }
 ): Promise<string> {
   const id = await createNotification(payload)
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/2d91110b-5d7c-457b-b926-3a30c5abf539',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63b6c4'},body:JSON.stringify({sessionId:'63b6c4',location:'queries.ts:createNotificationAndSendEmail',message:'createNotificationAndSendEmail called',data:{notificationId:id,type:payload.type,userId:payload.user_id,forceEmail:options?.forceEmail},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
   try {
-    await supabase.functions.invoke('send-notification-email', {
+    const result = await supabase.functions.invoke('send-notification-email', {
       body: {
         notification_id: id,
         force_email: options?.forceEmail ?? false,
       },
     })
-  } catch {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/2d91110b-5d7c-457b-b926-3a30c5abf539',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63b6c4'},body:JSON.stringify({sessionId:'63b6c4',location:'queries.ts:invoke result',message:'send-notification-email invoke result',data:{hasError:!!result.error,errorMsg:result.error?.message,data:result.data},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
+  } catch (e) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/2d91110b-5d7c-457b-b926-3a30c5abf539',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'63b6c4'},body:JSON.stringify({sessionId:'63b6c4',location:'queries.ts:invoke catch',message:'send-notification-email invoke threw',data:{error:String(e)},timestamp:Date.now(),hypothesisId:'H2'})}).catch(()=>{});
+    // #endregion
     // Non-blocking: email failure should not fail the operation
   }
   return id

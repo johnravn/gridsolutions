@@ -163,11 +163,11 @@ export default function LandingPage() {
       <Box
         style={{
           position: 'relative',
-          minHeight: '100vh',
+          minHeight: isMd ? '100vh' : 'auto',
           display: 'flex',
           alignItems: 'center',
           paddingTop: isMd ? '80px' : '60px',
-          paddingBottom: '2rem',
+          paddingBottom: isMd ? '2rem' : '1rem',
           paddingLeft: isMd ? 0 : '1rem',
           paddingRight: isMd ? 0 : '1rem',
           width: '100%',
@@ -290,9 +290,10 @@ export default function LandingPage() {
               justify="center"
               gap="4"
               style={{
-                flex: '1 1 45%',
+                flex: isMd ? '1 1 45%' : 'none',
                 maxWidth: isMd ? 560 : 420,
-                minHeight: 340,
+                minHeight: isMd ? 340 : 0,
+                display: isSm ? 'flex' : 'none',
               }}
             >
               <HeroGraphicCards />
@@ -306,7 +307,7 @@ export default function LandingPage() {
         id="features"
         style={{
           position: 'relative',
-          padding: isMd ? '6rem 0' : '3rem 1rem',
+          padding: isMd ? '6rem 0' : '2rem 1rem',
         }}
       >
         <Container size="4">
@@ -712,6 +713,10 @@ export default function LandingPage() {
 }
 
 function HeroGraphicCards() {
+  const isSmall = !useMediaQuery('(min-width: 640px)')
+
+  if (isSmall) return null
+
   return (
     <Flex
       gap="4"
