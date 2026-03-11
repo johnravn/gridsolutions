@@ -611,17 +611,15 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
 
   // Create in-app notifications and send emails per recipient
   if (recipientUserIds.length > 0) {
-    const forceEmail = input.forceEmailAll ?? false
+    const forceEmail =
+      input.forceEmailAll ?? input.matter_type === 'crew_invite'
     const notifType =
       input.matter_type === 'crew_invite'
         ? 'crew_invite'
         : input.matter_type === 'announcement'
           ? 'announcement'
           : 'matter_reply'
-    const actionUrl =
-      input.matter_type === 'crew_invite' && input.job_id
-        ? `/jobs?jobId=${input.job_id}`
-        : `/matters?matterId=${matter.id}`
+    const actionUrl = `/matters?matterId=${matter.id}`
 
     for (const recipientUserId of recipientUserIds) {
       try {

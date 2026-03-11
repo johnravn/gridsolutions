@@ -327,6 +327,8 @@ export type OfferEquipmentItem = {
   total_price: number
   is_internal: boolean
   sort_order: number
+  /** Free-text description for custom/one-off lines when item_id and group_id are both null. */
+  custom_line_description?: string | null
   // Joined relation
   item?: {
     id: UUID

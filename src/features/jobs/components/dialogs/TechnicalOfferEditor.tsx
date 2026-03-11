@@ -30,7 +30,7 @@ import {
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { companyExpansionQuery } from '@features/company/api/queries'
+import { companyExpansionQuery, crewPricingLevelsQuery } from '@features/company/api/queries'
 import {
   createOffer,
   exportOfferPDF,
@@ -72,6 +72,8 @@ type LocalEquipmentItem = {
   unit_price: number
   is_internal: boolean
   sort_order: number
+  /** Free-text description for custom/one-off lines (when item_id and group_id are null). */
+  custom_line_description?: string | null
   group_items?: Array<{
     id: string
     name: string
@@ -219,9 +221,13 @@ type JobInfo = {
 }
 
   // Fetch job title, duration, and customer (incl. crew pricing level) for default rates
-  const { data: jobData } = useQuery<JobInfo>({
+  const {
+    data: jobData,
+    isLoading: isLoadingJob,
+  } = useQuery<JobInfo>({
     queryKey: ['job-title', jobId],
-    enabled: open,
+    enabled: open && !!jobId,
+    refetchOnMount: 'always',
     queryFn: async () => {
       const { data, error } = await supabase
         .from('jobs')
@@ -283,15 +289,25 @@ type JobInfo = {
     [jobData],
   )
 
+  // Fetch company crew pricing levels (for fallback when customer has no level)
+  const { data: crewPricingLevels } = useQuery({
+    ...crewPricingLevelsQuery(companyId),
+    enabled: open && !!companyId && typeof companyId === 'string',
+  })
+
+  const firstCompanyCrewLevel = crewPricingLevels?.[0] ?? null
+
   // Fetch company expansion for default rates and rental factors
   const { data: companyExpansion } = useQuery({
     ...companyExpansionQuery({ companyId }),
     enabled: open && !!companyId && typeof companyId === 'string',
   })
 
-  // Effective crew rates: use customer's pricing level if set, else standard
+  // Effective crew rates: use customer's pricing level if set, else first company level, else company expansion
   const defaultCrewRatePerDay = React.useMemo(() => {
-    const level = job.customer?.crew_pricing_level
+    const level =
+      job.customer?.crew_pricing_level ??
+      (job.customer ? firstCompanyCrewLevel : null)
     const value =
       level?.crew_rate_per_day != null
         ? level.crew_rate_per_day
@@ -301,11 +317,15 @@ type JobInfo = {
     return Number.isFinite(numeric) ? numeric : null
   }, [
     job.customer?.crew_pricing_level?.crew_rate_per_day,
+    job.customer,
+    firstCompanyCrewLevel?.crew_rate_per_day,
     companyExpansion?.crew_rate_per_day,
   ])
 
   const defaultCrewRatePerHour = React.useMemo(() => {
-    const level = job.customer?.crew_pricing_level
+    const level =
+      job.customer?.crew_pricing_level ??
+      (job.customer ? firstCompanyCrewLevel : null)
     const value =
       level?.crew_rate_per_hour != null
         ? level.crew_rate_per_hour
@@ -315,11 +335,15 @@ type JobInfo = {
     return Number.isFinite(numeric) ? numeric : null
   }, [
     job.customer?.crew_pricing_level?.crew_rate_per_hour,
+    job.customer,
+    firstCompanyCrewLevel?.crew_rate_per_hour,
     companyExpansion?.crew_rate_per_hour,
   ])
 
   const defaultCrewBillingUnit = React.useMemo((): 'day' | 'hour' => {
-    const level = job.customer?.crew_pricing_level
+    const level =
+      job.customer?.crew_pricing_level ??
+      (job.customer ? firstCompanyCrewLevel : null)
     const value =
       level?.default_crew_billing_unit ??
       companyExpansion?.default_crew_billing_unit ??
@@ -327,6 +351,8 @@ type JobInfo = {
     return value === 'hour' ? 'hour' : 'day'
   }, [
     job.customer?.crew_pricing_level?.default_crew_billing_unit,
+    job.customer,
+    firstCompanyCrewLevel?.default_crew_billing_unit,
     companyExpansion?.default_crew_billing_unit,
   ])
 
@@ -456,6 +482,8 @@ type JobInfo = {
               unit_price: item.unit_price,
               is_internal: item.is_internal,
               sort_order: item.sort_order,
+              custom_line_description:
+                (item as any).custom_line_description ?? null,
               item: rawItem
                 ? {
                     id: rawItem.id,
@@ -840,6 +868,8 @@ type JobInfo = {
                 offer_group_id: groupId,
                 item_id: item.item_id,
                 group_id: item.group_id ?? null,
+                custom_line_description:
+                  item.custom_line_description?.trim() || null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: roundMoney(
@@ -858,6 +888,8 @@ type JobInfo = {
                 offer_group_id: groupId,
                 item_id: item.item_id,
                 group_id: item.group_id ?? null,
+                custom_line_description:
+                  item.custom_line_description?.trim() || null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: roundMoney(
@@ -1069,24 +1101,23 @@ type JobInfo = {
       const updatedOffer = await qc.fetchQuery(offerDetailQuery(lockedOfferId))
       if (updatedOffer?.access_token) {
         const url = `${window.location.origin}/offer/${updatedOffer.access_token}`
-        // Copy to clipboard
         try {
           await navigator.clipboard.writeText(url)
           success(
-            'Offer locked and sent',
-            `The offer has been locked. The link has been copied to your clipboard.`,
+            'Link copied — send it to your customer',
+            `The offer is locked. The link has been copied to your clipboard. Send it to your customer (e.g. by email) so they can view and accept the offer.`,
           )
           info('Offer link', `Link: ${url}`)
         } catch {
           success(
-            'Offer locked and sent',
-            `The offer has been locked. Share this link: ${url}`,
+            'Send this link to your customer',
+            `The offer is locked. Copy and send this link to your customer: ${url}`,
           )
         }
       } else {
         success(
           'Offer locked',
-          'The offer has been locked and is ready to send.',
+          'The offer has been locked. You can share the offer link with your customer once it is available.',
         )
       }
 
@@ -1370,6 +1401,7 @@ type JobInfo = {
                 defaultRatePerDay={defaultCrewRatePerDay}
                 defaultRatePerHour={defaultCrewRatePerHour}
                 defaultBillingUnit={defaultCrewBillingUnit}
+                defaultsLoading={!!jobId && isLoadingJob}
               />
             </Tabs.Content>
 
@@ -1461,7 +1493,7 @@ type JobInfo = {
                     disabled={lockOfferMutation.isPending}
                   >
                     <Lock width={14} height={14} />
-                    Lock & Send
+                    Lock offer & copy link
                   </Button>
                 )}
               </>
@@ -1510,7 +1542,7 @@ type JobInfo = {
               disabled={saveMutation.isPending}
             >
               {syncPromptAction === 'lock'
-                ? 'Send without syncing'
+                ? 'Lock without syncing'
                 : syncPromptAction === 'create'
                   ? 'Create without syncing'
                   : 'Save without syncing'}
@@ -1520,7 +1552,7 @@ type JobInfo = {
               disabled={saveMutation.isPending}
             >
               {syncPromptAction === 'lock'
-                ? 'Send and sync'
+                ? 'Lock and sync'
                 : syncPromptAction === 'create'
                   ? 'Create and sync'
                   : 'Save and sync'}
@@ -1539,6 +1571,7 @@ function ItemSearchField({
   searchResults,
   onSelectItem,
   formatCurrency,
+  compact,
 }: {
   searchTerm: string
   onSearchChange: (term: string) => void
@@ -1555,6 +1588,7 @@ function ItemSearchField({
   }>
   onSelectItem: (itemId: string) => void
   formatCurrency: (amount: number) => string
+  compact?: boolean
 }) {
   const containerRef = React.useRef<HTMLDivElement | null>(null)
   const [dropdownPosition, setDropdownPosition] = React.useState<{
@@ -1593,7 +1627,11 @@ function ItemSearchField({
   }, [searchTerm, searchResults.length])
 
   return (
-    <Box mb="3" ref={containerRef} style={{ position: 'relative' }}>
+    <Box
+      ref={containerRef}
+      style={{ position: 'relative' }}
+      mb={compact ? undefined : '3'}
+    >
       <TextField.Root
         placeholder="Search items or groups to add..."
         value={searchTerm}
@@ -1891,6 +1929,26 @@ function EquipmentSection({
     if (isGroup && itemId) {
       void loadGroupItems(itemId, groupId, newItem.id)
     }
+  }
+
+  const addCustomLineToGroup = (groupId: string) => {
+    const group = groups.find((g) => g.id === groupId)
+    if (!group) return
+
+    const newItem: LocalEquipmentItem = {
+      id: `temp-${Date.now()}-${Math.random()}`,
+      item_id: null,
+      group_id: null,
+      custom_line_description: '',
+      quantity: 1,
+      unit_price: 0,
+      is_internal: true,
+      sort_order: group.items.length,
+    }
+
+    updateGroup(groupId, {
+      items: [...group.items, newItem],
+    })
   }
 
   // Derive active search term for dependency tracking
@@ -2192,17 +2250,50 @@ function EquipmentSection({
                     )}
                     {/* Search for items */}
                     {!readOnly && (
-                      <ItemSearchField
-                        searchTerm={getSearchTerm(group.id)}
-                        onSearchChange={(term) => setSearchTerm(group.id, term)}
-                        searchResults={
-                          activeSearchGroupId === group.id ? searchResults : []
-                        }
-                        onSelectItem={(itemId) =>
-                          addItemToGroup(group.id, itemId)
-                        }
-                        formatCurrency={formatCurrency}
-                      />
+                      <Flex
+                        gap="2"
+                        align="center"
+                        mb="3"
+                        style={{ width: '100%' }}
+                      >
+                        <Box
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            width: '100%',
+                          }}
+                        >
+                          <ItemSearchField
+                            searchTerm={getSearchTerm(group.id)}
+                            onSearchChange={(term) =>
+                              setSearchTerm(group.id, term)
+                            }
+                            searchResults={
+                              activeSearchGroupId === group.id
+                                ? searchResults
+                                : []
+                            }
+                            onSelectItem={(itemId) =>
+                              addItemToGroup(group.id, itemId)
+                            }
+                            formatCurrency={formatCurrency}
+                            compact
+                          />
+                        </Box>
+                        <Button
+                          size="2"
+                          variant="soft"
+                          color="gray"
+                          style={{ flexShrink: 0 }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            addCustomLineToGroup(group.id)
+                          }}
+                        >
+                          <Plus width={14} height={14} />
+                          Add custom line
+                        </Button>
+                      </Flex>
                     )}
 
                     {/* Items table */}
@@ -2234,78 +2325,105 @@ function EquipmentSection({
                             const isGroupExpanded = expandedGroupItems.has(
                               item.id,
                             )
+                            const isCustomLine =
+                              !item.item && !item.group
                             return (
                               <React.Fragment key={item.id}>
                                 <Table.Row>
                                   <Table.Cell>
-                                    <Flex align="center" gap="2" wrap="wrap">
-                                      {item.group && (
-                                        <IconButton
-                                          variant="ghost"
-                                          size="1"
-                                          onClick={() =>
-                                            toggleGroupItems(item.id)
-                                          }
-                                          style={{
-                                            width: 20,
-                                            height: 20,
-                                            padding: 0,
-                                          }}
-                                        >
-                                          {isGroupExpanded ? (
-                                            <NavArrowDown
-                                              width={12}
-                                              height={12}
-                                            />
-                                          ) : (
-                                            <NavArrowRight
-                                              width={12}
-                                              height={12}
-                                            />
-                                          )}
-                                        </IconButton>
-                                      )}
-                                      <Text>
-                                        {item.item?.name ||
-                                          item.group?.name ||
-                                          '—'}
-                                      </Text>
-                                      {item.group ? (
-                                        <Badge
-                                          size="1"
-                                          variant="soft"
-                                          color="gray"
-                                        >
-                                          Group
-                                        </Badge>
-                                      ) : null}
-                                      {item.group?.externally_owned ||
-                                      item.item?.externally_owned ? (
-                                        <Badge
-                                          size="1"
-                                          variant="soft"
-                                          color="amber"
-                                        >
-                                          {item.group?.external_owner_name ??
-                                            item.item?.external_owner_name ??
-                                            'External'}
-                                        </Badge>
-                                      ) : (
-                                        <Badge
-                                          size="1"
-                                          variant="soft"
-                                          color="indigo"
-                                        >
-                                          Internal
-                                        </Badge>
-                                      )}
-                                    </Flex>
+                                    {isCustomLine ? (
+                                      <TextField.Root
+                                        value={
+                                          item.custom_line_description ?? ''
+                                        }
+                                        onChange={(e) =>
+                                          updateItem(group.id, item.id, {
+                                            custom_line_description:
+                                              e.target.value,
+                                          })
+                                        }
+                                        placeholder="Description (e.g. one-off fee)"
+                                        style={{ minWidth: 180 }}
+                                        readOnly={readOnly}
+                                      />
+                                    ) : (
+                                      <Flex align="center" gap="2" wrap="wrap">
+                                        {item.group && (
+                                          <IconButton
+                                            variant="ghost"
+                                            size="1"
+                                            onClick={() =>
+                                              toggleGroupItems(item.id)
+                                            }
+                                            style={{
+                                              width: 20,
+                                              height: 20,
+                                              padding: 0,
+                                            }}
+                                          >
+                                            {isGroupExpanded ? (
+                                              <NavArrowDown
+                                                width={12}
+                                                height={12}
+                                              />
+                                            ) : (
+                                              <NavArrowRight
+                                                width={12}
+                                                height={12}
+                                              />
+                                            )}
+                                          </IconButton>
+                                        )}
+                                        <Text>
+                                          {item.item?.name ||
+                                            item.group?.name ||
+                                            '—'}
+                                        </Text>
+                                        {item.group ? (
+                                          <Badge
+                                            size="1"
+                                            variant="soft"
+                                            color="gray"
+                                          >
+                                            Group
+                                          </Badge>
+                                        ) : null}
+                                        {item.group?.externally_owned ||
+                                        item.item?.externally_owned ? (
+                                          <Badge
+                                            size="1"
+                                            variant="soft"
+                                            color="amber"
+                                          >
+                                            {item.group?.external_owner_name ??
+                                              item.item?.external_owner_name ??
+                                              'External'}
+                                          </Badge>
+                                        ) : (
+                                          <Badge
+                                            size="1"
+                                            variant="soft"
+                                            color="indigo"
+                                          >
+                                            Internal
+                                          </Badge>
+                                        )}
+                                      </Flex>
+                                    )}
                                   </Table.Cell>
                                   <Table.Cell>
-                                    <Text>{item.item?.brand?.name ?? '—'}</Text>
+                                    <Text>
+                                      {isCustomLine
+                                        ? '—'
+                                        : item.item?.brand?.name ?? '—'}
+                                    </Text>
                                   </Table.Cell>
                                   <Table.Cell>
-                                    <Text>{item.item?.model ?? '—'}</Text>
+                                    <Text>
+                                      {isCustomLine
+                                        ? '—'
+                                        : item.item?.model ?? '—'}
+                                    </Text>
                                   </Table.Cell>
                                   <Table.Cell>
                                     <TextField.Root
@@ -2529,6 +2647,7 @@ function CrewSection({
   defaultRatePerDay,
   defaultRatePerHour,
   defaultBillingUnit = 'hour',
+  defaultsLoading = false,
 }: {
   items: Array<LocalCrewItem>
   onItemsChange: (items: Array<LocalCrewItem>) => void
@@ -2539,6 +2658,7 @@ function CrewSection({
   defaultRatePerDay?: number | null
   defaultRatePerHour?: number | null
   defaultBillingUnit?: 'day' | 'hour'
+  defaultsLoading?: boolean
 }) {
   const [expandedItems, setExpandedItems] = React.useState<Set<string>>(
     new Set(),
@@ -2708,7 +2828,16 @@ function CrewSection({
       <Flex justify="between" align="center">
         <Heading size="3">Crew</Heading>
         {!readOnly && (
-          <Button size="2" onClick={addItem}>
+          <Button
+            size="2"
+            onClick={addItem}
+            disabled={defaultsLoading}
+            title={
+              defaultsLoading
+                ? 'Loading customer pricing…'
+                : undefined
+            }
+          >
             <Plus width={16} height={16} /> Add Crew Item
           </Button>
         )}

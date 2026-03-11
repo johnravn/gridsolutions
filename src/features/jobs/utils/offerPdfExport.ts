@@ -458,14 +458,18 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
 
       if (group.items && group.items.length > 0) {
         for (const item of group.items) {
-          const baseName = item.group
-            ? `${item.group.name} (Group)`
-            : item.item?.name || 'Unknown Item'
-          const meta = item.group
-            ? null
-            : [item.item?.brand?.name, item.item?.model]
-                .filter(Boolean)
-                .join(' ')
+          const isCustomLine = !item.item && !item.group
+          const baseName = isCustomLine
+            ? (item.custom_line_description?.trim() || 'Custom line')
+            : item.group
+              ? `${item.group.name} (Group)`
+              : item.item?.name || 'Unknown Item'
+          const meta =
+            isCustomLine || item.group
+              ? null
+              : [item.item?.brand?.name, item.item?.model]
+                  .filter(Boolean)
+                  .join(' ')
           const itemName = meta ? `${baseName} (${meta})` : baseName
           const qty = `${item.quantity}`
           const unitPrice = formatCurrency(item.unit_price)
