@@ -284,6 +284,7 @@ function EquipmentItemRows({
   rowKeyPrefix?: string
 }) {
   const baseKey = rowKeyPrefix ?? `${offerGroupId}-${item.id}`
+  const isCustomLine = !item.item && !item.group
   const isGroup = !!item.group
   const hasContents =
     isGroup && item.group_contents && item.group_contents.length > 0
@@ -293,7 +294,11 @@ function EquipmentItemRows({
     <>
       <Table.Row key={item.id}>
         <Table.Cell>
-          {isGroup ? (
+          {isCustomLine ? (
+            <Text color={item.custom_line_description ? undefined : 'gray'}>
+              {item.custom_line_description?.trim() || 'Custom line'}
+            </Text>
+          ) : isGroup ? (
             <Flex align="center" gap="2">
               {hasContents ? (
                 <Box
@@ -315,8 +320,12 @@ function EquipmentItemRows({
             item.item?.name || 'Unknown Item'
           )}
         </Table.Cell>
-        <Table.Cell>{item.item?.brand?.name ?? '—'}</Table.Cell>
-        <Table.Cell>{item.item?.model ?? '—'}</Table.Cell>
+        <Table.Cell>
+          {isCustomLine ? '—' : item.item?.brand?.name ?? '—'}
+        </Table.Cell>
+        <Table.Cell>
+          {isCustomLine ? '—' : item.item?.model ?? '—'}
+        </Table.Cell>
         <Table.Cell style={{ textAlign: 'right' }}>{item.quantity}</Table.Cell>
         {showPrices && (
           <>
