@@ -2,7 +2,6 @@
 import * as React from 'react'
 import {
   useMutation,
-  useQueries,
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
@@ -148,9 +147,9 @@ export default function OffersTab({
 
   const offersQuery = useQuery({
     ...jobOffersQuery(jobId),
-    // The "Synced" column depends on current bookings; always re-check on tab entry.
-    refetchOnMount: 'always',
-    staleTime: 0,
+    // We already force-refresh on tab entry (see effect below). Avoid re-fetching on every mount.
+    staleTime: 30_000,
+    refetchOnMount: false,
   })
   const { data: offers = [], isLoading } = offersQuery
 
@@ -176,8 +175,8 @@ export default function OffersTab({
   const bookingsSnapshotQuery = useQuery({
     queryKey: ['jobs', jobId, 'bookings-snapshot-for-offers'] as const,
     enabled: isActive ?? true,
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 30_000,
+    refetchOnMount: false,
     queryFn: async (): Promise<BookingsSnapshot> => {
       const { data: timePeriodsRaw, error: tpErr } = await supabase
         .from('time_periods')
@@ -262,25 +261,117 @@ export default function OffersTab({
     [offers],
   )
 
-  const offerDetailResults = useQueries({
-    queries: technicalOffers.map((offer) => ({
-      ...offerDetailQuery(offer.id),
-      enabled: (isActive ?? true) && technicalOffers.length > 0,
-      staleTime: 0,
-      refetchOnMount: 'always' as const,
-    })),
+  const technicalOfferIds = React.useMemo(
+    () => technicalOffers.map((o) => o.id).filter(Boolean),
+    [technicalOffers],
+  )
+
+  // Batch-load offer details for all technical offers.
+  // This replaces the previous N+1 `useQueries(offerDetailQuery(...))` pattern.
+  const technicalOfferDetailsQuery = useQuery({
+    queryKey: ['offer-details-batch', ...technicalOfferIds] as const,
+    enabled: (isActive ?? true) && technicalOfferIds.length > 0,
+    staleTime: 30_000,
+    refetchOnMount: false,
+    queryFn: async (): Promise<Map<string, OfferDetail>> => {
+      const offerIds = technicalOfferIds
+      if (offerIds.length === 0) return new Map()
+
+      const { data: groupsRaw, error: groupsErr } = await supabase
+        .from('offer_equipment_groups')
+        .select('*')
+        .in('offer_id', offerIds)
+        .order('sort_order', { ascending: true })
+      if (groupsErr) throw groupsErr
+
+      const groups = (groupsRaw as Array<any> | null | undefined) ?? []
+      const groupIds = groups.map((g) => g.id).filter(Boolean) as Array<string>
+
+      const { data: equipmentItemsRaw, error: equipmentItemsErr } =
+        groupIds.length > 0
+          ? await supabase
+              .from('offer_equipment_items')
+              .select('*')
+              .in('offer_group_id', groupIds)
+              .order('sort_order', { ascending: true })
+          : { data: [], error: null }
+      if (equipmentItemsErr) throw equipmentItemsErr
+
+      const equipmentItems =
+        (equipmentItemsRaw as Array<any> | null | undefined) ?? []
+
+      const { data: crewItemsRaw, error: crewItemsErr } = await supabase
+        .from('offer_crew_items')
+        .select('*')
+        .in('offer_id', offerIds)
+      if (crewItemsErr) throw crewItemsErr
+
+      const { data: transportItemsRaw, error: transportItemsErr } = await supabase
+        .from('offer_transport_items')
+        .select('*')
+        .in('offer_id', offerIds)
+      if (transportItemsErr) throw transportItemsErr
+
+      const crewItems = (crewItemsRaw as Array<any> | null | undefined) ?? []
+      const transportItems =
+        (transportItemsRaw as Array<any> | null | undefined) ?? []
+
+      const itemsByGroupId = new Map<string, Array<any>>()
+      for (const it of equipmentItems) {
+        const gid = String(it.offer_group_id ?? '')
+        if (!gid) continue
+        const list = itemsByGroupId.get(gid) ?? []
+        list.push(it)
+        itemsByGroupId.set(gid, list)
+      }
+
+      const groupsByOfferId = new Map<string, Array<any>>()
+      for (const g of groups) {
+        const oid = String(g.offer_id ?? '')
+        if (!oid) continue
+        const list = groupsByOfferId.get(oid) ?? []
+        list.push({
+          ...g,
+          items: itemsByGroupId.get(String(g.id ?? '')) ?? [],
+        })
+        groupsByOfferId.set(oid, list)
+      }
+
+      const crewByOfferId = new Map<string, Array<any>>()
+      for (const it of crewItems) {
+        const oid = String(it.offer_id ?? '')
+        if (!oid) continue
+        const list = crewByOfferId.get(oid) ?? []
+        list.push(it)
+        crewByOfferId.set(oid, list)
+      }
+
+      const transportByOfferId = new Map<string, Array<any>>()
+      for (const it of transportItems) {
+        const oid = String(it.offer_id ?? '')
+        if (!oid) continue
+        const list = transportByOfferId.get(oid) ?? []
+        list.push(it)
+        transportByOfferId.set(oid, list)
+      }
+
+      const out = new Map<string, OfferDetail>()
+      for (const offerId of offerIds) {
+        // Only include fields OffersTab needs for diff/sync logic.
+        out.set(offerId, {
+          id: offerId,
+          groups: (groupsByOfferId.get(offerId) ?? []) as any,
+          crew_items: (crewByOfferId.get(offerId) ?? []) as any,
+          transport_items: (transportByOfferId.get(offerId) ?? []) as any,
+        } as any)
+      }
+      return out
+    },
   })
 
   const offerDetailsById = React.useMemo(() => {
-    const m = new Map<string, OfferDetail>()
-    for (const res of offerDetailResults) {
-      const offerDetail = res.data
-      if (offerDetail?.id) {
-        m.set(offerDetail.id, offerDetail)
-      }
-    }
-    return m
-  }, [offerDetailResults])
+    return technicalOfferDetailsQuery.data ?? new Map<string, OfferDetail>()
+  }, [technicalOfferDetailsQuery.data])
 
   const groupIdsUsedByOffers = React.useMemo(() => {
     const ids = new Set<string>()
@@ -297,8 +388,8 @@ export default function OffersTab({
   const groupItemsQuery = useQuery({
     queryKey: ['group-items', ...groupIdsUsedByOffers] as const,
     enabled: (isActive ?? true) && groupIdsUsedByOffers.length > 0,
-    staleTime: 0,
-    refetchOnMount: 'always',
+    staleTime: 60_000,
+    refetchOnMount: false,
     queryFn: async (): Promise<
       Map<string, Array<{ item_id: string; quantity: number }>>
     > => {
@@ -819,17 +910,15 @@ export default function OffersTab({
     // Force-refresh whenever the user enters the Offers tab.
     offersQuery.refetch()
     bookingsSnapshotQuery.refetch()
-    for (const res of offerDetailResults) {
-      res.refetch()
-    }
+    technicalOfferDetailsQuery.refetch()
     groupItemsQuery.refetch()
   }, [
     isActive,
     jobId,
     bookingsSnapshotQuery,
     groupItemsQuery,
-    offerDetailResults,
     offersQuery,
+    technicalOfferDetailsQuery,
   ])
 
   const deleteOfferMutation = useMutation({

@@ -1,6 +1,6 @@
 // src/features/inventory/components/InventoryTable.tsx
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import {
   Badge,
   Button,
@@ -15,7 +15,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Package, Packages, Search } from 'iconoir-react'
-import { categoryNamesQuery, inventoryIndexQueryAll } from '../api/queries'
+import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
 import type { InventoryIndexRow, SortBy, SortDir } from '../api/queries'
@@ -64,10 +64,14 @@ export default function InventoryTable({
   const controlsRef = React.useRef<HTMLDivElement | null>(null)
   const scrollRef = React.useRef<HTMLDivElement | null>(null)
 
-  const { data, isLoading, isFetching } = useQuery({
-    ...inventoryIndexQueryAll({
-      companyId: companyId ?? '__none__',
-      search: debouncedSearch,
+  const PAGE_SIZE = 200
+
+  const inventoryQuery = useInfiniteQuery({
+    queryKey: [
+      'company',
+      companyId,
+      'inventory-index-infinite',
+      debouncedSearch,
       showActive,
       showInactive,
       showInternal,
@@ -75,24 +79,71 @@ export default function InventoryTable({
       showGroupOnlyItems,
       showGroups,
       showItems,
-      category: categoryFilter,
+      categoryFilter,
       sortBy,
       sortDir,
-    }),
+    ] as const,
     enabled: !!companyId,
+    initialPageParam: 1,
+    queryFn: async ({ pageParam }): Promise<{ rows: Array<InventoryIndexRow>; count: number }> => {
+      const page = Number(pageParam) || 1
+      const { queryFn } = inventoryIndexQuery({
+        companyId: companyId ?? '__none__',
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch,
+        showActive,
+        showInactive,
+        showInternal,
+        showExternal,
+        showGroupOnlyItems,
+        showGroups,
+        showItems,
+        category: categoryFilter,
+        sortBy,
+        sortDir,
+      })
+      return await (queryFn as any)()
+    },
+    getNextPageParam: (lastPage, allPages) => {
+      const loaded = allPages.reduce((acc, p) => acc + p.rows.length, 0)
+      const total = lastPage.count
+      if (loaded >= total) return undefined
+      return allPages.length + 1
+    },
+    staleTime: 10_000,
   })
 
-  const rows = data?.rows ?? []
-  const totalCount = data?.count ?? 0
+  const rows = React.useMemo(
+    () => (inventoryQuery.data ? inventoryQuery.data.pages.flatMap((p) => p.rows) : []),
+    [inventoryQuery.data],
+  )
+  const totalCount = inventoryQuery.data ? inventoryQuery.data.pages[0]?.count ?? 0 : 0
 
   const rowVirtualizer = useVirtualizer({
-    count: rows.length,
+    count: rows.length + (inventoryQuery.hasNextPage ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => 44,
     overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0,
+    getItemKey: (index) => rows[index]?.id ?? `loader-${index}`,
+    enabled: rows.length > 0 || inventoryQuery.isFetching,
   })
+
+  React.useEffect(() => {
+    const vItems = rowVirtualizer.getVirtualItems()
+    if (vItems.length === 0) return
+    const last = vItems[vItems.length - 1]
+    const isAtLoader = last.index >= rows.length - 1
+    if (!isAtLoader) return
+    if (inventoryQuery.isFetchingNextPage) return
+    if (!inventoryQuery.hasNextPage) return
+    void inventoryQuery.fetchNextPage()
+  }, [
+    inventoryQuery.hasNextPage,
+    inventoryQuery.isFetchingNextPage,
+    rows.length,
+    rowVirtualizer,
+  ])
 
   const { data: categories = [] } = useQuery({
     ...categoryNamesQuery({ companyId: companyId ?? '__none__' }),
@@ -212,7 +263,7 @@ export default function InventoryTable({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {isFetching && <Spinner />}
+            {(inventoryQuery.isFetching || inventoryQuery.isFetchingNextPage) && <Spinner />}
           </TextField.Slot>
         </TextField.Root>
 
@@ -322,7 +373,7 @@ export default function InventoryTable({
               marginTop: 8,
             }}
           >
-        {isLoading ? (
+        {inventoryQuery.isLoading ? (
           <Flex align="center" justify="center" py="6">
             <Spinner size="2" />
           </Flex>
@@ -342,6 +393,33 @@ export default function InventoryTable({
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const row = rows[virtualRow.index]
+              const isLoaderRow = virtualRow.index >= rows.length
+
+              if (isLoaderRow) {
+                return (
+                  <div
+                    key={`loader-${virtualRow.index}`}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      height: `${virtualRow.size}px`,
+                      transform: `translateY(${virtualRow.start}px)`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 var(--space-3)',
+                      color: 'var(--gray-10)',
+                    }}
+                  >
+                    {inventoryQuery.hasNextPage
+                      ? inventoryQuery.isFetchingNextPage
+                        ? 'Loading more…'
+                        : 'Scroll to load more…'
+                      : '—'}
+                  </div>
+                )
+              }
 
               const isActive = row.id === selectedId
 

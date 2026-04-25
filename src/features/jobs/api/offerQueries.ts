@@ -6,8 +6,8 @@ import {
   calculateRentalFactor,
   generateSecureToken,
 } from '../utils/offerCalculations'
-import type { RentalFactorConfig } from '../utils/offerCalculations'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
+import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
   JobOffer,
   OfferAcceptance,
@@ -110,55 +110,65 @@ export function offerDetailQuery(offerId: string) {
 
       if (groupsError) throw groupsError
 
-      // Fetch equipment items for each group
-      // Note: We fetch items separately to avoid PostgREST relationship ambiguity
-      const groupsWithItems = await Promise.all(
-        (groups || []).map(async (group: OfferEquipmentGroup) => {
-          const { data: items, error: itemsError } = await supabase
-            .from('offer_equipment_items')
-            .select('*')
-            .eq('offer_group_id', group.id)
-            .order('sort_order', { ascending: true })
+      const groupRows = (groups || []) as Array<OfferEquipmentGroup>
+      const groupIdsForItems = groupRows.map((g) => g.id).filter(Boolean)
 
-          if (itemsError) throw itemsError
+      // Fetch equipment items for all groups in a single query (avoids N+1).
+      const itemsByGroupId = new Map<string, Array<any>>()
+      const allItemIds: Array<string> = []
+      const allGroupIds: Array<string> = []
 
-          // Fetch item/group details separately
-          const itemIds = (items || [])
-            .map((item: any) => item.item_id)
-            .filter((id): id is string => id !== null && id !== undefined)
-          const groupIds = (items || [])
-            .map((item: any) => item.group_id)
-            .filter((id): id is string => id !== null && id !== undefined)
+      if (groupIdsForItems.length > 0) {
+        const { data: items, error: itemsError } = await supabase
+          .from('offer_equipment_items')
+          .select('*')
+          .in('offer_group_id', groupIdsForItems)
+          .order('sort_order', { ascending: true })
 
-          const itemMap = new Map<
-            string,
-            {
-              id: string
-              name: string
-              internally_owned: boolean
-              external_owner_id: string | null
-              external_owner_name: string | null
-              brand?: { id: string; name: string } | null
-              model?: string | null
-            }
-          >()
-          const groupMap = new Map<
-            string,
-            {
-              id: string
-              name: string
-              internally_owned: boolean
-              external_owner_id: string | null
-              external_owner_name: string | null
-            }
-          >()
+        if (itemsError) throw itemsError
 
-          if (itemIds.length > 0) {
-            const { data: itemDetails, error: itemsDetailError } =
-              await supabase
-                .from('items')
-                .select(
-                  `
+        for (const it of (items || []) as Array<any>) {
+          const gid = it.offer_group_id as string
+          const list = itemsByGroupId.get(gid) ?? []
+          list.push(it)
+          itemsByGroupId.set(gid, list)
+
+          if (it.item_id) allItemIds.push(it.item_id)
+          if (it.group_id) allGroupIds.push(it.group_id)
+        }
+      }
+
+      const uniqItemIds = Array.from(new Set(allItemIds))
+      const uniqGroupIds = Array.from(new Set(allGroupIds))
+
+      const itemMap = new Map<
+        string,
+        {
+          id: string
+          name: string
+          internally_owned: boolean
+          external_owner_id: string | null
+          external_owner_name: string | null
+          brand?: { id: string; name: string } | null
+          model?: string | null
+        }
+      >()
+      const groupMap = new Map<
+        string,
+        {
+          id: string
+          name: string
+          internally_owned: boolean
+          external_owner_id: string | null
+          external_owner_name: string | null
+        }
+      >()
+
+      if (uniqItemIds.length > 0) {
+        const { data: itemDetails, error: itemsDetailError } = await supabase
+          .from('items')
+          .select(
+            `
                 id,
                 name,
                 internally_owned,
@@ -167,72 +177,67 @@ export function offerDetailQuery(offerId: string) {
                 external_owner:customers!items_external_owner_id_fkey ( id, name ),
                 brand:item_brands ( id, name )
               `,
-                )
-                .in('id', itemIds)
+          )
+          .in('id', uniqItemIds)
 
-            if (itemsDetailError) throw itemsDetailError
+        if (itemsDetailError) throw itemsDetailError
 
-            if (itemDetails) {
-              itemDetails.forEach((item: any) => {
-                const brand = Array.isArray(item.brand)
-                  ? item.brand[0]
-                  : item.brand
-                itemMap.set(item.id, {
-                  id: item.id,
-                  name: item.name,
-                  internally_owned: !!item.internally_owned,
-                  external_owner_id: item.external_owner_id ?? null,
-                  external_owner_name: item.external_owner?.name ?? null,
-                  brand: brand || null,
-                  model: item.model || null,
-                })
-              })
-            }
-          }
+        for (const item of itemDetails || []) {
+          const brand = Array.isArray((item as any).brand)
+            ? (item as any).brand[0]
+            : (item as any).brand
+          itemMap.set((item as any).id, {
+            id: (item as any).id,
+            name: (item as any).name,
+            internally_owned: !!(item as any).internally_owned,
+            external_owner_id: (item as any).external_owner_id ?? null,
+            external_owner_name: (item as any).external_owner?.name ?? null,
+            brand: brand || null,
+            model: (item as any).model || null,
+          })
+        }
+      }
 
-          if (groupIds.length > 0) {
-            const { data: groupDetails, error: groupDetailsError } =
-              await supabase
-                .from('item_groups')
-                .select(
-                  `
+      if (uniqGroupIds.length > 0) {
+        const { data: groupDetails, error: groupDetailsError } = await supabase
+          .from('item_groups')
+          .select(
+            `
                 id,
                 name,
                 internally_owned,
                 external_owner_id,
                 external_owner:customers!item_groups_external_owner_id_fkey ( id, name )
               `,
-                )
-                .in('id', groupIds)
+          )
+          .in('id', uniqGroupIds)
 
-            if (groupDetailsError) throw groupDetailsError
+        if (groupDetailsError) throw groupDetailsError
 
-            if (groupDetails) {
-              groupDetails.forEach((group: any) => {
-                groupMap.set(group.id, {
-                  id: group.id,
-                  name: group.name,
-                  internally_owned: !!group.internally_owned,
-                  external_owner_id: group.external_owner_id ?? null,
-                  external_owner_name: group.external_owner?.name ?? null,
-                })
-              })
-            }
-          }
+        for (const g of groupDetails || []) {
+          groupMap.set((g as any).id, {
+            id: (g as any).id,
+            name: (g as any).name,
+            internally_owned: !!(g as any).internally_owned,
+            external_owner_id: (g as any).external_owner_id ?? null,
+            external_owner_name: (g as any).external_owner?.name ?? null,
+          })
+        }
+      }
 
-          // Combine items with their details
-          const itemsWithDetails = (items || []).map((item: any) => ({
-            ...item,
-            item: item.item_id ? itemMap.get(item.item_id) || null : null,
-            group: item.group_id ? groupMap.get(item.group_id) || null : null,
-          }))
+      const groupsWithItems = groupRows.map((group) => {
+        const items = itemsByGroupId.get(group.id) ?? []
+        const itemsWithDetails = items.map((item: any) => ({
+          ...item,
+          item: item.item_id ? itemMap.get(item.item_id) || null : null,
+          group: item.group_id ? groupMap.get(item.group_id) || null : null,
+        }))
 
-          return {
-            ...group,
-            items: itemsWithDetails as Array<OfferEquipmentItem>,
-          }
-        }),
-      )
+        return {
+          ...group,
+          items: itemsWithDetails as Array<OfferEquipmentItem>,
+        }
+      })
 
       // Fetch crew items
       const { data: crewItems, error: crewError } = await supabase
@@ -942,7 +947,7 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      offer = await offerDetailQuery(offerId).queryFn()
+      offer = await (offerDetailQuery(offerId).queryFn as any)()
       if (offer) break
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
@@ -1129,7 +1134,7 @@ export async function markOfferViewed(accessToken: string): Promise<void> {
  * Duplicate an offer (for revisions)
  */
 export async function duplicateOffer(offerId: string): Promise<string> {
-  const offer = await offerDetailQuery(offerId).queryFn()
+  const offer = await (offerDetailQuery(offerId).queryFn as any)()
 
   if (!offer) throw new Error('Offer not found')
 
@@ -1162,7 +1167,7 @@ export async function duplicateOffer(offerId: string): Promise<string> {
       if (groupError) throw groupError
 
       if (group.items && group.items.length > 0) {
-        const itemsToInsert = group.items.map((item) => ({
+        const itemsToInsert = group.items.map((item: OfferEquipmentItem) => ({
           offer_group_id: newGroup.id,
           item_id: item.item_id,
           group_id: item.group_id ?? null,
@@ -1185,7 +1190,7 @@ export async function duplicateOffer(offerId: string): Promise<string> {
 
   // Copy crew items
   if (offer.crew_items && offer.crew_items.length > 0) {
-    const crewItemsToInsert = offer.crew_items.map((item) => ({
+    const crewItemsToInsert = offer.crew_items.map((item: OfferCrewItem) => ({
       offer_id: newOfferId,
       role_title: item.role_title,
       role_category: item.role_category ?? null,
@@ -1206,7 +1211,8 @@ export async function duplicateOffer(offerId: string): Promise<string> {
 
   // Copy transport items
   if (offer.transport_items && offer.transport_items.length > 0) {
-    const transportItemsToInsert = offer.transport_items.map((item) => ({
+    const transportItemsToInsert = offer.transport_items.map(
+      (item: OfferTransportItem) => ({
       offer_id: newOfferId,
       vehicle_name: item.vehicle_name,
       vehicle_id: item.vehicle_id,
@@ -1219,7 +1225,8 @@ export async function duplicateOffer(offerId: string): Promise<string> {
       total_price: item.total_price,
       is_internal: item.is_internal,
       sort_order: item.sort_order,
-    }))
+      }),
+    )
 
     const { error: transportError } = await supabase
       .from('offer_transport_items')
@@ -1230,14 +1237,16 @@ export async function duplicateOffer(offerId: string): Promise<string> {
 
   // Copy pretty sections
   if (offer.pretty_sections && offer.pretty_sections.length > 0) {
-    const sectionsToInsert = offer.pretty_sections.map((section) => ({
+    const sectionsToInsert = offer.pretty_sections.map(
+      (section: OfferPrettySection) => ({
       offer_id: newOfferId,
       section_type: section.section_type,
       title: section.title,
       content: section.content,
       image_url: section.image_url,
       sort_order: section.sort_order,
-    }))
+      }),
+    )
 
     const { error: sectionsError } = await supabase
       .from('offer_pretty_sections')
@@ -1307,7 +1316,7 @@ export async function createBookingsFromOffer(
   userId: string,
 ): Promise<void> {
   // Fetch the offer with all details
-  const offer = await offerDetailQuery(offerId).queryFn()
+  const offer = await (offerDetailQuery(offerId).queryFn as any)()
   if (!offer) throw new Error('Offer not found')
 
   // Get job info for default dates
@@ -1482,7 +1491,7 @@ export async function createBookingsFromOffer(
     }
 
     // Create time periods and reserved items for each owner
-    for (const [ownerId, data] of equipmentByOwner.entries()) {
+    for (const [_ownerId, data] of equipmentByOwner.entries()) {
       const timePeriodId = await getOrCreateTimePeriod(
         `${data.ownerName} Equipment period`,
         'equipment',
@@ -1980,7 +1989,7 @@ export async function syncBookingsFromOffer(
   offerId: string,
   userId: string,
 ): Promise<Array<string>> {
-  const offer = await offerDetailQuery(offerId).queryFn()
+  const offer = await (offerDetailQuery(offerId).queryFn as any)()
   if (!offer) throw new Error('Offer not found')
 
   const { data: job, error: jobError } = await supabase
@@ -2045,7 +2054,7 @@ export async function syncBookingsFromOffer(
  * Export offer as PDF
  */
 export async function exportOfferPDF(offerId: string): Promise<void> {
-  const offer = await offerDetailQuery(offerId).queryFn()
+  const offer = await (offerDetailQuery(offerId).queryFn as any)()
   if (!offer) throw new Error('Offer not found')
   await exportOfferAsPDF(offer)
 }

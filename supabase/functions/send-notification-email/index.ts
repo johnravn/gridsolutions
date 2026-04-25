@@ -113,6 +113,12 @@ Deno.serve(async (req) => {
 
     if (!sendEmail) {
       DEBUG_LOG('Skipped by preferences', { type: notification.type, prefKey, prefValue: prefsRow[prefKey], forceEmail, hypothesisId: 'H4' })
+      // Mark as processed to avoid retry loops from server-side dispatchers.
+      // We currently reuse email_sent_at as a "processed" marker even when skipped.
+      await supabase
+        .from('notifications')
+        .update({ email_sent_at: new Date().toISOString() })
+        .eq('id', notificationId)
       return new Response(
         JSON.stringify({ ok: true, skipped: 'preferences' }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

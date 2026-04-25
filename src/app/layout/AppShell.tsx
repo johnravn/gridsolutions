@@ -130,8 +130,8 @@ export default function AppShell() {
         speed: prefs?.animated_background_speed ?? 1.0,
       }
     },
-    staleTime: 0, // Always refetch when invalidated
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    staleTime: 10 * 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const backgroundEnabled = backgroundPrefs?.enabled ?? false

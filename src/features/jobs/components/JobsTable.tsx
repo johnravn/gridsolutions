@@ -28,7 +28,7 @@ import {
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { jobsIndexQuery } from '../api/queries'
+import { jobsIndexPageQuery } from '../api/queries'
 import { getJobStatusColor } from '../utils/statusColors'
 import JobDialog from './dialogs/JobDialog'
 import type { JobListRow, JobStatus } from '../types'
@@ -84,12 +84,14 @@ export default function JobsTable({
   const hasCalculatedInitialWidth = React.useRef(false)
 
   const {
-    data: allData = [],
+    data,
     isFetching,
     refetch,
   } = useQuery({
-    ...jobsIndexQuery({
+    ...jobsIndexPageQuery({
       companyId: companyId ?? '__none__',
+      page,
+      pageSize,
       search: debouncedSearch,
       selectedDate,
       sortBy,
@@ -100,6 +102,9 @@ export default function JobsTable({
     }),
     enabled: !!companyId,
   })
+
+  const allData = data?.rows ?? []
+  const totalCount = data?.count ?? 0
 
   // Archive/unarchive mutation
   const archiveJob = useMutation({
@@ -285,11 +290,9 @@ export default function JobsTable({
     setPage(1)
   }, [search, selectedDate, sortBy, sortDir, includeArchived])
 
-  // Paginate the data
-  const totalPages = Math.ceil(allData.length / pageSize)
-  const startIndex = (page - 1) * pageSize
-  const endIndex = startIndex + pageSize
-  const data = allData.slice(startIndex, endIndex)
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
+  const startIndex = Math.max(0, (page - 1) * pageSize)
+  const endIndex = Math.min(totalCount, startIndex + pageSize)
 
   const handleSort = (column: SortBy) => {
     if (sortBy === column) {
@@ -462,12 +465,12 @@ export default function JobsTable({
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {data.length === 0 ? (
+            {allData.length === 0 ? (
               <Table.Row>
                 <Table.Cell colSpan={6}>No jobs found</Table.Cell>
               </Table.Row>
             ) : (
-              data.map((j: JobListRow) => {
+              allData.map((j: JobListRow) => {
                 const active = j.id === selectedId
                 const projectLead = j.project_lead
                 const avatarUrl = projectLead?.avatar_url
@@ -625,8 +628,7 @@ export default function JobsTable({
         <div ref={pagerRef}>
           <Flex align="center" justify="between" mt="3">
             <Text size="2" color="gray">
-              Showing {startIndex + 1}-{Math.min(endIndex, allData.length)} of{' '}
-              {allData.length} jobs
+              Showing {startIndex + 1}-{endIndex} of {totalCount} jobs
             </Text>
             <Flex gap="2">
               <Button
