@@ -321,10 +321,10 @@ function EquipmentItemRows({
           )}
         </Table.Cell>
         <Table.Cell>
-          {isCustomLine ? '—' : item.item?.brand?.name ?? '—'}
+          {isCustomLine ? '—' : (item.item?.brand?.name ?? '—')}
         </Table.Cell>
         <Table.Cell>
-          {isCustomLine ? '—' : item.item?.model ?? '—'}
+          {isCustomLine ? '—' : (item.item?.model ?? '—')}
         </Table.Cell>
         <Table.Cell style={{ textAlign: 'right' }}>{item.quantity}</Table.Cell>
         {showPrices && (
@@ -814,7 +814,7 @@ export default function PublicOfferPage() {
 
   return (
     <Box
-      p="6"
+      p={{ initial: '4', sm: '1' }}
       style={{
         maxWidth: 900,
         margin: '0 auto',
@@ -829,8 +829,14 @@ export default function PublicOfferPage() {
         transition={{ duration: 0.6, ease: 'easeOut' }}
       >
         <Card>
-          <Box p="6">
-            <Flex justify="between" align="start" mb="4">
+          <Box p={{ initial: '4', sm: '1' }}>
+            <Flex
+              direction={{ initial: 'column', sm: 'row' }}
+              justify={{ initial: 'start', sm: 'between' }}
+              align="start"
+              gap={{ initial: '3', sm: '6' }}
+              mb="4"
+            >
               <Box>
                 <Heading size="7" mb="2">
                   {offer.title}
@@ -840,9 +846,14 @@ export default function PublicOfferPage() {
                 </Text>
               </Box>
               {offer.customer && (
-                <Flex direction="column" align="end">
+                <Flex
+                  direction="column"
+                  align={{ initial: 'start', sm: 'end' }}
+                >
                   {offer.customer.logo_path ? (
-                    <Box style={{ maxWidth: 200, maxHeight: 80 }}>
+                    <Box
+                      style={{ width: '100%', maxWidth: 200, maxHeight: 80 }}
+                    >
                       <img
                         src={`${
                           supabase.storage
@@ -870,16 +881,9 @@ export default function PublicOfferPage() {
             </Flex>
 
             {/* Job info section: two columns — start/end times, address */}
-            {(offer.job_start_at ||
-              offer.job_end_at ||
-              offer.job_address) && (
+            {(offer.job_start_at || offer.job_end_at || offer.job_address) && (
               <Box mt="4">
-                <Flex
-                  direction="row"
-                  gap="6"
-                  wrap="wrap"
-                  align="start"
-                >
+                <Flex direction="row" gap="6" wrap="wrap" align="start">
                   <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
                     {offer.job_start_at && (
                       <Flex direction="column" gap="1">
@@ -903,11 +907,22 @@ export default function PublicOfferPage() {
                     )}
                   </Flex>
                   {offer.job_address && (
-                    <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
+                    <Flex
+                      direction="column"
+                      gap="1"
+                      style={{ minWidth: 0, flex: 1 }}
+                    >
                       <Text size="1" color="gray" weight="medium">
                         Address
                       </Text>
-                      <Text size="2" as="div" style={{ wordBreak: 'break-word', whiteSpace: 'pre-line' }}>
+                      <Text
+                        size="2"
+                        as="div"
+                        style={{
+                          wordBreak: 'break-word',
+                          whiteSpace: 'pre-line',
+                        }}
+                      >
                         {offer.job_address.replace(/, /g, ',\n')}
                       </Text>
                     </Flex>
