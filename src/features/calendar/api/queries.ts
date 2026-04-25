@@ -420,11 +420,17 @@ export function companyCalendarQuery({
   categories,
   userId,
   companyRole,
+  fromDate,
+  toDate,
 }: {
   companyId: string
   categories?: Array<'program' | 'equipment' | 'crew' | 'transport'>
   userId?: string | null
   companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
+  /** ISO timestamp; defaults to now - 30 days */
+  fromDate?: string
+  /** ISO timestamp; defaults to now + 90 days */
+  toDate?: string
 }) {
   return queryOptions<Array<CalendarRecord>>({
     queryKey: [
@@ -434,13 +440,26 @@ export function companyCalendarQuery({
       categories?.sort().join(',') || 'all',
       userId,
       companyRole,
+      fromDate,
+      toDate,
     ] as const,
     queryFn: async () => {
+      const now = new Date()
+      const defaultFrom = new Date(now)
+      defaultFrom.setDate(defaultFrom.getDate() - 30)
+      const defaultTo = new Date(now)
+      defaultTo.setDate(defaultTo.getDate() + 90)
+      const fromIso = fromDate ?? defaultFrom.toISOString()
+      const toIso = toDate ?? defaultTo.toISOString()
+
       let q = supabase
         .from('time_periods')
         .select('id, title, start_at, end_at, job_id, category')
         .eq('company_id', companyId)
         .eq('deleted', false)
+        // Bound the dataset to a window to prevent “load entire company history”
+        .gte('start_at', fromIso)
+        .lte('start_at', toIso)
 
       if (categories && categories.length > 0) {
         q = q.in('category', categories)
@@ -525,14 +544,15 @@ export function companyCalendarQuery({
       >()
       data.forEach((tp) => {
         if (!tp.job_id) return
+        const jobId = tp.job_id as string
         const crewForPeriod = (crewRes.data || []).filter(
           (c: any) => c.time_period_id === tp.id,
         )
         crewForPeriod.forEach((c: any) => {
-          if (!jobCrewMap.has(tp.job_id)) {
-            jobCrewMap.set(tp.job_id, [])
+          if (!jobCrewMap.has(jobId)) {
+            jobCrewMap.set(jobId, [])
           }
-          const existing = jobCrewMap.get(tp.job_id)!
+          const existing = jobCrewMap.get(jobId)!
           const already = existing.find((x) => x.user_id === c.user_id)
           if (!already) {
             existing.push({ user_id: c.user_id, status: c.status })

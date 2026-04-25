@@ -48,6 +48,14 @@ export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
     }
 
     const checkAndUpdate = () => {
+      // Avoid background writes when the tab is not visible.
+      if (
+        typeof document !== 'undefined' &&
+        document.visibilityState === 'hidden'
+      ) {
+        return
+      }
+
       // Re-check job data from query cache to get latest status
       const cachedJob = qc.getQueryData<JobDetail>(['jobs-detail', job.id])
       const currentJob = cachedJob || job

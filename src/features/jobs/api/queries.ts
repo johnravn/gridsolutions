@@ -23,6 +23,7 @@ export function jobsIndexQuery({
   includeArchived = false,
   showOnlyArchived = false,
   onlyCrewForUserId = null,
+  maxRows = 500,
 }: {
   companyId: string
   search: string
@@ -34,6 +35,11 @@ export function jobsIndexQuery({
   includeArchived?: boolean
   showOnlyArchived?: boolean
   onlyCrewForUserId?: string | null
+  /**
+   * Safety cap to avoid fetching an entire company’s job history in one request.
+   * Use `jobsIndexPageQuery` for real pagination when you need full browsing.
+   */
+  maxRows?: number
 }) {
   return {
     queryKey: [
@@ -49,6 +55,7 @@ export function jobsIndexQuery({
       includeArchived,
       showOnlyArchived,
       onlyCrewForUserId,
+      maxRows,
     ],
     queryFn: async (): Promise<Array<JobListRow>> => {
       let q = supabase
@@ -73,6 +80,15 @@ export function jobsIndexQuery({
         }
       }
 
+      // Bound the dataset when a specific date is selected (dramatically reduces rows for big tenants).
+      if (selectedDate) {
+        // selectedDate is expected to be YYYY-MM-DD
+        const from = `${selectedDate}T00:00:00.000Z`
+        const to = `${selectedDate}T23:59:59.999Z`
+        // Start at/before end-of-day AND (end_at is null OR end_at after start-of-day)
+        q = q.lte('start_at', to).or(`end_at.is.null,end_at.gte.${from}`)
+      }
+
       // Note: We don't filter server-side when searching because we need to search
       // customer name (joined relation) which PostgREST doesn't support.
       // All filtering is done client-side to support title, customer, and date search.
@@ -85,6 +101,11 @@ export function jobsIndexQuery({
         q = q.order('start_at', { ascending: sortDir === 'asc' })
       } else {
         q = q.order(sortBy, { ascending: sortDir === 'asc' })
+      }
+
+      // Safety cap: avoid returning unbounded rows from PostgREST.
+      if (maxRows && maxRows > 0) {
+        q = q.limit(maxRows)
       }
 
       const { data, error } = await q
@@ -293,6 +314,99 @@ export function jobsIndexQuery({
       }
 
       return results
+    },
+    staleTime: 10_000,
+  }
+}
+
+export function jobsIndexPageQuery({
+  companyId,
+  page,
+  pageSize,
+  search,
+  selectedDate,
+  sortBy = 'start_at',
+  sortDir = 'desc',
+  userId,
+  companyRole,
+  includeArchived = false,
+  showOnlyArchived = false,
+  onlyCrewForUserId = null,
+}: {
+  companyId: string
+  page: number
+  pageSize: number
+  search: string
+  selectedDate?: string
+  sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
+  sortDir?: 'asc' | 'desc'
+  userId?: string | null
+  companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
+  includeArchived?: boolean
+  showOnlyArchived?: boolean
+  onlyCrewForUserId?: string | null
+}) {
+  return {
+    queryKey: [
+      'company',
+      companyId,
+      'jobs-index-page',
+      page,
+      pageSize,
+      search,
+      selectedDate,
+      sortBy,
+      sortDir,
+      userId,
+      companyRole,
+      includeArchived,
+      showOnlyArchived,
+      onlyCrewForUserId,
+    ] as const,
+    queryFn: async (): Promise<{ rows: Array<JobListRow>; count: number }> => {
+      const from = Math.max(0, (page - 1) * pageSize)
+      const to = Math.max(from, from + pageSize - 1)
+
+      let q = supabase
+        .from('jobs')
+        .select(
+          `
+          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived,
+          customer:customer_id ( id, name ),
+          customer_user:customer_user_id ( user_id, display_name, email ),
+          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )
+        `,
+          { count: 'estimated' },
+        )
+        .eq('company_id', companyId)
+
+      if (showOnlyArchived) {
+        q = q.eq('archived', true)
+      } else {
+        if (!includeArchived) q = q.eq('archived', false)
+      }
+
+      if (selectedDate) {
+        const dayFrom = `${selectedDate}T00:00:00.000Z`
+        const dayTo = `${selectedDate}T23:59:59.999Z`
+        q = q.lte('start_at', dayTo).or(`end_at.is.null,end_at.gte.${dayFrom}`)
+      }
+
+      // Narrow server-side when possible (title only); customer name still requires client-side fuzzy search elsewhere.
+      if (search.trim()) {
+        const safe = escapePgLike(search.trim())
+        q = q.ilike('title', `%${safe}%`)
+      }
+
+      if (sortBy === 'customer_name') {
+        q = q.order('start_at', { ascending: sortDir === 'asc' })
+      } else {
+        q = q.order(sortBy, { ascending: sortDir === 'asc' })
+      }
+
+      const { data, error, count } = await q.range(from, to)
+      if (error) throw error
+      return { rows: (data || []) as unknown as Array<JobListRow>, count: count ?? 0 }
     },
     staleTime: 10_000,
   }

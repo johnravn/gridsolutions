@@ -320,6 +320,9 @@ allow_dynamic_registration = false
 [functions.send-notification-email]
 verify_jwt = false
 
+[functions.dispatch-notification-emails]
+verify_jwt = false
+
 [edge_runtime]
 enabled = true
 # Supported request policies: `oneshot`, `per_worker`.

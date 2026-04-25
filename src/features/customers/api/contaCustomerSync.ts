@@ -146,7 +146,7 @@ export async function syncCustomersWithConta(
   // 2. Fetch Subb customers for this company
   const { data: subbCustomers, error: subbErr } = await db
     .from('customers')
-    .select('id, name, email, phone, address, vat_number')
+    .select('id, name, email, phone, address, vat_number, conta_customer_id')
     .eq('company_id', companyId)
     .or('deleted.is.null,deleted.eq.false')
 
@@ -167,14 +167,7 @@ export async function syncCustomersWithConta(
     let contaHit = contaCustomersByOrgNo.get(orgNo) ?? null
 
     // If we have conta_customer_id, try to fetch full customer from Conta
-    const { data: existing } = await db
-      .from('customers')
-      .select('conta_customer_id')
-      .eq('id', c.id)
-      .single()
-
-    const contaId = (existing as { conta_customer_id?: number } | null)
-      ?.conta_customer_id
+    const contaId = (c as { conta_customer_id?: number | null })?.conta_customer_id ?? null
 
     if (contaId && !contaHit) {
       try {

@@ -1,6 +1,7 @@
 // src/pages/CalendarPage.tsx
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Box,
   Button,
@@ -34,6 +35,7 @@ export default function CalendarPage() {
   const { userId, companyRole } = useAuthz()
   const [category, setCategory] = React.useState<Category>('jobDuration')
   const [searchQuery, setSearchQuery] = React.useState('')
+  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, { wait: 300 })
   const [selectedEntityId, setSelectedEntityId] = React.useState<string | null>(
     null,
   )
@@ -41,6 +43,14 @@ export default function CalendarPage() {
   const [listMode, setListMode] = React.useState(false)
   const [subscribeDialogOpen, setSubscribeDialogOpen] = React.useState(false)
   const searchRef = React.useRef<HTMLDivElement>(null)
+
+  const calendarWindow = React.useMemo(() => {
+    const from = new Date()
+    from.setDate(from.getDate() - 30)
+    const to = new Date()
+    to.setDate(to.getDate() + 90)
+    return { fromDate: from.toISOString(), toDate: to.toISOString() }
+  }, [])
 
   // Set default category based on role
   React.useEffect(() => {
@@ -75,19 +85,23 @@ export default function CalendarPage() {
       categories: undefined, // Fetch all categories
       userId,
       companyRole,
+      ...calendarWindow,
     }),
     enabled: !!companyId,
   })
 
   // Fetch suggestions based on category
-  const shouldFetchSuggestions = category !== 'all' && !!companyId
+  // Important: these index queries can be very expensive if they fire on every keystroke.
+  // Only fetch when the suggestion dropdown is actually open.
+  const shouldFetchSuggestions =
+    category !== 'all' && !!companyId && showSuggestions
 
   // Vehicles for transport
   const { data: vehicles = [] } = useQuery({
     ...vehiclesIndexQuery({
       companyId: companyId ?? '',
       includeExternal: true,
-      search: searchQuery,
+      search: debouncedSearchQuery,
     }),
     enabled: shouldFetchSuggestions && category === 'transport',
   })
@@ -98,7 +112,7 @@ export default function CalendarPage() {
       companyId: companyId ?? '',
       page: 1,
       pageSize: 100,
-      search: searchQuery,
+      search: debouncedSearchQuery,
       showActive: true,
       showInactive: false,
       showInternal: true,
@@ -127,7 +141,7 @@ export default function CalendarPage() {
   const { data: jobs = [] } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: searchQuery,
+      search: debouncedSearchQuery,
     }),
     enabled: shouldFetchSuggestions && category === 'jobDuration',
   })

@@ -1199,7 +1199,9 @@ export function unreadMattersCountQueryAll() {
 
       return filtered.length
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    // Avoid constant polling pressure on PostgREST/DB; rely more on invalidation from actions.
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   }
 }
 
@@ -1248,7 +1250,8 @@ export function unreadMattersCountQuery(companyId: string) {
 
       return filtered.length
     },
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
   }
 }
 
