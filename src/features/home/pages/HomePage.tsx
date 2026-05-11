@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Box, Text } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
+import { addDays, startOfMinute } from 'date-fns'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
@@ -64,9 +65,15 @@ export default function HomePage() {
     enabled: !!companyId && canSeeLatest,
   })
 
-  const now = new Date()
-  const conflictFrom = now.toISOString()
-  const conflictTo = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  // IMPORTANT: make range stable so queryKey doesn't change every render
+  const { conflictFrom, conflictTo } = React.useMemo(() => {
+    const now = startOfMinute(new Date())
+    return {
+      conflictFrom: now.toISOString(),
+      conflictTo: addDays(now, 30).toISOString(),
+    }
+  }, [companyId])
+
   const { data: crewConflicts = [], isLoading: crewConflictsLoading } = useQuery({
     ...crewConflictsQuery({
       companyId: companyId ?? '',
@@ -74,6 +81,9 @@ export default function HomePage() {
       to: conflictTo,
     }),
     enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
   const { data: vehicleConflicts = [], isLoading: vehicleConflictsLoading } = useQuery({
     ...vehicleConflictsQuery({
@@ -82,6 +92,9 @@ export default function HomePage() {
       to: conflictTo,
     }),
     enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
   const conflictsLoading = crewConflictsLoading || vehicleConflictsLoading
 

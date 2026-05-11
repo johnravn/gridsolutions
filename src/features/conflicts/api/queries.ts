@@ -52,6 +52,9 @@ export function crewConflictsQuery({
       return (data ?? []) as CrewConflictRow[]
     },
     enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }
 
@@ -76,5 +79,8 @@ export function vehicleConflictsQuery({
       return (data ?? []) as VehicleConflictRow[]
     },
     enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 }
