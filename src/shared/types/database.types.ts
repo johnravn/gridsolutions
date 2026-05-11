@@ -7,30 +7,10 @@ export type Json =
   | Json[]
 
 export type Database = {
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
@@ -1503,9 +1483,9 @@ export type Database = {
           access_token: string
           based_on_offer_id: string | null
           bookings_synced_at: string | null
+          company_id: string
           copied_from_job_id: string | null
           copied_from_offer_id: string | null
-          company_id: string
           created_at: string
           crew_subtotal: number
           days_of_use: number
@@ -1549,6 +1529,8 @@ export type Database = {
           based_on_offer_id?: string | null
           bookings_synced_at?: string | null
           company_id: string
+          copied_from_job_id?: string | null
+          copied_from_offer_id?: string | null
           created_at?: string
           crew_subtotal?: number
           days_of_use?: number
@@ -1556,8 +1538,6 @@ export type Database = {
           discount_percent?: number
           email_provider_message_id?: string | null
           equipment_subtotal?: number
-          copied_from_job_id?: string | null
-          copied_from_offer_id?: string | null
           id?: string
           job_id: string
           locked?: boolean
@@ -1594,6 +1574,8 @@ export type Database = {
           based_on_offer_id?: string | null
           bookings_synced_at?: string | null
           company_id?: string
+          copied_from_job_id?: string | null
+          copied_from_offer_id?: string | null
           created_at?: string
           crew_subtotal?: number
           days_of_use?: number
@@ -1601,8 +1583,6 @@ export type Database = {
           discount_percent?: number
           email_provider_message_id?: string | null
           equipment_subtotal?: number
-          copied_from_job_id?: string | null
-          copied_from_offer_id?: string | null
           id?: string
           job_id?: string
           locked?: boolean
@@ -1664,6 +1644,20 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offers_copied_from_job_id_fkey"
+            columns: ["copied_from_job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offers_copied_from_offer_id_fkey"
+            columns: ["copied_from_offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
             referencedColumns: ["id"]
           },
           {
@@ -2570,6 +2564,38 @@ export type Database = {
           },
         ]
       }
+      offer_transport_groups: {
+        Row: {
+          created_at: string
+          group_name: string
+          id: string
+          offer_id: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          group_name: string
+          id?: string
+          offer_id: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          group_name?: string
+          id?: string
+          offer_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "offer_transport_groups_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offer_transport_items: {
         Row: {
           daily_rate: number
@@ -2584,6 +2610,7 @@ export type Database = {
           sort_order: number
           start_date: string
           total_price: number
+          transport_group_id: string
           vehicle_category:
             | Database["public"]["Enums"]["vehicle_category"]
             | null
@@ -2603,6 +2630,7 @@ export type Database = {
           sort_order?: number
           start_date: string
           total_price?: number
+          transport_group_id: string
           vehicle_category?:
             | Database["public"]["Enums"]["vehicle_category"]
             | null
@@ -2622,6 +2650,7 @@ export type Database = {
           sort_order?: number
           start_date?: string
           total_price?: number
+          transport_group_id?: string
           vehicle_category?:
             | Database["public"]["Enums"]["vehicle_category"]
             | null
@@ -2634,6 +2663,13 @@ export type Database = {
             columns: ["offer_id"]
             isOneToOne: false
             referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_offer_transport_items_transport_group"
+            columns: ["transport_group_id"]
+            isOneToOne: false
+            referencedRelation: "offer_transport_groups"
             referencedColumns: ["id"]
           },
           {
@@ -3929,6 +3965,10 @@ export type Database = {
         }
         Returns: number
       }
+      job_copy: {
+        Args: { p_end_at: string; p_job_id: string; p_start_at: string }
+        Returns: string
+      }
       mark_job_offer_bookings_synced: {
         Args: { p_offer_id: string }
         Returns: undefined
@@ -4244,9 +4284,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {
       activity_type: [
@@ -4351,4 +4388,3 @@ export const Constants = {
     },
   },
 } as const
-
