@@ -100,6 +100,7 @@ export default function CompanyExpansionsTab() {
   const isContaSelected =
     form.accounting_software === 'conta' ||
     expansionData?.accounting_software === 'conta'
+  const isApiKeyActive = expansionData?.accounting_api_key_active ?? true
 
   // Calculate completion status
   const step1Completed =
@@ -135,7 +136,7 @@ export default function CompanyExpansionsTab() {
     }
   }, [isFullyConfigured, isEditing])
 
-  // Fetch available organizations when Conta is selected and API key is configured
+  // Fetch available organizations when Conta is selected and API key is configured & active
   const {
     data: availableOrganizations,
     isLoading: orgsLoading,
@@ -144,7 +145,7 @@ export default function CompanyExpansionsTab() {
   } = useQuery({
     queryKey: ['conta', 'organizations', companyId, apiEnvironment],
     queryFn: getAvailableOrganizations,
-    enabled: isContaSelected && hasApiKeyConfigured,
+    enabled: isContaSelected && hasApiKeyConfigured && isApiKeyActive,
     staleTime: 5 * 60 * 1000, // 5 minutes
     retry: 1,
   })
@@ -160,7 +161,7 @@ export default function CompanyExpansionsTab() {
       await contaClient.get('/invoice/ping')
       return true
     },
-    enabled: isContaSelected && hasApiKeyConfigured,
+    enabled: isContaSelected && hasApiKeyConfigured && isApiKeyActive,
     staleTime: 60 * 1000,
     retry: 0,
   })
@@ -215,6 +216,7 @@ export default function CompanyExpansionsTab() {
           apiEnvironment,
           organizationId: form.accounting_organization_id || undefined,
           readOnly: form.accounting_api_read_only,
+          apiKeyActive: true,
         })
       }
       return updateCompanyExpansion({
@@ -224,6 +226,7 @@ export default function CompanyExpansionsTab() {
         apiEnvironment,
         organizationId: form.accounting_organization_id || undefined,
         readOnly: form.accounting_api_read_only,
+        apiKeyActive: true,
       })
     },
     onSuccess: () => {
@@ -324,6 +327,43 @@ export default function CompanyExpansionsTab() {
     },
     onError: (e: any) => {
       toastError('Failed to remove API key', e?.message ?? 'Please try again.')
+    },
+  })
+
+  // Mutation for toggling API key active/inactive state
+  const toggleApiKeyActiveMutation = useMutation({
+    mutationFn: async (active: boolean) => {
+      if (!companyId) throw new Error('No company selected')
+      return updateCompanyExpansion({
+        companyId,
+        accountingSoftware: undefined,
+        apiKey: undefined,
+        sandboxApiKey: undefined,
+        organizationId: undefined,
+        readOnly: undefined,
+        apiKeyActive: active,
+      })
+    },
+    onSuccess: (_data, active) => {
+      qc.invalidateQueries({ queryKey: ['company', companyId, 'expansion'] })
+      qc.invalidateQueries({ queryKey: ['conta', 'organizations', companyId] })
+      qc.invalidateQueries({ queryKey: ['conta', 'health', companyId] })
+      qc.invalidateQueries({
+        queryKey: ['conta', 'income-expenses', companyId],
+        exact: false,
+      })
+      success(
+        active ? 'API Key Activated' : 'API Key Deactivated',
+        active
+          ? 'Accounting integration is active again. Sync and dashboard data will resume.'
+          : 'The stored API key is preserved but will not be used until you re-activate it.',
+      )
+    },
+    onError: (e: any) => {
+      toastError(
+        'Failed to update API key status',
+        e?.message ?? 'Please try again.',
+      )
     },
   })
 
@@ -518,6 +558,13 @@ export default function CompanyExpansionsTab() {
   // Get badge for header
   const getStatusBadge = () => {
     if (isFullyConfigured) {
+      if (!isApiKeyActive) {
+        return (
+          <Badge color="orange" variant="soft">
+            Inactive
+          </Badge>
+        )
+      }
       return (
         <Badge color="green" variant="soft">
           Configured
@@ -632,12 +679,36 @@ export default function CompanyExpansionsTab() {
                   }}
                 >
                   <Flex direction="column" gap="3">
-                    <Text as="div" size="2" weight="medium">
-                      Accounting software:{' '}
-                      {formatSoftwareName(
-                        expansionData.accounting_software as AccountingSoftware,
-                      )}
-                    </Text>
+                    <Flex align="center" justify="between" gap="3" wrap="wrap">
+                      <Text as="div" size="2" weight="medium">
+                        Accounting software:{' '}
+                        {formatSoftwareName(
+                          expansionData.accounting_software as AccountingSoftware,
+                        )}
+                      </Text>
+                      <Badge
+                        color={isApiKeyActive ? 'green' : 'orange'}
+                        variant="soft"
+                      >
+                        {isApiKeyActive ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </Flex>
+                    {!isApiKeyActive && (
+                      <Box
+                        style={{
+                          padding: 10,
+                          background: 'var(--orange-2)',
+                          borderRadius: 6,
+                          border: '1px solid var(--orange-6)',
+                        }}
+                      >
+                        <Text as="div" size="1" color="orange">
+                          This integration is paused. The API key and settings
+                          are preserved, but Conta sync, dashboard data, and
+                          invoice operations are disabled until you re-activate.
+                        </Text>
+                      </Box>
+                    )}
                     <Text as="div" size="2" color="gray">
                       API key: •••••••••••••••• (configured)
                     </Text>
@@ -665,9 +736,24 @@ export default function CompanyExpansionsTab() {
                         ? 'Read-only'
                         : 'Full access'}
                     </Text>
-                    <Flex gap="2" mt="2">
+                    <Flex gap="2" mt="2" wrap="wrap">
                       <Button onClick={() => setIsEditing(true)} size="2">
                         Edit
+                      </Button>
+                      <Button
+                        variant="soft"
+                        color={isApiKeyActive ? 'orange' : 'green'}
+                        onClick={() =>
+                          toggleApiKeyActiveMutation.mutate(!isApiKeyActive)
+                        }
+                        disabled={toggleApiKeyActiveMutation.isPending}
+                        size="2"
+                      >
+                        {toggleApiKeyActiveMutation.isPending
+                          ? 'Updating…'
+                          : isApiKeyActive
+                            ? 'Deactivate'
+                            : 'Activate'}
                       </Button>
                       <Button
                         variant="soft"
@@ -768,11 +854,37 @@ export default function CompanyExpansionsTab() {
                                 <Badge color="green" variant="soft" size="1">
                                   Configured
                                 </Badge>
+                                <Badge
+                                  color={isApiKeyActive ? 'green' : 'orange'}
+                                  variant="soft"
+                                  size="1"
+                                >
+                                  {isApiKeyActive ? 'Active' : 'Inactive'}
+                                </Badge>
                                 <Badge color="blue" variant="soft" size="1">
                                   {apiEnvironment === 'sandbox'
                                     ? 'Sandbox key'
                                     : 'Production key'}
                                 </Badge>
+                                <Button
+                                  size="1"
+                                  variant="soft"
+                                  color={isApiKeyActive ? 'orange' : 'green'}
+                                  onClick={() =>
+                                    toggleApiKeyActiveMutation.mutate(
+                                      !isApiKeyActive,
+                                    )
+                                  }
+                                  disabled={
+                                    toggleApiKeyActiveMutation.isPending
+                                  }
+                                >
+                                  {toggleApiKeyActiveMutation.isPending
+                                    ? 'Updating…'
+                                    : isApiKeyActive
+                                      ? 'Deactivate'
+                                      : 'Activate'}
+                                </Button>
                                 <Button
                                   size="1"
                                   variant="soft"
@@ -824,6 +936,11 @@ export default function CompanyExpansionsTab() {
                                     Add a {apiEnvironment} API key to run the
                                     check.
                                   </Text>
+                                ) : !isApiKeyActive ? (
+                                  <Text size="1" color="orange">
+                                    API key is inactive — activate it to run
+                                    the check.
+                                  </Text>
                                 ) : healthLoading ? (
                                   <Text size="1" color="gray">
                                     Checking connectivity...
@@ -843,27 +960,37 @@ export default function CompanyExpansionsTab() {
                               <Flex direction="column" align="end" gap="2">
                                 <Badge
                                   color={
-                                    !hasApiKeyConfigured || healthLoading
+                                    !hasApiKeyConfigured
                                       ? 'gray'
-                                      : healthOk
-                                        ? 'green'
-                                        : 'red'
+                                      : !isApiKeyActive
+                                        ? 'orange'
+                                        : healthLoading
+                                          ? 'gray'
+                                          : healthOk
+                                            ? 'green'
+                                            : 'red'
                                   }
                                   variant="soft"
                                   size="1"
                                 >
-                                  {!hasApiKeyConfigured || healthLoading
+                                  {!hasApiKeyConfigured
                                     ? 'Pending'
-                                    : healthOk
-                                      ? 'Healthy'
-                                      : 'Failed'}
+                                    : !isApiKeyActive
+                                      ? 'Paused'
+                                      : healthLoading
+                                        ? 'Pending'
+                                        : healthOk
+                                          ? 'Healthy'
+                                          : 'Failed'}
                                 </Badge>
                                 <Button
                                   size="1"
                                   variant="soft"
                                   onClick={() => refetchHealth()}
                                   disabled={
-                                    !hasApiKeyConfigured || healthLoading
+                                    !hasApiKeyConfigured ||
+                                    !isApiKeyActive ||
+                                    healthLoading
                                   }
                                 >
                                   Check now
