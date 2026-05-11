@@ -20,6 +20,7 @@ import type {
   OfferRevisionRequest,
   OfferStatus,
   OfferTransportItem,
+  OfferTransportGroup,
   OfferType,
 } from '../types'
 
@@ -248,19 +249,41 @@ export function offerDetailQuery(offerId: string) {
 
       if (crewError) throw crewError
 
-      // Fetch transport items
-      // Note: We fetch vehicles separately to avoid PostgREST relationship ambiguity
-      // when multiple relationships exist for vehicle_id
-      const { data: transportItemsRaw, error: transportError } = await supabase
-        .from('offer_transport_items')
-        .select('*')
-        .eq('offer_id', offerId)
-        .order('sort_order', { ascending: true })
+      // Fetch transport groups and items (grouped + ordered)
+      const { data: transportGroupsRaw, error: transportGroupsError } =
+        await supabase
+          .from('offer_transport_groups')
+          .select('*')
+          .eq('offer_id', offerId)
+          .order('sort_order', { ascending: true })
 
-      if (transportError) throw transportError
+      if (transportGroupsError) throw transportGroupsError
+
+      const transportGroupRows = (transportGroupsRaw ||
+        []) as Array<OfferTransportGroup>
+      const transportGroupIds = transportGroupRows.map((g) => g.id).filter(Boolean)
+
+      const transportItemsByGroupId = new Map<string, Array<any>>()
+      const transportItemsRaw: Array<any> = []
+      if (transportGroupIds.length > 0) {
+        const { data: items, error: itemsError } = await supabase
+          .from('offer_transport_items')
+          .select('*')
+          .in('transport_group_id', transportGroupIds)
+          .order('sort_order', { ascending: true })
+
+        if (itemsError) throw itemsError
+        for (const it of (items || []) as Array<any>) {
+          transportItemsRaw.push(it)
+          const gid = it.transport_group_id as string
+          const list = transportItemsByGroupId.get(gid) ?? []
+          list.push(it)
+          transportItemsByGroupId.set(gid, list)
+        }
+      }
 
       // Fetch vehicles separately if any transport items have vehicle_id
-      const vehicleIds = (transportItemsRaw || [])
+      const vehicleIds = transportItemsRaw
         .map((item: any) => item.vehicle_id)
         .filter((id): id is string => id !== null && id !== undefined)
 
@@ -282,13 +305,21 @@ export function offerDetailQuery(offerId: string) {
         }
       }
 
-      // Combine transport items with vehicle data
-      const transportItems = (transportItemsRaw || []).map((item: any) => ({
-        ...item,
-        vehicle: item.vehicle_id
-          ? vehicleMap.get(item.vehicle_id) || null
-          : null,
-      }))
+      const transportGroupsWithItems = transportGroupRows.map((group) => {
+        const items = transportItemsByGroupId.get(group.id) ?? []
+        return {
+          ...group,
+          items: items.map((item: any) => ({
+            ...item,
+            vehicle: item.vehicle_id
+              ? vehicleMap.get(item.vehicle_id) || null
+              : null,
+          })) as Array<OfferTransportItem>,
+        }
+      })
+
+      // Backward compatibility: also expose a flattened ordered list.
+      const transportItems = transportGroupsWithItems.flatMap((g) => g.items)
 
       // Fetch pretty sections (if this is a pretty offer)
       let prettySections: Array<OfferPrettySection> | undefined
@@ -309,6 +340,7 @@ export function offerDetailQuery(offerId: string) {
         groups: groupsWithItems,
         crew_items: (crewItems || []) as Array<OfferCrewItem>,
         transport_items: (transportItems || []) as Array<OfferTransportItem>,
+        transport_groups: transportGroupsWithItems,
         pretty_sections: prettySections,
       } as OfferDetail
 
@@ -1172,6 +1204,8 @@ export async function duplicateOffer(offerId: string): Promise<string> {
           item_id: item.item_id,
           group_id: item.group_id ?? null,
           custom_line_description: item.custom_line_description ?? null,
+          custom_line_brand: item.custom_line_brand ?? null,
+          custom_line_model: item.custom_line_model ?? null,
           quantity: item.quantity,
           unit_price: item.unit_price,
           total_price: item.total_price,

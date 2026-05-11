@@ -1,12 +1,12 @@
 import * as React from 'react'
 import { Box, Flex } from '@radix-ui/themes'
-import type { ActivityFeedItem } from '@features/latest/types'
-import type { CrewConflictRow, VehicleConflictRow } from '@features/conflicts/api/queries'
 import { ConflictsSection } from '@features/conflicts/components/ConflictsSection'
-import { BibleVerseSection } from './BibleVerseSection'
+import { DailyInspirationSection } from './DailyInspirationSection'
 import { LatestSection } from './LatestSection'
 import { MattersSection } from './MattersSection'
 import { UpcomingJobsSection } from './UpcomingJobsSection'
+import type { ActivityFeedItem } from '@features/latest/types'
+import type { CrewConflictRow, VehicleConflictRow } from '@features/conflicts/api/queries'
 import type { HomeMatter, UpcomingJob } from '../types'
 
 type HomeDesktopLayoutProps = {
@@ -16,6 +16,7 @@ type HomeDesktopLayoutProps = {
   isResizing: boolean
   onResizeStart: (e: React.MouseEvent) => void
   // Content
+  userId: string | null
   canSeeLatest: boolean
   latestActivities: Array<ActivityFeedItem>
   latestLoading: boolean
@@ -41,6 +42,7 @@ export function HomeDesktopLayout({
   leftPanelWidth,
   isResizing,
   onResizeStart,
+  userId,
   canSeeLatest,
   latestActivities,
   latestLoading,
@@ -95,7 +97,7 @@ export function HomeDesktopLayout({
           }}
         >
           <Box style={{ minHeight: 0 }}>
-            <BibleVerseSection />
+            <DailyInspirationSection userId={userId} />
           </Box>
           {canSeeLatest && (
             <Box style={{ flex: 1, minHeight: '40%' }}>

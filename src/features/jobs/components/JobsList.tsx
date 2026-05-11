@@ -15,7 +15,7 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { ArrowDown, ArrowUp, Plus, Search } from 'iconoir-react'
+import { Plus, Search } from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
@@ -53,7 +53,7 @@ export default function JobsList({
 }: {
   selectedId: string | null
   onSelect: (id: string | null) => void
-  statusFilter: JobStatus[]
+  statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
   selectedDate: string
   /** When true, use a stacked card layout for better mobile display */
@@ -270,7 +270,8 @@ export default function JobsList({
               const isSelected = job.id === selectedId
               const displayStatus = getDisplayStatus(job.status, companyRole)
               const myRole = getMyJobRole(job)
-              const showCrewBadge = myRole === 'crew' || myRole === 'both'
+              const isCanceled = job.status === 'canceled'
+              const showCrewBadge = !isCanceled && (myRole === 'crew' || myRole === 'both')
               const customerName =
                 job.customer?.name ??
                 job.customer_user?.display_name ??
@@ -325,7 +326,7 @@ export default function JobsList({
                   }}
                 >
                   {compact ? (
-                    <Flex justify="between" align="flex-start" gap="3" style={{ width: '100%', minWidth: 0 }}>
+                    <Flex justify="between" align="start" gap="3" style={{ width: '100%', minWidth: 0 }}>
                       <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
                         <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
                           <Text

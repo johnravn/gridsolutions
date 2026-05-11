@@ -10,6 +10,7 @@ import {
   Heading,
   Progress,
   Avatar as RadixAvatar,
+  Select,
   Separator,
   Slider,
   Text,
@@ -57,6 +58,7 @@ type OptionalFields = {
   certificates?: Array<string> | null
   notes?: string | null
   animated_background_intensity?: number | null
+  daily_inspiration_type?: 'quote' | 'bibleverse' | null
 }
 
 type AddressForm = {
@@ -82,9 +84,9 @@ export default function ProfilePage() {
   const { data: authUser } = useQuery({
     queryKey: ['auth', 'user'],
     queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser()
-      if (error) throw error
-      return data.user
+      const { data: authData, error: authErr } = await supabase.auth.getUser()
+      if (authErr) throw authErr
+      return authData.user
     },
   })
 
@@ -94,7 +96,7 @@ export default function ProfilePage() {
     enabled: !!authUser?.id,
     queryFn: async () => {
       if (!authUser?.id) return null
-      const { data, error } = await supabase
+      const { data: profileData, error: profileErr } = await supabase
         .from('profiles')
         .select(
           `
@@ -120,8 +122,8 @@ export default function ProfilePage() {
         )
         .eq('user_id', authUser.id)
         .maybeSingle()
-      if (error) throw error
-      return data as unknown as ProfileRow
+      if (profileErr) throw profileErr
+      return profileData as unknown as ProfileRow
     },
   })
 
@@ -144,6 +146,7 @@ export default function ProfilePage() {
     backgroundIntensity: 1.0,
     backgroundShapeType: 'circles' as 'circles' | 'triangles' | 'rectangles',
     backgroundSpeed: 1.0,
+    dailyInspirationType: 'quote' as 'quote' | 'bibleverse',
   })
 
   const [addr, setAddr] = React.useState<AddressForm>({
@@ -189,6 +192,11 @@ export default function ProfilePage() {
       backgroundSpeed:
         (data.preferences as Record<string, any> | null)
           ?.animated_background_speed ?? 1.0,
+      dailyInspirationType:
+        (data.preferences as Record<string, any> | null)
+          ?.daily_inspiration_type === 'bibleverse'
+          ? 'bibleverse'
+          : 'quote',
     }))
 
     const a = data.addresses
@@ -287,17 +295,21 @@ export default function ProfilePage() {
         animated_background_intensity: form.backgroundIntensity,
         animated_background_shape_type: form.backgroundShapeType,
         animated_background_speed: form.backgroundSpeed,
+        daily_inspiration_type: form.dailyInspirationType,
       }
 
-      const { error: rpcErr } = await supabase.rpc('update_my_profile', {
-        p_display_name: form.display_name || null,
-        p_first_name: form.first_name || null,
-        p_last_name: form.last_name || null,
-        p_phone: form.phone || null,
-        p_bio: form.bio || null,
-        p_avatar_path: form.avatarPath || null,
-        p_preferences: preferences as any,
-      })
+      const { error: rpcErr } = await supabase.rpc(
+        'update_my_profile',
+        {
+          p_display_name: form.display_name || null,
+          p_first_name: form.first_name || null,
+          p_last_name: form.last_name || null,
+          p_phone: form.phone || null,
+          p_bio: form.bio || null,
+          p_avatar_path: form.avatarPath || null,
+          p_preferences: preferences,
+        } as any,
+      )
       if (rpcErr) throw rpcErr
     },
     onSuccess: async () => {
@@ -306,6 +318,10 @@ export default function ProfilePage() {
       // Force refetch the background preference query immediately
       await qc.refetchQueries({
         queryKey: ['profile', authUser?.id, 'animated-background-preference'],
+        exact: false,
+      })
+      await qc.refetchQueries({
+        queryKey: ['profile', authUser?.id, 'daily-inspiration-type'],
         exact: false,
       })
       // Also invalidate any queries that might use this preference
@@ -506,7 +522,7 @@ export default function ProfilePage() {
                         // Save immediately
                         try {
                           await mut.mutateAsync()
-                        } catch (error) {
+                        } catch (err) {
                           // Error is handled by mutation's onError
                           // Revert on error
                           set('animatedBackground', false)
@@ -526,7 +542,7 @@ export default function ProfilePage() {
                         // Save immediately
                         try {
                           await mut.mutateAsync()
-                        } catch (error) {
+                        } catch (err) {
                           // Error is handled by mutation's onError
                           // Revert on error
                           set('animatedBackground', true)
@@ -550,7 +566,7 @@ export default function ProfilePage() {
                           set('backgroundSpeed', 0.5)
                           try {
                             await mut.mutateAsync()
-                          } catch (error) {
+                          } catch (err) {
                             // Error is handled by mutation's onError
                           }
                         }}
@@ -570,7 +586,7 @@ export default function ProfilePage() {
                           if (!mut.isPending && form.animatedBackground) {
                             try {
                               await mut.mutateAsync()
-                            } catch (error) {
+                            } catch (err) {
                               // Error is handled by mutation's onError
                             }
                           }
@@ -618,7 +634,7 @@ export default function ProfilePage() {
                               set('backgroundShapeType', shape)
                               try {
                                 await mut.mutateAsync()
-                              } catch (error) {
+                              } catch (err) {
                                 // Error is handled by mutation's onError
                               }
                             }}
@@ -649,7 +665,7 @@ export default function ProfilePage() {
                           if (!mut.isPending && form.animatedBackground) {
                             try {
                               await mut.mutateAsync()
-                            } catch (error) {
+                            } catch (err) {
                               // Error is handled by mutation's onError
                             }
                           }
@@ -739,6 +755,20 @@ export default function ProfilePage() {
                   placeholder="Short description about you…"
                   rows={5}
                 />
+              </Field>
+              <Field label="Homepage inspiration" maxWidth={FIELD_MAX}>
+                <Select.Root
+                  value={form.dailyInspirationType}
+                  onValueChange={(v) =>
+                    set('dailyInspirationType', v as 'quote' | 'bibleverse')
+                  }
+                >
+                  <Select.Trigger placeholder="Select…" style={{ width: '100%' }} />
+                  <Select.Content>
+                    <Select.Item value="quote">Quote of the day</Select.Item>
+                    <Select.Item value="bibleverse">Bible verse of the day</Select.Item>
+                  </Select.Content>
+                </Select.Root>
               </Field>
             </Column>
 

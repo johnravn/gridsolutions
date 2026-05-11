@@ -150,26 +150,39 @@ export default function JobDialog({
       const {
         data: { user },
       } = await supabase.auth.getUser()
-      if (user?.id) {
-        setProjectLead(user.id)
-      }
+      if (!user?.id) return
+
+      // Freelancers must not be set as project lead.
+      const { data: cu, error: cuErr } = await supabase
+        .from('company_user_profiles')
+        .select('role')
+        .eq('company_id', companyId)
+        .eq('user_id', user.id)
+        .maybeSingle()
+      if (cuErr) return
+      if (cu?.role === 'freelancer') return
+
+      setProjectLead(user.id)
     }
 
     setCurrentUserAsLead()
-  }, [open, mode])
+  }, [open, mode, companyId])
 
   const { data: leads = [] } = useQuery({
     queryKey: ['company', companyId, 'project-leads'],
     enabled: open,
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, email')
+        .from('company_user_profiles')
+        .select('user_id, display_name, email, role')
+        .eq('company_id', companyId)
+        .neq('role', 'freelancer')
       if (error) throw error
       return data as Array<{
         user_id: UUID
         display_name: string | null
         email: string
+        role: string
       }>
     },
   })
@@ -282,6 +295,18 @@ export default function JobDialog({
 
   const upsert = useMutation({
     mutationFn: async () => {
+      if (projectLead) {
+        const isValidLead = leads.some((l) => l.user_id === projectLead)
+        if (!isValidLead) {
+          showError(
+            'Invalid project lead',
+            'Freelancers cannot be set as project lead.',
+          )
+          setProjectLead('')
+          throw new Error('Invalid project lead')
+        }
+      }
+
       if (mode === 'create') {
         const { data, error } = await supabase
           .from('jobs')

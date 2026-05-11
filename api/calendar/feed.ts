@@ -46,6 +46,39 @@ function formatICalDate(iso: string): string {
   return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
 }
 
+function parseTstzRange(
+  during: unknown,
+): { start: string; end: string } | null {
+  if (typeof during !== 'string') return null
+  const s = during.trim()
+  if (!s) return null
+
+  // Common Postgres range output: "[2026-05-11 10:00:00+00,2026-05-11 18:00:00+00)"
+  // Sometimes it can contain quotes depending on driver; strip them gently.
+  const m = s.match(/^[\[(]\s*"?([^,"]+)"?\s*,\s*"?([^)\]"]+)"?\s*[\])]\s*$/)
+  if (!m) return null
+
+  const startRaw = m[1].trim()
+  const endRaw = m[2].trim()
+  if (!startRaw || !endRaw) return null
+  if (endRaw.toLowerCase() === 'infinity' || startRaw.toLowerCase() === '-infinity') return null
+
+  const start = new Date(startRaw)
+  const end = new Date(endRaw)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
+  return { start: start.toISOString(), end: end.toISOString() }
+}
+
+function rangesOverlap(aStartIso: string, aEndIso: string, bStartIso: string, bEndIso: string): boolean {
+  const aStart = new Date(aStartIso).getTime()
+  const aEnd = new Date(aEndIso).getTime()
+  const bStart = new Date(bStartIso).getTime()
+  const bEnd = new Date(bEndIso).getTime()
+  if ([aStart, aEnd, bStart, bEnd].some((t) => Number.isNaN(t))) return false
+  // [start, end) overlap
+  return aStart < bEnd && bStart < aEnd
+}
+
 function buildICS(events: Array<{ id: string; title: string; start: string; end: string; description?: string }>): string {
   const lines: string[] = [
     'BEGIN:VCALENDAR',
@@ -286,13 +319,30 @@ export default async function handler(req: any, res: any) {
 
     // Job-based kinds: program (all_jobs, project_lead_jobs); crew_jobs uses crew time_periods
     if (kind === 'crew_jobs') {
-      // Crew calendar: one event per crew time_period (actual work slot), not per job.
-      // So a job spanning two days with two crew bookings → two events with correct times.
-      const { data: crewRes } = await supabase
+      // Crew calendar: emit events per *reserved_crew row* and use reserved_crew.during
+      // (the actual booking window for that person). Fall back to time_periods start/end.
+      const { data: crewRes, error: crewResErr } = await supabase
         .from('reserved_crew')
-        .select('time_period_id')
+        .select('id, time_period_id, during, status')
         .eq('user_id', userId)
-      const crewPeriodIds = Array.from(new Set((crewRes ?? []).map((r: { time_period_id: string }) => r.time_period_id)))
+        .neq('status', 'canceled')
+
+      if (crewResErr) {
+        res.statusCode = 500
+        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+        res.setHeader('Content-Type', 'application/json')
+        return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
+      }
+
+      const crewRows =
+        (crewRes ?? []) as Array<{
+          id: string
+          time_period_id: string
+          during: unknown
+          status: string
+        }>
+
+      const crewPeriodIds = Array.from(new Set(crewRows.map((r) => r.time_period_id)))
       if (crewPeriodIds.length === 0) {
         const ics = buildICS([])
         res.statusCode = 200
@@ -310,8 +360,6 @@ export default async function handler(req: any, res: any) {
         .eq('category', 'crew')
         .in('id', crewPeriodIds)
         .eq('deleted', false)
-        .gte('start_at', fromIso)
-        .lte('start_at', toIso)
         .order('start_at', { ascending: true })
 
       if (crewErr) {
@@ -321,13 +369,53 @@ export default async function handler(req: any, res: any) {
         return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
       }
 
-      let crewPeriodList = crewPeriods || []
-      crewPeriodList = await filterNonArchivedJobPeriods(supabase, crewPeriodList)
+      // Filter by subscription window using the most accurate time range we have:
+      // reserved_crew.during when present; else time_periods.start/end.
+      const periodById = new Map<
+        string,
+        { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }
+      >()
+      ;(crewPeriods || []).forEach((p: any) => {
+        if (p?.id) {
+          periodById.set(p.id, {
+            id: p.id,
+            title: p.title ?? null,
+            start_at: p.start_at,
+            end_at: p.end_at,
+            job_id: p.job_id ?? null,
+          })
+        }
+      })
 
-      const jobIds = Array.from(new Set(crewPeriodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
+      let crewRowsWithPeriods = crewRows
+        .map((r) => ({
+          row: r,
+          period: periodById.get(r.time_period_id) ?? null,
+        }))
+        .filter((x) => !!x.period)
+
+      crewRowsWithPeriods = crewRowsWithPeriods.filter(({ row, period }) => {
+        const parsed = parseTstzRange(row.during)
+        const startIso = parsed?.start ?? period!.start_at
+        const endIso = parsed?.end ?? period!.end_at
+        return rangesOverlap(startIso, endIso, fromIso, toIso)
+      })
+
+      // We still want to exclude archived jobs (if a crew period points at an archived job)
+      const periodListForArchiveFilter = crewRowsWithPeriods.map((x) => x.period!) as Array<{
+        job_id: string | null
+      }>
+      const allowedPeriods = await filterNonArchivedJobPeriods(supabase, periodListForArchiveFilter)
+      const allowedPeriodIds = new Set((allowedPeriods as any[]).map((p) => p.id).filter(Boolean))
+      crewRowsWithPeriods = crewRowsWithPeriods.filter((x) => allowedPeriodIds.has(x.period!.id))
+
+      const jobIds = Array.from(
+        new Set(crewRowsWithPeriods.map((x) => x.period!.job_id).filter(Boolean)),
+      ) as string[]
       const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
 
-      const events = crewPeriodList.map((p: { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }) => {
+      const events = crewRowsWithPeriods.map(({ row, period }) => {
+        const p = period!
         const info = p.job_id ? jobInfo.get(p.job_id) : null
         const jobTitle = info?.title ?? p.title ?? 'Crew assignment'
         const jobNo = info ? formatJobNumber(info.jobnr) : ''
@@ -335,11 +423,16 @@ export default async function handler(req: any, res: any) {
         if (jobNo) descParts.push(`Job no: ${jobNo}`)
         if (info?.projectLeadName) descParts.push(`Project lead: ${info.projectLeadName}`)
         if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
+
+        const parsed = parseTstzRange(row.during)
+        const start = parsed?.start ?? p.start_at
+        const end = parsed?.end ?? p.end_at
+
         return {
-          id: p.id,
+          id: row.id, // unique per booking row (can be multiple crew on same period)
           title: 'CREW: ' + (jobTitle || 'Event'),
-          start: p.start_at,
-          end: p.end_at,
+          start,
+          end,
           description: descParts.length > 0 ? descParts.join('\n') : undefined,
         }
       })

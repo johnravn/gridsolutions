@@ -604,8 +604,21 @@ export default function InvoiceTab({
           .eq('id', jobId)
 
         if (!updateError) {
-          // Invalidate job queries to refresh the status
-          qc.invalidateQueries({ queryKey: ['jobs', jobId] })
+          // Update the detail cache immediately (JobInspector renders from this)
+          qc.setQueryData<JobDetail | null>(['jobs-detail', jobId], (old) =>
+            old ? { ...old, status: 'invoiced' } : old,
+          )
+          // Ensure we refetch from server too
+          qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+          // Refresh list views that may show "ready to invoice" or status badges
+          if (companyId) {
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'jobs-index'],
+            })
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'jobs-index-page'],
+            })
+          }
         }
       }
 
@@ -792,8 +805,21 @@ export default function InvoiceTab({
           .eq('id', jobId)
 
         if (!updateError) {
-          // Invalidate job queries to refresh the status
-          qc.invalidateQueries({ queryKey: ['jobs', jobId] })
+          // Update the detail cache immediately (JobInspector renders from this)
+          qc.setQueryData<JobDetail | null>(['jobs-detail', jobId], (old) =>
+            old ? { ...old, status: 'invoiced' } : old,
+          )
+          // Ensure we refetch from server too
+          qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+          // Refresh list views that may show "ready to invoice" or status badges
+          if (companyId) {
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'jobs-index'],
+            })
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'jobs-index-page'],
+            })
+          }
         }
       }
 

@@ -321,10 +321,14 @@ function EquipmentItemRows({
           )}
         </Table.Cell>
         <Table.Cell>
-          {isCustomLine ? '—' : (item.item?.brand?.name ?? '—')}
+          {isCustomLine
+            ? item.custom_line_brand?.trim() || '—'
+            : (item.item?.brand?.name ?? '—')}
         </Table.Cell>
         <Table.Cell>
-          {isCustomLine ? '—' : (item.item?.model ?? '—')}
+          {isCustomLine
+            ? item.custom_line_model?.trim() || '—'
+            : (item.item?.model ?? '—')}
         </Table.Cell>
         <Table.Cell style={{ textAlign: 'right' }}>{item.quantity}</Table.Cell>
         {showPrices && (
@@ -1122,7 +1126,9 @@ export default function PublicOfferPage() {
                     <Heading size="4" mb="4">
                       Equipment
                     </Heading>
-                    {offer.groups.map((group) => {
+                    {[...offer.groups]
+                      .sort((a, b) => a.sort_order - b.sort_order)
+                      .map((group) => {
                       const showPrices = offer.show_price_per_line !== false
                       const groupTotal = group.items.reduce(
                         (sum, item) => sum + item.total_price,
@@ -1174,7 +1180,9 @@ export default function PublicOfferPage() {
                               </Table.Row>
                             </Table.Header>
                             <Table.Body>
-                              {group.items.map((item) => (
+                              {[...group.items]
+                                .sort((a, b) => a.sort_order - b.sort_order)
+                                .map((item) => (
                                 <EquipmentItemRows
                                   key={item.id}
                                   item={item}
@@ -1217,7 +1225,10 @@ export default function PublicOfferPage() {
                       Crew
                     </Heading>
                     {(() => {
-                      const crewSectionTotal = offer.crew_items.reduce(
+                      const crewItems = [...offer.crew_items].sort(
+                        (a, b) => a.sort_order - b.sort_order,
+                      )
+                      const crewSectionTotal = crewItems.reduce(
                         (sum, item) => sum + item.total_price,
                         0,
                       )
@@ -1255,7 +1266,7 @@ export default function PublicOfferPage() {
                             </Table.Row>
                           </Table.Header>
                           <Table.Body>
-                            {offer.crew_items.map((item) => (
+                            {crewItems.map((item) => (
                               <Table.Row key={item.id}>
                                 <Table.Cell>{item.role_title}</Table.Cell>
                                 <Table.Cell style={{ textAlign: 'right' }}>
@@ -1300,19 +1311,14 @@ export default function PublicOfferPage() {
 
               {/* Transport Items (for technical offers) */}
               {offer.offer_type === 'technical' &&
-                offer.transport_items &&
-                offer.transport_items.length > 0 && (
+                ((offer.transport_groups && offer.transport_groups.length > 0) ||
+                  (offer.transport_items && offer.transport_items.length > 0)) && (
                   <Box mb="6">
                     <Heading size="4" mb="4">
                       Transportation
                     </Heading>
                     {(() => {
                       const showPrices = offer.show_price_per_line !== false
-                      const transportTotal = offer.transport_items.reduce(
-                        (sum, item) => sum + item.total_price,
-                        0,
-                      )
-
                       const formatCategory = (
                         category:
                           | 'passenger_car_small'
@@ -1343,83 +1349,127 @@ export default function PublicOfferPage() {
                         return map[category] || category
                       }
 
+                      const groups =
+                        offer.transport_groups && offer.transport_groups.length > 0
+                          ? [...offer.transport_groups].sort(
+                              (a, b) => a.sort_order - b.sort_order,
+                            )
+                          : [
+                              {
+                                id: 'transport',
+                                group_name: 'Transport',
+                                sort_order: 0,
+                                items: [...(offer.transport_items || [])].sort(
+                                  (a, b) => a.sort_order - b.sort_order,
+                                ),
+                              },
+                            ]
+
+                      const transportTotal = groups.reduce(
+                        (sum, g) =>
+                          sum +
+                          g.items.reduce((s: number, it: any) => s + it.total_price, 0),
+                        0,
+                      )
+
                       return (
-                        <Table.Root variant="surface">
-                          <Table.Header>
-                            <Table.Row>
-                              <Table.ColumnHeaderCell>
-                                Vehicle Category
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell>
-                                Distance (km)
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell>
-                                Start Date
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell
-                                style={{ textAlign: 'right' }}
-                              >
-                                Days
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell
-                                style={{ textAlign: 'right' }}
-                              >
-                                Total
-                              </Table.ColumnHeaderCell>
-                            </Table.Row>
-                          </Table.Header>
-                          <Table.Body>
-                            {offer.transport_items.map((item) => (
-                              <Table.Row key={item.id}>
-                                <Table.Cell>
-                                  {formatCategory(item.vehicle_category)}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  {item.distance_km ?? '—'}
-                                </Table.Cell>
-                                <Table.Cell>
-                                  {formatDateTimeShort(item.start_date)}
-                                </Table.Cell>
-                                <Table.Cell style={{ textAlign: 'right' }}>
-                                  {(() => {
-                                    const start = new Date(item.start_date)
-                                    const end = new Date(item.end_date)
-                                    if (
-                                      Number.isNaN(start.getTime()) ||
-                                      Number.isNaN(end.getTime()) ||
-                                      end.getTime() <= start.getTime()
-                                    )
-                                      return '–'
-                                    const days = Math.max(
-                                      1,
-                                      Math.ceil(
-                                        (end.getTime() - start.getTime()) /
-                                          (1000 * 60 * 60 * 24),
-                                      ),
-                                    )
-                                    return `${days} day${days !== 1 ? 's' : ''}`
-                                  })()}
-                                </Table.Cell>
-                                {showPrices ? (
-                                  <Table.Cell style={{ textAlign: 'right' }}>
-                                    {formatCurrency(item.total_price)}
-                                  </Table.Cell>
-                                ) : (
-                                  <Table.Cell style={{ textAlign: 'right' }}>
-                                    {/* Prices hidden per line when show_price_per_line is false */}
-                                  </Table.Cell>
-                                )}
-                              </Table.Row>
-                            ))}
-                            {/* Total row for transport items */}
-                            <Table.Row style={{ fontWeight: 'bold' }}>
-                              <Table.Cell colSpan={4}>Total</Table.Cell>
-                              <Table.Cell style={{ textAlign: 'right' }}>
-                                {formatCurrency(transportTotal)}
-                              </Table.Cell>
-                            </Table.Row>
-                          </Table.Body>
-                        </Table.Root>
+                        <Flex direction="column" gap="4">
+                          {groups.map((group) => {
+                            const groupTotal = group.items.reduce(
+                              (sum: number, it: any) => sum + it.total_price,
+                              0,
+                            )
+                            return (
+                              <Box key={group.id}>
+                                <Flex justify="between" align="center" mb="2">
+                                  <Heading size="3">
+                                    {group.group_name || 'Transport'}
+                                  </Heading>
+                                  {showPrices && (
+                                    <Text weight="medium">
+                                      {formatCurrency(groupTotal)}
+                                    </Text>
+                                  )}
+                                </Flex>
+                                <Table.Root variant="surface">
+                                  <Table.Header>
+                                    <Table.Row>
+                                      <Table.ColumnHeaderCell>
+                                        Vehicle Category
+                                      </Table.ColumnHeaderCell>
+                                      <Table.ColumnHeaderCell>
+                                        Distance (km)
+                                      </Table.ColumnHeaderCell>
+                                      <Table.ColumnHeaderCell>
+                                        Start Date
+                                      </Table.ColumnHeaderCell>
+                                      <Table.ColumnHeaderCell
+                                        style={{ textAlign: 'right' }}
+                                      >
+                                        Days
+                                      </Table.ColumnHeaderCell>
+                                      <Table.ColumnHeaderCell
+                                        style={{ textAlign: 'right' }}
+                                      >
+                                        Total
+                                      </Table.ColumnHeaderCell>
+                                    </Table.Row>
+                                  </Table.Header>
+                                  <Table.Body>
+                                    {group.items.map((item: any) => (
+                                      <Table.Row key={item.id}>
+                                        <Table.Cell>
+                                          {formatCategory(item.vehicle_category)}
+                                        </Table.Cell>
+                                        <Table.Cell>
+                                          {item.distance_km ?? '—'}
+                                        </Table.Cell>
+                                        <Table.Cell>
+                                          {formatDateTimeShort(item.start_date)}
+                                        </Table.Cell>
+                                        <Table.Cell style={{ textAlign: 'right' }}>
+                                          {(() => {
+                                            const start = new Date(item.start_date)
+                                            const end = new Date(item.end_date)
+                                            if (
+                                              Number.isNaN(start.getTime()) ||
+                                              Number.isNaN(end.getTime()) ||
+                                              end.getTime() <= start.getTime()
+                                            )
+                                              return '–'
+                                            const days = Math.max(
+                                              1,
+                                              Math.ceil(
+                                                (end.getTime() - start.getTime()) /
+                                                  (1000 * 60 * 60 * 24),
+                                              ),
+                                            )
+                                            return `${days} day${
+                                              days !== 1 ? 's' : ''
+                                            }`
+                                          })()}
+                                        </Table.Cell>
+                                        {showPrices ? (
+                                          <Table.Cell style={{ textAlign: 'right' }}>
+                                            {formatCurrency(item.total_price)}
+                                          </Table.Cell>
+                                        ) : (
+                                          <Table.Cell style={{ textAlign: 'right' }} />
+                                        )}
+                                      </Table.Row>
+                                    ))}
+                                  </Table.Body>
+                                </Table.Root>
+                              </Box>
+                            )
+                          })}
+
+                          <Flex justify="end">
+                            <Text weight="bold">
+                              Total: {formatCurrency(transportTotal)}
+                            </Text>
+                          </Flex>
+                        </Flex>
                       )
                     })()}
                   </Box>

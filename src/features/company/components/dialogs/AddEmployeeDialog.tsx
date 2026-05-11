@@ -4,12 +4,13 @@ import { useMutation } from '@tanstack/react-query'
 import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { supabase } from '@shared/api/supabase'
 import { addMemberOrInvite } from '@features/crew/api/queries'
 
 type AddInviteResult =
   | { type: 'added' }
-  | { type: 'invited' }
-  | { type: 'already_invited'; by: string }
+  | { type: 'invited'; pending_invite_id: string }
+  | { type: 'already_invited'; by: string; pending_invite_id: string }
   | {
       type: 'already_member'
       role: 'owner' | 'employee' | 'freelancer' | 'super_user'
@@ -48,11 +49,23 @@ export default function AddEmployeeDialog({
           'They already had an account and were added to your company.',
         )
       } else if (res.type === 'invited') {
+        // Don’t rely on pg_net/vault being configured in dev; explicitly invoke the welcome email.
+        supabase.functions
+          .invoke('send-welcome-email', {
+            body: { pending_invite_id: res.pending_invite_id },
+          })
+          .catch(() => {})
         info(
           'Invite created',
           'They will be added automatically when they sign up.',
         )
       } else if (res.type === 'already_invited') {
+        // If emails were previously not being dispatched, re-invoke to ensure the invite email is sent.
+        supabase.functions
+          .invoke('send-welcome-email', {
+            body: { pending_invite_id: res.pending_invite_id },
+          })
+          .catch(() => {})
         info('Already invited', `An invite already exists by ${res.by}.`)
       } else {
         // already_member
