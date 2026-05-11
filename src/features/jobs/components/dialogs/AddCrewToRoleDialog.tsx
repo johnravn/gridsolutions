@@ -14,7 +14,7 @@ import { supabase } from '@shared/api/supabase'
 import { Check } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { crewInternalNotesQuery } from '../../../crew/api/queries'
+import { addMemberOrInvite, crewInternalNotesQuery } from '../../../crew/api/queries'
 import type { UUID } from '../../types'
 
 export default function AddCrewToRoleDialog({
@@ -36,6 +36,7 @@ export default function AddCrewToRoleDialog({
   const [search, setSearch] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<UUID>>(new Set())
   const [placeholderName, setPlaceholderName] = React.useState('')
+  const [placeholderEmail, setPlaceholderEmail] = React.useState('')
 
   const canSeeInternalNotes =
     !!isGlobalSuperuser ||
@@ -66,7 +67,8 @@ export default function AddCrewToRoleDialog({
         .select('user_id')
         .eq('time_period_id', timePeriodId)
       if (error) throw error
-      return (data || []) as Array<{ user_id: UUID }>
+      const rows = Array.isArray(data) ? data : []
+      return rows as Array<{ user_id: UUID }>
     },
   })
 
@@ -95,7 +97,8 @@ export default function AddCrewToRoleDialog({
       if (error) throw error
 
       // Filter out crew already assigned to this role
-      return (data || []).filter(
+      const rows = Array.isArray(data) ? data : []
+      return rows.filter(
         (p) => !existingUserIds.has(p.user_id),
       ) as Array<{
         user_id: UUID
@@ -162,6 +165,7 @@ export default function AddCrewToRoleDialog({
         time_period_id: timePeriodId,
         user_id: null,
         placeholder_name: name,
+        placeholder_email: null,
         status: 'planned' as const,
         notes: null,
       })
@@ -183,11 +187,69 @@ export default function AddCrewToRoleDialog({
     },
   })
 
+  const inviteByEmail = useMutation({
+    mutationFn: async () => {
+      const email = placeholderEmail.trim().toLowerCase()
+      if (!email) throw new Error('Please enter an email')
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+        throw new Error('Please enter a valid email')
+      }
+
+      // 1) Create (or reuse) a company invite. This triggers the Resend welcome email via DB trigger.
+      await addMemberOrInvite({
+        companyId,
+        email,
+        role: 'freelancer',
+      })
+
+      // 2) Create a reserved_crew row for the role. If the user already exists, attach by user_id.
+      const { data: prof, error: profErr } = await supabase
+        .from('profiles')
+        .select('user_id')
+        .eq('email', email)
+        .maybeSingle()
+
+      if (profErr) throw profErr
+
+      const displayName = placeholderName.trim() || email
+
+      const { error } = await supabase.from('reserved_crew').insert({
+        time_period_id: timePeriodId,
+        user_id: prof?.user_id ?? null,
+        placeholder_name: prof?.user_id ? null : displayName,
+        placeholder_email: prof?.user_id ? null : email,
+        status: 'planned' as const,
+        notes: null,
+      })
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+      qc.invalidateQueries({
+        queryKey: ['jobs', jobId, 'time_periods', 'crew'],
+      })
+      success(
+        'Invite created',
+        'They’ll get an email to join the company. The booking has been added to this role.',
+      )
+      setPlaceholderEmail('')
+      setPlaceholderName('')
+    },
+    onError: (e: any) => {
+      toastError(
+        'Failed to invite',
+        e?.hint || e?.message || 'Please try again.',
+      )
+    },
+  })
+
   React.useEffect(() => {
     if (!open) {
       setSearch('')
       setSelectedIds(new Set())
       setPlaceholderName('')
+      setPlaceholderEmail('')
     }
   }, [open])
 
@@ -226,6 +288,35 @@ export default function AddCrewToRoleDialog({
               disabled={addPlaceholder.isPending || !placeholderName.trim()}
             >
               {addPlaceholder.isPending ? 'Adding…' : 'Add placeholder'}
+            </Button>
+          </Flex>
+        </Box>
+
+        <Box mb="4">
+          <Text as="div" size="2" weight="medium">
+            Invite by email
+          </Text>
+          <Text as="div" size="1" color="gray">
+            Adds them to the company (or creates a pending invite) and sends an
+            email to sign up if needed.
+          </Text>
+          <Flex gap="2" mt="2">
+            <TextField.Root
+              placeholder="Name (optional)"
+              value={placeholderName}
+              onChange={(e) => setPlaceholderName(e.target.value)}
+            />
+            <TextField.Root
+              placeholder="Email"
+              value={placeholderEmail}
+              onChange={(e) => setPlaceholderEmail(e.target.value)}
+            />
+            <Button
+              variant="solid"
+              onClick={() => inviteByEmail.mutate()}
+              disabled={inviteByEmail.isPending || !placeholderEmail.trim()}
+            >
+              {inviteByEmail.isPending ? 'Inviting…' : 'Invite'}
             </Button>
           </Flex>
         </Box>

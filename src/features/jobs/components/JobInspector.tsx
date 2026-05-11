@@ -12,14 +12,15 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { Archive, Edit, NavArrowDown, Trash } from 'iconoir-react'
+import { Archive, Copy, Edit, NavArrowDown, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useNavigate } from '@tanstack/react-router'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { jobDetailQuery } from '../api/queries'
+import { copyJob, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
 import OverviewTab from './tabs/OverviewTab'
@@ -35,6 +36,7 @@ import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
 import PackingTab from './tabs/PackingTab'
 import JobDialog from './dialogs/JobDialog'
+import CopyJobDialog from './dialogs/CopyJobDialog'
 import type { JobDetail, JobStatus } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
 
@@ -64,9 +66,11 @@ export default function JobInspector({
   // ✅ hooks first
   const { companyRole } = useAuthz()
   const isFreelancer = companyRole === 'freelancer'
+  const navigate = useNavigate()
   const [editOpen, setEditOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [archiveOpen, setArchiveOpen] = React.useState(false)
+  const [copyOpen, setCopyOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<string>(
     initialTab || 'overview',
   )
@@ -196,6 +200,23 @@ export default function JobInspector({
     },
   })
 
+  const copyJobMutation = useMutation({
+    mutationFn: async (payload: { jobId: string; startAt: string; endAt: string }) => {
+      return await copyJob(payload)
+    },
+    onSuccess: async (newJobId) => {
+      await qc.invalidateQueries({ queryKey: ['company'] })
+      await qc.invalidateQueries({ queryKey: ['jobs-index'] })
+      await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
+      setCopyOpen(false)
+      success('Job copied', 'A new job was created from this one.')
+      navigate({ to: '/jobs', search: { jobId: newJobId, tab: undefined } })
+    },
+    onError: (err: any) => {
+      toastError('Failed to copy job', err?.message || 'Please try again.')
+    },
+  })
+
   // now you can early return safely since hooks above already ran
   if (!id) return <Text color="gray">Select a job to see details.</Text>
   if (isLoading || !data) return <Text>Loading…</Text>
@@ -242,6 +263,11 @@ export default function JobInspector({
               <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
                 <Edit width={16} height={16} />
               </Button>
+              <Tooltip content="Copy job">
+                <Button size="2" variant="soft" onClick={() => setCopyOpen(true)}>
+                  <Copy width={16} height={16} />
+                </Button>
+              </Tooltip>
               <Button
                 size="2"
                 variant="soft"
@@ -267,6 +293,16 @@ export default function JobInspector({
                 companyId={job.company_id}
                 mode="edit"
                 initialData={job}
+              />
+              <CopyJobDialog
+                open={copyOpen}
+                onOpenChange={setCopyOpen}
+                initialStartAt={job.start_at}
+                initialEndAt={job.end_at}
+                isCopying={copyJobMutation.isPending}
+                onConfirm={({ startAt, endAt }) =>
+                  copyJobMutation.mutate({ jobId: job.id, startAt, endAt })
+                }
               />
               <DeleteJobDialog
                 open={deleteOpen}

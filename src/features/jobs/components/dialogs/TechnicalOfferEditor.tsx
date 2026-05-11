@@ -2,34 +2,20 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Badge,
   Box,
   Button,
   Checkbox,
   Dialog,
   Flex,
-  Heading,
-  IconButton,
   Select,
   Separator,
-  Table,
   Tabs,
   Text,
   TextField,
 } from '@radix-ui/themes'
-import {
-  Download,
-  Eye,
-  Lock,
-  NavArrowDown,
-  NavArrowRight,
-  NavArrowUp,
-  Plus,
-  Trash,
-} from 'iconoir-react'
+import { Download, Eye, Lock, Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import { companyExpansionQuery, crewPricingLevelsQuery } from '@features/company/api/queries'
 import {
   createOffer,
@@ -39,13 +25,138 @@ import {
   recalculateOfferTotals,
 } from '../../api/offerQueries'
 import { calculateOfferTotals, calculateRentalFactor } from '../../utils/offerCalculations'
+import { calculateHoursPerDay } from './technical-offer-editor/utils'
+import { CrewSection } from './technical-offer-editor/CrewSection'
+import { EquipmentSection } from './technical-offer-editor/EquipmentSection'
+import { Field } from './technical-offer-editor/Field'
+import { TotalsSection } from './technical-offer-editor/TotalsSection'
+import { TransportSection } from './technical-offer-editor/TransportSection'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
 import type {
   OfferCrewItem,
   OfferEquipmentItem,
   OfferTransportItem,
-  UUID,
 } from '../../types'
+import type {
+  LocalCrewItem,
+  LocalEquipmentGroup,
+  LocalEquipmentItem,
+  LocalTransportGroup,
+  LocalTransportItem,
+} from './technical-offer-editor/types'
+
+type JobInfo = {
+  title: string | null
+  start_at: string | null
+  end_at: string | null
+  customer: {
+    id: string
+    is_partner: boolean
+    crew_pricing_level_id: string | null
+    crew_pricing_level: {
+      id: string
+      name: string
+      crew_rate_per_day: number | null
+      crew_rate_per_hour: number | null
+      default_crew_billing_unit: 'day' | 'hour' | null
+    } | null
+  } | null
+  customer_contact: {
+    id: string
+    name: string | null
+    email: string | null
+  } | null
+}
+
+function serializeOfferEditorState(s: {
+  title: string
+  daysOfUse: number
+  discountPercent: number
+  vatPercent: number
+  showPricePerLine: boolean
+  equipmentGroups: Array<LocalEquipmentGroup>
+  crewItems: Array<LocalCrewItem>
+  transportGroups: Array<LocalTransportGroup>
+}): string {
+  const packEquipmentItem = (it: LocalEquipmentItem) => ({
+    id: it.id,
+    item_id: it.item_id,
+    group_id: it.group_id,
+    quantity: it.quantity,
+    unit_price: it.unit_price,
+    is_internal: it.is_internal,
+    sort_order: it.sort_order,
+    custom_line_description: it.custom_line_description ?? null,
+    custom_line_brand: it.custom_line_brand ?? null,
+    custom_line_model: it.custom_line_model ?? null,
+  })
+
+  const packTransportItem = (it: LocalTransportItem) => ({
+    id: it.id,
+    transport_group_id: it.transport_group_id ?? null,
+    vehicle_name: it.vehicle_name,
+    vehicle_id: it.vehicle_id,
+    vehicle_category: it.vehicle_category,
+    distance_km: it.distance_km,
+    start_date: it.start_date,
+    end_date: it.end_date,
+    days_used: it.days_used ?? null,
+    daily_rate_count: it.daily_rate_count ?? null,
+    daily_rate: it.daily_rate,
+    distance_rate: it.distance_rate,
+    is_internal: it.is_internal,
+    sort_order: it.sort_order,
+  })
+
+  const equipment = [...s.equipmentGroups]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((g) => ({
+      id: g.id,
+      group_name: g.group_name,
+      sort_order: g.sort_order,
+      items: [...g.items]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(packEquipmentItem),
+    }))
+
+  const crew = [...s.crewItems]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((c) => ({
+      id: c.id,
+      role_title: c.role_title,
+      crew_count: c.crew_count,
+      start_date: c.start_date,
+      end_date: c.end_date,
+      daily_rate: c.daily_rate,
+      hourly_rate: c.hourly_rate,
+      hours_per_day: c.hours_per_day,
+      billing_type: c.billing_type,
+      sort_order: c.sort_order,
+      role_category: c.role_category ?? null,
+    }))
+
+  const transport = [...s.transportGroups]
+    .sort((a, b) => a.sort_order - b.sort_order)
+    .map((g) => ({
+      id: g.id,
+      group_name: g.group_name,
+      sort_order: g.sort_order,
+      items: [...g.items]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(packTransportItem),
+    }))
+
+  return JSON.stringify({
+    title: s.title.trim(),
+    daysOfUse: s.daysOfUse,
+    discountPercent: s.discountPercent,
+    vatPercent: s.vatPercent,
+    showPricePerLine: s.showPricePerLine,
+    equipment,
+    crew,
+    transport,
+  })
+}
 
 type Props = {
   open: boolean
@@ -55,135 +166,6 @@ type Props = {
   offerId?: string | null // If provided, edit mode; otherwise create mode
   onSaved?: (offerId: string) => void
   onSyncBookingsAfterSave?: (offerId: string) => void
-}
-
-type LocalEquipmentGroup = {
-  id: string // temp ID for new groups
-  group_name: string
-  sort_order: number
-  items: Array<LocalEquipmentItem>
-}
-
-type LocalEquipmentItem = {
-  id: string // temp ID for new items
-  item_id: string | null
-  group_id: string | null
-  quantity: number
-  unit_price: number
-  is_internal: boolean
-  sort_order: number
-  /** Free-text description for custom/one-off lines (when item_id and group_id are null). */
-  custom_line_description?: string | null
-  group_items?: Array<{
-    id: string
-    name: string
-    brand_name: string | null
-    model: string | null
-    quantity: number
-  }>
-  item?: {
-    id: string
-    name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
-    brand?: { id: string; name: string } | null
-    model?: string | null
-  } | null
-  group?: {
-    id: string
-    name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
-  } | null
-}
-
-function escapeForPostgrestOr(value: string) {
-  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-type LocalCrewItem = {
-  id: string // temp ID for new items
-  role_title: string
-  crew_count: number
-  start_date: string
-  end_date: string
-  daily_rate: number
-  hourly_rate: number | null
-  hours_per_day: number | null
-  billing_type: 'daily' | 'hourly'
-  sort_order: number
-  role_category?: string | null
-}
-
-function calculateHoursPerDay(
-  start: string | null,
-  end: string | null,
-): number | null {
-  if (!start || !end) return null
-
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-
-  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-    return null
-  }
-
-  const diffMs = endDate.getTime() - startDate.getTime()
-  if (diffMs <= 0) return null
-
-  const hours = diffMs / (1000 * 60 * 60)
-  const days = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)))
-
-  return hours / days
-}
-
-type LocalTransportItem = {
-  id: string // temp ID for new items
-  vehicle_name: string
-  vehicle_id: string | null
-  vehicle_category:
-    | 'passenger_car_small'
-    | 'passenger_car_medium'
-    | 'passenger_car_big'
-    | 'van_small'
-    | 'van_medium'
-    | 'van_big'
-    | 'C1'
-    | 'C1E'
-    | 'C'
-    | 'CE'
-    | null
-  distance_km: number | null
-  start_date: string
-  end_date: string
-  daily_rate: number | null
-  distance_rate: number | null // Distance rate per increment (null means use default)
-  is_internal: boolean
-  sort_order: number
-  vehicle?: {
-    id: string
-    name: string
-    external_owner_id?: UUID | null
-  } | null
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div style={{ minWidth: 160 }}>
-      <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-        {label}
-      </Text>
-      {children}
-    </div>
-  )
 }
 
 export default function TechnicalOfferEditor({
@@ -202,25 +184,7 @@ export default function TechnicalOfferEditor({
     offerId || null,
   )
 
-type JobInfo = {
-  title: string | null
-  start_at: string | null
-  end_at: string | null
-  customer: {
-    id: string
-    is_partner: boolean
-    crew_pricing_level_id: string | null
-    crew_pricing_level: {
-      id: string
-      name: string
-      crew_rate_per_day: number | null
-      crew_rate_per_hour: number | null
-      default_crew_billing_unit: 'day' | 'hour' | null
-    } | null
-  } | null
-}
-
-  // Fetch job title, duration, and customer (incl. crew pricing level) for default rates
+  // Fetch job title, duration, customer (incl. crew pricing level), and main contact for offer email
   const {
     data: jobData,
     isLoading: isLoadingJob,
@@ -238,7 +202,8 @@ type JobInfo = {
             is_partner,
             crew_pricing_level_id,
             crew_pricing_level:crew_pricing_level_id ( id, name, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit )
-          )`,
+          ),
+          customer_contact:customer_contact_id ( id, name, email )`,
         )
         .eq('id', jobId)
         .single()
@@ -248,6 +213,11 @@ type JobInfo = {
       const customer = Array.isArray((data as any).customer)
         ? (data as any).customer[0]
         : (data as any).customer
+
+      const rawContact = (data as any).customer_contact
+      const contactRow = Array.isArray(rawContact)
+        ? rawContact[0]
+        : rawContact
 
       return {
         title: data.title,
@@ -261,18 +231,14 @@ type JobInfo = {
               crew_pricing_level: Array.isArray(customer.crew_pricing_level)
                 ? customer.crew_pricing_level[0]
                 : customer.crew_pricing_level ?? null,
-            } as {
-              id: string
-              is_partner: boolean
-              crew_pricing_level_id: string | null
-              crew_pricing_level: {
-                id: string
-                name: string
-                crew_rate_per_day: number | null
-                crew_rate_per_hour: number | null
-                default_crew_billing_unit: 'day' | 'hour' | null
-              } | null
-            })
+            } as JobInfo['customer'])
+          : null,
+        customer_contact: contactRow
+          ? {
+              id: contactRow.id,
+              name: contactRow.name ?? null,
+              email: contactRow.email ?? null,
+            }
           : null,
       }
     },
@@ -285,6 +251,7 @@ type JobInfo = {
         start_at: null,
         end_at: null,
         customer: null,
+        customer_contact: null,
       },
     [jobData],
   )
@@ -405,13 +372,28 @@ type JobInfo = {
   const [discountPercentDraft, setDiscountPercentDraft] = React.useState<
     string | null
   >(null)
-  const [syncBeforeSaveOpen, setSyncBeforeSaveOpen] = React.useState(false)
-  const [syncPromptAction, setSyncPromptAction] = React.useState<
-    'create' | 'save' | 'lock'
-  >('save')
-  const [afterSaveAction, setAfterSaveAction] = React.useState<'lock' | null>(
-    null,
-  )
+  const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const [lockSendStep, setLockSendStep] = React.useState<
+    null | 'choose' | 'email'
+  >(null)
+  const [gridEmailDraft, setGridEmailDraft] = React.useState('')
+  const [syncRunning, setSyncRunning] = React.useState(false)
+  const [lockSendBusy, setLockSendBusy] = React.useState(false)
+
+  const [baselineSerialized, setBaselineSerialized] = React.useState<
+    string | null
+  >(null)
+  const editorFormRef = React.useRef({
+    title: '',
+    daysOfUse: 1,
+    discountPercent: 0,
+    vatPercent: 25,
+    showPricePerLine: true,
+    equipmentGroups: [] as Array<LocalEquipmentGroup>,
+    crewItems: [] as Array<LocalCrewItem>,
+    transportGroups: [] as Array<LocalTransportGroup>,
+  })
+  const lockOutcomeRef = React.useRef<'close' | 'stay_open'>('close')
 
   // Equipment groups and items
   const [equipmentGroups, setEquipmentGroups] = React.useState<
@@ -424,10 +406,47 @@ type JobInfo = {
   // Crew items
   const [crewItems, setCrewItems] = React.useState<Array<LocalCrewItem>>([])
 
-  // Transport items
-  const [transportItems, setTransportItems] = React.useState<
-    Array<LocalTransportItem>
+  // Transport groups and items
+  const [transportGroups, setTransportGroups] = React.useState<
+    Array<LocalTransportGroup>
   >([])
+
+  editorFormRef.current = {
+    title,
+    daysOfUse,
+    discountPercent,
+    vatPercent,
+    showPricePerLine,
+    equipmentGroups,
+    crewItems,
+    transportGroups,
+  }
+
+  const hasUnsavedChanges = React.useCallback(() => {
+    if (!open || isReadOnly) return false
+    if (baselineSerialized === null) return false
+    return (
+      serializeOfferEditorState({
+        title: editorFormRef.current.title.trim(),
+        daysOfUse: editorFormRef.current.daysOfUse,
+        discountPercent: editorFormRef.current.discountPercent,
+        vatPercent: editorFormRef.current.vatPercent,
+        showPricePerLine: editorFormRef.current.showPricePerLine,
+        equipmentGroups: editorFormRef.current.equipmentGroups,
+        crewItems: editorFormRef.current.crewItems,
+        transportGroups: editorFormRef.current.transportGroups,
+      }) !== baselineSerialized
+    )
+  }, [open, isReadOnly, baselineSerialized, title, daysOfUse, discountPercent, vatPercent, showPricePerLine, equipmentGroups, crewItems, transportGroups])
+
+  React.useEffect(() => {
+    if (!open) {
+      setBaselineSerialized(null)
+      setCloseGuardOpen(false)
+      setLockSendStep(null)
+      setGridEmailDraft('')
+    }
+  }, [open])
 
   // Update currentOfferId when offerId prop changes
   React.useEffect(() => {
@@ -484,6 +503,8 @@ type JobInfo = {
               sort_order: item.sort_order,
               custom_line_description:
                 (item as any).custom_line_description ?? null,
+              custom_line_brand: (item as any).custom_line_brand ?? null,
+              custom_line_model: (item as any).custom_line_model ?? null,
               item: rawItem
                 ? {
                     id: rawItem.id,
@@ -556,23 +577,79 @@ type JobInfo = {
         }) || []
       setCrewItems(crew)
 
-      // Convert transport items
-      const transport: Array<LocalTransportItem> =
-        existingOffer.transport_items?.map((item) => ({
-          id: item.id,
-          vehicle_name: item.vehicle_name,
-          vehicle_id: item.vehicle_id,
-          vehicle_category: item.vehicle_category ?? null,
-          distance_km: item.distance_km ?? null,
-          start_date: item.start_date,
-          end_date: item.end_date,
-          daily_rate: item.daily_rate > 0 ? item.daily_rate : null,
-          distance_rate: item.distance_rate ?? null,
-          is_internal: item.is_internal,
-          sort_order: item.sort_order,
-          vehicle: item.vehicle,
-        })) || []
-      setTransportItems(transport)
+      let transportBaseline: Array<LocalTransportGroup>
+      const fromTransportGroups = existingOffer.transport_groups
+      if (fromTransportGroups && fromTransportGroups.length > 0) {
+        transportBaseline = fromTransportGroups.map((group) => ({
+          id: group.id,
+          group_name: group.group_name,
+          sort_order: group.sort_order,
+          items: group.items.map((item) => ({
+            id: item.id,
+            transport_group_id: group.id,
+            vehicle_name: item.vehicle_name,
+            vehicle_id: item.vehicle_id ?? null,
+            vehicle_category: item.vehicle_category ?? null,
+            distance_km: item.distance_km ?? null,
+            start_date: item.start_date,
+            end_date: item.end_date,
+            days_used: item.days_used ?? null,
+            daily_rate_count: item.daily_rate_count ?? null,
+            daily_rate: item.daily_rate > 0 ? item.daily_rate : null,
+            distance_rate: item.distance_rate ?? null,
+            is_internal: item.is_internal,
+            sort_order: item.sort_order,
+            vehicle: item.vehicle ?? null,
+          })),
+        }))
+        setTransportGroups(transportBaseline)
+      } else if (
+        existingOffer.transport_items &&
+        existingOffer.transport_items.length > 0
+      ) {
+        const gid = `temp-${Date.now()}-tg`
+        transportBaseline = [
+          {
+            id: gid,
+            group_name: 'Transport',
+            sort_order: 0,
+            items: existingOffer.transport_items.map((item) => ({
+              id: item.id,
+              transport_group_id: gid,
+              vehicle_name: item.vehicle_name,
+              vehicle_id: item.vehicle_id ?? null,
+              vehicle_category: item.vehicle_category ?? null,
+              distance_km: item.distance_km ?? null,
+              start_date: item.start_date,
+              end_date: item.end_date,
+              days_used: item.days_used ?? null,
+              daily_rate_count: item.daily_rate_count ?? null,
+              daily_rate: item.daily_rate > 0 ? item.daily_rate : null,
+              distance_rate: item.distance_rate ?? null,
+              is_internal: item.is_internal,
+              sort_order: item.sort_order,
+              vehicle: item.vehicle ?? null,
+            })),
+          },
+        ]
+        setTransportGroups(transportBaseline)
+      } else {
+        transportBaseline = []
+        setTransportGroups([])
+      }
+
+      setBaselineSerialized(
+        serializeOfferEditorState({
+          title: existingOffer.title.trim(),
+          daysOfUse: existingOffer.days_of_use,
+          discountPercent: existingOffer.discount_percent,
+          vatPercent: normalizedVat,
+          showPricePerLine: existingOffer.show_price_per_line,
+          equipmentGroups: groups,
+          crewItems: crew,
+          transportGroups: transportBaseline,
+        }),
+      )
     } else {
       // Reset for new offer
       setTitle(defaultTitle)
@@ -599,9 +676,22 @@ type JobInfo = {
       setShowPricePerLine(true)
       setEquipmentGroups([])
       setCrewItems([])
-      setTransportItems([])
+      setTransportGroups([])
       setExpandedGroups(new Set())
       setCurrentOfferId(null)
+
+      setBaselineSerialized(
+        serializeOfferEditorState({
+          title: defaultTitle.trim(),
+          daysOfUse: defaultDaysOfUse,
+          discountPercent: defaultDiscount,
+          vatPercent: 25,
+          showPricePerLine: true,
+          equipmentGroups: [],
+          crewItems: [],
+          transportGroups: [],
+        }),
+      )
     }
   }, [
     open,
@@ -648,48 +738,61 @@ type JobInfo = {
       sort_order: item.sort_order,
     }))
 
-    const transport: Array<OfferTransportItem> = transportItems.map((item) => ({
-      id: item.id,
-      offer_id: offerId || '',
-      vehicle_name: item.vehicle_name,
-      vehicle_id: item.vehicle_id,
-      vehicle_category: item.vehicle_category,
-      distance_km: item.distance_km,
-      start_date: item.start_date,
-      end_date: item.end_date,
-      daily_rate: item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0,
-      total_price: 0, // Will be calculated
-      is_internal: item.is_internal,
-      sort_order: item.sort_order,
-      vehicle: item.vehicle,
-    }))
+    const transport: Array<OfferTransportItem> = transportGroups.flatMap(
+      (group) =>
+        group.items.map((item) => ({
+          id: item.id,
+          offer_id: offerId || '',
+          transport_group_id: group.id as OfferTransportItem['transport_group_id'],
+          vehicle_name: item.vehicle_name,
+          vehicle_id: item.vehicle_id,
+          vehicle_category: item.vehicle_category,
+          distance_km: item.distance_km,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          days_used: item.days_used,
+          daily_rate_count: item.daily_rate_count,
+          daily_rate:
+            item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0,
+          distance_rate: item.distance_rate ?? null,
+          total_price: 0, // Will be calculated
+          is_internal: item.is_internal,
+          sort_order: item.sort_order,
+          vehicle: item.vehicle,
+        })),
+    )
 
-    // Calculate totals with item-specific rates
-    const transportSubtotal = transportItems.reduce((sum, item) => {
-      const days = Math.ceil(
-        (new Date(item.end_date).getTime() -
-          new Date(item.start_date).getTime()) /
-          (1000 * 60 * 60 * 24),
-      )
-      // Use item's daily_rate if set, otherwise use default from company
-      const effectiveDailyRate =
-        item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
-      const dailyCost = effectiveDailyRate * Math.max(1, days)
-
-      // Use item's distance_rate if set, otherwise use default from company
-      const distanceRate =
-        item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
-      const increment = companyExpansion?.vehicle_distance_increment ?? 150
-      const distanceIncrements = item.distance_km
-        ? Math.ceil(item.distance_km / increment)
-        : 0
-      const distanceCost =
-        distanceRate && distanceIncrements > 0
-          ? distanceRate * distanceIncrements
-          : 0
-
-      return sum + dailyCost + distanceCost
-    }, 0)
+    const distanceIncrement = Math.max(
+      1,
+      companyExpansion?.vehicle_distance_increment ?? 150,
+    )
+    const transportSubtotal = transportGroups.reduce(
+      (sum, group) =>
+        sum +
+        group.items.reduce((itemSum, item) => {
+          const days = Math.ceil(
+            (new Date(item.end_date).getTime() -
+              new Date(item.start_date).getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+          const derivedDays = Math.max(1, days)
+          const daysUsed = item.days_used ?? derivedDays
+          const effectiveDailyRate =
+            item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
+          const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
+          const distanceRate =
+            item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
+          const distanceIncrements = item.distance_km
+            ? Math.ceil(item.distance_km / distanceIncrement)
+            : 0
+          const distanceCost =
+            distanceRate && distanceIncrements > 0
+              ? distanceRate * distanceIncrements
+              : 0
+          return itemSum + dailyCost + distanceCost
+        }, 0),
+      0,
+    )
 
     const baseTotals = calculateOfferTotals(
       equipmentItems,
@@ -726,7 +829,7 @@ type JobInfo = {
   }, [
     equipmentGroups,
     crewItems,
-    transportItems,
+    transportGroups,
     daysOfUse,
     discountPercent,
     vatPercent,
@@ -738,7 +841,10 @@ type JobInfo = {
   ])
 
   const saveMutation = useMutation({
-    mutationFn: async (payload?: { syncAfterSave?: boolean }) => {
+    mutationFn: async (payload?: {
+      syncAfterSave?: boolean
+      closeAfterSave?: boolean
+    }) => {
       if (!title.trim()) {
         throw new Error('Title is required')
       }
@@ -802,17 +908,12 @@ type JobInfo = {
           if (crewErr) throw crewErr
         }
 
-        // Delete transport items
-        if (
-          existingOffer.transport_items &&
-          existingOffer.transport_items.length > 0
-        ) {
-          const { error: transportErr } = await supabase
-            .from('offer_transport_items')
-            .delete()
-            .eq('offer_id', workingOfferId)
-          if (transportErr) throw transportErr
-        }
+        // Delete transport groups (cascades to items). Table may be absent from generated DB types until types are refreshed.
+        const { error: transportGroupsDelErr } = await (supabase as any)
+          .from('offer_transport_groups')
+          .delete()
+          .eq('offer_id', workingOfferId)
+        if (transportGroupsDelErr) throw transportGroupsDelErr
       }
 
       const equipmentRentalFactor = calculateRentalFactor(
@@ -870,6 +971,8 @@ type JobInfo = {
                 group_id: item.group_id ?? null,
                 custom_line_description:
                   item.custom_line_description?.trim() || null,
+                custom_line_brand: item.custom_line_brand?.trim() || null,
+                custom_line_model: item.custom_line_model?.trim() || null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: roundMoney(
@@ -890,6 +993,8 @@ type JobInfo = {
                 group_id: item.group_id ?? null,
                 custom_line_description:
                   item.custom_line_description?.trim() || null,
+                custom_line_brand: item.custom_line_brand?.trim() || null,
+                custom_line_model: item.custom_line_model?.trim() || null,
                 quantity: item.quantity,
                 unit_price: item.unit_price,
                 total_price: roundMoney(
@@ -969,80 +1074,118 @@ type JobInfo = {
         }
       }
 
-      // Save transport items
-      for (const item of transportItems) {
-        const isExistingItem = !item.id.startsWith('temp-')
-        const days = Math.ceil(
-          (new Date(item.end_date).getTime() -
-            new Date(item.start_date).getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-        // Calculate total: daily_rate * days + distance_rate * (distance rounded up to increment)
-        // Use item's daily_rate if set, otherwise use default from company
-        const effectiveDailyRate =
-          item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
-        // Use item's distance_rate if set, otherwise use default from company
-        const effectiveDistanceRate =
-          item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
-        const distanceIncrement =
-          companyExpansion?.vehicle_distance_increment ?? 150
-        const distanceIncrements = item.distance_km
-          ? Math.ceil(item.distance_km / distanceIncrement)
-          : 0
-        const distanceCost =
-          effectiveDistanceRate && distanceIncrements > 0
-            ? effectiveDistanceRate * distanceIncrements
-            : 0
-        const dailyCost = effectiveDailyRate * Math.max(1, days)
-        const totalPrice = dailyCost + distanceCost
+      // Save transport groups and items
+      const distanceIncrementSave = Math.max(
+        1,
+        companyExpansion?.vehicle_distance_increment ?? 150,
+      )
+      for (const group of transportGroups) {
+        const isExistingGroup = !group.id.startsWith('temp-')
 
-        if (isExistingItem) {
-          const { error: itemErr } = await supabase
-            .from('offer_transport_items')
+        let groupId: string
+        if (isExistingGroup) {
+          const { data: upsertedGroup, error: groupErr } = await (supabase as any)
+            .from('offer_transport_groups')
             .upsert({
-              id: item.id,
+              id: group.id,
               offer_id: workingOfferId,
+              group_name: group.group_name,
+              sort_order: group.sort_order,
+            })
+            .select('id')
+            .single()
+
+          if (groupErr) throw groupErr
+          groupId = (upsertedGroup as { id: string }).id
+        } else {
+          const { data: newGroup, error: groupErr } = await (supabase as any)
+            .from('offer_transport_groups')
+            .insert({
+              offer_id: workingOfferId,
+              group_name: group.group_name,
+              sort_order: group.sort_order,
+            })
+            .select('id')
+            .single()
+
+          if (groupErr) throw groupErr
+          groupId = (newGroup as { id: string }).id
+        }
+
+        for (const item of group.items) {
+          const isExistingItem = !item.id.startsWith('temp-')
+          const days = Math.ceil(
+            (new Date(item.end_date).getTime() -
+              new Date(item.start_date).getTime()) /
+              (1000 * 60 * 60 * 24),
+          )
+          const derivedDays = Math.max(1, days)
+          const daysUsed = item.days_used ?? derivedDays
+          const effectiveDailyRate =
+            item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
+          const effectiveDistanceRate =
+            item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
+          const distanceIncrements = item.distance_km
+            ? Math.ceil(item.distance_km / distanceIncrementSave)
+            : 0
+          const distanceCost =
+            effectiveDistanceRate && distanceIncrements > 0
+              ? effectiveDistanceRate * distanceIncrements
+              : 0
+          const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
+          const totalPrice = dailyCost + distanceCost
+
+          if (isExistingItem) {
+            const { error: itemErr } = await (supabase as any)
+              .from('offer_transport_items')
+              .upsert({
+                id: item.id,
+                offer_id: workingOfferId,
+                transport_group_id: groupId,
+                vehicle_name: item.vehicle_name,
+                vehicle_id: item.vehicle_id ?? null,
+                vehicle_category: item.vehicle_category,
+                distance_km: item.distance_km,
+                distance_rate: item.distance_rate ?? null,
+                start_date: item.start_date,
+                end_date: item.end_date,
+                days_used: item.days_used ?? null,
+                daily_rate_count: item.daily_rate_count ?? null,
+                daily_rate: effectiveDailyRate,
+                total_price: totalPrice,
+                is_internal: item.is_internal,
+                sort_order: item.sort_order,
+              })
+
+            if (itemErr) throw itemErr
+          } else {
+            const insertPayload: Record<string, unknown> = {
+              offer_id: workingOfferId,
+              transport_group_id: groupId,
               vehicle_name: item.vehicle_name,
-              vehicle_id: item.vehicle_id ?? null,
               vehicle_category: item.vehicle_category,
               distance_km: item.distance_km,
               distance_rate: item.distance_rate ?? null,
               start_date: item.start_date,
               end_date: item.end_date,
+              days_used: item.days_used ?? null,
+              daily_rate_count: item.daily_rate_count ?? null,
               daily_rate: effectiveDailyRate,
               total_price: totalPrice,
               is_internal: item.is_internal,
               sort_order: item.sort_order,
-            })
+            }
 
-          if (itemErr) throw itemErr
-        } else {
-          // For new items, only include vehicle_id if it has a value
-          const insertPayload: any = {
-            offer_id: workingOfferId,
-            vehicle_name: item.vehicle_name,
-            vehicle_category: item.vehicle_category,
-            distance_km: item.distance_km,
-            distance_rate: item.distance_rate ?? null,
-            start_date: item.start_date,
-            end_date: item.end_date,
-            daily_rate: effectiveDailyRate,
-            total_price: totalPrice,
-            is_internal: item.is_internal,
-            sort_order: item.sort_order,
+            if (item.vehicle_id !== null) {
+              insertPayload.vehicle_id = item.vehicle_id
+            }
+
+            const { error: itemErr } = await (supabase as any)
+              .from('offer_transport_items')
+              .insert(insertPayload)
+
+            if (itemErr) throw itemErr
           }
-
-          // Only include vehicle_id if it has a value
-          // Omitting null vehicle_id avoids PostgREST relationship embedding issues
-          if (item.vehicle_id !== null) {
-            insertPayload.vehicle_id = item.vehicle_id
-          }
-
-          const { error: itemErr } = await supabase
-            .from('offer_transport_items')
-            .insert(insertPayload)
-
-          if (itemErr) throw itemErr
         }
       }
 
@@ -1058,33 +1201,39 @@ type JobInfo = {
       return {
         offerId: workingOfferId,
         syncAfterSave: !!payload?.syncAfterSave,
+        closeAfterSave: payload?.closeAfterSave === true,
       }
     },
     onSuccess: async (result) => {
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       await qc.invalidateQueries({ queryKey: ['offer-detail', result.offerId] })
-      // Update current offer ID so we can show preview/lock buttons
       setCurrentOfferId(result.offerId)
+      setBaselineSerialized(
+        serializeOfferEditorState({
+          title: editorFormRef.current.title.trim(),
+          daysOfUse: editorFormRef.current.daysOfUse,
+          discountPercent: editorFormRef.current.discountPercent,
+          vatPercent: editorFormRef.current.vatPercent,
+          showPricePerLine: editorFormRef.current.showPricePerLine,
+          equipmentGroups: editorFormRef.current.equipmentGroups,
+          crewItems: editorFormRef.current.crewItems,
+          transportGroups: editorFormRef.current.transportGroups,
+        }),
+      )
       success(
         isEditMode ? 'Offer updated' : 'Offer created',
         `Technical offer "${title.trim()}" was saved successfully.`,
       )
 
-      if (afterSaveAction === 'lock') {
-        setAfterSaveAction(null)
-        lockOfferMutation.mutate(result.offerId)
-        return
-      }
-
-      // Close dialog after save
-      onOpenChange(false)
       onSaved?.(result.offerId)
       if (result.syncAfterSave) {
         onSyncBookingsAfterSave?.(result.offerId)
       }
+      if (result.closeAfterSave) {
+        onOpenChange(false)
+      }
     },
     onError: (e: any) => {
-      setAfterSaveAction(null)
       toastError(
         'Failed to save offer',
         e?.message ?? 'Please check your inputs and try again.',
@@ -1097,34 +1246,42 @@ type JobInfo = {
     onSuccess: async (_, lockedOfferId) => {
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       await qc.invalidateQueries({ queryKey: ['offer-detail', lockedOfferId] })
-      // Fetch updated offer to get access_token
       const updatedOffer = await qc.fetchQuery(offerDetailQuery(lockedOfferId))
+      const stayOpen = lockOutcomeRef.current === 'stay_open'
+      lockOutcomeRef.current = 'close'
       if (updatedOffer?.access_token) {
         const url = `${window.location.origin}/offer/${updatedOffer.access_token}`
         try {
           await navigator.clipboard.writeText(url)
           success(
-            'Link copied — send it to your customer',
-            `The offer is locked. The link has been copied to your clipboard. Send it to your customer (e.g. by email) so they can view and accept the offer.`,
+            'Link copied',
+            stayOpen
+              ? 'The offer is locked. The link is on your clipboard — send it when you are ready.'
+              : `The offer is locked. The link has been copied to your clipboard.`,
           )
           info('Offer link', `Link: ${url}`)
         } catch {
           success(
-            'Send this link to your customer',
-            `The offer is locked. Copy and send this link to your customer: ${url}`,
+            'Offer locked',
+            stayOpen
+              ? `The offer is locked. Copy this link to send it yourself: ${url}`
+              : `The offer is locked. Copy and send this link: ${url}`,
           )
         }
       } else {
         success(
           'Offer locked',
-          'The offer has been locked. You can share the offer link with your customer once it is available.',
+          'The offer has been locked. You can share the offer link once it is available.',
         )
       }
 
-      onOpenChange(false)
       onSaved?.(lockedOfferId)
+      if (!stayOpen) {
+        onOpenChange(false)
+      }
     },
     onError: (e: any) => {
+      lockOutcomeRef.current = 'close'
       toastError('Failed to lock offer', e?.message ?? 'Please try again.')
     },
   })
@@ -1139,35 +1296,145 @@ type JobInfo = {
     },
   })
 
-  const handleLockAndSend = () => {
-    // If no offer ID yet, save first
-    if (!currentOfferId) {
-      info('Save required', 'Please save the offer first before locking it.')
+  const handleOfferDialogOpenChange = (next: boolean) => {
+    if (next) return
+    if (lockSendStep) {
+      setLockSendStep(null)
       return
     }
-    setSyncPromptAction('lock')
-    setSyncBeforeSaveOpen(true)
+    if (!isReadOnly && hasUnsavedChanges()) {
+      setCloseGuardOpen(true)
+      return
+    }
+    onOpenChange(false)
   }
 
   const handleSaveClick = () => {
-    setSyncPromptAction(isEditMode ? 'save' : 'create')
-    setSyncBeforeSaveOpen(true)
+    saveMutation.mutate({ closeAfterSave: false })
   }
 
-  const handleSaveWithSync = (syncAfterSave: boolean) => {
-    setSyncBeforeSaveOpen(false)
-    if (syncPromptAction === 'lock') {
-      setAfterSaveAction('lock')
-      saveMutation.mutate({ syncAfterSave })
+  const handleSyncBookingsClick = async () => {
+    if (!currentOfferId) {
+      info('Save required', 'Save the offer first so bookings can be synced.')
       return
     }
+    try {
+      setSyncRunning(true)
+      if (hasUnsavedChanges()) {
+        await saveMutation.mutateAsync({ closeAfterSave: false })
+      }
+      if (onSyncBookingsAfterSave) {
+        await onSyncBookingsAfterSave(currentOfferId)
+      }
+      success('Bookings synced', 'Job bookings now match this offer.')
+    } catch (e: any) {
+      toastError(
+        'Sync failed',
+        e?.message ?? 'Could not sync bookings. Try again.',
+      )
+    } finally {
+      setSyncRunning(false)
+    }
+  }
 
-    setAfterSaveAction(null)
-    saveMutation.mutate({ syncAfterSave })
+  const openLockSendFlow = () => {
+    if (!currentOfferId) {
+      info('Save required', 'Save the offer before locking and sending it.')
+      return
+    }
+    if (existingOffer?.locked) return
+    setLockSendStep('choose')
+  }
+
+  const performSelfLock = async () => {
+    if (!currentOfferId) return
+    try {
+      setLockSendBusy(true)
+      setLockSendStep(null)
+      if (hasUnsavedChanges()) {
+        await saveMutation.mutateAsync({ closeAfterSave: false })
+      }
+      lockOutcomeRef.current = 'stay_open'
+      await lockOfferMutation.mutateAsync(currentOfferId)
+    } catch {
+      // errors surfaced by mutations
+    } finally {
+      setLockSendBusy(false)
+    }
+  }
+
+  const performGridEmailSend = async () => {
+    const email = gridEmailDraft.trim()
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toastError('Invalid email', 'Enter a valid email address.')
+      return
+    }
+    if (!currentOfferId) return
+    try {
+      setLockSendBusy(true)
+      if (hasUnsavedChanges()) {
+        await saveMutation.mutateAsync({ closeAfterSave: false })
+      }
+      await lockOffer(currentOfferId)
+      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
+      const { data, error } = await supabase.functions.invoke('send-offer-email', {
+        body: { offer_id: currentOfferId, to_email: email },
+      })
+      if (error) throw error
+      if (
+        data &&
+        typeof data === 'object' &&
+        'error' in data &&
+        (data as { error?: string }).error
+      ) {
+        throw new Error(String((data as { error: string }).error))
+      }
+      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
+      success('Offer emailed', `The offer link was sent to ${email}.`)
+      setLockSendStep(null)
+      setBaselineSerialized(
+        serializeOfferEditorState({
+          title: editorFormRef.current.title.trim(),
+          daysOfUse: editorFormRef.current.daysOfUse,
+          discountPercent: editorFormRef.current.discountPercent,
+          vatPercent: editorFormRef.current.vatPercent,
+          showPricePerLine: editorFormRef.current.showPricePerLine,
+          equipmentGroups: editorFormRef.current.equipmentGroups,
+          crewItems: editorFormRef.current.crewItems,
+          transportGroups: editorFormRef.current.transportGroups,
+        }),
+      )
+      onSaved?.(currentOfferId)
+      onOpenChange(false)
+    } catch (e: any) {
+      toastError(
+        'Could not send email',
+        e?.message ?? 'Check the address and try again.',
+      )
+    } finally {
+      setLockSendBusy(false)
+    }
+  }
+
+  const saveFromCloseGuardAndExit = async () => {
+    try {
+      await saveMutation.mutateAsync({ closeAfterSave: true })
+      setCloseGuardOpen(false)
+      onOpenChange(false)
+    } catch {
+      // mutation shows error
+    }
+  }
+
+  const discardFromCloseGuard = () => {
+    setCloseGuardOpen(false)
+    onOpenChange(false)
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOfferDialogOpenChange}>
       <Dialog.Content
         maxWidth="1340px"
         style={{
@@ -1408,8 +1675,8 @@ type JobInfo = {
             {/* Transport Tab */}
             <Tabs.Content value="transport">
               <TransportSection
-                items={transportItems}
-                onItemsChange={setTransportItems}
+                groups={transportGroups}
+                onGroupsChange={setTransportGroups}
                 companyId={companyId}
                 readOnly={isReadOnly}
                 jobStartAt={job.start_at}
@@ -1448,2596 +1715,216 @@ type JobInfo = {
             borderTop: '1px solid var(--gray-a6)',
           }}
         >
-          <Flex gap="2">
-            {existingOffer?.access_token && (
+          <Flex gap="2" wrap="wrap">
+            {currentOfferId ? (
               <>
                 <Button
                   size="2"
                   variant="soft"
                   onClick={() => {
-                    const url = `${window.location.origin}/offer/${existingOffer.access_token}`
+                    const token = existingOffer?.access_token
+                    if (!token) return
+                    const url = `${window.location.origin}/offer/${token}`
                     window.open(url, '_blank')
                   }}
-                  disabled={
-                    !existingOffer.access_token ||
-                    existingOffer.status === 'draft'
-                  }
-                  title={
-                    existingOffer.status === 'draft'
-                      ? 'Draft offers can be previewed after they are sent'
-                      : 'Preview offer as customer will see it'
-                  }
+                  disabled={!existingOffer?.access_token}
+                  title="Open the public offer page as your customer sees it"
                 >
                   <Eye width={14} height={14} />
-                  Show Preview
+                  Show preview
                 </Button>
                 <Button
                   size="2"
                   variant="soft"
                   onClick={() => {
-                    exportPdfMutation.mutate(existingOffer.id)
+                    exportPdfMutation.mutate(currentOfferId)
                   }}
                   disabled={exportPdfMutation.isPending}
                 >
                   <Download width={14} height={14} />
                   Export PDF
                 </Button>
-                {!existingOffer.locked && (
-                  <Button
-                    size="2"
-                    variant="soft"
-                    color="blue"
-                    onClick={() => {
-                      handleLockAndSend()
-                    }}
-                    disabled={lockOfferMutation.isPending}
-                  >
-                    <Lock width={14} height={14} />
-                    Lock offer & copy link
-                  </Button>
-                )}
               </>
-            )}
+            ) : null}
           </Flex>
-          <Flex gap="2">
-            <Dialog.Close>
-              <Button variant="soft">{isReadOnly ? 'Close' : 'Cancel'}</Button>
-            </Dialog.Close>
+          <Flex gap="2" wrap="wrap" justify="end">
+            <Button
+              type="button"
+              variant="soft"
+              onClick={() => handleOfferDialogOpenChange(false)}
+            >
+              Close
+            </Button>
             {!isReadOnly && (
-              <Button
-                variant="solid"
-                onClick={handleSaveClick}
-                disabled={saveMutation.isPending || !title.trim()}
-              >
-                {saveMutation.isPending
-                  ? 'Saving...'
-                  : isEditMode
-                    ? 'Save Draft'
-                    : 'Create Offer'}
-              </Button>
+              <>
+                <Button
+                  type="button"
+                  variant="solid"
+                  onClick={handleSaveClick}
+                  disabled={saveMutation.isPending || !title.trim()}
+                >
+                  {saveMutation.isPending
+                    ? 'Saving…'
+                    : currentOfferId || isEditMode
+                      ? 'Save'
+                      : 'Create offer'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="soft"
+                  color="blue"
+                  onClick={() => void handleSyncBookingsClick()}
+                  disabled={
+                    !currentOfferId ||
+                    syncRunning ||
+                    saveMutation.isPending ||
+                    !title.trim()
+                  }
+                >
+                  <Refresh width={14} height={14} />
+                  {syncRunning ? 'Syncing…' : 'Sync'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="soft"
+                  color="blue"
+                  onClick={openLockSendFlow}
+                  disabled={
+                    !currentOfferId ||
+                    !!existingOffer?.locked ||
+                    lockOfferMutation.isPending ||
+                    lockSendBusy ||
+                    !title.trim()
+                  }
+                >
+                  <Lock width={14} height={14} />
+                  Lock & send
+                </Button>
+              </>
             )}
           </Flex>
         </Flex>
       </Dialog.Content>
 
-      <Dialog.Root
-        open={syncBeforeSaveOpen}
-        onOpenChange={(openValue) => setSyncBeforeSaveOpen(openValue)}
-      >
-        <Dialog.Content maxWidth="520px">
-          <Dialog.Title>Sync offer to bookings?</Dialog.Title>
+      <Dialog.Root open={closeGuardOpen} onOpenChange={setCloseGuardOpen}>
+        <Dialog.Content maxWidth="480px" style={{ zIndex: 101 }}>
+          <Dialog.Title>Unsaved changes</Dialog.Title>
           <Separator my="3" />
           <Text size="2">
-            Do you want to sync bookings to match this offer? Syncing will
-            replace the current equipment, crew, and transport bookings on this
-            job.
+            You have unsaved changes. Save them before closing, discard them,
+            or keep editing.
           </Text>
-          <Flex gap="2" mt="4" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              variant="soft"
-              onClick={() => handleSaveWithSync(false)}
-              disabled={saveMutation.isPending}
-            >
-              {syncPromptAction === 'lock'
-                ? 'Lock without syncing'
-                : syncPromptAction === 'create'
-                  ? 'Create without syncing'
-                  : 'Save without syncing'}
+          <Flex gap="2" mt="4" justify="end" wrap="wrap">
+            <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>
+              Keep editing
             </Button>
             <Button
-              onClick={() => handleSaveWithSync(true)}
+              variant="soft"
+              color="red"
+              onClick={discardFromCloseGuard}
               disabled={saveMutation.isPending}
             >
-              {syncPromptAction === 'lock'
-                ? 'Lock and sync'
-                : syncPromptAction === 'create'
-                  ? 'Create and sync'
-                  : 'Save and sync'}
+              Discard
+            </Button>
+            <Button
+              onClick={() => void saveFromCloseGuardAndExit()}
+              disabled={saveMutation.isPending || !title.trim()}
+            >
+              {saveMutation.isPending ? 'Saving…' : 'Save & close'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={lockSendStep === 'choose'}
+        onOpenChange={(o) => {
+          if (!o) setLockSendStep(null)
+        }}
+      >
+        <Dialog.Content maxWidth="520px" style={{ zIndex: 102 }}>
+          <Dialog.Title>Lock & send</Dialog.Title>
+          <Separator my="3" />
+          <Text size="2" mb="3">
+            Locking prevents further edits. How do you want to deliver the offer
+            to your customer?
+          </Text>
+          <Flex direction="column" gap="2">
+            <Button
+              variant="solid"
+              disabled={lockSendBusy}
+              onClick={() => void performSelfLock()}
+            >
+              I'll send the link myself
+            </Button>
+            <Button
+              variant="soft"
+              disabled={lockSendBusy}
+              onClick={() => {
+                setGridEmailDraft(job.customer_contact?.email?.trim() ?? '')
+                setLockSendStep('email')
+              }}
+            >
+              Send offer by email (Grid)
+            </Button>
+            <Button variant="ghost" onClick={() => setLockSendStep(null)}>
+              Cancel
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <Dialog.Root
+        open={lockSendStep === 'email'}
+        onOpenChange={(o) => {
+          if (!o) setLockSendStep(null)
+        }}
+      >
+        <Dialog.Content maxWidth="520px" style={{ zIndex: 102 }}>
+          <Dialog.Title>Send offer by email</Dialog.Title>
+          <Separator my="3" />
+          <Text size="2" mb="2">
+            We use the job’s main contact when available. Confirm or edit the
+            recipient address.
+          </Text>
+          {job.customer_contact?.name ? (
+            <Text size="2" color="gray" mb="2">
+              Contact: {job.customer_contact.name}
+            </Text>
+          ) : null}
+          <Field label="Recipient email">
+            <TextField.Root
+              type="email"
+              value={gridEmailDraft}
+              onChange={(e) => setGridEmailDraft(e.target.value)}
+              placeholder="name@company.com"
+              disabled={lockSendBusy}
+            />
+          </Field>
+          <Flex gap="2" mt="4" justify="end" wrap="wrap">
+            <Button
+              variant="soft"
+              onClick={() => setLockSendStep('choose')}
+              disabled={lockSendBusy}
+            >
+              Back
+            </Button>
+            <Button
+              variant="soft"
+              onClick={() => setLockSendStep(null)}
+              disabled={lockSendBusy}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void performGridEmailSend()}
+              disabled={lockSendBusy || !gridEmailDraft.trim()}
+            >
+              {lockSendBusy ? 'Sending…' : 'Lock & send email'}
             </Button>
           </Flex>
         </Dialog.Content>
       </Dialog.Root>
     </Dialog.Root>
-  )
-}
-
-// Search field with fixed-position dropdown
-function ItemSearchField({
-  searchTerm,
-  onSearchChange,
-  searchResults,
-  onSelectItem,
-  formatCurrency,
-  compact,
-}: {
-  searchTerm: string
-  onSearchChange: (term: string) => void
-  searchResults: Array<{
-    id: string
-    name: string
-    is_group: boolean
-    on_hand: number | null
-    price: number | null
-    internally_owned: boolean
-    external_owner_name: string | null
-    brand_name: string | null
-    model: string | null
-  }>
-  onSelectItem: (itemId: string) => void
-  formatCurrency: (amount: number) => string
-  compact?: boolean
-}) {
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const [dropdownPosition, setDropdownPosition] = React.useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
-
-  // Update dropdown position when search term or results change
-  React.useEffect(() => {
-    if (!searchTerm || searchResults.length === 0) {
-      setDropdownPosition(null)
-      return
-    }
-
-    // Use requestAnimationFrame to ensure DOM is ready
-    const updatePosition = () => {
-      if (containerRef.current) {
-        const input = containerRef.current.querySelector('input')
-        if (input) {
-          const rect = input.getBoundingClientRect()
-          setDropdownPosition({
-            top: rect.bottom + window.scrollY + 4,
-            left: rect.left + window.scrollX,
-            width: rect.width,
-          })
-        }
-      }
-    }
-
-    // Try immediately, then with a small delay to ensure layout is ready
-    updatePosition()
-    const timer = setTimeout(updatePosition, 10)
-
-    return () => clearTimeout(timer)
-  }, [searchTerm, searchResults.length])
-
-  return (
-    <Box
-      ref={containerRef}
-      style={{ position: 'relative' }}
-      mb={compact ? undefined : '3'}
-    >
-      <TextField.Root
-        placeholder="Search items or groups to add..."
-        value={searchTerm}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
-      {dropdownPosition && searchResults.length > 0 && (
-        <Box
-          style={{
-            position: 'fixed',
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
-            zIndex: 10000,
-            backgroundColor: 'var(--color-panel-solid)',
-            border: '1px solid var(--gray-6)',
-            borderRadius: 8,
-            maxHeight: 'min(400px, 50vh)',
-            overflowY: 'auto',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          }}
-        >
-          {searchResults.map((item) => (
-            <Box
-              key={item.id}
-              p="2"
-              style={{
-                cursor: 'pointer',
-                borderBottom: '1px solid var(--gray-4)',
-                backgroundColor: 'transparent',
-              }}
-              onClick={() => onSelectItem(item.id)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--gray-3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <Flex justify="between" align="center" gap="2">
-                <Flex
-                  direction="column"
-                  gap="1"
-                  style={{ flex: 1, minWidth: 0 }}
-                >
-                  <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                    <Text style={{ flex: 1, minWidth: 0 }}>{item.name}</Text>
-                    {item.internally_owned ? (
-                      <Badge size="1" variant="soft" color="indigo">
-                        Internal
-                      </Badge>
-                    ) : (
-                      <Badge size="1" variant="soft" color="amber">
-                        {item.external_owner_name ?? 'External'}
-                      </Badge>
-                    )}
-                  </Flex>
-                  <Text size="1" color="gray">
-                    {item.is_group
-                      ? `Group | Qty: ${item.on_hand ?? 'N/A'}`
-                      : `Brand: ${item.brand_name ?? 'N/A'} | Model: ${
-                          item.model ?? 'N/A'
-                        } | Qty: ${item.on_hand ?? 'N/A'}`}
-                  </Text>
-                </Flex>
-                {item.price !== null && (
-                  <Text size="2" color="gray" style={{ flexShrink: 0 }}>
-                    {formatCurrency(item.price)}
-                  </Text>
-                )}
-              </Flex>
-            </Box>
-          ))}
-        </Box>
-      )}
-    </Box>
-  )
-}
-
-// Equipment Section Component
-function EquipmentSection({
-  groups,
-  onGroupsChange,
-  expandedGroups,
-  onExpandedGroupsChange,
-  companyId,
-  equipmentDaysOfUse,
-  equipmentRentalFactor,
-  readOnly = false,
-}: {
-  groups: Array<LocalEquipmentGroup>
-  onGroupsChange: (groups: Array<LocalEquipmentGroup>) => void
-  expandedGroups: Set<string>
-  onExpandedGroupsChange: (groups: Set<string>) => void
-  companyId: string
-  equipmentDaysOfUse: number
-  equipmentRentalFactor: number
-  readOnly?: boolean
-}) {
-  // Track search state per group
-  const [searchTerms, setSearchTerms] = React.useState<Map<string, string>>(
-    new Map(),
-  )
-  const [activeSearchGroupId, setActiveSearchGroupId] = React.useState<
-    string | null
-  >(null)
-  const [quantityDrafts, setQuantityDrafts] = React.useState<
-    Record<string, string>
-  >({})
-  const [unitPriceDrafts, setUnitPriceDrafts] = React.useState<
-    Record<string, string>
-  >({})
-  const [searchResults, setSearchResults] = React.useState<
-    Array<{
-      id: string
-      name: string
-      is_group: boolean
-      on_hand: number | null
-      price: number | null
-      internally_owned: boolean
-      external_owner_name: string | null
-      brand_name: string | null
-      model: string | null
-    }>
-  >([])
-  const groupItemsCacheRef = React.useRef<
-    Map<
-      string,
-      Array<{
-        id: string
-        name: string
-        brand_name: string | null
-        model: string | null
-        quantity: number
-      }>
-    >
-  >(new Map())
-  const groupsRef = React.useRef(groups)
-  const [expandedGroupItems, setExpandedGroupItems] = React.useState<
-    Set<string>
-  >(new Set())
-
-  const groupNameSuggestions = ['Audio', 'Lights', 'Rigging', 'AV', 'General']
-
-  React.useEffect(() => {
-    groupsRef.current = groups
-  }, [groups])
-
-  // Get search term for a specific group
-  const getSearchTerm = (groupId: string) => {
-    return searchTerms.get(groupId) || ''
-  }
-
-  // Set search term for a specific group
-  const setSearchTerm = (groupId: string, term: string) => {
-    const newTerms = new Map(searchTerms)
-    newTerms.set(groupId, term)
-    setSearchTerms(newTerms)
-    setActiveSearchGroupId(groupId) // Track which group is being searched
-  }
-
-  // Search for items
-  const searchItems = React.useCallback(
-    async (term: string) => {
-      if (!term.trim()) {
-        setSearchResults([])
-        return
-      }
-
-      const termSafe = escapeForPostgrestOr(term)
-      const { data, error } = await supabase
-        .from('inventory_index')
-        .select(
-          `
-          id,
-          name,
-          is_group,
-          on_hand,
-          current_price,
-          internally_owned,
-          external_owner_name,
-          brand_name,
-          model
-        `,
-        )
-        .eq('company_id', companyId)
-        .eq('active', true)
-        .or('deleted.is.null,deleted.eq.false')
-        .or('is_group.eq.true,allow_individual_booking.eq.true')
-        .or(
-          `name.ilike.%${termSafe}%,category_name.ilike.%${termSafe}%,brand_name.ilike.%${termSafe}%,model.ilike.%${termSafe}%,nicknames.ilike.%${termSafe}%`,
-        )
-        .limit(20)
-
-      if (error) {
-        console.error('Search error:', error)
-        return
-      }
-
-      setSearchResults(
-        data.map((r: any) => {
-          return {
-            id: r.id,
-            name: r.name,
-            is_group: !!r.is_group,
-            on_hand: r.on_hand != null ? Number(r.on_hand) : null,
-            price: r.current_price ?? null,
-            internally_owned: !!r.internally_owned,
-            external_owner_name: r.external_owner_name ?? null,
-            brand_name: r.brand_name ?? null,
-            model: r.model ?? null,
-          }
-        }),
-      )
-    },
-    [companyId],
-  )
-
-  const addGroup = () => {
-    const newGroup: LocalEquipmentGroup = {
-      id: `temp-${Date.now()}`,
-      group_name: '',
-      sort_order: groups.length,
-      items: [],
-    }
-    onGroupsChange([...groups, newGroup])
-    onExpandedGroupsChange(new Set([...expandedGroups, newGroup.id]))
-  }
-
-  const updateGroup = (
-    groupId: string,
-    updates: Partial<LocalEquipmentGroup>,
-  ) => {
-    onGroupsChange(
-      groups.map((g) => (g.id === groupId ? { ...g, ...updates } : g)),
-    )
-  }
-
-  const deleteGroup = (groupId: string) => {
-    onGroupsChange(groups.filter((g) => g.id !== groupId))
-    const next = new Set(expandedGroups)
-    next.delete(groupId)
-    onExpandedGroupsChange(next)
-  }
-
-  const addItemToGroup = (groupId: string, itemId?: string) => {
-    const group = groups.find((g) => g.id === groupId)
-    if (!group) return
-
-    const selectedItem = searchResults.find((r) => r.id === itemId)
-    if (!selectedItem) return
-    const isGroup = selectedItem.is_group
-    const newItem: LocalEquipmentItem = {
-      id: `temp-${Date.now()}-${Math.random()}`,
-      item_id: isGroup ? null : itemId || null,
-      group_id: isGroup ? itemId || null : null,
-      quantity: 1,
-      unit_price: selectedItem.price ?? 0,
-      is_internal: selectedItem.internally_owned,
-      sort_order: group.items.length,
-      item: !isGroup
-        ? {
-            id: selectedItem.id,
-            name: selectedItem.name,
-            externally_owned: !selectedItem.internally_owned,
-            external_owner_id: selectedItem.internally_owned
-              ? null
-              : selectedItem.external_owner_name
-                ? 'temp'
-                : null,
-            external_owner_name: selectedItem.external_owner_name,
-            brand: selectedItem.brand_name
-              ? { id: 'temp', name: selectedItem.brand_name }
-              : null,
-            model: selectedItem.model ?? null,
-          }
-        : null,
-      group: isGroup
-        ? {
-            id: selectedItem.id,
-            name: selectedItem.name,
-            externally_owned: !selectedItem.internally_owned,
-            external_owner_id: null,
-            external_owner_name: selectedItem.external_owner_name,
-          }
-        : null,
-    }
-
-    updateGroup(groupId, {
-      items: [...group.items, newItem],
-    })
-    setSearchTerm(groupId, '')
-    setActiveSearchGroupId(null)
-    setSearchResults([])
-
-    if (isGroup && itemId) {
-      void loadGroupItems(itemId, groupId, newItem.id)
-    }
-  }
-
-  const addCustomLineToGroup = (groupId: string) => {
-    const group = groups.find((g) => g.id === groupId)
-    if (!group) return
-
-    const newItem: LocalEquipmentItem = {
-      id: `temp-${Date.now()}-${Math.random()}`,
-      item_id: null,
-      group_id: null,
-      custom_line_description: '',
-      quantity: 1,
-      unit_price: 0,
-      is_internal: true,
-      sort_order: group.items.length,
-    }
-
-    updateGroup(groupId, {
-      items: [...group.items, newItem],
-    })
-  }
-
-  // Derive active search term for dependency tracking
-  const activeSearchTerm = React.useMemo(() => {
-    if (!activeSearchGroupId) return ''
-    return searchTerms.get(activeSearchGroupId) || ''
-  }, [activeSearchGroupId, searchTerms])
-
-  // Search effect - trigger search when active group's search term changes
-  React.useEffect(() => {
-    if (!activeSearchGroupId) {
-      if (activeSearchTerm.trim() === '') {
-        setSearchResults([])
-      }
-      return
-    }
-
-    if (!activeSearchTerm.trim()) {
-      setSearchResults([])
-      return
-    }
-
-    const timeout = setTimeout(() => {
-      // Double-check the term hasn't changed and we're still on the same group
-      const currentTerm = searchTerms.get(activeSearchGroupId) || ''
-      if (
-        activeSearchGroupId &&
-        currentTerm.trim() === activeSearchTerm.trim()
-      ) {
-        searchItems(activeSearchTerm.trim())
-      }
-    }, 300)
-
-    return () => clearTimeout(timeout)
-  }, [activeSearchGroupId, activeSearchTerm, searchTerms, searchItems])
-
-  const updateItem = (
-    groupId: string,
-    itemId: string,
-    updates: Partial<LocalEquipmentItem>,
-  ) => {
-    const group = groups.find((g) => g.id === groupId)
-    if (!group) return
-
-    updateGroup(groupId, {
-      items: group.items.map((item) =>
-        item.id === itemId ? { ...item, ...updates } : item,
-      ),
-    })
-  }
-
-  const applyGroupItems = (
-    groupId: string,
-    groupItemId: string,
-    groupItems: Array<{
-      id: string
-      name: string
-      brand_name: string | null
-      model: string | null
-      quantity: number
-    }>,
-  ) => {
-    const currentGroups = groupsRef.current
-    const group = currentGroups.find((g) => g.id === groupId)
-    if (!group) return
-
-    onGroupsChange(
-      currentGroups.map((g) =>
-        g.id !== groupId
-          ? g
-          : {
-              ...g,
-              items: g.items.map((item) =>
-                item.id === groupItemId
-                  ? { ...item, group_items: groupItems }
-                  : item,
-              ),
-            },
-      ),
-    )
-  }
-
-  const loadGroupItems = React.useCallback(
-    async (groupId: string, targetGroupId: string, groupItemId: string) => {
-      const cached = groupItemsCacheRef.current.get(groupId)
-      if (cached) {
-        applyGroupItems(targetGroupId, groupItemId, cached)
-        return
-      }
-
-      const { data, error } = await supabase
-        .from('group_items')
-        .select(
-          `
-          item_id,
-          quantity,
-          item:items (
-            id,
-            name,
-            model,
-            brand:item_brands ( id, name )
-          )
-        `,
-        )
-        .eq('group_id', groupId)
-
-      if (error) {
-        console.error('Failed to load group items:', error)
-        return
-      }
-
-      const groupItems = data.map((row: any) => {
-          const rawItem = Array.isArray(row.item) ? row.item[0] : row.item
-          const rawBrand = rawItem?.brand
-          const brand = Array.isArray(rawBrand) ? rawBrand[0] : rawBrand
-          return {
-            id: rawItem?.id ?? row.item_id,
-            name: rawItem?.name ?? 'Unknown item',
-            brand_name: brand?.name ?? null,
-            model: rawItem?.model ?? null,
-            quantity: row.quantity ?? 1,
-          }
-        })
-
-      groupItemsCacheRef.current.set(groupId, groupItems)
-      applyGroupItems(targetGroupId, groupItemId, groupItems)
-    },
-    [],
-  )
-
-  const toggleGroupItems = (itemId: string) => {
-    setExpandedGroupItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(itemId)) {
-        next.delete(itemId)
-      } else {
-        next.add(itemId)
-      }
-      return next
-    })
-  }
-
-  React.useEffect(() => {
-    for (const group of groups) {
-      for (const item of group.items) {
-        if (item.group_id && !item.group_items) {
-          void loadGroupItems(item.group_id, group.id, item.id)
-        }
-      }
-    }
-  }, [groups, loadGroupItems])
-
-  const deleteItem = (groupId: string, itemId: string) => {
-    const group = groups.find((g) => g.id === groupId)
-    if (!group) return
-
-    updateGroup(groupId, {
-      items: group.items.filter((item) => item.id !== itemId),
-    })
-  }
-
-  const toggleGroup = (groupId: string) => {
-    const next = new Set(expandedGroups)
-    if (next.has(groupId)) {
-      next.delete(groupId)
-    } else {
-      next.add(groupId)
-    }
-    onExpandedGroupsChange(next)
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  return (
-    <Flex
-      direction="column"
-      gap="3"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Flex justify="between" align="center" style={{ flexShrink: 0 }}>
-        <Heading size="3">Equipment</Heading>
-        {!readOnly && (
-          <Button size="2" onClick={addGroup}>
-            <Plus width={16} height={16} /> Add Group
-          </Button>
-        )}
-      </Flex>
-
-      <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
-        Equipment totals are calculated as unit price × qty × rental factor (
-        {equipmentDaysOfUse} day{equipmentDaysOfUse === 1 ? '' : 's'} →{' '}
-        {equipmentRentalFactor.toFixed(2)}x).
-      </Text>
-
-      {groups.length > 0 && (
-        <Flex direction="column" gap="2">
-          {groups.map((group) => {
-            const isExpanded = expandedGroups.has(group.id)
-            const groupTotal = group.items.reduce(
-              (sum, item) =>
-                sum + item.unit_price * item.quantity * equipmentRentalFactor,
-              0,
-            )
-
-            return (
-              <Box
-                key={group.id}
-                style={{
-                  border: '1px solid var(--gray-a6)',
-                  borderRadius: 8,
-                  overflow: 'hidden',
-                }}
-              >
-                <Box
-                  p="3"
-                  style={{
-                    background: 'var(--gray-a2)',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => toggleGroup(group.id)}
-                >
-                  <Flex align="center" justify="between">
-                    <Flex align="center" gap="2">
-                      {isExpanded ? (
-                        <NavArrowDown width={18} height={18} />
-                      ) : (
-                        <NavArrowRight width={18} height={18} />
-                      )}
-                      <TextField.Root
-                        value={group.group_name}
-                        onChange={(e) => {
-                          e.stopPropagation()
-                          updateGroup(group.id, { group_name: e.target.value })
-                        }}
-                        onClick={(e) => e.stopPropagation()}
-                        placeholder="Enter group name"
-                        style={{ width: 200 }}
-                        readOnly={readOnly}
-                      />
-                      <Text size="2" color="gray">
-                        ({group.items.length} items)
-                      </Text>
-                    </Flex>
-                    <Flex align="center" gap="3">
-                      <Text weight="medium">{formatCurrency(groupTotal)}</Text>
-                      {!readOnly && (
-                        <Button
-                          size="1"
-                          variant="soft"
-                          color="red"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteGroup(group.id)
-                          }}
-                        >
-                          <Trash width={14} height={14} />
-                        </Button>
-                      )}
-                    </Flex>
-                  </Flex>
-                </Box>
-
-                {isExpanded && (
-                  <Box p="3" style={{ background: 'var(--gray-a1)' }}>
-                    {/* Group name suggestions */}
-                    {!readOnly && !group.group_name && (
-                      <Box mb="3">
-                        <Text size="1" color="gray" mb="1">
-                          Group name suggestions:
-                        </Text>
-                        <Flex gap="2" wrap="wrap">
-                          {groupNameSuggestions.map((suggestion) => (
-                            <Button
-                              key={suggestion}
-                              size="1"
-                              variant="soft"
-                              color="gray"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                updateGroup(group.id, {
-                                  group_name: suggestion,
-                                })
-                              }}
-                            >
-                              {suggestion}
-                            </Button>
-                          ))}
-                        </Flex>
-                      </Box>
-                    )}
-                    {/* Search for items */}
-                    {!readOnly && (
-                      <Flex
-                        gap="2"
-                        align="center"
-                        mb="3"
-                        style={{ width: '100%' }}
-                      >
-                        <Box
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            width: '100%',
-                          }}
-                        >
-                          <ItemSearchField
-                            searchTerm={getSearchTerm(group.id)}
-                            onSearchChange={(term) =>
-                              setSearchTerm(group.id, term)
-                            }
-                            searchResults={
-                              activeSearchGroupId === group.id
-                                ? searchResults
-                                : []
-                            }
-                            onSelectItem={(itemId) =>
-                              addItemToGroup(group.id, itemId)
-                            }
-                            formatCurrency={formatCurrency}
-                            compact
-                          />
-                        </Box>
-                        <Button
-                          size="2"
-                          variant="soft"
-                          color="gray"
-                          style={{ flexShrink: 0 }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            addCustomLineToGroup(group.id)
-                          }}
-                        >
-                          <Plus width={14} height={14} />
-                          Add custom line
-                        </Button>
-                      </Flex>
-                    )}
-
-                    {/* Items table */}
-                    {group.items.length > 0 ? (
-                      <Table.Root variant="surface" size="1">
-                        <Table.Header>
-                          <Table.Row>
-                            <Table.ColumnHeaderCell>
-                              Item
-                            </Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
-                              Brand
-                            </Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
-                              Model
-                            </Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
-                              Unit Price (/day)
-                            </Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
-                              Total
-                            </Table.ColumnHeaderCell>
-                            {!readOnly && <Table.ColumnHeaderCell />}
-                          </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                          {group.items.map((item) => {
-                            const isGroupExpanded = expandedGroupItems.has(
-                              item.id,
-                            )
-                            const isCustomLine =
-                              !item.item && !item.group
-                            return (
-                              <React.Fragment key={item.id}>
-                                <Table.Row>
-                                  <Table.Cell>
-                                    {isCustomLine ? (
-                                      <TextField.Root
-                                        value={
-                                          item.custom_line_description ?? ''
-                                        }
-                                        onChange={(e) =>
-                                          updateItem(group.id, item.id, {
-                                            custom_line_description:
-                                              e.target.value,
-                                          })
-                                        }
-                                        placeholder="Description (e.g. one-off fee)"
-                                        style={{ minWidth: 180 }}
-                                        readOnly={readOnly}
-                                      />
-                                    ) : (
-                                      <Flex align="center" gap="2" wrap="wrap">
-                                        {item.group && (
-                                          <IconButton
-                                            variant="ghost"
-                                            size="1"
-                                            onClick={() =>
-                                              toggleGroupItems(item.id)
-                                            }
-                                            style={{
-                                              width: 20,
-                                              height: 20,
-                                              padding: 0,
-                                            }}
-                                          >
-                                            {isGroupExpanded ? (
-                                              <NavArrowDown
-                                                width={12}
-                                                height={12}
-                                              />
-                                            ) : (
-                                              <NavArrowRight
-                                                width={12}
-                                                height={12}
-                                              />
-                                            )}
-                                          </IconButton>
-                                        )}
-                                        <Text>
-                                          {item.item?.name ||
-                                            item.group?.name ||
-                                            '—'}
-                                        </Text>
-                                        {item.group ? (
-                                          <Badge
-                                            size="1"
-                                            variant="soft"
-                                            color="gray"
-                                          >
-                                            Group
-                                          </Badge>
-                                        ) : null}
-                                        {item.group?.externally_owned ||
-                                        item.item?.externally_owned ? (
-                                          <Badge
-                                            size="1"
-                                            variant="soft"
-                                            color="amber"
-                                          >
-                                            {item.group?.external_owner_name ??
-                                              item.item?.external_owner_name ??
-                                              'External'}
-                                          </Badge>
-                                        ) : (
-                                          <Badge
-                                            size="1"
-                                            variant="soft"
-                                            color="indigo"
-                                          >
-                                            Internal
-                                          </Badge>
-                                        )}
-                                      </Flex>
-                                    )}
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Text>
-                                      {isCustomLine
-                                        ? '—'
-                                        : item.item?.brand?.name ?? '—'}
-                                    </Text>
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Text>
-                                      {isCustomLine
-                                        ? '—'
-                                        : item.item?.model ?? '—'}
-                                    </Text>
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <TextField.Root
-                                      type="number"
-                                      min="1"
-                                      value={
-                                        quantityDrafts[item.id] ??
-                                        String(item.quantity)
-                                      }
-                                      onChange={(e) => {
-                                        const nextValue = e.target.value
-                                        setQuantityDrafts((prev) => ({
-                                          ...prev,
-                                          [item.id]: nextValue,
-                                        }))
-
-                                        if (nextValue === '') return
-                                        const parsed = Number(nextValue)
-                                        if (Number.isNaN(parsed)) return
-
-                                        updateItem(group.id, item.id, {
-                                          quantity: Math.max(1, parsed),
-                                        })
-                                        setQuantityDrafts((prev) => {
-                                          const next = { ...prev }
-                                          delete next[item.id]
-                                          return next
-                                        })
-                                      }}
-                                      onBlur={() => {
-                                        if (quantityDrafts[item.id] === '') {
-                                          setQuantityDrafts((prev) => {
-                                            const next = { ...prev }
-                                            delete next[item.id]
-                                            return next
-                                          })
-                                        }
-                                      }}
-                                      style={{ width: 80 }}
-                                      readOnly={readOnly}
-                                    />
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <TextField.Root
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={
-                                        unitPriceDrafts[item.id] ??
-                                        String(item.unit_price)
-                                      }
-                                      onChange={(e) => {
-                                        const nextValue = e.target.value
-                                        setUnitPriceDrafts((prev) => ({
-                                          ...prev,
-                                          [item.id]: nextValue,
-                                        }))
-
-                                        if (nextValue === '') return
-                                        const parsed = Number(nextValue)
-                                        if (Number.isNaN(parsed)) return
-
-                                        updateItem(group.id, item.id, {
-                                          unit_price: Math.max(0, parsed),
-                                        })
-                                        setUnitPriceDrafts((prev) => {
-                                          const next = { ...prev }
-                                          delete next[item.id]
-                                          return next
-                                        })
-                                      }}
-                                      onBlur={() => {
-                                        if (unitPriceDrafts[item.id] === '') {
-                                          setUnitPriceDrafts((prev) => {
-                                            const next = { ...prev }
-                                            delete next[item.id]
-                                            return next
-                                          })
-                                        }
-                                      }}
-                                      style={{ width: 120 }}
-                                      readOnly={readOnly}
-                                    />
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Text>
-                                      {formatCurrency(
-                                        item.unit_price *
-                                          item.quantity *
-                                          equipmentRentalFactor,
-                                      )}
-                                    </Text>
-                                  </Table.Cell>
-                                  {!readOnly && (
-                                    <Table.Cell align="right">
-                                      <Button
-                                        size="1"
-                                        variant="soft"
-                                        color="red"
-                                        onClick={() =>
-                                          deleteItem(group.id, item.id)
-                                        }
-                                      >
-                                        <Trash width={14} height={14} />
-                                      </Button>
-                                    </Table.Cell>
-                                  )}
-                                </Table.Row>
-                                {item.group &&
-                                  isGroupExpanded &&
-                                  item.group_items?.map((groupItem) => {
-                                    const totalQty =
-                                      groupItem.quantity * item.quantity
-                                    return (
-                                      <Table.Row
-                                        key={`${item.id}-group-${groupItem.id}`}
-                                        style={{
-                                          background: 'var(--gray-a2)',
-                                          opacity: 0.75,
-                                        }}
-                                      >
-                                        <Table.Cell>
-                                          <Text
-                                            size="1"
-                                            color="gray"
-                                            style={{ paddingLeft: 16 }}
-                                          >
-                                            {groupItem.name}
-                                          </Text>
-                                        </Table.Cell>
-                                        <Table.Cell>
-                                          <Text size="1" color="gray">
-                                            {groupItem.brand_name ?? '—'}
-                                          </Text>
-                                        </Table.Cell>
-                                        <Table.Cell>
-                                          <Text size="1" color="gray">
-                                            {groupItem.model ?? '—'}
-                                          </Text>
-                                        </Table.Cell>
-                                        <Table.Cell>
-                                          <Text size="1" color="gray">
-                                            {totalQty}
-                                          </Text>
-                                        </Table.Cell>
-                                        <Table.Cell>
-                                          <Text size="1" color="gray">
-                                            Included
-                                          </Text>
-                                        </Table.Cell>
-                                        <Table.Cell>
-                                          <Text size="1" color="gray">
-                                            Included
-                                          </Text>
-                                        </Table.Cell>
-                                        {!readOnly && <Table.Cell />}
-                                      </Table.Row>
-                                    )
-                                  })}
-                              </React.Fragment>
-                            )
-                          })}
-                        </Table.Body>
-                      </Table.Root>
-                    ) : (
-                      <Text size="2" color="gray">
-                        No items in this group. Search above to add items.
-                      </Text>
-                    )}
-                  </Box>
-                )}
-              </Box>
-            )
-          })}
-        </Flex>
-      )}
-
-      {/* Always show empty state box at bottom */}
-      <Box
-        p="4"
-        style={{
-          border: '2px dashed var(--gray-a6)',
-          borderRadius: 8,
-          textAlign: 'center',
-          cursor: readOnly ? 'default' : 'pointer',
-          transition: 'all 100ms',
-        }}
-        onClick={readOnly ? undefined : addGroup}
-        onMouseEnter={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a8)'
-            e.currentTarget.style.background = 'var(--gray-a2)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a6)'
-            e.currentTarget.style.background = 'transparent'
-          }
-        }}
-      >
-        <Flex direction="column" align="center" gap="2">
-          {!readOnly && <Plus width={24} height={24} />}
-          <Text size="2" color="gray">
-            {readOnly ? 'No equipment groups yet' : 'Add equipment group'}
-          </Text>
-        </Flex>
-      </Box>
-    </Flex>
-  )
-}
-
-// Crew Section Component
-function CrewSection({
-  items,
-  onItemsChange,
-  companyId: _companyId,
-  readOnly = false,
-  jobStartAt,
-  jobEndAt,
-  defaultRatePerDay,
-  defaultRatePerHour,
-  defaultBillingUnit = 'hour',
-  defaultsLoading = false,
-}: {
-  items: Array<LocalCrewItem>
-  onItemsChange: (items: Array<LocalCrewItem>) => void
-  companyId: string
-  readOnly?: boolean
-  jobStartAt?: string | null
-  jobEndAt?: string | null
-  defaultRatePerDay?: number | null
-  defaultRatePerHour?: number | null
-  defaultBillingUnit?: 'day' | 'hour'
-  defaultsLoading?: boolean
-}) {
-  const [expandedItems, setExpandedItems] = React.useState<Set<string>>(
-    new Set(),
-  )
-  const [countDrafts, setCountDrafts] = React.useState<Record<string, string>>(
-    {},
-  )
-  const [dailyRateDrafts, setDailyRateDrafts] = React.useState<
-    Record<string, string>
-  >({})
-
-  const roleSuggestions = [
-    'Technician',
-    'Loader',
-    'FOH',
-    'Monitors',
-    'Hands',
-    'Driver',
-  ]
-
-  const categorySuggestions = ['Audio', 'Lights', 'AV', 'Transport', 'Rigging']
-
-  // Group items by category
-  const groupedItems = React.useMemo(() => {
-    const groups = new Map<string | null, Array<LocalCrewItem>>()
-    const noCategory: Array<LocalCrewItem> = []
-
-    for (const item of items) {
-      const cat = item.role_category || null
-      if (!cat) {
-        noCategory.push(item)
-      } else {
-        const existing = groups.get(cat) || []
-        existing.push(item)
-        groups.set(cat, existing)
-      }
-    }
-
-    // Convert map to sorted array: no category first, then sorted categories
-    const result: Array<{
-      category: string | null
-      items: Array<LocalCrewItem>
-    }> = []
-    if (noCategory.length > 0) {
-      result.push({ category: null, items: noCategory })
-    }
-
-    const sortedCategories = Array.from(groups.keys()).sort()
-    for (const cat of sortedCategories) {
-      result.push({ category: cat, items: groups.get(cat)! })
-    }
-
-    return result
-  }, [items])
-
-  const toggleItem = (itemId: string) => {
-    setExpandedItems((prev) => {
-      const next = new Set(prev)
-      if (next.has(itemId)) {
-        next.delete(itemId)
-      } else {
-        next.add(itemId)
-      }
-      return next
-    })
-  }
-
-  const addItem = () => {
-    // Default to job duration if available, otherwise use current time + 1 day
-    // This ensures times default to the job length (start_at to end_at)
-    const startDate = jobStartAt ? new Date(jobStartAt) : new Date()
-    const endDate = jobEndAt
-      ? new Date(jobEndAt)
-      : new Date(startDate.getTime() + 24 * 60 * 60 * 1000) // +1 day if no job end
-
-    const startIso = startDate.toISOString()
-    const endIso = endDate.toISOString()
-    const hasProvidedWindow = Boolean(jobStartAt && jobEndAt)
-    const computedHours = calculateHoursPerDay(startIso, endIso)
-    const hoursPerDay = hasProvidedWindow ? (computedHours ?? 8) : 8
-
-    let newItem: LocalCrewItem
-    if (defaultBillingUnit === 'day') {
-      const dailyRate = defaultRatePerDay ?? 0
-      newItem = {
-        id: `temp-${Date.now()}`,
-        role_title: '',
-        crew_count: 1,
-        start_date: startIso,
-        end_date: endIso,
-        daily_rate: dailyRate,
-        hourly_rate: null,
-        hours_per_day: null,
-        billing_type: 'daily',
-        sort_order: items.length,
-        role_category: null,
-      }
-    } else {
-      const hourlyRate = defaultRatePerHour ?? 0
-      const dailyRate = hourlyRate * hoursPerDay
-      newItem = {
-        id: `temp-${Date.now()}`,
-        role_title: '',
-        crew_count: 1,
-        start_date: startIso,
-        end_date: endIso,
-        daily_rate: dailyRate,
-        hourly_rate: hourlyRate,
-        hours_per_day: hoursPerDay,
-        billing_type: 'hourly',
-        sort_order: items.length,
-        role_category: null,
-      }
-    }
-    onItemsChange([...items, newItem])
-    setExpandedItems((prev) => new Set([...prev, newItem.id]))
-  }
-
-  const normalizeCrewItem = (item: LocalCrewItem): LocalCrewItem => {
-    if (item.billing_type === 'hourly') {
-      const computedHours =
-        calculateHoursPerDay(item.start_date, item.end_date) ??
-        (item.hours_per_day != null ? Math.max(0, item.hours_per_day) : null) ??
-        0
-      const normalizedHourly = Math.max(
-        0,
-        item.hourly_rate != null ? item.hourly_rate : (defaultRatePerHour ?? 0),
-      )
-      return {
-        ...item,
-        hours_per_day: computedHours,
-        hourly_rate: normalizedHourly,
-        daily_rate: normalizedHourly * computedHours,
-      }
-    }
-
-    return {
-      ...item,
-      hourly_rate: null,
-      hours_per_day: null,
-      daily_rate: Math.max(0, item.daily_rate),
-    }
-  }
-
-  const updateItem = (itemId: string, updates: Partial<LocalCrewItem>) => {
-    onItemsChange(
-      items.map((item) =>
-        item.id === itemId ? normalizeCrewItem({ ...item, ...updates }) : item,
-      ),
-    )
-  }
-
-  const deleteItem = (itemId: string) => {
-    onItemsChange(items.filter((item) => item.id !== itemId))
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  return (
-    <Flex direction="column" gap="3">
-      <Flex justify="between" align="center">
-        <Heading size="3">Crew</Heading>
-        {!readOnly && (
-          <Button
-            size="2"
-            onClick={addItem}
-            disabled={defaultsLoading}
-            title={
-              defaultsLoading
-                ? 'Loading customer pricing…'
-                : undefined
-            }
-          >
-            <Plus width={16} height={16} /> Add Crew Item
-          </Button>
-        )}
-      </Flex>
-
-      {items.length > 0 && (
-        <Box style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {groupedItems.map((group) => (
-            <Box key={group.category || 'no-category'}>
-              {group.category && (
-                <Heading
-                  size="4"
-                  mb="2"
-                  style={{ textTransform: 'capitalize' }}
-                >
-                  {group.category}
-                </Heading>
-              )}
-              <Box
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                }}
-              >
-                {group.items.map((item) => {
-                  const isExpanded = expandedItems.has(item.id)
-                  const days = Math.ceil(
-                    (new Date(item.end_date).getTime() -
-                      new Date(item.start_date).getTime()) /
-                      (1000 * 60 * 60 * 24),
-                  )
-                  const total =
-                    item.daily_rate * item.crew_count * Math.max(1, days)
-                  const computedHoursPerDay =
-                    item.billing_type === 'hourly'
-                      ? (item.hours_per_day ??
-                        calculateHoursPerDay(item.start_date, item.end_date) ??
-                        0)
-                      : null
-                  const formattedHoursPerDay =
-                    computedHoursPerDay != null
-                      ? Number(computedHoursPerDay.toFixed(2))
-                      : null
-                  const displayHourlyRate =
-                    item.billing_type === 'hourly'
-                      ? (item.hourly_rate ?? defaultRatePerHour ?? 0)
-                      : null
-
-                  return (
-                    <Box
-                      key={item.id}
-                      p="3"
-                      style={{
-                        border: '1px solid var(--gray-a6)',
-                        borderRadius: 8,
-                        background: 'var(--gray-a2)',
-                      }}
-                    >
-                      <Box
-                        style={{
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                        onClick={() => toggleItem(item.id)}
-                      >
-                        <Flex align="center" gap="2">
-                          {isExpanded ? (
-                            <NavArrowDown width={18} height={18} />
-                          ) : (
-                            <NavArrowRight width={18} height={18} />
-                          )}
-                          <Text weight="bold">{item.role_title || '—'}</Text>
-                          <Text size="2" color="gray">
-                            ({item.crew_count} crew
-                            {item.crew_count !== 1 ? 's' : ''})
-                          </Text>
-                          <Text size="2" color="gray">
-                            • {formatCurrency(total)}
-                          </Text>
-                        </Flex>
-                        {!readOnly && (
-                          <Button
-                            size="1"
-                            variant="soft"
-                            color="red"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              deleteItem(item.id)
-                            }}
-                          >
-                            <Trash width={14} height={14} />
-                          </Button>
-                        )}
-                      </Box>
-
-                      {isExpanded && (
-                        <Box
-                          mt="3"
-                          pt="3"
-                          style={{ borderTop: '1px solid var(--gray-a6)' }}
-                        >
-                          <Flex direction="column" gap="3">
-                            <Flex gap="3" wrap="wrap">
-                              {/* Role Title */}
-                              <Box style={{ flex: '1 1 260px' }}>
-                                <Text size="2" color="gray" mb="1">
-                                  Role Title
-                                </Text>
-                                <TextField.Root
-                                  value={item.role_title}
-                                  onChange={(e) =>
-                                    updateItem(item.id, {
-                                      role_title: e.target.value,
-                                    })
-                                  }
-                                  placeholder="e.g., Technician"
-                                  readOnly={readOnly}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                {!readOnly && !item.role_title && (
-                                  <Flex gap="2" wrap="wrap" mt="2">
-                                    <Text
-                                      size="1"
-                                      color="gray"
-                                      style={{ width: '100%' }}
-                                    >
-                                      Quick suggestions:
-                                    </Text>
-                                    {roleSuggestions.map((suggestion) => (
-                                      <Button
-                                        key={suggestion}
-                                        size="1"
-                                        variant="soft"
-                                        color="gray"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          updateItem(item.id, {
-                                            role_title: suggestion,
-                                          })
-                                        }}
-                                      >
-                                        {suggestion}
-                                      </Button>
-                                    ))}
-                                  </Flex>
-                                )}
-                              </Box>
-
-                              {/* Role Category */}
-                              <Box style={{ flex: '1 1 220px' }}>
-                                <Text size="2" color="gray" mb="1">
-                                  Role Category
-                                </Text>
-                                <TextField.Root
-                                  placeholder="e.g. Audio, Lights, AV"
-                                  value={item.role_category || ''}
-                                  onChange={(e) =>
-                                    updateItem(item.id, {
-                                      role_category:
-                                        e.target.value.trim() || null,
-                                    })
-                                  }
-                                  readOnly={readOnly}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                                {!readOnly && (
-                                  <Flex gap="2" wrap="wrap" mt="2">
-                                    <Text
-                                      size="1"
-                                      color="gray"
-                                      style={{ width: '100%' }}
-                                    >
-                                      Quick suggestions:
-                                    </Text>
-                                    {categorySuggestions.map((suggestion) => (
-                                      <Button
-                                        key={suggestion}
-                                        size="1"
-                                        variant="soft"
-                                        color="gray"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          updateItem(item.id, {
-                                            role_category:
-                                              suggestion.toLowerCase(),
-                                          })
-                                        }}
-                                      >
-                                        {suggestion}
-                                      </Button>
-                                    ))}
-                                  </Flex>
-                                )}
-                              </Box>
-                            </Flex>
-
-                            {/* Rate Type */}
-                            <Box>
-                              <Text size="2" color="gray" mb="1">
-                                Rate Type
-                              </Text>
-                              {readOnly ? (
-                                <Badge size="1" variant="soft" color="gray">
-                                  {item.billing_type === 'hourly'
-                                    ? 'Hourly rate'
-                                    : 'Daily rate'}
-                                </Badge>
-                              ) : (
-                                <Flex gap="2">
-                                  <Button
-                                    size="1"
-                                    variant={
-                                      item.billing_type === 'daily'
-                                        ? 'classic'
-                                        : 'soft'
-                                    }
-                                    color={
-                                      item.billing_type === 'daily'
-                                        ? 'blue'
-                                        : 'gray'
-                                    }
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (item.billing_type !== 'daily') {
-                                        const fallbackDaily = Math.max(
-                                          0,
-                                          defaultRatePerDay ?? item.daily_rate,
-                                        )
-                                        updateItem(item.id, {
-                                          billing_type: 'daily',
-                                          daily_rate: fallbackDaily,
-                                        })
-                                      }
-                                    }}
-                                  >
-                                    Daily
-                                  </Button>
-                                  <Button
-                                    size="1"
-                                    variant={
-                                      item.billing_type === 'hourly'
-                                        ? 'classic'
-                                        : 'soft'
-                                    }
-                                    color={
-                                      item.billing_type === 'hourly'
-                                        ? 'blue'
-                                        : 'gray'
-                                    }
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      if (item.billing_type !== 'hourly') {
-                                        const computedHours =
-                                          calculateHoursPerDay(
-                                            item.start_date,
-                                            item.end_date,
-                                          ) ??
-                                          (item.hours_per_day &&
-                                          item.hours_per_day > 0
-                                            ? item.hours_per_day
-                                            : 8)
-                                        const baseHourly =
-                                          defaultRatePerHour ??
-                                          (item.hourly_rate != null &&
-                                          item.hourly_rate > 0
-                                            ? item.hourly_rate
-                                            : computedHours > 0
-                                              ? item.daily_rate / computedHours
-                                              : 0)
-                                        const resolvedHourly = Number.isFinite(
-                                          baseHourly,
-                                        )
-                                          ? baseHourly
-                                          : 0
-
-                                        updateItem(item.id, {
-                                          billing_type: 'hourly',
-                                          hours_per_day: computedHours,
-                                          hourly_rate: Math.max(
-                                            0,
-                                            resolvedHourly,
-                                          ),
-                                        })
-                                      }
-                                    }}
-                                  >
-                                    Hourly
-                                  </Button>
-                                </Flex>
-                              )}
-                            </Box>
-
-                            {/* Details Grid */}
-                            <Flex gap="3" wrap="wrap">
-                              <Box style={{ minWidth: 120 }}>
-                                <Text size="2" color="gray" mb="1">
-                                  Crew Count
-                                </Text>
-                                <TextField.Root
-                                  type="number"
-                                  min="1"
-                                  value={
-                                    countDrafts[item.id] ??
-                                    String(item.crew_count)
-                                  }
-                                  onChange={(e) => {
-                                    const nextValue = e.target.value
-                                    setCountDrafts((prev) => ({
-                                      ...prev,
-                                      [item.id]: nextValue,
-                                    }))
-
-                                    if (nextValue === '') return
-                                    const parsed = Number(nextValue)
-                                    if (Number.isNaN(parsed)) return
-
-                                    updateItem(item.id, {
-                                      crew_count: Math.max(1, parsed),
-                                    })
-                                    setCountDrafts((prev) => {
-                                      const next = { ...prev }
-                                      delete next[item.id]
-                                      return next
-                                    })
-                                  }}
-                                  onBlur={() => {
-                                    if (countDrafts[item.id] === '') {
-                                      setCountDrafts((prev) => {
-                                        const next = { ...prev }
-                                        delete next[item.id]
-                                        return next
-                                      })
-                                    }
-                                  }}
-                                  style={{ width: 120 }}
-                                  readOnly={readOnly}
-                                  onClick={(e) => e.stopPropagation()}
-                                />
-                              </Box>
-
-                              <Box style={{ minWidth: 200 }}>
-                                <Text size="2" color="gray" mb="1">
-                                  Start Date
-                                </Text>
-                                {readOnly ? (
-                                  <Text>
-                                    {item.start_date
-                                      ? new Date(
-                                          item.start_date,
-                                        ).toLocaleDateString('nb-NO')
-                                      : '—'}
-                                  </Text>
-                                ) : (
-                                  <div onClick={(e) => e.stopPropagation()}>
-                                    <DateTimePicker
-                                      value={item.start_date}
-                                      onChange={(value) =>
-                                        updateItem(item.id, {
-                                          start_date: value,
-                                        })
-                                      }
-                                    />
-                                  </div>
-                                )}
-                              </Box>
-
-                              <Box style={{ minWidth: 200 }}>
-                                <Text size="2" color="gray" mb="1">
-                                  End Date
-                                </Text>
-                                {readOnly ? (
-                                  <Text>
-                                    {item.end_date
-                                      ? new Date(
-                                          item.end_date,
-                                        ).toLocaleDateString('nb-NO')
-                                      : '—'}
-                                  </Text>
-                                ) : (
-                                  <div onClick={(e) => e.stopPropagation()}>
-                                    <DateTimePicker
-                                      value={item.end_date}
-                                      onChange={(value) =>
-                                        updateItem(item.id, { end_date: value })
-                                      }
-                                    />
-                                  </div>
-                                )}
-                              </Box>
-
-                              {item.billing_type === 'daily' ? (
-                                <Box style={{ minWidth: 120 }}>
-                                  <Text size="2" color="gray" mb="1">
-                                    Daily Rate
-                                  </Text>
-                                  <TextField.Root
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={
-                                      dailyRateDrafts[item.id] ??
-                                      String(item.daily_rate)
-                                    }
-                                    onChange={(e) => {
-                                      const nextValue = e.target.value
-                                      setDailyRateDrafts((prev) => ({
-                                        ...prev,
-                                        [item.id]: nextValue,
-                                      }))
-
-                                      if (nextValue === '') return
-                                      const parsed = Number(nextValue)
-                                      if (Number.isNaN(parsed)) return
-
-                                      updateItem(item.id, {
-                                        daily_rate: Math.max(0, parsed),
-                                      })
-                                      setDailyRateDrafts((prev) => {
-                                        const next = { ...prev }
-                                        delete next[item.id]
-                                        return next
-                                      })
-                                    }}
-                                    onBlur={() => {
-                                      if (dailyRateDrafts[item.id] === '') {
-                                        setDailyRateDrafts((prev) => {
-                                          const next = { ...prev }
-                                          delete next[item.id]
-                                          return next
-                                        })
-                                      }
-                                    }}
-                                    placeholder={
-                                      defaultRatePerDay != null
-                                        ? String(defaultRatePerDay)
-                                        : undefined
-                                    }
-                                    style={{ width: 110 }}
-                                    readOnly={readOnly}
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </Box>
-                              ) : (
-                                <>
-                                  <Box style={{ minWidth: 120 }}>
-                                    <Text size="2" color="gray" mb="1">
-                                      Hourly Rate
-                                    </Text>
-                                    <TextField.Root
-                                      type="number"
-                                      min="0"
-                                      step="0.01"
-                                      value={
-                                        item.hourly_rate == null
-                                          ? ''
-                                          : String(item.hourly_rate)
-                                      }
-                                      onChange={(e) => {
-                                        const value = e.target.value
-                                        if (value === '') {
-                                          updateItem(item.id, {
-                                            hourly_rate: null,
-                                          })
-                                          return
-                                        }
-                                        updateItem(item.id, {
-                                          hourly_rate: Math.max(
-                                            0,
-                                            Number(value) || 0,
-                                          ),
-                                        })
-                                      }}
-                                      onBlur={() => {
-                                        if (item.hourly_rate == null) {
-                                          updateItem(item.id, {
-                                            hourly_rate:
-                                              defaultRatePerHour ?? 0,
-                                          })
-                                        }
-                                      }}
-                                      placeholder={
-                                        defaultRatePerHour != null
-                                          ? String(defaultRatePerHour)
-                                          : undefined
-                                      }
-                                      style={{ width: 110 }}
-                                      readOnly={readOnly}
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                    {!readOnly &&
-                                      defaultRatePerHour != null && (
-                                        <Text
-                                          size="1"
-                                          color="gray"
-                                          style={{ fontStyle: 'italic' }}
-                                          mt="1"
-                                        >
-                                          Default:{' '}
-                                          {formatCurrency(defaultRatePerHour)}
-                                          /hour
-                                        </Text>
-                                      )}
-                                  </Box>
-                                  <Box style={{ minWidth: 120 }}>
-                                    <Text size="2" color="gray" mb="1">
-                                      Hours per Day
-                                    </Text>
-                                    <TextField.Root
-                                      type="number"
-                                      min="0"
-                                      step="0.25"
-                                      value={
-                                        formattedHoursPerDay != null
-                                          ? formattedHoursPerDay.toFixed(2)
-                                          : ''
-                                      }
-                                      style={{ width: 110 }}
-                                      disabled
-                                      readOnly
-                                      onClick={(e) => e.stopPropagation()}
-                                    />
-                                  </Box>
-                                  <Box style={{ minWidth: 160 }}>
-                                    <Text size="2" color="gray" mb="1">
-                                      Daily Equivalent
-                                    </Text>
-                                    <Flex direction="column" gap="1">
-                                      <Text weight="medium">
-                                        {formatCurrency(item.daily_rate)}
-                                      </Text>
-                                      <Text size="1" color="gray">
-                                        per day
-                                      </Text>
-                                    </Flex>
-                                  </Box>
-                                </>
-                              )}
-                            </Flex>
-
-                            {/* Summary */}
-                            <Box
-                              p="2"
-                              style={{
-                                background: 'var(--gray-a3)',
-                                borderRadius: 4,
-                              }}
-                            >
-                              <Flex justify="between" align="center">
-                                <Text size="2" color="gray">
-                                  {days} day{days !== 1 ? 's' : ''} ×{' '}
-                                  {item.crew_count} crew
-                                  {item.crew_count !== 1 ? 's' : ''}{' '}
-                                  {item.billing_type === 'hourly'
-                                    ? `• ${(formattedHoursPerDay ?? 0).toFixed(2)}h/day @ ${formatCurrency(displayHourlyRate ?? 0)}/hour`
-                                    : `• ${formatCurrency(item.daily_rate)}/day`}
-                                </Text>
-                                <Text weight="medium">
-                                  Total: {formatCurrency(total)}
-                                </Text>
-                              </Flex>
-                            </Box>
-                          </Flex>
-                        </Box>
-                      )}
-                    </Box>
-                  )
-                })}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      )}
-
-      {/* Always show empty state box at bottom */}
-      <Box
-        p="4"
-        style={{
-          border: '2px dashed var(--gray-a6)',
-          borderRadius: 8,
-          textAlign: 'center',
-          cursor: readOnly ? 'default' : 'pointer',
-          transition: 'all 100ms',
-        }}
-        onClick={readOnly ? undefined : addItem}
-        onMouseEnter={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a8)'
-            e.currentTarget.style.background = 'var(--gray-a2)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a6)'
-            e.currentTarget.style.background = 'transparent'
-          }
-        }}
-      >
-        <Flex direction="column" align="center" gap="2">
-          {!readOnly && <Plus width={24} height={24} />}
-          <Text size="2" color="gray">
-            {readOnly ? 'No crew items yet' : 'Add crew item'}
-          </Text>
-        </Flex>
-      </Box>
-    </Flex>
-  )
-}
-
-// Helper function to format vehicle category for display
-function formatVehicleCategory(
-  category:
-    | 'passenger_car_small'
-    | 'passenger_car_medium'
-    | 'passenger_car_big'
-    | 'van_small'
-    | 'van_medium'
-    | 'van_big'
-    | 'C1'
-    | 'C1E'
-    | 'C'
-    | 'CE'
-    | null,
-): string {
-  if (!category) return '—'
-  const map: Record<string, string> = {
-    passenger_car_small: 'Passenger Car - Small',
-    passenger_car_medium: 'Passenger Car - Medium',
-    passenger_car_big: 'Passenger Car - Big',
-    van_small: 'Van - Small',
-    van_medium: 'Van - Medium',
-    van_big: 'Van - Big',
-    C1: 'C1',
-    C1E: 'C1E',
-    C: 'C',
-    CE: 'CE',
-  }
-  return map[category] || category
-}
-
-// Transport Section Component
-function TransportSection({
-  items,
-  onItemsChange,
-  companyId: _companyId,
-  readOnly = false,
-  jobStartAt,
-  jobEndAt,
-  vehicleDailyRate,
-  vehicleDistanceRate,
-  vehicleDistanceIncrement,
-}: {
-  items: Array<LocalTransportItem>
-  onItemsChange: (items: Array<LocalTransportItem>) => void
-  companyId: string
-  readOnly?: boolean
-  jobStartAt?: string | null
-  jobEndAt?: string | null
-  vehicleDailyRate?: number | null
-  vehicleDistanceRate?: number | null
-  vehicleDistanceIncrement?: number
-}) {
-  const addItem = () => {
-    // Default to job duration if available, otherwise use current time + 1 day
-    // This ensures times default to the job length (start_at to end_at)
-    const startDate = jobStartAt ? new Date(jobStartAt) : new Date()
-    const endDate = jobEndAt
-      ? new Date(jobEndAt)
-      : new Date(startDate.getTime() + 24 * 60 * 60 * 1000) // +1 day if no job end
-    const increment = Math.max(1, vehicleDistanceIncrement ?? 150)
-
-    // Ensure we preserve the full date-time from the job
-    const newItem: LocalTransportItem = {
-      id: `temp-${Date.now()}`,
-      vehicle_name: '',
-      vehicle_id: null,
-      vehicle_category: null,
-      distance_km: increment,
-      start_date: startDate.toISOString(),
-      end_date: endDate.toISOString(),
-      daily_rate: null,
-      distance_rate: null,
-      is_internal: true,
-      sort_order: items.length,
-    }
-    onItemsChange([...items, newItem])
-  }
-
-  const updateItem = (itemId: string, updates: Partial<LocalTransportItem>) => {
-    onItemsChange(
-      items.map((item) =>
-        item.id === itemId ? { ...item, ...updates } : item,
-      ),
-    )
-  }
-
-  const deleteItem = (itemId: string) => {
-    onItemsChange(items.filter((item) => item.id !== itemId))
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  return (
-    <Flex direction="column" gap="3">
-      <Flex justify="between" align="center">
-        <Heading size="3">Transport</Heading>
-        {!readOnly && (
-          <Button size="2" onClick={addItem}>
-            <Plus width={16} height={16} /> Add Transport Item
-          </Button>
-        )}
-      </Flex>
-
-      {items.length > 0 && (
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Vehicle Category</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Distance (km)</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Start Date</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>End Date</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Daily Rate</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Distance Rate</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
-              {!readOnly && <Table.ColumnHeaderCell />}
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {items.map((item) => {
-              const companyDailyRate = vehicleDailyRate ?? null
-              const companyDistanceRate = vehicleDistanceRate ?? null
-              const distanceIncrement = Math.max(
-                1,
-                vehicleDistanceIncrement ?? 150,
-              )
-              const dailyRateValue = item.daily_rate ?? companyDailyRate
-              const distanceRateValue =
-                item.distance_rate ?? companyDistanceRate
-              const adjustDistance = (delta: number) => {
-                const step = distanceIncrement
-                const current = item.distance_km ?? step
-                const next = current + delta
-                const minValue = step
-                let snapped: number
-                if (delta >= 0) {
-                  snapped = Math.ceil(next / step) * step
-                } else {
-                  snapped = Math.floor(next / step) * step
-                }
-                if (snapped < minValue) snapped = minValue
-                updateItem(item.id, { distance_km: snapped })
-              }
-
-              const days = Math.ceil(
-                (new Date(item.end_date).getTime() -
-                  new Date(item.start_date).getTime()) /
-                  (1000 * 60 * 60 * 24),
-              )
-              // Calculate total: daily_rate * days + distance_rate * (distance rounded up to increment)
-              // Use item's daily_rate if set, otherwise use default from company
-              const effectiveDailyRate = dailyRateValue ?? 0
-              const dailyCost = effectiveDailyRate * Math.max(1, days)
-
-              // Use item's distance_rate if set, otherwise use default from company
-              const effectiveDistanceRate = distanceRateValue
-              const distanceIncrements = item.distance_km
-                ? Math.ceil(item.distance_km / distanceIncrement)
-                : 0
-              const distanceCost =
-                effectiveDistanceRate && distanceIncrements > 0
-                  ? effectiveDistanceRate * distanceIncrements
-                  : 0
-              const total = dailyCost + distanceCost
-              const isUsingDefaultDistanceRate =
-                companyDistanceRate !== null &&
-                (item.distance_rate === null ||
-                  item.distance_rate === companyDistanceRate)
-              const isUsingDefaultDailyRate =
-                companyDailyRate !== null &&
-                (item.daily_rate === null ||
-                  item.daily_rate === companyDailyRate)
-
-              return (
-                <Table.Row key={item.id} style={{ verticalAlign: 'middle' }}>
-                  <Table.Cell>
-                    {readOnly ? (
-                      <Text>
-                        {formatVehicleCategory(item.vehicle_category)}
-                      </Text>
-                    ) : (
-                      <Select.Root
-                        value={item.vehicle_category ?? ''}
-                        onValueChange={(value) =>
-                          updateItem(item.id, {
-                            vehicle_category: (value ||
-                              null) as LocalTransportItem['vehicle_category'],
-                          })
-                        }
-                      >
-                        <Select.Trigger placeholder="Select category" />
-                        <Select.Content style={{ zIndex: 10000 }}>
-                          <Select.Item value="passenger_car_small">
-                            Passenger Car - Small
-                          </Select.Item>
-                          <Select.Item value="passenger_car_medium">
-                            Passenger Car - Medium
-                          </Select.Item>
-                          <Select.Item value="passenger_car_big">
-                            Passenger Car - Big
-                          </Select.Item>
-                          <Select.Item value="van_small">
-                            Van - Small
-                          </Select.Item>
-                          <Select.Item value="van_medium">
-                            Van - Medium
-                          </Select.Item>
-                          <Select.Item value="van_big">Van - Big</Select.Item>
-                          <Select.Item value="C1">C1</Select.Item>
-                          <Select.Item value="C1E">C1E</Select.Item>
-                          <Select.Item value="C">C</Select.Item>
-                          <Select.Item value="CE">CE</Select.Item>
-                        </Select.Content>
-                      </Select.Root>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    {readOnly ? (
-                      <Text>{item.distance_km ?? '—'}</Text>
-                    ) : (
-                      <Flex align="center" gap="1">
-                        <TextField.Root
-                          type="number"
-                          min={distanceIncrement}
-                          step={String(distanceIncrement)}
-                          value={String(item.distance_km ?? '')}
-                          onChange={(e) => {
-                            const value = e.target.value
-                            if (value === '') {
-                              updateItem(item.id, { distance_km: null })
-                            } else {
-                              const numValue = Number(value) || 0
-                              // Force to nearest increment (round to nearest)
-                              const rounded =
-                                Math.round(numValue / distanceIncrement) *
-                                distanceIncrement
-                              updateItem(item.id, {
-                                distance_km: Math.max(
-                                  distanceIncrement,
-                                  rounded,
-                                ),
-                              })
-                            }
-                          }}
-                          onBlur={() => {
-                            // Ensure value is rounded to increment on blur
-                            if (
-                              item.distance_km !== null &&
-                              item.distance_km > 0
-                            ) {
-                              const rounded =
-                                Math.round(
-                                  item.distance_km / distanceIncrement,
-                                ) * distanceIncrement
-                              const nextValue = Math.max(
-                                distanceIncrement,
-                                rounded,
-                              )
-                              if (nextValue !== item.distance_km) {
-                                updateItem(item.id, { distance_km: nextValue })
-                              }
-                            }
-                            if (
-                              item.distance_km !== null &&
-                              item.distance_km < distanceIncrement
-                            ) {
-                              updateItem(item.id, {
-                                distance_km: distanceIncrement,
-                              })
-                            }
-                          }}
-                          placeholder="Distance"
-                          style={{ width: 80 }}
-                        />
-                        <Flex
-                          direction="column"
-                          gap="1"
-                          style={{ alignSelf: 'stretch' }}
-                        >
-                          <IconButton
-                            size="1"
-                            variant="soft"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              adjustDistance(distanceIncrement)
-                            }}
-                            style={{ width: 20, height: 18, padding: 0 }}
-                          >
-                            <NavArrowUp width={12} height={12} />
-                          </IconButton>
-                          <IconButton
-                            size="1"
-                            variant="soft"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              adjustDistance(-distanceIncrement)
-                            }}
-                            style={{ width: 20, height: 18, padding: 0 }}
-                          >
-                            <NavArrowDown width={12} height={12} />
-                          </IconButton>
-                        </Flex>
-                      </Flex>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    {readOnly ? (
-                      <Text>
-                        {item.start_date
-                          ? new Date(item.start_date).toLocaleDateString(
-                              'nb-NO',
-                            )
-                          : '—'}
-                      </Text>
-                    ) : (
-                      <DateTimePicker
-                        value={item.start_date}
-                        onChange={(value) =>
-                          updateItem(item.id, { start_date: value })
-                        }
-                      />
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    {readOnly ? (
-                      <Text>
-                        {item.end_date
-                          ? new Date(item.end_date).toLocaleDateString('nb-NO')
-                          : '—'}
-                      </Text>
-                    ) : (
-                      <DateTimePicker
-                        value={item.end_date}
-                        onChange={(value) =>
-                          updateItem(item.id, { end_date: value })
-                        }
-                      />
-                    )}
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    <Flex direction="column" gap="1">
-                      <TextField.Root
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={
-                          dailyRateValue == null ? '' : String(dailyRateValue)
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value
-                          // If empty, set to null (use default)
-                          if (value === '') {
-                            updateItem(item.id, { daily_rate: null })
-                          } else {
-                            const numValue = Number(value) || 0
-                            updateItem(item.id, {
-                              daily_rate: Math.max(0, numValue),
-                            })
-                          }
-                        }}
-                        placeholder={
-                          companyDailyRate !== null
-                            ? String(companyDailyRate)
-                            : 'Not set'
-                        }
-                        style={{ width: 100 }}
-                        readOnly={readOnly}
-                      />
-                      {!readOnly &&
-                        companyDailyRate !== null &&
-                        !isUsingDefaultDailyRate && (
-                          <Text
-                            size="1"
-                            color="gray"
-                            style={{ fontStyle: 'italic' }}
-                          >
-                            Default: {formatCurrency(companyDailyRate)}/day
-                          </Text>
-                        )}
-                    </Flex>
-                  </Table.Cell>
-                  <Table.Cell style={{ verticalAlign: 'middle' }}>
-                    <Flex direction="column" gap="1">
-                      <TextField.Root
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={
-                          distanceRateValue == null
-                            ? ''
-                            : String(distanceRateValue)
-                        }
-                        onChange={(e) => {
-                          const value = e.target.value
-                          // If empty, set to null to use default
-                          if (value === '') {
-                            updateItem(item.id, { distance_rate: null })
-                          } else {
-                            const numValue = Number(value) || 0
-                            updateItem(item.id, {
-                              distance_rate: Math.max(0, numValue),
-                            })
-                          }
-                        }}
-                        placeholder={
-                          companyDistanceRate !== null
-                            ? String(companyDistanceRate)
-                            : 'Not set'
-                        }
-                        style={{ width: 100 }}
-                        readOnly={readOnly}
-                      />
-                      {!readOnly &&
-                        !isUsingDefaultDistanceRate &&
-                        companyDistanceRate !== null && (
-                          <Text
-                            size="1"
-                            color="gray"
-                            style={{ fontStyle: 'italic' }}
-                          >
-                            Default: {formatCurrency(companyDistanceRate)} /{' '}
-                            {distanceIncrement}km
-                          </Text>
-                        )}
-                    </Flex>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text>{formatCurrency(total)}</Text>
-                  </Table.Cell>
-                  {!readOnly && (
-                    <Table.Cell align="right">
-                      <Button
-                        size="1"
-                        variant="soft"
-                        color="red"
-                        onClick={() => deleteItem(item.id)}
-                      >
-                        <Trash width={14} height={14} />
-                      </Button>
-                    </Table.Cell>
-                  )}
-                </Table.Row>
-              )
-            })}
-          </Table.Body>
-        </Table.Root>
-      )}
-
-      {/* Always show empty state box at bottom */}
-      <Box
-        p="4"
-        style={{
-          border: '2px dashed var(--gray-a6)',
-          borderRadius: 8,
-          textAlign: 'center',
-          cursor: readOnly ? 'default' : 'pointer',
-          transition: 'all 100ms',
-        }}
-        onClick={readOnly ? undefined : addItem}
-        onMouseEnter={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a8)'
-            e.currentTarget.style.background = 'var(--gray-a2)'
-          }
-        }}
-        onMouseLeave={(e) => {
-          if (!readOnly) {
-            e.currentTarget.style.borderColor = 'var(--gray-a6)'
-            e.currentTarget.style.background = 'transparent'
-          }
-        }}
-      >
-        <Flex direction="column" align="center" gap="2">
-          {!readOnly && <Plus width={24} height={24} />}
-          <Text size="2" color="gray">
-            {readOnly ? 'No transport items yet' : 'Add transport item'}
-          </Text>
-        </Flex>
-      </Box>
-    </Flex>
-  )
-}
-
-// Totals Section Component
-function TotalsSection({
-  totals,
-}: {
-  totals: ReturnType<typeof calculateOfferTotals>
-}) {
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
-  }
-
-  return (
-    <Flex direction="column" gap="3">
-      <Heading size="3">Totals</Heading>
-      <Table.Root variant="surface">
-        <Table.Body>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">Equipment Subtotal</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>{formatCurrency(totals.equipmentSubtotal)}</Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">Crew Subtotal</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>{formatCurrency(totals.crewSubtotal)}</Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">Transport Subtotal</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>{formatCurrency(totals.transportSubtotal)}</Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">Total Before Discount</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>{formatCurrency(totals.totalBeforeDiscount)}</Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">
-                Equipment discount ({totals.discountPercent}%)
-              </Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text color="red">
-                -
-                {formatCurrency(totals.discountAmount)}
-              </Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">Total After Discount</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>{formatCurrency(totals.totalAfterDiscount)}</Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text weight="medium">VAT ({totals.vatPercent}%)</Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text>
-                {formatCurrency(
-                  totals.totalWithVAT - totals.totalAfterDiscount,
-                )}
-              </Text>
-            </Table.Cell>
-          </Table.Row>
-          <Table.Row>
-            <Table.Cell>
-              <Text size="4" weight="bold">
-                Total With VAT
-              </Text>
-            </Table.Cell>
-            <Table.Cell align="right">
-              <Text size="4" weight="bold">
-                {formatCurrency(totals.totalWithVAT)}
-              </Text>
-            </Table.Cell>
-          </Table.Row>
-        </Table.Body>
-      </Table.Root>
-    </Flex>
   )
 }

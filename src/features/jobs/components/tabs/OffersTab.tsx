@@ -1494,11 +1494,11 @@ export default function OffersTab({
             <Table.Header>
               <Table.Row>
                 <Table.ColumnHeaderCell>Version</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Synced</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Synced</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
               </Table.Row>
@@ -1515,11 +1515,25 @@ export default function OffersTab({
                     </Flex>
                   </Table.Cell>
                   <Table.Cell>
-                    <Badge variant="soft">
-                      {getOfferTypeLabel(offer.offer_type)}
-                    </Badge>
+                    <Flex align="center" gap="2" wrap="wrap">
+                      <Text weight="medium">{offer.title}</Text>
+                      {offer.copied_from_job_id && (
+                        <Tooltip content="Copied from another job. Duplicate this offer to start a new revision.">
+                          <Badge variant="soft" color="orange">
+                            Copied
+                          </Badge>
+                        </Tooltip>
+                      )}
+                    </Flex>
                   </Table.Cell>
                   <Table.Cell>
+                    <Text>
+                      {offer.total_with_vat && offer.total_with_vat > 0
+                        ? formatCurrency(offer.total_with_vat)
+                        : '—'}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell style={{ minWidth: 140 }}>
                     <Flex direction="column" gap="1">
                       <Badge
                         radius="full"
@@ -1538,6 +1552,11 @@ export default function OffersTab({
                         </Button>
                       )}
                     </Flex>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Badge variant="soft">
+                      {getOfferTypeLabel(offer.offer_type)}
+                    </Badge>
                   </Table.Cell>
                   <Table.Cell>
                     {(() => {
@@ -1570,19 +1589,9 @@ export default function OffersTab({
                     })()}
                   </Table.Cell>
                   <Table.Cell>
-                    <Text weight="medium">{offer.title}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text>
-                      {offer.total_with_vat && offer.total_with_vat > 0
-                        ? formatCurrency(offer.total_with_vat)
-                        : '—'}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell>
                     <Text size="2">{formatDate(offer.created_at)}</Text>
                   </Table.Cell>
-                  <Table.Cell style={{ width: 56, minWidth: 56 }}>
+                  <Table.Cell style={{ width: 96, minWidth: 96 }}>
                     {(() => {
                       const canView = offer.locked
                       const canEdit = !offer.locked && !isReadOnly
@@ -1594,8 +1603,33 @@ export default function OffersTab({
 
                       if (!hasAnyAction) return null
 
+                      const openEditor = () => {
+                        setEditorType(offer.offer_type === 'technical' ? 'technical' : 'pretty')
+                        if (offer.locked) {
+                          handleViewOffer(offer)
+                        } else {
+                          handleEditOffer(offer)
+                        }
+                      }
+
                       return (
-                        <Flex justify="end">
+                        <Flex justify="end" gap="1" align="center">
+                          {(canView || canEdit) && (
+                            <Tooltip content={canView ? 'Open (view)' : 'Open (edit)'}>
+                              <IconButton
+                                size="1"
+                                variant="soft"
+                                aria-label={canView ? 'Open offer (view)' : 'Open offer (edit)'}
+                                onClick={openEditor}
+                              >
+                                {canView ? (
+                                  <Eye width={14} height={14} />
+                                ) : (
+                                  <Edit width={14} height={14} />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                          )}
                           <DropdownMenu.Root>
                             <DropdownMenu.Trigger>
                               <IconButton

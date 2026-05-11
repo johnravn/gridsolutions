@@ -266,8 +266,8 @@ export function pendingInvitesQuery({ companyId }: { companyId: string }) {
 // src/features/crew/api/queries.ts
 export type AddInviteResult =
   | { type: 'added' }
-  | { type: 'invited' }
-  | { type: 'already_invited'; by: string }
+  | { type: 'invited'; pending_invite_id: string }
+  | { type: 'already_invited'; by: string; pending_invite_id: string }
   | {
       type: 'already_member'
       role: 'owner' | 'employee' | 'freelancer' | 'super_user'
@@ -315,7 +315,18 @@ export async function addMemberOrInvite({
         .join(' ') ||
         'another user in your company')
 
-    return { type: 'already_invited', by }
+    return {
+      type: 'already_invited',
+      by,
+      pending_invite_id: String(res.pending_invite_id),
+    }
+  }
+
+  if (res?.type === 'invited') {
+    return {
+      type: 'invited',
+      pending_invite_id: String(res.pending_invite_id),
+    }
   }
 
   return res as AddInviteResult

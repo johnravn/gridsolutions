@@ -132,6 +132,7 @@ export default function HomePage() {
   if (!isLarge) {
     return (
       <HomeMobileLayout
+        userId={userId}
         canSeeLatest={canSeeLatest}
         latestActivities={latestData?.items || []}
         latestLoading={latestLoading}
@@ -160,6 +161,7 @@ export default function HomePage() {
       leftPanelWidth={leftPanelWidth}
       isResizing={isResizing}
       onResizeStart={() => setIsResizing(true)}
+      userId={userId}
       canSeeLatest={canSeeLatest}
       latestActivities={latestData?.items || []}
       latestLoading={latestLoading}

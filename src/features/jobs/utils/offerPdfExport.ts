@@ -438,7 +438,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         ]
     drawTableHeader(equipmentColumns)
 
-    for (const group of offer.groups) {
+    for (const group of [...offer.groups].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    )) {
       const groupTotal = (group.items || []).reduce((sum, item) => {
         const lineTotal = item.unit_price * item.quantity * equipmentRentalFactor
         return sum + lineTotal
@@ -457,16 +459,22 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
       doc.setFont('helvetica', 'normal')
 
       if (group.items && group.items.length > 0) {
-        for (const item of group.items) {
+        for (const item of [...group.items].sort(
+          (a, b) => a.sort_order - b.sort_order,
+        )) {
           const isCustomLine = !item.item && !item.group
           const baseName = isCustomLine
             ? (item.custom_line_description?.trim() || 'Custom line')
             : item.group
               ? `${item.group.name} (Group)`
               : item.item?.name || 'Unknown Item'
-          const meta =
-            isCustomLine || item.group
-              ? null
+          const meta = item.group
+            ? null
+            : isCustomLine
+              ? [item.custom_line_brand, item.custom_line_model]
+                  .map((s) => s?.trim())
+                  .filter(Boolean)
+                  .join(' ') || null
               : [item.item?.brand?.name, item.item?.model]
                   .filter(Boolean)
                   .join(' ')
@@ -523,7 +531,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     ]
     drawTableHeader(crewColumns)
 
-    for (const crew of offer.crew_items) {
+    for (const crew of [...offer.crew_items].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    )) {
       const days = calculateDays(crew.start_date, crew.end_date)
       const hoursLabel = formatHours(crew.hours_per_day)
       const bookedHours =
@@ -562,7 +572,10 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     }
   }
 
-  if (offer.transport_items && offer.transport_items.length > 0) {
+  if (
+    (offer.transport_groups && offer.transport_groups.length > 0) ||
+    (offer.transport_items && offer.transport_items.length > 0)
+  ) {
     yPos += 4
     addSectionHeader('Transport')
     const transportColumns: Array<{
@@ -577,45 +590,72 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     ]
     drawTableHeader(transportColumns)
 
-    for (const transport of offer.transport_items) {
-      const distanceIncrement =
-        offer.company_expansion?.vehicle_distance_increment ?? 150
-      const effectiveDailyRate =
-        transport.daily_rate ??
-        offer.company_expansion?.vehicle_daily_rate ??
-        null
-      const effectiveDistanceRate =
-        transport.distance_rate ??
-        offer.company_expansion?.vehicle_distance_rate ??
-        null
-      const vehicleName = formatVehicleCategory(
-        transport.vehicle_category ?? null,
-      )
-      const dailyRateLabel =
-        effectiveDailyRate !== null
-          ? `Daily: ${formatCurrency(effectiveDailyRate)} / day`
-          : 'Daily: —'
-      const distanceRateLabel =
-        effectiveDistanceRate !== null
-          ? `Distance: ${formatCurrency(effectiveDistanceRate)} / ${distanceIncrement} km`
-          : 'Distance: —'
-      const rateParts = [dailyRateLabel, distanceRateLabel]
-      drawTableRow(
-        [
-          { text: vehicleName, width: 55 },
-          {
-            text: formatDateRange(transport.start_date, transport.end_date),
-            width: 45,
-          },
-          { text: rateParts.join('\n'), width: 35, align: 'right' },
-          {
-            text: formatCurrency(transport.total_price),
-            width: 35,
-            align: 'right',
-          },
-        ],
-        transportColumns,
-      )
+    const transportGroups =
+      offer.transport_groups && offer.transport_groups.length > 0
+        ? [...offer.transport_groups].sort((a, b) => a.sort_order - b.sort_order)
+        : [
+            {
+              id: 'transport',
+              group_name: 'Transport',
+              sort_order: 0,
+              items: [...(offer.transport_items || [])].sort(
+                (a, b) => a.sort_order - b.sort_order,
+              ),
+            },
+          ]
+
+    for (const group of transportGroups) {
+      ensureSpace(10, () => drawTableHeader(transportColumns, true))
+      doc.setFontSize(9)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30)
+      doc.text(group.group_name || 'Transport', margin, yPos)
+      yPos += 5
+      doc.setFont('helvetica', 'normal')
+
+      for (const transport of [...group.items].sort(
+        (a, b) => a.sort_order - b.sort_order,
+      )) {
+        const distanceIncrement =
+          offer.company_expansion?.vehicle_distance_increment ?? 150
+        const effectiveDailyRate =
+          transport.daily_rate ??
+          offer.company_expansion?.vehicle_daily_rate ??
+          null
+        const effectiveDistanceRate =
+          transport.distance_rate ??
+          offer.company_expansion?.vehicle_distance_rate ??
+          null
+        const vehicleName = formatVehicleCategory(
+          transport.vehicle_category ?? null,
+        )
+        const dailyRateLabel =
+          effectiveDailyRate !== null
+            ? `Daily: ${formatCurrency(effectiveDailyRate)} / day`
+            : 'Daily: —'
+        const distanceRateLabel =
+          effectiveDistanceRate !== null
+            ? `Distance: ${formatCurrency(effectiveDistanceRate)} / ${distanceIncrement} km`
+            : 'Distance: —'
+        const rateParts = [dailyRateLabel, distanceRateLabel]
+        drawTableRow(
+          [
+            { text: vehicleName, width: 55 },
+            {
+              text: formatDateRange(transport.start_date, transport.end_date),
+              width: 45,
+            },
+            { text: rateParts.join('\n'), width: 35, align: 'right' },
+            {
+              text: formatCurrency(transport.total_price),
+              width: 35,
+              align: 'right',
+            },
+          ],
+          transportColumns,
+        )
+      }
+      yPos += 2
     }
   }
 

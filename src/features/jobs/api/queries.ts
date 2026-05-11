@@ -287,7 +287,7 @@ export function jobsIndexQuery({
 
         if (tpError) throw tpError
 
-        if (timePeriods && timePeriods.length > 0) {
+        if (timePeriods.length > 0) {
           const timePeriodIds = timePeriods.map((tp: { id: string }) => tp.id)
           const { data: crewRes, error: crewError } = await supabase
             .from('reserved_crew')
@@ -298,15 +298,13 @@ export function jobsIndexQuery({
           if (crewError) throw crewError
 
           const jobIdsWithUserAsCrew = new Set<string>()
-          if (crewRes && timePeriods) {
-            crewRes.forEach((c: { time_period_id: string }) => {
-              const tp = timePeriods.find(
-                (t: { id: string; job_id: string | null }) =>
-                  t.id === c.time_period_id,
-              )
-              if (tp?.job_id) jobIdsWithUserAsCrew.add(tp.job_id)
-            })
-          }
+          crewRes.forEach((c: { time_period_id: string }) => {
+            const tp = timePeriods.find(
+              (t: { id: string; job_id: string | null }) =>
+                t.id === c.time_period_id,
+            )
+            if (tp?.job_id) jobIdsWithUserAsCrew.add(tp.job_id)
+          })
           results = results.filter((job) => jobIdsWithUserAsCrew.has(job.id))
         } else {
           results = []
@@ -406,7 +404,7 @@ export function jobsIndexPageQuery({
 
       const { data, error, count } = await q.range(from, to)
       if (error) throw error
-      return { rows: (data || []) as unknown as Array<JobListRow>, count: count ?? 0 }
+      return { rows: data as unknown as Array<JobListRow>, count: count ?? 0 }
     },
     staleTime: 10_000,
   }
@@ -567,4 +565,18 @@ export async function upsertTimePeriod(payload: {
     if (error) throw error
     return data.id
   }
+}
+
+export async function copyJob(payload: {
+  jobId: string
+  startAt: string // ISO
+  endAt: string // ISO
+}): Promise<string> {
+  const { data, error } = await (supabase as any).rpc('job_copy', {
+    p_job_id: payload.jobId,
+    p_start_at: payload.startAt,
+    p_end_at: payload.endAt,
+  })
+  if (error) throw error
+  return data as string
 }

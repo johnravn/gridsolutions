@@ -307,6 +307,12 @@ export type JobOffer = {
   revision_requested_by_name: string | null
   revision_requested_by_phone: string | null
   revision_comment: string | null
+  sent_via_email_at?: string | null
+  sent_via_email_to?: string | null
+  email_provider_message_id?: string | null
+  delivered_via_email_at?: string | null
+  copied_from_job_id?: UUID | null
+  copied_from_offer_id?: UUID | null
 }
 
 export type OfferEquipmentGroup = {
@@ -329,6 +335,8 @@ export type OfferEquipmentItem = {
   sort_order: number
   /** Free-text description for custom/one-off lines when item_id and group_id are both null. */
   custom_line_description?: string | null
+  custom_line_brand?: string | null
+  custom_line_model?: string | null
   // Joined relation
   item?: {
     id: UUID
@@ -385,6 +393,7 @@ export type OfferCrewItem = {
 export type OfferTransportItem = {
   id: UUID
   offer_id: UUID
+  transport_group_id?: UUID
   vehicle_name: string
   vehicle_id: UUID | null
   vehicle_category:
@@ -402,6 +411,8 @@ export type OfferTransportItem = {
   distance_km: number | null
   start_date: string
   end_date: string
+  days_used?: number | null
+  daily_rate_count?: number | null
   daily_rate: number
   distance_rate?: number | null
   total_price: number
@@ -413,6 +424,14 @@ export type OfferTransportItem = {
     name: string
     external_owner_id?: UUID | null
   } | null
+}
+
+export type OfferTransportGroup = {
+  id: UUID
+  offer_id: UUID
+  group_name: string
+  sort_order: number
+  created_at: string
 }
 
 export type OfferPrettySection = {
@@ -430,6 +449,7 @@ export type OfferDetail = JobOffer & {
   groups?: Array<OfferEquipmentGroup & { items: Array<OfferEquipmentItem> }>
   crew_items?: Array<OfferCrewItem>
   transport_items?: Array<OfferTransportItem>
+  transport_groups?: Array<OfferTransportGroup & { items: Array<OfferTransportItem> }>
   pretty_sections?: Array<OfferPrettySection>
   job_title?: string | null
   job_start_at?: string | null

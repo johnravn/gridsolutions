@@ -1503,11 +1503,15 @@ export type Database = {
           access_token: string
           based_on_offer_id: string | null
           bookings_synced_at: string | null
+          copied_from_job_id: string | null
+          copied_from_offer_id: string | null
           company_id: string
           created_at: string
           crew_subtotal: number
           days_of_use: number
+          delivered_via_email_at: string | null
           discount_percent: number
+          email_provider_message_id: string | null
           equipment_subtotal: number
           id: string
           job_id: string
@@ -1522,6 +1526,8 @@ export type Database = {
           revision_requested_by_name: string | null
           revision_requested_by_phone: string | null
           sent_at: string | null
+          sent_via_email_at: string | null
+          sent_via_email_to: string | null
           show_price_per_line: boolean
           status: Database["public"]["Enums"]["offer_status"]
           title: string
@@ -1546,8 +1552,12 @@ export type Database = {
           created_at?: string
           crew_subtotal?: number
           days_of_use?: number
+          delivered_via_email_at?: string | null
           discount_percent?: number
+          email_provider_message_id?: string | null
           equipment_subtotal?: number
+          copied_from_job_id?: string | null
+          copied_from_offer_id?: string | null
           id?: string
           job_id: string
           locked?: boolean
@@ -1561,6 +1571,8 @@ export type Database = {
           revision_requested_by_name?: string | null
           revision_requested_by_phone?: string | null
           sent_at?: string | null
+          sent_via_email_at?: string | null
+          sent_via_email_to?: string | null
           show_price_per_line?: boolean
           status?: Database["public"]["Enums"]["offer_status"]
           title: string
@@ -1585,8 +1597,12 @@ export type Database = {
           created_at?: string
           crew_subtotal?: number
           days_of_use?: number
+          delivered_via_email_at?: string | null
           discount_percent?: number
+          email_provider_message_id?: string | null
           equipment_subtotal?: number
+          copied_from_job_id?: string | null
+          copied_from_offer_id?: string | null
           id?: string
           job_id?: string
           locked?: boolean
@@ -1600,6 +1616,8 @@ export type Database = {
           revision_requested_by_name?: string | null
           revision_requested_by_phone?: string | null
           sent_at?: string | null
+          sent_via_email_at?: string | null
+          sent_via_email_to?: string | null
           show_price_per_line?: boolean
           status?: Database["public"]["Enums"]["offer_status"]
           title?: string
@@ -1653,6 +1671,74 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_packing_sessions: {
+        Row: {
+          all_loaded: boolean
+          company_id: string
+          confirmed_at: string
+          created_by_user_id: string
+          id: string
+          job_id: string
+          packed_keys: string[]
+          slip_signature: string
+          slip_snapshot: Json
+          vehicle_booking_id: string
+        }
+        Insert: {
+          all_loaded?: boolean
+          company_id: string
+          confirmed_at?: string
+          created_by_user_id: string
+          id?: string
+          job_id: string
+          packed_keys?: string[]
+          slip_signature: string
+          slip_snapshot?: Json
+          vehicle_booking_id: string
+        }
+        Update: {
+          all_loaded?: boolean
+          company_id?: string
+          confirmed_at?: string
+          created_by_user_id?: string
+          id?: string
+          job_id?: string
+          packed_keys?: string[]
+          slip_signature?: string
+          slip_snapshot?: Json
+          vehicle_booking_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_packing_sessions_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_packing_sessions_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "job_packing_sessions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_packing_sessions_vehicle_booking_id_fkey"
+            columns: ["vehicle_booking_id"]
+            isOneToOne: false
+            referencedRelation: "reserved_vehicles"
             referencedColumns: ["id"]
           },
         ]
@@ -2325,6 +2411,9 @@ export type Database = {
       }
       offer_equipment_items: {
         Row: {
+          custom_line_brand: string | null
+          custom_line_description: string | null
+          custom_line_model: string | null
           group_id: string | null
           id: string
           is_internal: boolean
@@ -2336,6 +2425,9 @@ export type Database = {
           unit_price: number
         }
         Insert: {
+          custom_line_brand?: string | null
+          custom_line_description?: string | null
+          custom_line_model?: string | null
           group_id?: string | null
           id?: string
           is_internal?: boolean
@@ -2347,6 +2439,9 @@ export type Database = {
           unit_price?: number
         }
         Update: {
+          custom_line_brand?: string | null
+          custom_line_description?: string | null
+          custom_line_model?: string | null
           group_id?: string | null
           id?: string
           is_internal?: boolean
@@ -2478,6 +2573,8 @@ export type Database = {
       offer_transport_items: {
         Row: {
           daily_rate: number
+          daily_rate_count: number | null
+          days_used: number | null
           distance_km: number | null
           distance_rate: number | null
           end_date: string
@@ -2495,6 +2592,8 @@ export type Database = {
         }
         Insert: {
           daily_rate?: number
+          daily_rate_count?: number | null
+          days_used?: number | null
           distance_km?: number | null
           distance_rate?: number | null
           end_date: string
@@ -2512,6 +2611,8 @@ export type Database = {
         }
         Update: {
           daily_rate?: number
+          daily_rate_count?: number | null
+          days_used?: number | null
           distance_km?: number | null
           distance_rate?: number | null
           end_date?: string
@@ -2713,6 +2814,7 @@ export type Database = {
           during: unknown
           id: string
           notes: string | null
+          placeholder_email: string | null
           placeholder_name: string | null
           requested_at: string | null
           status: Database["public"]["Enums"]["booking_status"]
@@ -2724,6 +2826,7 @@ export type Database = {
           during?: unknown
           id?: string
           notes?: string | null
+          placeholder_email?: string | null
           placeholder_name?: string | null
           requested_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
@@ -2735,6 +2838,7 @@ export type Database = {
           during?: unknown
           id?: string
           notes?: string | null
+          placeholder_email?: string | null
           placeholder_name?: string | null
           requested_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]

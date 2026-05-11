@@ -42,6 +42,8 @@ export function useUpcomingJobs({
   const upcomingJobs = React.useMemo(() => {
     if (!jobsData) return []
     return jobsData.filter((job) => {
+      // Canceled jobs should never be treated as upcoming (and should not show "You are crew")
+      if (job.status === 'canceled') return false
       if (job.status === 'in_progress') return true
       if (!job.start_at) return false
       const startDate = new Date(job.start_at)

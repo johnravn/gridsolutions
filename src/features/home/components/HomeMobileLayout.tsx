@@ -1,6 +1,6 @@
 import { Box, Flex } from '@radix-ui/themes'
 import { ConflictsSection } from '@features/conflicts/components/ConflictsSection'
-import { BibleVerseSection } from './BibleVerseSection'
+import { DailyInspirationSection } from './DailyInspirationSection'
 import { LatestSection } from './LatestSection'
 import { MattersSection } from './MattersSection'
 import { UpcomingJobsSection } from './UpcomingJobsSection'
@@ -12,6 +12,7 @@ import type { ActivityFeedItem } from '@features/latest/types'
 import type { HomeMatter, UpcomingJob } from '../types'
 
 type HomeMobileLayoutProps = {
+  userId: string | null
   canSeeLatest: boolean
   latestActivities: Array<ActivityFeedItem>
   latestLoading: boolean
@@ -33,6 +34,7 @@ type HomeMobileLayoutProps = {
 }
 
 export function HomeMobileLayout({
+  userId,
   canSeeLatest,
   latestActivities,
   latestLoading,
@@ -63,7 +65,7 @@ export function HomeMobileLayout({
     >
       <Flex direction="column" gap="4">
         <Box>
-          <BibleVerseSection />
+          <DailyInspirationSection userId={userId} />
         </Box>
         {canSeeLatest && (
           <Box

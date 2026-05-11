@@ -1,4 +1,6 @@
 export { BibleVerseSection } from './BibleVerseSection'
+export { DailyInspirationSection } from './DailyInspirationSection'
+export { QuoteSection } from './QuoteSection'
 export { DashboardCard } from './DashboardCard'
 export { HomeDesktopLayout } from './HomeDesktopLayout'
 export { HomeMobileLayout } from './HomeMobileLayout'
