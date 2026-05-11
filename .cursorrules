@@ -10,9 +10,13 @@ This project is primarily developed using AI agents. Follow these rules strictly
 
 1. **Create migration**: `npm run db:migrate descriptive_name`
 2. **Write SQL** in the generated migration file
-3. **Test locally**: `npm run db:reset`
-4. **Push to production**: `npm run db:push`
-5. **Update types**: `npm run db:types:remote`
+3. **Test locally**: `npm run db:reset:with-data` (never bare `db:reset` — it leaves an empty DB)
+4. **Regenerate types from local** (while iterating): `npm run db:types`
+5. **Push to production**: `npm run db:push`
+6. **Regenerate types from remote** (after push succeeds): `npm run db:types:remote`
+
+> Use `db:types` against the **local** DB while you're iterating on a migration.
+> Only run `db:types:remote` **after** `db:push` succeeds — otherwise the generated types won't match what's actually deployed.
 
 ### RLS (Row Level Security) Requirements:
 
@@ -37,7 +41,73 @@ This project is primarily developed using AI agents. Follow these rules strictly
 - Follow existing patterns in the codebase
 - Use TanStack Query for data fetching
 - Use Radix UI Themes for components
-- Follow the feature-based folder structure in `src/features/`
+
+### TypeScript Strictness (tsconfig is strict — these break the build)
+
+`tsconfig.json` enables `verbatimModuleSyntax`, `noUnusedLocals`, `noUnusedParameters`, and `strict`. Common agent mistakes:
+
+- **Type-only imports must use `import type`** (because of `verbatimModuleSyntax`):
+  ```ts
+  // ❌ BAD — fails at build time
+  import { Matter } from '../types'
+
+  // ✅ GOOD
+  import type { Matter } from '../types'
+
+  // ✅ GOOD — mixed
+  import { createMatter, type Matter } from '../api/queries'
+  ```
+- **No unused imports, variables, or parameters.** Prefix intentionally-unused params with `_` (e.g. `(_event, value) => ...`).
+- **No implicit `any`**, no `// @ts-ignore` without a justification comment.
+
+### Path Aliases — never use long relative imports
+
+Aliases are configured in both `tsconfig.json` and `vite.config.ts`:
+
+| Alias        | Resolves to       |
+|--------------|-------------------|
+| `@app/*`     | `src/app/*`       |
+| `@shared/*`  | `src/shared/*`    |
+| `@features/*`| `src/features/*`  |
+
+```ts
+// ❌ BAD
+import { supabase } from '../../../shared/api/supabase'
+
+// ✅ GOOD
+import { supabase } from '@shared/api/supabase'
+```
+
+Within the **same feature**, relative imports (`../types`, `./components/Foo`) are fine. Crossing feature or layer boundaries → use the alias.
+
+### Feature Folder Convention (`src/features/<feature>/`)
+
+Every feature follows the same shape. Don't invent new structures:
+
+```
+src/features/<feature>/
+  api/         # TanStack Query options + Supabase calls (queries.ts, fooQueries.ts, ...)
+  components/  # React components (dialogs/, tabs/, etc. as sub-folders)
+  hooks/       # Custom hooks (optional)
+  pages/       # Route-level page components
+  types.ts     # Feature-local types
+```
+
+When adding a new feature, mirror an existing one (e.g. `src/features/matters/`). Data fetching always lives in `api/` as TanStack Query option factories — don't call `supabase` from components directly.
+
+## Quality Gates (run before pushing)
+
+Before `git push` on a feature branch, verify the change passes:
+
+```bash
+npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
+npm run build:check  # vite build + tsc (catches type errors CI will reject)
+npm run test         # vitest run (only if you touched tested code)
+```
+
+- `npm run build:check` is the single most important gate — Vercel runs the equivalent and will fail the preview build if `tsc` errors exist. Run it whenever you've touched non-trivial TypeScript.
+- `npm run check` is safe to run on every change; it auto-fixes formatting and lint.
+- If `npm run check` reports lint errors it couldn't auto-fix, **fix them before committing** — don't silence them.
 
 ## GitHub & Deployment Workflow
 
@@ -48,7 +118,7 @@ This project is primarily developed using AI agents. Follow these rules strictly
 1. **Create feature branch**: `git checkout -b feature/description`
 2. **Make changes**: Code, test locally
 3. **Create migration** (if needed): `npm run db:migrate descriptive_name`
-4. **Test locally**: `npm run db:reset && npm run dev`
+4. **Test locally**: `npm run db:reset:with-data && npm run dev` (never bare `db:reset` — it leaves an empty DB)
 5. **Push migration** (if backward-compatible): `npm run db:push` before merging
 6. **Commit and push**: `git push origin feature/description`
 7. **Create PR on GitHub**: Use the PR template

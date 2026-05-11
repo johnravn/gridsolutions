@@ -20,11 +20,11 @@ const TYPE_LABELS: Record<MatterType, string> = {
 }
 
 const TYPE_ORDER: MatterType[] = [
-  'vote',
   'announcement',
-  'chat',
   'update',
   'crew_invite',
+  'vote',
+  'chat',
 ]
 
 type Props = {

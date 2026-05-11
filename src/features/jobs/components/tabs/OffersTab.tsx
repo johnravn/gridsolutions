@@ -41,7 +41,6 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
-import { createMatter } from '@features/matters/api/queries'
 import {
   createBookingsFromOffer,
   createTechnicalOfferFromBookings,
@@ -1042,21 +1041,14 @@ export default function OffersTab({
       const comment = payload.comment.trim()
       const recordedBy = 'Project lead'
 
-      let jobData: {
-        id: string
-        title: string | null
-        project_lead_user_id: string | null
-      } | null = null
-
       if (payload.responseType === 'revision') {
-        const { data, error: jobError } = await supabase
+        const { data: jobRow, error: jobError } = await supabase
           .from('jobs')
-          .select('id, title, project_lead_user_id')
+          .select('project_lead_user_id')
           .eq('id', jobId)
           .single()
         if (jobError) throw jobError
-        jobData = data
-        if (!jobData.project_lead_user_id) {
+        if (!jobRow.project_lead_user_id) {
           throw new Error(
             'Project lead is missing. Assign a project lead to send the revision matter.',
           )
@@ -1114,29 +1106,7 @@ export default function OffersTab({
         .eq('id', payload.offerId)
 
       if (error) throw error
-
-      if (payload.responseType === 'revision') {
-        const projectLeadId = jobData?.project_lead_user_id as string
-        const jobTitle = jobData?.title?.trim() || 'Job'
-        const jobLink = `${window.location.origin}/jobs?jobId=${jobId}`
-        const message = comment || 'No message provided.'
-        const content = [
-          `Customer requested a revision on offer "${payload.offerTitle}".`,
-          `Message: ${message}`,
-          `Job: ${jobTitle}`,
-          `Go to job: ${jobLink}`,
-        ].join('\n')
-
-        await createMatter({
-          company_id: companyId,
-          matter_type: 'update',
-          title: `Offer revision requested: ${jobTitle}`,
-          content,
-          job_id: jobId,
-          recipient_user_ids: [projectLeadId],
-          created_as_company: true,
-        })
-      }
+      // Matter + notification for revision: DB trigger handle_offer_revision_request
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })

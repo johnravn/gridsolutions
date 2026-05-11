@@ -57,6 +57,33 @@ code {
   z-index: 2147483647 !important;
 }
 
+/* Radix Toast: swipe-to-dismiss visual feedback (variables set by @radix-ui/react-toast) */
+@media (prefers-reduced-motion: no-preference) {
+  [data-radix-toast-root][data-swipe='move'] {
+    transform: translateX(var(--radix-toast-swipe-move-x))
+      translateY(var(--radix-toast-swipe-move-y));
+  }
+
+  [data-radix-toast-root][data-swipe='cancel'] {
+    transform: translateX(0) translateY(0);
+    transition: transform 200ms ease-out;
+  }
+
+  [data-radix-toast-root][data-swipe='end'] {
+    animation: radix-toast-swipe-end 0.15s ease-out forwards;
+  }
+
+  @keyframes radix-toast-swipe-end {
+    from {
+      transform: translateX(var(--radix-toast-swipe-end-x))
+        translateY(var(--radix-toast-swipe-end-y));
+    }
+    to {
+      transform: translateX(calc(100% + 24px));
+    }
+  }
+}
+
 /* Ensure Radix UI Dialog overlays/backdrops are below toasts */
 [data-radix-dialog-overlay],
 [class*='rt-DialogOverlay'] {

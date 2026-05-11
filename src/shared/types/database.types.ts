@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -2196,7 +2216,10 @@ export type Database = {
           created_at: string
           email_announcements: boolean
           email_crew_invites: boolean
+          email_matter_announcements: boolean
+          email_matter_invites: boolean
           email_matter_replies: boolean
+          email_matter_updates: boolean
           email_offer_updates: boolean
           email_reminders: boolean
           updated_at: string
@@ -2207,7 +2230,10 @@ export type Database = {
           created_at?: string
           email_announcements?: boolean
           email_crew_invites?: boolean
+          email_matter_announcements?: boolean
+          email_matter_invites?: boolean
           email_matter_replies?: boolean
+          email_matter_updates?: boolean
           email_offer_updates?: boolean
           email_reminders?: boolean
           updated_at?: string
@@ -2218,7 +2244,10 @@ export type Database = {
           created_at?: string
           email_announcements?: boolean
           email_crew_invites?: boolean
+          email_matter_announcements?: boolean
+          email_matter_invites?: boolean
           email_matter_replies?: boolean
+          email_matter_updates?: boolean
           email_offer_updates?: boolean
           email_reminders?: boolean
           updated_at?: string
@@ -2247,6 +2276,8 @@ export type Database = {
           body_text: string | null
           company_id: string
           created_at: string
+          created_by_user_id: string | null
+          email_force_send: boolean
           email_sent_at: string | null
           entity_id: string | null
           entity_type: string | null
@@ -2261,6 +2292,8 @@ export type Database = {
           body_text?: string | null
           company_id: string
           created_at?: string
+          created_by_user_id?: string | null
+          email_force_send?: boolean
           email_sent_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
@@ -2275,6 +2308,8 @@ export type Database = {
           body_text?: string | null
           company_id?: string
           created_at?: string
+          created_by_user_id?: string | null
+          email_force_send?: boolean
           email_sent_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
@@ -2291,6 +2326,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "notifications_user_id_fkey"
@@ -3973,6 +4015,18 @@ export type Database = {
         Args: { p_offer_id: string }
         Returns: undefined
       }
+      notification_insert_allowed_for_actor: {
+        Args: {
+          p_actor: string
+          p_company_id: string
+          p_recipient_user_id: string
+        }
+        Returns: boolean
+      }
+      notification_recipient_allowed_for_company: {
+        Args: { p_company_id: string; p_recipient_user_id: string }
+        Returns: boolean
+      }
       public_offer_accept: {
         Args: {
           p_access_token: string
@@ -4007,6 +4061,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      resolve_pg_net_edge_base_url: { Args: never; Returns: string }
       set_company_user_role: {
         Args: {
           p_actor_user_id: string
@@ -4124,6 +4179,7 @@ export type Database = {
         | "reminder"
         | "announcement"
         | "other"
+        | "matter_update"
       offer_status:
         | "draft"
         | "sent"
@@ -4284,6 +4340,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       activity_type: [
@@ -4345,6 +4404,7 @@ export const Constants = {
         "reminder",
         "announcement",
         "other",
+        "matter_update",
       ],
       offer_status: [
         "draft",
@@ -4388,3 +4448,4 @@ export const Constants = {
     },
   },
 } as const
+

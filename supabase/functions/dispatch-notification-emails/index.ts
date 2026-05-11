@@ -4,12 +4,9 @@
 // It scans for notifications that have not been processed (email_sent_at is null)
 // and calls the existing send-notification-email function for each.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { emailFunctionCorsHeaders } from '../_shared/email/resend.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-}
+const corsHeaders = emailFunctionCorsHeaders
 
 type DispatchResult = {
   ok: true
@@ -38,7 +35,7 @@ Deno.serve(async (req) => {
     // Keep batches small to stay within function limits.
     const { data: pending, error } = await supabase
       .from('notifications')
-      .select('id, created_at')
+      .select('id, created_at, email_force_send')
       .is('email_sent_at', null)
       .order('created_at', { ascending: true })
       .limit(50)
@@ -60,7 +57,10 @@ Deno.serve(async (req) => {
           // use service role to invoke without relying on anon keys/vault
           'Authorization': `Bearer ${serviceKey}`,
         },
-        body: JSON.stringify({ notification_id: n.id, force_email: false }),
+        body: JSON.stringify({
+          notification_id: n.id,
+          force_email: (n as { email_force_send?: boolean }).email_force_send === true,
+        }),
       }).catch(() => null)
 
       if (!res) {

@@ -1,6 +1,7 @@
 // src/shared/companies/CompanyProvider.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCompanyAppRealtimeSync } from '@shared/realtime/useCompanyAppRealtimeSync'
 import { supabase } from '@shared/api/supabase'
 
 type Company = { id: string; name: string }
@@ -13,6 +14,9 @@ type Ctx = {
 }
 
 const CompanyCtx = React.createContext<Ctx | null>(null)
+
+/** Stable fallback so `companiesQ.data ?? X` does not allocate a new `[]` every render while loading. */
+const EMPTY_COMPANIES: Array<Company> = []
 
 function safeGetLS(key: string) {
   try {
@@ -148,7 +152,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   })
 
   // 4) Resolve an effective company id (priority: LS > server > first)
-  const companies = companiesQ.data ?? []
+  const companies = companiesQ.data ?? EMPTY_COMPANIES
   const resolvedCompanyId = React.useMemo(() => {
     if (!companies.length) return null
 
@@ -206,6 +210,8 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const company = companies.find((c) => c.id === resolvedCompanyId) ?? null
   const loading =
     userQ.isLoading || companiesQ.isLoading || serverPrefQ.isLoading
+
+  useCompanyAppRealtimeSync(userId, resolvedCompanyId, qc)
 
   const value = React.useMemo<Ctx>(
     () => ({

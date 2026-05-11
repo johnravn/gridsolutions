@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { Message } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
@@ -24,7 +23,7 @@ export function BibleVerseSection() {
       }
       return json
     },
-    staleTime: 1000 * 60 * 60 * 24, // cache for a day
+    staleTime: 1000 * 60 * 60 * 24,
     gcTime: 1000 * 60 * 60 * 48,
     retry: 1,
   })

@@ -10,42 +10,31 @@
 // - RESEND_FROM_NAME (optional)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const RESEND_API_URL = 'https://api.resend.com/emails'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-}
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-}
+import {
+  emailFunctionCorsHeaders,
+  escapeHtml,
+  getResendApiKey,
+  sendResendHtmlEmail,
+} from '../_shared/email/resend.ts'
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response('ok', { headers: emailFunctionCorsHeaders })
   }
 
   try {
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const resendApiKey = getResendApiKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
     if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({
-          error:
-            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+          error: 'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
         }),
         {
           status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
         },
       )
     }
@@ -57,13 +46,13 @@ Deno.serve(async (req) => {
     if (!offerId || typeof offerId !== 'string') {
       return new Response(JSON.stringify({ error: 'Body must include offer_id' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
       })
     }
     if (!toEmail || typeof toEmail !== 'string') {
       return new Response(JSON.stringify({ error: 'Body must include to_email' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -93,7 +82,7 @@ Deno.serve(async (req) => {
     if (offerErr || !offer) {
       return new Response(JSON.stringify({ error: 'Offer not found' }), {
         status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
       })
     }
 
@@ -102,7 +91,7 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Offer must be locked before sending by email' }),
         {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
         },
       )
     }
@@ -116,9 +105,7 @@ Deno.serve(async (req) => {
     const job = Array.isArray((offer as any).job) ? (offer as any).job[0] : (offer as any).job
     const customer = Array.isArray(job?.customer) ? job?.customer[0] : job?.customer
 
-    const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'notifications@resend.dev'
-    const fromName = Deno.env.get('RESEND_FROM_NAME') || (company?.name ?? 'Grid')
-
+    const fromDisplayName = company?.name ?? null
     const subject = `Offer: ${offer.title ?? 'Offer'}`
     const heading = company?.name ? `Offer from ${company.name}` : 'Offer from Grid'
     const customerName = customer?.name ?? null
@@ -142,36 +129,26 @@ Deno.serve(async (req) => {
       </div>
     `
 
-    const res = await fetch(RESEND_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${resendApiKey}`,
-        'User-Agent': 'Grid-App/1.0',
-      },
-      body: JSON.stringify({
-        from: `${fromName} <${fromEmail}>`,
-        to: [toEmail],
-        subject,
-        html,
-      }),
+    const sent = await sendResendHtmlEmail({
+      apiKey: resendApiKey,
+      to: [toEmail],
+      subject,
+      html,
+      fromDisplayName,
     })
 
-    if (!res.ok) {
-      const errText = await res.text()
+    if (!sent.ok) {
       return new Response(
-        JSON.stringify({ error: 'Resend failed', details: errText }),
+        JSON.stringify({ error: 'Resend failed', details: sent.bodyText }),
         {
           status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
         },
       )
     }
 
-    const payload = await res.json().catch(() => ({}))
-    const messageId = payload?.id ?? null
+    const messageId = sent.messageId
 
-    // Mark as sent. (Delivery tracking is best-effort; delivered_via_email_at stays null for now.)
     await supabase
       .from('job_offers')
       .update({
@@ -184,13 +161,12 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ ok: true, message_id: messageId }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })
-

@@ -1,0 +1,15 @@
+---
+description: Transactional email — Resend via Supabase Edge Functions and shared client helpers
+globs: supabase/functions/**/*.ts,src/shared/email/**/*.ts
+alwaysApply: false
+---
+
+# Email in this project
+
+Read **`docs/EMAIL.md`** before adding or changing outbound email.
+
+**Summary**
+
+- Use **Resend** only from **Supabase Edge Functions**; shared code lives in `supabase/functions/_shared/email/resend.ts`.
+- From the web app, use **`@shared/email/supabaseEdgeEmail`** (or `@shared/email`) — do not scatter raw `supabase.functions.invoke('send-…')` calls.
+- New Edge Function: extend `_shared/email/resend.ts` for sends, add `[functions.<name>] verify_jwt = false` in `supabase/config.toml` if invoked like existing email functions, add a typed wrapper beside `sendOfferByEmail` / `sendWelcomeEmailForPendingInvite` / `sendNotificationEmailNow`, and update **`docs/EMAIL.md`**.

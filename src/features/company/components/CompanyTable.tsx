@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
+  AlertDialog,
   Badge,
   Box,
   Button,
@@ -183,6 +184,10 @@ export default function CompanyTable({
     name: string
     email: string
     kind: 'employee' | 'freelancer'
+  } | null>(null)
+  const [inviteToRevoke, setInviteToRevoke] = React.useState<{
+    id: string
+    email: string
   } | null>(null)
 
   const delInvite = useMutation({
@@ -398,7 +403,10 @@ export default function CompanyTable({
                         color="red"
                         onClick={(e) => {
                           e.stopPropagation()
-                          delInvite.mutate(r.id.replace('invite:', ''))
+                          setInviteToRevoke({
+                            id: r.id.replace('invite:', ''),
+                            email: r.title,
+                          })
                         }}
                         disabled={delInvite.isPending}
                       >
@@ -477,6 +485,44 @@ export default function CompanyTable({
         userKind={userToRemove?.kind ?? 'employee'}
         userId={userToRemove?.id ?? ''}
       />
+
+      <AlertDialog.Root
+        open={!!inviteToRevoke}
+        onOpenChange={(next) => {
+          if (!next) setInviteToRevoke(null)
+        }}
+      >
+        <AlertDialog.Content maxWidth="460px">
+          <AlertDialog.Title>Revoke invite?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            This will cancel the pending invitation to{' '}
+            <Text weight="medium">{inviteToRevoke?.email ?? ''}</Text>. They
+            will not be able to join using the old link.
+          </AlertDialog.Description>
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button variant="soft" disabled={delInvite.isPending}>
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                variant="solid"
+                disabled={delInvite.isPending || !inviteToRevoke}
+                onClick={() => {
+                  if (!inviteToRevoke || delInvite.isPending) return
+                  delInvite.mutate(inviteToRevoke.id, {
+                    onSettled: () => setInviteToRevoke(null),
+                  })
+                }}
+              >
+                {delInvite.isPending ? 'Revoking…' : 'Yes, revoke invite'}
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </div>
   )
 }

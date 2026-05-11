@@ -16,6 +16,10 @@ import {
   HomeDesktopLayout,
   HomeMobileLayout,
 } from '@features/home/components'
+import {
+  defaultHomeDashboardLayoutPreferences,
+  profileHomeLayoutQuery,
+} from '@features/home/api/profileHomeLayoutQuery'
 import { useUpcomingJobs } from '@features/home/hooks/useUpcomingJobs'
 import { useHomeResizeLayout } from '@features/home/hooks/useHomeResizeLayout'
 import {
@@ -121,6 +125,13 @@ export default function HomePage() {
     setIsResizing,
   } = useHomeResizeLayout()
 
+  const { data: homeLayoutPrefs } = useQuery({
+    ...profileHomeLayoutQuery(userId ?? ''),
+    enabled: !!userId && !!companyId,
+  })
+  const homeLayout =
+    homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
+
   if (!companyId) {
     return (
       <Box p="4">
@@ -151,6 +162,7 @@ export default function HomePage() {
         crewConflicts={crewConflicts}
         vehicleConflicts={vehicleConflicts}
         conflictsLoading={conflictsLoading}
+        homeLayout={homeLayout}
       />
     )
   }
@@ -180,6 +192,7 @@ export default function HomePage() {
       crewConflicts={crewConflicts}
       vehicleConflicts={vehicleConflicts}
       conflictsLoading={conflictsLoading}
+      homeLayout={homeLayout}
     />
   )
 }

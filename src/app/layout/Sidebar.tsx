@@ -39,7 +39,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { companyExpansionQuery } from '@features/company/api/queries'
-import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
+import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useMediaQuery } from '../hooks/useMediaQuery'
@@ -208,6 +208,11 @@ function SidebarContent({
       return data.user ?? null
     },
   })
+  const { data: unreadMatters = 0 } = useQuery({
+    ...unreadMattersCountQueryAll(),
+    enabled: !!user?.id,
+  })
+
   const { data: companyExpansion } = useQuery({
     ...(companyId
       ? companyExpansionQuery({ companyId })
@@ -329,14 +334,6 @@ function SidebarContent({
               </Button>
             </Flex>
 
-            {user?.id && (
-              <NotificationCenter
-                userId={user.id}
-                companyId={companyId}
-                onNavigateClick={() => onToggle(false)}
-              />
-            )}
-
             {onLogout && (
               <Button size="2" variant="soft" onClick={onLogout}>
                 Logout
@@ -444,6 +441,22 @@ function SidebarContent({
                         currentPath={currentPath}
                         isMobile={isMobile}
                         onCloseMobile={() => onToggle(false)}
+                        badge={
+                          n.label === 'Matters' && unreadMatters > 0 ? (
+                            <Badge
+                              size="1"
+                              radius="full"
+                              style={{
+                                minWidth: 18,
+                                height: 18,
+                                padding: '0 5px',
+                                fontSize: 11,
+                              }}
+                            >
+                              {unreadMatters > 99 ? '99+' : unreadMatters}
+                            </Badge>
+                          ) : undefined
+                        }
                       />
                     ))}
                   </>

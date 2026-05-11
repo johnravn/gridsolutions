@@ -4,15 +4,12 @@ import {
   Box,
   Button,
   Card,
-  Dialog,
   Flex,
   Grid,
   Heading,
   Progress,
   Avatar as RadixAvatar,
-  Select,
-  Separator,
-  Slider,
+  Tabs,
   Text,
   TextArea,
   TextField,
@@ -22,12 +19,14 @@ import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { Camera, Lock, Palette } from 'iconoir-react'
+import { Camera, Lock } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
-import ThemeToggle from '@shared/theme/ThemeToggle'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import ChangePasswordDialog from '@features/profile/components/ChangePasswordDialog'
+import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatterEmailSettings'
+import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
+import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
 
 type ProfileRow = {
   user_id: string
@@ -70,15 +69,29 @@ type AddressForm = {
   country: string
 }
 
-const FIELD_MAX = 420
-
 export default function ProfilePage() {
   const qc = useQueryClient()
   const { info, success, error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = React.useState(false)
-  const [themeDialogOpen, setThemeDialogOpen] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
+
+  const [isLarge, setIsLarge] = React.useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.matchMedia('(min-width: 1024px)').matches
+      : false,
+  )
+  React.useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => setIsLarge(e.matches)
+    try {
+      mq.addEventListener('change', onChange)
+      return () => mq.removeEventListener('change', onChange)
+    } catch {
+      mq.addListener(onChange)
+      return () => mq.removeListener(onChange)
+    }
+  }, [])
 
   // 1) get current user
   const { data: authUser } = useQuery({
@@ -284,8 +297,15 @@ export default function ProfilePage() {
         if (linkErr) throw linkErr
       }
 
-      // 5c) Update profile core + preferences (note: address removed from preferences)
-      const preferences = {
+      // 5c) Update profile core + preferences (RPC replaces entire JSON — merge first)
+      const prevPrefs =
+        data?.preferences != null &&
+        typeof data.preferences === 'object' &&
+        !Array.isArray(data.preferences)
+          ? { ...(data.preferences as Record<string, unknown>) }
+          : {}
+      const preferences: Record<string, unknown> = {
+        ...prevPrefs,
         date_of_birth: form.date_of_birth || null,
         drivers_license: form.drivers_license || null,
         licenses: licenses.length ? licenses : null,
@@ -297,6 +317,9 @@ export default function ProfilePage() {
         animated_background_speed: form.backgroundSpeed,
         daily_inspiration_type: form.dailyInspirationType,
       }
+      delete preferences.prefer_reduced_motion
+      delete preferences.daily_inspiration_show_attribution
+      delete preferences.daily_inspiration_large_text
 
       const { error: rpcErr } = await supabase.rpc(
         'update_my_profile',
@@ -379,527 +402,375 @@ export default function ProfilePage() {
   }
 
   return (
-    <Card size="4" style={{ minHeight: 0, overflow: 'auto' }}>
-      {/* Header: three columns matching content below */}
-      <Box p="4" pb="0">
-        <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4">
-          {/* Left: name, email, avatar, change photo */}
-          <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
-            <Flex align="center" gap="3" wrap="wrap">
-              <Avatar
-                src={avatarUrl ?? undefined}
-                initials={getInitials(form.display_name || data.email)}
-              />
-              <Box style={{ minWidth: 0 }}>
-                <Heading size="4">{form.display_name || data.email}</Heading>
-                <Text as="div" color="gray" size="2">
-                  {data.email}
-                </Text>
-              </Box>
-            </Flex>
-            <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                style={{ display: 'none' }}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0]
-                  if (!file) return
-                  setUploading(true)
-                  try {
-                    const path = await uploadAvatar(file)
-                    set('avatarPath', path)
-                    info('Photo uploaded', 'Remember to hit Save to apply.')
-                  } catch (err: any) {
-                    toastError(
-                      'Upload failed',
-                      err?.message ?? 'Try another image.',
-                    )
-                  } finally {
-                    setUploading(false)
-                    e.currentTarget.value = ''
-                  }
-                }}
-              />
-              <Button
-                size="2"
-                variant="soft"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={uploading}
-                style={{ width: '100%', minWidth: 0 }}
-              >
-                <Flex gap="2" align="center" justify="center">
-                  <Camera width={16} height={16} />
-                  {uploading ? 'Uploading…' : 'Change photo'}
-                </Flex>
-              </Button>
-              {uploading && (
-                <Box style={{ width: '100%', maxWidth: 200 }}>
-                  <Progress />
-                </Box>
-              )}
-            </Flex>
-          </Flex>
+    <section
+      style={{
+        height: isLarge ? '100%' : undefined,
+        minHeight: 0,
+      }}
+    >
+      <Tabs.Root
+        defaultValue="general"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          height: isLarge ? '100%' : undefined,
+          minHeight: 0,
+        }}
+      >
+        <Tabs.List>
+          <Tabs.Trigger value="general">General</Tabs.Trigger>
+          <Tabs.Trigger value="notifications">Matter notifications</Tabs.Trigger>
+          <Tabs.Trigger value="personalization">Personalization</Tabs.Trigger>
+        </Tabs.List>
 
-          {/* Middle: empty */}
-          <Box style={{ minWidth: 0 }} />
-
-          {/* Right: theme and change password */}
-          <Flex
-            direction="column"
-            gap="2"
-            justify={{ initial: 'start', md: 'end' }}
-            style={{ minWidth: 0 }}
+        <Box
+          pt="4"
+          style={{
+            flex: isLarge ? 1 : undefined,
+            minHeight: isLarge ? 0 : undefined,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <Tabs.Content
+            value="general"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
           >
-            <Button
-              size="2"
-              variant="soft"
-              onClick={() => setThemeDialogOpen(true)}
-              style={{ width: '100%', minWidth: 0 }}
+            <Card
+              size="4"
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                height: isLarge ? '100%' : undefined,
+                minHeight: 0,
+                overflow: 'hidden',
+              }}
             >
-              <Flex gap="2" align="center" justify="center">
-                <Palette width={16} height={16} />
-                Theme & background
-              </Flex>
-            </Button>
-            <Button
-              size="2"
-              variant="soft"
-              onClick={() => setChangePasswordOpen(true)}
-              style={{ width: '100%', minWidth: 0 }}
-            >
-              <Flex gap="2" align="center" justify="center">
-                <Lock width={16} height={16} />
-                Change password
-              </Flex>
-            </Button>
-          </Flex>
-        </Grid>
-      </Box>
-
-      {/* Theme dialog (replaces popover) */}
-      <Dialog.Root open={themeDialogOpen} onOpenChange={setThemeDialogOpen}>
-        <Dialog.Content size="2" style={{ maxWidth: 400 }}>
-          <Dialog.Title>Theme & background</Dialog.Title>
-          <Dialog.Description size="2">
-            Choose theme and background style.
-          </Dialog.Description>
-          <Flex direction="column" gap="4" mt="4">
-                <Box>
-                  <Text
-                    size="2"
-                    weight="bold"
-                    mb="3"
-                    style={{ display: 'block' }}
-                  >
-                    Theme
-                  </Text>
-                  <ThemeToggle />
-                </Box>
-
-                <Separator />
-
-                <Box>
-                  <Text
-                    size="2"
-                    weight="bold"
-                    mb="3"
-                    style={{ display: 'block' }}
-                  >
-                    Background style
-                  </Text>
-                  <Flex gap="3" align="center" mb="3">
-                    <BackgroundOption
-                      label="Animated"
-                      isAnimated={true}
-                      selected={form.animatedBackground}
-                      shapeType={form.backgroundShapeType}
-                      speed={form.backgroundSpeed}
-                      onSelect={async () => {
-                        if (mut.isPending) return
-                        set('animatedBackground', true)
-                        // Save immediately
-                        try {
-                          await mut.mutateAsync()
-                        } catch (err) {
-                          // Error is handled by mutation's onError
-                          // Revert on error
-                          set('animatedBackground', false)
-                        }
-                      }}
-                      disabled={mut.isPending}
-                    />
-                    <BackgroundOption
-                      label="Solid"
-                      isAnimated={false}
-                      selected={!form.animatedBackground}
-                      shapeType={form.backgroundShapeType}
-                      speed={form.backgroundSpeed}
-                      onSelect={async () => {
-                        if (mut.isPending) return
-                        set('animatedBackground', false)
-                        // Save immediately
-                        try {
-                          await mut.mutateAsync()
-                        } catch (err) {
-                          // Error is handled by mutation's onError
-                          // Revert on error
-                          set('animatedBackground', true)
-                        }
-                      }}
-                      disabled={mut.isPending}
-                    />
-                  </Flex>
-                  <Flex direction="column" gap="2">
-                    <Flex align="center" justify="between">
-                      <Text size="2" weight="medium">
-                        Background intensity
-                      </Text>
-                      <Button
-                        size="1"
-                        variant="soft"
-                        onClick={async () => {
-                          if (mut.isPending || !form.animatedBackground) return
-                          set('backgroundIntensity', 0.1)
-                          set('backgroundShapeType', 'circles')
-                          set('backgroundSpeed', 0.5)
-                          try {
-                            await mut.mutateAsync()
-                          } catch (err) {
-                            // Error is handled by mutation's onError
-                          }
-                        }}
-                        disabled={!form.animatedBackground || mut.isPending}
-                      >
-                        Recommended settings
-                      </Button>
-                    </Flex>
-                    <Flex gap="3" align="center">
-                      <Slider
-                        value={[form.backgroundIntensity]}
-                        onValueChange={([value]) => {
-                          set('backgroundIntensity', value)
-                        }}
-                        onValueCommit={async () => {
-                          // Save when user finishes dragging
-                          if (!mut.isPending && form.animatedBackground) {
-                            try {
-                              await mut.mutateAsync()
-                            } catch (err) {
-                              // Error is handled by mutation's onError
-                            }
-                          }
-                        }}
-                        min={0}
-                        max={1}
-                        step={0.1}
-                        disabled={!form.animatedBackground || mut.isPending}
-                        style={{ flex: 1 }}
+              {/* Header: identity + change password */}
+              <Box p="4" pb="3">
+                <Grid
+                  columns={{ initial: '1', md: '1fr auto' }}
+                  gap="4"
+                  align="start"
+                >
+                  <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
+                    <Flex align="center" gap="3" wrap="wrap">
+                      <Avatar
+                        src={avatarUrl ?? undefined}
+                        initials={getInitials(form.display_name || data.email)}
                       />
-                      <Text
-                        size="2"
-                        color={!form.animatedBackground ? 'gray' : undefined}
-                        style={{
-                          minWidth: 40,
-                          textAlign: 'right',
-                          opacity: !form.animatedBackground ? 0.5 : 1,
-                        }}
-                      >
-                        {Math.round(form.backgroundIntensity * 100)}%
-                      </Text>
+                      <Box style={{ minWidth: 0 }}>
+                        <Heading size="4">
+                          {form.display_name || data.email}
+                        </Heading>
+                        <Text as="div" color="gray" size="2">
+                          {data.email}
+                        </Text>
+                      </Box>
                     </Flex>
-                  </Flex>
-
-                  <Separator />
-
-                  <Flex direction="column" gap="2">
-                    <Text size="2" weight="medium">
-                      Shape type
-                    </Text>
-                    <Flex gap="2" wrap="wrap">
-                      {(['circles', 'triangles', 'rectangles'] as const).map(
-                        (shape) => (
-                          <Button
-                            key={shape}
-                            size="2"
-                            variant={
-                              form.backgroundShapeType === shape
-                                ? 'solid'
-                                : 'soft'
-                            }
-                            onClick={async () => {
-                              if (mut.isPending || !form.animatedBackground)
-                                return
-                              set('backgroundShapeType', shape)
-                              try {
-                                await mut.mutateAsync()
-                              } catch (err) {
-                                // Error is handled by mutation's onError
-                              }
-                            }}
-                            disabled={!form.animatedBackground || mut.isPending}
-                            style={{ textTransform: 'capitalize' }}
-                          >
-                            {shape}
-                          </Button>
-                        ),
+                    <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          setUploading(true)
+                          try {
+                            const path = await uploadAvatar(file)
+                            set('avatarPath', path)
+                            info(
+                              'Photo uploaded',
+                              'Remember to hit Save to apply.',
+                            )
+                          } catch (err: any) {
+                            toastError(
+                              'Upload failed',
+                              err?.message ?? 'Try another image.',
+                            )
+                          } finally {
+                            setUploading(false)
+                            e.currentTarget.value = ''
+                          }
+                        }}
+                      />
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        style={{ width: '100%', maxWidth: 280 }}
+                      >
+                        <Flex gap="2" align="center" justify="center">
+                          <Camera width={16} height={16} />
+                          {uploading ? 'Uploading…' : 'Change photo'}
+                        </Flex>
+                      </Button>
+                      {uploading && (
+                        <Box style={{ width: '100%', maxWidth: 280 }}>
+                          <Progress />
+                        </Box>
                       )}
                     </Flex>
                   </Flex>
 
-                  <Separator />
+                  <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
+                    <Button
+                      size="2"
+                      variant="soft"
+                      onClick={() => setChangePasswordOpen(true)}
+                      style={{ width: '100%', minWidth: 160 }}
+                    >
+                      <Flex gap="2" align="center" justify="center">
+                        <Lock width={16} height={16} />
+                        Change password
+                      </Flex>
+                    </Button>
+                  </Flex>
+                </Grid>
+              </Box>
 
-                  <Flex direction="column" gap="2">
-                    <Text size="2" weight="medium">
-                      Animation speed
-                    </Text>
-                    <Flex gap="3" align="center">
-                      <Slider
-                        value={[form.backgroundSpeed]}
-                        onValueChange={([value]) => {
-                          set('backgroundSpeed', value)
-                        }}
-                        onValueCommit={async () => {
-                          // Save when user finishes dragging
-                          if (!mut.isPending && form.animatedBackground) {
-                            try {
-                              await mut.mutateAsync()
-                            } catch (err) {
-                              // Error is handled by mutation's onError
-                            }
+              {/* Three equal columns: personal, address, optional */}
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: 'auto',
+                }}
+                p="4"
+                pt="0"
+              >
+                <Grid
+                  columns={{
+                    initial: '1',
+                    md: 'repeat(2, minmax(0, 1fr))',
+                    lg: 'repeat(3, minmax(0, 1fr))',
+                  }}
+                  gap="5"
+                  align="start"
+                >
+                  <Column title="Personal information">
+                    <Field label="Display name">
+                      <TextField.Root
+                        value={form.display_name}
+                        onChange={(e) => set('display_name', e.target.value)}
+                        placeholder="Shown in the app"
+                      />
+                    </Field>
+                    <Field label="Phone">
+                      <PhoneInputField
+                        value={form.phone || undefined}
+                        onChange={(v) => set('phone', v ?? '')}
+                        defaultCountry="NO"
+                      />
+                    </Field>
+                    <Grid
+                      columns={{ initial: '1', sm: 'repeat(2, minmax(0, 1fr))' }}
+                      gap="3"
+                      width="100%"
+                    >
+                      <Field label="First name">
+                        <TextField.Root
+                          value={form.first_name}
+                          onChange={(e) => set('first_name', e.target.value)}
+                        />
+                      </Field>
+                      <Field label="Last name">
+                        <TextField.Root
+                          value={form.last_name}
+                          onChange={(e) => set('last_name', e.target.value)}
+                        />
+                      </Field>
+                    </Grid>
+                    <Field label="Bio">
+                      <TextArea
+                        value={form.bio}
+                        onChange={(e) => set('bio', e.target.value)}
+                        placeholder="Short description about you…"
+                        rows={5}
+                      />
+                    </Field>
+                  </Column>
+
+                  <Column title="Address">
+                    <Field label="Address line">
+                      <TextField.Root
+                        value={addr.address_line}
+                        onChange={(e) =>
+                          setAddrVal('address_line', e.target.value)
+                        }
+                        placeholder="Street and number"
+                      />
+                    </Field>
+                    <Grid
+                      columns={{
+                        initial: '1',
+                        sm: 'minmax(5.5rem, 0.32fr) minmax(0, 1fr)',
+                      }}
+                      gap="3"
+                      width="100%"
+                    >
+                      <Field label="ZIP">
+                        <NorwayZipCodeField
+                          value={addr.zip_code}
+                          onChange={(val) => setAddrVal('zip_code', val)}
+                          autoCompleteCity={(city) => setAddrVal('city', city)}
+                        />
+                      </Field>
+                      <Field label="City">
+                        <TextField.Root
+                          value={addr.city}
+                          onChange={(e) => setAddrVal('city', e.target.value)}
+                          placeholder="e.g., Oslo"
+                        />
+                      </Field>
+                    </Grid>
+                    <Field label="Country">
+                      <TextField.Root
+                        value={addr.country}
+                        onChange={(e) => setAddrVal('country', e.target.value)}
+                      />
+                    </Field>
+
+                    {mapQuery && (
+                      <Box mt="1" style={{ width: '100%' }}>
+                        <MapEmbed query={mapQuery} zoom={15} />
+                      </Box>
+                    )}
+                  </Column>
+
+                  <Column title="Optional details">
+                    <Field label="Date of birth">
+                      <DateTimePicker
+                        value={
+                          form.date_of_birth
+                            ? new Date(
+                                form.date_of_birth + 'T00:00:00',
+                              ).toISOString()
+                            : ''
+                        }
+                        onChange={(iso) => {
+                          if (iso) {
+                            const d = new Date(iso)
+                            const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+                            set('date_of_birth', dateStr)
+                          } else {
+                            set('date_of_birth', '')
                           }
                         }}
-                        min={0.1}
-                        max={3.0}
-                        step={0.1}
-                        disabled={!form.animatedBackground || mut.isPending}
-                        style={{ flex: 1 }}
+                        dateOnly
                       />
-                      <Text
-                        size="2"
-                        color={!form.animatedBackground ? 'gray' : undefined}
-                        style={{
-                          minWidth: 50,
-                          textAlign: 'right',
-                          opacity: !form.animatedBackground ? 0.5 : 1,
-                        }}
-                      >
-                        {form.backgroundSpeed.toFixed(1)}x
-                      </Text>
-                    </Flex>
-                    <Text
-                      size="1"
-                      color="gray"
-                      style={{
-                        opacity: !form.animatedBackground ? 0.5 : 1,
-                      }}
-                    >
-                      {form.backgroundSpeed < 1.0
-                        ? 'Slower'
-                        : form.backgroundSpeed > 1.0
-                          ? 'Faster'
-                          : 'Normal'}
-                    </Text>
-                  </Flex>
-                </Box>
-              </Flex>
-          <Flex gap="3" justify="end" mt="4">
-            <Dialog.Close>
-              <Button type="button" variant="soft">
-                Done
-              </Button>
-            </Dialog.Close>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
+                    </Field>
+                    <Field label="Driver’s license">
+                      <TextField.Root
+                        value={form.drivers_license}
+                        onChange={(e) =>
+                          set('drivers_license', e.target.value)
+                        }
+                        placeholder="e.g., B, BE"
+                      />
+                    </Field>
+                    <Field label="Other licenses (comma separated)">
+                      <TextField.Root
+                        value={form.licensesCsv}
+                        onChange={(e) => set('licensesCsv', e.target.value)}
+                        placeholder="e.g., Lift, Forklift"
+                      />
+                    </Field>
+                    <Field label="Certificates (comma separated)">
+                      <TextField.Root
+                        value={form.certificatesCsv}
+                        onChange={(e) => set('certificatesCsv', e.target.value)}
+                        placeholder="e.g., HSE, First aid"
+                      />
+                    </Field>
+                    <Field label="Other notes">
+                      <TextArea
+                        value={form.notes}
+                        onChange={(e) => set('notes', e.target.value)}
+                        rows={5}
+                      />
+                    </Field>
+                  </Column>
+                </Grid>
+              </Box>
 
-      {/* Three columns: personal (left), address (middle), optional (right) */}
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
-        <Flex direction="column" gap="4" p="4">
-          <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4">
-            {/* LEFT: Personal information */}
-            <Column title="Personal information">
-              <Field label="Display name" maxWidth={FIELD_MAX}>
-                <TextField.Root
-                  value={form.display_name}
-                  onChange={(e) => set('display_name', e.target.value)}
-                  placeholder="Shown in the app"
-                />
-              </Field>
-              <Field label="Phone" maxWidth={FIELD_MAX}>
-                <PhoneInputField
-                  value={form.phone || undefined}
-                  onChange={(v) => set('phone', v ?? '')}
-                  defaultCountry="NO"
-                />
-              </Field>
-              <FieldRow>
-                <Field label="First name" maxWidth={FIELD_MAX}>
-                  <TextField.Root
-                    value={form.first_name}
-                    onChange={(e) => set('first_name', e.target.value)}
-                  />
-                </Field>
-                <Field label="Last name" maxWidth={FIELD_MAX}>
-                  <TextField.Root
-                    value={form.last_name}
-                    onChange={(e) => set('last_name', e.target.value)}
-                  />
-                </Field>
-              </FieldRow>
-              <Field label="Bio" maxWidth={680}>
-                <TextArea
-                  value={form.bio}
-                  onChange={(e) => set('bio', e.target.value)}
-                  placeholder="Short description about you…"
-                  rows={5}
-                />
-              </Field>
-              <Field label="Homepage inspiration" maxWidth={FIELD_MAX}>
-                <Select.Root
-                  value={form.dailyInspirationType}
-                  onValueChange={(v) =>
-                    set('dailyInspirationType', v as 'quote' | 'bibleverse')
+              <Flex justify="end" gap="3" p="4" pt="3">
+                <Button
+                  size="2"
+                  variant="soft"
+                  color="gray"
+                  onClick={() =>
+                    qc.invalidateQueries({ queryKey: ['profile', authUser?.id] })
                   }
+                  disabled={mut.isPending}
                 >
-                  <Select.Trigger placeholder="Select…" style={{ width: '100%' }} />
-                  <Select.Content>
-                    <Select.Item value="quote">Quote of the day</Select.Item>
-                    <Select.Item value="bibleverse">Bible verse of the day</Select.Item>
-                  </Select.Content>
-                </Select.Root>
-              </Field>
-            </Column>
+                  Reset
+                </Button>
+                <Button
+                  size="2"
+                  onClick={() => mut.mutate()}
+                  disabled={mut.isPending}
+                >
+                  {mut.isPending ? 'Saving…' : 'Save'}
+                </Button>
+              </Flex>
+              <ChangePasswordDialog
+                open={changePasswordOpen}
+                onOpenChange={setChangePasswordOpen}
+                userEmail={data.email}
+              />
+            </Card>
+          </Tabs.Content>
 
-            {/* MIDDLE: Address (normalized) */}
-            <Column title="Address">
-              {/* <Field label="Label (home, office…)" maxWidth={FIELD_MAX}>
-                <TextField.Root
-                  value={addr.name}
-                  onChange={(e) => setAddrVal('name', e.target.value)}
-                  placeholder="e.g., Home"
-                />
-              </Field> */}
-              <Field label="Address line" maxWidth={520}>
-                <TextField.Root
-                  value={addr.address_line}
-                  onChange={(e) => setAddrVal('address_line', e.target.value)}
-                  placeholder="Street and number"
-                />
-              </Field>
-              <FieldRow>
-                <Flex gap={'2'} width={'100%'}>
-                  <Field label="ZIP" maxWidth={100}>
-                    <NorwayZipCodeField
-                      value={addr.zip_code}
-                      onChange={(val) => setAddrVal('zip_code', val)}
-                      autoCompleteCity={(city) => setAddrVal('city', city)}
-                    />
-                  </Field>
-                  <Field label="City" maxWidth={FIELD_MAX}>
-                    <TextField.Root
-                      value={addr.city}
-                      onChange={(e) => setAddrVal('city', e.target.value)}
-                      placeholder="e.g., Oslo"
-                    />
-                  </Field>
-                </Flex>
-              </FieldRow>
-              <Field label="Country" maxWidth={FIELD_MAX}>
-                <TextField.Root
-                  value={addr.country}
-                  onChange={(e) => setAddrVal('country', e.target.value)}
-                />
-              </Field>
+          <Tabs.Content
+            value="notifications"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <ProfileMatterEmailSettings />
+          </Tabs.Content>
 
-              {/* Live map preview (only if we have something to show) */}
-              {mapQuery && (
-                <Box mt="2" style={{ maxWidth: 520 }}>
-                  <MapEmbed query={mapQuery} zoom={15} />
-                </Box>
-              )}
-            </Column>
-
-            {/* RIGHT: Optional info */}
-            <Column title="Optional details">
-              <Field label="Date of birth" maxWidth={FIELD_MAX}>
-                <DateTimePicker
-                  value={
-                    form.date_of_birth
-                      ? new Date(form.date_of_birth + 'T00:00:00').toISOString()
-                      : ''
-                  }
-                  onChange={(iso) => {
-                    if (iso) {
-                      const d = new Date(iso)
-                      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-                      set('date_of_birth', dateStr)
-                    } else {
-                      set('date_of_birth', '')
-                    }
-                  }}
-                  dateOnly
-                />
-              </Field>
-              <Field label="Driver’s license" maxWidth={FIELD_MAX}>
-                <TextField.Root
-                  value={form.drivers_license}
-                  onChange={(e) => set('drivers_license', e.target.value)}
-                  placeholder="e.g., B, BE"
-                />
-              </Field>
-              <Field label="Other licenses (comma separated)" maxWidth={520}>
-                <TextField.Root
-                  value={form.licensesCsv}
-                  onChange={(e) => set('licensesCsv', e.target.value)}
-                  placeholder="e.g., Lift, Forklift"
-                />
-              </Field>
-              <Field label="Certificates (comma separated)" maxWidth={520}>
-                <TextField.Root
-                  value={form.certificatesCsv}
-                  onChange={(e) => set('certificatesCsv', e.target.value)}
-                  placeholder="e.g., HSE, First aid"
-                />
-              </Field>
-              <Field label="Other notes" maxWidth={520}>
-                <TextArea
-                  value={form.notes}
-                  onChange={(e) => set('notes', e.target.value)}
-                  rows={5}
-                />
-              </Field>
-            </Column>
-          </Grid>
-        </Flex>
-      </div>
-
-      {/* <Separator /> */}
-
-      {/* Footer actions */}
-      <Flex justify="end" gap="3" p="3">
-        <Button
-          size="2"
-          variant="soft"
-          color="gray"
-          onClick={() =>
-            qc.invalidateQueries({ queryKey: ['profile', authUser?.id] })
-          }
-          disabled={mut.isPending}
-        >
-          Reset
-        </Button>
-        <Button size="2" onClick={() => mut.mutate()} disabled={mut.isPending}>
-          {mut.isPending ? 'Saving…' : 'Save'}
-        </Button>
-      </Flex>
-      <ChangePasswordDialog
-        open={changePasswordOpen}
-        onOpenChange={setChangePasswordOpen}
-        userEmail={data.email}
-      />
-    </Card>
+          <Tabs.Content
+            value="personalization"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <ProfilePersonalizationTab
+              form={
+                {
+                  animatedBackground: form.animatedBackground,
+                  backgroundIntensity: form.backgroundIntensity,
+                  backgroundShapeType: form.backgroundShapeType,
+                  backgroundSpeed: form.backgroundSpeed,
+                  dailyInspirationType: form.dailyInspirationType,
+                } satisfies ProfilePersonalizationFormSlice
+              }
+              patchForm={(patch: Partial<ProfilePersonalizationFormSlice>) =>
+                setForm((s) => ({ ...s, ...patch }))
+              }
+              saveProfile={() => mut.mutateAsync()}
+              isSaving={mut.isPending}
+            />
+          </Tabs.Content>
+        </Box>
+      </Tabs.Root>
+    </section>
   )
 }
 
@@ -913,21 +784,17 @@ function Column({
   children: React.ReactNode
 }) {
   return (
-    <Box>
-      <Heading size="3" mb="2">
+    <Flex
+      direction="column"
+      gap="3"
+      style={{ minWidth: 0, width: '100%', alignSelf: 'stretch' }}
+    >
+      <Heading size="3" mb="0">
         {title}
       </Heading>
-      <Flex direction="column" gap="3">
+      <Flex direction="column" gap="3" style={{ width: '100%' }}>
         {children}
       </Flex>
-    </Box>
-  )
-}
-
-function FieldRow({ children }: { children: React.ReactNode }) {
-  return (
-    <Flex wrap="wrap" gap="3" style={{ alignItems: 'start' }}>
-      {children}
     </Flex>
   )
 }
@@ -935,14 +802,23 @@ function FieldRow({ children }: { children: React.ReactNode }) {
 function Field({
   label,
   children,
-  maxWidth = FIELD_MAX,
+  maxWidth,
 }: {
   label: string
   children: React.ReactNode
   maxWidth?: number
 }) {
   return (
-    <Box style={{ maxWidth, width: 'min(100%, ' + maxWidth + 'px)' }}>
+    <Box
+      style={
+        maxWidth != null
+          ? {
+              maxWidth,
+              width: `min(100%, ${maxWidth}px)`,
+            }
+          : { width: '100%', minWidth: 0 }
+      }
+    >
       <Text as="div" size="2" color="gray" mb="1">
         {label}
       </Text>
@@ -960,230 +836,5 @@ function Avatar({ src, initials }: { src?: string; initials: string }) {
       src={src}
       style={{ border: '1px solid var(--gray-5)' }}
     />
-  )
-}
-
-// Using shared getInitials from generalFunctions
-
-function BackgroundOption({
-  label,
-  isAnimated,
-  selected,
-  onSelect,
-  disabled,
-  shapeType,
-  speed,
-}: {
-  label: string
-  isAnimated: boolean
-  selected: boolean
-  onSelect: () => void
-  disabled?: boolean
-  shapeType?: 'circles' | 'triangles' | 'rectangles'
-  speed?: number
-}) {
-  return (
-    <Box
-      style={{
-        position: 'relative',
-        width: 120,
-        height: 80,
-        borderRadius: 8,
-        overflow: 'hidden',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.5 : 1,
-        border: selected
-          ? '2px solid var(--accent-9)'
-          : '2px solid var(--gray-6)',
-        transition: 'border-color 0.2s',
-      }}
-      onClick={disabled ? undefined : onSelect}
-    >
-      {/* Background preview */}
-      {isAnimated ? (
-        <AnimatedBackgroundPreview
-          shapeType={shapeType || 'circles'}
-          speed={speed || 1.0}
-        />
-      ) : (
-        <Box
-          style={{
-            width: '100%',
-            height: '100%',
-            backgroundColor: 'var(--gray-1)',
-          }}
-        />
-      )}
-      {/* Label overlay */}
-      <Box
-        style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: '6px 8px',
-          backgroundColor: selected ? 'var(--accent-9)' : 'rgba(0, 0, 0, 0.6)',
-          backdropFilter: 'blur(4px)',
-          transition: 'background-color 0.2s',
-        }}
-      >
-        <Text
-          size="1"
-          weight="medium"
-          style={{
-            color: selected ? 'var(--accent-contrast)' : 'var(--gray-12)',
-            textAlign: 'center',
-            display: 'block',
-          }}
-        >
-          {label}
-        </Text>
-      </Box>
-    </Box>
-  )
-}
-
-function AnimatedBackgroundPreview({
-  shapeType = 'circles',
-  speed = 1.0,
-}: {
-  shapeType?: 'circles' | 'triangles' | 'rectangles'
-  speed?: number
-}) {
-  // Calculate durations based on speed (similar to main background)
-  const speedMultiplier = Math.max(0.1, Math.min(3.0, speed))
-  const baseDurations = [6, 8, 10, 7]
-  const durations = baseDurations.map((d) => d / speedMultiplier)
-
-  // Rotation durations - much slower for subtle rotation
-  const baseRotationDurations = [15, 21, 18, 19]
-  const rotationDurations = baseRotationDurations.map(
-    (d) => d / speedMultiplier,
-  )
-
-  // Initial rotation angles
-  const initialRotations = [15, 30, 45, 60]
-
-  // Calculate rotation amounts (degrees per slide cycle)
-  const rotationAmounts = durations.map((slideDur, idx) =>
-    Math.round((slideDur / rotationDurations[idx]) * 360),
-  )
-
-  return (
-    <Box
-      style={{
-        width: '100%',
-        height: '100%',
-        position: 'relative',
-        overflow: 'hidden',
-        backgroundColor: 'var(--gray-1)',
-      }}
-    >
-      <style>{`
-        @keyframes previewSlide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(calc(120px + 100%)); }
-        }
-        
-        @keyframes previewSlideReverse {
-          0% { transform: translateX(calc(120px + 100%)); }
-          100% { transform: translateX(-100%); }
-        }
-        
-        @keyframes previewSlideWithRotate1 {
-          0% { transform: translateX(-100%) rotate(${initialRotations[0]}deg); }
-          100% { transform: translateX(calc(120px + 100%)) rotate(${initialRotations[0] + rotationAmounts[0]}deg); }
-        }
-        
-        @keyframes previewSlideReverseWithRotate2 {
-          0% { transform: translateX(calc(120px + 100%)) rotate(${initialRotations[1]}deg); }
-          100% { transform: translateX(-100%) rotate(${initialRotations[1] - rotationAmounts[1]}deg); }
-        }
-        
-        @keyframes previewSlideWithRotate3 {
-          0% { transform: translateX(-100%) rotate(${initialRotations[2]}deg); }
-          100% { transform: translateX(calc(120px + 100%)) rotate(${initialRotations[2] + rotationAmounts[2]}deg); }
-        }
-        
-        @keyframes previewSlideReverseWithRotate4 {
-          0% { transform: translateX(calc(120px + 100%)) rotate(${initialRotations[3]}deg); }
-          100% { transform: translateX(-100%) rotate(${initialRotations[3] - rotationAmounts[3]}deg); }
-        }
-        
-        .preview-shape {
-          position: absolute;
-          opacity: 0.4;
-        }
-        
-        .preview-shape-1 {
-          width: 70px;
-          height: 70px;
-          background: var(--accent-a3);
-          top: -15px;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `previewSlideWithRotate1 ${durations[0]}s linear infinite`
-              : `previewSlide ${durations[0]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 8px;' : ''}
-        }
-        
-        .preview-shape-2 {
-          width: 55px;
-          height: 55px;
-          background: var(--accent-a2);
-          top: 15px;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `previewSlideReverseWithRotate2 ${durations[1]}s linear infinite`
-              : `previewSlideReverse ${durations[1]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 10px;' : ''}
-        }
-        
-        .preview-shape-3 {
-          width: 65px;
-          height: 65px;
-          background: var(--accent-a3);
-          bottom: -10px;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `previewSlideWithRotate3 ${durations[2]}s linear infinite`
-              : `previewSlide ${durations[2]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 8px;' : ''}
-        }
-        
-        .preview-shape-4 {
-          width: 45px;
-          height: 45px;
-          background: var(--accent-a2);
-          top: 50%;
-          left: 0;
-          margin-top: -22.5px;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `previewSlideReverseWithRotate4 ${durations[3]}s linear infinite`
-              : `previewSlideReverse ${durations[3]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 12px;' : ''}
-        }
-      `}</style>
-      <div className="preview-shape preview-shape-1" />
-      <div className="preview-shape preview-shape-2" />
-      <div className="preview-shape preview-shape-3" />
-      <div className="preview-shape preview-shape-4" />
-    </Box>
   )
 }

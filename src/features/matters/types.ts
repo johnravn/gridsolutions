@@ -1,9 +1,13 @@
+/** DB may still contain legacy `vote` / `chat` rows; app only creates the first three. */
 export type MatterType =
   | 'crew_invite'
   | 'vote'
   | 'announcement'
   | 'chat'
   | 'update'
+
+/** Matter kinds users can compose from the Matters UI (system creates updates). */
+export type ComposableMatterType = 'announcement'
 export type MatterRecipientStatus =
   | 'pending'
   | 'sent'
@@ -120,6 +124,7 @@ export type CreateMatterInput = {
   is_anonymous?: boolean
   allow_custom_responses?: boolean
   created_as_company?: boolean
+  metadata?: Record<string, unknown> | null
   files?: Array<File>
   /** When true, send email to all recipients regardless of their notification preferences (e.g. announcements). */
   forceEmailAll?: boolean
@@ -143,12 +148,3 @@ export type MatterFile = {
   } | null
 }
 
-export type CreateVoteInput = {
-  company_id: string
-  title: string
-  content?: string | null
-  recipient_user_ids: Array<string>
-  is_anonymous?: boolean
-  allow_custom_responses?: boolean
-  files?: Array<File>
-}

@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { BibleVerseSection } from './BibleVerseSection'
@@ -17,8 +16,10 @@ export function DailyInspirationSection({ userId }: { userId: string | null }) {
         .eq('user_id', userId)
         .maybeSingle()
       if (error) throw error
-      const prefs = (data as any)?.preferences as unknown
-      const raw = (prefs as any)?.daily_inspiration_type
+      const prefs = (data as { preferences?: unknown } | null)?.preferences as
+        | Record<string, unknown>
+        | undefined
+      const raw = prefs?.daily_inspiration_type
       return normalizeDailyInspirationType(raw)
     },
     staleTime: 1000 * 60 * 60 * 12,
@@ -30,4 +31,3 @@ export function DailyInspirationSection({ userId }: { userId: string | null }) {
   if (resolved === 'bibleverse') return <BibleVerseSection />
   return <QuoteSection />
 }
-

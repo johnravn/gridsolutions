@@ -2,12 +2,13 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import * as Toast from '@radix-ui/react-toast'
-import { Button, Flex, Text } from '@radix-ui/themes'
+import { Button, Flex, IconButton, Text } from '@radix-ui/themes'
 import {
   CheckCircleSolid,
   InfoCircle,
   Undo,
   WarningTriangle,
+  Xmark,
 } from 'iconoir-react'
 
 type ToastKind = 'success' | 'error' | 'info'
@@ -127,46 +128,49 @@ function ToastItem({
         position: 'relative',
       }}
     >
-      {/* Timer, undo button, and copy button in top right */}
-      {(t.onUndo || t.kind === 'error') && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'flex-end',
-            gap: 6,
-          }}
-        >
-          {duration > 0 && (
-            <Text
-              size="1"
-              color="gray"
-              style={{
-                fontWeight: 500,
-              }}
-            >
-              {Math.ceil(timeRemaining / 1000)}s
-            </Text>
-          )}
-          {t.onUndo && (
-            <Button
-              size="2"
-              variant="ghost"
-              color="gray"
-              onClick={handleUndo}
-              style={{
-                fontWeight: 500,
-              }}
-            >
-              <Undo width={14} height={14} />
-              {t.undoLabel || 'Undo'}
-            </Button>
-          )}
-        </div>
-      )}
+      {/* Dismiss (always), optional countdown + undo */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 6,
+          right: 6,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 4,
+          zIndex: 1,
+        }}
+      >
+        <Toast.Close asChild>
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            aria-label="Dismiss notification"
+          >
+            <Xmark width={18} height={18} strokeWidth={1.75} />
+          </IconButton>
+        </Toast.Close>
+        {(t.onUndo || t.kind === 'error') && duration > 0 && (
+          <Text size="1" color="gray" style={{ fontWeight: 500 }}>
+            {Math.ceil(timeRemaining / 1000)}s
+          </Text>
+        )}
+        {t.onUndo && (
+          <Button
+            size="2"
+            variant="ghost"
+            color="gray"
+            onClick={handleUndo}
+            style={{
+              fontWeight: 500,
+            }}
+          >
+            <Undo width={14} height={14} />
+            {t.undoLabel || 'Undo'}
+          </Button>
+        )}
+      </div>
 
       <div
         style={{
@@ -194,7 +198,7 @@ function ToastItem({
                 fontSize: 14,
                 lineHeight: '20px',
                 marginBottom: t.description ? 4 : 0,
-                paddingRight: t.onUndo || t.kind === 'error' ? 100 : 0, // Make room for timer and button(s)
+                paddingRight: t.onUndo || t.kind === 'error' ? 100 : 44,
               }}
             >
               {t.title}
@@ -295,15 +299,14 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
       <Toast.Provider swipeDirection="right">
         {children}
 
-        {/* Render all active toasts */}
-        {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} onRemove={remove} />
-        ))}
-
-        {/* Portal viewport to document.body to ensure it's rendered after dialogs in DOM order */}
+        {/* Register viewport before toast roots so portals resolve immediately */}
         {mounted && typeof document !== 'undefined'
           ? createPortal(viewport, document.body)
           : viewport}
+
+        {toasts.map((t) => (
+          <ToastItem key={t.id} toast={t} onRemove={remove} />
+        ))}
       </Toast.Provider>
     </ToastCtx.Provider>
   )

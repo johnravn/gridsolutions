@@ -1,9 +1,10 @@
 // src/shared/auth/useAuthz.ts
+import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { capabilitiesFor } from './permissions'
-import type { CapabilitySet, CompanyRole } from './permissions'
+import type { Capability, CapabilitySet, CompanyRole } from './permissions'
 
 type AuthzData = {
   isGlobalSuperuser: boolean
@@ -82,11 +83,18 @@ export function useAuthz() {
     },
   })
 
+  // While authz is loading, `data` stays undefined — avoid returning a fresh `new Set()` every
+  // render (unstable reference → needless child rerenders / effect churn, e.g. RequireCap deps).
+  const caps = React.useMemo((): CapabilitySet => {
+    if (data?.caps) return data.caps
+    return new Set<Capability>()
+  }, [data])
+
   return {
     loading: isLoading,
     isGlobalSuperuser: data?.isGlobalSuperuser ?? false,
     companyRole: data?.companyRole ?? null,
-    caps: data?.caps ?? new Set(),
+    caps,
     userId: data?.userId ?? null,
   }
 }

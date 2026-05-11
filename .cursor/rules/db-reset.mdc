@@ -1,0 +1,16 @@
+---
+description: Always use db:reset:with-data instead of db:reset for local database resets
+alwaysApply: true
+---
+
+# Local DB Reset
+
+When you need to reset the local Supabase database, ALWAYS run:
+
+```bash
+npm run db:reset:with-data
+```
+
+Never run `npm run db:reset` directly. The `:with-data` variant wraps `db:reset` + `db:copy-data` (see `scripts/reset-with-data.js`) so the local DB is repopulated from remote and is actually usable for development. A bare `db:reset` leaves an empty database.
+
+This applies everywhere — including docs, READMEs, suggested commands, migration workflows, and instructions you write for other agents or users. If you see `npm run db:reset` referenced as a standalone step, treat it as a bug and replace it with `npm run db:reset:with-data` (unless the context is explicitly the script definition in `package.json`).

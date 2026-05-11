@@ -10,19 +10,9 @@ import {
   Heading,
   Separator,
   Table,
-  Tabs,
   Text,
-  TextArea,
 } from '@radix-ui/themes'
-import {
-  ArrowRight,
-  Check,
-  Download,
-  Edit,
-  Send,
-  Trash,
-  Xmark,
-} from 'iconoir-react'
+import { ArrowRight, Check, Download, Edit, Trash, Xmark } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
@@ -38,9 +28,7 @@ import {
   matterFilesQuery,
   matterMessagesQuery,
   matterRecipientsQuery,
-  matterResponsesQuery,
   respondToMatter,
-  sendMessage,
 } from '../api/queries'
 
 export default function MatterDetail({
@@ -56,23 +44,39 @@ export default function MatterDetail({
   const { companyId } = useCompany()
   const { companyRole } = useAuthz()
   const navigate = useNavigate()
-  const [newMessage, setNewMessage] = React.useState('')
   const [isEditingResponse, setIsEditingResponse] = React.useState(false)
 
   const { data: matter } = useQuery({
     ...matterDetailQuery(matterId),
   })
 
+  const canSeeAnnouncementRecipients = React.useMemo(() => {
+    if (
+      !matter ||
+      matter.id !== matterId ||
+      matter.matter_type !== 'announcement' ||
+      !user?.id
+    ) {
+      return false
+    }
+    if (user.id === matter.created_by_user_id) return true
+    if (companyRole === 'owner') return true
+    return false
+  }, [matter, matterId, user?.id, companyRole])
+
   const { data: recipients = [] } = useQuery({
     ...matterRecipientsQuery(matterId),
+    enabled: canSeeAnnouncementRecipients,
   })
 
-  const { data: responses = [] } = useQuery({
-    ...matterResponsesQuery(matterId),
-  })
+  const hasInvitationMeta = !!(matter?.metadata as any)?.invitation_message
 
   const { data: messages = [] } = useQuery({
     ...matterMessagesQuery(matterId),
+    enabled:
+      !!matter &&
+      matter.matter_type === 'crew_invite' &&
+      !hasInvitationMeta,
   })
 
   const { data: files } = useQuery({
@@ -80,8 +84,10 @@ export default function MatterDetail({
   })
   const matterFiles = files || []
 
-  // Get invitation message (first message from creator) for crew_invite
   const invitationMessage = React.useMemo(() => {
+    const meta = (matter?.metadata as { invitation_message?: string } | null)
+      ?.invitation_message
+    if (meta?.trim()) return meta.trim()
     if (
       !matter ||
       matter.matter_type !== 'crew_invite' ||
@@ -89,11 +95,10 @@ export default function MatterDetail({
     ) {
       return null
     }
-    // Find the first message from the creator
     const creatorMessage = messages.find(
       (msg) => msg.user_id === matter.created_by_user_id,
     )
-    return creatorMessage ? creatorMessage.content : null
+    return creatorMessage?.content ?? null
   }, [messages, matter])
 
   // Fetch additional job and time period details for crew_invite matters
@@ -216,21 +221,16 @@ export default function MatterDetail({
     },
   })
 
-  // Calculate recipient summary (must be at component level, not in JSX)
   const recipientSummary = React.useMemo(() => {
     const totalRecipients = recipients.length
-    const respondedCount = recipients.filter((r) => !!r.response).length
     const viewedCount = recipients.filter((r) => r.viewed_at).length
-    const pendingCount = totalRecipients - respondedCount
-    const allResponded =
-      respondedCount === totalRecipients && totalRecipients > 0
-
+    const pendingCount = totalRecipients - viewedCount
+    const allViewed = viewedCount === totalRecipients && totalRecipients > 0
     return {
       totalRecipients,
-      respondedCount,
       viewedCount,
       pendingCount,
-      allResponded,
+      allViewed,
     }
   }, [recipients])
 
@@ -291,22 +291,6 @@ export default function MatterDetail({
     },
   })
 
-  const send = useMutation({
-    mutationFn: async () => {
-      if (!newMessage.trim()) {
-        throw new Error('Message cannot be empty')
-      }
-      await sendMessage(matterId, newMessage)
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['matters', 'messages', matterId] })
-      setNewMessage('')
-    },
-    onError: (e: any) => {
-      toastError('Failed', e?.message || 'Could not send message')
-    },
-  })
-
   // Build address string for map query (must be before early return to follow Rules of Hooks)
   const mapQuery = React.useMemo(() => {
     if (!crewInviteDetails) return null
@@ -350,10 +334,10 @@ export default function MatterDetail({
 
   const getTypeBadge = () => {
     const variants: Record<string, { color: string; label: string }> = {
-      crew_invite: { color: 'blue', label: 'Crew Invitation' },
-      vote: { color: 'purple', label: 'Vote' },
+      crew_invite: { color: 'blue', label: 'Invite' },
+      vote: { color: 'purple', label: 'Vote (legacy)' },
       announcement: { color: 'gray', label: 'Announcement' },
-      chat: { color: 'green', label: 'Chat' },
+      chat: { color: 'green', label: 'Chat (legacy)' },
       update: { color: 'amber', label: 'Update' },
     }
     const v = variants[matter.matter_type] ?? variants.announcement
@@ -790,479 +774,67 @@ export default function MatterDetail({
         </Dialog.Content>
       </Dialog.Root>
 
-      {/* Tabs - hide for crew_invite */}
-      {matter.matter_type !== 'crew_invite' && (
-        <Tabs.Root
-          defaultValue={
-            matter.matter_type === 'vote'
-              ? 'responses'
-              : matter.matter_type === 'announcement'
-                ? user?.id === matter.created_by_user_id
-                  ? 'recipients'
-                  : undefined
-                : 'chat'
-          }
-        >
-          <Tabs.List>
-            {matter.matter_type === 'vote' && (
-              <Tabs.Trigger value="responses">
-                Responses ({responses.length})
-              </Tabs.Trigger>
-            )}
-            {matter.matter_type !== 'announcement' &&
-              !(matter.matter_type === 'vote' && matter.is_anonymous) && (
-                <Tabs.Trigger value="chat">
-                  Chat ({messages.length})
-                </Tabs.Trigger>
-              )}
-            {(matter.matter_type !== 'announcement' ||
-              user?.id === matter.created_by_user_id) && (
-              <Tabs.Trigger value="recipients">Recipients</Tabs.Trigger>
-            )}
-          </Tabs.List>
-
-          <Box mt="3">
-            {(matter.matter_type !== 'announcement' ||
-              user?.id === matter.created_by_user_id) && (
-              <Tabs.Content value="recipients">
-                {/* For anonymous votes, only show summary count, not individual recipients */}
-                {matter.matter_type === 'vote' && matter.is_anonymous ? (
-                  <Box
-                    mb="4"
-                    p="3"
-                    style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
-                  >
-                    <Flex direction="column" gap="1">
-                      <Text size="3" weight="medium">
-                        {recipientSummary.respondedCount} of{' '}
-                        {recipientSummary.totalRecipients} recipient
-                        {recipientSummary.totalRecipients !== 1 ? 's' : ''} have
-                        responded
-                      </Text>
-                      <Text size="2" color="gray" mt="2">
-                        This is an anonymous vote. Individual responses and
-                        viewing status are hidden.
-                      </Text>
-                    </Flex>
-                  </Box>
-                ) : (
-                  <>
-                    {/* Summary message */}
-                    <Box
-                      mb="4"
-                      p="3"
-                      style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
-                    >
-                      {recipientSummary.allResponded ? (
-                        <Text size="3" weight="medium" color="green">
-                          ✓ All recipients have responded
-                        </Text>
-                      ) : (
-                        <Flex direction="column" gap="1">
-                          <Text size="3" weight="medium">
-                            {recipientSummary.pendingCount} of{' '}
-                            {recipientSummary.totalRecipients} recipient
-                            {recipientSummary.pendingCount !== 1
-                              ? 's'
-                              : ''}{' '}
-                            {recipientSummary.pendingCount === 1
-                              ? 'has'
-                              : 'have'}{' '}
-                            not responded
-                          </Text>
-                          <Text size="2" color="gray">
-                            {recipientSummary.viewedCount} of{' '}
-                            {recipientSummary.totalRecipients} viewed
-                          </Text>
-                        </Flex>
-                      )}
-                    </Box>
-
-                    <Table.Root variant="surface">
-                      <Table.Header>
-                        <Table.Row>
-                          <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>
-                            Viewed
-                          </Table.ColumnHeaderCell>
-                          {matter.matter_type === 'vote' && (
-                            <Table.ColumnHeaderCell>
-                              Responded
-                            </Table.ColumnHeaderCell>
-                          )}
-                        </Table.Row>
-                      </Table.Header>
-                      <Table.Body>
-                        {recipients.map((r) => {
-                          const isViewed = !!r.viewed_at
-
-                          // Determine viewed badge color
-                          const viewedColor = isViewed ? 'green' : 'orange'
-
-                          return (
-                            <Table.Row key={r.id}>
-                              <Table.Cell>
-                                {r.user?.display_name ||
-                                  r.user?.email ||
-                                  'Unknown'}
-                              </Table.Cell>
-                              <Table.Cell>
-                                {isViewed ? (
-                                  <Badge
-                                    radius="full"
-                                    size="1"
-                                    color={viewedColor}
-                                  >
-                                    Viewed
-                                  </Badge>
-                                ) : (
-                                  <Badge radius="full" size="1" color="orange">
-                                    Pending
-                                  </Badge>
-                                )}
-                              </Table.Cell>
-                              {matter.matter_type === 'vote' && (
-                                <Table.Cell>
-                                  {r.response ? (
-                                    <Badge
-                                      radius="full"
-                                      size="1"
-                                      color={
-                                        r.response.response.toLowerCase() ===
-                                        'approved'
-                                          ? 'green'
-                                          : r.response.response.toLowerCase() ===
-                                              'rejected'
-                                            ? 'red'
-                                            : 'blue'
-                                      }
-                                    >
-                                      {r.response.response.toLowerCase() ===
-                                      'approved'
-                                        ? 'Approved'
-                                        : r.response.response.toLowerCase() ===
-                                            'rejected'
-                                          ? 'Rejected'
-                                          : r.response.response}
-                                    </Badge>
-                                  ) : (
-                                    <Badge
-                                      radius="full"
-                                      size="1"
-                                      color="orange"
-                                    >
-                                      Pending
-                                    </Badge>
-                                  )}
-                                </Table.Cell>
-                              )}
-                            </Table.Row>
-                          )
-                        })}
-                      </Table.Body>
-                    </Table.Root>
-                  </>
-                )}
-              </Tabs.Content>
-            )}
-
-            {matter.matter_type === 'vote' && (
-              <Tabs.Content value="responses">
-                {/* Vote summary counters */}
-                {responses.length > 0 && (
-                  <Box
-                    mb="4"
-                    p="3"
-                    style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
-                  >
-                    <Flex align="center" gap="4">
-                      <Flex align="center" gap="2">
-                        <Badge radius="full" color="green">
-                          <Check width={14} height={14} />
-                        </Badge>
-                        <Text weight="medium">
-                          {
-                            responses.filter(
-                              (r) => r.response.toLowerCase() === 'approved',
-                            ).length
-                          }{' '}
-                          For
-                        </Text>
-                      </Flex>
-                      <Flex align="center" gap="2">
-                        <Badge radius="full" color="red">
-                          <Xmark width={14} height={14} />
-                        </Badge>
-                        <Text weight="medium">
-                          {
-                            responses.filter(
-                              (r) => r.response.toLowerCase() === 'rejected',
-                            ).length
-                          }{' '}
-                          Against
-                        </Text>
-                      </Flex>
-                    </Flex>
-                    {matter.is_anonymous && (
-                      <Text size="2" color="gray" mt="2">
-                        {responses.length} of {recipientSummary.totalRecipients}{' '}
-                        recipient
-                        {recipientSummary.totalRecipients !== 1 ? 's' : ''} have
-                        responded. Individual responses are hidden for
-                        anonymity.
-                      </Text>
-                    )}
-                  </Box>
-                )}
-
-                <Box mb="4">
-                  <Flex justify="between" align="center" mb="3">
-                    <Heading size="4">Your Response</Heading>
-                    {matter.my_response && !isEditingResponse && (
-                      <Button
-                        size="2"
-                        variant="soft"
-                        onClick={() => {
-                          setIsEditingResponse(true)
-                        }}
-                      >
-                        <Edit width={14} height={14} /> Edit
-                      </Button>
-                    )}
-                  </Flex>
-                  {matter.my_response && !isEditingResponse ? (
-                    <Box
-                      p="3"
-                      style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
-                    >
-                      <Flex align="center" gap="2" mb="2">
-                        {matter.my_response.response.toLowerCase() ===
-                          'approved' && (
-                          <Badge radius="full" color="green">
-                            <Check width={12} height={12} /> Approved
-                          </Badge>
-                        )}
-                        {matter.my_response.response.toLowerCase() ===
-                          'rejected' && (
-                          <Badge radius="full" color="red">
-                            <Xmark width={12} height={12} /> Rejected
-                          </Badge>
-                        )}
-                      </Flex>
-                      <Text
-                        size="1"
-                        color="gray"
-                        style={{ display: 'block', marginTop: 8 }}
-                      >
-                        Last updated:{' '}
-                        {formatDate(matter.my_response.updated_at)}{' '}
-                        {formatTime(matter.my_response.updated_at)}
-                      </Text>
-                    </Box>
-                  ) : (
-                    <Box>
-                      <Flex gap="2">
-                        <Button
-                          variant="soft"
-                          color="green"
-                          onClick={() => respond.mutate('approved')}
-                          disabled={respond.isPending}
-                        >
-                          <Check /> Approve
-                        </Button>
-                        <Button
-                          variant="soft"
-                          color="red"
-                          onClick={() => respond.mutate('rejected')}
-                          disabled={respond.isPending}
-                        >
-                          <Xmark /> Reject
-                        </Button>
-                      </Flex>
-                    </Box>
-                  )}
-                </Box>
-
-                {/* For anonymous votes, hide individual responses list */}
-                {!matter.is_anonymous && (
-                  <>
-                    <Separator size="4" mb="3" />
-
-                    <Heading size="4" mb="3">
-                      All Responses ({responses.length})
-                    </Heading>
-                    {responses.length === 0 ? (
-                      <Text color="gray">No responses yet</Text>
-                    ) : (
-                      <Box
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8,
-                        }}
-                      >
-                        {responses.map((r) => {
-                          const isApproved =
-                            r.response.toLowerCase() === 'approved'
-                          const isRejected =
-                            r.response.toLowerCase() === 'rejected'
-                          const showName =
-                            !matter.is_anonymous ||
-                            r.user_id === matter.created_by_user_id
-
-                          return (
-                            <Box
-                              key={r.id}
-                              p="3"
-                              style={{
-                                border: '1px solid var(--gray-a6)',
-                                borderRadius: 8,
-                                background: 'var(--gray-a2)',
-                              }}
-                            >
-                              <Flex align="center" gap="2" mb="2">
-                                {isApproved && (
-                                  <Badge radius="full" color="green">
-                                    <Check width={12} height={12} /> Approved
-                                  </Badge>
-                                )}
-                                {isRejected && (
-                                  <Badge radius="full" color="red">
-                                    <Xmark width={12} height={12} /> Rejected
-                                  </Badge>
-                                )}
-                                <Text weight="medium">
-                                  {showName
-                                    ? r.user?.display_name ||
-                                      r.user?.email ||
-                                      'Unknown'
-                                    : 'Anonymous'}
-                                </Text>
-                                <Text size="1" color="gray">
-                                  {formatDate(r.created_at)}{' '}
-                                  {formatTime(r.created_at)}
-                                </Text>
-                              </Flex>
-                              {!isApproved && !isRejected && (
-                                <Text>{r.response}</Text>
-                              )}
-                            </Box>
-                          )
-                        })}
-                      </Box>
-                    )}
-                  </>
-                )}
-              </Tabs.Content>
-            )}
-
-            {!(matter.matter_type === 'vote' && matter.is_anonymous) && (
-              <Tabs.Content value="chat">
-                <Box
-                  mb="4"
-                  style={{
-                    maxHeight: 400,
-                    overflowY: 'auto',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
-                    padding: 12,
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 8,
-                    background: 'var(--gray-a1)',
-                  }}
-                >
-                  {messages.length === 0 ? (
-                    <Text color="gray" style={{ textAlign: 'center' }}>
-                      No messages yet. Start the conversation!
-                    </Text>
-                  ) : (
-                    messages.map((msg) => {
-                      const isMyMessage = msg.user_id === user?.id
-                      return (
-                        <Box
-                          key={msg.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: isMyMessage
-                              ? 'flex-end'
-                              : 'flex-start',
-                            width: '100%',
-                          }}
-                        >
-                          <Box
-                            p="2"
-                            style={{
-                              background: isMyMessage
-                                ? 'var(--blue-a3)'
-                                : 'var(--gray-a2)',
-                              borderRadius: 6,
-                              maxWidth: '80%',
-                            }}
-                          >
-                            {!isMyMessage && (
-                              <Text
-                                size="1"
-                                weight="medium"
-                                color="gray"
-                                style={{ display: 'block', marginBottom: 4 }}
-                              >
-                                {msg.user?.display_name ||
-                                  msg.user?.email ||
-                                  'Unknown'}
-                              </Text>
-                            )}
-                            <Text>{msg.content}</Text>
-                            <Text
-                              size="1"
-                              color="gray"
-                              style={{ display: 'block', marginTop: 4 }}
-                            >
-                              {(() => {
-                                const d = new Date(msg.created_at)
-                                const hours = String(d.getHours()).padStart(
-                                  2,
-                                  '0',
-                                )
-                                const minutes = String(d.getMinutes()).padStart(
-                                  2,
-                                  '0',
-                                )
-                                return `${hours}:${minutes}`
-                              })()}
-                            </Text>
-                          </Box>
-                        </Box>
-                      )
-                    })
-                  )}
-                </Box>
-
-                <Flex gap="2">
-                  <TextArea
-                    placeholder="Type a message..."
-                    value={newMessage}
-                    onChange={(e) => setNewMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                        send.mutate()
-                      }
-                    }}
-                    rows={2}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    onClick={() => send.mutate()}
-                    disabled={!newMessage.trim() || send.isPending}
-                  >
-                    <Send width={16} height={16} /> Send
-                  </Button>
+      {canSeeAnnouncementRecipients && recipients.length > 0 && (
+          <Box mb="4">
+            <Separator size="4" mb="3" />
+            <Heading size="4" mb="2">
+              Recipients ({recipients.length})
+            </Heading>
+            <Box
+              mb="3"
+              p="3"
+              style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
+            >
+              {recipientSummary.allViewed ? (
+                <Text size="3" weight="medium" color="green">
+                  All recipients have opened this matter
+                </Text>
+              ) : (
+                <Flex direction="column" gap="1">
+                  <Text size="3" weight="medium">
+                    {recipientSummary.pendingCount} of{' '}
+                    {recipientSummary.totalRecipients} not yet opened
+                  </Text>
+                  <Text size="2" color="gray">
+                    {recipientSummary.viewedCount} of{' '}
+                    {recipientSummary.totalRecipients} opened
+                  </Text>
                 </Flex>
-              </Tabs.Content>
-            )}
+              )}
+            </Box>
+            <Table.Root variant="surface">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Opened</Table.ColumnHeaderCell>
+                </Table.Row>
+              </Table.Header>
+              <Table.Body>
+                {recipients.map((r) => {
+                  const isViewed = !!r.viewed_at
+                  return (
+                    <Table.Row key={r.id}>
+                      <Table.Cell>
+                        {r.user?.display_name || r.user?.email || 'Unknown'}
+                      </Table.Cell>
+                      <Table.Cell>
+                        {isViewed ? (
+                          <Badge radius="full" size="1" color="green">
+                            Yes
+                          </Badge>
+                        ) : (
+                          <Badge radius="full" size="1" color="orange">
+                            No
+                          </Badge>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  )
+                })}
+              </Table.Body>
+            </Table.Root>
           </Box>
-        </Tabs.Root>
-      )}
+        )}
     </Box>
   )
 }

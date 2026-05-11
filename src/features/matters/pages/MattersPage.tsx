@@ -278,8 +278,8 @@ export default function MattersPage() {
                         Select a matter
                       </Heading>
                       <p style={{ color: 'var(--gray-11)' }}>
-                        Choose a matter from the list to view details, responses,
-                        and chat.
+                        Choose a matter from the list to read announcements,
+                        automatic updates, and invitations.
                       </p>
                     </Box>
                   </Box>
@@ -512,8 +512,8 @@ export default function MattersPage() {
                     Select a matter
                   </Heading>
                   <p style={{ color: 'var(--gray-11)' }}>
-                    Choose a matter from the list to view details, responses,
-                    and chat.
+                    Choose a matter from the list to read announcements,
+                    automatic updates, and invitations.
                   </p>
                 </Box>
               </Box>
