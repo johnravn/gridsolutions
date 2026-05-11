@@ -8,7 +8,6 @@ import {
   Dialog,
   Flex,
   Grid,
-  RadioGroup,
   Text,
   TextArea,
   TextField,
@@ -19,7 +18,6 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { Xmark } from 'iconoir-react'
 import { createMatter } from '../api/queries'
-import type { MatterType } from '../types'
 
 type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 type PersonWithRole = {
@@ -37,15 +35,13 @@ export default function CreateMatterDialog({
   onOpenChange: (v: boolean) => void
 }) {
   const { companyId } = useCompany()
-  const { companyRole } = useAuthz()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
-  const [matterType, setMatterType] = React.useState<MatterType>('vote')
   const [title, setTitle] = React.useState('')
   const [content, setContent] = React.useState('')
   const [search, setSearch] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
-  const [isAnonymous, setIsAnonymous] = React.useState(false)
   const [createdAsCompany, setCreatedAsCompany] = React.useState(false)
   const [selectedFiles, setSelectedFiles] = React.useState<Array<File>>([])
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -247,15 +243,13 @@ export default function CreateMatterDialog({
 
       await createMatter({
         company_id: companyId,
-        matter_type: matterType,
+        matter_type: 'announcement',
         title: title.trim(),
         content: content.trim() || null,
         recipient_user_ids: Array.from(selectedIds),
-        is_anonymous: matterType === 'vote' ? isAnonymous : undefined,
-        allow_custom_responses: matterType === 'vote' ? false : undefined,
+        allow_custom_responses: true,
         created_as_company:
-          matterType === 'announcement' &&
-          (companyRole === 'owner' || companyRole === 'super_user')
+          companyRole === 'owner' || isGlobalSuperuser
             ? createdAsCompany
             : undefined,
         files: selectedFiles.length > 0 ? selectedFiles : undefined,
@@ -263,12 +257,11 @@ export default function CreateMatterDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Matter created and sent')
+      success('Announcement sent', 'Recipients were notified in the app (and by email when enabled).')
       setTitle('')
       setContent('')
       setSelectedIds(new Set())
       setSearch('')
-      setIsAnonymous(false)
       setCreatedAsCompany(false)
       setSelectedFiles([])
       if (fileInputRef.current) fileInputRef.current.value = ''
@@ -290,12 +283,10 @@ export default function CreateMatterDialog({
 
   React.useEffect(() => {
     if (!open) {
-      setMatterType('vote')
       setTitle('')
       setContent('')
       setSelectedIds(new Set())
       setSearch('')
-      setIsAnonymous(false)
       setCreatedAsCompany(false)
       setSelectedFiles([])
       if (fileInputRef.current) {
@@ -304,16 +295,15 @@ export default function CreateMatterDialog({
     }
   }, [open])
 
-  const isVote = matterType === 'vote'
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content
         style={{ maxWidth: 900, maxHeight: '90vh', overflow: 'auto' }}
       >
-        <Dialog.Title>Create Matter</Dialog.Title>
+        <Dialog.Title>New announcement</Dialog.Title>
         <Dialog.Description>
-          Create a new matter to send to team members
+          Updates in the inbox are created automatically (offers, invites, and
+          similar). Use this only for a manual broadcast to selected people.
         </Dialog.Description>
 
         <Grid columns={isLarge ? '1fr 1.5fr' : '1fr'} gap="4">
@@ -323,52 +313,13 @@ export default function CreateMatterDialog({
               <Text
                 size="2"
                 weight="medium"
-                mb="2"
-                style={{ display: 'block' }}
-              >
-                Matter Type *
-              </Text>
-              <RadioGroup.Root
-                value={matterType}
-                onValueChange={(v) => setMatterType(v as MatterType)}
-              >
-                <Flex gap="4" wrap="wrap">
-                  <Flex align="center" gap="2">
-                    <RadioGroup.Item value="vote" id="vote" />
-                    <Text size="2" as="label" htmlFor="vote">
-                      Vote
-                    </Text>
-                  </Flex>
-                  <Flex align="center" gap="2">
-                    <RadioGroup.Item value="announcement" id="announcement" />
-                    <Text size="2" as="label" htmlFor="announcement">
-                      Announcement
-                    </Text>
-                  </Flex>
-                  <Flex align="center" gap="2">
-                    <RadioGroup.Item value="chat" id="chat" />
-                    <Text size="2" as="label" htmlFor="chat">
-                      Chat
-                    </Text>
-                  </Flex>
-                </Flex>
-              </RadioGroup.Root>
-            </Box>
-            <Box my="4">
-              <Text
-                size="2"
-                weight="medium"
                 mb="1"
                 style={{ display: 'block' }}
               >
-                {isVote ? 'Question/Title' : 'Title'} *
+                Title *
               </Text>
               <TextField.Root
-                placeholder={
-                  isVote
-                    ? 'e.g., Should we buy this equipment?'
-                    : 'Enter a title...'
-                }
+                placeholder="Enter a title…"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
               />
@@ -391,33 +342,7 @@ export default function CreateMatterDialog({
               />
             </Box>
 
-            {isVote && (
-              <>
-                <Box my="4">
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Checkbox
-                      checked={isAnonymous}
-                      onCheckedChange={(checked) =>
-                        setIsAnonymous(checked === true)
-                      }
-                    />
-                    <Text size="2">
-                      Anonymous vote (responses will not show names)
-                    </Text>
-                  </label>
-                </Box>
-              </>
-            )}
-
-            {matterType === 'announcement' &&
-              (companyRole === 'owner' || companyRole === 'super_user') && (
+            {(companyRole === 'owner' || isGlobalSuperuser) && (
                 <Box my="4">
                   <label
                     style={{
@@ -635,7 +560,7 @@ export default function CreateMatterDialog({
               !title.trim() || selectedIds.size === 0 || create.isPending
             }
           >
-            {create.isPending ? 'Creating…' : 'Create Matter'}
+            {create.isPending ? 'Sending…' : 'Send announcement'}
           </Button>
         </Flex>
       </Dialog.Content>

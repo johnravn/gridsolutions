@@ -10,6 +10,7 @@ import type {
 } from '@features/conflicts/api/queries'
 import type { ActivityFeedItem } from '@features/latest/types'
 import type { HomeMatter, UpcomingJob } from '../types'
+import type { HomeDashboardLayoutPreferences } from '../api/profileHomeLayoutQuery'
 
 type HomeMobileLayoutProps = {
   userId: string | null
@@ -31,6 +32,7 @@ type HomeMobileLayoutProps = {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   conflictsLoading: boolean
+  homeLayout: HomeDashboardLayoutPreferences
 }
 
 export function HomeMobileLayout({
@@ -53,6 +55,7 @@ export function HomeMobileLayout({
   crewConflicts,
   vehicleConflicts,
   conflictsLoading,
+  homeLayout,
 }: HomeMobileLayoutProps) {
   return (
     <Box
@@ -64,10 +67,12 @@ export function HomeMobileLayout({
       }}
     >
       <Flex direction="column" gap="4">
-        <Box>
-          <DailyInspirationSection userId={userId} />
-        </Box>
-        {canSeeLatest && (
+        {homeLayout.showDailyInspiration && (
+          <Box>
+            <DailyInspirationSection userId={userId} />
+          </Box>
+        )}
+        {canSeeLatest && homeLayout.showLatest && (
           <Box
             style={{
               height: '60vh',
@@ -90,7 +95,7 @@ export function HomeMobileLayout({
             </Box>
           </Box>
         )}
-        {unreadMatters.length > 0 && (
+        {homeLayout.showMatters && unreadMatters.length > 0 && (
           <Box style={{ minHeight: 0 }}>
             <MattersSection
               matters={unreadMatters}
@@ -100,7 +105,8 @@ export function HomeMobileLayout({
             />
           </Box>
         )}
-        {(crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
+        {homeLayout.showConflicts &&
+          (crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
           <Box style={{ minHeight: 0 }}>
             <ConflictsSection
               crewConflicts={crewConflicts}
@@ -109,19 +115,21 @@ export function HomeMobileLayout({
             />
           </Box>
         )}
-        <Box style={{ height: '70dvh', flexShrink: 0 }}>
-          <UpcomingJobsSection
-            jobs={upcomingJobs}
-            loading={upcomingJobsLoading}
-            showMyJobsOnly={showMyJobsOnly}
-            onToggleMyJobsOnly={onToggleMyJobsOnly}
-            getInitials={getInitials}
-            getAvatarUrl={getAvatarUrl}
-            isFreelancer={isFreelancer}
-            daysFilter={daysFilter}
-            onDaysFilterChange={onDaysFilterChange}
-          />
-        </Box>
+        {homeLayout.showUpcomingJobs && (
+          <Box style={{ height: '70dvh', flexShrink: 0 }}>
+            <UpcomingJobsSection
+              jobs={upcomingJobs}
+              loading={upcomingJobsLoading}
+              showMyJobsOnly={showMyJobsOnly}
+              onToggleMyJobsOnly={onToggleMyJobsOnly}
+              getInitials={getInitials}
+              getAvatarUrl={getAvatarUrl}
+              isFreelancer={isFreelancer}
+              daysFilter={daysFilter}
+              onDaysFilterChange={onDaysFilterChange}
+            />
+          </Box>
+        )}
       </Flex>
     </Box>
   )

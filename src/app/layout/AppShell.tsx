@@ -21,17 +21,19 @@ import { supabase } from '@shared/api/supabase'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
-import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { NAV, Sidebar } from './Sidebar'
+
+const prefersReducedMotionQuery = '(prefers-reduced-motion: reduce)'
 
 export default function AppShell() {
   const [open, setOpen] = React.useState(true)
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
   const isMobile = useMediaQuery('(max-width: 768px)')
+  const systemPrefersReducedMotion = useMediaQuery(prefersReducedMotionQuery)
   const navigate = useNavigate()
   const { companies, companyId, loading: companyLoading } = useCompany()
   const isLocal =
@@ -165,6 +167,8 @@ export default function AppShell() {
   const backgroundIntensity = backgroundPrefs?.intensity ?? 1.0
   const backgroundShapeType = backgroundPrefs?.shapeType ?? 'circles'
   const backgroundSpeed = backgroundPrefs?.speed ?? 1.0
+  const showAnimatedBackground =
+    backgroundEnabled && !systemPrefersReducedMotion
 
   React.useEffect(() => {
     if (isMobile) setOpen(false)
@@ -193,7 +197,7 @@ export default function AppShell() {
       style={{ position: 'relative', minHeight: 0 }} // allow children to shrink
     >
       {/* Animated background - only on authenticated pages and if enabled */}
-      {!isPublic && backgroundEnabled === true && (
+      {!isPublic && showAnimatedBackground && (
         <AnimatedBackground
           intensity={backgroundIntensity}
           shapeType={backgroundShapeType}
@@ -256,10 +260,6 @@ export default function AppShell() {
             )}
             {!isPublic && !isMobile && (
               <Flex align="center" gap="3">
-                <NotificationCenter
-                  userId={authUser?.id ?? ''}
-                  companyId={companyId}
-                />
                 <Link to="/profile" style={{ textDecoration: 'none' }}>
                   <Flex
                     align="center"
@@ -443,7 +443,6 @@ function DevBadgeContent({
 }
 
 function getPageTitle(path: string) {
-  if (path === '/notifications') return 'Notifications'
   const NAVinfo = NAV
 
   for (const section of NAVinfo) {

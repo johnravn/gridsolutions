@@ -8,6 +8,7 @@ import { UpcomingJobsSection } from './UpcomingJobsSection'
 import type { ActivityFeedItem } from '@features/latest/types'
 import type { CrewConflictRow, VehicleConflictRow } from '@features/conflicts/api/queries'
 import type { HomeMatter, UpcomingJob } from '../types'
+import type { HomeDashboardLayoutPreferences } from '../api/profileHomeLayoutQuery'
 
 type HomeDesktopLayoutProps = {
   // Resize state
@@ -35,6 +36,7 @@ type HomeDesktopLayoutProps = {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   conflictsLoading: boolean
+  homeLayout: HomeDashboardLayoutPreferences
 }
 
 export function HomeDesktopLayout({
@@ -61,6 +63,7 @@ export function HomeDesktopLayout({
   crewConflicts,
   vehicleConflicts,
   conflictsLoading,
+  homeLayout,
 }: HomeDesktopLayoutProps) {
   return (
     <Box
@@ -96,10 +99,12 @@ export function HomeDesktopLayout({
             overflow: 'hidden',
           }}
         >
-          <Box style={{ minHeight: 0 }}>
-            <DailyInspirationSection userId={userId} />
-          </Box>
-          {canSeeLatest && (
+          {homeLayout.showDailyInspiration && (
+            <Box style={{ minHeight: 0 }}>
+              <DailyInspirationSection userId={userId} />
+            </Box>
+          )}
+          {canSeeLatest && homeLayout.showLatest && (
             <Box style={{ flex: 1, minHeight: '40%' }}>
               <LatestSection
                 activities={latestActivities}
@@ -157,7 +162,7 @@ export function HomeDesktopLayout({
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
           }}
         >
-          {unreadMatters.length > 0 && (
+          {homeLayout.showMatters && unreadMatters.length > 0 && (
             <Box style={{ minHeight: 0 }}>
               <MattersSection
                 matters={unreadMatters}
@@ -167,7 +172,8 @@ export function HomeDesktopLayout({
               />
             </Box>
           )}
-          {(crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
+          {homeLayout.showConflicts &&
+            (crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
             <Box style={{ minHeight: 0 }}>
               <ConflictsSection
                 crewConflicts={crewConflicts}
@@ -176,19 +182,21 @@ export function HomeDesktopLayout({
               />
             </Box>
           )}
-          <Box style={{ flex: 2, minHeight: 0 }}>
-            <UpcomingJobsSection
-              jobs={upcomingJobs}
-              loading={upcomingJobsLoading}
-              showMyJobsOnly={showMyJobsOnly}
-              onToggleMyJobsOnly={onToggleMyJobsOnly}
-              getInitials={getInitials}
-              getAvatarUrl={getAvatarUrl}
-              isFreelancer={isFreelancer}
-              daysFilter={daysFilter}
-              onDaysFilterChange={onDaysFilterChange}
-            />
-          </Box>
+          {homeLayout.showUpcomingJobs && (
+            <Box style={{ flex: 2, minHeight: 0 }}>
+              <UpcomingJobsSection
+                jobs={upcomingJobs}
+                loading={upcomingJobsLoading}
+                showMyJobsOnly={showMyJobsOnly}
+                onToggleMyJobsOnly={onToggleMyJobsOnly}
+                getInitials={getInitials}
+                getAvatarUrl={getAvatarUrl}
+                isFreelancer={isFreelancer}
+                daysFilter={daysFilter}
+                onDaysFilterChange={onDaysFilterChange}
+              />
+            </Box>
+          )}
         </Flex>
       </Flex>
     </Box>

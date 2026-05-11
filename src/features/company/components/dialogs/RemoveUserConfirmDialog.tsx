@@ -1,5 +1,4 @@
-import * as React from 'react'
-import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
+import { AlertDialog, Button, Flex, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -50,14 +49,14 @@ export default function RemoveUserConfirmDialog({
   })
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="460px">
-        <Dialog.Title>Remove {userKind}</Dialog.Title>
-        <Dialog.Description size="2">
+    <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
+      <AlertDialog.Content maxWidth="460px">
+        <AlertDialog.Title>Remove {userKind}</AlertDialog.Title>
+        <AlertDialog.Description size="2">
           Are you sure you want to remove{' '}
           <Text weight="medium">{userName}</Text> ({userEmail}) from this
           company?
-        </Dialog.Description>
+        </AlertDialog.Description>
 
         <Flex
           direction="column"
@@ -87,22 +86,27 @@ export default function RemoveUserConfirmDialog({
         </Flex>
 
         <Flex gap="3" justify="end" mt="4">
-          <Dialog.Close>
+          <AlertDialog.Cancel>
             <Button type="button" variant="soft" disabled={mut.isPending}>
               Cancel
             </Button>
-          </Dialog.Close>
-          <Button
-            type="button"
-            variant="solid"
-            color="red"
-            disabled={mut.isPending}
-            onClick={() => mut.mutate()}
-          >
-            {mut.isPending ? 'Removing…' : 'Remove'}
-          </Button>
+          </AlertDialog.Cancel>
+          <AlertDialog.Action>
+            <Button
+              type="button"
+              variant="solid"
+              color="red"
+              disabled={mut.isPending || !userId}
+              onClick={() => {
+                if (!userId || mut.isPending) return
+                mut.mutate()
+              }}
+            >
+              {mut.isPending ? 'Removing…' : 'Remove'}
+            </Button>
+          </AlertDialog.Action>
         </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
+      </AlertDialog.Content>
+    </AlertDialog.Root>
   )
 }

@@ -410,7 +410,7 @@ export default function CrewTab({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Invitations sent and matter created')
+      success('Success', 'Invitations sent')
       setSendInviteDialog(null)
     },
     onError: (e: any) => {

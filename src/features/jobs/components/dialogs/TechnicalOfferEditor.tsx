@@ -15,6 +15,7 @@ import {
 } from '@radix-ui/themes'
 import { Download, Eye, Lock, Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { companyExpansionQuery, crewPricingLevelsQuery } from '@features/company/api/queries'
 import {
@@ -1378,17 +1379,13 @@ export default function TechnicalOfferEditor({
       await lockOffer(currentOfferId)
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
-      const { data, error } = await supabase.functions.invoke('send-offer-email', {
-        body: { offer_id: currentOfferId, to_email: email },
-      })
-      if (error) throw error
-      if (
-        data &&
-        typeof data === 'object' &&
-        'error' in data &&
-        (data as { error?: string }).error
-      ) {
-        throw new Error(String((data as { error: string }).error))
+      const sent = await sendOfferByEmail({ offerId: currentOfferId, toEmail: email })
+      if (!sent.ok) {
+        throw new Error(
+          sent.failure.details
+            ? `${sent.failure.message}: ${sent.failure.details}`
+            : sent.failure.message,
+        )
       }
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })

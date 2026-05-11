@@ -13,6 +13,7 @@ import {
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { Edit, MessageText, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { fmtVAT } from '@shared/lib/generalFunctions'
@@ -26,7 +27,12 @@ const FIELD_MAX = 420
 
 export default function CompanyOverviewTab() {
   const { companyId } = useCompany()
+  const { companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
+  const canSendCompanyAnnouncement =
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    isGlobalSuperuser
   const [editOpen, setEditOpen] = React.useState(false)
   const [announcementOpen, setAnnouncementOpen] = React.useState(false)
   const [logoExpanded, setLogoExpanded] = React.useState(false)
@@ -153,14 +159,16 @@ export default function CompanyOverviewTab() {
       >
         <Heading size="4">{data.name}</Heading>
         <Flex gap="2">
-          <Button
-            size="2"
-            variant="soft"
-            onClick={() => setAnnouncementOpen(true)}
-          >
-            <MessageText />
-            New Announcement
-          </Button>
+          {canSendCompanyAnnouncement && (
+            <Button
+              size="2"
+              variant="soft"
+              onClick={() => setAnnouncementOpen(true)}
+            >
+              <MessageText />
+              New Announcement
+            </Button>
+          )}
           <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
             <Edit />
             Edit

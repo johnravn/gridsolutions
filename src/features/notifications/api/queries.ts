@@ -9,6 +9,7 @@ export type NotificationType =
   | 'crew_invite'
   | 'matter_reply'
   | 'matter_mention'
+  | 'matter_update'
   | 'reminder'
   | 'announcement'
   | 'other'
@@ -36,6 +37,9 @@ export type NotificationPreferences = {
   email_matter_replies: boolean
   email_reminders: boolean
   email_announcements: boolean
+  email_matter_announcements?: boolean
+  email_matter_updates?: boolean
+  email_matter_invites?: boolean
   created_at: string
   updated_at: string
 }
@@ -193,6 +197,9 @@ export async function upsertNotificationPreferences(
     email_matter_replies?: boolean
     email_reminders?: boolean
     email_announcements?: boolean
+    email_matter_announcements?: boolean
+    email_matter_updates?: boolean
+    email_matter_invites?: boolean
   }
 ): Promise<void> {
   const { error } = await supabase.from('notification_preferences').upsert(
@@ -204,6 +211,9 @@ export async function upsertNotificationPreferences(
       email_matter_replies: payload.email_matter_replies ?? true,
       email_reminders: payload.email_reminders ?? true,
       email_announcements: payload.email_announcements ?? true,
+      email_matter_announcements: payload.email_matter_announcements ?? true,
+      email_matter_updates: payload.email_matter_updates ?? true,
+      email_matter_invites: payload.email_matter_invites ?? true,
     },
     { onConflict: 'user_id,company_id' }
   )
@@ -219,22 +229,31 @@ export type CreateNotificationPayload = {
   action_url?: string | null
   entity_type?: string | null
   entity_id?: string | null
+  /** When true, edge send bypasses prefs (crew_invite, force-email announcements). Dispatched only via DB trigger / cron. */
+  email_force_send?: boolean
 }
 
 export async function createNotification(
   payload: CreateNotificationPayload
 ): Promise<string> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
   const { data, error } = await supabase
     .from('notifications')
     .insert({
       company_id: payload.company_id,
       user_id: payload.user_id,
+      created_by_user_id: user.id,
       type: payload.type,
       title: payload.title,
       body_text: payload.body_text ?? null,
       action_url: payload.action_url ?? null,
       entity_type: payload.entity_type ?? null,
       entity_id: payload.entity_id ?? null,
+      email_force_send: payload.email_force_send ?? false,
     })
     .select('id')
     .single()
@@ -242,21 +261,17 @@ export async function createNotification(
   return data.id
 }
 
-/** Create a notification and trigger the Edge Function to send email (if preferences allow). */
+/**
+ * Create a notification; email is sent once by `trg_notifications_dispatch_email_after_insert`
+ * (pg_net → send-notification-email). Do not invoke the edge function from the client — that
+ * duplicated sends when the trigger also ran.
+ */
 export async function createNotificationAndSendEmail(
   payload: CreateNotificationPayload,
   options?: { forceEmail?: boolean }
 ): Promise<string> {
-  const id = await createNotification(payload)
-  try {
-    const result = await supabase.functions.invoke('send-notification-email', {
-      body: {
-        notification_id: id,
-        force_email: options?.forceEmail ?? false,
-      },
-    })
-  } catch (e) {
-    // Non-blocking: email failure should not fail the operation
-  }
-  return id
+  return createNotification({
+    ...payload,
+    email_force_send: payload.email_force_send ?? options?.forceEmail ?? false,
+  })
 }

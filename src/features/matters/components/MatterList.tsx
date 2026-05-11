@@ -20,6 +20,7 @@ import {
   Xmark,
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { mattersIndexQueryAll } from '../api/queries'
 import type { Matter, MatterType } from '../types'
 
@@ -64,6 +65,11 @@ export default function MatterList({
   companies: Array<{ id: string; name: string }>
   onCreateMatter?: () => void
 }) {
+  const { companyRole, isGlobalSuperuser } = useAuthz()
+  const canCreateAnnouncement =
+    companyRole === 'owner' ||
+    companyRole === 'employee' ||
+    isGlobalSuperuser
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('created')
@@ -125,15 +131,9 @@ export default function MatterList({
           break
         case 'response': {
           const aHasResponse =
-            (a.matter_type === 'vote' || a.matter_type === 'crew_invite') &&
-            a.my_response
-              ? 1
-              : 0
+            a.matter_type === 'crew_invite' && a.my_response ? 1 : 0
           const bHasResponse =
-            (b.matter_type === 'vote' || b.matter_type === 'crew_invite') &&
-            b.my_response
-              ? 1
-              : 0
+            b.matter_type === 'crew_invite' && b.my_response ? 1 : 0
           comparison = aHasResponse - bHasResponse
           break
         }
@@ -174,7 +174,7 @@ export default function MatterList({
   }
 
   const getResponseIcon = (matter: Matter) => {
-    if (matter.matter_type === 'vote' || matter.matter_type === 'crew_invite') {
+    if (matter.matter_type === 'crew_invite') {
       if (matter.my_response) {
         const responseLower = matter.my_response.response.toLowerCase()
         if (responseLower === 'approved' || responseLower === 'accepted') {
@@ -251,14 +251,21 @@ export default function MatterList({
         align="center"
         wrap="wrap"
         mb="2"
-        direction={isMobile && onCreateMatter ? 'column' : 'row'}
+        direction={isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'}
+        justify={isMobile ? 'start' : 'between'}
       >
         <TextField.Root
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search matters…"
           size="3"
-          style={{ flex: isMobile && onCreateMatter ? undefined : '1 1 260px', width: '100%' }}
+          style={{
+            flex:
+              isMobile && onCreateMatter && canCreateAnnouncement
+                ? undefined
+                : '1 1 260px',
+            width: '100%',
+          }}
         >
           <TextField.Slot side="left">
             <Search />
@@ -267,16 +274,24 @@ export default function MatterList({
             {isFetching && <Spinner size="2" />}
           </TextField.Slot>
         </TextField.Root>
-        {onCreateMatter && (
-          <Button
-            variant="solid"
-            size={isMobile ? '3' : '2'}
-            onClick={onCreateMatter}
-            style={isMobile ? { width: '100%' } : undefined}
-          >
-            <Plus width={18} height={18} />
-            New Matter
-          </Button>
+        {onCreateMatter && canCreateAnnouncement && (
+          <Tooltip content="Send a manual announcement to selected people (uncommon)">
+            <Button
+              type="button"
+              variant="ghost"
+              size="1"
+              color="gray"
+              onClick={onCreateMatter}
+              style={
+                isMobile
+                  ? { alignSelf: 'flex-end' }
+                  : { flexShrink: 0, alignSelf: 'center' }
+              }
+            >
+              <Plus width={14} height={14} />
+              New announcement
+            </Button>
+          </Tooltip>
         )}
       </Flex>
 
@@ -379,8 +394,13 @@ export default function MatterList({
                     cursor: 'pointer',
                     backgroundColor: isSelected
                       ? 'var(--accent-a3)'
-                      : 'transparent',
+                      : matter.is_unread
+                        ? 'var(--blue-a2)'
+                        : 'transparent',
                     borderRadius: 'var(--radius-2)',
+                    boxShadow: matter.is_unread && !isSelected
+                      ? 'inset 3px 0 0 0 var(--blue-9)'
+                      : undefined,
                   }}
                   onMouseEnter={(e) => {
                     if (!isSelected) {
@@ -389,7 +409,9 @@ export default function MatterList({
                   }}
                   onMouseLeave={(e) => {
                     if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = 'transparent'
+                      e.currentTarget.style.backgroundColor = matter.is_unread
+                        ? 'var(--blue-a2)'
+                        : 'transparent'
                     }
                   }}
                 >
@@ -399,6 +421,18 @@ export default function MatterList({
 
                   <Box style={{ minWidth: 0 }}>
                     <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                      {matter.is_unread && (
+                        <Box
+                          aria-hidden
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            backgroundColor: 'var(--blue-9)',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
                       <Tooltip content={matter.title} delayDuration={300}>
                         <Box
                           style={{
@@ -411,11 +445,9 @@ export default function MatterList({
                         >
                           <Text
                             weight={
-                              isSelected
+                              isSelected || matter.is_unread
                                 ? 'bold'
-                                : matter.is_unread
-                                  ? 'bold'
-                                  : 'medium'
+                                : 'medium'
                             }
                             size="2"
                             style={{
@@ -463,16 +495,9 @@ export default function MatterList({
 
                   <Flex align="center" justify="end">
                     {matter.is_unread && (
-                      <Box
-                        style={{
-                          width: 10,
-                          height: 10,
-                          borderRadius: '50%',
-                          backgroundColor: 'var(--blue-9)',
-                          flexShrink: 0,
-                        }}
-                        title="Unread"
-                      />
+                      <Text size="1" color="blue" weight="medium">
+                        New
+                      </Text>
                     )}
                   </Flex>
                 </div>

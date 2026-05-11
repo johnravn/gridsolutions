@@ -1,10 +1,10 @@
-// src/features/crew/components/dialogs/AddEmployeeDialog.tsx
+// src/features/company/components/dialogs/AddEmployeeDialog.tsx
 import * as React from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { supabase } from '@shared/api/supabase'
+import { sendWelcomeEmailForPendingInvite } from '@shared/email/supabaseEdgeEmail'
 import { addMemberOrInvite } from '@features/crew/api/queries'
 
 type AddInviteResult =
@@ -26,7 +26,7 @@ export default function AddEmployeeDialog({
   onAdded?: () => void
 }) {
   const { companyId } = useCompany()
-  const { info, error } = useToast()
+  const { info, error, success } = useToast()
   const [email, setEmail] = React.useState('')
 
   const normalized = email.trim().toLowerCase()
@@ -43,42 +43,65 @@ export default function AddEmployeeDialog({
       })
     },
     onSuccess: (res) => {
+      const finish = () => {
+        setEmail('')
+        onOpenChange(false)
+        onAdded?.()
+      }
+
       if (res.type === 'added') {
         info(
           'Employee added',
           'They already had an account and were added to your company.',
         )
-      } else if (res.type === 'invited') {
-        // Don’t rely on pg_net/vault being configured in dev; explicitly invoke the welcome email.
-        supabase.functions
-          .invoke('send-welcome-email', {
-            body: { pending_invite_id: res.pending_invite_id },
-          })
-          .catch(() => {})
-        info(
-          'Invite created',
-          'They will be added automatically when they sign up.',
-        )
-      } else if (res.type === 'already_invited') {
-        // If emails were previously not being dispatched, re-invoke to ensure the invite email is sent.
-        supabase.functions
-          .invoke('send-welcome-email', {
-            body: { pending_invite_id: res.pending_invite_id },
-          })
-          .catch(() => {})
-        info('Already invited', `An invite already exists by ${res.by}.`)
-      } else {
-        // already_member
+        finish()
+        return
+      }
+      if (res.type === 'already_member') {
         const nice =
           res.role === 'super_user' ? 'super user' : res.role.replace('_', ' ')
         info(
           'Already a member',
           `This user is already ${nice} in your company.`,
         )
+        finish()
+        return
       }
-      setEmail('')
-      onOpenChange(false)
-      onAdded?.()
+
+      if (res.type === 'invited') {
+        // New row: trg_pending_invites_send_welcome_email already calls send-welcome-email via pg_net.
+        success(
+          'Invitation sent',
+          'They’ll receive an email with a link to join. They’ll be added when they sign up.',
+        )
+        finish()
+        return
+      }
+
+      // already_invited: no new INSERT, so the DB trigger does not run — resend from the client.
+      void sendWelcomeEmailForPendingInvite(res.pending_invite_id)
+        .then((emailRes) => {
+          if (emailRes.ok) {
+            success(
+              'Invitation email sent',
+              `We sent another invite link. A pending invite already exists (from ${res.by}).`,
+            )
+          } else {
+            info(
+              'Already invited',
+              `An invite already exists (from ${res.by}). We could not resend the email just now.`,
+            )
+          }
+        })
+        .catch(() => {
+          info(
+            'Already invited',
+            'An invite already exists. We could not resend the email just now.',
+          )
+        })
+        .finally(() => {
+          finish()
+        })
     },
     onError: (e: any) => {
       error('Failed', e?.message ?? 'Please try again.')
@@ -97,8 +120,9 @@ export default function AddEmployeeDialog({
         <Dialog.Title>Add employee</Dialog.Title>
         <Dialog.Description size="2">
           Enter the person’s email. If they already have an account, they’ll be
-          added immediately as an <b>employee</b>. Otherwise, they’ll appear as
-          a pending invite (expires in 30 days).
+          added immediately as an <b>employee</b>. Otherwise we’ll email them an
+          invitation link; they’ll appear as a pending invite (expires in 30 days)
+          until they join.
         </Dialog.Description>
 
         <form onSubmit={onSubmit}>

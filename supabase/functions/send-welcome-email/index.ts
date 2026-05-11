@@ -1,19 +1,18 @@
 // Supabase Edge Function: send welcome email for a pending invite via Resend.
 // Invoke with body: { pending_invite_id: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-
-const RESEND_API_URL = 'https://api.resend.com/emails'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import {
+  emailFunctionCorsHeaders,
+  escapeHtml,
+  getResendApiKey,
+  sendResendHtmlEmail,
+} from '../_shared/email/resend.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: emailFunctionCorsHeaders })
 
   try {
-    const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const resendApiKey = getResendApiKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
@@ -22,7 +21,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: 'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
         }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 500, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
@@ -31,11 +30,10 @@ Deno.serve(async (req) => {
     if (!pendingInviteId || typeof pendingInviteId !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Body must include pending_invite_id' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 400, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
-    // Service role: bypass RLS so this can be called from DB triggers.
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const { data: invite, error: inviteErr } = await supabase
@@ -47,7 +45,7 @@ Deno.serve(async (req) => {
     if (inviteErr || !invite) {
       return new Response(
         JSON.stringify({ error: 'Pending invite not found' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        { status: 404, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
@@ -69,7 +67,8 @@ Deno.serve(async (req) => {
     const appUrl = Deno.env.get('APP_URL') || 'https://gridsolutions.app'
     const signupLink = `${appUrl}/signup`
 
-    const roleNice = invite.role === 'freelancer' ? 'freelancer' : invite.role === 'employee' ? 'employee' : 'member'
+    const roleNice =
+      invite.role === 'freelancer' ? 'freelancer' : invite.role === 'employee' ? 'employee' : 'member'
     const subject = `Welcome to Grid — invited to ${companyName}`
 
     const html = `
@@ -87,45 +86,28 @@ Deno.serve(async (req) => {
       </div>
     `
 
-    const fromEmail = Deno.env.get('RESEND_FROM_EMAIL') || 'notifications@resend.dev'
-    const fromName = Deno.env.get('RESEND_FROM_NAME') || 'Grid'
-
-    const res = await fetch(RESEND_API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${resendApiKey}`,
-        'User-Agent': 'Grid-App/1.0',
-      },
-      body: JSON.stringify({
-        from: `${fromName} <${fromEmail}>`,
-        to: [String(invite.email)],
-        subject,
-        html,
-      }),
+    const sent = await sendResendHtmlEmail({
+      apiKey: resendApiKey,
+      to: [String(invite.email)],
+      subject,
+      html,
     })
 
-    if (!res.ok) {
-      const errText = await res.text()
+    if (!sent.ok) {
       return new Response(
-        JSON.stringify({ error: 'Resend failed', details: errText }),
-        { status: 502, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({ error: 'Resend failed', details: sent.bodyText }),
+        { status: 502, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
       )
     }
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
     })
   }
 })
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
