@@ -20,6 +20,7 @@ import { supabase } from '@shared/api/supabase'
 // add
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { companyExpansionQuery } from '@features/company/api/queries'
 import { NotificationCenter } from '@features/notifications/components/NotificationCenter'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
@@ -69,8 +70,34 @@ export default function AppShell() {
     },
   })
 
+  // Read the active/inactive flag from the same cache as the Expansions tab so
+  // toggling activate/deactivate updates the dev badge in real time via the
+  // existing query invalidation on ['company', companyId, 'expansion'].
+  const { data: expansionForDevBadge } = useQuery({
+    ...(companyId
+      ? companyExpansionQuery({ companyId })
+      : {
+          queryKey: ['company', 'none', 'expansion'] as const,
+          queryFn: () => Promise.resolve(null),
+        }),
+    enabled: isLocal && !!authUser?.id && !!companyId,
+  })
+
+  const isApiKeyActive = expansionForDevBadge?.accounting_api_key_active ?? true
+
+  // Conta is configured (production or sandbox key present) but currently paused
+  const isContaPaused =
+    isLocal &&
+    expansionForDevBadge?.accounting_software === 'conta' &&
+    !isApiKeyActive &&
+    !!(
+      expansionForDevBadge.accounting_api_key_encrypted ||
+      expansionForDevBadge.accounting_api_key_sandbox_encrypted
+    )
+
   const isProductionContaInDev =
     isLocal &&
+    isApiKeyActive &&
     (useProductionContaInDev || accountingEnvironment === 'production')
 
   // Load my profile row
@@ -332,6 +359,20 @@ export default function AppShell() {
             >
               <DevBadgeContent marqueeClassName="dev-badge-marquee">
                 ⚠️ Production Conta in dev — real invoices possible
+              </DevBadgeContent>
+            </Badge>
+          )}
+          {isContaPaused && (
+            <Badge
+              role="status"
+              aria-live="polite"
+              color="orange"
+              variant="surface"
+              size="3"
+              className="dev-badge"
+            >
+              <DevBadgeContent marqueeClassName="dev-badge-marquee">
+                Conta paused — API key inactive
               </DevBadgeContent>
             </Badge>
           )}

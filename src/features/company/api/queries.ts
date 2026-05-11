@@ -376,6 +376,7 @@ export type CompanyExpansion = {
   accounting_api_environment: 'production' | 'sandbox' | null
   accounting_organization_id: string | null
   accounting_api_read_only: boolean
+  accounting_api_key_active: boolean
   crew_rate_per_day: number | null
   crew_rate_per_hour: number | null
   default_crew_billing_unit: DefaultCrewBillingUnit
@@ -402,7 +403,7 @@ export function companyExpansionQuery({ companyId }: { companyId: string }) {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
+          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -436,6 +437,7 @@ export async function updateCompanyExpansion({
   apiEnvironment,
   organizationId,
   readOnly,
+  apiKeyActive,
 }: {
   companyId: string
   accountingSoftware?: 'none' | 'conta'
@@ -444,6 +446,7 @@ export async function updateCompanyExpansion({
   apiEnvironment?: 'production' | 'sandbox'
   organizationId?: string | null
   readOnly?: boolean
+  apiKeyActive?: boolean
 }) {
   const { data: auth, error: authErr } = await supabase.auth.getUser()
   if (authErr) throw authErr
@@ -509,6 +512,10 @@ export async function updateCompanyExpansion({
           readOnly !== undefined
             ? readOnly
             : (current?.accounting_api_read_only ?? true),
+        accounting_api_key_active:
+          apiKeyActive !== undefined
+            ? apiKeyActive
+            : ((current as any)?.accounting_api_key_active ?? true),
       },
       { onConflict: 'company_id' },
     )

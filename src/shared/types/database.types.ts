@@ -381,6 +381,7 @@ export type Database = {
       company_expansions: {
         Row: {
           accounting_api_environment: string | null
+          accounting_api_key_active: boolean
           accounting_api_key_encrypted: string | null
           accounting_api_key_sandbox_encrypted: string | null
           accounting_api_read_only: boolean
@@ -406,6 +407,7 @@ export type Database = {
         }
         Insert: {
           accounting_api_environment?: string | null
+          accounting_api_key_active?: boolean
           accounting_api_key_encrypted?: string | null
           accounting_api_key_sandbox_encrypted?: string | null
           accounting_api_read_only?: boolean
@@ -431,6 +433,7 @@ export type Database = {
         }
         Update: {
           accounting_api_environment?: string | null
+          accounting_api_key_active?: boolean
           accounting_api_key_encrypted?: string | null
           accounting_api_key_sandbox_encrypted?: string | null
           accounting_api_read_only?: boolean
