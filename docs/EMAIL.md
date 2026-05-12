@@ -6,17 +6,25 @@ This document is the **canonical reference** for how transactional email works i
 
 1. **Provider**: [Resend](https://resend.com) (`RESEND_API_KEY`).
 2. **Runtime**: **Supabase Edge Functions** under `supabase/functions/`. The browser **never** calls Resend directly.
-3. **Shared HTTP layer**: `supabase/functions/_shared/email/resend.ts` — all Edge Functions that send mail should use `sendResendHtmlEmail()` (or extend that module) so headers, From formatting, and error handling stay consistent.
+3. **Shared HTTP layer**: `supabase/functions/_shared/email/resend.ts` — all Edge Functions that send mail should use `sendResendHtmlEmail()` (or extend that module) so headers, From formatting, and error handling stay consistent. Pass optional **`text`** for a plain-text part alongside HTML when it improves accessibility or deliverability.
+
+### Shared HTML and assets
+
+- **`_shared/email/layout.ts`** — reusable fragments: hidden preheader (inbox snippet), table-based wrapper, primary button, optional header logo block (`emailHeaderLogo`).
+- **`_shared/email/gridWordmarkSvg.ts`** — inlined Grid wordmark for emails where remote assets are blocked (Matter **test** email).
+- **`_shared/email/publicStorageUrl.ts`** — build public URLs for Storage objects without the browser client (`publicLogoUrl`, `preferredCompanyLogoPath` for `companies.logo_*` fields).
+- Company **logos** in email use the **`logos`** bucket (same as the app). Images load only if those objects are **publicly readable** (same assumption as the public offer page). Many clients block remote images until the user chooses to load them.
 
 ### Active Edge Functions
 
-| Function | Purpose | Typical caller |
-|----------|---------|------------------|
-| `send-notification-email` | One notification row → user profile email | Client via `sendNotificationEmailNow()`; **after each `notifications` INSERT** a DB trigger queues `pg_net` → this function (needs vault `project_url` + `anon_key`, same as cron); plus `dispatch-notification-emails` (cron) as backup |
-| `send-welcome-email` | Pending company invite → welcome + signup link | Client via `fireAndForgetWelcomeEmail()`, or DB trigger + `pg_net` + vault `anon_key` |
-| `send-offer-email` | Locked job offer → public offer link | Client via `sendOfferByEmail()` |
-| `send-test-email` | One-off test to the caller’s profile email (Profile → Matter notifications) | Client via `sendMatterEmailTest()` |
-| `dispatch-notification-emails` | Batch: pending `notifications` with `email_sent_at` null | `pg_cron` / server |
+| Function                       | Purpose                                                                                                                                                                        | Typical caller                                                                                                                                                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `send-notification-email`      | One notification → profile email; **From** = company name; greeting + card layout.                                                                                              | Client via `sendNotificationEmailNow()`; **after each `notifications` INSERT** a DB trigger queues `pg_net` → this function (needs vault `project_url` + `anon_key`, same as cron); plus `dispatch-notification-emails` (cron) as backup |
+| `send-welcome-email`           | Pending company invite; **From** = company name; longer copy + what Grid is.                                                                                                   | Client via `fireAndForgetWelcomeEmail()`, or DB trigger + `pg_net` + vault `anon_key`                                                                                                                                                    |
+| `send-offer-email`             | Locked job offer; **From** = company name; hello + thank-you intro.                                                                                                             | Client via `sendOfferByEmail()`                                                                                                                                                                                                          |
+| `send-crew-position-invite-email` | Email-only crew slot; **From** = company; **Open invite in Grid** → `/matters?matterId=…` when a matching crew-invite matter exists.                                        | Client via `sendCrewPositionInviteEmail()`                                                                                                                                                                                               |
+| `send-test-email`              | Matter notifications **test** only; **From** = **Grid**; wordmark is **inline SVG** (no remote image).                                                                          | Client via `sendMatterEmailTest()`                                                                                                                                                                                                       |
+| `dispatch-notification-emails` | Batch: pending `notifications` with `email_sent_at` null                                                                                                                       | `pg_cron` / server                                                                                                                                                                                                                       |
 
 **Matter-related notification email:** `send-notification-email` reads `public.notification_preferences` columns `email_matter_announcements`, `email_matter_updates`, and `email_matter_invites` (with fallback to the older `email_announcements`, `email_matter_replies`, and `email_crew_invites` when needed). Notification rows use `notification_type` values including `announcement`, `matter_update` (activity-driven matter emails), and `crew_invite`. Users edit the three toggles on **Profile → Matter notifications** (email today; PWA push planned).
 
@@ -37,14 +45,14 @@ Use **`@shared/email/supabaseEdgeEmail`** (or `@shared/email` if you add barrel 
 
 Set these in the **Supabase project** (Dashboard → Edge Functions → Secrets, or CLI secrets), not only in Vercel:
 
-| Variable | Required | Notes |
-|----------|----------|--------|
-| `RESEND_API_KEY` | Yes | Resend dashboard |
-| `RESEND_FROM_EMAIL` | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default |
-| `RESEND_FROM_NAME` | No | Display name; defaults to `Grid` |
-| `APP_URL` | No | Public links in emails; defaults to production app URL |
-| `SUPABASE_URL` | Yes | Injected in hosted env |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes | Edge Functions use service role for DB |
+| Variable                    | Required   | Notes                                                                                          |
+| --------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `RESEND_API_KEY`            | Yes        | Resend dashboard                                                                               |
+| `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default |
+| `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                               |
+| `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                         |
+| `SUPABASE_URL`              | Yes        | Injected in hosted env                                                                         |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes        | Edge Functions use service role for DB                                                         |
 
 ## Development vs production
 
@@ -52,12 +60,12 @@ Email behavior is **not** controlled by Vite’s `DEV` / `PROD` alone. It follow
 
 ### Practical setups
 
-| Goal | Typical setup |
-|------|----------------|
-| **Local full stack** | `VITE_SUPABASE_URL=http://127.0.0.1:54321` (see `LOCAL_SUPABASE_WORKFLOW.md`). Set Edge secrets on **local** Supabase: `supabase secrets set RESEND_API_KEY=…` (and optionally `RESEND_FROM_EMAIL`, `APP_URL`). Run `supabase functions serve` or rely on `supabase start` depending on your workflow. |
-| **Local UI → hosted Supabase** | Same as any remote consumer: secrets live in the **hosted** project (Dashboard → Edge Functions → Secrets). Emails are real for that project’s data; use a **non-production** Supabase project if you must avoid touching prod. |
-| **Vercel preview / staging** | Prefer a **dedicated Supabase project** (staging) + its own Resend key / verified sending domain (or Resend’s test domain for internal checks). Point preview env vars at that project so previews never use production `RESEND_*` or prod user data by accident. |
-| **Production** | Production Supabase project only. `RESEND_FROM_EMAIL` must use your **verified** domain in Resend. `APP_URL` should match the public app URL (`https://gridsolutions.app` or your canonical host). |
+| Goal                           | Typical setup                                                                                                                                                                                                                                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Local full stack**           | `VITE_SUPABASE_URL=http://127.0.0.1:54321` (see `LOCAL_SUPABASE_WORKFLOW.md`). Set Edge secrets on **local** Supabase: `supabase secrets set RESEND_API_KEY=…` (and optionally `RESEND_FROM_EMAIL`, `APP_URL`). Run `supabase functions serve` or rely on `supabase start` depending on your workflow. |
+| **Local UI → hosted Supabase** | Same as any remote consumer: secrets live in the **hosted** project (Dashboard → Edge Functions → Secrets). Emails are real for that project’s data; use a **non-production** Supabase project if you must avoid touching prod.                                                                        |
+| **Vercel preview / staging**   | Prefer a **dedicated Supabase project** (staging) + its own Resend key / verified sending domain (or Resend’s test domain for internal checks). Point preview env vars at that project so previews never use production `RESEND_*` or prod user data by accident.                                      |
+| **Production**                 | Production Supabase project only. `RESEND_FROM_EMAIL` must use your **verified** domain in Resend. `APP_URL` should match the public app URL (`https://gridsolutions.app` or your canonical host).                                                                                                     |
 
 ### `APP_URL` per environment
 

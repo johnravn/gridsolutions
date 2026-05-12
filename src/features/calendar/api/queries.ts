@@ -183,16 +183,20 @@ export function vehiclePastCalendarQuery({
         })
       }
 
-      return data.map((tp: any): CalendarRecord => ({
-        id: tp.id,
-        title: tp.title || 'Transport',
-        start: tp.start_at,
-        end: tp.end_at ?? undefined,
-        kind: 'vehicle',
-        ref: { vehicleId, jobId: tp.job_id || undefined },
-        notes: undefined,
-        jobTitle: tp.job_id ? jobTitles.get(tp.job_id) || undefined : undefined,
-      }))
+      return data.map(
+        (tp: any): CalendarRecord => ({
+          id: tp.id,
+          title: tp.title || 'Transport',
+          start: tp.start_at,
+          end: tp.end_at ?? undefined,
+          kind: 'vehicle',
+          ref: { vehicleId, jobId: tp.job_id || undefined },
+          notes: undefined,
+          jobTitle: tp.job_id
+            ? jobTitles.get(tp.job_id) || undefined
+            : undefined,
+        }),
+      )
     },
   })
 }
@@ -270,27 +274,25 @@ export function itemCalendarQuery({
         itemMap.get(i.time_period_id)!.push(i.item_id)
       })
 
-      return (data || []).map(
-        (tp: any): CalendarRecord => {
-          const jobTitle = tp.job_id
-            ? jobTitles.get(tp.job_id) || undefined
-            : undefined
-          return {
-            id: tp.id,
-            title: jobTitle || tp.title || 'Equipment',
-            start: tp.start_at,
-            end: tp.end_at ?? undefined,
-            kind: 'item',
-            ref: {
-              itemId, // Keep backward compatibility
-              itemIds: itemMap.get(tp.id) || [], // All items in this period
-              jobId: tp.job_id || undefined,
-            },
-            notes: undefined,
-            jobTitle: jobTitle || undefined,
-          }
-        },
-      )
+      return (data || []).map((tp: any): CalendarRecord => {
+        const jobTitle = tp.job_id
+          ? jobTitles.get(tp.job_id) || undefined
+          : undefined
+        return {
+          id: tp.id,
+          title: jobTitle || tp.title || 'Equipment',
+          start: tp.start_at,
+          end: tp.end_at ?? undefined,
+          kind: 'item',
+          ref: {
+            itemId, // Keep backward compatibility
+            itemIds: itemMap.get(tp.id) || [], // All items in this period
+            jobId: tp.job_id || undefined,
+          },
+          notes: undefined,
+          jobTitle: jobTitle || undefined,
+        }
+      })
     },
   })
 }
@@ -351,26 +353,24 @@ export function crewCalendarQuery({
         })
       }
 
-      return data.map(
-        (tp: any): CalendarRecord => {
-          const jobTitle = tp.job_id
-            ? jobTitles.get(tp.job_id) || undefined
-            : undefined
-          return {
-            id: tp.id,
-            title: jobTitle || tp.title || 'Crew assignment',
-            start: tp.start_at,
-            end: tp.end_at ?? undefined,
-            kind: 'crew',
-            ref: {
-              userId,
-              jobId: tp.job_id || undefined,
-            },
-            notes: undefined,
-            jobTitle: jobTitle || undefined,
-          }
-        },
-      )
+      return data.map((tp: any): CalendarRecord => {
+        const jobTitle = tp.job_id
+          ? jobTitles.get(tp.job_id) || undefined
+          : undefined
+        return {
+          id: tp.id,
+          title: jobTitle || tp.title || 'Crew assignment',
+          start: tp.start_at,
+          end: tp.end_at ?? undefined,
+          kind: 'crew',
+          ref: {
+            userId,
+            jobId: tp.job_id || undefined,
+          },
+          notes: undefined,
+          jobTitle: jobTitle || undefined,
+        }
+      })
     },
   })
 }
@@ -544,7 +544,7 @@ export function companyCalendarQuery({
       >()
       data.forEach((tp) => {
         if (!tp.job_id) return
-        const jobId = tp.job_id as string
+        const jobId = tp.job_id
         const crewForPeriod = (crewRes.data || []).filter(
           (c: any) => c.time_period_id === tp.id,
         )
@@ -556,10 +556,7 @@ export function companyCalendarQuery({
           const already = existing.find((x) => x.user_id === c.user_id)
           if (!already) {
             existing.push({ user_id: c.user_id, status: c.status })
-          } else if (
-            c.status === 'accepted' &&
-            already.status !== 'accepted'
-          ) {
+          } else if (c.status === 'accepted' && already.status !== 'accepted') {
             already.status = 'accepted'
           }
         })
@@ -646,8 +643,7 @@ export function companyCalendarQuery({
             crewForPeriod.map((c) => [c.user_id, c.status]),
           )
 
-          const jobCrew =
-            tp.job_id ? jobCrewMap.get(tp.job_id) || [] : []
+          const jobCrew = tp.job_id ? jobCrewMap.get(tp.job_id) || [] : []
           const jobCrewUserIds = jobCrew.map((c) => c.user_id)
           const jobCrewStatusByUserId = Object.fromEntries(
             jobCrew.map((c) => [c.user_id, c.status]),

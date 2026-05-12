@@ -43,3 +43,15 @@ export type HomeMatter = {
     avatar_url: string | null
   } | null
 }
+
+export type HomeJobReadyToInvoice = {
+  id: string
+  title: string
+  jobnr: number | null
+  start_at: string | null
+  end_at: string | null
+  customer?: {
+    id: string
+    name: string | null
+  } | null
+}

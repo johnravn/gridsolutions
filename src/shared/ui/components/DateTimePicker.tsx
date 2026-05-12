@@ -38,9 +38,36 @@ export default function DateTimePicker({
   locale = 'en',
   disabled = false,
 }: Props) {
-  const monthNames = locale === 'nb'
-    ? ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des']
-    : ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+  const monthNames =
+    locale === 'nb'
+      ? [
+          'jan',
+          'feb',
+          'mar',
+          'apr',
+          'mai',
+          'jun',
+          'jul',
+          'aug',
+          'sep',
+          'okt',
+          'nov',
+          'des',
+        ]
+      : [
+          'jan',
+          'feb',
+          'mar',
+          'apr',
+          'may',
+          'jun',
+          'jul',
+          'aug',
+          'sep',
+          'oct',
+          'nov',
+          'dec',
+        ]
   const defaultPlaceholder = dateOnly ? 'Select date' : 'Select date and time'
   const finalPlaceholder = placeholder || defaultPlaceholder
 

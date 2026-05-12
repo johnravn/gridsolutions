@@ -17,7 +17,10 @@ import { Download, Eye, Lock, Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { companyExpansionQuery, crewPricingLevelsQuery } from '@features/company/api/queries'
+import {
+  companyExpansionQuery,
+  crewPricingLevelsQuery,
+} from '@features/company/api/queries'
 import {
   createOffer,
   exportOfferPDF,
@@ -25,7 +28,10 @@ import {
   offerDetailQuery,
   recalculateOfferTotals,
 } from '../../api/offerQueries'
-import { calculateOfferTotals, calculateRentalFactor } from '../../utils/offerCalculations'
+import {
+  calculateOfferTotals,
+  calculateRentalFactor,
+} from '../../utils/offerCalculations'
 import { calculateHoursPerDay } from './technical-offer-editor/utils'
 import { CrewSection } from './technical-offer-editor/CrewSection'
 import { EquipmentSection } from './technical-offer-editor/EquipmentSection'
@@ -180,16 +186,14 @@ export default function TechnicalOfferEditor({
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
-  const isEditMode = !!offerId
   const [currentOfferId, setCurrentOfferId] = React.useState<string | null>(
     offerId || null,
   )
+  const persistedOfferId = offerId ?? currentOfferId
+  const hasPersistedOffer = !!persistedOfferId
 
   // Fetch job title, duration, customer (incl. crew pricing level), and main contact for offer email
-  const {
-    data: jobData,
-    isLoading: isLoadingJob,
-  } = useQuery<JobInfo>({
+  const { data: jobData, isLoading: isLoadingJob } = useQuery<JobInfo>({
     queryKey: ['job-title', jobId],
     enabled: open && !!jobId,
     refetchOnMount: 'always',
@@ -216,9 +220,7 @@ export default function TechnicalOfferEditor({
         : (data as any).customer
 
       const rawContact = (data as any).customer_contact
-      const contactRow = Array.isArray(rawContact)
-        ? rawContact[0]
-        : rawContact
+      const contactRow = Array.isArray(rawContact) ? rawContact[0] : rawContact
 
       return {
         title: data.title,
@@ -231,7 +233,7 @@ export default function TechnicalOfferEditor({
               crew_pricing_level_id: customer.crew_pricing_level_id ?? null,
               crew_pricing_level: Array.isArray(customer.crew_pricing_level)
                 ? customer.crew_pricing_level[0]
-                : customer.crew_pricing_level ?? null,
+                : (customer.crew_pricing_level ?? null),
             } as JobInfo['customer'])
           : null,
         customer_contact: contactRow
@@ -438,7 +440,19 @@ export default function TechnicalOfferEditor({
         transportGroups: editorFormRef.current.transportGroups,
       }) !== baselineSerialized
     )
-  }, [open, isReadOnly, baselineSerialized, title, daysOfUse, discountPercent, vatPercent, showPricePerLine, equipmentGroups, crewItems, transportGroups])
+  }, [
+    open,
+    isReadOnly,
+    baselineSerialized,
+    title,
+    daysOfUse,
+    discountPercent,
+    vatPercent,
+    showPricePerLine,
+    equipmentGroups,
+    crewItems,
+    transportGroups,
+  ])
 
   React.useEffect(() => {
     if (!open) {
@@ -458,10 +472,10 @@ export default function TechnicalOfferEditor({
 
   // Update daysOfUse when job duration becomes available (only for new offers)
   React.useEffect(() => {
-    if (!open || isEditMode || !job.start_at || !job.end_at) return
+    if (!open || hasPersistedOffer || !job.start_at || !job.end_at) return
     setDaysOfUse(defaultDaysOfUse)
     setDaysOfUseDraft(null)
-  }, [open, isEditMode, defaultDaysOfUse, job.start_at, job.end_at])
+  }, [open, hasPersistedOffer, defaultDaysOfUse, job.start_at, job.end_at])
 
   // Initialize from existing offer
   React.useEffect(() => {
@@ -703,7 +717,7 @@ export default function TechnicalOfferEditor({
     companyExpansion,
     job,
     isLoadingOffer,
-    isEditMode,
+    hasPersistedOffer,
     defaultCrewRatePerHour,
   ])
 
@@ -728,7 +742,7 @@ export default function TechnicalOfferEditor({
 
     const crew: Array<OfferCrewItem> = crewItems.map((item) => ({
       id: item.id,
-      offer_id: offerId || '',
+      offer_id: persistedOfferId || '',
       role_title: item.role_title,
       role_category: item.role_category ?? null,
       crew_count: item.crew_count,
@@ -743,8 +757,9 @@ export default function TechnicalOfferEditor({
       (group) =>
         group.items.map((item) => ({
           id: item.id,
-          offer_id: offerId || '',
-          transport_group_id: group.id as OfferTransportItem['transport_group_id'],
+          offer_id: persistedOfferId || '',
+          transport_group_id:
+            group.id as OfferTransportItem['transport_group_id'],
           vehicle_name: item.vehicle_name,
           vehicle_id: item.vehicle_id,
           vehicle_category: item.vehicle_category,
@@ -782,7 +797,9 @@ export default function TechnicalOfferEditor({
             item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
           const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
           const distanceRate =
-            item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
+            item.distance_rate ??
+            companyExpansion?.vehicle_distance_rate ??
+            null
           const distanceIncrements = item.distance_km
             ? Math.ceil(item.distance_km / distanceIncrement)
             : 0
@@ -813,7 +830,8 @@ export default function TechnicalOfferEditor({
       baseTotals.equipmentSubtotal + baseTotals.crewSubtotal + transportSubtotal
     const discountAmount = baseTotals.discountAmount
     const totalAfterDiscount = totalBeforeDiscount - discountAmount
-    const totalWithVAT = totalAfterDiscount + (totalAfterDiscount * vatPercent) / 100
+    const totalWithVAT =
+      totalAfterDiscount + (totalAfterDiscount * vatPercent) / 100
 
     // Round monetary values to 2 decimals to avoid floating-point display issues
     const round2 = (n: number) => Math.round(n * 100) / 100
@@ -835,7 +853,7 @@ export default function TechnicalOfferEditor({
     discountPercent,
     vatPercent,
     rentalFactorConfig,
-    offerId,
+    persistedOfferId,
     companyExpansion?.vehicle_daily_rate,
     companyExpansion?.vehicle_distance_rate,
     companyExpansion?.vehicle_distance_increment,
@@ -850,10 +868,13 @@ export default function TechnicalOfferEditor({
         throw new Error('Title is required')
       }
 
+      const persistedBefore = offerId ?? currentOfferId
       let workingOfferId: string
+      let createdNew = false
 
-      // Create offer if new
-      if (!offerId) {
+      // Create offer only when nothing exists yet (prop + local)
+      if (!persistedBefore) {
+        createdNew = true
         workingOfferId = await createOffer({
           jobId,
           companyId,
@@ -865,7 +886,7 @@ export default function TechnicalOfferEditor({
           showPricePerLine,
         })
       } else {
-        workingOfferId = offerId
+        workingOfferId = persistedBefore
         // Update offer metadata
         const { error } = await supabase
           .from('job_offers')
@@ -1085,7 +1106,9 @@ export default function TechnicalOfferEditor({
 
         let groupId: string
         if (isExistingGroup) {
-          const { data: upsertedGroup, error: groupErr } = await (supabase as any)
+          const { data: upsertedGroup, error: groupErr } = await (
+            supabase as any
+          )
             .from('offer_transport_groups')
             .upsert({
               id: group.id,
@@ -1125,7 +1148,9 @@ export default function TechnicalOfferEditor({
           const effectiveDailyRate =
             item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
           const effectiveDistanceRate =
-            item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
+            item.distance_rate ??
+            companyExpansion?.vehicle_distance_rate ??
+            null
           const distanceIncrements = item.distance_km
             ? Math.ceil(item.distance_km / distanceIncrementSave)
             : 0
@@ -1201,6 +1226,7 @@ export default function TechnicalOfferEditor({
 
       return {
         offerId: workingOfferId,
+        createdNew,
         syncAfterSave: !!payload?.syncAfterSave,
         closeAfterSave: payload?.closeAfterSave === true,
       }
@@ -1222,7 +1248,7 @@ export default function TechnicalOfferEditor({
         }),
       )
       success(
-        isEditMode ? 'Offer updated' : 'Offer created',
+        result.createdNew ? 'Offer created' : 'Offer updated',
         `Technical offer "${title.trim()}" was saved successfully.`,
       )
 
@@ -1379,7 +1405,10 @@ export default function TechnicalOfferEditor({
       await lockOffer(currentOfferId)
       await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
-      const sent = await sendOfferByEmail({ offerId: currentOfferId, toEmail: email })
+      const sent = await sendOfferByEmail({
+        offerId: currentOfferId,
+        toEmail: email,
+      })
       if (!sent.ok) {
         throw new Error(
           sent.failure.details
@@ -1442,10 +1471,10 @@ export default function TechnicalOfferEditor({
         }}
       >
         <Dialog.Title>
-          {isEditMode ? 'Edit Technical Offer' : 'Create Technical Offer'}
+          {hasPersistedOffer ? 'Edit Technical Offer' : 'Create Technical Offer'}
         </Dialog.Title>
         <Dialog.Description>
-          {isEditMode
+          {hasPersistedOffer
             ? 'Edit the technical offer details, equipment, crew, and transport items.'
             : 'Create a new technical offer with equipment, crew, and transport items.'}
         </Dialog.Description>
@@ -1488,7 +1517,7 @@ export default function TechnicalOfferEditor({
                       readOnly={isReadOnly}
                       style={{ width: '400px' }}
                     />
-                    {!isReadOnly && !isEditMode && defaultTitle && (
+                    {!isReadOnly && defaultTitle && (
                       <Button
                         size="2"
                         variant="soft"
@@ -1547,7 +1576,9 @@ export default function TechnicalOfferEditor({
                           type="number"
                           min="0"
                           max="100"
-                          value={discountPercentDraft ?? String(discountPercent)}
+                          value={
+                            discountPercentDraft ?? String(discountPercent)
+                          }
                           onChange={(e) => {
                             const nextValue = e.target.value
                             setDiscountPercentDraft(nextValue)
@@ -1572,11 +1603,7 @@ export default function TechnicalOfferEditor({
                       </Field>
                     </Flex>
 
-                    <Text
-                      size="1"
-                      color="gray"
-                      style={{ fontStyle: 'italic' }}
-                    >
+                    <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
                       Rental factor: {totals.equipmentRentalFactor.toFixed(2)}x
                     </Text>
                   </Flex>
@@ -1602,11 +1629,7 @@ export default function TechnicalOfferEditor({
                         <Select.Item value="25">25%</Select.Item>
                       </Select.Content>
                     </Select.Root>
-                    <Text
-                      size="1"
-                      color="gray"
-                      style={{ fontStyle: 'italic' }}
-                    >
+                    <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
                       Applies to the entire offer.
                     </Text>
                   </Flex>
@@ -1760,11 +1783,7 @@ export default function TechnicalOfferEditor({
                   onClick={handleSaveClick}
                   disabled={saveMutation.isPending || !title.trim()}
                 >
-                  {saveMutation.isPending
-                    ? 'Saving…'
-                    : currentOfferId || isEditMode
-                      ? 'Save'
-                      : 'Create offer'}
+                  {saveMutation.isPending ? 'Saving…' : 'Save'}
                 </Button>
                 <Button
                   type="button"
@@ -1808,8 +1827,8 @@ export default function TechnicalOfferEditor({
           <Dialog.Title>Unsaved changes</Dialog.Title>
           <Separator my="3" />
           <Text size="2">
-            You have unsaved changes. Save them before closing, discard them,
-            or keep editing.
+            You have unsaved changes. Save them before closing, discard them, or
+            keep editing.
           </Text>
           <Flex gap="2" mt="4" justify="end" wrap="wrap">
             <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>

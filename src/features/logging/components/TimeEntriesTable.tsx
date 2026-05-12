@@ -106,12 +106,10 @@ function compareEntries(
       cmp = nameA.localeCompare(nameB, undefined, { sensitivity: 'base' })
       break
     case 'date':
-      cmp =
-        new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+      cmp = new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
       break
     case 'start':
-      cmp =
-        new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
+      cmp = new Date(a.start_at).getTime() - new Date(b.start_at).getTime()
       break
     case 'end':
       cmp = new Date(a.end_at).getTime() - new Date(b.end_at).getTime()
@@ -285,7 +283,8 @@ export default function TimeEntriesTable({
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const entry = rows[virtualRow.index]
-              const canEdit = onEditEntry && (!canEditEntry || canEditEntry(entry))
+              const canEdit =
+                onEditEntry && (!canEditEntry || canEditEntry(entry))
               const canDelete =
                 onDeleteEntry && (!canDeleteEntry || canDeleteEntry(entry))
 
@@ -321,13 +320,18 @@ export default function TimeEntriesTable({
                         radius="full"
                         fallback={getInitialsFromNameOrEmail(
                           entry.profile?.display_name ??
-                            [entry.profile?.first_name, entry.profile?.last_name]
+                            [
+                              entry.profile?.first_name,
+                              entry.profile?.last_name,
+                            ]
                               .filter(Boolean)
                               .join(' ') ??
                             null,
                           entry.profile?.email ?? '??',
                         )}
-                        src={getAvatarUrl(entry.profile?.avatar_url) ?? undefined}
+                        src={
+                          getAvatarUrl(entry.profile?.avatar_url) ?? undefined
+                        }
                         style={{ border: '1px solid var(--gray-5)' }}
                       />
                       <Text size="2">
@@ -370,10 +374,7 @@ export default function TimeEntriesTable({
                           <Dialog.Description size="2" color="gray" mb="3">
                             Details for this time entry.
                           </Dialog.Description>
-                          <Text
-                            size="2"
-                            style={{ whiteSpace: 'pre-wrap' }}
-                          >
+                          <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
                             {entry.note}
                           </Text>
                         </Dialog.Content>

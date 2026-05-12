@@ -545,19 +545,19 @@ function EditTimePeriodDialog({
                 <Text size="1" color="gray" style={{ width: '100%' }}>
                   Quick pick:
                 </Text>
-                {[
-                  ...new Set([...existingGroupNames, ...groupSuggestions]),
-                ].map((g) => (
-                  <Button
-                    key={g}
-                    size="1"
-                    variant="soft"
-                    color="gray"
-                    onClick={() => setProgramGroup(g)}
-                  >
-                    {g}
-                  </Button>
-                ))}
+                {[...new Set([...existingGroupNames, ...groupSuggestions])].map(
+                  (g) => (
+                    <Button
+                      key={g}
+                      size="1"
+                      variant="soft"
+                      color="gray"
+                      onClick={() => setProgramGroup(g)}
+                    >
+                      {g}
+                    </Button>
+                  ),
+                )}
               </Flex>
             )}
           </Box>

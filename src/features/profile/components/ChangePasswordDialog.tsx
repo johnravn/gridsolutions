@@ -124,7 +124,10 @@ export default function ChangePasswordDialog({
     onSuccess: () => {
       onOpenChange(false)
       resetForm()
-      success('Password changed', 'Your password has been updated successfully.')
+      success(
+        'Password changed',
+        'Your password has been updated successfully.',
+      )
     },
     onError: (e: Error) => {
       toastError('Password change failed', e?.message ?? 'Please try again.')
@@ -320,9 +323,7 @@ export default function ChangePasswordDialog({
                   placeholder="Confirm new password"
                   disabled={changeLoading}
                   autoComplete="new-password"
-                  color={
-                    confirmPassword && !passwordsMatch ? 'red' : undefined
-                  }
+                  color={confirmPassword && !passwordsMatch ? 'red' : undefined}
                 />
                 {confirmPassword && (
                   <Flex align="center" gap="2" mt="1">
@@ -348,11 +349,7 @@ export default function ChangePasswordDialog({
 
               <Flex gap="3" justify="end" mt="2">
                 <Dialog.Close>
-                  <Button
-                    type="button"
-                    variant="soft"
-                    disabled={changeLoading}
-                  >
+                  <Button type="button" variant="soft" disabled={changeLoading}>
                     Cancel
                   </Button>
                 </Dialog.Close>

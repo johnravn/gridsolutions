@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Box,
   Button,
@@ -24,27 +24,30 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
 import {
-  getCalendarSubscriptions,
   createCalendarSubscription,
   deleteCalendarSubscription,
   getCalendarFeedUrl,
-  type CalendarSubscriptionKind,
-  type CalendarSubscriptionRow,
+  getCalendarSubscriptions,
 } from '../api/calendarSubscription'
-import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
+import type {
+  CalendarSubscriptionKind,
+  CalendarSubscriptionRow,
+} from '../api/calendarSubscription'
 
 // Order: transport_vehicle last so it appears alone on the last row when in a 2-col grid
-const PREMADE_OPTIONS: {
+const PREMADE_OPTIONS: Array<{
   kind: CalendarSubscriptionKind
   label: string
   description: string
   Icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>
-}[] = [
+}> = [
   {
     kind: 'all_jobs',
     label: 'All jobs in the company',
-    description: 'Job duration periods with job title, project lead, customer and location.',
+    description:
+      'Job duration periods with job title, project lead, customer and location.',
     Icon: Calendar,
   },
   {
@@ -68,7 +71,8 @@ const PREMADE_OPTIONS: {
   {
     kind: 'transport_vehicle',
     label: 'Transport: one vehicle',
-    description: 'Pick a vehicle. Events show job title, customer and project lead.',
+    description:
+      'Pick a vehicle. Events show job title, customer and project lead.',
     Icon: Car,
   },
 ]
@@ -94,7 +98,9 @@ export default function SubscribeToCalendarDialog({
   const { success, error: toastError } = useToast()
   const isFreelancer = companyRole === 'freelancer'
 
-  const [addKind, setAddKind] = React.useState<CalendarSubscriptionKind | null>(null)
+  const [addKind, setAddKind] = React.useState<CalendarSubscriptionKind | null>(
+    null,
+  )
   const [addVehicleId, setAddVehicleId] = React.useState<string | null>(null)
   const [instructionsOpen, setInstructionsOpen] = React.useState(false)
 
@@ -114,13 +120,21 @@ export default function SubscribeToCalendarDialog({
   })
 
   const createMutation = useMutation({
-    mutationFn: async (params: { kind: CalendarSubscriptionKind; vehicleId?: string | null }) => {
+    mutationFn: async (params: {
+      kind: CalendarSubscriptionKind
+      vehicleId?: string | null
+    }) => {
       if (!companyId || !userId) throw new Error('Not signed in')
       return createCalendarSubscription(companyId, userId, params)
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['calendar-subscriptions', companyId, userId] })
-      success('Calendar added', 'Copy the link below to add this calendar to your device.')
+      qc.invalidateQueries({
+        queryKey: ['calendar-subscriptions', companyId, userId],
+      })
+      success(
+        'Calendar added',
+        'Copy the link below to add this calendar to your device.',
+      )
       setAddKind(null)
       setAddVehicleId(null)
     },
@@ -132,7 +146,9 @@ export default function SubscribeToCalendarDialog({
   const deleteMutation = useMutation({
     mutationFn: (id: string) => deleteCalendarSubscription(id, userId!),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['calendar-subscriptions', companyId, userId] })
+      qc.invalidateQueries({
+        queryKey: ['calendar-subscriptions', companyId, userId],
+      })
       success('Calendar removed', 'That subscription has been removed.')
     },
     onError: (err: Error) => {
@@ -167,11 +183,17 @@ export default function SubscribeToCalendarDialog({
   const canAddMore = subscriptions.length < 10
 
   const getSubscriptionLabel = (row: CalendarSubscriptionRow): string => {
-    if (row.kind === 'transport_vehicle' && row.vehicle_id && vehicles.length > 0) {
+    if (
+      row.kind === 'transport_vehicle' &&
+      row.vehicle_id &&
+      vehicles.length > 0
+    ) {
       const v = vehicles.find((x) => x.id === row.vehicle_id)
-      return v ? `Transport: ${v.name}${v.registration_no ? ` (${v.registration_no})` : ''}` : KIND_LABELS[row.kind]
+      return v
+        ? `Transport: ${v.name}${v.registration_no ? ` (${v.registration_no})` : ''}`
+        : KIND_LABELS[row.kind]
     }
-    return KIND_LABELS[row.kind as CalendarSubscriptionKind]
+    return KIND_LABELS[row.kind]
   }
 
   // Disable option if user already has a subscription of that kind (transport_vehicle can have multiple)
@@ -183,7 +205,8 @@ export default function SubscribeToCalendarDialog({
       <Dialog.Content maxWidth="540px">
         <Dialog.Title>Subscribe to calendar</Dialog.Title>
         <Text size="2" color="gray" as="p" mt="1">
-          Add calendar feeds to your phone or computer. You can have up to 10 subscriptions. Choose a type below and copy the link.
+          Add calendar feeds to your phone or computer. You can have up to 10
+          subscriptions. Choose a type below and copy the link.
         </Text>
 
         {/* Your calendar subscriptions – always visible, not inside scroll */}
@@ -192,11 +215,19 @@ export default function SubscribeToCalendarDialog({
             Your calendar subscriptions ({subscriptions.length}/10)
           </Text>
           {isLoading ? (
-            <Text size="2" color="gray">Loading…</Text>
+            <Text size="2" color="gray">
+              Loading…
+            </Text>
           ) : subscriptions.length === 0 ? (
-            <Text size="2" color="gray">No subscriptions yet. Add one below.</Text>
+            <Text size="2" color="gray">
+              No subscriptions yet. Add one below.
+            </Text>
           ) : (
-            <Flex direction="column" gap="2" style={{ maxHeight: 220, overflowY: 'auto' }}>
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ maxHeight: 220, overflowY: 'auto' }}
+            >
               {subscriptions.map((sub) => (
                 <Box
                   key={sub.id}
@@ -249,7 +280,11 @@ export default function SubscribeToCalendarDialog({
           )}
         </Box>
 
-        <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: '50vh' }}>
+        <ScrollArea
+          type="auto"
+          scrollbars="vertical"
+          style={{ maxHeight: '50vh' }}
+        >
           <Flex direction="column" gap="4" mt="4">
             {/* Add new subscription */}
             {canAddMore && (
@@ -275,14 +310,19 @@ export default function SubscribeToCalendarDialog({
                   >
                     {optionsToShow.map((opt, index) => {
                       const isLastAndOdd =
-                        optionsToShow.length % 2 === 1 && index === optionsToShow.length - 1
+                        optionsToShow.length % 2 === 1 &&
+                        index === optionsToShow.length - 1
                       const IconComponent = opt.Icon
                       return (
                         <Box
                           key={opt.kind}
                           style={
                             isLastAndOdd
-                              ? { gridColumn: '1 / -1', width: '100%', minWidth: 0 }
+                              ? {
+                                  gridColumn: '1 / -1',
+                                  width: '100%',
+                                  minWidth: 0,
+                                }
                               : undefined
                           }
                         >
@@ -294,7 +334,11 @@ export default function SubscribeToCalendarDialog({
                             <Box>
                               <Flex gap="2" align="center" mb="1">
                                 <IconComponent
-                                  style={{ width: 20, height: 20, flexShrink: 0 }}
+                                  style={{
+                                    width: 20,
+                                    height: 20,
+                                    flexShrink: 0,
+                                  }}
                                 />
                                 <Text size="2" weight="medium">
                                   {opt.label}
@@ -332,27 +376,40 @@ export default function SubscribeToCalendarDialog({
                       >
                         {vehicles.map((v, index) => {
                           const isLastAndOdd =
-                            vehicles.length % 2 === 1 && index === vehicles.length - 1
+                            vehicles.length % 2 === 1 &&
+                            index === vehicles.length - 1
                           return (
                             <Box
                               key={v.id}
                               style={
                                 isLastAndOdd
-                                  ? { gridColumn: '1 / -1', width: '100%', minWidth: 0 }
+                                  ? {
+                                      gridColumn: '1 / -1',
+                                      width: '100%',
+                                      minWidth: 0,
+                                    }
                                   : undefined
                               }
                             >
                               <RadioCards.Item
                                 value={v.id}
-                                style={isLastAndOdd ? { width: '100%' } : undefined}
+                                style={
+                                  isLastAndOdd ? { width: '100%' } : undefined
+                                }
                               >
                                 <Flex gap="2" align="center">
                                   <Car
-                                    style={{ width: 18, height: 18, flexShrink: 0 }}
+                                    style={{
+                                      width: 18,
+                                      height: 18,
+                                      flexShrink: 0,
+                                    }}
                                   />
                                   <Text size="2">
                                     {v.name}
-                                    {v.registration_no ? ` (${v.registration_no})` : ''}
+                                    {v.registration_no
+                                      ? ` (${v.registration_no})`
+                                      : ''}
                                   </Text>
                                 </Flex>
                               </RadioCards.Item>
@@ -410,16 +467,21 @@ export default function SubscribeToCalendarDialog({
               {instructionsOpen && (
                 <Box pl="5" mt="2">
                   <Text size="1" color="gray" as="p">
-                    <strong>Mac:</strong> Open Calendar → File → New Calendar Subscription… → paste the link → Subscribe.
+                    <strong>Mac:</strong> Open Calendar → File → New Calendar
+                    Subscription… → paste the link → Subscribe.
                   </Text>
                   <Text size="1" color="gray" as="p" mt="1">
-                    <strong>iPhone:</strong> Settings → Calendar → Accounts → Add Account → Other → Add Subscribed Calendar → paste the link.
+                    <strong>iPhone:</strong> Settings → Calendar → Accounts →
+                    Add Account → Other → Add Subscribed Calendar → paste the
+                    link.
                   </Text>
                   <Text size="1" color="gray" as="p" mt="1">
-                    <strong>Android:</strong> Google Calendar → Settings → Add account → Subscribe to calendar → paste the link.
+                    <strong>Android:</strong> Google Calendar → Settings → Add
+                    account → Subscribe to calendar → paste the link.
                   </Text>
                   <Text size="1" color="gray" as="p" mt="1">
-                    The calendar may take up to an hour to refresh on your device.
+                    The calendar may take up to an hour to refresh on your
+                    device.
                   </Text>
                 </Box>
               )}

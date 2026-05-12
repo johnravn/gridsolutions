@@ -83,6 +83,8 @@ export default function CompanyExpansionsTab() {
     number | null | ''
   >(null)
   const [invoiceDaysChanged, setInvoiceDaysChanged] = React.useState(false)
+  const [accountingEnvPersistPending, setAccountingEnvPersistPending] =
+    React.useState(false)
 
   // Determine configuration state
   const apiEnvironment: AccountingEnvironment =
@@ -543,8 +545,43 @@ export default function CompanyExpansionsTab() {
     }
   }
 
-  const handleEnvironmentChange = (value: AccountingEnvironment) => {
+  const handleEnvironmentChange = async (value: AccountingEnvironment) => {
+    if (!companyId || form.accounting_software !== 'conta') return
+
     setForm((s) => ({ ...s, accounting_api_environment: value }))
+
+    const dbEnv: AccountingEnvironment =
+      expansionData?.accounting_api_environment ?? 'production'
+    if (value === dbEnv) {
+      return
+    }
+
+    const revertEnv: AccountingEnvironment = dbEnv
+    setAccountingEnvPersistPending(true)
+    try {
+      await updateCompanyExpansion({
+        companyId,
+        accountingSoftware: 'conta',
+        apiEnvironment: value,
+        apiKey: undefined,
+        sandboxApiKey: undefined,
+        organizationId: undefined,
+        readOnly: undefined,
+      })
+      qc.invalidateQueries({ queryKey: ['company', companyId, 'expansion'] })
+      qc.invalidateQueries({
+        queryKey: ['conta', 'organizations', companyId],
+      })
+      qc.invalidateQueries({ queryKey: ['conta', 'health', companyId] })
+    } catch (e: unknown) {
+      setForm((s) => ({ ...s, accounting_api_environment: revertEnv }))
+      toastError(
+        'Failed to update API environment',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    } finally {
+      setAccountingEnvPersistPending(false)
+    }
   }
 
   if (configLoading) {
@@ -727,7 +764,8 @@ export default function CompanyExpansionsTab() {
                     )}
                     {expansionData.default_invoice_days_until_due != null && (
                       <Text as="div" size="2" color="gray">
-                        Default invoice due: {expansionData.default_invoice_days_until_due} days
+                        Default invoice due:{' '}
+                        {expansionData.default_invoice_days_until_due} days
                       </Text>
                     )}
                     <Text as="div" size="2" color="gray">
@@ -808,10 +846,11 @@ export default function CompanyExpansionsTab() {
                           <SegmentedControl.Root
                             value={apiEnvironment}
                             onValueChange={(value) =>
-                              handleEnvironmentChange(
+                              void handleEnvironmentChange(
                                 value as AccountingEnvironment,
                               )
                             }
+                            disabled={accountingEnvPersistPending}
                             size="1"
                           >
                             <SegmentedControl.Item value="production">
@@ -938,8 +977,8 @@ export default function CompanyExpansionsTab() {
                                   </Text>
                                 ) : !isApiKeyActive ? (
                                   <Text size="1" color="orange">
-                                    API key is inactive — activate it to run
-                                    the check.
+                                    API key is inactive — activate it to run the
+                                    check.
                                   </Text>
                                 ) : healthLoading ? (
                                   <Text size="1" color="gray">
@@ -990,7 +1029,8 @@ export default function CompanyExpansionsTab() {
                                   disabled={
                                     !hasApiKeyConfigured ||
                                     !isApiKeyActive ||
-                                    healthLoading
+                                    healthLoading ||
+                                    accountingEnvPersistPending
                                   }
                                 >
                                   Check now
@@ -1062,7 +1102,7 @@ export default function CompanyExpansionsTab() {
                             </Select.Root>
                             {form.accounting_organization_id &&
                               (form.accounting_organization_id !==
-                                expansionData.accounting_organization_id ||
+                                expansionData?.accounting_organization_id ||
                                 !step3Completed) && (
                                 <Button
                                   size="2"

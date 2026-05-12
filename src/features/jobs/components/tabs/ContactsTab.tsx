@@ -148,7 +148,10 @@ export default function ContactsTab({
       if (e2) throw e2
       const resIds =
         (res as Array<{ id: string }> | null)?.map((r) => r.id) ?? []
-      const roleByTimePeriodId = new Map<string, { title: string; category: string | null }>()
+      const roleByTimePeriodId = new Map<
+        string,
+        { title: string; category: string | null }
+      >()
       for (const tp of (res as Array<{
         id: string
         title: string | null
@@ -392,7 +395,9 @@ export default function ContactsTab({
                       textDecoration: 'none',
                     }}
                   >
-                    <Text size="2">{customerContactData.customer_contact.email}</Text>
+                    <Text size="2">
+                      {customerContactData.customer_contact.email}
+                    </Text>
                   </a>
                 ) : (
                   <Text size="2">—</Text>
@@ -416,7 +421,9 @@ export default function ContactsTab({
                       {prettyPhone(customerContactData.customer_contact.phone)}
                     </Text>
                   </a>
-                  <CopyIconButton text={customerContactData.customer_contact.phone} />
+                  <CopyIconButton
+                    text={customerContactData.customer_contact.phone}
+                  />
                 </Flex>
               </Box>
             )}
@@ -675,7 +682,9 @@ export default function ContactsTab({
                   '—'
                 )}
               </Table.Cell>
-              <Table.Cell>{c.roles.length ? c.roles.join(', ') : '—'}</Table.Cell>
+              <Table.Cell>
+                {c.roles.length ? c.roles.join(', ') : '—'}
+              </Table.Cell>
               <Table.Cell>
                 {c.email && c.email !== '—' ? (
                   <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>

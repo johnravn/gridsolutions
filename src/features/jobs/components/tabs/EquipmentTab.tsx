@@ -34,6 +34,7 @@ import { jobDetailQuery, upsertTimePeriod } from '@features/jobs/api/queries'
 import { partnerCustomersQuery } from '@features/inventory/api/partners'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
 import SelectExternalOwnerDialog from '../dialogs/SelectExternalOwnerDialog'
+import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
 import type {
   BookingStatus,
   ExternalReqStatus,
@@ -87,6 +88,10 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
           internal: [],
           external: [],
           externalTimePeriods,
+          groupItemsByGroupId: new Map<
+            string,
+            Array<{ item_id: string; quantity: number }>
+          >(),
         }
       }
 
@@ -116,10 +121,40 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
       const rows = items as Array<ReservedItemRow & any>
       const internal = rows.filter((x) => !extOwnerId(x.item))
       const external = rows.filter((x) => !!extOwnerId(x.item))
+
+      const groupIdsForTemplate = new Set<string>()
+      for (const r of rows) {
+        if (r.source_kind === 'group' && r.source_group_id) {
+          groupIdsForTemplate.add(r.source_group_id)
+        }
+      }
+
+      const groupItemsByGroupId = new Map<
+        string,
+        Array<{ item_id: string; quantity: number }>
+      >()
+      if (groupIdsForTemplate.size > 0) {
+        const { data: groupItemsRows, error: giErr } = await supabase
+          .from('group_items')
+          .select('group_id, item_id, quantity')
+          .in('group_id', Array.from(groupIdsForTemplate))
+        if (giErr) throw giErr
+        for (const row of groupItemsRows) {
+          if (!row.group_id || !row.item_id) continue
+          const list = groupItemsByGroupId.get(row.group_id) ?? []
+          list.push({
+            item_id: row.item_id,
+            quantity: row.quantity,
+          })
+          groupItemsByGroupId.set(row.group_id, list)
+        }
+      }
+
       return {
         internal,
         external,
         externalTimePeriods,
+        groupItemsByGroupId,
       }
     },
   })
@@ -130,6 +165,10 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
       {view === 'internal' && (
         <InternalEquipmentTable
           rows={data?.internal ?? []}
+          groupItemsByGroupId={
+            data?.groupItemsByGroupId ??
+            new Map<string, Array<{ item_id: string; quantity: number }>>()
+          }
           jobId={jobId}
           canBook={canBook}
           companyId={companyId ?? undefined}
@@ -163,6 +202,7 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
 /* ------------------- Internal Table ------------------- */
 function InternalEquipmentTable({
   rows,
+  groupItemsByGroupId,
   jobId,
   canBook,
   companyId,
@@ -174,6 +214,10 @@ function InternalEquipmentTable({
   onViewChange,
 }: {
   rows: Array<any>
+  groupItemsByGroupId: Map<
+    string,
+    Array<{ item_id: string; quantity: number }>
+  >
   jobId: string
   canBook: boolean
   companyId: string | undefined
@@ -212,13 +256,13 @@ function InternalEquipmentTable({
   const groupStatusKey = (groupId: string, timePeriodId: string) =>
     `group:${groupId}:${timePeriodId}`
 
-  const toggleGroup = (groupId: string) => {
+  const toggleGroup = (expandKey: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
-      if (next.has(groupId)) {
-        next.delete(groupId)
+      if (next.has(expandKey)) {
+        next.delete(expandKey)
       } else {
-        next.add(groupId)
+        next.add(expandKey)
       }
       return next
     })
@@ -234,15 +278,18 @@ function InternalEquipmentTable({
   }
 
   const categorizedEntries = React.useMemo(() => {
-    // Group rows by source_group_id (compute inside memo so deps are stable)
+    // One chunk per (inventory group, time period); quantities on rows are
+    // expanded per member item — header qty uses impliedBookedGroupCount.
     const groupMap = new Map<string, Array<any>>()
     const directRows: Array<any> = []
 
     rows.forEach((r) => {
       if (r.source_kind === 'group' && r.source_group_id) {
-        const arr = groupMap.get(r.source_group_id) ?? []
+        const tp = (r.time_period_id as string | undefined) ?? ''
+        const chunkKey = `${r.source_group_id}:${tp}`
+        const arr = groupMap.get(chunkKey) ?? []
         arr.push(r)
-        groupMap.set(r.source_group_id, arr)
+        groupMap.set(chunkKey, arr)
       } else {
         directRows.push(r)
       }
@@ -251,13 +298,19 @@ function InternalEquipmentTable({
     const categoryMap = new Map<
       string,
       {
-        groupEntries: Array<[string, Array<any>]>
+        groupEntries: Array<{
+          groupId: string
+          timePeriodId: string
+          rows: Array<any>
+        }>
         directRows: Array<any>
       }
     >()
 
-    for (const [groupId, groupRows] of groupMap.entries()) {
+    for (const groupRows of groupMap.values()) {
       const firstRow = groupRows[0]
+      const groupId = firstRow.source_group_id as string
+      const timePeriodId = (firstRow.time_period_id as string | undefined) ?? ''
       const sourceGroup = Array.isArray(firstRow?.source_group)
         ? firstRow?.source_group[0]
         : firstRow?.source_group
@@ -266,7 +319,7 @@ function InternalEquipmentTable({
         groupEntries: [],
         directRows: [],
       }
-      entry.groupEntries.push([groupId, groupRows])
+      entry.groupEntries.push({ groupId, timePeriodId, rows: groupRows })
       categoryMap.set(categoryName, entry)
     }
 
@@ -424,7 +477,11 @@ function InternalEquipmentTable({
       const itemIds = rows
         .filter((r) => {
           if (decoupledRows.has(r.id)) return false
-          if (r.source_kind === 'group' && r.source_group_id && r.time_period_id) {
+          if (
+            r.source_kind === 'group' &&
+            r.source_group_id &&
+            r.time_period_id
+          ) {
             const key = groupStatusKey(r.source_group_id, r.time_period_id)
             if (decoupledGroups.has(key)) return false
           }
@@ -557,8 +614,8 @@ function InternalEquipmentTable({
           )
           const itemCount =
             category.directRows.length +
-            category.groupEntries.reduce((sum, [, groupRows]) => {
-              return sum + groupRows.length
+            category.groupEntries.reduce((sum, chunk) => {
+              return sum + chunk.rows.length
             }, 0)
 
           return (
@@ -618,40 +675,56 @@ function InternalEquipmentTable({
                     </Table.Header>
                     <Table.Body>
                       {/* Render grouped items */}
-                      {category.groupEntries.map(([groupId, groupRows]) => {
-                        const firstRow = groupRows[0]
-                        const sourceGroup = Array.isArray(
-                          firstRow?.source_group,
-                        )
-                          ? firstRow?.source_group[0]
-                          : firstRow?.source_group
-                        const groupName =
-                          sourceGroup?.name ?? `Group ${groupId.slice(0, 8)}`
-                        const groupCategory = Array.isArray(
-                          sourceGroup?.category,
-                        )
-                          ? sourceGroup?.category[0]?.name
-                          : sourceGroup?.category?.name
-                        const isExpanded = expandedGroups.has(groupId)
-                        const statusKey = groupStatusKey(
-                          groupId,
-                          firstRow.time_period_id,
-                        )
-                        const totalQty = groupRows.reduce(
-                          (sum, r) => sum + (r.quantity ?? 0),
-                          0,
-                        )
+                      {category.groupEntries.map(
+                        ({ groupId, timePeriodId, rows: groupRows }) => {
+                          const firstRow = groupRows[0]
+                          const sourceGroup = Array.isArray(
+                            firstRow?.source_group,
+                          )
+                            ? firstRow?.source_group[0]
+                            : firstRow?.source_group
+                          const groupName =
+                            sourceGroup?.name ??
+                            `Group ${groupId.slice(0, 8)}`
+                          const groupCategory = Array.isArray(
+                            sourceGroup?.category,
+                          )
+                            ? sourceGroup?.category[0]?.name
+                            : sourceGroup?.category?.name
+                          const expandKey = `${groupId}:${timePeriodId}`
+                          const isExpanded = expandedGroups.has(expandKey)
+                          const periodId =
+                            timePeriodId || firstRow.time_period_id
+                          const statusKey = groupStatusKey(groupId, periodId)
+                          const template =
+                            groupItemsByGroupId.get(groupId) ?? []
+                          const totalQty =
+                            template.length > 0
+                              ? impliedBookedGroupCount(
+                                  template,
+                                  groupRows.map((r: any) => ({
+                                    item_id: r.item_id,
+                                    quantity: r.quantity ?? 0,
+                                  })),
+                                )
+                              : groupRows.reduce(
+                                  (sum: number, r: any) =>
+                                    sum + (r.quantity ?? 0),
+                                  0,
+                                )
 
-                        return (
-                          <React.Fragment key={groupId}>
-                            {/* Group header row */}
-                            <Table.Row
-                              style={{
-                                cursor: editMode ? 'default' : 'pointer',
-                                backgroundColor: 'var(--gray-a1)',
-                              }}
-                              onClick={() => !editMode && toggleGroup(groupId)}
-                            >
+                          return (
+                            <React.Fragment key={expandKey}>
+                              {/* Group header row */}
+                              <Table.Row
+                                style={{
+                                  cursor: editMode ? 'default' : 'pointer',
+                                  backgroundColor: 'var(--gray-a1)',
+                                }}
+                                onClick={() =>
+                                  !editMode && toggleGroup(expandKey)
+                                }
+                              >
                               <Table.Cell>
                                 <Box
                                   style={{
@@ -704,7 +777,9 @@ function InternalEquipmentTable({
                                         {decoupledGroups.has(statusKey) ? (
                                           <>
                                             <Popover.Root
-                                              open={statusPopoverOpen === statusKey}
+                                              open={
+                                                statusPopoverOpen === statusKey
+                                              }
                                               onOpenChange={(open) =>
                                                 setStatusPopoverOpen(
                                                   open ? statusKey : null,
@@ -719,12 +794,23 @@ function InternalEquipmentTable({
                                                     e.stopPropagation()
                                                   }}
                                                 >
-                                                  <Edit width={14} height={14} />
+                                                  <Edit
+                                                    width={14}
+                                                    height={14}
+                                                  />
                                                 </IconButton>
                                               </Popover.Trigger>
-                                              <Popover.Content style={{ width: 180 }}>
-                                                <Flex direction="column" gap="2">
-                                                  <Text size="2" weight="medium">
+                                              <Popover.Content
+                                                style={{ width: 180 }}
+                                              >
+                                                <Flex
+                                                  direction="column"
+                                                  gap="2"
+                                                >
+                                                  <Text
+                                                    size="2"
+                                                    weight="medium"
+                                                  >
                                                     Change status
                                                   </Text>
                                                   <Select.Root
@@ -735,7 +821,7 @@ function InternalEquipmentTable({
                                                     onValueChange={(value) => {
                                                       handleUpdateGroupStatus(
                                                         groupId,
-                                                        firstRow.time_period_id,
+                                                        periodId,
                                                         value as BookingStatus,
                                                       )
                                                       setStatusPopoverOpen(null)
@@ -766,7 +852,9 @@ function InternalEquipmentTable({
                                               }}
                                               style={{
                                                 opacity:
-                                                  hoveredRowId === statusKey ? 1 : 0,
+                                                  hoveredRowId === statusKey
+                                                    ? 1
+                                                    : 0,
                                                 pointerEvents:
                                                   hoveredRowId === statusKey
                                                     ? 'auto'
@@ -786,7 +874,9 @@ function InternalEquipmentTable({
                                             }}
                                             style={{
                                               opacity:
-                                                hoveredRowId === statusKey ? 1 : 0,
+                                                hoveredRowId === statusKey
+                                                  ? 1
+                                                  : 0,
                                               pointerEvents:
                                                 hoveredRowId === statusKey
                                                   ? 'auto'
@@ -813,10 +903,7 @@ function InternalEquipmentTable({
                                     color="red"
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      handleDeleteGroup(
-                                        groupId,
-                                        firstRow.time_period_id,
-                                      )
+                                      handleDeleteGroup(groupId, periodId)
                                     }}
                                   >
                                     <Trash width={14} height={14} />
@@ -1115,7 +1202,10 @@ function InternalEquipmentTable({
             justify="center"
             style={rows.length > 0 ? { flexDirection: 'row' } : undefined}
           >
-            <Plus width={rows.length === 0 ? 24 : 16} height={rows.length === 0 ? 24 : 16} />
+            <Plus
+              width={rows.length === 0 ? 24 : 16}
+              height={rows.length === 0 ? 24 : 16}
+            />
             <Text size="2" color="gray">
               {rows.length === 0 ? 'Book items' : 'Add items'}
             </Text>

@@ -137,7 +137,14 @@ export default function CustomerTable({
           marginTop: 16,
         }}
       >
-        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div
+          style={{
+            minWidth: 'max-content',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
           {/* Table header */}
           <div
             style={{
@@ -151,33 +158,33 @@ export default function CustomerTable({
             }}
           >
             <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Name
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          <Flex gap="1" align="center">
-            Type
-            <Tooltip content="Customer: normal customer, Partner: supplier & customer">
-              <InfoCircle width="1em" height="1em" />
-            </Tooltip>
-          </Flex>
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Crew rate
+              style={{
+                fontSize: 'var(--font-size-1)',
+                fontWeight: 600,
+              }}
+            >
+              Name
+            </div>
+            <div
+              style={{
+                fontSize: 'var(--font-size-1)',
+                fontWeight: 600,
+              }}
+            >
+              <Flex gap="1" align="center">
+                Type
+                <Tooltip content="Customer: normal customer, Partner: supplier & customer">
+                  <InfoCircle width="1em" height="1em" />
+                </Tooltip>
+              </Flex>
+            </div>
+            <div
+              style={{
+                fontSize: 'var(--font-size-1)',
+                fontWeight: 600,
+              }}
+            >
+              Crew rate
             </div>
           </div>
 
@@ -191,85 +198,88 @@ export default function CustomerTable({
               marginTop: 8,
             }}
           >
-        {isLoading ? (
-          <Flex align="center" justify="center" py="6">
-            <Spinner size="2" />
-          </Flex>
-        ) : rows.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              No results
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const r = rows[virtualRow.index]
+            {isLoading ? (
+              <Flex align="center" justify="center" py="6">
+                <Spinner size="2" />
+              </Flex>
+            ) : rows.length === 0 ? (
+              <Flex align="center" justify="center" py="6">
+                <Text size="2" color="gray">
+                  No results
+                </Text>
+              </Flex>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const r = rows[virtualRow.index]
 
-              const active = r.id === selectedId
+                  const active = r.id === selectedId
 
-              return (
-                <div
-                  key={r.id}
-                  data-index={virtualRow.index}
-                  onClick={() => onSelect(r.id)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    display: 'grid',
-                    gridTemplateColumns: GRID_COLUMNS,
-                    gap: 'var(--space-2)',
-                    alignItems: 'center',
-                    padding: '0 var(--space-3)',
-                    cursor: 'pointer',
-                    backgroundColor: active ? 'var(--accent-a3)' : 'transparent',
-                    borderRadius: 'var(--radius-2)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!active) {
-                      e.currentTarget.style.backgroundColor = 'transparent'
-                    }
-                  }}
-                >
-                  <div>
-                    <Text size="2" weight="medium">
-                      {r.name}
-                    </Text>
-                  </div>
-                  <div>
-                    {r.is_partner ? (
-                      <Badge variant="soft" color="green">
-                        Partner
-                      </Badge>
-                    ) : (
-                      <Badge variant="soft">Customer</Badge>
-                    )}
-                  </div>
-                  <div>
-                    <Text size="1" color="gray">
-                      {(r as any).crew_pricing_level?.name ?? 'Standard'}
-                    </Text>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                  return (
+                    <div
+                      key={r.id}
+                      data-index={virtualRow.index}
+                      onClick={() => onSelect(r.id)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'grid',
+                        gridTemplateColumns: GRID_COLUMNS,
+                        gap: 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: '0 var(--space-3)',
+                        cursor: 'pointer',
+                        backgroundColor: active
+                          ? 'var(--accent-a3)'
+                          : 'transparent',
+                        borderRadius: 'var(--radius-2)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor =
+                            'var(--gray-a2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!active) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }
+                      }}
+                    >
+                      <div>
+                        <Text size="2" weight="medium">
+                          {r.name}
+                        </Text>
+                      </div>
+                      <div>
+                        {r.is_partner ? (
+                          <Badge variant="soft" color="green">
+                            Partner
+                          </Badge>
+                        ) : (
+                          <Badge variant="soft">Customer</Badge>
+                        )}
+                      </div>
+                      <div>
+                        <Text size="1" color="gray">
+                          {(r as any).crew_pricing_level?.name ?? 'Standard'}
+                        </Text>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

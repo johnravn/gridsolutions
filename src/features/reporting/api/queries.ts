@@ -44,9 +44,9 @@ export function reportJobProfitabilityQuery({
   fromDate: string
   toDate: string
 }) {
-  return queryOptions<JobProfitabilityRow[]>({
+  return queryOptions<Array<JobProfitabilityRow>>({
     queryKey: ['reporting', 'job-profitability', companyId, fromDate, toDate],
-    queryFn: async (): Promise<JobProfitabilityRow[]> => {
+    queryFn: async (): Promise<Array<JobProfitabilityRow>> => {
       const from = new Date(fromDate)
       const to = new Date(toDate)
       const fromISO = from.toISOString()
@@ -87,10 +87,7 @@ export function reportJobProfitabilityQuery({
 
       if (itemsError) throw itemsError
 
-      const byJob = new Map<
-        string,
-        { income: number; expenses: number }
-      >()
+      const byJob = new Map<string, { income: number; expenses: number }>()
       for (const j of jobIds) {
         byJob.set(j, { income: 0, expenses: 0 })
       }
@@ -108,9 +105,12 @@ export function reportJobProfitabilityQuery({
         const profit = income - expenses
         const margin_pct =
           income > 0 ? Math.round((profit / income) * 10000) / 100 : null
-        const jobNumber = job.jobnr != null ? String(job.jobnr).padStart(6, '0') : '—'
+        const jobNumber =
+          job.jobnr != null ? String(job.jobnr).padStart(6, '0') : '—'
         const customerName =
-          job.customer != null && typeof job.customer === 'object' && job.customer.name != null
+          job.customer != null &&
+          typeof job.customer === 'object' &&
+          job.customer.name != null
             ? job.customer.name
             : null
         return {
@@ -143,7 +143,7 @@ export function reportCustomerProfitabilityQuery({
   fromDate: string
   toDate: string
 }) {
-  return queryOptions<CustomerProfitabilityRow[]>({
+  return queryOptions<Array<CustomerProfitabilityRow>>({
     queryKey: [
       'reporting',
       'customer-profitability',
@@ -151,7 +151,7 @@ export function reportCustomerProfitabilityQuery({
       fromDate,
       toDate,
     ],
-    queryFn: async (): Promise<CustomerProfitabilityRow[]> => {
+    queryFn: async (): Promise<Array<CustomerProfitabilityRow>> => {
       const jobRows = await reportJobProfitabilityQuery({
         companyId,
         fromDate,
@@ -217,9 +217,9 @@ export function reportUtilizationQuery({
   fromDate: string
   toDate: string
 }) {
-  return queryOptions<UtilizationRow[]>({
+  return queryOptions<Array<UtilizationRow>>({
     queryKey: ['reporting', 'utilization', companyId, fromDate, toDate],
-    queryFn: async (): Promise<UtilizationRow[]> => {
+    queryFn: async (): Promise<Array<UtilizationRow>> => {
       const from = new Date(fromDate)
       const to = new Date(toDate)
       const fromISO = from.toISOString()

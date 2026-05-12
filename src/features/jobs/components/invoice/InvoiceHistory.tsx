@@ -324,7 +324,7 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
         Invoice History
       </Heading>
       <Box style={{ overflowX: 'auto' }}>
-          <Table.Root style={{ width: '100%', minWidth: 720 }}>
+        <Table.Root style={{ width: '100%', minWidth: 720 }}>
           <Table.Header>
             <Table.Row>
               <Table.ColumnHeaderCell>Created</Table.ColumnHeaderCell>
@@ -412,7 +412,9 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
                         {formatCurrency(getInvoiceTotal(invoice)!)}
                       </Text>
                     ) : (
-                      <Text size="2" color="gray">—</Text>
+                      <Text size="2" color="gray">
+                        —
+                      </Text>
                     )}
                   </Table.Cell>
                   <Table.Cell>

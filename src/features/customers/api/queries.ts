@@ -114,7 +114,11 @@ export function customersIndexQuery({
         return fuzzySearch(
           normalized as Array<CustomerRow>,
           search,
-          [(item) => item.name, (item) => item.vat_number, (item) => item.address],
+          [
+            (item) => item.name,
+            (item) => item.vat_number,
+            (item) => item.address,
+          ],
           0.25, // Lower threshold since we already filtered with ilike
         )
       }
@@ -162,8 +166,8 @@ export function customerDetailQuery({
 
       const raw = c as any
       const crewPricingLevel = Array.isArray(raw.crew_pricing_level)
-        ? raw.crew_pricing_level[0] ?? null
-        : raw.crew_pricing_level ?? null
+        ? (raw.crew_pricing_level[0] ?? null)
+        : (raw.crew_pricing_level ?? null)
       return {
         ...raw,
         crew_pricing_level: crewPricingLevel,

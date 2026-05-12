@@ -1,10 +1,6 @@
 // src/features/jobs/components/tabs/OffersTab.tsx
 import * as React from 'react'
-import {
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Badge,
   Box,
@@ -43,6 +39,7 @@ import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import {
   createBookingsFromOffer,
+  createEmptyDraftTechnicalOffer,
   createTechnicalOfferFromBookings,
   deleteOffer,
   duplicateOffer,
@@ -54,6 +51,7 @@ import {
 } from '../../api/offerQueries'
 import TechnicalOfferEditor from '../dialogs/TechnicalOfferEditor'
 import PrettyOfferEditor from '../dialogs/PrettyOfferEditor'
+import { formatOfferNumberDisplay } from '../../utils/offerNumber'
 import type { JobOffer, OfferDetail, OfferType } from '../../types'
 
 function getOfferStatusBadgeColor(offer: JobOffer) {
@@ -305,10 +303,11 @@ export default function OffersTab({
         .in('offer_id', offerIds)
       if (crewItemsErr) throw crewItemsErr
 
-      const { data: transportItemsRaw, error: transportItemsErr } = await supabase
-        .from('offer_transport_items')
-        .select('*')
-        .in('offer_id', offerIds)
+      const { data: transportItemsRaw, error: transportItemsErr } =
+        await supabase
+          .from('offer_transport_items')
+          .select('*')
+          .in('offer_id', offerIds)
       if (transportItemsErr) throw transportItemsErr
 
       const crewItems = (crewItemsRaw as Array<any> | null | undefined) ?? []
@@ -490,7 +489,11 @@ export default function OffersTab({
 
   const parseEquipmentKey = (
     key: string,
-  ): { source_kind: 'direct' | 'group'; source_group_id: string | null; item_id: string } => {
+  ): {
+    source_kind: 'direct' | 'group'
+    source_group_id: string | null
+    item_id: string
+  } => {
     const [source_kind, source_group_id_raw, item_id] = key.split(':')
     return {
       source_kind: source_kind === 'group' ? 'group' : 'direct',
@@ -638,7 +641,8 @@ export default function OffersTab({
         .in('id', diffItemIds)
       if (error) throw error
       const m = new Map<string, string>()
-      for (const row of ((data as Array<{ id: string; name: string }> | null) ?? [])) {
+      for (const row of (data as Array<{ id: string; name: string }> | null) ??
+        []) {
         m.set(row.id, row.name)
       }
       return m
@@ -710,7 +714,8 @@ export default function OffersTab({
       removedEquipment.map((c) => (
         <Text key={`re-${c.key}`} size="1">
           - {formatItem(c.item_id)}
-          {c.source_kind === 'group' ? ' (group)' : ''}: -{c.current - c.expected}
+          {c.source_kind === 'group' ? ' (group)' : ''}: -
+          {c.current - c.expected}
         </Text>
       )),
       'None',
@@ -721,7 +726,8 @@ export default function OffersTab({
       addedEquipment.map((c) => (
         <Text key={`ae-${c.key}`} size="1">
           - {formatItem(c.item_id)}
-          {c.source_kind === 'group' ? ' (group)' : ''}: +{c.expected - c.current}
+          {c.source_kind === 'group' ? ' (group)' : ''}: +
+          {c.expected - c.current}
         </Text>
       )),
       'None',
@@ -740,7 +746,8 @@ export default function OffersTab({
     if (diff.expectedTransport === null) {
       lines.push(
         <Text key="transport" size="1" color="gray">
-          Transport: cannot be strictly compared (offer does not specify vehicles).
+          Transport: cannot be strictly compared (offer does not specify
+          vehicles).
         </Text>,
       )
     } else {
@@ -1143,6 +1150,28 @@ export default function OffersTab({
     },
   })
 
+  const createEmptyTechnicalOfferMutation = useMutation({
+    mutationFn: async () => {
+      return await createEmptyDraftTechnicalOffer({ jobId, companyId })
+    },
+    onSuccess: (newOfferId) => {
+      qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      setEditorType('technical')
+      setEditingOfferId(newOfferId)
+      setEditorOpen(true)
+      success(
+        'Offer created',
+        'Add equipment, crew, and transport, then save your changes.',
+      )
+    },
+    onError: (err: any) => {
+      toastError(
+        'Failed to create technical offer',
+        err?.message || 'Please try again.',
+      )
+    },
+  })
+
   const exportPdfMutation = useMutation({
     mutationFn: exportOfferPDF,
     onSuccess: () => {
@@ -1158,9 +1187,7 @@ export default function OffersTab({
   )
 
   const handleCreateTechnicalOffer = () => {
-    setEditingOfferId(null)
-    setEditorType('technical')
-    setEditorOpen(true)
+    createEmptyTechnicalOfferMutation.mutate()
   }
 
   const handleCreatePrettyOffer = () => {
@@ -1229,7 +1256,8 @@ export default function OffersTab({
   const fetchGroupItemsMap = React.useCallback(
     async (groupIds: Array<string>) => {
       const ids = Array.from(new Set(groupIds)).filter(Boolean)
-      if (ids.length === 0) return new Map<string, Array<{ item_id: string; quantity: number }>>()
+      if (ids.length === 0)
+        return new Map<string, Array<{ item_id: string; quantity: number }>>()
 
       const { data, error } = await supabase
         .from('group_items')
@@ -1238,8 +1266,12 @@ export default function OffersTab({
 
       if (error) throw error
 
-      const map = new Map<string, Array<{ item_id: string; quantity: number }>>()
-      for (const row of (data as Array<GroupItemRow> | null | undefined) ?? []) {
+      const map = new Map<
+        string,
+        Array<{ item_id: string; quantity: number }>
+      >()
+      for (const row of (data as Array<GroupItemRow> | null | undefined) ??
+        []) {
         if (!row.group_id || !row.item_id) continue
         const list = map.get(row.group_id) ?? []
         list.push({ item_id: row.item_id, quantity: row.quantity ?? 1 })
@@ -1271,106 +1303,111 @@ export default function OffersTab({
     [bookingsSnapshotQuery, computeOfferDiff, fetchGroupItemsMap, qc],
   )
 
-  const handleSyncBookings = React.useCallback(async (offer: JobOffer) => {
-    if (!user?.id) {
-      toastError('Authentication required', 'Please log in to sync bookings.')
-      return
-    }
-    // If syncing would remove anything, warn before proceeding.
-    let diff: OfferDiff | null = null
-    try {
-      diff = await fetchOfferDiffForSync(offer)
-    } catch (e: any) {
-      toastError(
-        'Failed to check booking changes',
-        e?.message || 'Please try again.',
-      )
-      return
-    }
-    if (!diff) {
-      info(
-        'Just a sec…',
-        'Loading differences so we can warn you about removals. Try again in a moment.',
-      )
-      offersQuery.refetch()
-      bookingsSnapshotQuery.refetch()
-      groupItemsQuery.refetch()
-      return
-    }
+  const handleSyncBookings = React.useCallback(
+    async (offer: JobOffer) => {
+      if (!user?.id) {
+        toastError('Authentication required', 'Please log in to sync bookings.')
+        return
+      }
+      // If syncing would remove anything, warn before proceeding.
+      let diff: OfferDiff | null = null
+      try {
+        diff = await fetchOfferDiffForSync(offer)
+      } catch (e: any) {
+        toastError(
+          'Failed to check booking changes',
+          e?.message || 'Please try again.',
+        )
+        return
+      }
+      if (!diff) {
+        info(
+          'Just a sec…',
+          'Loading differences so we can warn you about removals. Try again in a moment.',
+        )
+        offersQuery.refetch()
+        bookingsSnapshotQuery.refetch()
+        groupItemsQuery.refetch()
+        return
+      }
 
-    const equipmentRemovals: Array<string> = []
-    const crewRemovals: Array<string> = []
-    const transportRemovals: Array<string> = []
+      const equipmentRemovals: Array<string> = []
+      const crewRemovals: Array<string> = []
+      const transportRemovals: Array<string> = []
 
-    const removedEquipment = diff.equipmentChanges
-      .filter((c) => c.current > c.expected)
-      .sort((a, b) => (b.current - b.expected) - (a.current - a.expected))
-    for (const c of removedEquipment.slice(0, 10)) {
-      equipmentRemovals.push(
-        `Equipment: ${formatItem(c.item_id)}${c.source_kind === 'group' ? ' (group)' : ''} (-${c.current - c.expected})`,
-      )
-    }
-    if (removedEquipment.length > 10) {
-      equipmentRemovals.push(
-        `…and ${removedEquipment.length - 10} more equipment removals`,
-      )
-    }
-
-    const removedCrew = diff.crewChanges
-      .filter((c) => c.current > c.expected)
-      .sort((a, b) => (b.current - b.expected) - (a.current - a.expected))
-    for (const c of removedCrew.slice(0, 10)) {
-      crewRemovals.push(`${c.title || 'Crew'} (${c.current} → ${c.expected})`)
-    }
-    if (removedCrew.length > 10) {
-      crewRemovals.push(`…and ${removedCrew.length - 10} more crew removals`)
-    }
-
-    // Transport removals (best-effort)
-    if (diff.expectedTransport === null) {
-      if (diff.currentTransport.length > 0) {
-        transportRemovals.push(
-          `Transport: existing vehicle bookings may be replaced (${diff.currentTransport.length} current)`,
+      const removedEquipment = diff.equipmentChanges
+        .filter((c) => c.current > c.expected)
+        .sort((a, b) => b.current - b.expected - (a.current - a.expected))
+      for (const c of removedEquipment.slice(0, 10)) {
+        equipmentRemovals.push(
+          `Equipment: ${formatItem(c.item_id)}${c.source_kind === 'group' ? ' (group)' : ''} (-${c.current - c.expected})`,
         )
       }
-    } else {
-      const expectedSet = new Set(diff.expectedTransport)
-      const removedVehicles = diff.currentTransport.filter(
-        (id) => !expectedSet.has(id),
-      )
-      if (removedVehicles.length > 0) {
-        transportRemovals.push(
-          `${removedVehicles.length} vehicle booking(s) will be removed/replaced`,
+      if (removedEquipment.length > 10) {
+        equipmentRemovals.push(
+          `…and ${removedEquipment.length - 10} more equipment removals`,
         )
       }
-    }
 
-    const totalRemovalCount =
-      equipmentRemovals.length + crewRemovals.length + transportRemovals.length
-    if (totalRemovalCount > 0) {
-      setSyncConfirm({
-        offer,
-        removals: {
-          equipment: equipmentRemovals,
-          crew: crewRemovals,
-          transport: transportRemovals,
-        },
-      })
-      return
-    }
+      const removedCrew = diff.crewChanges
+        .filter((c) => c.current > c.expected)
+        .sort((a, b) => b.current - b.expected - (a.current - a.expected))
+      for (const c of removedCrew.slice(0, 10)) {
+        crewRemovals.push(`${c.title || 'Crew'} (${c.current} → ${c.expected})`)
+      }
+      if (removedCrew.length > 10) {
+        crewRemovals.push(`…and ${removedCrew.length - 10} more crew removals`)
+      }
 
-    setSyncingOfferId(offer.id)
-    syncBookingsMutation.mutate(offer.id)
-  }, [
-    bookingsSnapshotQuery,
-    fetchOfferDiffForSync,
-    groupItemsQuery,
-    info,
-    offersQuery,
-    syncBookingsMutation,
-    toastError,
-    user?.id,
-  ])
+      // Transport removals (best-effort)
+      if (diff.expectedTransport === null) {
+        if (diff.currentTransport.length > 0) {
+          transportRemovals.push(
+            `Transport: existing vehicle bookings may be replaced (${diff.currentTransport.length} current)`,
+          )
+        }
+      } else {
+        const expectedSet = new Set(diff.expectedTransport)
+        const removedVehicles = diff.currentTransport.filter(
+          (id) => !expectedSet.has(id),
+        )
+        if (removedVehicles.length > 0) {
+          transportRemovals.push(
+            `${removedVehicles.length} vehicle booking(s) will be removed/replaced`,
+          )
+        }
+      }
+
+      const totalRemovalCount =
+        equipmentRemovals.length +
+        crewRemovals.length +
+        transportRemovals.length
+      if (totalRemovalCount > 0) {
+        setSyncConfirm({
+          offer,
+          removals: {
+            equipment: equipmentRemovals,
+            crew: crewRemovals,
+            transport: transportRemovals,
+          },
+        })
+        return
+      }
+
+      setSyncingOfferId(offer.id)
+      syncBookingsMutation.mutate(offer.id)
+    },
+    [
+      bookingsSnapshotQuery,
+      fetchOfferDiffForSync,
+      groupItemsQuery,
+      info,
+      offersQuery,
+      syncBookingsMutation,
+      toastError,
+      user?.id,
+    ],
+  )
 
   const handleExportPDF = (offer: JobOffer) => {
     exportPdfMutation.mutate(offer.id)
@@ -1463,6 +1500,7 @@ export default function OffersTab({
           <Table.Root variant="surface" style={{ minWidth: 1060 }}>
             <Table.Header>
               <Table.Row>
+                <Table.ColumnHeaderCell>Offer #</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Version</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
@@ -1476,6 +1514,11 @@ export default function OffersTab({
             <Table.Body>
               {offers.map((offer) => (
                 <Table.Row key={offer.id}>
+                  <Table.Cell>
+                    <Text weight="medium">
+                      {formatOfferNumberDisplay(offer.offernr) ?? '—'}
+                    </Text>
+                  </Table.Cell>
                   <Table.Cell>
                     <Flex align="center" gap="2">
                       <Text>v{offer.version_number}</Text>
@@ -1574,7 +1617,11 @@ export default function OffersTab({
                       if (!hasAnyAction) return null
 
                       const openEditor = () => {
-                        setEditorType(offer.offer_type === 'technical' ? 'technical' : 'pretty')
+                        setEditorType(
+                          offer.offer_type === 'technical'
+                            ? 'technical'
+                            : 'pretty',
+                        )
                         if (offer.locked) {
                           handleViewOffer(offer)
                         } else {
@@ -1585,11 +1632,17 @@ export default function OffersTab({
                       return (
                         <Flex justify="end" gap="1" align="center">
                           {(canView || canEdit) && (
-                            <Tooltip content={canView ? 'Open (view)' : 'Open (edit)'}>
+                            <Tooltip
+                              content={canView ? 'Open (view)' : 'Open (edit)'}
+                            >
                               <IconButton
                                 size="1"
                                 variant="soft"
-                                aria-label={canView ? 'Open offer (view)' : 'Open offer (edit)'}
+                                aria-label={
+                                  canView
+                                    ? 'Open offer (view)'
+                                    : 'Open offer (edit)'
+                                }
                                 onClick={openEditor}
                               >
                                 {canView ? (
@@ -1721,7 +1774,9 @@ export default function OffersTab({
                                       onSelect={() =>
                                         handleCreateBookings(offer)
                                       }
-                                      disabled={createBookingsMutation.isPending}
+                                      disabled={
+                                        createBookingsMutation.isPending
+                                      }
                                     >
                                       <Flex align="center" gap="2">
                                         <Calendar width={14} height={14} />
@@ -1816,6 +1871,12 @@ export default function OffersTab({
                 <Text size="2">
                   <strong>Version:</strong> {deleteOpen.version_number}
                 </Text>
+                {formatOfferNumberDisplay(deleteOpen.offernr) ? (
+                  <Text size="2">
+                    <strong>Offer #:</strong>{' '}
+                    {formatOfferNumberDisplay(deleteOpen.offernr)}
+                  </Text>
+                ) : null}
               </Flex>
             </Box>
             <Flex gap="2" mt="4" justify="end">
@@ -1850,8 +1911,8 @@ export default function OffersTab({
                 <InfoCircle width={18} height={18} />
               </Callout.Icon>
               <Callout.Text>
-                This sync will <strong>remove or reduce</strong> existing bookings
-                so they match the offer.
+                This sync will <strong>remove or reduce</strong> existing
+                bookings so they match the offer.
               </Callout.Text>
             </Callout.Root>
 
@@ -1959,23 +2020,31 @@ export default function OffersTab({
                 style={{
                   border: '1px solid var(--gray-a6)',
                   borderRadius: 8,
-                  cursor: 'pointer',
+                  cursor: createEmptyTechnicalOfferMutation.isPending
+                    ? 'not-allowed'
+                    : 'pointer',
+                  opacity: createEmptyTechnicalOfferMutation.isPending ? 0.6 : 1,
                   transition: 'all 100ms',
                 }}
                 role="button"
-                tabIndex={0}
+                tabIndex={
+                  createEmptyTechnicalOfferMutation.isPending ? -1 : 0
+                }
                 onClick={() => {
+                  if (createEmptyTechnicalOfferMutation.isPending) return
                   setCreateDialogOpen(false)
                   handleCreateTechnicalOffer()
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault()
+                    if (createEmptyTechnicalOfferMutation.isPending) return
                     setCreateDialogOpen(false)
                     handleCreateTechnicalOffer()
                   }
                 }}
                 onMouseEnter={(e) => {
+                  if (createEmptyTechnicalOfferMutation.isPending) return
                   e.currentTarget.style.borderColor = 'var(--gray-a8)'
                   e.currentTarget.style.background = 'var(--gray-a2)'
                 }}
@@ -2138,7 +2207,8 @@ export default function OffersTab({
           jobId={jobId}
           companyId={companyId}
           offerId={editingOfferId}
-          onSaved={() => {
+          onSaved={(savedId) => {
+            setEditingOfferId(savedId)
             qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
           }}
           onSyncBookingsAfterSave={async (offerId) => {

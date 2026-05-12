@@ -171,7 +171,10 @@ export default function MattersPage() {
   // On small screens: when a matter is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedId])
 
@@ -194,7 +197,12 @@ export default function MattersPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              style={{ flexShrink: 0 }}
+            >
               <Heading size="5">Matters</Heading>
               <Flex align="center" gap="2" wrap="wrap">
                 <MattersFilter
@@ -339,15 +347,11 @@ export default function MattersPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{

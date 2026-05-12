@@ -281,7 +281,8 @@ export default function CompanyTable({
           }}
           title="Click to sort"
         >
-          Name / Email{sortBy === 'name' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
+          Name / Email
+          {sortBy === 'name' ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
         </div>
         <div
           onClick={() => handleSort('status')}
@@ -343,7 +344,9 @@ export default function CompanyTable({
                     alignItems: 'center',
                     padding: '0 var(--space-3)',
                     cursor: r.kind !== 'invite' ? 'pointer' : 'default',
-                    backgroundColor: active ? 'var(--accent-a3)' : 'transparent',
+                    backgroundColor: active
+                      ? 'var(--accent-a3)'
+                      : 'transparent',
                     borderRadius: 'var(--radius-2)',
                   }}
                   onMouseEnter={(e) => {

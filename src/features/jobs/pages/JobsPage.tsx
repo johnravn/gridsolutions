@@ -112,7 +112,6 @@ export default function JobsPage() {
     }
   }, [isMinimized, savedWidth])
 
-
   // Handle mouse move for resizing
   React.useEffect(() => {
     if (!isResizing) return
@@ -171,7 +170,10 @@ export default function JobsPage() {
   // On phone: when a job is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedId])
 
@@ -183,12 +185,7 @@ export default function JobsPage() {
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{ minHeight: 0 }}
-        >
+        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
           {/* Jobs list + top bar: viewport height minus app chrome and padding */}
           <Card
             size="3"
@@ -200,7 +197,14 @@ export default function JobsPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2" style={{ flexShrink: 0 }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              wrap="wrap"
+              gap="2"
+              style={{ flexShrink: 0 }}
+            >
               <Heading size="5">Jobs</Heading>
               <Flex align="center" gap="2" wrap="wrap">
                 {selectedDate ? (
@@ -264,39 +268,47 @@ export default function JobsPage() {
           </Card>
 
           {/* Inspector: below the fold on mobile; same height as list so layout doesn't jump before content loads */}
-          <div ref={inspectorRef} style={{ minHeight: 0, maxWidth: '100%', width: '100%', height: mobileCardHeight }}>
-          <Card
-            size="3"
+          <div
+            ref={inspectorRef}
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: isLarge ? '100%' : mobileCardHeight,
-              maxHeight: isLarge ? '100%' : undefined,
-              overflow: isLarge ? 'hidden' : 'hidden',
               minHeight: 0,
               maxWidth: '100%',
+              width: '100%',
+              height: mobileCardHeight,
             }}
           >
-            <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
-              Inspector
-            </Heading>
-            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
-            <Box
+            <Card
+              size="3"
               style={{
-                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                height: isLarge ? '100%' : mobileCardHeight,
+                maxHeight: isLarge ? '100%' : undefined,
+                overflow: isLarge ? 'hidden' : 'hidden',
                 minHeight: 0,
-                overflowY: 'auto',
-                minWidth: 0,
                 maxWidth: '100%',
               }}
             >
-              <JobInspector
-                id={selectedId}
-                onDeleted={() => setSelectedId(null)}
-                initialTab={tab}
-              />
-            </Box>
-          </Card>
+              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
+                Inspector
+              </Heading>
+              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
+              <Box
+                style={{
+                  flex: 1,
+                  minHeight: 0,
+                  overflowY: 'auto',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                }}
+              >
+                <JobInspector
+                  id={selectedId}
+                  onDeleted={() => setSelectedId(null)}
+                  initialTab={tab}
+                />
+              </Box>
+            </Card>
           </div>
         </Grid>
         <ScrollToTopButton

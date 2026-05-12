@@ -2,12 +2,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import {
-  Flex,
-  Spinner,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+import { Flex, Spinner, Text, TextField } from '@radix-ui/themes'
 import { Search } from 'iconoir-react'
 import { prettyPhone } from '@shared/phone/phone'
 import { usersIndexQuery } from '../api/queries'
@@ -32,9 +27,13 @@ function compare(
 ): number {
   let cmp = 0
   const aName =
-    a.display_name ?? [a.first_name, a.last_name].filter(Boolean).join(' ') ?? ''
+    a.display_name ??
+    [a.first_name, a.last_name].filter(Boolean).join(' ') ??
+    ''
   const bName =
-    b.display_name ?? [b.first_name, b.last_name].filter(Boolean).join(' ') ?? ''
+    b.display_name ??
+    [b.first_name, b.last_name].filter(Boolean).join(' ') ??
+    ''
   switch (sortBy) {
     case 'email':
       cmp = (a.email ?? '').localeCompare(b.email ?? '', undefined, {
@@ -62,10 +61,7 @@ type Props = {
   onDelete: (user: UserIndexRow) => void
 }
 
-export default function UsersTable({
-  selectedId,
-  onSelect,
-}: Props) {
+export default function UsersTable({ selectedId, onSelect }: Props) {
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('email')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
@@ -205,7 +201,8 @@ export default function UsersTable({
               const isActive = row.user_id === selectedId
               const displayName =
                 row.display_name ??
-                ([row.first_name, row.last_name].filter(Boolean).join(' ') || '—')
+                ([row.first_name, row.last_name].filter(Boolean).join(' ') ||
+                  '—')
 
               return (
                 <div
@@ -225,7 +222,9 @@ export default function UsersTable({
                     alignItems: 'center',
                     padding: '0 var(--space-3)',
                     cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--accent-a3)' : 'transparent',
+                    backgroundColor: isActive
+                      ? 'var(--accent-a3)'
+                      : 'transparent',
                     borderRadius: 'var(--radius-2)',
                   }}
                   onMouseEnter={(e) => {

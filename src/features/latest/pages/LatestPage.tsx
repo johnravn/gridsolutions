@@ -133,7 +133,10 @@ export default function LatestPage() {
   // On small screens: when an item is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedId])
 
@@ -157,7 +160,12 @@ export default function LatestPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              style={{ flexShrink: 0 }}
+            >
               <Heading size="5">Latest</Heading>
               <ActivityFilter
                 selectedTypes={activityTypes}
@@ -274,15 +282,11 @@ export default function LatestPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{

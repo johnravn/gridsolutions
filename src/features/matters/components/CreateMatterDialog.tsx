@@ -257,7 +257,10 @@ export default function CreateMatterDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Announcement sent', 'Recipients were notified in the app (and by email when enabled).')
+      success(
+        'Announcement sent',
+        'Recipients were notified in the app (and by email when enabled).',
+      )
       setTitle('')
       setContent('')
       setSelectedIds(new Set())
@@ -343,28 +346,28 @@ export default function CreateMatterDialog({
             </Box>
 
             {(companyRole === 'owner' || isGlobalSuperuser) && (
-                <Box my="4">
-                  <label
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 'var(--space-2)',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Checkbox
-                      checked={createdAsCompany}
-                      onCheckedChange={(checked) =>
-                        setCreatedAsCompany(checked === true)
-                      }
-                    />
-                    <Text size="2">
-                      Create as company (will show company name instead of your
-                      name)
-                    </Text>
-                  </label>
-                </Box>
-              )}
+              <Box my="4">
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Checkbox
+                    checked={createdAsCompany}
+                    onCheckedChange={(checked) =>
+                      setCreatedAsCompany(checked === true)
+                    }
+                  />
+                  <Text size="2">
+                    Create as company (will show company name instead of your
+                    name)
+                  </Text>
+                </label>
+              </Box>
+            )}
 
             <Box my="4">
               <Text

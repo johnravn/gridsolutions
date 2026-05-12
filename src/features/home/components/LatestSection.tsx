@@ -1,26 +1,19 @@
 import * as React from 'react'
-import {
-  Avatar,
-  Box,
-  Button,
-  Flex,
-  Spinner,
-  Text,
-} from '@radix-ui/themes'
+import { Avatar, Box, Button, Flex, Spinner, Text } from '@radix-ui/themes'
 import { RssFeed } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useNavigate } from '@tanstack/react-router'
 import { groupInventoryActivities } from '@features/latest/utils/groupInventoryActivities'
 import { formatActivityDate } from '@features/latest/utils/formatActivityDate'
-import type {
-  ActivityFeedItem,
-  GroupedInventoryActivity,
-} from '@features/latest/types'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
   useScrollButtonStyles,
 } from './ScrollToBottomButton'
+import type {
+  ActivityFeedItem,
+  GroupedInventoryActivity,
+} from '@features/latest/types'
 
 function getActivityIcon(
   activity: ActivityFeedItem | GroupedInventoryActivity,

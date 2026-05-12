@@ -35,7 +35,8 @@ function randomToken(): string {
   if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
     crypto.getRandomValues(bytes)
   } else {
-    for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256)
+    for (let i = 0; i < bytes.length; i++)
+      bytes[i] = Math.floor(Math.random() * 256)
   }
   return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
@@ -46,7 +47,7 @@ const MAX_SUBSCRIPTIONS_PER_USER = 10
 export async function getCalendarSubscriptions(
   companyId: string,
   userId: string,
-): Promise<CalendarSubscriptionRow[]> {
+): Promise<Array<CalendarSubscriptionRow>> {
   const { data, error } = await supabase
     .from('calendar_subscriptions')
     .select(SELECT_COLS)
@@ -55,7 +56,7 @@ export async function getCalendarSubscriptions(
     .order('created_at', { ascending: true })
 
   if (error) throw error
-  return (data ?? []) as CalendarSubscriptionRow[]
+  return (data ?? []) as Array<CalendarSubscriptionRow>
 }
 
 /** Create a new calendar subscription. Fails if user already has 10. */
@@ -66,7 +67,9 @@ export async function createCalendarSubscription(
 ): Promise<CalendarSubscriptionRow> {
   const existing = await getCalendarSubscriptions(companyId, userId)
   if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) {
-    throw new Error(`You can have at most ${MAX_SUBSCRIPTIONS_PER_USER} calendar subscriptions. Remove one to add another.`)
+    throw new Error(
+      `You can have at most ${MAX_SUBSCRIPTIONS_PER_USER} calendar subscriptions. Remove one to add another.`,
+    )
   }
 
   const row: CalendarSubscriptionInsert = {
@@ -74,7 +77,8 @@ export async function createCalendarSubscription(
     user_id: userId,
     token: randomToken(),
     kind: params.kind,
-    vehicle_id: params.kind === 'transport_vehicle' ? params.vehicleId ?? null : null,
+    vehicle_id:
+      params.kind === 'transport_vehicle' ? (params.vehicleId ?? null) : null,
   }
 
   const { data, error } = await supabase
@@ -103,14 +107,16 @@ export async function deleteCalendarSubscription(
 
 /** Public app URL used for calendar feed link */
 const PUBLIC_BASE_URL =
-  (typeof import.meta !== 'undefined' && (import.meta as any).env?.VITE_APP_PUBLIC_URL as string) ||
+  (typeof import.meta !== 'undefined' &&
+    ((import.meta as any).env?.VITE_APP_PUBLIC_URL as string)) ||
   ''
 
 /** Build the feed URL for a given token */
 export function getCalendarFeedUrl(token: string, baseUrl?: string): string {
   const base =
     baseUrl ??
-    (PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : ''))
+    (PUBLIC_BASE_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : ''))
   return `${base.replace(/\/$/, '')}/api/calendar/feed?token=${encodeURIComponent(token)}`
 }
 
@@ -118,7 +124,8 @@ export function getCalendarFeedUrl(token: string, baseUrl?: string): string {
 export function getCalendarWebcalUrl(token: string, baseUrl?: string): string {
   const base =
     baseUrl ??
-    (PUBLIC_BASE_URL || (typeof window !== 'undefined' ? window.location.origin : ''))
+    (PUBLIC_BASE_URL ||
+      (typeof window !== 'undefined' ? window.location.origin : ''))
   const https = base.replace(/^http:\/\//, 'https://').replace(/\/$/, '')
   return `webcal://${https.replace(/^https:\/\//, '')}/api/calendar/feed?token=${encodeURIComponent(token)}`
 }

@@ -74,9 +74,7 @@ export default function MatterDetail({
   const { data: messages = [] } = useQuery({
     ...matterMessagesQuery(matterId),
     enabled:
-      !!matter &&
-      matter.matter_type === 'crew_invite' &&
-      !hasInvitationMeta,
+      !!matter && matter.matter_type === 'crew_invite' && !hasInvitationMeta,
   })
 
   const { data: files } = useQuery({
@@ -775,66 +773,66 @@ export default function MatterDetail({
       </Dialog.Root>
 
       {canSeeAnnouncementRecipients && recipients.length > 0 && (
-          <Box mb="4">
-            <Separator size="4" mb="3" />
-            <Heading size="4" mb="2">
-              Recipients ({recipients.length})
-            </Heading>
-            <Box
-              mb="3"
-              p="3"
-              style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
-            >
-              {recipientSummary.allViewed ? (
-                <Text size="3" weight="medium" color="green">
-                  All recipients have opened this matter
+        <Box mb="4">
+          <Separator size="4" mb="3" />
+          <Heading size="4" mb="2">
+            Recipients ({recipients.length})
+          </Heading>
+          <Box
+            mb="3"
+            p="3"
+            style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
+          >
+            {recipientSummary.allViewed ? (
+              <Text size="3" weight="medium" color="green">
+                All recipients have opened this matter
+              </Text>
+            ) : (
+              <Flex direction="column" gap="1">
+                <Text size="3" weight="medium">
+                  {recipientSummary.pendingCount} of{' '}
+                  {recipientSummary.totalRecipients} not yet opened
                 </Text>
-              ) : (
-                <Flex direction="column" gap="1">
-                  <Text size="3" weight="medium">
-                    {recipientSummary.pendingCount} of{' '}
-                    {recipientSummary.totalRecipients} not yet opened
-                  </Text>
-                  <Text size="2" color="gray">
-                    {recipientSummary.viewedCount} of{' '}
-                    {recipientSummary.totalRecipients} opened
-                  </Text>
-                </Flex>
-              )}
-            </Box>
-            <Table.Root variant="surface">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Opened</Table.ColumnHeaderCell>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {recipients.map((r) => {
-                  const isViewed = !!r.viewed_at
-                  return (
-                    <Table.Row key={r.id}>
-                      <Table.Cell>
-                        {r.user?.display_name || r.user?.email || 'Unknown'}
-                      </Table.Cell>
-                      <Table.Cell>
-                        {isViewed ? (
-                          <Badge radius="full" size="1" color="green">
-                            Yes
-                          </Badge>
-                        ) : (
-                          <Badge radius="full" size="1" color="orange">
-                            No
-                          </Badge>
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  )
-                })}
-              </Table.Body>
-            </Table.Root>
+                <Text size="2" color="gray">
+                  {recipientSummary.viewedCount} of{' '}
+                  {recipientSummary.totalRecipients} opened
+                </Text>
+              </Flex>
+            )}
           </Box>
-        )}
+          <Table.Root variant="surface">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Opened</Table.ColumnHeaderCell>
+              </Table.Row>
+            </Table.Header>
+            <Table.Body>
+              {recipients.map((r) => {
+                const isViewed = !!r.viewed_at
+                return (
+                  <Table.Row key={r.id}>
+                    <Table.Cell>
+                      {r.user?.display_name || r.user?.email || 'Unknown'}
+                    </Table.Cell>
+                    <Table.Cell>
+                      {isViewed ? (
+                        <Badge radius="full" size="1" color="green">
+                          Yes
+                        </Badge>
+                      ) : (
+                        <Badge radius="full" size="1" color="orange">
+                          No
+                        </Badge>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                )
+              })}
+            </Table.Body>
+          </Table.Root>
+        </Box>
+      )}
     </Box>
   )
 }

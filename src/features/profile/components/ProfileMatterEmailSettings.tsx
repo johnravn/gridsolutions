@@ -122,9 +122,9 @@ export default function ProfileMatterEmailSettings() {
         </Heading>
         <Text size="2" color="gray" mb="4">
           Email alerts for matters involving{' '}
-          <Text weight="medium">{company?.name ?? 'this company'}</Text>.
-          Push notifications (PWA) will be added here later. In-app matters stay
-          in the Matters inbox.
+          <Text weight="medium">{company?.name ?? 'this company'}</Text>. Push
+          notifications (PWA) will be added here later. In-app matters stay in
+          the Matters inbox.
         </Text>
         <Flex align="center" gap="3" wrap="wrap" mb="4">
           <Button
@@ -168,10 +168,7 @@ export default function ProfileMatterEmailSettings() {
           />
         </Flex>
         <Flex justify="end" mt="4">
-          <Button
-            disabled={save.isPending}
-            onClick={() => save.mutate()}
-          >
+          <Button disabled={save.isPending} onClick={() => save.mutate()}>
             {save.isPending ? 'Saving…' : 'Save preferences'}
           </Button>
         </Flex>

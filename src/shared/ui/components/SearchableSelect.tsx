@@ -10,7 +10,7 @@ export type SearchableSelectOption = {
 }
 
 type Props = {
-  options: SearchableSelectOption[]
+  options: Array<SearchableSelectOption>
   value: string
   onValueChange: (value: string) => void
   placeholder?: string

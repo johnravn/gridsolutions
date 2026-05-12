@@ -609,11 +609,15 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
             entity_type: 'matter',
             entity_id: matter.id,
           },
-          { forceEmail }
+          { forceEmail },
         )
       } catch (e) {
         if (import.meta.env.DEV) {
-          console.warn('[notifications] createNotificationAndSendEmail failed', notifType, e)
+          console.warn(
+            '[notifications] createNotificationAndSendEmail failed',
+            notifType,
+            e,
+          )
         }
       }
     }
@@ -734,7 +738,12 @@ export async function sendCrewInvites(
   let addressStr: string | null = null
   if (job.address) {
     const addr = job.address as Record<string, string | null | undefined>
-    const parts = [addr.address_line, addr.zip_code, addr.city, addr.country].filter(Boolean)
+    const parts = [
+      addr.address_line,
+      addr.zip_code,
+      addr.city,
+      addr.country,
+    ].filter(Boolean)
     addressStr = parts.length ? parts.join(', ') : null
   }
 
@@ -885,7 +894,12 @@ export async function sendCrewInvite(
   let addressStr: string | null = null
   if (job.address) {
     const addr = job.address as Record<string, string | null | undefined>
-    const parts = [addr.address_line, addr.zip_code, addr.city, addr.country].filter(Boolean)
+    const parts = [
+      addr.address_line,
+      addr.zip_code,
+      addr.city,
+      addr.country,
+    ].filter(Boolean)
     addressStr = parts.length ? parts.join(', ') : null
   }
 

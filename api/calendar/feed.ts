@@ -30,7 +30,7 @@ function icsEscape(str: string): string {
 function foldLine(line: string): string {
   const max = 75
   if (line.length <= max) return line
-  const parts: string[] = []
+  const parts: Array<string> = []
   let rest = line
   while (rest.length > 0) {
     parts.push(rest.slice(0, max))
@@ -61,7 +61,11 @@ function parseTstzRange(
   const startRaw = m[1].trim()
   const endRaw = m[2].trim()
   if (!startRaw || !endRaw) return null
-  if (endRaw.toLowerCase() === 'infinity' || startRaw.toLowerCase() === '-infinity') return null
+  if (
+    endRaw.toLowerCase() === 'infinity' ||
+    startRaw.toLowerCase() === '-infinity'
+  )
+    return null
 
   const start = new Date(startRaw)
   const end = new Date(endRaw)
@@ -69,7 +73,12 @@ function parseTstzRange(
   return { start: start.toISOString(), end: end.toISOString() }
 }
 
-function rangesOverlap(aStartIso: string, aEndIso: string, bStartIso: string, bEndIso: string): boolean {
+function rangesOverlap(
+  aStartIso: string,
+  aEndIso: string,
+  bStartIso: string,
+  bEndIso: string,
+): boolean {
   const aStart = new Date(aStartIso).getTime()
   const aEnd = new Date(aEndIso).getTime()
   const bStart = new Date(bStartIso).getTime()
@@ -79,8 +88,16 @@ function rangesOverlap(aStartIso: string, aEndIso: string, bStartIso: string, bE
   return aStart < bEnd && bStart < aEnd
 }
 
-function buildICS(events: Array<{ id: string; title: string; start: string; end: string; description?: string }>): string {
-  const lines: string[] = [
+function buildICS(
+  events: Array<{
+    id: string
+    title: string
+    start: string
+    end: string
+    description?: string
+  }>,
+): string {
+  const lines: Array<string> = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Grid//Calendar Feed//EN',
@@ -89,7 +106,9 @@ function buildICS(events: Array<{ id: string; title: string; start: string; end:
   ]
   for (const e of events) {
     const summary = foldLine('SUMMARY:' + icsEscape(e.title))
-    const desc = e.description ? foldLine('DESCRIPTION:' + icsEscape(e.description)) : null
+    const desc = e.description
+      ? foldLine('DESCRIPTION:' + icsEscape(e.description))
+      : null
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@grid-calendar',
@@ -105,9 +124,21 @@ function buildICS(events: Array<{ id: string; title: string; start: string; end:
   return lines.join('\r\n')
 }
 
-function formatLocation(addr: { address_line: string; city: string; zip_code: string; country: string } | null): string {
+function formatLocation(
+  addr: {
+    address_line: string
+    city: string
+    zip_code: string
+    country: string
+  } | null,
+): string {
   if (!addr) return ''
-  const parts = [addr.address_line, addr.city, addr.zip_code, addr.country].filter(Boolean)
+  const parts = [
+    addr.address_line,
+    addr.city,
+    addr.zip_code,
+    addr.country,
+  ].filter(Boolean)
   return parts.join(', ')
 }
 
@@ -138,7 +169,8 @@ export default async function handler(req: any, res: any) {
   }
 
   const supabaseUrl =
-    (process.env.VITE_SUPABASE_URL as string) || (process.env.SUPABASE_URL as string)
+    (process.env.VITE_SUPABASE_URL as string) ||
+    (process.env.SUPABASE_URL as string)
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string
 
   if (!supabaseUrl || !serviceRoleKey) {
@@ -148,7 +180,9 @@ export default async function handler(req: any, res: any) {
     return res.end(JSON.stringify({ error: 'Server configuration error' }))
   }
 
-  const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
+  const supabase = createClient<Database>(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false },
+  })
 
   try {
     const { data: sub, error: subErr } = await supabase
@@ -161,7 +195,9 @@ export default async function handler(req: any, res: any) {
       res.statusCode = 404
       Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
       res.setHeader('Content-Type', 'application/json')
-      return res.end(JSON.stringify({ error: 'Invalid or expired calendar link' }))
+      return res.end(
+        JSON.stringify({ error: 'Invalid or expired calendar link' }),
+      )
     }
 
     const kind = (sub.kind as SubscriptionKind) || 'all_jobs'
@@ -180,7 +216,9 @@ export default async function handler(req: any, res: any) {
       res.statusCode = 403
       Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
       res.setHeader('Content-Type', 'application/json')
-      return res.end(JSON.stringify({ error: 'Invalid or expired calendar link' }))
+      return res.end(
+        JSON.stringify({ error: 'Invalid or expired calendar link' }),
+      )
     }
 
     const now = new Date()
@@ -193,7 +231,7 @@ export default async function handler(req: any, res: any) {
 
     if (kind === 'transport_vehicle' || kind === 'transport_all') {
       // Transport: time_periods with category = transport
-      let q = supabase
+      const q = supabase
         .from('time_periods')
         .select('id, title, start_at, end_at, job_id, category')
         .eq('company_id', companyId)
@@ -217,15 +255,28 @@ export default async function handler(req: any, res: any) {
           .from('reserved_vehicles')
           .select('time_period_id')
           .eq('vehicle_id', vehicleId)
-          .in('time_period_id', periodList.map((p: { id: string }) => p.id))
-        const allowedIds = new Set((rv || []).map((r: { time_period_id: string }) => r.time_period_id))
-        periodList = periodList.filter((p: { id: string }) => allowedIds.has(p.id))
+          .in(
+            'time_period_id',
+            periodList.map((p: { id: string }) => p.id),
+          )
+        const allowedIds = new Set(
+          (rv || []).map((r: { time_period_id: string }) => r.time_period_id),
+        )
+        periodList = periodList.filter((p: { id: string }) =>
+          allowedIds.has(p.id),
+        )
       }
 
       periodList = await filterNonArchivedJobPeriods(supabase, periodList)
 
       const periodIds = periodList.map((p: { id: string }) => p.id)
-      const jobIds = Array.from(new Set(periodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
+      const jobIds = Array.from(
+        new Set(
+          periodList
+            .map((p: { job_id: string | null }) => p.job_id)
+            .filter(Boolean),
+        ),
+      ) as Array<string>
 
       const { data: rvData } = await supabase
         .from('reserved_vehicles')
@@ -233,24 +284,40 @@ export default async function handler(req: any, res: any) {
         .in('time_period_id', periodIds)
 
       const periodToVehicle = new Map<string, string>()
-      ;(rvData || []).forEach((r: { time_period_id: string; vehicle_id: string }) => {
-        periodToVehicle.set(r.time_period_id, r.vehicle_id)
-      })
+      ;(rvData || []).forEach(
+        (r: { time_period_id: string; vehicle_id: string }) => {
+          periodToVehicle.set(r.time_period_id, r.vehicle_id)
+        },
+      )
 
       const vehicleIds = Array.from(new Set(periodToVehicle.values()))
       const { data: vehiclesData } = await supabase
         .from('vehicles')
         .select('id, name, registration_no')
         .in('id', vehicleIds)
-      const vehicleMap = new Map<string, { name: string; registration_no: string | null }>()
-      ;(vehiclesData || []).forEach((v: { id: string; name: string; registration_no: string | null }) => {
-        vehicleMap.set(v.id, { name: v.name, registration_no: v.registration_no })
-      })
+      const vehicleMap = new Map<
+        string,
+        { name: string; registration_no: string | null }
+      >()
+      ;(vehiclesData || []).forEach(
+        (v: { id: string; name: string; registration_no: string | null }) => {
+          vehicleMap.set(v.id, {
+            name: v.name,
+            registration_no: v.registration_no,
+          })
+        },
+      )
 
       const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
       if (kind === 'transport_all') {
         // One event per (period, vehicle) so each event title starts with vehicle name and reg
-        const events: Array<{ id: string; title: string; start: string; end: string; description?: string }> = []
+        const events: Array<{
+          id: string
+          title: string
+          start: string
+          end: string
+          description?: string
+        }> = []
         for (const p of periodList) {
           const info = p.job_id ? jobInfo.get(p.job_id) : null
           const jobTitle = info?.title ?? p.title ?? 'Transport'
@@ -258,7 +325,11 @@ export default async function handler(req: any, res: any) {
           const projectLead = info?.projectLeadName ?? ''
           const parts = [jobTitle, customer, projectLead].filter(Boolean)
           const rest = parts.join(' · ')
-          const vehicleIdsForPeriod = (rvData || []).filter((r: { time_period_id: string }) => r.time_period_id === p.id).map((r: { vehicle_id: string }) => r.vehicle_id)
+          const vehicleIdsForPeriod = (rvData || [])
+            .filter(
+              (r: { time_period_id: string }) => r.time_period_id === p.id,
+            )
+            .map((r: { vehicle_id: string }) => r.vehicle_id)
           for (const vid of vehicleIdsForPeriod) {
             const vehicle = vehicleMap.get(vid)
             const vehicleLabel = vehicle
@@ -266,13 +337,17 @@ export default async function handler(req: any, res: any) {
               : 'Transport'
             const title = `${vehicleLabel}: ${rest}`.trim() || 'Transport'
             const jobNo = info ? formatJobNumber(info.jobnr) : ''
-            const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
+            const descParts = [
+              jobNo && `Job no: ${jobNo}`,
+              p.job_id && `Job ID: ${p.job_id}`,
+            ].filter(Boolean)
             events.push({
               id: `${p.id}-${vid}`,
               title,
               start: p.start_at,
               end: p.end_at,
-              description: descParts.length > 0 ? descParts.join('\n') : undefined,
+              description:
+                descParts.length > 0 ? descParts.join('\n') : undefined,
             })
           }
         }
@@ -285,28 +360,44 @@ export default async function handler(req: any, res: any) {
         return res.end(ics)
       }
 
-      const events = periodList.map((p: { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }) => {
-        const info = p.job_id ? jobInfo.get(p.job_id) : null
-        const jobTitle = info?.title ?? p.title ?? 'Transport'
-        const customer = info?.customerName ?? ''
-        const projectLead = info?.projectLeadName ?? ''
-        const vehicle = periodToVehicle.get(p.id) ? vehicleMap.get(periodToVehicle.get(p.id)!) : null
-        const vehicleLabel = vehicle
-          ? `${vehicle.name}${vehicle.registration_no ? ` (${vehicle.registration_no})` : ''}`
-          : ''
-        const parts = [jobTitle, customer, projectLead].filter(Boolean)
-        const rest = parts.join(' · ')
-        const title = vehicleLabel ? `${vehicleLabel}: ${rest}` : rest || 'Transport'
-        const jobNo = info ? formatJobNumber(info.jobnr) : ''
-        const descParts = [jobNo && `Job no: ${jobNo}`, p.job_id && `Job ID: ${p.job_id}`].filter(Boolean)
-        return {
-          id: p.id,
-          title,
-          start: p.start_at,
-          end: p.end_at,
-          description: descParts.length > 0 ? descParts.join('\n') : undefined,
-        }
-      })
+      const events = periodList.map(
+        (p: {
+          id: string
+          title: string | null
+          start_at: string
+          end_at: string
+          job_id: string | null
+        }) => {
+          const info = p.job_id ? jobInfo.get(p.job_id) : null
+          const jobTitle = info?.title ?? p.title ?? 'Transport'
+          const customer = info?.customerName ?? ''
+          const projectLead = info?.projectLeadName ?? ''
+          const vehicle = periodToVehicle.get(p.id)
+            ? vehicleMap.get(periodToVehicle.get(p.id)!)
+            : null
+          const vehicleLabel = vehicle
+            ? `${vehicle.name}${vehicle.registration_no ? ` (${vehicle.registration_no})` : ''}`
+            : ''
+          const parts = [jobTitle, customer, projectLead].filter(Boolean)
+          const rest = parts.join(' · ')
+          const title = vehicleLabel
+            ? `${vehicleLabel}: ${rest}`
+            : rest || 'Transport'
+          const jobNo = info ? formatJobNumber(info.jobnr) : ''
+          const descParts = [
+            jobNo && `Job no: ${jobNo}`,
+            p.job_id && `Job ID: ${p.job_id}`,
+          ].filter(Boolean)
+          return {
+            id: p.id,
+            title,
+            start: p.start_at,
+            end: p.end_at,
+            description:
+              descParts.length > 0 ? descParts.join('\n') : undefined,
+          }
+        },
+      )
 
       const ics = buildICS(events)
       res.statusCode = 200
@@ -334,15 +425,16 @@ export default async function handler(req: any, res: any) {
         return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
       }
 
-      const crewRows =
-        (crewRes ?? []) as Array<{
-          id: string
-          time_period_id: string
-          during: unknown
-          status: string
-        }>
+      const crewRows = (crewRes ?? []) as Array<{
+        id: string
+        time_period_id: string
+        during: unknown
+        status: string
+      }>
 
-      const crewPeriodIds = Array.from(new Set(crewRows.map((r) => r.time_period_id)))
+      const crewPeriodIds = Array.from(
+        new Set(crewRows.map((r) => r.time_period_id)),
+      )
       if (crewPeriodIds.length === 0) {
         const ics = buildICS([])
         res.statusCode = 200
@@ -373,7 +465,13 @@ export default async function handler(req: any, res: any) {
       // reserved_crew.during when present; else time_periods.start/end.
       const periodById = new Map<
         string,
-        { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }
+        {
+          id: string
+          title: string | null
+          start_at: string
+          end_at: string
+          job_id: string | null
+        }
       >()
       ;(crewPeriods || []).forEach((p: any) => {
         if (p?.id) {
@@ -402,16 +500,27 @@ export default async function handler(req: any, res: any) {
       })
 
       // We still want to exclude archived jobs (if a crew period points at an archived job)
-      const periodListForArchiveFilter = crewRowsWithPeriods.map((x) => x.period!) as Array<{
+      const periodListForArchiveFilter = crewRowsWithPeriods.map(
+        (x) => x.period!,
+      ) as Array<{
         job_id: string | null
       }>
-      const allowedPeriods = await filterNonArchivedJobPeriods(supabase, periodListForArchiveFilter)
-      const allowedPeriodIds = new Set((allowedPeriods as any[]).map((p) => p.id).filter(Boolean))
-      crewRowsWithPeriods = crewRowsWithPeriods.filter((x) => allowedPeriodIds.has(x.period!.id))
+      const allowedPeriods = await filterNonArchivedJobPeriods(
+        supabase,
+        periodListForArchiveFilter,
+      )
+      const allowedPeriodIds = new Set(
+        (allowedPeriods as Array<any>).map((p) => p.id).filter(Boolean),
+      )
+      crewRowsWithPeriods = crewRowsWithPeriods.filter((x) =>
+        allowedPeriodIds.has(x.period!.id),
+      )
 
       const jobIds = Array.from(
-        new Set(crewRowsWithPeriods.map((x) => x.period!.job_id).filter(Boolean)),
-      ) as string[]
+        new Set(
+          crewRowsWithPeriods.map((x) => x.period!.job_id).filter(Boolean),
+        ),
+      ) as Array<string>
       const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
 
       const events = crewRowsWithPeriods.map(({ row, period }) => {
@@ -419,9 +528,10 @@ export default async function handler(req: any, res: any) {
         const info = p.job_id ? jobInfo.get(p.job_id) : null
         const jobTitle = info?.title ?? p.title ?? 'Crew assignment'
         const jobNo = info ? formatJobNumber(info.jobnr) : ''
-        const descParts: string[] = []
+        const descParts: Array<string> = []
         if (jobNo) descParts.push(`Job no: ${jobNo}`)
-        if (info?.projectLeadName) descParts.push(`Project lead: ${info.projectLeadName}`)
+        if (info?.projectLeadName)
+          descParts.push(`Project lead: ${info.projectLeadName}`)
         if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
 
         const parsed = parseTstzRange(row.during)
@@ -447,7 +557,7 @@ export default async function handler(req: any, res: any) {
     }
 
     // all_jobs / project_lead_jobs: use program time_periods (job duration)
-    let q = supabase
+    const q = supabase
       .from('time_periods')
       .select('id, title, start_at, end_at, job_id, category')
       .eq('company_id', companyId)
@@ -473,13 +583,23 @@ export default async function handler(req: any, res: any) {
         .select('id')
         .eq('company_id', companyId)
         .eq('project_lead_user_id', userId)
-      const leadJobIds = new Set((jobIdsData || []).map((j: { id: string }) => j.id))
-      periodList = periodList.filter((p: { job_id: string | null }) => p.job_id && leadJobIds.has(p.job_id))
+      const leadJobIds = new Set(
+        (jobIdsData || []).map((j: { id: string }) => j.id),
+      )
+      periodList = periodList.filter(
+        (p: { job_id: string | null }) => p.job_id && leadJobIds.has(p.job_id),
+      )
     }
 
     periodList = await filterNonArchivedJobPeriods(supabase, periodList)
 
-    const jobIds = Array.from(new Set(periodList.map((p: { job_id: string | null }) => p.job_id).filter(Boolean))) as string[]
+    const jobIds = Array.from(
+      new Set(
+        periodList
+          .map((p: { job_id: string | null }) => p.job_id)
+          .filter(Boolean),
+      ),
+    ) as Array<string>
     const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
 
     const prefix =
@@ -491,43 +611,55 @@ export default async function handler(req: any, res: any) {
             ? 'CREW: '
             : ''
 
-    const events = periodList.map((p: { id: string; title: string | null; start_at: string; end_at: string; job_id: string | null }) => {
-      const info = p.job_id ? jobInfo.get(p.job_id) : null
-      const jobTitle = info?.title ?? p.title ?? 'Job'
-      const jobNo = info ? formatJobNumber(info.jobnr) : ''
-      const statusLabel = info ? formatJobStatus(info.status) : ''
+    const events = periodList.map(
+      (p: {
+        id: string
+        title: string | null
+        start_at: string
+        end_at: string
+        job_id: string | null
+      }) => {
+        const info = p.job_id ? jobInfo.get(p.job_id) : null
+        const jobTitle = info?.title ?? p.title ?? 'Job'
+        const jobNo = info ? formatJobNumber(info.jobnr) : ''
+        const statusLabel = info ? formatJobStatus(info.status) : ''
 
-      if (kind === 'all_jobs') {
+        if (kind === 'all_jobs') {
+          const title = prefix + jobTitle
+          const descLines: Array<string> = []
+          if (jobNo) descLines.push(`Job no: ${jobNo}`)
+          if (statusLabel) descLines.push(`Status: ${statusLabel}`)
+          if (info?.projectLeadName)
+            descLines.push(`Project lead: ${info.projectLeadName}`)
+          if (info?.customerName)
+            descLines.push(`Customer: ${info.customerName}`)
+          if (info?.location) descLines.push(`Location: ${info.location}`)
+          if (p.job_id) descLines.push(`Job ID: ${p.job_id}`)
+          return {
+            id: p.id,
+            title: title || 'Event',
+            start: p.start_at,
+            end: p.end_at,
+            description:
+              descLines.length > 0 ? descLines.join('\n') : undefined,
+          }
+        }
+
         const title = prefix + jobTitle
-        const descLines: string[] = []
-        if (jobNo) descLines.push(`Job no: ${jobNo}`)
-        if (statusLabel) descLines.push(`Status: ${statusLabel}`)
-        if (info?.projectLeadName) descLines.push(`Project lead: ${info.projectLeadName}`)
-        if (info?.customerName) descLines.push(`Customer: ${info.customerName}`)
-        if (info?.location) descLines.push(`Location: ${info.location}`)
-        if (p.job_id) descLines.push(`Job ID: ${p.job_id}`)
+        const descParts: Array<string> = []
+        if (jobNo) descParts.push(`Job no: ${jobNo}`)
+        if (info?.projectLeadName)
+          descParts.push(`Project lead: ${info.projectLeadName}`)
+        if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
         return {
           id: p.id,
           title: title || 'Event',
           start: p.start_at,
           end: p.end_at,
-          description: descLines.length > 0 ? descLines.join('\n') : undefined,
+          description: descParts.length > 0 ? descParts.join('\n') : undefined,
         }
-      }
-
-      const title = prefix + jobTitle
-      const descParts: string[] = []
-      if (jobNo) descParts.push(`Job no: ${jobNo}`)
-      if (info?.projectLeadName) descParts.push(`Project lead: ${info.projectLeadName}`)
-      if (p.job_id) descParts.push(`Job ID: ${p.job_id}`)
-      return {
-        id: p.id,
-        title: title || 'Event',
-        start: p.start_at,
-        end: p.end_at,
-        description: descParts.length > 0 ? descParts.join('\n') : undefined,
-      }
-    })
+      },
+    )
 
     const ics = buildICS(events)
     res.statusCode = 200
@@ -540,7 +672,12 @@ export default async function handler(req: any, res: any) {
     res.statusCode = 500
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
     res.setHeader('Content-Type', 'application/json')
-    res.end(JSON.stringify({ error: 'Failed to generate calendar', message: e?.message || String(e) }))
+    res.end(
+      JSON.stringify({
+        error: 'Failed to generate calendar',
+        message: e?.message || String(e),
+      }),
+    )
   }
 }
 
@@ -566,57 +703,112 @@ type JobInfo = {
 async function fetchJobInfo(
   supabase: ReturnType<typeof createClient<Database>>,
   companyId: string,
-  jobIds: string[],
+  jobIds: Array<string>,
 ): Promise<Map<string, JobInfo>> {
   const out = new Map<string, JobInfo>()
   if (jobIds.length === 0) return out
 
   const { data: jobs } = await supabase
     .from('jobs')
-    .select('id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status')
+    .select(
+      'id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status',
+    )
     .in('id', jobIds)
 
   if (!jobs || jobs.length === 0) return out
 
-  const leadUserIds = Array.from(new Set(jobs.map((j: { project_lead_user_id: string | null }) => j.project_lead_user_id).filter(Boolean))) as string[]
-  const customerIds = Array.from(new Set(jobs.map((j: { customer_id: string | null }) => j.customer_id).filter(Boolean))) as string[]
-  const addressIds = Array.from(new Set(jobs.map((j: { job_address_id: string | null }) => j.job_address_id).filter(Boolean))) as string[]
+  const leadUserIds = Array.from(
+    new Set(
+      jobs
+        .map(
+          (j: { project_lead_user_id: string | null }) =>
+            j.project_lead_user_id,
+        )
+        .filter(Boolean),
+    ),
+  ) as Array<string>
+  const customerIds = Array.from(
+    new Set(
+      jobs
+        .map((j: { customer_id: string | null }) => j.customer_id)
+        .filter(Boolean),
+    ),
+  ) as Array<string>
+  const addressIds = Array.from(
+    new Set(
+      jobs
+        .map((j: { job_address_id: string | null }) => j.job_address_id)
+        .filter(Boolean),
+    ),
+  ) as Array<string>
 
   const [profilesRes, customersRes, addressesRes] = await Promise.all([
     leadUserIds.length > 0
-      ? supabase.from('profiles').select('user_id, display_name').in('user_id', leadUserIds)
+      ? supabase
+          .from('profiles')
+          .select('user_id, display_name')
+          .in('user_id', leadUserIds)
       : Promise.resolve({ data: [] }),
     customerIds.length > 0
       ? supabase.from('customers').select('id, name').in('id', customerIds)
       : Promise.resolve({ data: [] }),
     addressIds.length > 0
-      ? supabase.from('addresses').select('id, address_line, city, zip_code, country').in('id', addressIds)
+      ? supabase
+          .from('addresses')
+          .select('id, address_line, city, zip_code, country')
+          .in('id', addressIds)
       : Promise.resolve({ data: [] }),
   ])
 
   const leadNames = new Map<string, string>()
-  ;(profilesRes.data || []).forEach((p: { user_id: string; display_name: string | null }) => {
-    leadNames.set(p.user_id, p.display_name || '')
-  })
+  ;(profilesRes.data || []).forEach(
+    (p: { user_id: string; display_name: string | null }) => {
+      leadNames.set(p.user_id, p.display_name || '')
+    },
+  )
   const customerNames = new Map<string, string>()
   ;(customersRes.data || []).forEach((c: { id: string; name: string }) => {
     customerNames.set(c.id, c.name)
   })
   const addressMap = new Map<string, string>()
-  ;(addressesRes.data || []).forEach((a: { id: string; address_line: string; city: string; zip_code: string; country: string }) => {
-    addressMap.set(a.id, formatLocation(a))
-  })
+  ;(addressesRes.data || []).forEach(
+    (a: {
+      id: string
+      address_line: string
+      city: string
+      zip_code: string
+      country: string
+    }) => {
+      addressMap.set(a.id, formatLocation(a))
+    },
+  )
 
-  jobs.forEach((j: { id: string; title: string; project_lead_user_id: string | null; customer_id: string | null; job_address_id: string | null; jobnr: number | null; status: string }) => {
-    out.set(j.id, {
-      title: j.title || 'Job',
-      projectLeadName: j.project_lead_user_id ? leadNames.get(j.project_lead_user_id) ?? '' : '',
-      customerName: j.customer_id ? customerNames.get(j.customer_id) ?? '' : '',
-      location: j.job_address_id ? addressMap.get(j.job_address_id) ?? '' : '',
-      jobnr: j.jobnr ?? null,
-      status: j.status || '',
-    })
-  })
+  jobs.forEach(
+    (j: {
+      id: string
+      title: string
+      project_lead_user_id: string | null
+      customer_id: string | null
+      job_address_id: string | null
+      jobnr: number | null
+      status: string
+    }) => {
+      out.set(j.id, {
+        title: j.title || 'Job',
+        projectLeadName: j.project_lead_user_id
+          ? (leadNames.get(j.project_lead_user_id) ?? '')
+          : '',
+        customerName: j.customer_id
+          ? (customerNames.get(j.customer_id) ?? '')
+          : '',
+        location: j.job_address_id
+          ? (addressMap.get(j.job_address_id) ?? '')
+          : '',
+        jobnr: j.jobnr ?? null,
+        status: j.status || '',
+      })
+    },
+  )
   return out
 }
 
@@ -625,7 +817,9 @@ async function filterNonArchivedJobPeriods<T extends { job_id: string | null }>(
   supabase: ReturnType<typeof createClient<Database>>,
   periodList: Array<T>,
 ): Promise<Array<T>> {
-  const jobIds = Array.from(new Set(periodList.map((p) => p.job_id).filter(Boolean))) as string[]
+  const jobIds = Array.from(
+    new Set(periodList.map((p) => p.job_id).filter(Boolean)),
+  ) as Array<string>
   if (jobIds.length === 0) return periodList
   const { data: jobs } = await supabase
     .from('jobs')

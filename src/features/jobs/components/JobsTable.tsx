@@ -83,11 +83,7 @@ export default function JobsTable({
   // Track if we've calculated initial width to prevent recalculating on every search/filter
   const hasCalculatedInitialWidth = React.useRef(false)
 
-  const {
-    data,
-    isFetching,
-    refetch,
-  } = useQuery({
+  const { data, isFetching, refetch } = useQuery({
     ...jobsIndexPageQuery({
       companyId: companyId ?? '__none__',
       page,

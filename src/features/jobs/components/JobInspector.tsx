@@ -201,7 +201,11 @@ export default function JobInspector({
   })
 
   const copyJobMutation = useMutation({
-    mutationFn: async (payload: { jobId: string; startAt: string; endAt: string }) => {
+    mutationFn: async (payload: {
+      jobId: string
+      startAt: string
+      endAt: string
+    }) => {
       return await copyJob(payload)
     },
     onSuccess: async (newJobId) => {
@@ -235,8 +239,16 @@ export default function JobInspector({
           gap: 8,
         }}
       >
-        <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0, flex: '1 1 auto' }}>
-          <Heading size="4" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <Flex
+          align="center"
+          gap="3"
+          wrap="wrap"
+          style={{ minWidth: 0, flex: '1 1 auto' }}
+        >
+          <Heading
+            size="4"
+            style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
             {job.title}
           </Heading>
           {job.jobnr && (
@@ -245,7 +257,14 @@ export default function JobInspector({
             </Text>
           )}
         </Flex>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: 8,
+            alignItems: 'center',
+            flexWrap: 'wrap',
+          }}
+        >
           {(() => {
             const displayStatus = getDisplayStatus(job.status, companyRole)
             return (
@@ -264,7 +283,11 @@ export default function JobInspector({
                 <Edit width={16} height={16} />
               </Button>
               <Tooltip content="Copy job">
-                <Button size="2" variant="soft" onClick={() => setCopyOpen(true)}>
+                <Button
+                  size="2"
+                  variant="soft"
+                  onClick={() => setCopyOpen(true)}
+                >
                   <Copy width={16} height={16} />
                 </Button>
               </Tooltip>
@@ -364,13 +387,18 @@ export default function JobInspector({
                     justifyContent: 'space-between',
                   }}
                 >
-                  {tabOptions.find((o) => o.value === activeTab)?.label ?? 'Overview'}
+                  {tabOptions.find((o) => o.value === activeTab)?.label ??
+                    'Overview'}
                   <NavArrowDown width={18} height={18} />
                 </Button>
               </DropdownMenu.Trigger>
               <DropdownMenu.Content
                 align="start"
-                style={{ minWidth: 'var(--radix-dropdown-menu-trigger-width)', maxHeight: 'min(70vh, 400px)', overflowY: 'auto' }}
+                style={{
+                  minWidth: 'var(--radix-dropdown-menu-trigger-width)',
+                  maxHeight: 'min(70vh, 400px)',
+                  overflowY: 'auto',
+                }}
               >
                 {tabOptions.map((opt) => (
                   <DropdownMenu.Item
@@ -403,10 +431,16 @@ export default function JobInspector({
             <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
             <Tabs.Trigger value="program">Program</Tabs.Trigger>
             <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
-            {!isFreelancer && <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>}
+            {!isFreelancer && (
+              <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
+            )}
             <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
-            {!isFreelancer && <Tabs.Trigger value="offers">Offers</Tabs.Trigger>}
-            {!isFreelancer && <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>}
+            {!isFreelancer && (
+              <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
+            )}
+            {!isFreelancer && (
+              <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
+            )}
             {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
             {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
             <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>

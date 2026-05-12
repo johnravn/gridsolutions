@@ -1,7 +1,6 @@
 // src/features/jobs/components/invoice/InvoicePreview.tsx
 import * as React from 'react'
 import {
-  Badge,
   Box,
   Button,
   Card,
@@ -16,10 +15,15 @@ import {
 } from '@radix-ui/themes'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { Plus, Trash } from 'iconoir-react'
+import { addLocalCalendarDays } from '@shared/lib/generalFunctions'
+import {
+  acceptedOfferInvoiceLineDescription,
+  sanitizeOfferTitleForInvoiceLine,
+} from '../../utils/offerNumber'
 import type { JobDetail, JobOffer } from '../../types'
 import type {
-  BookingsForInvoice,
   BookingInvoiceLine,
+  BookingsForInvoice,
 } from '../../api/invoiceQueries'
 
 function parseAddress(addr: string | null): { line1: string; line2: string } {
@@ -57,7 +61,12 @@ type InvoicePreviewProps =
       companyAddress: string | null
       job: Pick<
         JobDetail,
-        'title' | 'jobnr' | 'start_at' | 'end_at' | 'project_lead' | 'customer_contact'
+        | 'title'
+        | 'jobnr'
+        | 'start_at'
+        | 'end_at'
+        | 'project_lead'
+        | 'customer_contact'
       >
       employees: Array<{ user_id: string; display_name: string | null }>
       contacts: Array<{ id: string; name: string }>
@@ -97,15 +106,14 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
 
   const invoiceDate = new Date()
   const daysUntilDue = props.daysUntilDue ?? 14
-  const dueDate = new Date(
-    Date.now() + daysUntilDue * 24 * 60 * 60 * 1000,
-  )
+  const dueDate = addLocalCalendarDays(invoiceDate, daysUntilDue)
   const deliveryDateStr = formatDdMmYyyy(invoiceDate)
   const invoiceDateStr = formatDdMmYyyy(invoiceDate)
   const dueDateStr = formatDdMmYyyy(dueDate)
 
   if (props.basis === 'offer') {
     const { offer, customerName } = props
+    const offerSubtitle = sanitizeOfferTitleForInvoiceLine(offer.title)
     const subtotal = offer.total_after_discount
     const vatAmount = (subtotal * offer.vat_percent) / 100
     const total = subtotal + vatAmount
@@ -163,21 +171,23 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
             <Table.Body>
               <Table.Row>
                 <Table.Cell>
-                  <Text weight="medium">
-                    {offer.title ||
-                      `Invoice for Offer v${offer.version_number}`}
-                  </Text>
+                  <Flex direction="column" gap="1">
+                    <Text weight="medium">
+                      {acceptedOfferInvoiceLineDescription(offer)}
+                    </Text>
+                    {offerSubtitle ? (
+                      <Text size="2" color="gray">
+                        {offerSubtitle}
+                      </Text>
+                    ) : null}
+                  </Flex>
                 </Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>1</Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>
                   {formatCurrency(offer.total_after_discount)}
                 </Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>
-                  {offer.discount_percent > 0 ? (
-                    <Badge color="orange">{offer.discount_percent}%</Badge>
-                  ) : (
-                    <Text color="gray">—</Text>
-                  )}
+                  <Text color="gray">—</Text>
                 </Table.Cell>
                 <Table.Cell style={{ textAlign: 'right' }}>
                   <Text weight="medium">{formatCurrency(subtotal)}</Text>
@@ -230,7 +240,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
     customerAddress,
     companyName,
     companyAddress,
-    job,
+    job: _job,
     employees,
     contacts,
     vatIncluded,
@@ -283,23 +293,25 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
               minWidth: 48,
             }}
             onChange={(e) => {
-            const raw = e.target.value
-            if (raw === '' || raw === '-') {
-              onLineDiscountChange(line.id, 0)
-              return
-            }
-            const v = parseFloat(raw)
-            if (!isNaN(v) && v >= 0 && v <= 100) {
-              onLineDiscountChange(line.id, v)
-            }
-          }}
-          onBlur={(e) => {
-            const v = parseFloat((e.target as HTMLInputElement).value)
-            if (isNaN(v) || v < 0) onLineDiscountChange(line.id, 0)
-            else if (v > 100) onLineDiscountChange(line.id, 100)
-          }}
-        />
-          <Text size="2" color="gray">%</Text>
+              const raw = e.target.value
+              if (raw === '' || raw === '-') {
+                onLineDiscountChange(line.id, 0)
+                return
+              }
+              const v = parseFloat(raw)
+              if (!isNaN(v) && v >= 0 && v <= 100) {
+                onLineDiscountChange(line.id, v)
+              }
+            }}
+            onBlur={(e) => {
+              const v = parseFloat((e.target as HTMLInputElement).value)
+              if (isNaN(v) || v < 0) onLineDiscountChange(line.id, 0)
+              else if (v > 100) onLineDiscountChange(line.id, 100)
+            }}
+          />
+          <Text size="2" color="gray">
+            %
+          </Text>
         </Flex>
       )
     }
@@ -308,7 +320,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
 
   const getLineTotalPrice = (line: BookingInvoiceLine) => {
     const discount = lineDiscountOverrides[line.id] ?? 0
-    return line.totalPrice * (1 - discount / 100)
+    return line.unitPrice * line.quantity * (1 - discount / 100)
   }
 
   const { subtotal, vatAmount, total } = React.useMemo(() => {
@@ -329,6 +341,14 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
       total: exVat + vat,
     }
   }, [displayLines, lineDiscountOverrides, vatIncluded])
+
+  const vatSummaryLabel = React.useMemo(() => {
+    if (!vatIncluded) return '0%'
+    if (displayLines.length === 0) return '0%'
+    const first = displayLines[0].vatPercent
+    if (displayLines.every((l) => l.vatPercent === first)) return `${first}%`
+    return 'various rates'
+  }, [vatIncluded, displayLines])
 
   return (
     <Card>
@@ -395,9 +415,8 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                 label: e.display_name ?? e.user_id,
               }))}
               value={
-                employees.find(
-                  (e) => (e.display_name ?? e.user_id) === ourRef,
-                )?.user_id ?? ''
+                employees.find((e) => (e.display_name ?? e.user_id) === ourRef)
+                  ?.user_id ?? ''
               }
               onValueChange={(v) => {
                 const opt = employees.find((e) => e.user_id === v)
@@ -419,9 +438,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                 value: c.id,
                 label: c.name,
               }))}
-              value={
-                contacts.find((c) => c.name === theirRef)?.id ?? ''
-              }
+              value={contacts.find((c) => c.name === theirRef)?.id ?? ''}
               onValueChange={(v) => {
                 const opt = contacts.find((c) => c.id === v)
                 onTheirRefChange(opt ? opt.name : '')
@@ -507,7 +524,10 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
               </Button>
             </Flex>
           )}
-          <Table.Root style={{ width: '100%', minWidth: 640 }} data-invoice-lines>
+          <Table.Root
+            style={{ width: '100%', minWidth: 640 }}
+            data-invoice-lines
+          >
             <Table.Header>
               <Table.Row>
                 {onRemoveLine && (
@@ -550,7 +570,13 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                 return (
                   <Table.Row key={line.id}>
                     {onRemoveLine && (
-                      <Table.Cell style={{ width: 40, paddingLeft: 12, verticalAlign: 'top' }}>
+                      <Table.Cell
+                        style={{
+                          width: 40,
+                          paddingLeft: 12,
+                          verticalAlign: 'top',
+                        }}
+                      >
                         <IconButton
                           size="1"
                           variant="ghost"
@@ -585,7 +611,13 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                           rows={1}
                         />
                       ) : (
-                        <Text as="div" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                        <Text
+                          as="div"
+                          style={{
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                          }}
+                        >
                           {line.description}
                         </Text>
                       )}
@@ -637,14 +669,10 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
                       {renderDiscountCell(line)}
                     </Table.Cell>
                     <Table.Cell style={{ textAlign: 'right' }}>
-                      <Text>
-                        {vatIncluded ? `${line.vatPercent}%` : '0%'}
-                      </Text>
+                      <Text>{vatIncluded ? `${line.vatPercent}%` : '0%'}</Text>
                     </Table.Cell>
                     <Table.Cell style={{ textAlign: 'right' }}>
-                      <Text weight="medium">
-                        {formatCurrency(lineTotal)}
-                      </Text>
+                      <Text weight="medium">{formatCurrency(lineTotal)}</Text>
                     </Table.Cell>
                   </Table.Row>
                 )
@@ -664,7 +692,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
           </Flex>
           <Flex justify="between" style={{ width: '100%', maxWidth: '300px' }}>
             <Text size="2" color="gray">
-              VAT ({vatIncluded ? '25%' : '0%'})
+              VAT ({vatSummaryLabel})
             </Text>
             <Text>{formatCurrency(vatAmount)}</Text>
           </Flex>

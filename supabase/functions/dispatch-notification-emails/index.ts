@@ -17,15 +17,21 @@ type DispatchResult = {
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method === 'OPTIONS')
+    return new Response('ok', { headers: corsHeaders })
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     if (!supabaseUrl || !serviceKey) {
       return new Response(
-        JSON.stringify({ error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
+        JSON.stringify({
+          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        },
       )
     }
 
@@ -55,11 +61,12 @@ Deno.serve(async (req) => {
         headers: {
           'Content-Type': 'application/json',
           // use service role to invoke without relying on anon keys/vault
-          'Authorization': `Bearer ${serviceKey}`,
+          Authorization: `Bearer ${serviceKey}`,
         },
         body: JSON.stringify({
           notification_id: n.id,
-          force_email: (n as { email_force_send?: boolean }).email_force_send === true,
+          force_email:
+            (n as { email_force_send?: boolean }).email_force_send === true,
         }),
       }).catch(() => null)
 
@@ -94,4 +101,3 @@ Deno.serve(async (req) => {
     })
   }
 })
-

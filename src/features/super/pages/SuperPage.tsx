@@ -29,6 +29,7 @@ import UsersTable from '../components/UsersTable'
 import UserDialog from '../components/UserDialog'
 import UserInspector from '../components/UserInspector'
 import { createDummyCompany } from '../api/queries'
+import SuperEmailTab from '../components/SuperEmailTab'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
 
@@ -557,6 +558,7 @@ export default function SuperPage() {
         <Tabs.List>
           <Tabs.Trigger value="companies">Companies</Tabs.Trigger>
           <Tabs.Trigger value="users">Users</Tabs.Trigger>
+          <Tabs.Trigger value="email">Email</Tabs.Trigger>
         </Tabs.List>
 
         <Box
@@ -1278,6 +1280,18 @@ export default function SuperPage() {
                 </Card>
               </Flex>
             )}
+          </Tabs.Content>
+
+          <Tabs.Content
+            value="email"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <SuperEmailTab />
           </Tabs.Content>
         </Box>
       </Tabs.Root>

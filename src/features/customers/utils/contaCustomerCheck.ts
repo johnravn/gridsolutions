@@ -25,7 +25,8 @@ export async function checkContaCustomerExists(
     return {
       exists: false,
       searchedBy: 'orgNo',
-      error: 'Organization number is required to search in Conta. Add a VAT/org number to the customer.',
+      error:
+        'Organization number is required to search in Conta. Add a VAT/org number to the customer.',
     }
   }
 
@@ -34,9 +35,7 @@ export async function checkContaCustomerExists(
       `/invoice/organizations/${organizationId}/customers?q=${encodeURIComponent(orgNo)}`,
     )) as { hits?: Array<{ id?: number; name?: string; orgNo?: string }> }
     const hits = Array.isArray(orgSearch?.hits) ? orgSearch.hits : []
-    const match = hits.find(
-      (h) => (h.orgNo || '').replace(/\D/g, '') === orgNo,
-    )
+    const match = hits.find((h) => (h.orgNo || '').replace(/\D/g, '') === orgNo)
     if (match?.id) {
       return {
         exists: true,

@@ -1,12 +1,15 @@
 import * as React from 'react'
 import { Box, Flex, Text } from '@radix-ui/themes'
-import { Message } from 'iconoir-react'
-import { DashboardCard } from './DashboardCard'
+import { Quote } from 'iconoir-react'
 import { DAILY_QUOTES } from '../data/quotes'
 import { pickQuoteForDate } from '../utils/dailyInspiration'
+import { DashboardCard } from './DashboardCard'
 
 export function QuoteSection() {
-  const todayKey = React.useMemo(() => new Date().toISOString().slice(0, 10), [])
+  const todayKey = React.useMemo(
+    () => new Date().toISOString().slice(0, 10),
+    [],
+  )
   const quote = React.useMemo(
     () => pickQuoteForDate({ dateKey: todayKey, quotes: DAILY_QUOTES }),
     [todayKey],
@@ -15,7 +18,7 @@ export function QuoteSection() {
   return (
     <DashboardCard
       title="Today's quote"
-      icon={<Message width={18} height={18} />}
+      icon={<Quote width={18} height={18} />}
       notFullHeight
     >
       {!quote ? (

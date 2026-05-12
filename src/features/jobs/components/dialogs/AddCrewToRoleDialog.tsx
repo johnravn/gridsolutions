@@ -14,7 +14,10 @@ import { supabase } from '@shared/api/supabase'
 import { Check } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { addMemberOrInvite, crewInternalNotesQuery } from '../../../crew/api/queries'
+import {
+  addMemberOrInvite,
+  crewInternalNotesQuery,
+} from '../../../crew/api/queries'
 import type { UUID } from '../../types'
 
 export default function AddCrewToRoleDialog({
@@ -98,9 +101,7 @@ export default function AddCrewToRoleDialog({
 
       // Filter out crew already assigned to this role
       const rows = Array.isArray(data) ? data : []
-      return rows.filter(
-        (p) => !existingUserIds.has(p.user_id),
-      ) as Array<{
+      return rows.filter((p) => !existingUserIds.has(p.user_id)) as Array<{
         user_id: UUID
         display_name: string | null
         email: string
@@ -379,7 +380,8 @@ export default function AddCrewToRoleDialog({
                           )}
                           {internalNote && (
                             <Text as="div" size="1" color="gray" mt="1">
-                              <Text weight="medium">Internal:</Text> {internalNote}
+                              <Text weight="medium">Internal:</Text>{' '}
+                              {internalNote}
                             </Text>
                           )}
                         </div>

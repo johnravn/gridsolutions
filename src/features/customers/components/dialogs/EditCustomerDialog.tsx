@@ -184,10 +184,7 @@ export default function EditCustomerDialog({
             <Select.Root
               value={form.crew_pricing_level_id ?? '__standard__'}
               onValueChange={(v) =>
-                set(
-                  'crew_pricing_level_id',
-                  v === '__standard__' ? null : v,
-                )
+                set('crew_pricing_level_id', v === '__standard__' ? null : v)
               }
             >
               <Select.Trigger placeholder="Standard" />

@@ -68,10 +68,10 @@ export default function CreateAnnouncementDialog({
           }}
         >
           <Text size="2" color="gray">
-            This will be sent to every company member (owners, employees, admins,
-            and freelancers). They will see it in their Matters inbox. Users who
-            have enabled &quot;Announcements&quot; in their email preferences
-            will also receive an email.
+            This will be sent to every company member (owners, employees,
+            admins, and freelancers). They will see it in their Matters inbox.
+            Users who have enabled &quot;Announcements&quot; in their email
+            preferences will also receive an email.
           </Text>
         </Box>
 

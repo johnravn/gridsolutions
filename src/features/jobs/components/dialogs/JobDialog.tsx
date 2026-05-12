@@ -386,10 +386,7 @@ export default function JobDialog({
 
             if (crewBookingError) throw crewBookingError
           } catch (e: any) {
-            console.error(
-              'Failed to create crew booking for project lead',
-              e,
-            )
+            console.error('Failed to create crew booking for project lead', e)
             // Don't fail the whole job create
           }
         }
@@ -656,15 +653,19 @@ export default function JobDialog({
         maxWidth="820px"
         style={{ display: 'flex', flexDirection: 'column' }}
         onPointerDownOutside={(e) => {
-          const ev = e as unknown as { detail?: { originalEvent?: PointerEvent } }
-          const el = (ev.detail?.originalEvent?.target ?? e.target) as HTMLElement
+          const ev = e as unknown as {
+            detail?: { originalEvent?: PointerEvent }
+          }
+          const el = (ev.detail?.originalEvent?.target ??
+            e.target) as HTMLElement
           if (el.closest('[data-searchable-select-dropdown]')) {
             e.preventDefault()
           }
         }}
         onInteractOutside={(e) => {
           const ev = e as unknown as { detail?: { originalEvent?: FocusEvent } }
-          const el = (ev.detail?.originalEvent?.target ?? e.target) as HTMLElement
+          const el = (ev.detail?.originalEvent?.target ??
+            e.target) as HTMLElement
           if (el.closest('[data-searchable-select-dropdown]')) {
             e.preventDefault()
           }
@@ -911,26 +912,26 @@ export default function JobDialog({
               initialData &&
               (startAt !== (initialData.start_at ?? '') ||
                 endAt !== (initialData.end_at ?? '')) && (
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
-              >
-                <Checkbox
-                  checked={syncTimePeriods}
-                  onCheckedChange={(checked) =>
-                    setSyncTimePeriods(checked === true)
-                  }
-                />
-                <Text size="2">
-                  Sync crew, equipment and vehicle bookings to new times
-                </Text>
-              </label>
-            )}
+                <label
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                    cursor: 'pointer',
+                    width: '100%',
+                  }}
+                >
+                  <Checkbox
+                    checked={syncTimePeriods}
+                    onCheckedChange={(checked) =>
+                      setSyncTimePeriods(checked === true)
+                    }
+                  />
+                  <Text size="2">
+                    Sync crew, equipment and vehicle bookings to new times
+                  </Text>
+                </label>
+              )}
             <Field label="Notes">
               <TextArea
                 rows={5}

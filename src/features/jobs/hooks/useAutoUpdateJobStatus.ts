@@ -1,6 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@shared/api/supabase'
+import {
+  getScheduledJobStatusTransition,
+  persistJobStatusTransition,
+} from '../utils/jobStatusAutoTransition'
 import type { JobDetail } from '../types'
 
 /**
@@ -20,20 +23,19 @@ export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
       jobId: string
       newStatus: 'in_progress' | 'completed'
     }) => {
-      const { error: updateError } = await supabase
-        .from('jobs')
-        .update({ status: newStatus })
-        .eq('id', jobId)
-      if (updateError) throw updateError
+      await persistJobStatusTransition(jobId, newStatus)
     },
     onSuccess: async (_, { jobId }) => {
       await qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
-      await qc.invalidateQueries({ queryKey: ['company'] })
+      await qc.invalidateQueries({ queryKey: ['company'], exact: false })
       // Don't show toast for auto-updates to avoid spam
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       // Silent error - don't spam user with auto-update failures
-      console.error('Auto-update job status failed:', err?.message)
+      console.error(
+        'Auto-update job status failed:',
+        err instanceof Error ? err.message : err,
+      )
     },
   })
 
@@ -69,31 +71,16 @@ export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
         return
       }
 
-      const now = new Date().getTime()
-      const startAt = new Date(currentJob.start_at!).getTime()
-      const endAt = new Date(currentJob.end_at!).getTime()
+      const transition = getScheduledJobStatusTransition({
+        id: currentJob.id,
+        status: currentJob.status,
+        start_at: currentJob.start_at,
+        end_at: currentJob.end_at,
+      })
+      if (!transition) return
 
-      // Only check if job is confirmed or in_progress
-      if (currentJob.status === 'confirmed') {
-        // If current time is within job duration, change to in_progress
-        if (now >= startAt && now <= endAt) {
-          if (!updateStatus.isPending) {
-            updateStatus.mutate({
-              jobId: currentJob.id,
-              newStatus: 'in_progress',
-            })
-          }
-        }
-      } else if (currentJob.status === 'in_progress') {
-        // If current time is after job duration, change to completed
-        if (now > endAt) {
-          if (!updateStatus.isPending) {
-            updateStatus.mutate({
-              jobId: currentJob.id,
-              newStatus: 'completed',
-            })
-          }
-        }
+      if (!updateStatus.isPending) {
+        updateStatus.mutate(transition)
       }
     }
 

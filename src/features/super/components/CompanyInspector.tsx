@@ -19,13 +19,9 @@ import { fmtVAT } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import {
-  
-  companyUsersQuery,
-  removeUserFromCompany
-} from '../api/queries'
+import { companyUsersQuery, removeUserFromCompany } from '../api/queries'
 import AssignUserToCompanyDialog from './AssignUserToCompanyDialog'
-import type {CompanyUserRow} from '../api/queries';
+import type { CompanyUserRow } from '../api/queries'
 
 export default function CompanyInspector({
   id,

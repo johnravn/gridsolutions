@@ -2,6 +2,11 @@
 // Invoke with body: { pending_invite_id: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
+  emailDocument,
+  hiddenPreheader,
+  primaryButton,
+} from '../_shared/email/layout.ts'
+import {
   emailFunctionCorsHeaders,
   escapeHtml,
   getResendApiKey,
@@ -9,7 +14,8 @@ import {
 } from '../_shared/email/resend.ts'
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: emailFunctionCorsHeaders })
+  if (req.method === 'OPTIONS')
+    return new Response('ok', { headers: emailFunctionCorsHeaders })
 
   try {
     const resendApiKey = getResendApiKey()
@@ -19,9 +25,16 @@ Deno.serve(async (req) => {
     if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({
-          error: 'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+          error:
+            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
         }),
-        { status: 500, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: 500,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
       )
     }
 
@@ -30,7 +43,13 @@ Deno.serve(async (req) => {
     if (!pendingInviteId || typeof pendingInviteId !== 'string') {
       return new Response(
         JSON.stringify({ error: 'Body must include pending_invite_id' }),
-        { status: 400, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: 400,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
       )
     }
 
@@ -38,19 +57,31 @@ Deno.serve(async (req) => {
 
     const { data: invite, error: inviteErr } = await supabase
       .from('pending_invites')
-      .select('id, company_id, inviter_user_id, email, role, created_at, expires_at')
+      .select(
+        'id, company_id, inviter_user_id, email, role, created_at, expires_at',
+      )
       .eq('id', pendingInviteId)
       .single()
 
     if (inviteErr || !invite) {
       return new Response(
         JSON.stringify({ error: 'Pending invite not found' }),
-        { status: 404, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: 404,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
       )
     }
 
     const [{ data: company }, { data: inviterProfile }] = await Promise.all([
-      supabase.from('companies').select('name').eq('id', invite.company_id).maybeSingle(),
+      supabase
+        .from('companies')
+        .select('name')
+        .eq('id', invite.company_id)
+        .maybeSingle(),
       supabase
         .from('profiles')
         .select('display_name, first_name, last_name')
@@ -58,56 +89,104 @@ Deno.serve(async (req) => {
         .maybeSingle(),
     ])
 
-    const companyName = company?.name ?? 'a company on Grid'
+    const companyName = company?.name?.trim() || 'a team on Grid'
+    const inviterFromParts = [
+      inviterProfile?.first_name,
+      inviterProfile?.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .trim()
     const inviterName =
-      inviterProfile?.display_name ??
-      [inviterProfile?.first_name, inviterProfile?.last_name].filter(Boolean).join(' ') ??
-      'someone'
+      (inviterProfile?.display_name?.trim() ?? inviterFromParts) ||
+      'Someone on your new team'
 
     const appUrl = Deno.env.get('APP_URL') || 'https://gridsolutions.app'
-    const signupLink = `${appUrl}/signup`
+    const baseUrl = appUrl.replace(/\/$/, '')
+    const signupLink = `${baseUrl}/signup`
 
     const roleNice =
-      invite.role === 'freelancer' ? 'freelancer' : invite.role === 'employee' ? 'employee' : 'member'
-    const subject = `Welcome to Grid — invited to ${companyName}`
+      invite.role === 'freelancer'
+        ? 'freelancer'
+        : invite.role === 'employee'
+          ? 'employee'
+          : 'member'
 
-    const html = `
-      <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2 style="color: #333;">Welcome to Grid</h2>
-        <p style="color: #555; line-height: 1.5;">
-          You’ve been invited to <b>${escapeHtml(companyName)}</b> as a ${escapeHtml(roleNice)} by <b>${escapeHtml(inviterName)}</b>.
-        </p>
-        <p style="margin-top: 24px;">
-          <a href="${escapeHtml(signupLink)}" style="background: #3b82f6; color: white; padding: 10px 16px; text-decoration: none; border-radius: 8px; display: inline-block;">Get started</a>
-        </p>
-        <p style="margin-top: 24px; font-size: 12px; color: #888;">
-          If you weren’t expecting this invitation, you can ignore this email.
-        </p>
-      </div>
-    `
+    const subject = `You're invited to ${companyName} on Grid`
+
+    const preheaderText = `${inviterName} invited you to collaborate in Grid — accept to get started.`
+
+    const innerHtml = `
+${hiddenPreheader(preheaderText)}
+<p style="margin:0;color:#334155;line-height:1.65;font-size:16px;">Hello,</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  <strong>${escapeHtml(inviterName)}</strong> has invited you to join <strong>${escapeHtml(companyName)}</strong> on Grid as a <strong>${escapeHtml(roleNice)}</strong>.
+</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  <strong>What is Grid?</strong> Grid is the workspace where your team plans jobs, crew, equipment, offers, and day-to-day communication — so everyone stays aligned from first quote to invoice.
+</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  When you accept this invitation you'll get access to the right projects and matters for <strong>${escapeHtml(companyName)}</strong>, using the same email address this message was sent to.
+</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  If you were not expecting this email, you can safely ignore it — no account will be created unless you complete signup.
+</p>
+${primaryButton(signupLink, 'Accept invitation & get started')}
+<p style="margin:24px 0 0 0;font-size:12px;color:#94a3b8;line-height:1.5;">
+  Sent on behalf of ${escapeHtml(companyName)} via Grid.
+</p>
+`
+
+    const html = emailDocument(innerHtml)
+
+    const text = [
+      'Hello,',
+      '',
+      `${inviterName} has invited you to join ${companyName} on Grid as a ${roleNice}.`,
+      '',
+      'What is Grid? Grid is the workspace where teams plan jobs, crew, equipment, offers, and communication.',
+      '',
+      `Accept the invitation: ${signupLink}`,
+      '',
+      'If you were not expecting this email, you can ignore it.',
+    ].join('\n')
 
     const sent = await sendResendHtmlEmail({
       apiKey: resendApiKey,
       to: [String(invite.email)],
       subject,
       html,
+      text,
+      fromDisplayName: companyName,
     })
 
     if (!sent.ok) {
       return new Response(
         JSON.stringify({ error: 'Resend failed', details: sent.bodyText }),
-        { status: 502, headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' } },
+        {
+          status: 502,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
       )
     }
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
-      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...emailFunctionCorsHeaders,
+        'Content-Type': 'application/json',
+      },
     })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...emailFunctionCorsHeaders,
+        'Content-Type': 'application/json',
+      },
     })
   }
 })

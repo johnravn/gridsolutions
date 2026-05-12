@@ -17,8 +17,18 @@ export function formatLoggingDate(iso: string): string {
 }
 
 const LOGGING_MONTHS_ABBREV = [
-  'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
-  'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'mai',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'okt',
+  'nov',
+  'des',
 ]
 
 export function getRange(

@@ -150,7 +150,10 @@ export default function CrewInspector({
       })
     },
     onError: (e: any) => {
-      toastError('Failed to save internal note', e?.message ?? 'Please try again.')
+      toastError(
+        'Failed to save internal note',
+        e?.message ?? 'Please try again.',
+      )
     },
   })
 

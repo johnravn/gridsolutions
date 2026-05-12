@@ -26,13 +26,10 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
-import type { LocalEquipmentGroup, LocalEquipmentItem } from './types'
 import { escapeForPostgrestOr } from './utils'
 import { ItemSearchField } from './ItemSearchField'
-import {
-  SortableEquipmentGroupCard,
-  SortableEquipmentRow,
-} from './sortable'
+import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
+import type { LocalEquipmentGroup, LocalEquipmentItem } from './types'
 
 export function EquipmentSection({
   groups,
@@ -924,7 +921,8 @@ export function EquipmentSection({
                                                     value={
                                                       unitPriceDrafts[
                                                         item.id
-                                                      ] ?? String(item.unit_price)
+                                                      ] ??
+                                                      String(item.unit_price)
                                                     }
                                                     onChange={(e) => {
                                                       const nextValue =
@@ -1218,4 +1216,3 @@ export function EquipmentSection({
     </Flex>
   )
 }
-

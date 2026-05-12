@@ -5,12 +5,8 @@ import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { DashboardCard } from '@features/home/components/DashboardCard'
-import {
-  crewConflictsQuery,
-  vehicleConflictsQuery,
-  type CrewConflictRow,
-  type VehicleConflictRow,
-} from '../api/queries'
+import { crewConflictsQuery, vehicleConflictsQuery } from '../api/queries'
+import type { CrewConflictRow, VehicleConflictRow } from '../api/queries'
 
 function formatPeriod(start: string, end: string) {
   const s = new Date(start)
@@ -23,8 +19,8 @@ export function ConflictsSection({
   vehicleConflicts,
   loading,
 }: {
-  crewConflicts: CrewConflictRow[]
-  vehicleConflicts: VehicleConflictRow[]
+  crewConflicts: Array<CrewConflictRow>
+  vehicleConflicts: Array<VehicleConflictRow>
   loading: boolean
 }) {
   const navigate = useNavigate()
@@ -68,12 +64,19 @@ export function ConflictsSection({
                         <Text
                           size="1"
                           color="blue"
-                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                           onClick={() =>
-                            navigate({ to: '/jobs', search: { jobId: row.job_id_1 } })
+                            navigate({
+                              to: '/jobs',
+                              search: { jobId: row.job_id_1 },
+                            })
                           }
                         >
-                          {row.job_title_1 ?? 'Job'} ({formatPeriod(row.start_1, row.end_1)})
+                          {row.job_title_1 ?? 'Job'} (
+                          {formatPeriod(row.start_1, row.end_1)})
                         </Text>
                       )}
                       <Text size="1" color="gray">
@@ -83,12 +86,19 @@ export function ConflictsSection({
                         <Text
                           size="1"
                           color="blue"
-                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                           onClick={() =>
-                            navigate({ to: '/jobs', search: { jobId: row.job_id_2 } })
+                            navigate({
+                              to: '/jobs',
+                              search: { jobId: row.job_id_2 },
+                            })
                           }
                         >
-                          {row.job_title_2 ?? 'Job'} ({formatPeriod(row.start_2, row.end_2)})
+                          {row.job_title_2 ?? 'Job'} (
+                          {formatPeriod(row.start_2, row.end_2)})
                         </Text>
                       )}
                     </Flex>
@@ -121,12 +131,19 @@ export function ConflictsSection({
                         <Text
                           size="1"
                           color="blue"
-                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                           onClick={() =>
-                            navigate({ to: '/jobs', search: { jobId: row.job_id_1 } })
+                            navigate({
+                              to: '/jobs',
+                              search: { jobId: row.job_id_1 },
+                            })
                           }
                         >
-                          {row.job_title_1 ?? 'Job'} ({formatPeriod(row.start_1, row.end_1)})
+                          {row.job_title_1 ?? 'Job'} (
+                          {formatPeriod(row.start_1, row.end_1)})
                         </Text>
                       )}
                       <Text size="1" color="gray">
@@ -136,12 +153,19 @@ export function ConflictsSection({
                         <Text
                           size="1"
                           color="blue"
-                          style={{ cursor: 'pointer', textDecoration: 'underline' }}
+                          style={{
+                            cursor: 'pointer',
+                            textDecoration: 'underline',
+                          }}
                           onClick={() =>
-                            navigate({ to: '/jobs', search: { jobId: row.job_id_2 } })
+                            navigate({
+                              to: '/jobs',
+                              search: { jobId: row.job_id_2 },
+                            })
                           }
                         >
-                          {row.job_title_2 ?? 'Job'} ({formatPeriod(row.start_2, row.end_2)})
+                          {row.job_title_2 ?? 'Job'} (
+                          {formatPeriod(row.start_2, row.end_2)})
                         </Text>
                       )}
                     </Flex>

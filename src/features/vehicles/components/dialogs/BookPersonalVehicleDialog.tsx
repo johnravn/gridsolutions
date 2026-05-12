@@ -1,14 +1,7 @@
 // src/features/vehicles/components/dialogs/BookPersonalVehicleDialog.tsx
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { addThreeHours } from '@shared/lib/generalFunctions'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
@@ -122,14 +115,20 @@ export default function BookPersonalVehicleDialog({
       onSaved?.()
     },
     onError: (err: unknown) => {
-      showError('Failed to update', (err as Error)?.message ?? 'Please try again.')
+      showError(
+        'Failed to update',
+        (err as Error)?.message ?? 'Please try again.',
+      )
     },
   })
 
   const save = mode === 'create' ? createMut.mutate : updateMut.mutate
   const isPending = createMut.isPending || updateMut.isPending
   const canSave =
-    title.trim().length > 0 && startAt && endAt && new Date(endAt) > new Date(startAt)
+    title.trim().length > 0 &&
+    startAt &&
+    endAt &&
+    new Date(endAt) > new Date(startAt)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -138,7 +137,10 @@ export default function BookPersonalVehicleDialog({
           {mode === 'create' ? 'Book vehicle' : 'Edit booking'}
         </Dialog.Title>
 
-        <Box mt="4" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Box
+          mt="4"
+          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        >
           <Box>
             <Text size="2" weight="medium" mb="2" as="div">
               Title

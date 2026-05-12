@@ -106,11 +106,15 @@ export function calculateOfferTotals(
   vehicleDistanceIncrement?: number | null,
   vehicleDailyRate?: number | null,
 ): OfferTotals {
-  const equipmentRentalFactor = calculateRentalFactor(daysOfUse, rentalFactorConfig)
+  const equipmentRentalFactor = calculateRentalFactor(
+    daysOfUse,
+    rentalFactorConfig,
+  )
 
   // Calculate equipment subtotal (unit price * qty * rental factor)
   const equipmentSubtotal = equipmentItems.reduce(
-    (sum, item) => sum + item.unit_price * item.quantity * equipmentRentalFactor,
+    (sum, item) =>
+      sum + item.unit_price * item.quantity * equipmentRentalFactor,
     0,
   )
 
@@ -133,8 +137,7 @@ export function calculateOfferTotals(
         new Date(item.start_date).getTime()) /
         (1000 * 60 * 60 * 24),
     )
-    const effectiveDailyRate =
-      item.daily_rate ?? vehicleDailyRate ?? 0
+    const effectiveDailyRate = item.daily_rate ?? vehicleDailyRate ?? 0
     const dailyCost = effectiveDailyRate * Math.max(1, days)
 
     const increment = vehicleDistanceIncrement ?? 150
@@ -142,7 +145,8 @@ export function calculateOfferTotals(
       ? Math.ceil(item.distance_km / increment)
       : 0
     // Per-item distance_rate overrides company vehicleDistanceRate (same logic as Technical offer dialog)
-    const effectiveDistanceRate = item.distance_rate ?? vehicleDistanceRate ?? null
+    const effectiveDistanceRate =
+      item.distance_rate ?? vehicleDistanceRate ?? null
     const distanceCost =
       effectiveDistanceRate && distanceIncrements > 0
         ? effectiveDistanceRate * distanceIncrements

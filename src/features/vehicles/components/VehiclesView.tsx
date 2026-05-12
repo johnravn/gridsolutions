@@ -2,14 +2,23 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Plus, Search } from 'iconoir-react'
-import { Badge, Box, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  Spinner,
+  Text,
+  TextField,
+} from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { vehiclesIndexQuery } from '../api/queries'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
 import type { VehicleIndexRow } from '../api/queries'
 
-const GRID_COLUMNS = 'minmax(140px, 2fr) minmax(80px, 1fr) minmax(80px, 1fr) minmax(100px, 1fr)'
+const GRID_COLUMNS =
+  'minmax(140px, 2fr) minmax(80px, 1fr) minmax(80px, 1fr) minmax(100px, 1fr)'
 
 type SortBy = 'name' | 'registration_no' | 'fuel' | 'owner'
 type SortDir = 'asc' | 'desc'
@@ -33,15 +42,25 @@ function compareVehicles(
       cmp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
       break
     case 'registration_no':
-      cmp = (a.registration_no ?? '').localeCompare(b.registration_no ?? '', undefined, { sensitivity: 'base' })
+      cmp = (a.registration_no ?? '').localeCompare(
+        b.registration_no ?? '',
+        undefined,
+        { sensitivity: 'base' },
+      )
       break
     case 'fuel':
-      cmp = (a.fuel ?? '').localeCompare(b.fuel ?? '', undefined, { sensitivity: 'base' })
+      cmp = (a.fuel ?? '').localeCompare(b.fuel ?? '', undefined, {
+        sensitivity: 'base',
+      })
       break
     case 'owner':
       cmp = Number(a.internally_owned) - Number(b.internally_owned)
       if (cmp === 0) {
-        cmp = (a.external_owner_name ?? '').localeCompare(b.external_owner_name ?? '', undefined, { sensitivity: 'base' })
+        cmp = (a.external_owner_name ?? '').localeCompare(
+          b.external_owner_name ?? '',
+          undefined,
+          { sensitivity: 'base' },
+        )
       }
       break
     default:
@@ -165,7 +184,14 @@ export default function VehiclesView({
           marginTop: 16,
         }}
       >
-        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div
+          style={{
+            minWidth: 'max-content',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
           {/* Table header */}
           <div
             style={{
@@ -179,25 +205,25 @@ export default function VehiclesView({
             }}
           >
             {SORTABLE_COLUMNS.map((col) => {
-          const isActive = sortBy === col.id
-          const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
-          return (
-            <div
-              key={col.id}
-              onClick={() => handleSort(col.id)}
-              style={{
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-              title="Click to sort"
-            >
-              {col.header}
-              {arrow}
-            </div>
-          )
-        })}
+              const isActive = sortBy === col.id
+              const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => handleSort(col.id)}
+                  style={{
+                    fontSize: 'var(--font-size-1)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                  }}
+                  title="Click to sort"
+                >
+                  {col.header}
+                  {arrow}
+                </div>
+              )
+            })}
           </div>
 
           {/* Virtualized list body */}
@@ -210,100 +236,103 @@ export default function VehiclesView({
               marginTop: 8,
             }}
           >
-        {isLoading ? (
-          <Flex align="center" justify="center" py="6">
-            <Spinner size="2" />
-          </Flex>
-        ) : rows.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              No vehicles
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = rows[virtualRow.index]
-              const isActive = row.id === selectedId
+            {isLoading ? (
+              <Flex align="center" justify="center" py="6">
+                <Spinner size="2" />
+              </Flex>
+            ) : rows.length === 0 ? (
+              <Flex align="center" justify="center" py="6">
+                <Text size="2" color="gray">
+                  No vehicles
+                </Text>
+              </Flex>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index]
+                  const isActive = row.id === selectedId
 
-              return (
-                <div
-                  key={row.id}
-                  data-index={virtualRow.index}
-                  onClick={() => onSelect(row.id)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    display: 'grid',
-                    gridTemplateColumns: GRID_COLUMNS,
-                    gap: 'var(--space-2)',
-                    alignItems: 'center',
-                    padding: '0 var(--space-3)',
-                    cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--accent-a3)' : 'transparent',
-                    borderRadius: 'var(--radius-2)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'transparent'
-                    }
-                  }}
-                >
-                  <Text size="2" weight="medium">
-                    {row.name}
-                  </Text>
-                  <Text size="2" color="gray">
-                    {row.registration_no ?? '—'}
-                  </Text>
-                  <Box>
-                    {row.fuel ? (
-                      <Badge
-                        variant="soft"
-                        color={
-                          row.fuel === 'electric'
-                            ? 'green'
-                            : row.fuel === 'diesel'
-                              ? 'orange'
-                              : 'blue'
+                  return (
+                    <div
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      onClick={() => onSelect(row.id)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'grid',
+                        gridTemplateColumns: GRID_COLUMNS,
+                        gap: 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: '0 var(--space-3)',
+                        cursor: 'pointer',
+                        backgroundColor: isActive
+                          ? 'var(--accent-a3)'
+                          : 'transparent',
+                        borderRadius: 'var(--radius-2)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor =
+                            'var(--gray-a2)'
                         }
-                      >
-                        {row.fuel}
-                      </Badge>
-                    ) : (
-                      '—'
-                    )}
-                  </Box>
-                  <Box>
-                    {row.internally_owned ? (
-                      <Badge variant="soft" color="indigo">
-                        Internal
-                      </Badge>
-                    ) : (
-                      <Badge variant="soft" color="violet">
-                        {row.external_owner_name ?? 'External'}
-                      </Badge>
-                    )}
-                  </Box>
-                </div>
-              )
-            })}
-          </div>
-        )}
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }
+                      }}
+                    >
+                      <Text size="2" weight="medium">
+                        {row.name}
+                      </Text>
+                      <Text size="2" color="gray">
+                        {row.registration_no ?? '—'}
+                      </Text>
+                      <Box>
+                        {row.fuel ? (
+                          <Badge
+                            variant="soft"
+                            color={
+                              row.fuel === 'electric'
+                                ? 'green'
+                                : row.fuel === 'diesel'
+                                  ? 'orange'
+                                  : 'blue'
+                            }
+                          >
+                            {row.fuel}
+                          </Badge>
+                        ) : (
+                          '—'
+                        )}
+                      </Box>
+                      <Box>
+                        {row.internally_owned ? (
+                          <Badge variant="soft" color="indigo">
+                            Internal
+                          </Badge>
+                        ) : (
+                          <Badge variant="soft" color="violet">
+                            {row.external_owner_name ?? 'External'}
+                          </Badge>
+                        )}
+                      </Box>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -14,7 +14,7 @@ export function useJobCrewRoleIds({
 }: {
   companyId: string | null
   userId: string | null
-  jobIds: string[]
+  jobIds: Array<string>
 }) {
   const { data: crewJobIds = [] } = useQuery({
     queryKey: [
@@ -24,7 +24,7 @@ export function useJobCrewRoleIds({
       userId,
       jobIds.length ? jobIds.slice(0, 50).join(',') : '',
     ],
-    queryFn: async (): Promise<string[]> => {
+    queryFn: async (): Promise<Array<string>> => {
       if (!userId || jobIds.length === 0) return []
 
       const { data: timePeriods, error: tpError } = await supabase
@@ -50,7 +50,7 @@ export function useJobCrewRoleIds({
         if (tp.job_id) tpToJob.set(tp.id, tp.job_id)
       })
 
-      const out: string[] = []
+      const out: Array<string> = []
       ;(crewRes ?? []).forEach((c) => {
         const jobId = tpToJob.get(c.time_period_id)
         if (jobId) out.push(jobId)

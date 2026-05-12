@@ -157,11 +157,20 @@ export default function LoggingPage() {
   // Show newest first; only jobs that start on or before end of "today + 2 days" (today + next 2 days = 3 days total)
   const jobsForPicker = React.useMemo(() => {
     const now = new Date()
-    const endOfWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 2, 23, 59, 59, 999)
+    const endOfWindow = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 2,
+      23,
+      59,
+      59,
+      999,
+    )
     return jobsData
       .filter(
         (job) =>
-          !job.start_at || new Date(job.start_at).getTime() <= endOfWindow.getTime(),
+          !job.start_at ||
+          new Date(job.start_at).getTime() <= endOfWindow.getTime(),
       )
       .slice(0, 50)
   }, [jobsData])
@@ -244,13 +253,6 @@ export default function LoggingPage() {
       lockedMonthSet: lockedMonthSetForEntry,
     })
   }, [endAt, lockedMonthSetForEntry, startAt])
-
-  // When "Link to job" is selected and no job chosen, focus the job search field
-  React.useEffect(() => {
-    if (entryMode === 'job' && !selectedJobId && jobSearchInputRef.current) {
-      jobSearchInputRef.current.focus()
-    }
-  }, [entryMode, selectedJobId])
 
   const handleJobSelect = React.useCallback(
     (
@@ -395,11 +397,6 @@ export default function LoggingPage() {
 
   const lastSelectedMonthRef = React.useRef(selectedMonth)
   React.useEffect(() => {
-    if (entryMode === 'job' && !selectedJobId && jobSearchInputRef.current) {
-      jobSearchInputRef.current.focus()
-    }
-  }, [entryMode, selectedJobId])
-  React.useEffect(() => {
     if (lastSelectedMonthRef.current === selectedMonth) return
     lastSelectedMonthRef.current = selectedMonth
     const shifted = shiftRangeToMonth({
@@ -431,7 +428,7 @@ export default function LoggingPage() {
           gap: 16,
         }}
       >
-        <label>
+        <label style={{ gridColumn: '1 / -1' }}>
           <Text as="div" size="2" mb="1" weight="medium">
             Entry type
           </Text>
@@ -446,6 +443,7 @@ export default function LoggingPage() {
                 setJobSearchOpen(true)
               }
             }}
+            style={{ width: '100%' }}
           >
             <SegmentedControl.Item value="job">
               Link to job
@@ -454,55 +452,36 @@ export default function LoggingPage() {
           </SegmentedControl.Root>
         </label>
         {entryMode === 'job' && (
-          <>
-            <Flex direction="column" gap="2" style={{ gridColumn: '1 / -1' }}>
+          <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
+            <Text as="div" size="2" mb="1" weight="medium">
+              Job
+            </Text>
+            {selectedJobId ? (
               <Flex align="center" gap="2">
-                <Switch
-                  checked={showAllJobs}
-                  onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
-                />
-                <Text size="2">Show all jobs</Text>
-                <Tooltip
-                  content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range."
+                <Text size="2" style={{ flex: 1 }}>
+                  {(() => {
+                    const job = jobsData.find((j) => j.id === selectedJobId)
+                    return job ? formatJobOption(job) : selectedJobId
+                  })()}
+                </Text>
+                <Button
+                  size="1"
+                  variant="soft"
+                  onClick={() => {
+                    setSelectedJobId(null)
+                    setJobSearchOpen(true)
+                  }}
                 >
-                  <IconButton
-                    size="1"
-                    variant="ghost"
-                    color="gray"
-                    style={{ cursor: 'help' }}
-                    aria-label="Explain job list options"
-                  >
-                    <InfoCircle width={16} height={16} />
-                  </IconButton>
-                </Tooltip>
+                  Change
+                </Button>
               </Flex>
-            </Flex>
-            <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
-              <Text as="div" size="2" mb="1" weight="medium">
-                Job
-              </Text>
-              {selectedJobId ? (
-                <Flex align="center" gap="2">
-                  <Text size="2" style={{ flex: 1 }}>
-                    {(() => {
-                      const job = jobsData.find((j) => j.id === selectedJobId)
-                      return job ? formatJobOption(job) : selectedJobId
-                    })()}
-                  </Text>
-                  <Button
-                    size="1"
-                    variant="soft"
-                    onClick={() => {
-                      setSelectedJobId(null)
-                      setJobSearchOpen(true)
-                    }}
+            ) : (
+              <>
+                <Flex align="center" gap="3" wrap="wrap">
+                  <Box
+                    ref={jobSearchInputRef}
+                    style={{ flex: 1, minWidth: 240 }}
                   >
-                    Change
-                  </Button>
-                </Flex>
-              ) : (
-                <>
-                  <Box ref={jobSearchInputRef}>
                     <TextField.Root
                       placeholder="Search by title, project lead, date, customer, job number"
                       value={jobSearch}
@@ -516,78 +495,96 @@ export default function LoggingPage() {
                       }}
                     />
                   </Box>
-                  {jobSearchOpen && jobSearch.trim().length > 0 && (
-                    <Box
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        top: '100%',
-                        marginTop: 4,
-                        zIndex: 10,
-                        maxHeight: 280,
-                        overflow: 'auto',
-                        background: 'var(--color-background)',
-                        border: '1px solid var(--gray-a6)',
-                        borderRadius: 'var(--radius-3)',
-                        boxShadow: 'var(--shadow-4)',
-                      }}
-                    >
-                      {jobsLoading ? (
-                        <Box p="3">
-                          <Text size="2" color="gray">
-                            Loading jobs…
-                          </Text>
-                        </Box>
-                      ) : jobsForPicker.length === 0 ? (
-                        <Box p="3">
-                          <Text size="2" color="gray">
-                            No jobs found. Try a different search or turn on
-                            &quot;Show all jobs&quot;.
-                          </Text>
-                        </Box>
-                      ) : (
-                        jobsForPicker.map((job) => (
-                          <Box
-                            key={job.id}
-                            asChild
-                            p="2"
-                            style={{
-                              cursor: 'pointer',
-                            }}
-                            onClick={() => handleJobSelect(job.id, job)}
-                            onMouseDown={(e) => e.preventDefault()}
-                          >
-                            <div>
-                              <Flex align="center" gap="2" wrap="wrap">
-                                <Text size="2">{formatJobOption(job)}</Text>
-                                {isJobOnToday(job) && (
-                                  <Badge size="1" color="blue" variant="soft">
-                                    Today
-                                  </Badge>
-                                )}
-                              </Flex>
-                              {(job.customer?.name ??
-                                job.project_lead?.display_name) && (
-                                <Text size="1" color="gray" as="div">
-                                  {[
-                                    job.customer?.name,
-                                    job.project_lead?.display_name,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                </Text>
+                  <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                    <Switch
+                      checked={showAllJobs}
+                      onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
+                    />
+                    <Text size="2">Show all jobs</Text>
+                    <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range.">
+                      <IconButton
+                        size="1"
+                        variant="ghost"
+                        color="gray"
+                        style={{ cursor: 'help' }}
+                        aria-label="Explain job list options"
+                      >
+                        <InfoCircle width={16} height={16} />
+                      </IconButton>
+                    </Tooltip>
+                  </Flex>
+                </Flex>
+                {jobSearchOpen && jobSearch.trim().length > 0 && (
+                  <Box
+                    style={{
+                      position: 'absolute',
+                      left: 0,
+                      right: 0,
+                      top: '100%',
+                      marginTop: 4,
+                      zIndex: 10,
+                      maxHeight: 280,
+                      overflow: 'auto',
+                      background: 'var(--color-background)',
+                      border: '1px solid var(--gray-a6)',
+                      borderRadius: 'var(--radius-3)',
+                      boxShadow: 'var(--shadow-4)',
+                    }}
+                  >
+                    {jobsLoading ? (
+                      <Box p="3">
+                        <Text size="2" color="gray">
+                          Loading jobs…
+                        </Text>
+                      </Box>
+                    ) : jobsForPicker.length === 0 ? (
+                      <Box p="3">
+                        <Text size="2" color="gray">
+                          No jobs found. Try a different search or turn on
+                          &quot;Show all jobs&quot;.
+                        </Text>
+                      </Box>
+                    ) : (
+                      jobsForPicker.map((job) => (
+                        <Box
+                          key={job.id}
+                          asChild
+                          p="2"
+                          style={{
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => handleJobSelect(job.id, job)}
+                          onMouseDown={(e) => e.preventDefault()}
+                        >
+                          <div>
+                            <Flex align="center" gap="2" wrap="wrap">
+                              <Text size="2">{formatJobOption(job)}</Text>
+                              {isJobOnToday(job) && (
+                                <Badge size="1" color="blue" variant="soft">
+                                  Today
+                                </Badge>
                               )}
-                            </div>
-                          </Box>
-                        ))
-                      )}
-                    </Box>
-                  )}
-                </>
-              )}
-            </Box>
-          </>
+                            </Flex>
+                            {(job.customer?.name ??
+                              job.project_lead?.display_name) && (
+                              <Text size="1" color="gray" as="div">
+                                {[
+                                  job.customer?.name,
+                                  job.project_lead?.display_name,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </Text>
+                            )}
+                          </div>
+                        </Box>
+                      ))
+                    )}
+                  </Box>
+                )}
+              </>
+            )}
+          </Box>
         )}
         <label>
           <Text as="div" size="2" mb="1" weight="medium">
@@ -797,11 +794,7 @@ export default function LoggingPage() {
           />
         </Box>
 
-        <Flex
-          justify="end"
-          mt="3"
-          style={{ flexShrink: 0 }}
-        >
+        <Flex justify="end" mt="3" style={{ flexShrink: 0 }}>
           <Text size="4" weight="bold">
             Total: {totalHours.toFixed(2)} hours
           </Text>
@@ -1008,11 +1001,13 @@ export default function LoggingPage() {
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
                 const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement) bar.style.setProperty('width', '24px')
+                if (bar instanceof HTMLElement)
+                  bar.style.setProperty('width', '24px')
               }}
               onMouseLeave={(e) => {
                 const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement) bar.style.setProperty('width', '12px')
+                if (bar instanceof HTMLElement)
+                  bar.style.setProperty('width', '12px')
               }}
               style={{
                 position: 'absolute',
@@ -1263,7 +1258,11 @@ function isJobOnToday(job: {
   end_at: string | null
 }): boolean {
   const today = new Date()
-  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
+  const todayStart = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  ).getTime()
   const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1
   if (job.start_at) {
     const t = new Date(job.start_at).getTime()

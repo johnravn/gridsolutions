@@ -1018,7 +1018,9 @@ export default function BookItemsDialog({
                     wrap="wrap"
                     align="center"
                     direction={isSmallScreen ? 'column' : 'row'}
-                    style={{ alignItems: isSmallScreen ? 'stretch' : undefined }}
+                    style={{
+                      alignItems: isSmallScreen ? 'stretch' : undefined,
+                    }}
                   >
                     <Box style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}>
                       <Text size="1" color="gray" mb="1" as="div">
@@ -1223,8 +1225,20 @@ export default function BookItemsDialog({
                             wrap="wrap"
                             style={{ flexWrap: 'wrap' }}
                           >
-                            <Flex align="center" gap="2" wrap="wrap" style={{ minWidth: 0, flex: 1 }}>
-                              <Text size="2" weight="medium" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            <Flex
+                              align="center"
+                              gap="2"
+                              wrap="wrap"
+                              style={{ minWidth: 0, flex: 1 }}
+                            >
+                              <Text
+                                size="2"
+                                weight="medium"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                }}
+                              >
                                 {r.name}
                               </Text>
                               {r.is_group && (
@@ -1251,7 +1265,11 @@ export default function BookItemsDialog({
                               Add
                             </Button>
                           </Flex>
-                          <Flex gap="3" wrap="wrap" style={{ fontSize: 12, color: 'var(--gray-11)' }}>
+                          <Flex
+                            gap="3"
+                            wrap="wrap"
+                            style={{ fontSize: 12, color: 'var(--gray-11)' }}
+                          >
                             {r.category_name && (
                               <Text size="1" color="gray">
                                 {r.category_name}

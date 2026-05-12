@@ -24,8 +24,8 @@ import {
 } from 'recharts'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
-  reportJobProfitabilityQuery,
   reportCustomerProfitabilityQuery,
+  reportJobProfitabilityQuery,
   reportUtilizationQuery,
 } from '../api/queries'
 

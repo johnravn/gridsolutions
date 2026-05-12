@@ -156,7 +156,10 @@ export default function CrewPage() {
   // On small screens: when a crew member is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedUserId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedUserId])
 
@@ -180,7 +183,12 @@ export default function CrewPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              style={{ flexShrink: 0 }}
+            >
               <Heading size="5">Crew</Heading>
               <CrewFilter
                 showEmployees={showEmployees}
@@ -305,15 +313,11 @@ export default function CrewPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{

@@ -2,6 +2,7 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Badge,
   Box,
   Button,
   Card,
@@ -30,6 +31,7 @@ import {
   rejectOffer,
   requestOfferRevision,
 } from '../api/offerQueries'
+import { formatOfferNumberDisplay } from '../utils/offerNumber'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
 import type {
   GroupContentEntry,
@@ -845,9 +847,16 @@ export default function PublicOfferPage() {
                 <Heading size="7" mb="2">
                   {offer.title}
                 </Heading>
-                <Text size="3" color="gray">
-                  Version {offer.version_number}
-                </Text>
+                <Flex direction="column" align="start" gap="2">
+                  {formatOfferNumberDisplay(offer.offernr) ? (
+                    <Badge size="2" variant="soft" color="gray">
+                      Offer {formatOfferNumberDisplay(offer.offernr)}
+                    </Badge>
+                  ) : null}
+                  <Text size="3" color="gray">
+                    Version {offer.version_number}
+                  </Text>
+                </Flex>
               </Box>
               {offer.customer && (
                 <Flex
@@ -1129,90 +1138,92 @@ export default function PublicOfferPage() {
                     {[...offer.groups]
                       .sort((a, b) => a.sort_order - b.sort_order)
                       .map((group) => {
-                      const showPrices = offer.show_price_per_line !== false
-                      const groupTotal = group.items.reduce(
-                        (sum, item) => sum + item.total_price,
-                        0,
-                      )
-                      return (
-                        <Box key={group.id} mb="4">
-                          <Heading size="3" mb="3">
-                            {group.group_name}
-                          </Heading>
-                          <Table.Root variant="surface">
-                            <Table.Header>
-                              <Table.Row>
-                                <Table.ColumnHeaderCell>
-                                  Item
-                                </Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>
-                                  Brand
-                                </Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>
-                                  Model
-                                </Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell
-                                  style={{ textAlign: 'right' }}
-                                >
-                                  Quantity
-                                </Table.ColumnHeaderCell>
-                                {showPrices && (
-                                  <>
-                                    <Table.ColumnHeaderCell
-                                      style={{ textAlign: 'right' }}
-                                    >
-                                      Unit Price
-                                    </Table.ColumnHeaderCell>
+                        const showPrices = offer.show_price_per_line !== false
+                        const groupTotal = group.items.reduce(
+                          (sum, item) => sum + item.total_price,
+                          0,
+                        )
+                        return (
+                          <Box key={group.id} mb="4">
+                            <Heading size="3" mb="3">
+                              {group.group_name}
+                            </Heading>
+                            <Table.Root variant="surface">
+                              <Table.Header>
+                                <Table.Row>
+                                  <Table.ColumnHeaderCell>
+                                    Item
+                                  </Table.ColumnHeaderCell>
+                                  <Table.ColumnHeaderCell>
+                                    Brand
+                                  </Table.ColumnHeaderCell>
+                                  <Table.ColumnHeaderCell>
+                                    Model
+                                  </Table.ColumnHeaderCell>
+                                  <Table.ColumnHeaderCell
+                                    style={{ textAlign: 'right' }}
+                                  >
+                                    Quantity
+                                  </Table.ColumnHeaderCell>
+                                  {showPrices && (
+                                    <>
+                                      <Table.ColumnHeaderCell
+                                        style={{ textAlign: 'right' }}
+                                      >
+                                        Unit Price
+                                      </Table.ColumnHeaderCell>
+                                      <Table.ColumnHeaderCell
+                                        style={{ textAlign: 'right' }}
+                                      >
+                                        Total
+                                      </Table.ColumnHeaderCell>
+                                    </>
+                                  )}
+                                  {!showPrices && (
                                     <Table.ColumnHeaderCell
                                       style={{ textAlign: 'right' }}
                                     >
                                       Total
                                     </Table.ColumnHeaderCell>
-                                  </>
-                                )}
-                                {!showPrices && (
-                                  <Table.ColumnHeaderCell
-                                    style={{ textAlign: 'right' }}
-                                  >
+                                  )}
+                                </Table.Row>
+                              </Table.Header>
+                              <Table.Body>
+                                {[...group.items]
+                                  .sort((a, b) => a.sort_order - b.sort_order)
+                                  .map((item) => (
+                                    <EquipmentItemRows
+                                      key={item.id}
+                                      item={item}
+                                      offerGroupId={group.id}
+                                      showPrices={showPrices}
+                                      formatCurrency={formatCurrency}
+                                      expandedItemGroupKeys={
+                                        expandedItemGroupKeys
+                                      }
+                                      onToggleExpanded={(key) => {
+                                        setExpandedItemGroupKeys((prev) => {
+                                          const next = new Set(prev)
+                                          if (next.has(key)) next.delete(key)
+                                          else next.add(key)
+                                          return next
+                                        })
+                                      }}
+                                    />
+                                  ))}
+                                <Table.Row style={{ fontWeight: 'bold' }}>
+                                  <Table.Cell colSpan={showPrices ? 5 : 4}>
                                     Total
-                                  </Table.ColumnHeaderCell>
-                                )}
-                              </Table.Row>
-                            </Table.Header>
-                            <Table.Body>
-                              {[...group.items]
-                                .sort((a, b) => a.sort_order - b.sort_order)
-                                .map((item) => (
-                                <EquipmentItemRows
-                                  key={item.id}
-                                  item={item}
-                                  offerGroupId={group.id}
-                                  showPrices={showPrices}
-                                  formatCurrency={formatCurrency}
-                                  expandedItemGroupKeys={expandedItemGroupKeys}
-                                  onToggleExpanded={(key) => {
-                                    setExpandedItemGroupKeys((prev) => {
-                                      const next = new Set(prev)
-                                      if (next.has(key)) next.delete(key)
-                                      else next.add(key)
-                                      return next
-                                    })
-                                  }}
-                                />
-                              ))}
-                              <Table.Row style={{ fontWeight: 'bold' }}>
-                                <Table.Cell colSpan={showPrices ? 5 : 4}>
-                                  Total
-                                </Table.Cell>
-                                <Table.Cell style={{ textAlign: 'right' }}>
-                                  {formatCurrency(groupTotal)}
-                                </Table.Cell>
-                              </Table.Row>
-                            </Table.Body>
-                          </Table.Root>
-                        </Box>
-                      )
-                    })}
+                                  </Table.Cell>
+                                  <Table.Cell style={{ textAlign: 'right' }}>
+                                    {formatCurrency(groupTotal)}
+                                  </Table.Cell>
+                                </Table.Row>
+                              </Table.Body>
+                            </Table.Root>
+                          </Box>
+                        )
+                      })}
                   </Box>
                 )}
 
@@ -1311,8 +1322,10 @@ export default function PublicOfferPage() {
 
               {/* Transport Items (for technical offers) */}
               {offer.offer_type === 'technical' &&
-                ((offer.transport_groups && offer.transport_groups.length > 0) ||
-                  (offer.transport_items && offer.transport_items.length > 0)) && (
+                ((offer.transport_groups &&
+                  offer.transport_groups.length > 0) ||
+                  (offer.transport_items &&
+                    offer.transport_items.length > 0)) && (
                   <Box mb="6">
                     <Heading size="4" mb="4">
                       Transportation
@@ -1350,7 +1363,8 @@ export default function PublicOfferPage() {
                       }
 
                       const groups =
-                        offer.transport_groups && offer.transport_groups.length > 0
+                        offer.transport_groups &&
+                        offer.transport_groups.length > 0
                           ? [...offer.transport_groups].sort(
                               (a, b) => a.sort_order - b.sort_order,
                             )
@@ -1368,7 +1382,10 @@ export default function PublicOfferPage() {
                       const transportTotal = groups.reduce(
                         (sum, g) =>
                           sum +
-                          g.items.reduce((s: number, it: any) => s + it.total_price, 0),
+                          g.items.reduce(
+                            (s: number, it: any) => s + it.total_price,
+                            0,
+                          ),
                         0,
                       )
 
@@ -1419,7 +1436,9 @@ export default function PublicOfferPage() {
                                     {group.items.map((item: any) => (
                                       <Table.Row key={item.id}>
                                         <Table.Cell>
-                                          {formatCategory(item.vehicle_category)}
+                                          {formatCategory(
+                                            item.vehicle_category,
+                                          )}
                                         </Table.Cell>
                                         <Table.Cell>
                                           {item.distance_km ?? '—'}
@@ -1427,9 +1446,13 @@ export default function PublicOfferPage() {
                                         <Table.Cell>
                                           {formatDateTimeShort(item.start_date)}
                                         </Table.Cell>
-                                        <Table.Cell style={{ textAlign: 'right' }}>
+                                        <Table.Cell
+                                          style={{ textAlign: 'right' }}
+                                        >
                                           {(() => {
-                                            const start = new Date(item.start_date)
+                                            const start = new Date(
+                                              item.start_date,
+                                            )
                                             const end = new Date(item.end_date)
                                             if (
                                               Number.isNaN(start.getTime()) ||
@@ -1440,7 +1463,8 @@ export default function PublicOfferPage() {
                                             const days = Math.max(
                                               1,
                                               Math.ceil(
-                                                (end.getTime() - start.getTime()) /
+                                                (end.getTime() -
+                                                  start.getTime()) /
                                                   (1000 * 60 * 60 * 24),
                                               ),
                                             )
@@ -1450,11 +1474,15 @@ export default function PublicOfferPage() {
                                           })()}
                                         </Table.Cell>
                                         {showPrices ? (
-                                          <Table.Cell style={{ textAlign: 'right' }}>
+                                          <Table.Cell
+                                            style={{ textAlign: 'right' }}
+                                          >
                                             {formatCurrency(item.total_price)}
                                           </Table.Cell>
                                         ) : (
-                                          <Table.Cell style={{ textAlign: 'right' }} />
+                                          <Table.Cell
+                                            style={{ textAlign: 'right' }}
+                                          />
                                         )}
                                       </Table.Row>
                                     ))}

@@ -1,10 +1,9 @@
 // src/features/jobs/utils/offerPdfExport.ts
 import jsPDF from 'jspdf'
+import { calculateRentalFactor } from './offerCalculations'
+import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
-import {
-  calculateRentalFactor,
-  type RentalFactorConfig,
-} from './offerCalculations'
+import { formatOfferNumberDisplay } from './offerNumber'
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('nb-NO', {
@@ -289,9 +288,17 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   doc.setFontSize(10)
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(110)
-  doc.text(`Offer v${offer.version_number}`, pageWidth - margin, yPos, {
-    align: 'right',
-  })
+  const offerNumLabel = formatOfferNumberDisplay(offer.offernr)
+  doc.text(
+    offerNumLabel
+      ? `Offer ${offerNumLabel} · v${offer.version_number}`
+      : `Offer v${offer.version_number}`,
+    pageWidth - margin,
+    yPos,
+    {
+      align: 'right',
+    },
+  )
   yPos += 6
 
   doc.setFontSize(12)
@@ -321,6 +328,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
 
   addSectionHeader('Offer Details')
   addKeyValue('Type', offer.offer_type === 'technical' ? 'Technical' : 'Pretty')
+  if (offer.offernr != null) {
+    addKeyValue('Offer number', formatOfferNumberDisplay(offer.offernr) ?? '—')
+  }
   addKeyValue('Created', formatDate(offer.created_at))
   if (offer.job_title) {
     addKeyValue('Job', offer.job_title)
@@ -442,7 +452,8 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
       (a, b) => a.sort_order - b.sort_order,
     )) {
       const groupTotal = (group.items || []).reduce((sum, item) => {
-        const lineTotal = item.unit_price * item.quantity * equipmentRentalFactor
+        const lineTotal =
+          item.unit_price * item.quantity * equipmentRentalFactor
         return sum + lineTotal
       }, 0)
       ensureSpace(10, () => drawTableHeader(equipmentColumns, true))
@@ -464,7 +475,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         )) {
           const isCustomLine = !item.item && !item.group
           const baseName = isCustomLine
-            ? (item.custom_line_description?.trim() || 'Custom line')
+            ? item.custom_line_description?.trim() || 'Custom line'
             : item.group
               ? `${item.group.name} (Group)`
               : item.item?.name || 'Unknown Item'
@@ -592,7 +603,9 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
 
     const transportGroups =
       offer.transport_groups && offer.transport_groups.length > 0
-        ? [...offer.transport_groups].sort((a, b) => a.sort_order - b.sort_order)
+        ? [...offer.transport_groups].sort(
+            (a, b) => a.sort_order - b.sort_order,
+          )
         : [
             {
               id: 'transport',
@@ -758,6 +771,13 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     align: 'right',
   })
 
-  const filename = `${offer.title.replace(/[^a-z0-9]/gi, '_')}_v${offer.version_number}.pdf`
+  const safeTitle = offer.title.replace(/[^a-z0-9]/gi, '_')
+  const numPart =
+    offer.offernr != null
+      ? formatOfferNumberDisplay(offer.offernr)?.replace(/^#/, '') ?? ''
+      : ''
+  const filename = numPart
+    ? `${safeTitle}_${numPart}_v${offer.version_number}.pdf`
+    : `${safeTitle}_v${offer.version_number}.pdf`
   doc.save(filename)
 }

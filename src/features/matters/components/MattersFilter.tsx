@@ -19,7 +19,7 @@ const TYPE_LABELS: Record<MatterType, string> = {
   update: 'Update',
 }
 
-const TYPE_ORDER: MatterType[] = [
+const TYPE_ORDER: Array<MatterType> = [
   'announcement',
   'update',
   'crew_invite',
@@ -30,10 +30,10 @@ const TYPE_ORDER: MatterType[] = [
 type Props = {
   unreadFilter: boolean
   onUnreadFilterChange: (v: boolean) => void
-  companyFilter: string[]
-  onCompanyFilterChange: (v: string[]) => void
-  typeFilter: MatterType[]
-  onTypeFilterChange: (v: MatterType[]) => void
+  companyFilter: Array<string>
+  onCompanyFilterChange: (v: Array<string>) => void
+  typeFilter: Array<MatterType>
+  onTypeFilterChange: (v: Array<MatterType>) => void
   companies: Array<{ id: string; name: string }>
 }
 

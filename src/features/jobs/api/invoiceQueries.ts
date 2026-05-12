@@ -2,6 +2,8 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 
+import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
+
 export type BookingInvoiceLine = {
   id: string
   type: 'equipment' | 'crew' | 'transport'
@@ -73,7 +75,7 @@ export function jobBookingsForInvoiceQuery({
       const { data: companyExpansion } = await supabase
         .from('company_expansions')
         .select(
-          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment',
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -86,16 +88,13 @@ export function jobBookingsForInvoiceQuery({
           ? 'hour'
           : 'day'
       const crewRatePerDay =
-        crewLevel?.crew_rate_per_day ??
-        (companyExpansion?.crew_rate_per_day ?? 0)
+        crewLevel?.crew_rate_per_day ?? companyExpansion?.crew_rate_per_day ?? 0
       const crewRatePerHour =
         crewLevel?.crew_rate_per_hour ??
-        (companyExpansion?.crew_rate_per_hour ?? 0)
+        companyExpansion?.crew_rate_per_hour ??
+        0
 
       const vehicleDailyRate = companyExpansion?.vehicle_daily_rate ?? 0
-      const vehicleDistanceRate = companyExpansion?.vehicle_distance_rate ?? 0
-      const vehicleDistanceIncrement =
-        companyExpansion?.vehicle_distance_increment ?? 0
 
       // Fetch all time periods for this job
       const { data: timePeriods, error: tpError } = await supabase
@@ -142,7 +141,7 @@ export function jobBookingsForInvoiceQuery({
         .from('reserved_items')
         .select(
           `
-          id, time_period_id, item_id, quantity,
+          id, time_period_id, item_id, quantity, source_kind, source_group_id,
           item:item_id (
             id, name, model,
             brand:brand_id ( name )
@@ -153,10 +152,18 @@ export function jobBookingsForInvoiceQuery({
 
       if (eqError) throw eqError
 
-      // Fetch prices separately from item_current_price view
+      const equipmentDirectBookings =
+        equipmentBookings?.filter((b) => b.source_kind !== 'group') ?? []
+      const equipmentGroupBookings =
+        equipmentBookings?.filter(
+          (b) => b.source_kind === 'group' && b.source_group_id,
+        ) ?? []
+
+      // Fetch prices separately from item_current_price view (direct items only;
+      // group bookings use bundle price from inventory_index).
       const itemIds =
-        equipmentBookings
-          ?.map((b) => b.item_id)
+        equipmentDirectBookings
+          .map((b) => b.item_id)
           .filter((id): id is string => !!id) ?? []
       const pricesMap = new Map<string, number | null>()
       if (itemIds.length > 0) {
@@ -169,9 +176,165 @@ export function jobBookingsForInvoiceQuery({
 
         if (prices) {
           for (const price of prices) {
+            if (!price.item_id) continue
             pricesMap.set(price.item_id, price.current_price)
           }
         }
+      }
+
+      const groupIdsFromBookings = [
+        ...new Set(
+          equipmentGroupBookings
+            .map((b) => b.source_group_id)
+            .filter((id): id is string => !!id),
+        ),
+      ]
+
+      const groupInfoMap = new Map<
+        string,
+        { name: string; current_price: number }
+      >()
+      if (groupIdsFromBookings.length > 0) {
+        const { data: groupInfo, error: groupInfoError } = await supabase
+          .from('inventory_index')
+          .select('id, name, current_price, is_group')
+          .in('id', groupIdsFromBookings)
+
+        if (groupInfoError) throw groupInfoError
+
+        for (const row of groupInfo || []) {
+          if (!row.id || !row.is_group) continue
+          groupInfoMap.set(row.id, {
+            name: (row.name ?? 'Group').trim() || 'Group',
+            current_price: row.current_price ?? 0,
+          })
+        }
+      }
+
+      const groupItemsMap = new Map<
+        string,
+        Array<{ item_id: string; quantity: number }>
+      >()
+      if (groupIdsFromBookings.length > 0) {
+        const { data: groupItems, error: groupItemsError } = await supabase
+          .from('group_items')
+          .select('group_id, item_id, quantity')
+          .in('group_id', groupIdsFromBookings)
+
+        if (groupItemsError) throw groupItemsError
+
+        for (const row of groupItems || []) {
+          if (!row.item_id || !row.group_id) continue
+          const list = groupItemsMap.get(row.group_id) ?? []
+          list.push({ item_id: row.item_id, quantity: row.quantity ?? 1 })
+          groupItemsMap.set(row.group_id, list)
+        }
+      }
+
+      type GroupBucket = {
+        time_period_id: string
+        source_group_id: string
+        byItem: Map<string, number>
+      }
+      const groupBuckets = new Map<string, GroupBucket>()
+      for (const booking of equipmentGroupBookings) {
+        const gid = booking.source_group_id
+        if (!gid || !booking.item_id) continue
+        const key = `${booking.time_period_id}:${gid}`
+        let bucket = groupBuckets.get(key)
+        if (!bucket) {
+          bucket = {
+            time_period_id: booking.time_period_id,
+            source_group_id: gid,
+            byItem: new Map(),
+          }
+          groupBuckets.set(key, bucket)
+        }
+        const cur = bucket.byItem.get(booking.item_id) ?? 0
+        bucket.byItem.set(booking.item_id, cur + (booking.quantity ?? 0))
+      }
+
+      // Process equipment: direct item rows + one line per booked group per time period
+      const equipmentLines: Array<BookingInvoiceLine> = []
+
+      for (const booking of equipmentDirectBookings) {
+        const item = Array.isArray(booking.item)
+          ? booking.item[0]
+          : booking.item
+        const timePeriod = timePeriodMap.get(booking.time_period_id)
+        if (!item || !timePeriod) continue
+        const brand = Array.isArray(item.brand) ? item.brand[0] : item.brand
+        const brandName = brand?.name ?? null
+        const model = item.model ?? null
+        const desc =
+          [brandName, model].filter(Boolean).join(' ') ||
+          item.name ||
+          'Equipment'
+
+        const unitPrice = pricesMap.get(booking.item_id) ?? 0
+        const quantity = booking.quantity
+        const totalPrice = unitPrice * quantity
+
+        equipmentLines.push({
+          id: booking.id,
+          type: 'equipment',
+          description: desc,
+          brandName,
+          model,
+          quantity,
+          unitPrice,
+          totalPrice,
+          vatPercent: defaultVatPercent,
+          timePeriodId: booking.time_period_id,
+          timePeriodTitle: timePeriod.title,
+          startAt: timePeriod.start_at,
+          endAt: timePeriod.end_at,
+        })
+      }
+
+      const groupBucketList = Array.from(groupBuckets.values())
+      groupBucketList.sort((a, b) => {
+        const ta = timePeriodMap.get(a.time_period_id)?.start_at ?? ''
+        const tb = timePeriodMap.get(b.time_period_id)?.start_at ?? ''
+        const byTime = ta.localeCompare(tb)
+        if (byTime !== 0) return byTime
+        const na = groupInfoMap.get(a.source_group_id)?.name ?? ''
+        const nb = groupInfoMap.get(b.source_group_id)?.name ?? ''
+        return na.localeCompare(nb)
+      })
+
+      for (const bucket of groupBucketList) {
+        const info = groupInfoMap.get(bucket.source_group_id)
+        if (!info) continue
+
+        const templateItems = groupItemsMap.get(bucket.source_group_id) ?? []
+        if (templateItems.length === 0) continue
+
+        const bookedLines = Array.from(bucket.byItem.entries()).map(
+          ([item_id, quantity]) => ({ item_id, quantity }),
+        )
+        const quantity = impliedBookedGroupCount(templateItems, bookedLines)
+        const unitPrice = info.current_price
+        const totalPrice = unitPrice * quantity
+
+        const timePeriod = timePeriodMap.get(bucket.time_period_id)
+        if (!timePeriod) continue
+
+        equipmentLines.push({
+          id: `group:${bucket.time_period_id}:${bucket.source_group_id}`,
+          type: 'equipment',
+          description: `${info.name} (Group)`,
+          brandName: null,
+          model: null,
+          quantity,
+          unitPrice,
+          totalPrice,
+          vatPercent: defaultVatPercent,
+          timePeriodId: bucket.time_period_id,
+          timePeriodTitle: timePeriod.title,
+          startAt: timePeriod.start_at,
+          endAt: timePeriod.end_at,
+        })
       }
 
       // Fetch crew roles (time_periods with category='crew') - invoice uses roles, not assigned crew
@@ -182,7 +345,9 @@ export function jobBookingsForInvoiceQuery({
         crewTimePeriodIds.length > 0
           ? await supabase
               .from('time_periods')
-              .select('id, title, role_category, needed_count, start_at, end_at')
+              .select(
+                'id, title, role_category, needed_count, start_at, end_at',
+              )
               .in('id', crewTimePeriodIds)
           : { data: [], error: null }
 
@@ -206,45 +371,6 @@ export function jobBookingsForInvoiceQuery({
 
       if (transError) throw transError
 
-      // Process equipment bookings - description = brand + model
-      const equipmentLines: Array<BookingInvoiceLine> = []
-      if (equipmentBookings) {
-        for (const booking of equipmentBookings) {
-          const item = Array.isArray(booking.item)
-            ? booking.item[0]
-            : booking.item
-          const timePeriod = timePeriodMap.get(booking.time_period_id)
-          if (!item || !timePeriod) continue
-          const brand = Array.isArray(item.brand) ? item.brand[0] : item.brand
-          const brandName = brand?.name ?? null
-          const model = item.model ?? null
-          const desc =
-            [brandName, model].filter(Boolean).join(' ') ||
-            item.name ||
-            'Equipment'
-
-          const unitPrice = pricesMap.get(booking.item_id) ?? 0
-          const quantity = booking.quantity
-          const totalPrice = unitPrice * quantity
-
-          equipmentLines.push({
-            id: booking.id,
-            type: 'equipment',
-            description: desc,
-            brandName,
-            model,
-            quantity,
-            unitPrice,
-            totalPrice,
-            vatPercent: defaultVatPercent,
-            timePeriodId: booking.time_period_id,
-            timePeriodTitle: timePeriod.title,
-            startAt: timePeriod.start_at,
-            endAt: timePeriod.end_at,
-          })
-        }
-      }
-
       // Process crew roles (one line per role, using role title/category - not assigned crew)
       const crewLines: Array<BookingInvoiceLine> = []
       if (crewRoles) {
@@ -256,13 +382,8 @@ export function jobBookingsForInvoiceQuery({
           const endAt = role.end_at
           const neededCount = Math.max(1, role.needed_count ?? 1)
           const roleLabel =
-            role.title?.trim() ||
-            role.role_category?.trim() ||
-            'technician'
-          const unitLabel =
-            crewBillingUnit === 'hour'
-              ? 'per hour'
-              : 'per day'
+            role.title?.trim() || role.role_category?.trim() || 'technician'
+          const unitLabel = crewBillingUnit === 'hour' ? 'per hour' : 'per day'
           const roleDescription = `Crew - ${roleLabel} - ${unitLabel}`
 
           let quantity: number
@@ -271,8 +392,7 @@ export function jobBookingsForInvoiceQuery({
 
           if (crewBillingUnit === 'hour') {
             quantity =
-              neededCount *
-              Math.max(0.1, calculateHours(startAt, endAt))
+              neededCount * Math.max(0.1, calculateHours(startAt, endAt))
             unitPrice = crewRatePerHour
           } else {
             quantity = neededCount * calculateDays(startAt, endAt)

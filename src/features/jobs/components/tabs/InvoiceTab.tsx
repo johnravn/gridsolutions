@@ -9,25 +9,24 @@ import {
   Flex,
   Heading,
   Text,
-  TextArea,
   Tooltip,
 } from '@radix-ui/themes'
-import {
-  CheckCircle,
-  Eye,
-  GoogleDocs,
-  XmarkCircle,
-} from 'iconoir-react'
+import { CheckCircle, Eye, GoogleDocs, XmarkCircle } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { contaClient } from '@shared/api/conta/client'
-import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { contaClient, getEffectiveContaApiEnvironment } from '@shared/api/conta/client'
+import {
+  addLocalCalendarDays,
+  formatLocalYmd,
+  makeWordPresentable,
+} from '@shared/lib/generalFunctions'
 import { companyDetailQuery } from '@features/company/api/queries'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
 import { ensureContaProjectId } from '../../utils/contaProjects'
+import { acceptedOfferInvoiceLineDescription } from '../../utils/offerNumber'
 import type {
   BookingInvoiceLine,
   BookingsForInvoice,
@@ -58,9 +57,7 @@ function offerToBookingsForInvoice(offer: JobOffer): BookingsForInvoice {
   const line: BookingInvoiceLine = {
     id: offer.id,
     type: 'equipment',
-    description:
-      offer.title.trim() ||
-      `Invoice for Job offer v${offer.version_number}`,
+    description: acceptedOfferInvoiceLineDescription(offer),
     quantity: 1,
     unitPrice: offer.total_after_discount,
     totalPrice: offer.total_after_discount,
@@ -83,24 +80,66 @@ function offerToBookingsForInvoice(offer: JobOffer): BookingsForInvoice {
   }
 }
 
-type PendingInvoiceAction =
-  | {
-      kind: 'offer'
-      offer: JobOffer
-      invoiceMessage: string
-      orgReferenceOverride?: string
-      theirRefOverride?: string
-      invoiceWithVat?: boolean
+/** Ex-VAT amount for one line after line discount (matches InvoicePreview). */
+function lineExVatAfterDiscount(
+  line: BookingInvoiceLine,
+  lineDiscountOverrides: Record<string, number>,
+): number {
+  const d = lineDiscountOverrides[line.id] ?? 0
+  return line.unitPrice * line.quantity * (1 - d / 100)
+}
+
+/**
+ * Snapshot of lines + totals from the invoice preview state. Conta payload is
+ * built from this so sent values match the preview tab.
+ */
+function buildBookingsForInvoiceSendPayload(
+  previewBookings: BookingsForInvoice,
+  editedLines: Array<BookingInvoiceLine>,
+  lineDiscountOverrides: Record<string, number>,
+  vatIncluded: boolean,
+): BookingsForInvoice {
+  const lines =
+    editedLines.length > 0 ? editedLines : previewBookings.all
+  const equipment = lines.filter((l) => l.type === 'equipment')
+  const crew = lines.filter((l) => l.type === 'crew')
+  const transport = lines.filter((l) => l.type === 'transport')
+
+  let totalExVat = 0
+  for (const line of lines) {
+    totalExVat += lineExVatAfterDiscount(line, lineDiscountOverrides)
+  }
+  let totalVat = 0
+  if (vatIncluded) {
+    for (const line of lines) {
+      const ex = lineExVatAfterDiscount(line, lineDiscountOverrides)
+      totalVat += (ex * line.vatPercent) / 100
     }
-  | {
-      kind: 'bookings'
-      bookings: BookingsForInvoice
-      invoiceMessage: string
-      orgReferenceOverride?: string
-      theirRefOverride?: string
-      lineDiscountOverrides?: Record<string, number>
-      invoiceWithVat?: boolean
-    }
+  }
+  const totalWithVat = totalExVat + totalVat
+
+  return {
+    ...previewBookings,
+    equipment,
+    crew,
+    transport,
+    all: lines,
+    totalExVat,
+    totalVat,
+    totalWithVat,
+  }
+}
+
+type PendingInvoiceAction = {
+  bookingsData: BookingsForInvoice
+  invoiceMessage: string
+  orgReferenceOverride?: string
+  theirRefOverride?: string
+  lineDiscountOverrides: Record<string, number>
+  invoiceWithVat?: boolean
+  /** When set, job_invoices row links to the accepted offer (same as legacy offer flow). */
+  offerId?: string | null
+}
 
 export default function InvoiceTab({
   jobId,
@@ -124,11 +163,6 @@ export default function InvoiceTab({
     React.useState<PendingInvoiceAction | null>(null)
   const [pendingInvoiceRecipients, setPendingInvoiceRecipients] =
     React.useState<Array<InvoiceRecipient> | null>(null)
-  const [invoiceMessageDialogOpen, setInvoiceMessageDialogOpen] =
-    React.useState(false)
-  const [invoiceMessageDraft, setInvoiceMessageDraft] = React.useState('')
-  const [invoiceMessageAction, setInvoiceMessageAction] =
-    React.useState<PendingInvoiceAction | null>(null)
   const [invoiceWithVat, setInvoiceWithVat] = React.useState(true)
 
   // Get current user ID for tracking
@@ -140,12 +174,19 @@ export default function InvoiceTab({
     },
   })
 
-  // Check if we're in test/sandbox mode
-  const isTestMode = React.useMemo(() => {
-    const apiUrl =
-      import.meta.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
-    return apiUrl.includes('sandbox') || apiUrl.includes('test')
-  }, [])
+  const { data: effectiveContaEnv } = useQuery({
+    queryKey: ['conta-effective-api-environment', companyId],
+    queryFn: async () => {
+      try {
+        return await getEffectiveContaApiEnvironment()
+      } catch {
+        return 'production' as const
+      }
+    },
+    enabled: !!companyId,
+    staleTime: 30_000,
+  })
+  const isSandboxConta = effectiveContaEnv === 'sandbox'
 
   // Fetch accepted offers for this job
   const { data: acceptedOffers = [], isLoading: isLoadingOffers } = useQuery({
@@ -165,10 +206,7 @@ export default function InvoiceTab({
 
   // Fetch bookings for invoice (only when bookings basis is selected)
   // Use a stable query key (always 25%) so toggling VAT doesn't refetch and cause dialog to glitch
-  const {
-    data: bookings,
-    isLoading: isLoadingBookings,
-  } = useQuery({
+  const { data: bookings, isLoading: isLoadingBookings } = useQuery({
     ...jobBookingsForInvoiceQuery({
       jobId,
       companyId: companyId ?? '',
@@ -233,7 +271,10 @@ export default function InvoiceTab({
         .eq('customer_id', job.customer_id)
         .order('name', { ascending: true })
       if (error) throw error
-      return (Array.isArray(data) ? data : []) as Array<{ id: string; name: string }>
+      return (Array.isArray(data) ? data : []) as Array<{
+        id: string
+        name: string
+      }>
     },
   })
 
@@ -272,10 +313,17 @@ export default function InvoiceTab({
     enabled: !!companyId,
   })
 
-  const getDaysUntilDue = (): number =>
-    job.customer?.conta_days_until_payment_reminder ??
-    accountingConfig?.default_invoice_days_until_due ??
-    14
+  const getDaysUntilDue = (): number => {
+    const positiveDays = (value: unknown) =>
+      typeof value === 'number' && Number.isFinite(value) && value > 0
+        ? value
+        : null
+    return (
+      positiveDays(job.customer?.conta_days_until_payment_reminder) ??
+      positiveDays(accountingConfig?.default_invoice_days_until_due) ??
+      14
+    )
+  }
 
   const canSendInvoice =
     job.customer != null && job.customer.conta_customer_id != null
@@ -356,7 +404,6 @@ export default function InvoiceTab({
     const lineCount = details.bookingsCount ?? 0
     return `Job: ${jobLabel}\nInvoice based on bookings (${lineCount} line${lineCount !== 1 ? 's' : ''})`
   }
-
 
   const getProjectLeadReference = () =>
     job.project_lead?.display_name || job.project_lead?.email || undefined
@@ -451,199 +498,7 @@ export default function InvoiceTab({
     return 'high' // Default to high
   }
 
-  // Create invoice mutation for offer basis
-  const createInvoiceFromOfferMutation = useMutation({
-    mutationFn: async ({
-      offer,
-      organizationId,
-      invoiceRecipients,
-      downloadPdfAfterCreate: _downloadPdfAfterCreate,
-      invoiceMessage,
-      orgReferenceOverride,
-      theirRefOverride,
-      invoiceWithVat: includeVat = true,
-    }: {
-      offer: JobOffer
-      organizationId: string
-      invoiceRecipients: Array<InvoiceRecipient>
-      downloadPdfAfterCreate?: boolean
-      invoiceMessage?: string
-      orgReferenceOverride?: string
-      theirRefOverride?: string
-      invoiceWithVat?: boolean
-    }) => {
-      const contaCustomerId = getContaCustomerId()
-
-      let contaProjectId: number | null = null
-      try {
-        contaProjectId = await ensureContaProjectId(organizationId, {
-          jobTitle: job.title,
-          jobnr: job.jobnr,
-          jobId,
-          customerId: contaCustomerId,
-        })
-      } catch (projectError) {
-        console.warn('Failed to resolve Conta project for job', projectError)
-      }
-
-      const orgRef = orgReferenceOverride?.trim() || getOrgReference()
-      const customerRef =
-        theirRefOverride?.trim() || getCustomerContactReference() || ''
-      const vatCode = getVatCode(includeVat ? 25 : 0)
-
-      // Create invoice with single line for the offer
-      const daysUntilDue = getDaysUntilDue()
-      const shouldSendEhf =
-        invoiceRecipients[0] && invoiceRecipients[0].type === 'EHF'
-      const invoiceData = {
-        customerId: contaCustomerId,
-        invoiceDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        invoiceDueDate: new Date(
-          Date.now() + daysUntilDue * 24 * 60 * 60 * 1000,
-        )
-          .toISOString()
-          .split('T')[0],
-        invoiceCurrency: 'NOK',
-        ...(contaProjectId ? { projectId: contaProjectId } : {}),
-        ...(shouldSendEhf ? { invoiceRecipients } : {}),
-        ...(shouldSendEhf ? { ehfOrderReference: getEhfOrderReference() } : {}),
-        ...(orgRef ? { orgReference: orgRef } : {}),
-        ...(customerRef ? { customerReference: customerRef } : {}),
-        personalMessage:
-          invoiceMessage?.trim() ||
-          getDefaultPersonalMessage({
-            type: 'offer',
-            offerTitle: offer.title || `v${offer.version_number}`,
-          }),
-        invoiceLines: [
-          {
-            description: offer.title || `Invoice for Job ${job.jobnr || jobId}`,
-            quantity: 1,
-            price: offer.total_after_discount, // Price ex VAT
-            discount: offer.discount_percent,
-            vatCode,
-            lineNo: 1,
-          },
-        ],
-      }
-
-      // Create invoice record in database first (pending status)
-      const { data: invoiceRecord, error: recordError } = await supabase
-        .from('job_invoices')
-        .insert({
-          job_id: jobId,
-          offer_id: offer.id,
-          organization_id: organizationId,
-          conta_customer_id: contaCustomerId,
-          invoice_basis: 'offer',
-          invoice_data: invoiceData as any,
-          status: 'pending',
-          created_by_user_id: authUser?.id ?? null,
-        })
-        .select()
-        .single()
-
-      if (recordError) {
-        console.error('Failed to create invoice record:', recordError)
-      }
-
-      let response: any
-      let errorMessage: string | null = null
-
-      try {
-        response = await contaClient.post(
-          `/invoice/organizations/${organizationId}/invoices`,
-          invoiceData,
-        )
-
-        // Update invoice record with success
-        if (invoiceRecord) {
-          await supabase
-            .from('job_invoices')
-            .update({
-              status: 'created',
-              conta_invoice_id:
-                response?.invoiceNo?.toString() ||
-                response?.id?.toString() ||
-                response?.invoiceId?.toString() ||
-                null,
-              conta_response: response,
-            })
-            .eq('id', invoiceRecord.id)
-        }
-      } catch (error: any) {
-        errorMessage = error?.message || 'Unknown error'
-
-        // Update invoice record with failure
-        if (invoiceRecord) {
-          await supabase
-            .from('job_invoices')
-            .update({
-              status: 'failed',
-              error_message: errorMessage,
-            })
-            .eq('id', invoiceRecord.id)
-        }
-
-        throw error
-      }
-
-      return { response, invoiceRecord }
-    },
-    onSuccess: async (data, variables) => {
-      success(
-        'Invoice created and sent through Conta.',
-        isTestMode ? 'Test mode' : undefined,
-      )
-
-      // Update job status to 'invoiced' if not already
-      if (job.status !== 'invoiced' && job.status !== 'paid') {
-        const { error: updateError } = await supabase
-          .from('jobs')
-          .update({ status: 'invoiced' })
-          .eq('id', jobId)
-
-        if (!updateError) {
-          // Update the detail cache immediately (JobInspector renders from this)
-          qc.setQueryData<JobDetail | null>(['jobs-detail', jobId], (old) =>
-            old ? { ...old, status: 'invoiced' } : old,
-          )
-          // Ensure we refetch from server too
-          qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
-          // Refresh list views that may show "ready to invoice" or status badges
-          if (companyId) {
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'jobs-index'],
-            })
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'jobs-index-page'],
-            })
-          }
-        }
-      }
-
-      // Refresh accepted offers and invoice history
-      qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'invoice', 'accepted-offers'],
-      })
-      qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'invoices'],
-      })
-
-      if (variables.downloadPdfAfterCreate) {
-        await downloadContaInvoicePdf(variables.organizationId, data.response)
-      }
-    },
-    onError: (err: any) => {
-      toastError(
-        'Failed to Create Invoice',
-        err?.message ||
-          'An error occurred while creating the invoice. Please try again.',
-      )
-    },
-  })
-
-  // Create invoice mutation for bookings basis
+  // Create invoice mutation for bookings basis (also used for "from accepted offer" preview lines)
   const createInvoiceFromBookingsMutation = useMutation({
     mutationFn: async ({
       bookingsData,
@@ -655,6 +510,7 @@ export default function InvoiceTab({
       theirRefOverride,
       lineDiscountOverrides: lineDiscountOverridesParam = {},
       invoiceWithVat: includeVat = true,
+      offerId = null,
     }: {
       bookingsData: BookingsForInvoice
       organizationId: string
@@ -665,37 +521,42 @@ export default function InvoiceTab({
       theirRefOverride?: string
       lineDiscountOverrides?: Record<string, number>
       invoiceWithVat?: boolean
+      offerId?: string | null
     }) => {
       const contaCustomerId = getContaCustomerId()
 
-      let contaProjectId: number | null = null
-      try {
-        contaProjectId = await ensureContaProjectId(organizationId, {
-          jobTitle: job.title,
-          jobnr: job.jobnr,
-          jobId,
-          customerId: contaCustomerId,
-        })
-      } catch (projectError) {
-        console.warn('Failed to resolve Conta project for job', projectError)
+      const contaProjectId = await ensureContaProjectId(organizationId, {
+        jobTitle: job.title,
+        jobnr: job.jobnr,
+        jobId,
+        customerId: contaCustomerId,
+      })
+      if (contaProjectId == null) {
+        throw new Error(
+          'Could not resolve a Conta project for this job (no id returned). Check Conta and try again.',
+        )
       }
 
       if (bookingsData.all.length === 0) {
         throw new Error('No bookings available to invoice')
       }
 
-      // Use VAT choice at send time so the toggle is the source of truth (fixes bug where turning off VAT still sent with VAT)
-      const vatPercentForLines = includeVat ? 25 : 0
+      // Per-line VAT matches the preview table; "Invoice with VAT: No" forces no-vat codes.
       const invoiceLines = bookingsData.all.map((line, index) => ({
         description: line.description,
         quantity: line.quantity,
         price: line.unitPrice, // Price ex VAT per unit
         discount: lineDiscountOverridesParam[line.id] ?? 0,
-        vatCode: getVatCode(vatPercentForLines),
+        vatCode: getVatCode(includeVat ? line.vatPercent : 0),
         lineNo: index + 1,
       }))
 
       const daysUntilDue = getDaysUntilDue()
+      const invoiceDateLocal = new Date()
+      const invoiceDueDateLocal = addLocalCalendarDays(
+        invoiceDateLocal,
+        daysUntilDue,
+      )
       const shouldSendEhf =
         invoiceRecipients[0] && invoiceRecipients[0].type === 'EHF'
       const orgRef = orgReferenceOverride?.trim()
@@ -703,14 +564,10 @@ export default function InvoiceTab({
         : getOrgReference()
       const invoiceData = {
         customerId: contaCustomerId,
-        invoiceDate: new Date().toISOString().split('T')[0], // YYYY-MM-DD format
-        invoiceDueDate: new Date(
-          Date.now() + daysUntilDue * 24 * 60 * 60 * 1000,
-        )
-          .toISOString()
-          .split('T')[0],
+        invoiceDate: formatLocalYmd(invoiceDateLocal),
+        invoiceDueDate: formatLocalYmd(invoiceDueDateLocal),
         invoiceCurrency: 'NOK',
-        ...(contaProjectId ? { projectId: contaProjectId } : {}),
+        projectId: contaProjectId,
         ...(shouldSendEhf ? { invoiceRecipients } : {}),
         ...(shouldSendEhf ? { ehfOrderReference: getEhfOrderReference() } : {}),
         ...(orgRef ? { orgReference: orgRef } : {}),
@@ -722,10 +579,12 @@ export default function InvoiceTab({
           : {}),
         personalMessage:
           invoiceMessage?.trim() ||
-          getDefaultPersonalMessage({
-            type: 'bookings',
-            bookingsCount: bookingsData.all.length,
-          }),
+          (offerId
+            ? getDefaultPersonalMessage({ type: 'offer' })
+            : getDefaultPersonalMessage({
+                type: 'bookings',
+                bookingsCount: bookingsData.all.length,
+              })),
         invoiceLines,
       }
 
@@ -734,9 +593,10 @@ export default function InvoiceTab({
         .from('job_invoices')
         .insert({
           job_id: jobId,
+          offer_id: offerId ?? null,
           organization_id: organizationId,
           conta_customer_id: contaCustomerId,
-          invoice_basis: 'bookings',
+          invoice_basis: offerId ? 'offer' : 'bookings',
           invoice_data: invoiceData as any,
           status: 'pending',
           created_by_user_id: authUser?.id ?? null,
@@ -752,6 +612,17 @@ export default function InvoiceTab({
       let errorMessage: string | null = null
 
       try {
+        const logPayload =
+          import.meta.env.DEV ||
+          import.meta.env.VITE_LOG_CONTA_INVOICE_PAYLOAD === 'true'
+        if (logPayload) {
+          console.info(
+            '[Conta invoice create] POST',
+            `/invoice/organizations/${organizationId}/invoices`,
+            '\nBody (JSON):\n',
+            JSON.stringify(invoiceData, null, 2),
+          )
+        }
         response = await contaClient.post(
           `/invoice/organizations/${organizationId}/invoices`,
           invoiceData,
@@ -794,7 +665,7 @@ export default function InvoiceTab({
     onSuccess: async (data, variables) => {
       success(
         'Invoice created and sent through Conta.',
-        isTestMode ? 'Test mode' : undefined,
+        isSandboxConta ? 'Sandbox Conta' : undefined,
       )
 
       // Update job status to 'invoiced' if not already
@@ -830,6 +701,11 @@ export default function InvoiceTab({
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'invoices'],
       })
+      if (variables.offerId) {
+        qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'invoice', 'accepted-offers'],
+        })
+      }
 
       if (variables.downloadPdfAfterCreate) {
         await downloadContaInvoicePdf(variables.organizationId, data.response)
@@ -865,34 +741,24 @@ export default function InvoiceTab({
       return
     }
     const organizationId = accountingConfig.accounting_organization_id
-    if (pendingInvoiceAction.kind === 'offer') {
-      createInvoiceFromOfferMutation.mutate({
-        offer: pendingInvoiceAction.offer,
-        organizationId,
-        invoiceRecipients: pendingInvoiceRecipients,
-        downloadPdfAfterCreate: true,
-        invoiceMessage: pendingInvoiceAction.invoiceMessage,
-        orgReferenceOverride: pendingInvoiceAction.orgReferenceOverride,
-        theirRefOverride:
-          pendingInvoiceAction.theirRefOverride ??
-          job.customer_contact?.name?.trim(),
-        invoiceWithVat: pendingInvoiceAction.invoiceWithVat ?? true,
-      })
-    } else {
-      createInvoiceFromBookingsMutation.mutate({
-        bookingsData: pendingInvoiceAction.bookings,
-        organizationId,
-        invoiceRecipients: pendingInvoiceRecipients,
-        downloadPdfAfterCreate: true,
-        invoiceMessage: pendingInvoiceAction.invoiceMessage,
-        orgReferenceOverride: pendingInvoiceAction.orgReferenceOverride,
-        theirRefOverride:
-          pendingInvoiceAction.theirRefOverride ??
-          job.customer_contact?.name?.trim(),
-        lineDiscountOverrides: pendingInvoiceAction.lineDiscountOverrides,
-        invoiceWithVat: pendingInvoiceAction.invoiceWithVat ?? true,
-      })
-    }
+    const a = pendingInvoiceAction
+    createInvoiceFromBookingsMutation.mutate({
+      bookingsData: a.bookingsData,
+      organizationId,
+      invoiceRecipients: pendingInvoiceRecipients,
+      downloadPdfAfterCreate: true,
+      invoiceMessage: a.invoiceMessage,
+      orgReferenceOverride: a.orgReferenceOverride,
+      theirRefOverride:
+        a.theirRefOverride ?? job.customer_contact?.name?.trim(),
+      lineDiscountOverrides: a.lineDiscountOverrides,
+      invoiceWithVat: a.invoiceWithVat ?? true,
+      offerId: a.offerId ?? null,
+    })
+    setPreviewBookings(null)
+    setPreviewOffer(null)
+    setPreviewSourceOffer(null)
+    setEhfStatus(null)
     setManualSendDialogOpen(false)
     setPendingInvoiceAction(null)
     setPendingInvoiceRecipients(null)
@@ -937,57 +803,15 @@ export default function InvoiceTab({
     setPreviewSourceOffer(offer)
     setPreviewOffer(null)
     setPreviewBookings(oneLineBookings)
-    const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
-    setInvoicePreviewMessage(
-      `Job: ${jobLabel}\nInvoice from accepted offer: ${offer.title || `v${offer.version_number}`}`,
-    )
+    const jobLabel = `${job.title}${job.jobnr ? ` (#${String(job.jobnr).padStart(6, '0')})` : ''}`
+    setInvoicePreviewMessage(`Job: ${jobLabel}`)
     setInvoicePreviewOurRef(
       job.project_lead?.display_name || job.project_lead?.email || '',
     )
     setInvoicePreviewTheirRef(job.customer_contact?.name?.trim() || '')
     setLineDiscountOverrides({})
     setEditedInvoiceLines(oneLineBookings.all)
-  }
-
-  const createInvoiceFromOfferWithMessage = async (
-    offer: JobOffer,
-    message: string,
-    orgReferenceOverride?: string,
-    theirRefOverride?: string,
-    invoiceWithVatParam: boolean = true,
-  ) => {
-    if (!accountingConfig?.accounting_organization_id) return
-    const hasBankAccount = await ensureContaBankAccount(
-      accountingConfig.accounting_organization_id,
-    )
-    if (!hasBankAccount) return
-
-    const recipientResult = await resolveInvoiceRecipients(job.customer)
-    if (recipientResult.requiresManualSend) {
-      openManualSendDialog(
-        {
-          kind: 'offer',
-          offer,
-          invoiceMessage: message,
-          orgReferenceOverride,
-          theirRefOverride,
-          invoiceWithVat: invoiceWithVatParam,
-        },
-        recipientResult.recipients,
-        recipientResult.reason,
-      )
-      return
-    }
-
-    createInvoiceFromOfferMutation.mutate({
-      offer,
-      organizationId: accountingConfig.accounting_organization_id,
-      invoiceRecipients: recipientResult.recipients,
-      invoiceMessage: message,
-      orgReferenceOverride,
-      theirRefOverride,
-      invoiceWithVat: invoiceWithVatParam,
-    })
+    setInvoiceWithVat(true)
   }
 
   const handleCreateInvoiceFromBookings = async () => {
@@ -1044,17 +868,15 @@ export default function InvoiceTab({
           year: 'numeric',
         })
       : ''
-    const datesPart =
-      startFmt && endFmt ? `, ${startFmt} - ${endFmt}` : ''
+    const datesPart = startFmt && endFmt ? `, ${startFmt} - ${endFmt}` : ''
     setInvoicePreviewMessage(`Job: ${jobLabel}${datesPart}`)
     setInvoicePreviewOurRef(
       job.project_lead?.display_name || job.project_lead?.email || '',
     )
-    setInvoicePreviewTheirRef(
-      job.customer_contact?.name?.trim() || '',
-    )
+    setInvoicePreviewTheirRef(job.customer_contact?.name?.trim() || '')
     setLineDiscountOverrides({})
     setEditedInvoiceLines(bookings.all)
+    setInvoiceWithVat(true)
   }
 
   const handleAddInvoiceLine = () => {
@@ -1091,7 +913,8 @@ export default function InvoiceTab({
       const idx = base.findIndex((l) => l.id === lineId)
       if (idx < 0) return prev
       const line = { ...base[idx] }
-      if (updates.description !== undefined) line.description = updates.description
+      if (updates.description !== undefined)
+        line.description = updates.description
       if (updates.unitPrice !== undefined) line.unitPrice = updates.unitPrice
       if (updates.quantity !== undefined) line.quantity = updates.quantity
       if (updates.unitPrice !== undefined || updates.quantity !== undefined) {
@@ -1104,35 +927,44 @@ export default function InvoiceTab({
   }
 
   const createInvoiceFromBookingsWithMessage = async (
-    bookingsData: BookingsForInvoice,
+    sourceBookings: BookingsForInvoice,
+    editedLines: Array<BookingInvoiceLine>,
+    lineDiscountOverridesParam: Record<string, number>,
     message: string,
     orgReferenceOverride?: string,
     theirRefOverride?: string,
-    lineDiscountOverridesParam?: Record<string, number>,
     invoiceWithVatParam: boolean = true,
-  ) => {
-    if (!accountingConfig?.accounting_organization_id) return
+    offerId: string | null = null,
+  ): Promise<{ sent: true } | { sent: false } | undefined> => {
+    if (!accountingConfig?.accounting_organization_id) return undefined
     const hasBankAccount = await ensureContaBankAccount(
       accountingConfig.accounting_organization_id,
     )
-    if (!hasBankAccount) return
+    if (!hasBankAccount) return undefined
+
+    const bookingsData = buildBookingsForInvoiceSendPayload(
+      sourceBookings,
+      editedLines,
+      lineDiscountOverridesParam,
+      invoiceWithVatParam,
+    )
 
     const recipientResult = await resolveInvoiceRecipients(job.customer)
     if (recipientResult.requiresManualSend) {
       openManualSendDialog(
         {
-          kind: 'bookings',
-          bookings: bookingsData,
+          bookingsData,
           invoiceMessage: message,
           orgReferenceOverride,
           theirRefOverride,
           lineDiscountOverrides: lineDiscountOverridesParam,
           invoiceWithVat: invoiceWithVatParam,
+          offerId,
         },
         recipientResult.recipients,
         recipientResult.reason,
       )
-      return
+      return { sent: false as const }
     }
 
     createInvoiceFromBookingsMutation.mutate({
@@ -1144,7 +976,9 @@ export default function InvoiceTab({
       theirRefOverride,
       lineDiscountOverrides: lineDiscountOverridesParam,
       invoiceWithVat: invoiceWithVatParam,
+      offerId,
     })
+    return { sent: true as const }
   }
 
   // Display version of preview bookings: when VAT is off, show zero-VAT totals without refetching
@@ -1252,7 +1086,7 @@ export default function InvoiceTab({
                   disabled={
                     !hasAcceptedOffers ||
                     !canSendInvoice ||
-                    createInvoiceFromOfferMutation.isPending
+                    createInvoiceFromBookingsMutation.isPending
                   }
                 >
                   <Eye width={16} height={16} />
@@ -1293,7 +1127,7 @@ export default function InvoiceTab({
       <InvoiceHistory jobId={jobId} />
 
       {/* Test Mode Indicator */}
-      {isTestMode && (
+      {isSandboxConta && (
         <Card
           mt="4"
           style={{
@@ -1303,98 +1137,16 @@ export default function InvoiceTab({
         >
           <Flex gap="2" align="center">
             <Text size="2" weight="bold" color="yellow">
-              🧪 TEST MODE
+              Sandbox Conta
             </Text>
             <Text size="2" color="gray">
-              You are connected to the Conta sandbox environment. Invoices
-              created here will not appear in your production accounting system.
+              Invoices are sent to the Conta sandbox (same environment as the
+              Conta API client). They do not appear in your production accounting
+              system.
             </Text>
           </Flex>
         </Card>
       )}
-
-      {/* Manual send confirmation dialog */}
-      <Dialog.Root
-        open={manualSendDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setManualSendDialogOpen(false)
-            setPendingInvoiceAction(null)
-            setPendingInvoiceRecipients(null)
-            setManualSendReason('')
-          }
-        }}
-      >
-        <Dialog.Content size="3" style={{ maxWidth: '520px' }}>
-          <Dialog.Title>EHF Not Available</Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="3">
-            This customer cannot receive invoices via EHF.
-          </Dialog.Description>
-          {manualSendReason && (
-            <Text size="2" color="gray">
-              {manualSendReason}
-            </Text>
-          )}
-          <Flex gap="3" mt="4" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button onClick={confirmManualSend}>
-              Download PDF and send myself
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
-
-      {/* Invoice message dialog */}
-      <Dialog.Root
-        open={invoiceMessageDialogOpen}
-        onOpenChange={(open) => {
-          if (!open) {
-            setInvoiceMessageDialogOpen(false)
-            setInvoiceMessageAction(null)
-          }
-        }}
-      >
-        <Dialog.Content size="3" style={{ maxWidth: '520px' }}>
-          <Dialog.Title>Invoice Message</Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="3">
-            Add the personal message that will appear on the invoice.
-          </Dialog.Description>
-          <TextArea
-            value={invoiceMessageDraft}
-            onChange={(event) => setInvoiceMessageDraft(event.target.value)}
-            placeholder="Write a custom message for the invoice..."
-            size="2"
-          />
-          <Flex gap="3" mt="4" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              onClick={async () => {
-                if (!invoiceMessageAction) return
-                const message = invoiceMessageDraft.trim()
-                if (invoiceMessageAction.kind === 'offer') {
-                  await createInvoiceFromOfferWithMessage(
-                    invoiceMessageAction.offer,
-                    message,
-                  )
-                } else {
-                  await createInvoiceFromBookingsWithMessage(
-                    invoiceMessageAction.bookings,
-                    message,
-                  )
-                }
-                setInvoiceMessageDialogOpen(false)
-                setInvoiceMessageAction(null)
-              }}
-            >
-              Create Invoice
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
 
       {/* Invoice Preview Dialog */}
       <Dialog.Root
@@ -1421,138 +1173,183 @@ export default function InvoiceTab({
               software.
             </Dialog.Description>
 
-          {previewOffer && (
-            <InvoicePreview
-              basis="offer"
-              offer={previewOffer}
-              customerName={job.customer?.name || 'Unknown Customer'}
-              daysUntilDue={getDaysUntilDue()}
-            />
-          )}
-
-          {previewBookings && displayBookings && (
-            <>
-              {ehfStatus !== null && (
-                <Box
-                  mb="4"
-                  p="3"
-                  style={{
-                    borderRadius: 8,
-                    background: ehfStatus.canReceive
-                      ? 'var(--green-a2)'
-                      : 'var(--orange-a2)',
-                    border: `1px solid ${ehfStatus.canReceive ? 'var(--green-a6)' : 'var(--orange-a6)'}`,
-                  }}
-                >
-                  <Text
-                    size="2"
-                    weight="medium"
-                    color={ehfStatus.canReceive ? 'green' : 'orange'}
-                  >
-                    {ehfStatus.canReceive
-                      ? '✓ Customer can receive EHF invoices'
-                      : 'EHF not available'}
-                  </Text>
-                  {ehfStatus.reason && (
-                    <Text size="2" color="gray" as="p" mt="1">
-                      {ehfStatus.reason}
-                    </Text>
-                  )}
-                </Box>
-              )}
+            {previewOffer && (
               <InvoicePreview
-                basis="bookings"
-                bookings={displayBookings}
+                basis="offer"
+                offer={previewOffer}
                 customerName={job.customer?.name || 'Unknown Customer'}
-                customerAddress={job.customer?.address ?? null}
-                companyName={companyDetail?.name ?? '—'}
-                companyAddress={companyDetail?.address ?? null}
-                job={job}
-                employees={companyEmployees}
-                contacts={customerContacts}
-                vatIncluded={invoiceWithVat}
-                onVatIncludedChange={setInvoiceWithVat}
-                message={invoicePreviewMessage}
-                onMessageChange={setInvoicePreviewMessage}
-                ourRef={invoicePreviewOurRef}
-                onOurRefChange={setInvoicePreviewOurRef}
-                theirRef={invoicePreviewTheirRef}
-                onTheirRefChange={setInvoicePreviewTheirRef}
                 daysUntilDue={getDaysUntilDue()}
-                lineDiscountOverrides={lineDiscountOverrides}
-                onLineDiscountChange={(lineId, pct) =>
-                  setLineDiscountOverrides((prev) => ({
-                    ...prev,
-                    [lineId]: pct,
-                  }))
-                }
-                editedLines={editedInvoiceLines}
-                onLineChange={handleLineChange}
-                onAddLine={handleAddInvoiceLine}
-                onRemoveLine={handleRemoveInvoiceLine}
-                refFieldPortalContainer={() => invoicePreviewPortalRef.current}
               />
-            </>
-          )}
+            )}
 
-          <Flex gap="3" mt="4" justify="end">
-            {previewBookings && (
-              <Tooltip
-                content={
-                  !canSendInvoice
-                    ? 'Customer must be linked to Conta before sending invoices.'
-                    : undefined
-                }
-              >
-                <span style={{ display: 'inline-block' }}>
-                  <Button
-                  onClick={async () => {
-                    if (previewSourceOffer) {
-                      await createInvoiceFromOfferWithMessage(
-                        previewSourceOffer,
-                        invoicePreviewMessage,
-                        invoicePreviewOurRef || undefined,
-                        invoicePreviewTheirRef || undefined,
-                        invoiceWithVat,
-                      )
-                    } else {
-                      createInvoiceFromBookingsWithMessage(
-                        {
-                          ...previewBookings,
-                          all:
-                            editedInvoiceLines.length > 0
-                              ? editedInvoiceLines
-                              : previewBookings.all,
-                        },
-                        invoicePreviewMessage,
-                        invoicePreviewOurRef || undefined,
-                        invoicePreviewTheirRef || undefined,
-                        lineDiscountOverrides,
-                        invoiceWithVat,
-                      )
-                    }
-                    setPreviewBookings(null)
-                    setPreviewOffer(null)
-                    setPreviewSourceOffer(null)
-                    setEhfStatus(null)
-                  }}
-                  disabled={
-                    createInvoiceFromBookingsMutation.isPending ||
-                    createInvoiceFromOfferMutation.isPending ||
+            {previewBookings && displayBookings && (
+              <>
+                {ehfStatus !== null && (
+                  <Box
+                    mb="4"
+                    p="3"
+                    style={{
+                      borderRadius: 8,
+                      background: ehfStatus.canReceive
+                        ? 'var(--green-a2)'
+                        : 'var(--orange-a2)',
+                      border: `1px solid ${ehfStatus.canReceive ? 'var(--green-a6)' : 'var(--orange-a6)'}`,
+                    }}
+                  >
+                    <Text
+                      size="2"
+                      weight="medium"
+                      color={ehfStatus.canReceive ? 'green' : 'orange'}
+                    >
+                      {ehfStatus.canReceive
+                        ? '✓ Customer can receive EHF invoices'
+                        : 'EHF not available'}
+                    </Text>
+                    {ehfStatus.reason && (
+                      <Text size="2" color="gray" as="p" mt="1">
+                        {ehfStatus.reason}
+                      </Text>
+                    )}
+                    {!ehfStatus.canReceive ? (
+                      <Text size="2" color="gray" as="p" mt="2">
+                        When you click Send invoice, you will be asked to
+                        confirm creating the invoice in Conta and downloading
+                        the PDF so you can send it to the customer yourself.
+                      </Text>
+                    ) : null}
+                  </Box>
+                )}
+                <InvoicePreview
+                  basis="bookings"
+                  bookings={displayBookings}
+                  customerName={job.customer?.name || 'Unknown Customer'}
+                  customerAddress={job.customer?.address ?? null}
+                  companyName={companyDetail?.name ?? '—'}
+                  companyAddress={companyDetail?.address ?? null}
+                  job={job}
+                  employees={companyEmployees}
+                  contacts={customerContacts}
+                  vatIncluded={invoiceWithVat}
+                  onVatIncludedChange={setInvoiceWithVat}
+                  message={invoicePreviewMessage}
+                  onMessageChange={setInvoicePreviewMessage}
+                  ourRef={invoicePreviewOurRef}
+                  onOurRefChange={setInvoicePreviewOurRef}
+                  theirRef={invoicePreviewTheirRef}
+                  onTheirRefChange={setInvoicePreviewTheirRef}
+                  daysUntilDue={getDaysUntilDue()}
+                  lineDiscountOverrides={lineDiscountOverrides}
+                  onLineDiscountChange={(lineId, pct) =>
+                    setLineDiscountOverrides((prev) => ({
+                      ...prev,
+                      [lineId]: pct,
+                    }))
+                  }
+                  editedLines={editedInvoiceLines}
+                  onLineChange={handleLineChange}
+                  onAddLine={handleAddInvoiceLine}
+                  onRemoveLine={handleRemoveInvoiceLine}
+                  refFieldPortalContainer={() =>
+                    invoicePreviewPortalRef.current
+                  }
+                />
+              </>
+            )}
+
+            <Flex gap="3" mt="4" justify="end">
+              {previewBookings && (
+                <Tooltip
+                  content={
                     !canSendInvoice
+                      ? 'Customer must be linked to Conta before sending invoices.'
+                      : undefined
                   }
                 >
-                  <GoogleDocs width={16} height={16} />
-                  Send Invoice
-                </Button>
-                </span>
-              </Tooltip>
-            )}
-            <Dialog.Close>
-              <Button variant="soft">Close</Button>
-            </Dialog.Close>
-          </Flex>
+                  <span style={{ display: 'inline-block' }}>
+                    <Button
+                      onClick={async () => {
+                        const result =
+                          await createInvoiceFromBookingsWithMessage(
+                            previewBookings,
+                            editedInvoiceLines,
+                            lineDiscountOverrides,
+                            invoicePreviewMessage,
+                            invoicePreviewOurRef || undefined,
+                            invoicePreviewTheirRef || undefined,
+                            invoiceWithVat,
+                            previewSourceOffer?.id ?? null,
+                          )
+                        if (result?.sent === true) {
+                          setPreviewBookings(null)
+                          setPreviewOffer(null)
+                          setPreviewSourceOffer(null)
+                          setEhfStatus(null)
+                        }
+                      }}
+                      disabled={
+                        createInvoiceFromBookingsMutation.isPending ||
+                        !canSendInvoice
+                      }
+                    >
+                      <GoogleDocs width={16} height={16} />
+                      Send Invoice
+                    </Button>
+                  </span>
+                </Tooltip>
+              )}
+              <Dialog.Close>
+                <Button variant="soft">Close</Button>
+              </Dialog.Close>
+            </Flex>
           </Box>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      {/* After preview in DOM so this layers above the preview when both are open */}
+      <Dialog.Root
+        open={manualSendDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setManualSendDialogOpen(false)
+            setPendingInvoiceAction(null)
+            setPendingInvoiceRecipients(null)
+            setManualSendReason('')
+          }
+        }}
+      >
+        <Dialog.Content size="3" style={{ maxWidth: '520px' }}>
+          <Dialog.Title>Customer cannot receive EHF</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="2">
+            This customer is not set up to receive invoices through the
+            Norwegian electronic invoicing network (EHF). Conta cannot deliver
+            the invoice to them automatically.
+          </Dialog.Description>
+          {manualSendReason ? (
+            <Box
+              mb="3"
+              p="2"
+              style={{
+                borderRadius: 6,
+                background: 'var(--gray-a3)',
+              }}
+            >
+              <Text size="2" color="gray">
+                {manualSendReason}
+              </Text>
+            </Box>
+          ) : null}
+          <Text size="2" weight="medium" mb="4" as="p">
+            Do you want to create the invoice in Conta anyway and download the
+            PDF so you can send it to the customer yourself (email, post, etc.)?
+          </Text>
+          <Flex gap="3" justify="end">
+            <Dialog.Close>
+              <Button variant="soft">Cancel</Button>
+            </Dialog.Close>
+            <Button onClick={confirmManualSend}>
+              Download PDF and send myself
+            </Button>
+          </Flex>
         </Dialog.Content>
       </Dialog.Root>
     </Box>

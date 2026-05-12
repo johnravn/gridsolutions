@@ -11,13 +11,12 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import {
-  insertJobMoneyItem,
-  updateJobMoneyItem,
-  type JobMoneyItem,
-  type JobMoneyItemInsert,
-  type JobMoneyItemSource,
-  type JobMoneyItemType,
+import { insertJobMoneyItem, updateJobMoneyItem } from '../../api/moneyQueries'
+import type {
+  JobMoneyItem,
+  JobMoneyItemInsert,
+  JobMoneyItemSource,
+  JobMoneyItemType,
 } from '../../api/moneyQueries'
 
 type FormState = {
@@ -76,7 +75,7 @@ export default function MoneyItemEditDialog({
     if (!open) return
     if (mode === 'edit' && existingItem) {
       setForm({
-        type: existingItem.type as JobMoneyItemType,
+        type: existingItem.type,
         description: existingItem.description,
         amount: String(existingItem.amount),
         date: existingItem.date ? existingItem.date.slice(0, 10) : '',
@@ -93,16 +92,20 @@ export default function MoneyItemEditDialog({
     } else {
       setForm(emptyForm)
     }
-  }, [open, mode, existingItem?.id, initialData?.description, initialData?.amount])
+  }, [
+    open,
+    mode,
+    existingItem?.id,
+    initialData?.description,
+    initialData?.amount,
+  ])
 
   const amountNum = React.useMemo(() => {
     const parsed = parseFloat(form.amount)
     return Number.isNaN(parsed) ? 0 : parsed
   }, [form.amount])
 
-  const isValid =
-    form.description.trim().length > 0 &&
-    amountNum > 0
+  const isValid = form.description.trim().length > 0 && amountNum > 0
 
   const insertMutation = useMutation({
     mutationFn: async () => {
@@ -252,10 +255,7 @@ export default function MoneyItemEditDialog({
           <Dialog.Close>
             <Button variant="soft">Cancel</Button>
           </Dialog.Close>
-          <Button
-            onClick={handleSubmit}
-            disabled={!isValid || isPending}
-          >
+          <Button onClick={handleSubmit} disabled={!isValid || isPending}>
             {mode === 'edit' ? 'Save' : 'Add'}
           </Button>
         </Flex>
