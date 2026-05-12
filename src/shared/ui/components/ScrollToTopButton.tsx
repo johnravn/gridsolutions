@@ -41,7 +41,11 @@ export default function ScrollToTopButton({
       const p = el.parentElement
       const style = getComputedStyle(p)
       const overflowY = style.overflowY
-      if (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') {
+      if (
+        overflowY === 'auto' ||
+        overflowY === 'scroll' ||
+        overflowY === 'overlay'
+      ) {
         p.scrollTo({ top: 0, behavior: 'smooth' })
         break
       }

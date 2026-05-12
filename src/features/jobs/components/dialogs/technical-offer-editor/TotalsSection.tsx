@@ -1,5 +1,5 @@
 import { Flex, Heading, Table, Text } from '@radix-ui/themes'
-import { calculateOfferTotals } from '../../../utils/offerCalculations'
+import type { calculateOfferTotals } from '../../../utils/offerCalculations'
 
 export function TotalsSection({
   totals,
@@ -98,4 +98,3 @@ export function TotalsSection({
     </Flex>
   )
 }
-

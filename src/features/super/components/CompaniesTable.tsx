@@ -32,12 +32,20 @@ function compare(
       })
       break
     case 'email':
-      cmp = (a.general_email ?? '').localeCompare(b.general_email ?? '', undefined, {
-        sensitivity: 'base',
-      })
+      cmp = (a.general_email ?? '').localeCompare(
+        b.general_email ?? '',
+        undefined,
+        {
+          sensitivity: 'base',
+        },
+      )
       break
     case 'contact':
-      cmp = (a.contact_person?.display_name ?? a.contact_person?.email ?? '').localeCompare(
+      cmp = (
+        a.contact_person?.display_name ??
+        a.contact_person?.email ??
+        ''
+      ).localeCompare(
         b.contact_person?.display_name ?? b.contact_person?.email ?? '',
         undefined,
         { sensitivity: 'base' },
@@ -56,10 +64,7 @@ type Props = {
   onDelete: (company: CompanyIndexRow) => void
 }
 
-export default function CompaniesTable({
-  selectedId,
-  onSelect,
-}: Props) {
+export default function CompaniesTable({ selectedId, onSelect }: Props) {
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('name')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
@@ -215,7 +220,9 @@ export default function CompaniesTable({
                     alignItems: 'center',
                     padding: '0 var(--space-3)',
                     cursor: 'pointer',
-                    backgroundColor: isActive ? 'var(--accent-a3)' : 'transparent',
+                    backgroundColor: isActive
+                      ? 'var(--accent-a3)'
+                      : 'transparent',
                     borderRadius: 'var(--radius-2)',
                   }}
                   onMouseEnter={(e) => {

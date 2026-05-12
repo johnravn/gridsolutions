@@ -321,18 +321,15 @@ export default function ProfilePage() {
       delete preferences.daily_inspiration_show_attribution
       delete preferences.daily_inspiration_large_text
 
-      const { error: rpcErr } = await supabase.rpc(
-        'update_my_profile',
-        {
-          p_display_name: form.display_name || null,
-          p_first_name: form.first_name || null,
-          p_last_name: form.last_name || null,
-          p_phone: form.phone || null,
-          p_bio: form.bio || null,
-          p_avatar_path: form.avatarPath || null,
-          p_preferences: preferences,
-        } as any,
-      )
+      const { error: rpcErr } = await supabase.rpc('update_my_profile', {
+        p_display_name: form.display_name || null,
+        p_first_name: form.first_name || null,
+        p_last_name: form.last_name || null,
+        p_phone: form.phone || null,
+        p_bio: form.bio || null,
+        p_avatar_path: form.avatarPath || null,
+        p_preferences: preferences,
+      } as any)
       if (rpcErr) throw rpcErr
     },
     onSuccess: async () => {
@@ -419,7 +416,9 @@ export default function ProfilePage() {
       >
         <Tabs.List>
           <Tabs.Trigger value="general">General</Tabs.Trigger>
-          <Tabs.Trigger value="notifications">Matter notifications</Tabs.Trigger>
+          <Tabs.Trigger value="notifications">
+            Matter notifications
+          </Tabs.Trigger>
           <Tabs.Trigger value="personalization">Personalization</Tabs.Trigger>
         </Tabs.List>
 
@@ -572,7 +571,10 @@ export default function ProfilePage() {
                       />
                     </Field>
                     <Grid
-                      columns={{ initial: '1', sm: 'repeat(2, minmax(0, 1fr))' }}
+                      columns={{
+                        initial: '1',
+                        sm: 'repeat(2, minmax(0, 1fr))',
+                      }}
                       gap="3"
                       width="100%"
                     >
@@ -671,9 +673,7 @@ export default function ProfilePage() {
                     <Field label="Driver’s license">
                       <TextField.Root
                         value={form.drivers_license}
-                        onChange={(e) =>
-                          set('drivers_license', e.target.value)
-                        }
+                        onChange={(e) => set('drivers_license', e.target.value)}
                         placeholder="e.g., B, BE"
                       />
                     </Field>
@@ -708,7 +708,9 @@ export default function ProfilePage() {
                   variant="soft"
                   color="gray"
                   onClick={() =>
-                    qc.invalidateQueries({ queryKey: ['profile', authUser?.id] })
+                    qc.invalidateQueries({
+                      queryKey: ['profile', authUser?.id],
+                    })
                   }
                   disabled={mut.isPending}
                 >

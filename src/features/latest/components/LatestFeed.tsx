@@ -72,10 +72,7 @@ export default function LatestFeed({
 
   // Compute before any returns so hook order is stable (Rules of Hooks)
   const groupedActivities = React.useMemo(
-    () =>
-      data?.items?.length
-        ? groupInventoryActivities(data.items)
-        : [],
+    () => (data?.items?.length ? groupInventoryActivities(data.items) : []),
     [data?.items],
   )
   const parentRef = React.useRef<HTMLDivElement>(null)
@@ -190,7 +187,11 @@ export default function LatestFeed({
                   onMouseLeave={() => setHoveredId(null)}
                 >
                   <Flex gap="3" align="start" justify="between">
-                    <Flex gap="3" align="start" style={{ flex: 1, minWidth: 0 }}>
+                    <Flex
+                      gap="3"
+                      align="start"
+                      style={{ flex: 1, minWidth: 0 }}
+                    >
                       <Flex
                         align="center"
                         justify="center"

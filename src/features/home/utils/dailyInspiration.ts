@@ -28,4 +28,3 @@ export function normalizeDailyInspirationType(
 ): DailyInspirationType {
   return value === 'bibleverse' ? 'bibleverse' : 'quote'
 }
-

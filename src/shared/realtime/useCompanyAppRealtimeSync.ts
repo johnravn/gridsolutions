@@ -1,8 +1,9 @@
 import * as React from 'react'
-import type { QueryClient } from '@tanstack/react-query'
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '@shared/api/supabase'
 import { subscribeRealtimeChannelWithRetry } from './subscribeRealtimeChannelWithRetry'
+import type { JobListRow, JobStatus } from '@features/jobs/types'
+import type { QueryClient } from '@tanstack/react-query'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
 
@@ -25,7 +26,7 @@ type TpRow = { job_id?: string | null; company_id?: string | null }
 
 function jobIdsFromTimePeriodPayload(
   payload: RealtimePostgresChangesPayload<TpRow>,
-): string[] {
+): Array<string> {
   const ids = new Set<string>()
   const n = payload.new as TpRow | null
   const o = payload.old as TpRow | null
@@ -40,6 +41,93 @@ function timePeriodIdFromReservedPayload(
   const n = payload.new as { time_period_id?: string | null } | null
   const o = payload.old as { time_period_id?: string | null } | null
   return n?.time_period_id ?? o?.time_period_id ?? null
+}
+
+function patchJobsListRows(
+  rows: Array<JobListRow>,
+  jobId: string,
+  patch: Partial<JobListRow>,
+): Array<JobListRow> {
+  return rows.map((r) => (r.id === jobId ? { ...r, ...patch } : r))
+}
+
+function realtimeRecordToJobListPatch(
+  raw: Record<string, unknown> | null | undefined,
+): Partial<JobListRow> | null {
+  if (!raw) return null
+  const patch: Partial<JobListRow> = {}
+  if (typeof raw.status === 'string') patch.status = raw.status as JobStatus
+  if (typeof raw.archived === 'boolean') patch.archived = raw.archived
+  if (typeof raw.title === 'string') patch.title = raw.title
+  if (raw.jobnr !== undefined && raw.jobnr !== null) {
+    const n = typeof raw.jobnr === 'number' ? raw.jobnr : Number(raw.jobnr)
+    if (!Number.isNaN(n)) patch.jobnr = n
+  }
+  if (typeof raw.start_at === 'string' || raw.start_at === null)
+    patch.start_at = raw.start_at
+  if (typeof raw.end_at === 'string' || raw.end_at === null)
+    patch.end_at = raw.end_at
+  if (
+    typeof raw.customer_contact_id === 'string' ||
+    raw.customer_contact_id === null
+  )
+    patch.customer_contact_id = raw.customer_contact_id
+  return Object.keys(patch).length > 0 ? patch : null
+}
+
+/** Merge jobs realtime payloads into cached Jobs page lists so badges update immediately. */
+function patchJobsListCachesFromRealtime(
+  qc: QueryClient,
+  companyId: string,
+  payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+) {
+  const jobId =
+    (payload.new as { id?: string } | null)?.id ??
+    (payload.old as { id?: string } | null)?.id
+  if (!jobId) return
+
+  if (payload.eventType === 'DELETE') {
+    qc.setQueriesData<Array<JobListRow>>(
+      { queryKey: ['company', companyId, 'jobs-index'], exact: false },
+      (old) => (old ? old.filter((r) => r.id !== jobId) : old),
+    )
+    qc.setQueriesData<{ rows: Array<JobListRow>; count: number }>(
+      { queryKey: ['company', companyId, 'jobs-index-page'], exact: false },
+      (old) => {
+        if (!old) return old
+        const rows = old.rows.filter((r) => r.id !== jobId)
+        if (rows.length === old.rows.length) return old
+        return {
+          rows,
+          count: Math.max(0, old.count - 1),
+        }
+      },
+    )
+    return
+  }
+
+  const patch = realtimeRecordToJobListPatch(
+    payload.new as Record<string, unknown> | null,
+  )
+  if (!patch) return
+
+  qc.setQueriesData<Array<JobListRow>>(
+    { queryKey: ['company', companyId, 'jobs-index'], exact: false },
+    (old) => {
+      if (!old) return old
+      return patchJobsListRows(old, jobId, patch)
+    },
+  )
+  qc.setQueriesData<{ rows: Array<JobListRow>; count: number }>(
+    { queryKey: ['company', companyId, 'jobs-index-page'], exact: false },
+    (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        rows: patchJobsListRows(old.rows, jobId, patch),
+      }
+    },
+  )
 }
 
 function invalidateScheduleQueries(
@@ -79,6 +167,10 @@ function invalidateScheduleQueries(
     queryKey: ['jobs', 'crew-role-ids', companyId],
     exact: false,
   })
+  void qc.invalidateQueries({
+    queryKey: ['home', companyId, 'company-jobs-week-bookings'],
+    exact: false,
+  })
 
   for (const jobId of jobIds) {
     void qc.invalidateQueries({
@@ -89,7 +181,10 @@ function invalidateScheduleQueries(
     void qc.invalidateQueries({
       queryKey: ['company', companyId, 'job-calendar', jobId],
     })
-    void qc.invalidateQueries({ queryKey: ['jobs.packing', jobId], exact: false })
+    void qc.invalidateQueries({
+      queryKey: ['jobs.packing', jobId],
+      exact: false,
+    })
     void qc.invalidateQueries({
       queryKey: ['jobs', jobId, 'bookings-snapshot-for-offers'],
       exact: false,
@@ -130,7 +225,7 @@ export function useCompanyAppRealtimeSync(
       return
     }
 
-    const rows = data ?? []
+    const rows = data
     const relevant = rows.filter((r) => r.company_id === company)
     if (rows.length > 0 && relevant.length === 0) return
 
@@ -153,11 +248,16 @@ export function useCompanyAppRealtimeSync(
     if (!userId || disableAppRealtime) return
 
     const invalidateMatters = () => {
-      void queryClient.invalidateQueries({ queryKey: ['matters'], exact: false })
+      void queryClient.invalidateQueries({
+        queryKey: ['matters'],
+        exact: false,
+      })
     }
 
     const onReservedEvent = (
-      payload: RealtimePostgresChangesPayload<{ time_period_id?: string | null }>,
+      payload: RealtimePostgresChangesPayload<{
+        time_period_id?: string | null
+      }>,
     ) => {
       const tpId = timePeriodIdFromReservedPayload(payload)
       if (tpId) pendingTpIdsRef.current.add(tpId)
@@ -165,7 +265,8 @@ export function useCompanyAppRealtimeSync(
     }
 
     const cid = companyId
-    const { initialDelayMs, reconnectSettleMs } = localRealtimeSubscribeOptions()
+    const { initialDelayMs, reconnectSettleMs } =
+      localRealtimeSubscribeOptions()
 
     const unsubscribe = subscribeRealtimeChannelWithRetry(
       supabase,
@@ -202,9 +303,11 @@ export function useCompanyAppRealtimeSync(
               filter: `company_id=eq.${cid}`,
             },
             (payload) => {
-              const newRow = payload.new as { id?: string } | null
-              const oldRow = payload.old as { id?: string } | null
-              const jobId = newRow?.id ?? oldRow?.id
+              patchJobsListCachesFromRealtime(queryClient, cid, payload)
+
+              const newRow = payload.new as { id?: string } | null | undefined
+              const oldRow = payload.old as { id?: string } | null | undefined
+              const jobId = newRow?.id ? newRow.id : oldRow?.id
 
               void queryClient.invalidateQueries({
                 queryKey: ['company', cid, 'jobs-index'],
@@ -212,6 +315,18 @@ export function useCompanyAppRealtimeSync(
               })
               void queryClient.invalidateQueries({
                 queryKey: ['company', cid, 'jobs-index-page'],
+                exact: false,
+              })
+              void queryClient.invalidateQueries({
+                queryKey: ['home', cid, 'jobs-ready-to-invoice'],
+                exact: false,
+              })
+              void queryClient.invalidateQueries({
+                queryKey: ['home', cid, 'company-jobs-week'],
+                exact: false,
+              })
+              void queryClient.invalidateQueries({
+                queryKey: ['home', cid, 'company-jobs-week-bookings'],
                 exact: false,
               })
               void queryClient.invalidateQueries({
@@ -237,7 +352,10 @@ export function useCompanyAppRealtimeSync(
               filter: `company_id=eq.${cid}`,
             },
             (payload: RealtimePostgresChangesPayload<TpRow>) => {
-              const row = (payload.new ?? payload.old) as TpRow | null
+              const row = (
+                (payload.new as TpRow | null) ??
+                (payload.old as TpRow | null)
+              )
               if (row?.company_id && row.company_id !== cid) return
 
               const jobIds = jobIdsFromTimePeriodPayload(payload)

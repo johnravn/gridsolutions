@@ -14,7 +14,7 @@ import { Lock } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import {  crewIndexQuery } from '../../crew/api/queries'
+import { crewIndexQuery } from '../../crew/api/queries'
 import {
   loggingPeriodsQuery,
   setLoggingPeriodLock,
@@ -26,7 +26,7 @@ import {
   getMonthOptions,
   getRange,
 } from '../../logging/lib/timeEntryRange'
-import type {CrewPerson} from '../../crew/api/queries';
+import type { CrewPerson } from '../../crew/api/queries'
 import type { LoggingPeriod } from '../../logging/api/loggingPeriods'
 
 type UserFilter = 'all' | string

@@ -54,7 +54,10 @@ async function resetWithData() {
   try {
     // Step 1: Reset database (applies migrations + seed file)
     log('1️⃣  Resetting local database...', 'cyan')
-    log('   (Migrations, seed.sql, bucket sync, and db:seed-email-vault-local)', 'cyan')
+    log(
+      '   (Migrations, seed.sql, bucket sync, and db:seed-email-vault-local)',
+      'cyan',
+    )
     // db:reset often fails with 502 while Docker restarts Kong/DB — retry with longer backoff.
     await runWithRetry('npm run db:reset', { retries: 4, delayMs: 20000 })
     log('   ✅ Database reset complete', 'green')
@@ -63,7 +66,10 @@ async function resetWithData() {
     // Step 2: Vault secrets for pg_net → Edge Functions (DB-triggered notification emails)
     // db:reset already runs this when it succeeds; run again here so it is explicit for this
     // workflow and retries after containers settle if the first attempt was skipped.
-    log('2️⃣  Seeding local Vault for notification email dispatch (pg_net)...', 'cyan')
+    log(
+      '2️⃣  Seeding local Vault for notification email dispatch (pg_net)...',
+      'cyan',
+    )
     try {
       execSync('npm run db:seed-email-vault-local', { stdio: 'inherit' })
       log('   ✅ Vault secrets project_url + anon_key updated', 'green')
@@ -115,7 +121,10 @@ async function resetWithData() {
     console.log('')
     log('💡 What was included:', 'blue')
     log('   ✅ Database schema (migrations)', 'green')
-    log('   ✅ Vault secrets for pg_net → Edge Functions (trigger emails)', 'green')
+    log(
+      '   ✅ Vault secrets for pg_net → Edge Functions (trigger emails)',
+      'green',
+    )
     log('   ✅ Authentication users (can log in locally)', 'green')
     log('   ✅ Database data (all tables)', 'green')
     log('   ✅ Storage bucket definitions', 'green')

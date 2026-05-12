@@ -118,7 +118,9 @@ type PackingSessionRow = {
   slip_snapshot: PackingSlip
 }
 
-function normalizeMaybeArray<T>(value: T | Array<T> | null | undefined): T | null {
+function normalizeMaybeArray<T>(
+  value: T | Array<T> | null | undefined,
+): T | null {
   if (!value) return null
   return Array.isArray(value) ? (value[0] ?? null) : value
 }
@@ -256,7 +258,8 @@ export default function PackingTab({ jobId }: { jobId: string }) {
     for (const arr of m.values()) {
       arr.sort(
         (a, b) =>
-          new Date(b.confirmed_at).getTime() - new Date(a.confirmed_at).getTime(),
+          new Date(b.confirmed_at).getTime() -
+          new Date(a.confirmed_at).getTime(),
       )
     }
     return m
@@ -330,7 +333,8 @@ export default function PackingTab({ jobId }: { jobId: string }) {
       itemCategoryName: string | null,
       groupCategoryName: string | null,
     ) => {
-      const fallbackCategory = itemCategoryName ?? groupCategoryName ?? 'Uncategorized'
+      const fallbackCategory =
+        itemCategoryName ?? groupCategoryName ?? 'Uncategorized'
       if (row.source_group_id) {
         const gid = row.source_group_id
         const gName = groupName ?? 'Group'
@@ -338,7 +342,8 @@ export default function PackingTab({ jobId }: { jobId: string }) {
           slip.groups.set(gid, {
             id: gid,
             name: gName,
-            categoryName: groupCategoryName ?? itemCategoryName ?? 'Uncategorized',
+            categoryName:
+              groupCategoryName ?? itemCategoryName ?? 'Uncategorized',
             items: new Map(),
           })
         }
@@ -376,16 +381,19 @@ export default function PackingTab({ jobId }: { jobId: string }) {
 
       const itemName = item?.name ?? 'Unknown item'
       const brandName =
-        (item?.brand && Array.isArray(item.brand) ? item.brand[0]?.name : item?.brand?.name) ??
-        null
+        (item?.brand && Array.isArray(item.brand)
+          ? item.brand[0]?.name
+          : item?.brand?.name) ?? null
       const model = item?.model ?? null
       const groupName = group?.name ?? null
       const itemCategoryName =
-        (item?.category && Array.isArray(item.category) ? item.category[0]?.name : item?.category?.name) ??
-        null
+        (item?.category && Array.isArray(item.category)
+          ? item.category[0]?.name
+          : item?.category?.name) ?? null
       const groupCategoryName =
-        (group?.category && Array.isArray(group.category) ? group.category[0]?.name : group?.category?.name) ??
-        null
+        (group?.category && Array.isArray(group.category)
+          ? group.category[0]?.name
+          : group?.category?.name) ?? null
 
       // Aggregate into "no vehicle" slip too (used when no transport exists)
       addToSlip(
@@ -413,7 +421,9 @@ export default function PackingTab({ jobId }: { jobId: string }) {
         }
       }
 
-      const dest = bestVehicle ? byVehicle.get(bestVehicle.bookingId)! : unassigned
+      const dest = bestVehicle
+        ? byVehicle.get(bestVehicle.bookingId)!
+        : unassigned
       addToSlip(
         dest,
         row,
@@ -483,7 +493,8 @@ export default function PackingTab({ jobId }: { jobId: string }) {
             </Text>
             <Separator size="4" />
             <Heading size="2">Tentative packing list</Heading>
-            {slips.noVehicle.items.length === 0 && slips.noVehicle.groups.length === 0 ? (
+            {slips.noVehicle.items.length === 0 &&
+            slips.noVehicle.groups.length === 0 ? (
               <Text color="gray">No equipment booked.</Text>
             ) : (
               <PackingSlipChecklist
@@ -511,14 +522,17 @@ export default function PackingTab({ jobId }: { jobId: string }) {
               jobId={jobId}
               vehicleBookingId={v.vehicleBookingId}
               vehicleDisplay={v.vehicleDisplay}
-              slip={slips.byVehicle[v.vehicleBookingId] ?? { items: [], groups: [] }}
+              slip={
+                slips.byVehicle[v.vehicleBookingId] ?? { items: [], groups: [] }
+              }
               canLoad={canLoad}
               companyId={companyId}
               sessions={sessionsByVehicle.get(v.vehicleBookingId) ?? []}
             />
           ))}
 
-          {(slips.unassigned.items.length > 0 || slips.unassigned.groups.length > 0) && (
+          {(slips.unassigned.items.length > 0 ||
+            slips.unassigned.groups.length > 0) && (
             <Card>
               <Flex direction="column" gap="2">
                 <Flex align="center" gap="2" wrap="wrap">
@@ -561,14 +575,16 @@ function collectAllLineKeys(slip: PackingSlip) {
   const keys: Array<string> = []
   for (const item of slip.items) keys.push(lineKeyForItem(item.id))
   for (const group of slip.groups) {
-    for (const item of group.items) keys.push(lineKeyForGroupItem(group.id, item.id))
+    for (const item of group.items)
+      keys.push(lineKeyForGroupItem(group.id, item.id))
   }
   return keys
 }
 
 function collectAllLineSignatures(slip: PackingSlip) {
   const sigs: Array<string> = []
-  for (const item of slip.items) sigs.push(`${lineKeyForItem(item.id)}=${item.quantity}`)
+  for (const item of slip.items)
+    sigs.push(`${lineKeyForItem(item.id)}=${item.quantity}`)
   for (const group of slip.groups) {
     for (const item of group.items) {
       sigs.push(`${lineKeyForGroupItem(group.id, item.id)}=${item.quantity}`)
@@ -596,21 +612,33 @@ function VehiclePackingCard({
   sessions: Array<PackingSessionRow>
 }) {
   const qc = useQueryClient()
-  const [mode, setMode] = React.useState<'tentative' | 'loading' | 'review' | 'confirmed'>(
-    'tentative',
+  const [mode, setMode] = React.useState<
+    'tentative' | 'loading' | 'review' | 'confirmed'
+  >('tentative')
+  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(
+    new Set(),
   )
-  const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set())
-  const [expandedItems, setExpandedItems] = React.useState<Set<string>>(new Set())
-  const [checkedByKey, setCheckedByKey] = React.useState<Record<string, boolean>>({})
+  const [expandedItems, setExpandedItems] = React.useState<Set<string>>(
+    new Set(),
+  )
+  const [checkedByKey, setCheckedByKey] = React.useState<
+    Record<string, boolean>
+  >({})
   const [confirmed, setConfirmed] = React.useState<
-    (ConfirmedPackingV2 & { packedKeys?: Array<string>; allLoaded?: boolean }) | null
+    | (ConfirmedPackingV2 & { packedKeys?: Array<string>; allLoaded?: boolean })
+    | null
   >(null)
   const [incompleteFinishOpen, setIncompleteFinishOpen] = React.useState(false)
   const [showOnlyRemaining, setShowOnlyRemaining] = React.useState(false)
-  const [selectedSessionId, setSelectedSessionId] = React.useState<string | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = React.useState<
+    string | null
+  >(null)
   const [resetOpen, setResetOpen] = React.useState(false)
 
-  const slipSignature = React.useMemo(() => collectAllLineSignatures(slip), [slip])
+  const slipSignature = React.useMemo(
+    () => collectAllLineSignatures(slip),
+    [slip],
+  )
   const prevSlipSignatureRef = React.useRef<string | null>(null)
 
   React.useEffect(() => {
@@ -770,21 +798,24 @@ function VehiclePackingCard({
       slip,
     }
     const packedKeysToSave = packedKeys
-    const allLoaded = packedKeysToSave.length === allLineKeys.length && hasAnything
+    const allLoaded =
+      packedKeysToSave.length === allLineKeys.length && hasAnything
 
     try {
       if (companyId && userId) {
-        const { error: insErr } = await supabase.from('job_packing_sessions').insert({
-          job_id: jobId,
-          company_id: companyId,
-          vehicle_booking_id: vehicleBookingId,
-          created_by_user_id: userId,
-          confirmed_at: payload.confirmedAt,
-          all_loaded: allLoaded,
-          packed_keys: packedKeysToSave,
-          slip_signature: slipSignature,
-          slip_snapshot: slip as any,
-        })
+        const { error: insErr } = await supabase
+          .from('job_packing_sessions')
+          .insert({
+            job_id: jobId,
+            company_id: companyId,
+            vehicle_booking_id: vehicleBookingId,
+            created_by_user_id: userId,
+            confirmed_at: payload.confirmedAt,
+            all_loaded: allLoaded,
+            packed_keys: packedKeysToSave,
+            slip_signature: slipSignature,
+            slip_snapshot: slip as any,
+          })
         if (insErr) throw insErr
         qc.invalidateQueries({ queryKey: ['jobs.packing', jobId] })
       }
@@ -814,7 +845,10 @@ function VehiclePackingCard({
 
   const bookingsChangedSinceConfirm = React.useMemo(() => {
     if (!confirmed) return false
-    return collectAllLineSignatures(confirmed.slip) !== collectAllLineSignatures(slip)
+    return (
+      collectAllLineSignatures(confirmed.slip) !==
+      collectAllLineSignatures(slip)
+    )
   }, [confirmed, slip])
 
   const showGreenBorder =
@@ -825,9 +859,7 @@ function VehiclePackingCard({
   return (
     <Card
       style={
-        showGreenBorder
-          ? { border: '2px solid var(--green-9)' }
-          : undefined
+        showGreenBorder ? { border: '2px solid var(--green-9)' } : undefined
       }
     >
       <Flex direction="column" gap="3">
@@ -844,15 +876,16 @@ function VehiclePackingCard({
               {sessions[0] && sessions[0].all_loaded === false && canLoad && (
                 <Button
                   variant="soft"
-                  onClick={() =>
-                    resumeFromPackedKeys(sessions[0].packed_keys)
-                  }
+                  onClick={() => resumeFromPackedKeys(sessions[0].packed_keys)}
                   disabled={!hasAnything}
                 >
                   Resume loading
                 </Button>
               )}
-              <Button onClick={startLoading} disabled={!hasAnything || !canLoad}>
+              <Button
+                onClick={startLoading}
+                disabled={!hasAnything || !canLoad}
+              >
                 Start loading
               </Button>
             </Flex>
@@ -861,7 +894,8 @@ function VehiclePackingCard({
 
         {!canLoad && (
           <Text size="2" color="gray">
-            Loading is disabled for freelancers. You can still view the packing slip.
+            Loading is disabled for freelancers. You can still view the packing
+            slip.
           </Text>
         )}
 
@@ -880,39 +914,42 @@ function VehiclePackingCard({
                   : 'Partially loaded'}
               </Badge>
               <Text>
-                {(selectedServerSession?.all_loaded ?? confirmed?.allLoaded)
-                  ? (
-                      <>
-                        Everything is loaded in <strong>{vehicleDisplay}</strong>.
-                      </>
-                    )
-                  : (
-                      <>
-                        Loading confirmed for <strong>{vehicleDisplay}</strong>.
-                      </>
-                    )}
+                {(selectedServerSession?.all_loaded ?? confirmed?.allLoaded) ? (
+                  <>
+                    Everything is loaded in <strong>{vehicleDisplay}</strong>.
+                  </>
+                ) : (
+                  <>
+                    Loading confirmed for <strong>{vehicleDisplay}</strong>.
+                  </>
+                )}
               </Text>
-              {bookingsChangedSinceConfirm && <Badge color="orange">Bookings changed</Badge>}
+              {bookingsChangedSinceConfirm && (
+                <Badge color="orange">Bookings changed</Badge>
+              )}
             </Flex>
             {selectedServerSession?.confirmed_at && (
               <Text size="2" color="gray">
                 Showing packing confirmed at{' '}
-                <strong>{formatConfirmedAt(selectedServerSession.confirmed_at)}</strong>
+                <strong>
+                  {formatConfirmedAt(selectedServerSession.confirmed_at)}
+                </strong>
               </Text>
             )}
-            {(
-              selectedServerSession?.slip_snapshot ??
-              confirmed?.slip
-            ) ? (
+            {(selectedServerSession?.slip_snapshot ?? confirmed?.slip) ? (
               (() => {
                 const selectedKeys =
-                  selectedServerSession?.packed_keys ?? confirmed?.packedKeys ?? []
+                  selectedServerSession?.packed_keys ??
+                  confirmed?.packedKeys ??
+                  []
                 const selectedKeySet = new Set(selectedKeys)
 
                 // "New in this confirmation" = keys in selected session that were never packed before it.
                 let newKeySet: Set<string> | undefined = undefined
                 if (selectedServerSession?.confirmed_at) {
-                  const selectedAt = new Date(selectedServerSession.confirmed_at).getTime()
+                  const selectedAt = new Date(
+                    selectedServerSession.confirmed_at,
+                  ).getTime()
                   const prevPacked = new Set<string>()
                   for (const s of sessions) {
                     const t = new Date(s.confirmed_at).getTime()
@@ -929,36 +966,36 @@ function VehiclePackingCard({
                 for (const k of selectedKeySet) checkedMap[k] = true
 
                 return (
-              <PackingSlipChecklist
-                slip={
-                  selectedServerSession?.slip_snapshot ??
-                  // fallback (legacy localStorage)
-                  (confirmed?.slip as PackingSlip)
-                }
-                mode="view"
-                checkedByKey={checkedMap}
-                newInSelectedPackingKeys={newKeySet}
-                expandedGroups={expandedGroups}
-                expandedItems={expandedItems}
-                onToggleExpandGroup={(groupId) => {
-                  setExpandedGroups((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(groupId)) next.delete(groupId)
-                    else next.add(groupId)
-                    return next
-                  })
-                }}
-                onToggleExpandItem={(key) => {
-                  setExpandedItems((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(key)) next.delete(key)
-                    else next.add(key)
-                    return next
-                  })
-                }}
-                onToggleLine={() => {}}
-                onToggleGroup={() => {}}
-              />
+                  <PackingSlipChecklist
+                    slip={
+                      selectedServerSession?.slip_snapshot ??
+                      // fallback (legacy localStorage)
+                      (confirmed?.slip as PackingSlip)
+                    }
+                    mode="view"
+                    checkedByKey={checkedMap}
+                    newInSelectedPackingKeys={newKeySet}
+                    expandedGroups={expandedGroups}
+                    expandedItems={expandedItems}
+                    onToggleExpandGroup={(groupId) => {
+                      setExpandedGroups((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(groupId)) next.delete(groupId)
+                        else next.add(groupId)
+                        return next
+                      })
+                    }}
+                    onToggleExpandItem={(key) => {
+                      setExpandedItems((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(key)) next.delete(key)
+                        else next.add(key)
+                        return next
+                      })
+                    }}
+                    onToggleLine={() => {}}
+                    onToggleGroup={() => {}}
+                  />
                 )
               })()
             ) : (
@@ -976,7 +1013,9 @@ function VehiclePackingCard({
                     <Button
                       key={s.id}
                       size="1"
-                      variant={s.id === selectedServerSession?.id ? 'solid' : 'soft'}
+                      variant={
+                        s.id === selectedServerSession?.id ? 'solid' : 'soft'
+                      }
                       onClick={() => setSelectedSessionId(s.id)}
                     >
                       {formatConfirmedAt(s.confirmed_at)}
@@ -985,11 +1024,15 @@ function VehiclePackingCard({
                 </Flex>
               )}
               <Flex justify="end" gap="2" wrap="wrap">
-                {!(selectedServerSession?.all_loaded ?? confirmed?.allLoaded) && canLoad && (
-                  <Button variant="soft" onClick={continueLoadingFromNewestSession}>
-                    Continue loading
-                  </Button>
-                )}
+                {!(selectedServerSession?.all_loaded ?? confirmed?.allLoaded) &&
+                  canLoad && (
+                    <Button
+                      variant="soft"
+                      onClick={continueLoadingFromNewestSession}
+                    >
+                      Continue loading
+                    </Button>
+                  )}
                 <AlertDialog.Root open={resetOpen} onOpenChange={setResetOpen}>
                   <AlertDialog.Trigger>
                     <Button variant="soft" color="red">
@@ -997,10 +1040,13 @@ function VehiclePackingCard({
                     </Button>
                   </AlertDialog.Trigger>
                   <AlertDialog.Content maxWidth="520px">
-                    <AlertDialog.Title>Reset packing for this job?</AlertDialog.Title>
+                    <AlertDialog.Title>
+                      Reset packing for this job?
+                    </AlertDialog.Title>
                     <AlertDialog.Description>
-                      This will delete all packing confirmations for this job (including partial
-                      packings) and clear local packing cache.
+                      This will delete all packing confirmations for this job
+                      (including partial packings) and clear local packing
+                      cache.
                     </AlertDialog.Description>
                     <Flex gap="3" mt="4" justify="end">
                       <AlertDialog.Cancel>
@@ -1028,7 +1074,9 @@ function VehiclePackingCard({
         {mode !== 'confirmed' && (
           <Flex direction="column" gap="3">
             {!hasAnything ? (
-              <Text color="gray">No booked equipment overlaps this transport period.</Text>
+              <Text color="gray">
+                No booked equipment overlaps this transport period.
+              </Text>
             ) : (
               <>
                 {mode === 'loading' && (
@@ -1046,12 +1094,23 @@ function VehiclePackingCard({
                     }}
                   >
                     <Flex direction="column" gap="2">
-                      <Flex align="center" justify="between" gap="2" wrap="wrap">
+                      <Flex
+                        align="center"
+                        justify="between"
+                        gap="2"
+                        wrap="wrap"
+                      >
                         <Flex align="center" gap="2" wrap="wrap">
                           <Badge color="blue">Review mode</Badge>
                           <Text weight="medium">Ready to confirm loading</Text>
                         </Flex>
-                        <Badge color={packedKeys.length === allLineKeys.length ? 'green' : 'orange'}>
+                        <Badge
+                          color={
+                            packedKeys.length === allLineKeys.length
+                              ? 'green'
+                              : 'orange'
+                          }
+                        >
                           {packedKeys.length}/{allLineKeys.length} lines loaded
                         </Badge>
                       </Flex>
@@ -1104,8 +1163,12 @@ function VehiclePackingCard({
                     if (mode !== 'loading') return
                     const group = slip.groups.find((g) => g.id === groupId)
                     if (!group) return
-                    const keys = group.items.map((it) => lineKeyForGroupItem(groupId, it.id))
-                    const shouldCheck = !keys.every((k) => checkedByKey[k] === true)
+                    const keys = group.items.map((it) =>
+                      lineKeyForGroupItem(groupId, it.id),
+                    )
+                    const shouldCheck = !keys.every(
+                      (k) => checkedByKey[k] === true,
+                    )
                     setCheckedByKey((prev) => {
                       const next = { ...prev }
                       for (const k of keys) next[k] = shouldCheck
@@ -1122,65 +1185,75 @@ function VehiclePackingCard({
                 />
 
                 {canLoad && (
-                <Flex justify="between" gap="2" wrap="wrap" align="center">
-                  <Button
-                    variant="ghost"
-                    size="2"
-                    onClick={() => setShowOnlyRemaining((v) => !v)}
-                    disabled={mode !== 'loading'}
-                  >
-                    {showOnlyRemaining ? 'Show all' : 'Show remaining'}
-                  </Button>
-                  <Flex justify="end" gap="2" wrap="wrap">
-                  {mode === 'loading' && (
-                    <>
-                      <Button variant="soft" onClick={() => setMode('tentative')}>
-                        Cancel
-                      </Button>
-                      <Button onClick={finishLoading}>
-                        Finish loading
-                      </Button>
-                      <AlertDialog.Root
-                        open={incompleteFinishOpen}
-                        onOpenChange={setIncompleteFinishOpen}
-                      >
-                        <AlertDialog.Content maxWidth="520px">
-                          <AlertDialog.Title>Not everything is checked</AlertDialog.Title>
-                          <AlertDialog.Description>
-                            {remainingCount === 1
-                              ? '1 line is still unchecked.'
-                              : `${remainingCount} lines are still unchecked.`}{' '}
-                            Do you want to finish loading anyway?
-                          </AlertDialog.Description>
-                          <Flex gap="3" mt="4" justify="end">
-                            <AlertDialog.Cancel>
-                              <Button variant="soft">Go back</Button>
-                            </AlertDialog.Cancel>
-                            <AlertDialog.Action>
-                              <Button
-                                onClick={() => {
-                                  setIncompleteFinishOpen(false)
-                                  setMode('review')
-                                }}
-                              >
-                                Finish anyway
-                              </Button>
-                            </AlertDialog.Action>
-                          </Flex>
-                        </AlertDialog.Content>
-                      </AlertDialog.Root>
-                    </>
-                  )}
-                  {mode === 'review' && (
-                    <>
-                      <Button variant="soft" onClick={() => setMode('loading')}>
-                        Back
-                      </Button>
-                      <Button onClick={confirmLoading}>Confirm loading</Button>
-                    </>
-                  )}
+                  <Flex justify="between" gap="2" wrap="wrap" align="center">
+                    <Button
+                      variant="ghost"
+                      size="2"
+                      onClick={() => setShowOnlyRemaining((v) => !v)}
+                      disabled={mode !== 'loading'}
+                    >
+                      {showOnlyRemaining ? 'Show all' : 'Show remaining'}
+                    </Button>
+                    <Flex justify="end" gap="2" wrap="wrap">
+                      {mode === 'loading' && (
+                        <>
+                          <Button
+                            variant="soft"
+                            onClick={() => setMode('tentative')}
+                          >
+                            Cancel
+                          </Button>
+                          <Button onClick={finishLoading}>
+                            Finish loading
+                          </Button>
+                          <AlertDialog.Root
+                            open={incompleteFinishOpen}
+                            onOpenChange={setIncompleteFinishOpen}
+                          >
+                            <AlertDialog.Content maxWidth="520px">
+                              <AlertDialog.Title>
+                                Not everything is checked
+                              </AlertDialog.Title>
+                              <AlertDialog.Description>
+                                {remainingCount === 1
+                                  ? '1 line is still unchecked.'
+                                  : `${remainingCount} lines are still unchecked.`}{' '}
+                                Do you want to finish loading anyway?
+                              </AlertDialog.Description>
+                              <Flex gap="3" mt="4" justify="end">
+                                <AlertDialog.Cancel>
+                                  <Button variant="soft">Go back</Button>
+                                </AlertDialog.Cancel>
+                                <AlertDialog.Action>
+                                  <Button
+                                    onClick={() => {
+                                      setIncompleteFinishOpen(false)
+                                      setMode('review')
+                                    }}
+                                  >
+                                    Finish anyway
+                                  </Button>
+                                </AlertDialog.Action>
+                              </Flex>
+                            </AlertDialog.Content>
+                          </AlertDialog.Root>
+                        </>
+                      )}
+                      {mode === 'review' && (
+                        <>
+                          <Button
+                            variant="soft"
+                            onClick={() => setMode('loading')}
+                          >
+                            Back
+                          </Button>
+                          <Button onClick={confirmLoading}>
+                            Confirm loading
+                          </Button>
+                        </>
+                      )}
+                    </Flex>
                   </Flex>
-                </Flex>
                 )}
               </>
             )}
@@ -1249,7 +1322,9 @@ function PackingSlipChecklist({
     for (const g of slip.groups) {
       const childKeys = g.items.map((it) => lineKeyForGroupItem(g.id, it.id))
       const visibleChildren = filterKeys
-        ? g.items.filter((it) => filterKeys.has(lineKeyForGroupItem(g.id, it.id)))
+        ? g.items.filter((it) =>
+            filterKeys.has(lineKeyForGroupItem(g.id, it.id)),
+          )
         : g.items
       const visibleChildKeys = filterKeys
         ? childKeys.filter((k) => filterKeys.has(k))
@@ -1288,7 +1363,8 @@ function PackingSlipChecklist({
     }
 
     out.sort((a, b) => {
-      if (a.categoryName !== b.categoryName) return a.categoryName.localeCompare(b.categoryName)
+      if (a.categoryName !== b.categoryName)
+        return a.categoryName.localeCompare(b.categoryName)
       return a.name.localeCompare(b.name)
     })
 
@@ -1304,159 +1380,29 @@ function PackingSlipChecklist({
       ) : (
         <Flex direction="column" gap="2">
           {entries.map((entry) => {
-              if (entry.kind === 'item') {
-                const checked = checkedByKey[entry.key] === true
-                const isExpanded = expandedItems.has(entry.key)
-                const showDot = showLoadedInThisPackingDot && newInSelectedPackingKeys?.has(entry.key) === true
-                return (
-                  <Card
-                    key={entry.key}
-                    style={{
-                      padding: 12,
-                      cursor: interactive ? 'pointer' : 'default',
-                      opacity: isReview && !checked ? 0.55 : 1,
-                      borderLeft:
-                        showStatusPills && checked
-                          ? '4px solid var(--green-9)'
-                          : showStatusPills && !checked
-                            ? '4px solid var(--orange-9)'
-                            : undefined,
-                    }}
-                    onClick={() => {
-                      if (!interactive) return
-                      onToggleLine(entry.key)
-                    }}
-                  >
-                    <Flex direction="column" gap="2">
-                      <Flex align="center" justify="between" gap="2">
-                        <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                          {showCheckboxes && (
-                            <Checkbox
-                              checked={checked}
-                              disabled={!interactive}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (!interactive) return
-                                onToggleLine(entry.key)
-                              }}
-                            />
-                          )}
-                          <Box style={{ minWidth: 0 }}>
-                            <Text weight="medium" style={{ display: 'block' }}>
-                              {entry.name}
-                            </Text>
-                            <Text size="1" color="gray">
-                              {entry.categoryName}
-                            </Text>
-                          </Box>
-                        </Flex>
-                        <Flex align="center" gap="2">
-                          {showStatusPills && (
-                            <Flex align="center" gap="1">
-                              {showDot && (
-                                <Box
-                                  style={{
-                                    width: 8,
-                                    height: 8,
-                                    borderRadius: 999,
-                                    background: 'var(--blue-9)',
-                                  }}
-                                  aria-label="Newly loaded in selected packing"
-                                />
-                              )}
-                              <Badge color={checked ? 'green' : 'orange'}>
-                                {checked ? 'Loaded' : 'Not loaded'}
-                              </Badge>
-                            </Flex>
-                          )}
-                          <Badge color="gray">x{entry.quantity}</Badge>
-                          <IconButton
-                            variant="soft"
-                            size="2"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onToggleExpandItem(entry.key)
-                            }}
-                            aria-label={isExpanded ? 'Collapse item' : 'Expand item'}
-                          >
-                            {isExpanded ? <NavArrowDown /> : <NavArrowRight />}
-                          </IconButton>
-                        </Flex>
-                      </Flex>
-                      {isExpanded && (
-                        <Flex direction="column" gap="1">
-                          <Flex align="center" gap="2" wrap="wrap">
-                            <Badge color={checked ? 'green' : 'orange'}>
-                              {checked ? 'Loaded' : 'Not loaded'}
-                            </Badge>
-                            <Text size="2" color="gray">
-                              Qty: <strong>{entry.quantity}</strong>
-                            </Text>
-                          </Flex>
-                          {(entry.brandName || entry.model) && (
-                            <Text size="2" color="gray">
-                              {entry.brandName ? (
-                                <>
-                                  Brand: <strong>{entry.brandName}</strong>
-                                </>
-                              ) : (
-                                'Brand: —'
-                              )}
-                              {entry.model ? (
-                                <>
-                                  {' '}
-                                  · Model: <strong>{entry.model}</strong>
-                                </>
-                              ) : (
-                                ''
-                              )}
-                            </Text>
-                          )}
-                          <Text size="2" color="gray">
-                            Category: {entry.categoryName}
-                          </Text>
-                        </Flex>
-                      )}
-                    </Flex>
-                  </Card>
-                )
-              }
-
-              const isExpanded = expandedGroups.has(entry.groupId)
-              const checkedCount = entry.childKeys.filter((k) => checkedByKey[k] === true).length
-              const isAll =
-                entry.childKeys.length > 0 && checkedCount === entry.childKeys.length
-              const isNone = checkedCount === 0
-              const groupChecked: boolean | 'indeterminate' = isAll
-                ? true
-                : isNone
-                  ? false
-                  : 'indeterminate'
-              const showGroupDot =
+            if (entry.kind === 'item') {
+              const checked = checkedByKey[entry.key] === true
+              const isExpanded = expandedItems.has(entry.key)
+              const showDot =
                 showLoadedInThisPackingDot &&
-                entry.childKeys.some(
-                  (k) => newInSelectedPackingKeys?.has(k) === true,
-                )
-
+                newInSelectedPackingKeys?.has(entry.key) === true
               return (
                 <Card
-                  key={`group:${entry.groupId}`}
+                  key={entry.key}
                   style={{
                     padding: 12,
-                    position: 'relative',
-                    cursor: 'pointer',
+                    cursor: interactive ? 'pointer' : 'default',
+                    opacity: isReview && !checked ? 0.55 : 1,
                     borderLeft:
-                      showStatusPills && checkedCount === entry.childKeys.length
+                      showStatusPills && checked
                         ? '4px solid var(--green-9)'
-                        : showStatusPills && checkedCount === 0
+                        : showStatusPills && !checked
                           ? '4px solid var(--orange-9)'
-                          : showStatusPills
-                            ? '4px solid var(--blue-9)'
-                            : undefined,
+                          : undefined,
                   }}
                   onClick={() => {
-                    if (interactive) onToggleGroup(entry.groupId)
-                    else onToggleExpandGroup(entry.groupId)
+                    if (!interactive) return
+                    onToggleLine(entry.key)
                   }}
                 >
                   <Flex direction="column" gap="2">
@@ -1464,12 +1410,12 @@ function PackingSlipChecklist({
                       <Flex align="center" gap="2" style={{ minWidth: 0 }}>
                         {showCheckboxes && (
                           <Checkbox
-                            checked={groupChecked}
+                            checked={checked}
                             disabled={!interactive}
                             onClick={(e) => {
                               e.stopPropagation()
                               if (!interactive) return
-                              onToggleGroup(entry.groupId)
+                              onToggleLine(entry.key)
                             }}
                           />
                         )}
@@ -1478,14 +1424,14 @@ function PackingSlipChecklist({
                             {entry.name}
                           </Text>
                           <Text size="1" color="gray">
-                            {entry.categoryName} · {checkedCount}/{entry.childKeys.length} loaded
+                            {entry.categoryName}
                           </Text>
                         </Box>
                       </Flex>
                       <Flex align="center" gap="2">
                         {showStatusPills && (
                           <Flex align="center" gap="1">
-                            {showGroupDot && (
+                            {showDot && (
                               <Box
                                 style={{
                                   width: 8,
@@ -1496,20 +1442,8 @@ function PackingSlipChecklist({
                                 aria-label="Newly loaded in selected packing"
                               />
                             )}
-                            <Badge
-                              color={
-                                checkedCount === entry.childKeys.length
-                                  ? 'green'
-                                  : checkedCount === 0
-                                    ? 'orange'
-                                    : 'blue'
-                              }
-                            >
-                              {checkedCount === entry.childKeys.length
-                                ? 'Loaded'
-                                : checkedCount === 0
-                                  ? 'Not loaded'
-                                  : 'Partial'}
+                            <Badge color={checked ? 'green' : 'orange'}>
+                              {checked ? 'Loaded' : 'Not loaded'}
                             </Badge>
                           </Flex>
                         )}
@@ -1519,55 +1453,223 @@ function PackingSlipChecklist({
                           size="2"
                           onClick={(e) => {
                             e.stopPropagation()
-                            onToggleExpandGroup(entry.groupId)
+                            onToggleExpandItem(entry.key)
                           }}
-                          aria-label={isExpanded ? 'Collapse group' : 'Expand group'}
+                          aria-label={
+                            isExpanded ? 'Collapse item' : 'Expand item'
+                          }
                         >
                           {isExpanded ? <NavArrowDown /> : <NavArrowRight />}
                         </IconButton>
                       </Flex>
                     </Flex>
-
                     {isExpanded && (
                       <Flex direction="column" gap="1">
                         <Flex align="center" gap="2" wrap="wrap">
-                          <Badge color={checkedCount === entry.childKeys.length ? 'green' : 'orange'}>
-                            {checkedCount === entry.childKeys.length ? 'All loaded' : 'Partially loaded'}
+                          <Badge color={checked ? 'green' : 'orange'}>
+                            {checked ? 'Loaded' : 'Not loaded'}
                           </Badge>
                           <Text size="2" color="gray">
-                            Lines: <strong>{entry.childKeys.length}</strong>
+                            Qty: <strong>{entry.quantity}</strong>
                           </Text>
                         </Flex>
-                        {entry.children.map((it) => {
-                          const key = lineKeyForGroupItem(entry.groupId, it.id)
-                          const checked = checkedByKey[key] === true
-                          const isChildExpanded = expandedItems.has(key)
-                          const showDot =
-                            showLoadedInThisPackingDot &&
-                            newInSelectedPackingKeys?.has(key) === true
-                          return (
-                            <Card
-                              key={key}
+                        {(entry.brandName || entry.model) && (
+                          <Text size="2" color="gray">
+                            {entry.brandName ? (
+                              <>
+                                Brand: <strong>{entry.brandName}</strong>
+                              </>
+                            ) : (
+                              'Brand: —'
+                            )}
+                            {entry.model ? (
+                              <>
+                                {' '}
+                                · Model: <strong>{entry.model}</strong>
+                              </>
+                            ) : (
+                              ''
+                            )}
+                          </Text>
+                        )}
+                        <Text size="2" color="gray">
+                          Category: {entry.categoryName}
+                        </Text>
+                      </Flex>
+                    )}
+                  </Flex>
+                </Card>
+              )
+            }
+
+            const isExpanded = expandedGroups.has(entry.groupId)
+            const checkedCount = entry.childKeys.filter(
+              (k) => checkedByKey[k] === true,
+            ).length
+            const isAll =
+              entry.childKeys.length > 0 &&
+              checkedCount === entry.childKeys.length
+            const isNone = checkedCount === 0
+            const groupChecked: boolean | 'indeterminate' = isAll
+              ? true
+              : isNone
+                ? false
+                : 'indeterminate'
+            const showGroupDot =
+              showLoadedInThisPackingDot &&
+              entry.childKeys.some(
+                (k) => newInSelectedPackingKeys?.has(k) === true,
+              )
+
+            return (
+              <Card
+                key={`group:${entry.groupId}`}
+                style={{
+                  padding: 12,
+                  position: 'relative',
+                  cursor: 'pointer',
+                  borderLeft:
+                    showStatusPills && checkedCount === entry.childKeys.length
+                      ? '4px solid var(--green-9)'
+                      : showStatusPills && checkedCount === 0
+                        ? '4px solid var(--orange-9)'
+                        : showStatusPills
+                          ? '4px solid var(--blue-9)'
+                          : undefined,
+                }}
+                onClick={() => {
+                  if (interactive) onToggleGroup(entry.groupId)
+                  else onToggleExpandGroup(entry.groupId)
+                }}
+              >
+                <Flex direction="column" gap="2">
+                  <Flex align="center" justify="between" gap="2">
+                    <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                      {showCheckboxes && (
+                        <Checkbox
+                          checked={groupChecked}
+                          disabled={!interactive}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!interactive) return
+                            onToggleGroup(entry.groupId)
+                          }}
+                        />
+                      )}
+                      <Box style={{ minWidth: 0 }}>
+                        <Text weight="medium" style={{ display: 'block' }}>
+                          {entry.name}
+                        </Text>
+                        <Text size="1" color="gray">
+                          {entry.categoryName} · {checkedCount}/
+                          {entry.childKeys.length} loaded
+                        </Text>
+                      </Box>
+                    </Flex>
+                    <Flex align="center" gap="2">
+                      {showStatusPills && (
+                        <Flex align="center" gap="1">
+                          {showGroupDot && (
+                            <Box
                               style={{
-                                padding: 10,
-                                background: 'var(--gray-a2)',
-                                cursor: interactive ? 'pointer' : 'default',
-                                opacity: isReview && !checked ? 0.55 : 1,
-                                borderLeft:
-                                  showStatusPills && checked
-                                    ? '4px solid var(--green-9)'
-                                    : showStatusPills && !checked
-                                      ? '4px solid var(--orange-9)'
-                                      : undefined,
+                                width: 8,
+                                height: 8,
+                                borderRadius: 999,
+                                background: 'var(--blue-9)',
                               }}
-                              onClick={() => {
-                                if (!interactive) return
-                                onToggleLine(key)
-                              }}
+                              aria-label="Newly loaded in selected packing"
+                            />
+                          )}
+                          <Badge
+                            color={
+                              checkedCount === entry.childKeys.length
+                                ? 'green'
+                                : checkedCount === 0
+                                  ? 'orange'
+                                  : 'blue'
+                            }
+                          >
+                            {checkedCount === entry.childKeys.length
+                              ? 'Loaded'
+                              : checkedCount === 0
+                                ? 'Not loaded'
+                                : 'Partial'}
+                          </Badge>
+                        </Flex>
+                      )}
+                      <Badge color="gray">x{entry.quantity}</Badge>
+                      <IconButton
+                        variant="soft"
+                        size="2"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onToggleExpandGroup(entry.groupId)
+                        }}
+                        aria-label={
+                          isExpanded ? 'Collapse group' : 'Expand group'
+                        }
+                      >
+                        {isExpanded ? <NavArrowDown /> : <NavArrowRight />}
+                      </IconButton>
+                    </Flex>
+                  </Flex>
+
+                  {isExpanded && (
+                    <Flex direction="column" gap="1">
+                      <Flex align="center" gap="2" wrap="wrap">
+                        <Badge
+                          color={
+                            checkedCount === entry.childKeys.length
+                              ? 'green'
+                              : 'orange'
+                          }
+                        >
+                          {checkedCount === entry.childKeys.length
+                            ? 'All loaded'
+                            : 'Partially loaded'}
+                        </Badge>
+                        <Text size="2" color="gray">
+                          Lines: <strong>{entry.childKeys.length}</strong>
+                        </Text>
+                      </Flex>
+                      {entry.children.map((it) => {
+                        const key = lineKeyForGroupItem(entry.groupId, it.id)
+                        const checked = checkedByKey[key] === true
+                        const isChildExpanded = expandedItems.has(key)
+                        const showDot =
+                          showLoadedInThisPackingDot &&
+                          newInSelectedPackingKeys?.has(key) === true
+                        return (
+                          <Card
+                            key={key}
+                            style={{
+                              padding: 10,
+                              background: 'var(--gray-a2)',
+                              cursor: interactive ? 'pointer' : 'default',
+                              opacity: isReview && !checked ? 0.55 : 1,
+                              borderLeft:
+                                showStatusPills && checked
+                                  ? '4px solid var(--green-9)'
+                                  : showStatusPills && !checked
+                                    ? '4px solid var(--orange-9)'
+                                    : undefined,
+                            }}
+                            onClick={() => {
+                              if (!interactive) return
+                              onToggleLine(key)
+                            }}
+                          >
+                            <Flex
+                              direction="column"
+                              gap="2"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <Flex direction="column" gap="2" onClick={(e) => e.stopPropagation()}>
-                                <Flex align="center" justify="between" gap="2">
-                                  <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                              <Flex align="center" justify="between" gap="2">
+                                <Flex
+                                  align="center"
+                                  gap="2"
+                                  style={{ minWidth: 0 }}
+                                >
                                   {showCheckboxes && (
                                     <Checkbox
                                       checked={checked}
@@ -1580,87 +1682,97 @@ function PackingSlipChecklist({
                                     />
                                   )}
                                   <Text style={{ minWidth: 0 }}>{it.name}</Text>
-                                  </Flex>
-                                  <Flex align="center" gap="2">
-                                    {showStatusPills && (
-                                      <Flex align="center" gap="1">
-                                        <Badge color={checked ? 'green' : 'orange'}>
-                                          {checked ? 'Loaded' : 'Not loaded'}
-                                        </Badge>
-                                        {showDot && (
-                                          <Box
-                                            style={{
-                                              width: 8,
-                                              height: 8,
-                                              borderRadius: 999,
-                                              background: 'var(--blue-9)',
-                                            }}
-                                            aria-label="Newly loaded in selected packing"
-                                          />
-                                        )}
-                                      </Flex>
-                                    )}
-                                    <Badge color="gray">x{it.quantity}</Badge>
-                                  </Flex>
-                                  <IconButton
-                                    variant="soft"
-                                    size="2"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      onToggleExpandItem(key)
-                                    }}
-                                    aria-label={isChildExpanded ? 'Collapse item' : 'Expand item'}
-                                  >
-                                    {isChildExpanded ? <NavArrowDown /> : <NavArrowRight />}
-                                  </IconButton>
                                 </Flex>
-                                {isChildExpanded && (
-                                  <Flex direction="column" gap="1">
-                                    <Flex align="center" gap="2" wrap="wrap">
-                                      <Badge color={checked ? 'green' : 'orange'}>
+                                <Flex align="center" gap="2">
+                                  {showStatusPills && (
+                                    <Flex align="center" gap="1">
+                                      <Badge
+                                        color={checked ? 'green' : 'orange'}
+                                      >
                                         {checked ? 'Loaded' : 'Not loaded'}
                                       </Badge>
-                                      <Text size="2" color="gray">
-                                        Qty: <strong>{it.quantity}</strong>
-                                      </Text>
+                                      {showDot && (
+                                        <Box
+                                          style={{
+                                            width: 8,
+                                            height: 8,
+                                            borderRadius: 999,
+                                            background: 'var(--blue-9)',
+                                          }}
+                                          aria-label="Newly loaded in selected packing"
+                                        />
+                                      )}
                                     </Flex>
-                                    {(it.brandName || it.model) && (
-                                      <Text size="2" color="gray">
-                                        {it.brandName ? (
-                                          <>
-                                            Brand: <strong>{it.brandName}</strong>
-                                          </>
-                                        ) : (
-                                          'Brand: —'
-                                        )}
-                                        {it.model ? (
-                                          <>
-                                            {' '}
-                                            · Model: <strong>{it.model}</strong>
-                                          </>
-                                        ) : (
-                                          ''
-                                        )}
-                                      </Text>
-                                    )}
+                                  )}
+                                  <Badge color="gray">x{it.quantity}</Badge>
+                                </Flex>
+                                <IconButton
+                                  variant="soft"
+                                  size="2"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    onToggleExpandItem(key)
+                                  }}
+                                  aria-label={
+                                    isChildExpanded
+                                      ? 'Collapse item'
+                                      : 'Expand item'
+                                  }
+                                >
+                                  {isChildExpanded ? (
+                                    <NavArrowDown />
+                                  ) : (
+                                    <NavArrowRight />
+                                  )}
+                                </IconButton>
+                              </Flex>
+                              {isChildExpanded && (
+                                <Flex direction="column" gap="1">
+                                  <Flex align="center" gap="2" wrap="wrap">
+                                    <Badge color={checked ? 'green' : 'orange'}>
+                                      {checked ? 'Loaded' : 'Not loaded'}
+                                    </Badge>
                                     <Text size="2" color="gray">
-                                      Group: <strong>{entry.name}</strong>
-                                    </Text>
-                                    <Text size="2" color="gray">
-                                      Category: {it.categoryName}
+                                      Qty: <strong>{it.quantity}</strong>
                                     </Text>
                                   </Flex>
-                                )}
-                              </Flex>
-                            </Card>
-                          )
-                        })}
-                      </Flex>
-                    )}
-                  </Flex>
-                </Card>
-              )
-            })}
+                                  {(it.brandName || it.model) && (
+                                    <Text size="2" color="gray">
+                                      {it.brandName ? (
+                                        <>
+                                          Brand: <strong>{it.brandName}</strong>
+                                        </>
+                                      ) : (
+                                        'Brand: —'
+                                      )}
+                                      {it.model ? (
+                                        <>
+                                          {' '}
+                                          · Model: <strong>{it.model}</strong>
+                                        </>
+                                      ) : (
+                                        ''
+                                      )}
+                                    </Text>
+                                  )}
+                                  <Text size="2" color="gray">
+                                    Group: <strong>{entry.name}</strong>
+                                  </Text>
+                                  <Text size="2" color="gray">
+                                    Category: {it.categoryName}
+                                  </Text>
+                                </Flex>
+                              )}
+                            </Flex>
+                          </Card>
+                        )
+                      })}
+                    </Flex>
+                  )}
+                </Flex>
+              </Card>
+            )
+          })}
           <Text size="1" color="gray">
             <Box
               asChild
@@ -1676,11 +1788,11 @@ function PackingSlipChecklist({
             >
               <span />
             </Box>
-            Blue dot = first time this item was loaded (compared to earlier confirmations).
+            Blue dot = first time this item was loaded (compared to earlier
+            confirmations).
           </Text>
         </Flex>
       )}
     </Flex>
   )
 }
-

@@ -60,16 +60,12 @@ function recoveryLooksGood(expectedLatest, appliedMax) {
 
 const dbUrl = `postgresql://postgres:postgres@127.0.0.1:${readDbPort()}/postgres`
 
-const reset = spawnSync(
-  'supabase',
-  ['db', 'reset'],
-  {
-    cwd: root,
-    env: { ...process.env, SUPABASE_DB_ONLY: 'true' },
-    stdio: 'inherit',
-    shell: false,
-  },
-)
+const reset = spawnSync('supabase', ['db', 'reset'], {
+  cwd: root,
+  env: { ...process.env, SUPABASE_DB_ONLY: 'true' },
+  stdio: 'inherit',
+  shell: false,
+})
 
 function followUp() {
   const r1 = spawnSync('npm', ['run', 'db:sync-buckets'], {

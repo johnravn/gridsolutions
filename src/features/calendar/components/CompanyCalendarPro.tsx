@@ -259,15 +259,13 @@ export default function CompanyCalendarPro({
     const jobTitle = props?.jobTitle as string | undefined
     const status = props?.status as string | undefined
     const category = props?.category as string | undefined
-    const crewUserIds =
-      (props?.crewUserIds as Array<string> | undefined) || []
+    const crewUserIds = (props?.crewUserIds as Array<string> | undefined) || []
     const crewStatusByUserId =
       (props?.crewStatusByUserId as Record<string, string> | undefined) || {}
     const jobCrewUserIds =
       (props?.jobCrewUserIds as Array<string> | undefined) || []
     const jobCrewStatusByUserId =
-      (props?.jobCrewStatusByUserId as Record<string, string> | undefined) ||
-      {}
+      (props?.jobCrewStatusByUserId as Record<string, string> | undefined) || {}
     const ref = props?.ref as { userId?: string } | undefined
 
     const displayTitle = jobTitle || arg.event.title
@@ -278,14 +276,14 @@ export default function CompanyCalendarPro({
 
     const isProjectLead = !!userId && projectLead?.user_id === userId
     const isCrewOnPeriod =
-      !!userId &&
-      (crewUserIds.includes(userId) || ref?.userId === userId)
+      !!userId && (crewUserIds.includes(userId) || ref?.userId === userId)
     const isCrewOnJob =
       !!userId && jobCrewUserIds.length > 0 && jobCrewUserIds.includes(userId)
     const isCrew = isCrewOnPeriod || isCrewOnJob
-    const crewStatus = isCrew && userId
-      ? crewStatusByUserId[userId] ?? jobCrewStatusByUserId[userId]
-      : undefined
+    const crewStatus =
+      isCrew && userId
+        ? (crewStatusByUserId[userId] ?? jobCrewStatusByUserId[userId])
+        : undefined
     const isConfirmedCrew = isCrew && crewStatus === 'accepted'
 
     const avatarUrl = projectLead?.avatar_url
@@ -308,9 +306,7 @@ export default function CompanyCalendarPro({
                 {arg.event.title}
               </Text>
             )}
-            {timeStr && (
-              <Text size="1">Time: {timeStr}</Text>
-            )}
+            {timeStr && <Text size="1">Time: {timeStr}</Text>}
             {projectLead && (
               <Flex align="center" gap="2">
                 <Avatar
@@ -331,7 +327,9 @@ export default function CompanyCalendarPro({
             {(isProjectLead || isCrew) && (
               <Badge
                 size="1"
-                color={isProjectLead ? 'blue' : isConfirmedCrew ? 'green' : 'amber'}
+                color={
+                  isProjectLead ? 'blue' : isConfirmedCrew ? 'green' : 'amber'
+                }
                 variant="outline"
               >
                 You are{' '}
@@ -366,18 +364,19 @@ export default function CompanyCalendarPro({
           <div
             style={{
               display: 'flex',
-              gap: 6,
+              gap: 4,
               alignItems: 'center',
               width: '100%',
               minWidth: 0,
               overflow: 'hidden',
+              lineHeight: 1.25,
             }}
           >
             {timeStr && (
               <span
                 style={{
                   fontWeight: 600,
-                  fontSize: 12,
+                  fontSize: 11,
                   flexShrink: 0,
                 }}
               >
@@ -386,7 +385,7 @@ export default function CompanyCalendarPro({
             )}
             <span
               style={{
-                fontSize: 12,
+                fontSize: 11,
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -548,7 +547,10 @@ export default function CompanyCalendarPro({
               borderColor: colors.border,
               textColor: colors.text,
               classNames: isCanceled
-                ? [...((event.classNames as string[]) || []), 'fc-event-canceled']
+                ? [
+                    ...((event.classNames as Array<string>) || []),
+                    'fc-event-canceled',
+                  ]
                 : event.classNames,
             }
           })}
@@ -596,7 +598,10 @@ export default function CompanyCalendarPro({
               borderColor: colors.border,
               textColor: colors.text,
               classNames: isCanceled
-                ? [...((event.classNames as string[]) || []), 'fc-event-canceled']
+                ? [
+                    ...((event.classNames as Array<string>) || []),
+                    'fc-event-canceled',
+                  ]
                 : event.classNames,
             }
           })}

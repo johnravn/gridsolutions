@@ -13,7 +13,7 @@ import { Filter } from 'iconoir-react'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import type { JobStatus } from '../types'
 
-const ALL_STATUSES: JobStatus[] = [
+const ALL_STATUSES: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',
@@ -26,7 +26,7 @@ const ALL_STATUSES: JobStatus[] = [
 ]
 
 /** Default: show all statuses except invoiced, canceled, paid */
-export const DEFAULT_STATUS_FILTER: JobStatus[] = [
+export const DEFAULT_STATUS_FILTER: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',
@@ -36,8 +36,8 @@ export const DEFAULT_STATUS_FILTER: JobStatus[] = [
 ]
 
 type Props = {
-  statusFilter: JobStatus[]
-  onStatusFilterChange: (v: JobStatus[]) => void
+  statusFilter: Array<JobStatus>
+  onStatusFilterChange: (v: Array<JobStatus>) => void
   showOnlyArchived: boolean
   onShowOnlyArchivedChange: (v: boolean) => void
 }
@@ -192,7 +192,12 @@ export default function JobsFilter({
             onMouseEnter={() => setHoveredStatus(status)}
             onMouseLeave={() => setHoveredStatus(null)}
           >
-            <Flex align="center" justify="between" gap="2" style={{ width: '100%' }}>
+            <Flex
+              align="center"
+              justify="between"
+              gap="2"
+              style={{ width: '100%' }}
+            >
               <Flex align="center" gap="2">
                 <Checkbox checked={statusFilter.includes(status)} />
                 <Text>{makeWordPresentable(status)}</Text>

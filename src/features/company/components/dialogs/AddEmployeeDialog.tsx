@@ -121,8 +121,8 @@ export default function AddEmployeeDialog({
         <Dialog.Description size="2">
           Enter the person’s email. If they already have an account, they’ll be
           added immediately as an <b>employee</b>. Otherwise we’ll email them an
-          invitation link; they’ll appear as a pending invite (expires in 30 days)
-          until they join.
+          invitation link; they’ll appear as a pending invite (expires in 30
+          days) until they join.
         </Dialog.Description>
 
         <form onSubmit={onSubmit}>

@@ -40,7 +40,7 @@ export function crewConflictsQuery({
   from?: string | null
   to?: string | null
 }) {
-  return queryOptions<CrewConflictRow[]>({
+  return queryOptions<Array<CrewConflictRow>>({
     queryKey: ['conflicts', 'crew', companyId, from ?? null, to ?? null],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_conflicts_crew', {
@@ -49,7 +49,7 @@ export function crewConflictsQuery({
         p_to: to ?? null,
       })
       if (error) throw error
-      return (data ?? []) as CrewConflictRow[]
+      return (data ?? []) as Array<CrewConflictRow>
     },
     enabled: !!companyId,
     staleTime: 5 * 60 * 1000,
@@ -67,7 +67,7 @@ export function vehicleConflictsQuery({
   from?: string | null
   to?: string | null
 }) {
-  return queryOptions<VehicleConflictRow[]>({
+  return queryOptions<Array<VehicleConflictRow>>({
     queryKey: ['conflicts', 'vehicle', companyId, from ?? null, to ?? null],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_conflicts_vehicle', {
@@ -76,7 +76,7 @@ export function vehicleConflictsQuery({
         p_to: to ?? null,
       })
       if (error) throw error
-      return (data ?? []) as VehicleConflictRow[]
+      return (data ?? []) as Array<VehicleConflictRow>
     },
     enabled: !!companyId,
     staleTime: 5 * 60 * 1000,

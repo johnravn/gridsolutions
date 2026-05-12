@@ -361,7 +361,7 @@ export default function AddGroupDialog({
       item_name: p.item_name,
       quantity: p.quantity,
       unit_price: p.item_current_price,
-      part_type: (p.part_type ? p.part_type : p.item_id ? 'item' : 'group'),
+      part_type: p.part_type ? p.part_type : p.item_id ? 'item' : 'group',
     }))
 
     setForm((prev) => {

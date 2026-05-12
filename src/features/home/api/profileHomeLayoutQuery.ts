@@ -39,7 +39,9 @@ export function profileHomeLayoutQuery(userId: string) {
         .eq('user_id', userId)
         .maybeSingle()
       if (error) throw error
-      return parseHomeLayout(data?.preferences as Record<string, unknown> | null)
+      return parseHomeLayout(
+        data?.preferences as Record<string, unknown> | null,
+      )
     },
     staleTime: 10 * 60_000,
     refetchOnWindowFocus: false,

@@ -272,7 +272,9 @@ export async function updatePersonalVehicleBooking(
 }
 
 /** Delete a personal vehicle booking (hard-delete; cascade removes reserved_vehicles). Caller must ensure job_id is null. */
-export async function deletePersonalVehicleBooking(timePeriodId: string): Promise<void> {
+export async function deletePersonalVehicleBooking(
+  timePeriodId: string,
+): Promise<void> {
   const { error } = await supabase
     .from('time_periods')
     .delete()
@@ -281,7 +283,9 @@ export async function deletePersonalVehicleBooking(timePeriodId: string): Promis
 }
 
 /** Check if a time period is a personal booking (job_id is null) */
-export async function isPersonalBooking(timePeriodId: string): Promise<boolean> {
+export async function isPersonalBooking(
+  timePeriodId: string,
+): Promise<boolean> {
   const { data, error } = await supabase
     .from('time_periods')
     .select('job_id')

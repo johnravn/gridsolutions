@@ -85,7 +85,9 @@ export default function InventoryTable({
     ] as const,
     enabled: !!companyId,
     initialPageParam: 1,
-    queryFn: async ({ pageParam }): Promise<{ rows: Array<InventoryIndexRow>; count: number }> => {
+    queryFn: async ({
+      pageParam,
+    }): Promise<{ rows: Array<InventoryIndexRow>; count: number }> => {
       const page = Number(pageParam) || 1
       const { queryFn } = inventoryIndexQuery({
         companyId: companyId ?? '__none__',
@@ -115,10 +117,15 @@ export default function InventoryTable({
   })
 
   const rows = React.useMemo(
-    () => (inventoryQuery.data ? inventoryQuery.data.pages.flatMap((p) => p.rows) : []),
+    () =>
+      inventoryQuery.data
+        ? inventoryQuery.data.pages.flatMap((p) => p.rows)
+        : [],
     [inventoryQuery.data],
   )
-  const totalCount = inventoryQuery.data ? inventoryQuery.data.pages[0]?.count ?? 0 : 0
+  const totalCount = inventoryQuery.data
+    ? (inventoryQuery.data.pages[0]?.count ?? 0)
+    : 0
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length + (inventoryQuery.hasNextPage ? 1 : 0),
@@ -251,7 +258,13 @@ export default function InventoryTable({
       }}
     >
       {/* Search bar */}
-      <Flex ref={controlsRef} gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+      <Flex
+        ref={controlsRef}
+        gap="2"
+        align="center"
+        wrap="wrap"
+        style={{ minWidth: 0 }}
+      >
         <TextField.Root
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -263,7 +276,8 @@ export default function InventoryTable({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {(inventoryQuery.isFetching || inventoryQuery.isFetchingNextPage) && <Spinner />}
+            {(inventoryQuery.isFetching ||
+              inventoryQuery.isFetchingNextPage) && <Spinner />}
           </TextField.Slot>
         </TextField.Root>
 
@@ -301,7 +315,11 @@ export default function InventoryTable({
             onClick={() => setAddGroupDialog(true)}
             style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
           >
-            <Packages width={isSmallScreen ? 20 : 16} height={isSmallScreen ? 20 : 16} /> Add group
+            <Packages
+              width={isSmallScreen ? 20 : 16}
+              height={isSmallScreen ? 20 : 16}
+            />{' '}
+            Add group
           </Button>
           <Button
             size={isSmallScreen ? '3' : '2'}
@@ -309,7 +327,11 @@ export default function InventoryTable({
             onClick={() => setAddItemOpen(true)}
             style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
           >
-            <Package width={isSmallScreen ? 20 : 16} height={isSmallScreen ? 20 : 16} /> Add item
+            <Package
+              width={isSmallScreen ? 20 : 16}
+              height={isSmallScreen ? 20 : 16}
+            />{' '}
+            Add item
           </Button>
         </Flex>
       </Flex>
@@ -325,7 +347,14 @@ export default function InventoryTable({
           marginTop: 16,
         }}
       >
-        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div
+          style={{
+            minWidth: 'max-content',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
           {/* Table header */}
           <div
             style={{
@@ -339,28 +368,28 @@ export default function InventoryTable({
             }}
           >
             {columns.map((col) => {
-          const canSort =
-            col.sortable && sortableCols.includes(col.id as SortBy)
-          const isActive = sortBy === col.id
-          const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+              const canSort =
+                col.sortable && sortableCols.includes(col.id as SortBy)
+              const isActive = sortBy === col.id
+              const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
 
-          return (
-            <div
-              key={col.id}
-              onClick={() => canSort && handleSort(col.id as SortBy)}
-              style={{
-                cursor: canSort ? 'pointer' : undefined,
-                userSelect: 'none',
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-              }}
-              title={canSort ? 'Click to sort' : undefined}
-            >
-              {col.header}
-              {arrow}
-            </div>
-          )
-        })}
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => canSort && handleSort(col.id as SortBy)}
+                  style={{
+                    cursor: canSort ? 'pointer' : undefined,
+                    userSelect: 'none',
+                    fontSize: 'var(--font-size-1)',
+                    fontWeight: 600,
+                  }}
+                  title={canSort ? 'Click to sort' : undefined}
+                >
+                  {col.header}
+                  {arrow}
+                </div>
+              )
+            })}
           </div>
 
           {/* Virtualized list body */}
@@ -373,98 +402,99 @@ export default function InventoryTable({
               marginTop: 8,
             }}
           >
-        {inventoryQuery.isLoading ? (
-          <Flex align="center" justify="center" py="6">
-            <Spinner size="2" />
-          </Flex>
-        ) : rows.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              No results
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const row = rows[virtualRow.index]
-              const isLoaderRow = virtualRow.index >= rows.length
+            {inventoryQuery.isLoading ? (
+              <Flex align="center" justify="center" py="6">
+                <Spinner size="2" />
+              </Flex>
+            ) : rows.length === 0 ? (
+              <Flex align="center" justify="center" py="6">
+                <Text size="2" color="gray">
+                  No results
+                </Text>
+              </Flex>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const row = rows[virtualRow.index]
+                  const isLoaderRow = virtualRow.index >= rows.length
 
-              if (isLoaderRow) {
-                return (
-                  <div
-                    key={`loader-${virtualRow.index}`}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualRow.size}px`,
-                      transform: `translateY(${virtualRow.start}px)`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      padding: '0 var(--space-3)',
-                      color: 'var(--gray-10)',
-                    }}
-                  >
-                    {inventoryQuery.hasNextPage
-                      ? inventoryQuery.isFetchingNextPage
-                        ? 'Loading more…'
-                        : 'Scroll to load more…'
-                      : '—'}
-                  </div>
-                )
-              }
+                  if (isLoaderRow) {
+                    return (
+                      <div
+                        key={`loader-${virtualRow.index}`}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0 var(--space-3)',
+                          color: 'var(--gray-10)',
+                        }}
+                      >
+                        {inventoryQuery.hasNextPage
+                          ? inventoryQuery.isFetchingNextPage
+                            ? 'Loading more…'
+                            : 'Scroll to load more…'
+                          : '—'}
+                      </div>
+                    )
+                  }
 
-              const isActive = row.id === selectedId
+                  const isActive = row.id === selectedId
 
-              return (
-                <div
-                  key={row.id}
-                  data-index={virtualRow.index}
-                  onClick={() => onSelect(row.id)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    display: 'grid',
-                    gridTemplateColumns: GRID_COLUMNS,
-                    gap: 'var(--space-2)',
-                    alignItems: 'center',
-                    padding: '0 var(--space-3)',
-                    cursor: 'pointer',
-                    backgroundColor: isActive
-                      ? 'var(--accent-a3)'
-                      : 'transparent',
-                    borderRadius: 'var(--radius-2)',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isActive) {
-                      e.currentTarget.style.backgroundColor = 'transparent'
-                    }
-                  }}
-                >
-                  {columns.map((col) => (
-                    <div key={col.id}>{renderCell(row, col.id)}</div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-        )}
+                  return (
+                    <div
+                      key={row.id}
+                      data-index={virtualRow.index}
+                      onClick={() => onSelect(row.id)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'grid',
+                        gridTemplateColumns: GRID_COLUMNS,
+                        gap: 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: '0 var(--space-3)',
+                        cursor: 'pointer',
+                        backgroundColor: isActive
+                          ? 'var(--accent-a3)'
+                          : 'transparent',
+                        borderRadius: 'var(--radius-2)',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor =
+                            'var(--gray-a2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isActive) {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                        }
+                      }}
+                    >
+                      {columns.map((col) => (
+                        <div key={col.id}>{renderCell(row, col.id)}</div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

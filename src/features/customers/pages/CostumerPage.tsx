@@ -15,12 +15,12 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { Refresh, TransitionLeft } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
 
@@ -182,7 +182,10 @@ export default function CustomerPage() {
   // On small screens: when an item is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedId])
 
@@ -219,7 +222,12 @@ export default function CustomerPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              style={{ flexShrink: 0 }}
+            >
               <Heading size="5">Customers</Heading>
               {accountingConfig?.accounting_software === 'conta' &&
                 accountingConfig?.accounting_organization_id && (
@@ -343,15 +351,11 @@ export default function CustomerPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{
@@ -407,7 +411,9 @@ export default function CustomerPage() {
                         disabled={syncMutation.isPending}
                       >
                         <Refresh width={14} height={14} />
-                        {syncMutation.isPending ? 'Syncing…' : 'Sync with Conta'}
+                        {syncMutation.isPending
+                          ? 'Syncing…'
+                          : 'Sync with Conta'}
                       </Button>
                     )}
                   <Tooltip

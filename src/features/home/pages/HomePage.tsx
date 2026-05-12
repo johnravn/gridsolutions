@@ -1,21 +1,17 @@
 // src/features/home/pages/HomePage.tsx
 import * as React from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { Box, Text } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { addDays, startOfMinute } from 'date-fns'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
-import {
-  getInitialsFromNameOrEmail,
-} from '@shared/lib/generalFunctions'
-import { latestFeedQuery } from '@features/latest/api/queries'
+import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { mattersIndexQueryAll } from '@features/matters/api/queries'
-import {
-  HomeDesktopLayout,
-  HomeMobileLayout,
-} from '@features/home/components'
+import { HomeDesktopLayout, HomeMobileLayout } from '@features/home/components'
+import { companyJobsWeekQuery } from '@features/home/api/companyJobsWeekQuery'
+import { companyWeekJobsBookingsQuery } from '@features/home/api/companyWeekJobsBookingsQuery'
+import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
 import {
   defaultHomeDashboardLayoutPreferences,
   profileHomeLayoutQuery,
@@ -31,14 +27,14 @@ import type { HomeMatter } from '@features/home/types'
 export default function HomePage() {
   const { companyId } = useCompany()
   const { userId, companyRole, caps } = useAuthz()
-  const navigate = useNavigate()
 
   const [daysFilter, setDaysFilter] = React.useState<'7' | '14' | '30' | 'all'>(
     'all',
   )
   const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(true)
+  const [jobsWeekOffset, setJobsWeekOffset] = React.useState<0 | 1>(0)
 
-  const canSeeLatest = caps.has('visit:latest')
+  const canVisitJobs = caps.has('visit:jobs')
 
   const {
     jobs: filteredUpcomingJobs,
@@ -52,6 +48,48 @@ export default function HomePage() {
     showMyJobsOnly,
   })
 
+  const { data: jobsReadyToInvoice = [], isLoading: jobsReadyToInvoiceLoading } =
+    useQuery({
+      ...jobsReadyToInvoiceQuery({
+        companyId: companyId ?? '',
+        userId: userId ?? '',
+      }),
+      enabled: !!companyId && !!userId && canVisitJobs,
+    })
+
+  const { data: companyWeekJobs = [], isLoading: companyWeekJobsLoading } =
+    useQuery({
+      ...companyJobsWeekQuery({
+        companyId: companyId ?? '',
+        weekOffset: jobsWeekOffset,
+        userId,
+        companyRole,
+      }),
+      enabled: !!companyId && canVisitJobs,
+    })
+
+  const jobsWeekBookingsMeta = React.useMemo(
+    () =>
+      companyWeekJobs.map((j) => ({
+        id: j.id,
+        leadUserId: j.project_lead?.user_id ?? null,
+      })),
+    [companyWeekJobs],
+  )
+
+  const { data: companyWeekBookingSummaries = {}, isLoading: companyWeekBookingsDetailLoading } =
+    useQuery({
+      ...companyWeekJobsBookingsQuery({
+        companyId: companyId ?? '',
+        weekOffset: jobsWeekOffset,
+        jobsMeta: jobsWeekBookingsMeta,
+      }),
+      enabled:
+        !!companyId &&
+        canVisitJobs &&
+        jobsWeekBookingsMeta.length > 0,
+    })
+
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
     ...mattersIndexQueryAll(),
   })
@@ -60,14 +98,6 @@ export default function HomePage() {
     if (!mattersData) return []
     return mattersData.filter((matter) => matter.is_unread)
   }, [mattersData])
-
-  const { data: latestData, isLoading: latestLoading } = useQuery({
-    ...latestFeedQuery({
-      companyId: companyId ?? '',
-      limit: 10,
-    }),
-    enabled: !!companyId && canSeeLatest,
-  })
 
   // IMPORTANT: make range stable so queryKey doesn't change every render
   const { conflictFrom, conflictTo } = React.useMemo(() => {
@@ -78,36 +108,31 @@ export default function HomePage() {
     }
   }, [companyId])
 
-  const { data: crewConflicts = [], isLoading: crewConflictsLoading } = useQuery({
-    ...crewConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
-  const { data: vehicleConflicts = [], isLoading: vehicleConflictsLoading } = useQuery({
-    ...vehicleConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: !!companyId,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
-  const conflictsLoading = crewConflictsLoading || vehicleConflictsLoading
-
-  const handleLatestClick = (activityId: string) => {
-    navigate({
-      to: '/latest',
-      search: { activityId },
+  const { data: crewConflicts = [], isLoading: crewConflictsLoading } =
+    useQuery({
+      ...crewConflictsQuery({
+        companyId: companyId ?? '',
+        from: conflictFrom,
+        to: conflictTo,
+      }),
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
     })
-  }
+  const { data: vehicleConflicts = [], isLoading: vehicleConflictsLoading } =
+    useQuery({
+      ...vehicleConflictsQuery({
+        companyId: companyId ?? '',
+        from: conflictFrom,
+        to: conflictTo,
+      }),
+      enabled: !!companyId,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    })
+  const conflictsLoading = crewConflictsLoading || vehicleConflictsLoading
 
   const getInitials = getInitialsFromNameOrEmail
 
@@ -117,20 +142,14 @@ export default function HomePage() {
     return data.publicUrl
   }
 
-  const {
-    isLarge,
-    containerRef,
-    leftPanelWidth,
-    isResizing,
-    setIsResizing,
-  } = useHomeResizeLayout()
+  const { isLarge, containerRef, leftPanelWidth, isResizing, setIsResizing } =
+    useHomeResizeLayout()
 
   const { data: homeLayoutPrefs } = useQuery({
     ...profileHomeLayoutQuery(userId ?? ''),
     enabled: !!userId && !!companyId,
   })
-  const homeLayout =
-    homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
+  const homeLayout = homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
 
   if (!companyId) {
     return (
@@ -144,12 +163,17 @@ export default function HomePage() {
     return (
       <HomeMobileLayout
         userId={userId}
-        canSeeLatest={canSeeLatest}
-        latestActivities={latestData?.items || []}
-        latestLoading={latestLoading}
-        onLatestClick={handleLatestClick}
+        canVisitJobs={canVisitJobs}
+        companyWeekJobs={companyWeekJobs}
+        companyWeekJobsLoading={companyWeekJobsLoading}
+        companyWeekBookingSummaries={companyWeekBookingSummaries}
+        companyWeekBookingsDetailLoading={companyWeekBookingsDetailLoading}
+        jobsWeekOffset={jobsWeekOffset}
+        onJobsWeekOffsetChange={setJobsWeekOffset}
         unreadMatters={unreadMatters}
         mattersLoading={mattersLoading}
+        jobsReadyToInvoice={jobsReadyToInvoice}
+        jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
         upcomingJobs={filteredUpcomingJobs}
         upcomingJobsLoading={upcomingJobsLoading}
         showMyJobsOnly={showMyJobsOnly}
@@ -174,12 +198,17 @@ export default function HomePage() {
       isResizing={isResizing}
       onResizeStart={() => setIsResizing(true)}
       userId={userId}
-      canSeeLatest={canSeeLatest}
-      latestActivities={latestData?.items || []}
-      latestLoading={latestLoading}
-      onLatestClick={handleLatestClick}
+      canVisitJobs={canVisitJobs}
+      companyWeekJobs={companyWeekJobs}
+      companyWeekJobsLoading={companyWeekJobsLoading}
+      companyWeekBookingSummaries={companyWeekBookingSummaries}
+      companyWeekBookingsDetailLoading={companyWeekBookingsDetailLoading}
+      jobsWeekOffset={jobsWeekOffset}
+      onJobsWeekOffsetChange={setJobsWeekOffset}
       unreadMatters={unreadMatters}
       mattersLoading={mattersLoading}
+      jobsReadyToInvoice={jobsReadyToInvoice}
+      jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
       upcomingJobs={filteredUpcomingJobs}
       upcomingJobsLoading={upcomingJobsLoading}
       showMyJobsOnly={showMyJobsOnly}

@@ -11,6 +11,11 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
+  emailDocument,
+  hiddenPreheader,
+  primaryButton,
+} from '../_shared/email/layout.ts'
+import {
   emailFunctionCorsHeaders,
   escapeHtml,
   getResendApiKey,
@@ -30,11 +35,15 @@ Deno.serve(async (req) => {
     if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
       return new Response(
         JSON.stringify({
-          error: 'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+          error:
+            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
         }),
         {
           status: 500,
-          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
         },
       )
     }
@@ -44,16 +53,28 @@ Deno.serve(async (req) => {
     const toEmail = body?.to_email
 
     if (!offerId || typeof offerId !== 'string') {
-      return new Response(JSON.stringify({ error: 'Body must include offer_id' }), {
-        status: 400,
-        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ error: 'Body must include offer_id' }),
+        {
+          status: 400,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     }
     if (!toEmail || typeof toEmail !== 'string') {
-      return new Response(JSON.stringify({ error: 'Body must include to_email' }), {
-        status: 400,
-        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
-      })
+      return new Response(
+        JSON.stringify({ error: 'Body must include to_email' }),
+        {
+          status: 400,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
@@ -82,59 +103,82 @@ Deno.serve(async (req) => {
     if (offerErr || !offer) {
       return new Response(JSON.stringify({ error: 'Offer not found' }), {
         status: 404,
-        headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...emailFunctionCorsHeaders,
+          'Content-Type': 'application/json',
+        },
       })
     }
 
     if (!offer.locked) {
       return new Response(
-        JSON.stringify({ error: 'Offer must be locked before sending by email' }),
+        JSON.stringify({
+          error: 'Offer must be locked before sending by email',
+        }),
         {
           status: 400,
-          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
         },
       )
     }
 
     const appUrl = Deno.env.get('APP_URL') || 'https://gridsolutions.app'
-    const offerUrl = `${appUrl}/offer/${offer.access_token}`
+    const baseUrl = appUrl.replace(/\/$/, '')
+    const offerUrl = `${baseUrl}/offer/${offer.access_token}`
 
     const company = Array.isArray((offer as any).company)
       ? (offer as any).company[0]
       : (offer as any).company
-    const job = Array.isArray((offer as any).job) ? (offer as any).job[0] : (offer as any).job
-    const customer = Array.isArray(job?.customer) ? job?.customer[0] : job?.customer
+    const job = Array.isArray((offer as any).job)
+      ? (offer as any).job[0]
+      : (offer as any).job
+    const customer = Array.isArray(job?.customer)
+      ? job?.customer[0]
+      : job?.customer
 
-    const fromDisplayName = company?.name ?? null
+    const companyName = (company?.name as string | undefined)?.trim() || 'Our team'
     const subject = `Offer: ${offer.title ?? 'Offer'}`
-    const heading = company?.name ? `Offer from ${company.name}` : 'Offer from Grid'
     const customerName = customer?.name ?? null
     const jobTitle = job?.title ?? null
 
-    const html = `
-      <div style="font-family: sans-serif; max-width: 560px; margin: 0 auto;">
-        <h2 style="color: #333;">${escapeHtml(heading)}</h2>
-        <p style="color: #555; line-height: 1.5;">
-          You have received an offer${customerName ? ` for <b>${escapeHtml(customerName)}</b>` : ''}${jobTitle ? ` (${escapeHtml(jobTitle)})` : ''}.
-        </p>
-        <p style="margin-top: 24px;">
-          <a href="${escapeHtml(offerUrl)}"
-             style="background: #3b82f6; color: white; padding: 10px 16px; text-decoration: none; border-radius: 8px; display: inline-block;">
-             View offer
-          </a>
-        </p>
-        <p style="margin-top: 18px; font-size: 12px; color: #888;">
-          If the button doesn’t work, copy this link: ${escapeHtml(offerUrl)}
-        </p>
-      </div>
-    `
+    const preheaderText = `${companyName} — view and respond to your offer in one click.`
+
+    const innerHtml = `
+${hiddenPreheader(preheaderText)}
+<p style="margin:0;color:#334155;line-height:1.65;">Hello,</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  Thank you for the opportunity to work together. <strong>${escapeHtml(companyName)}</strong> is pleased to share the following offer${customerName ? ` for <strong>${escapeHtml(customerName)}</strong>` : ''}${jobTitle ? ` — <strong>${escapeHtml(jobTitle)}</strong>` : ''}.
+</p>
+<p style="margin:16px 0 0 0;color:#475569;line-height:1.65;">
+  You can review the full details, including scope and pricing, using the secure link below. If you have questions, reply to your contact at ${escapeHtml(companyName)} as you normally would.
+</p>
+${primaryButton(offerUrl, 'View offer')}
+<p style="margin:18px 0 0 0;font-size:12px;color:#94a3b8;line-height:1.5;">
+  If the button does not work, copy this link into your browser:<br/>
+  <span style="word-break:break-all;">${escapeHtml(offerUrl)}</span>
+</p>
+`
+
+    const html = emailDocument(innerHtml)
+
+    const text = [
+      'Hello,',
+      '',
+      `Thank you for the opportunity to work together. ${companyName} is pleased to share an offer${customerName ? ` for ${customerName}` : ''}${jobTitle ? ` (${jobTitle})` : ''}.`,
+      '',
+      `View offer: ${offerUrl}`,
+    ].join('\n')
 
     const sent = await sendResendHtmlEmail({
       apiKey: resendApiKey,
       to: [toEmail],
       subject,
       html,
-      fromDisplayName,
+      text,
+      fromDisplayName: companyName,
     })
 
     if (!sent.ok) {
@@ -142,7 +186,10 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: 'Resend failed', details: sent.bodyText }),
         {
           status: 502,
-          headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
         },
       )
     }
@@ -161,12 +208,18 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({ ok: true, message_id: messageId }), {
       status: 200,
-      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...emailFunctionCorsHeaders,
+        'Content-Type': 'application/json',
+      },
     })
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...emailFunctionCorsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...emailFunctionCorsHeaders,
+        'Content-Type': 'application/json',
+      },
     })
   }
 })

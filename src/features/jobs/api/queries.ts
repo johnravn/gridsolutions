@@ -515,7 +515,9 @@ export function jobTimePeriodsQuery({ jobId }: { jobId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('time_periods')
-        .select('id, company_id, job_id, title, start_at, end_at, category, program_group')
+        .select(
+          'id, company_id, job_id, title, start_at, end_at, category, program_group',
+        )
         .eq('job_id', jobId)
         .order('start_at', { ascending: true })
       if (error) throw error

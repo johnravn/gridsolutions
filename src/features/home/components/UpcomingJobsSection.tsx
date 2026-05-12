@@ -106,9 +106,7 @@ export function UpcomingJobsSection({
   const daysFilterSelect = (
     <Select.Root
       value={daysFilter}
-      onValueChange={(value) =>
-        onDaysFilterChange(value as DaysFilter)
-      }
+      onValueChange={(value) => onDaysFilterChange(value as DaysFilter)}
     >
       <Select.Trigger variant="soft" style={{ minWidth: '120px' }}>
         {getDaysLabel(daysFilter)}
@@ -240,8 +238,7 @@ export function UpcomingJobsSection({
                         borderRadius: isMobile ? '12px' : '8px',
                         ...(isMobile &&
                           virtualRow.index < jobs.length - 1 && {
-                            borderBottom:
-                              '1px solid var(--gray-a5)',
+                            borderBottom: '1px solid var(--gray-a5)',
                           }),
                         transition: 'background-color 0.15s',
                         backgroundColor: 'transparent',
@@ -262,27 +259,27 @@ export function UpcomingJobsSection({
                         })
                       }
                     >
+                      <Flex
+                        gap={isMobile ? '3' : '2'}
+                        align="center"
+                        justify="between"
+                        direction="row"
+                        style={{ width: '100%', minWidth: 0 }}
+                      >
                         <Flex
-                          gap={isMobile ? '3' : '2'}
-                          align="center"
-                          justify="between"
-                          direction="row"
-                          style={{ width: '100%', minWidth: 0 }}
+                          direction="column"
+                          gap={isMobile ? '2' : '1'}
+                          style={{ flex: 1, minWidth: 0 }}
                         >
-                          <Flex
-                            direction="column"
-                            gap={isMobile ? '2' : '1'}
-                            style={{ flex: 1, minWidth: 0 }}
-                          >
-                            {isMobile ? (
-                              <>
-                                <Text
-                                  size="3"
-                                  weight="medium"
-                                  style={{ lineHeight: 1.3 }}
-                                >
-                                  {job.title}
-                                </Text>
+                          {isMobile ? (
+                            <>
+                              <Text
+                                size="3"
+                                weight="medium"
+                                style={{ lineHeight: 1.3 }}
+                              >
+                                {job.title}
+                              </Text>
                             </>
                           ) : (
                             <Text size="2" weight="medium">
@@ -304,9 +301,13 @@ export function UpcomingJobsSection({
                             )}
                             <Text size="1" color="gray">
                               {job.start_at
-                                ? format(new Date(job.start_at), 'd. MMM yyyy', {
-                                    locale: nb,
-                                  })
+                                ? format(
+                                    new Date(job.start_at),
+                                    'd. MMM yyyy',
+                                    {
+                                      locale: nb,
+                                    },
+                                  )
                                 : 'No date set'}
                             </Text>
                           </Flex>

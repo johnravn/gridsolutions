@@ -99,4 +99,3 @@ export type LocalTransportGroup = {
   sort_order: number
   items: Array<LocalTransportItem>
 }
-

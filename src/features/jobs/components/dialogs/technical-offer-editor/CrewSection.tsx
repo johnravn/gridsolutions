@@ -13,12 +13,20 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
-import { Badge, Box, Button, Flex, Heading, Text, TextField } from '@radix-ui/themes'
+import {
+  Badge,
+  Box,
+  Button,
+  Flex,
+  Heading,
+  Text,
+  TextField,
+} from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import type { LocalCrewItem } from './types'
 import { calculateHoursPerDay } from './utils'
 import { SortableCrewCard } from './sortable'
+import type { LocalCrewItem } from './types'
 
 export function CrewSection({
   items,
@@ -941,7 +949,9 @@ export function CrewSection({
                         const movedById = new Map(
                           moved.map((it) => [it.id, it]),
                         )
-                        onItemsChange(items.map((it) => movedById.get(it.id) ?? it))
+                        onItemsChange(
+                          items.map((it) => movedById.get(it.id) ?? it),
+                        )
                       }}
                     >
                       <SortableContext
@@ -993,4 +1003,3 @@ export function CrewSection({
     </Flex>
   )
 }
-

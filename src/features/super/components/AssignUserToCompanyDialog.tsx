@@ -14,7 +14,7 @@ import {
 } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
-import { assignUserToCompany, companyUsersQuery  } from '../api/queries'
+import { assignUserToCompany, companyUsersQuery } from '../api/queries'
 
 type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 

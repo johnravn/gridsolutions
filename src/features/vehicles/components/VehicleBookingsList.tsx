@@ -39,7 +39,8 @@ type BookingEvent = EventInput & {
   }
 }
 
-const GRID_COLUMNS = 'minmax(0, 2fr) minmax(180px, 1.5fr) minmax(90px, auto) minmax(80px, auto)'
+const GRID_COLUMNS =
+  'minmax(0, 2fr) minmax(180px, 1.5fr) minmax(90px, auto) minmax(80px, auto)'
 
 type Props = {
   events: Array<BookingEvent>
@@ -80,8 +81,7 @@ export default function VehicleBookingsList({
     const id = ev.id as string
     const xp = ev.extendedProps
     const jobId = xp?.ref?.jobId
-    const displayTitle =
-      xp?.jobTitle || (ev.title as string) || 'Booking'
+    const displayTitle = xp?.jobTitle || (ev.title as string) || 'Booking'
     const isPersonal = !jobId
     return (
       <div
@@ -106,10 +106,7 @@ export default function VehicleBookingsList({
           {displayTitle}
         </Text>
         <Text size="2" color="gray">
-          {formatRange(
-            ev.start as string,
-            ev.end as string | null | undefined,
-          )}
+          {formatRange(ev.start as string, ev.end as string | null | undefined)}
         </Text>
         <Box>
           {isPersonal ? (

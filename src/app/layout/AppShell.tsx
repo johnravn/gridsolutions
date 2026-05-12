@@ -57,21 +57,6 @@ export default function AppShell() {
     },
   })
 
-  /** In dev, we may force production Conta key via env; or company may have production key configured. */
-  const useProductionContaInDev =
-    import.meta.env.VITE_CONTA_USE_PRODUCTION_IN_DEV === 'true'
-
-  // Only in dev: detect if current company uses production Conta (so real invoices are possible)
-  const { data: accountingEnvironment } = useQuery({
-    queryKey: ['accounting-api-environment', authUser?.id, companyId],
-    enabled: isLocal && !!authUser?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_accounting_api_environment')
-      if (error) return null
-      return typeof data === 'string' ? data : null
-    },
-  })
-
   // Read the active/inactive flag from the same cache as the Expansions tab so
   // toggling activate/deactivate updates the dev badge in real time via the
   // existing query invalidation on ['company', companyId, 'expansion'].
@@ -100,7 +85,8 @@ export default function AppShell() {
   const isProductionContaInDev =
     isLocal &&
     isApiKeyActive &&
-    (useProductionContaInDev || accountingEnvironment === 'production')
+    expansionForDevBadge?.accounting_software === 'conta' &&
+    expansionForDevBadge.accounting_api_environment === 'production'
 
   // Load my profile row
   const { data: myProfile } = useQuery({

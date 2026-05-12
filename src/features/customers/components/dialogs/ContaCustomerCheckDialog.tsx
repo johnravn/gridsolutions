@@ -1,13 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  Spinner,
-  Text,
-} from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex, Spinner, Text } from '@radix-ui/themes'
 import { Download, Plus, Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -111,7 +104,11 @@ export default function ContaCustomerCheckDialog({
     },
     onSuccess: () => {
       qc.invalidateQueries({
-        queryKey: ['conta-customer-check', accountingConfig?.accounting_organization_id, customer.id],
+        queryKey: [
+          'conta-customer-check',
+          accountingConfig?.accounting_organization_id,
+          customer.id,
+        ],
       })
       onCreatedInConta?.()
       success('Created in Conta', 'The customer was created in Conta.')
@@ -260,9 +257,11 @@ export default function ContaCustomerCheckDialog({
                     )}
                     {!canCreateInConta &&
                       !checkResult.error &&
-                      (customer.vat_number?.replace(/\D/g, '').trim().length ?? 0) < 6 && (
+                      (customer.vat_number?.replace(/\D/g, '').trim().length ??
+                        0) < 6 && (
                         <Text size="1" color="gray">
-                          Add an organization number to create the customer in Conta.
+                          Add an organization number to create the customer in
+                          Conta.
                         </Text>
                       )}
                   </Flex>

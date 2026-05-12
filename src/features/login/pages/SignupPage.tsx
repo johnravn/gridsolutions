@@ -380,12 +380,7 @@ export default function SignupPage() {
               {error && <Text color="red">{error}</Text>}
               {info && <Text color="green">{info}</Text>}
 
-              <Button
-                type="submit"
-                size="2"
-                disabled={loading}
-                variant="solid"
-              >
+              <Button type="submit" size="2" disabled={loading} variant="solid">
                 {loading ? 'Creating account…' : 'Create account'}
               </Button>
 

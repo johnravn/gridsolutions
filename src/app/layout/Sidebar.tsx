@@ -126,7 +126,19 @@ export function Sidebar({
               overflow: 'hidden',
             }}
           >
-            <Dialog.Title style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>
+            <Dialog.Title
+              style={{
+                position: 'absolute',
+                width: 1,
+                height: 1,
+                padding: 0,
+                margin: -1,
+                overflow: 'hidden',
+                clip: 'rect(0,0,0,0)',
+                whiteSpace: 'nowrap',
+                border: 0,
+              }}
+            >
               Navigation
             </Dialog.Title>
             <SidebarContent
@@ -291,14 +303,7 @@ function SidebarContent({
       {/* Mobile user panel */}
       {isMobile && (
         <>
-          <Flex
-            align="center"
-            justify="between"
-            pl="5"
-            pr="3"
-            py="3"
-            gap="3"
-          >
+          <Flex align="center" justify="between" pl="5" pr="3" py="3" gap="3">
             <Flex align="center" gap="3" style={{ minWidth: 0, flex: 1 }}>
               <Button
                 variant="ghost"
@@ -500,7 +505,11 @@ function SidebarContent({
               alt="Grid Logo"
               style={{ maxWidth: '70%', height: 'auto', borderRadius: 6 }}
             />
-            <Text size="1" color="gray" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>
+            <Text
+              size="1"
+              color="gray"
+              style={{ fontSize: '10px', letterSpacing: '0.5px' }}
+            >
               v{APP_VERSION}
             </Text>
           </Flex>

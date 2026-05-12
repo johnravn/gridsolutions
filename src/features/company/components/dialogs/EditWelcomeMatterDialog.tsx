@@ -59,7 +59,7 @@ export default function EditWelcomeMatterDialog({
         ? {
             id: data.id,
             title: data.title,
-            content: (data.content) ?? '',
+            content: data.content ?? '',
           }
         : null
     },

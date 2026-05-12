@@ -47,13 +47,25 @@ export type ResendSendResult =
  */
 export async function sendResendHtmlEmail(params: {
   apiKey: string
-  to: string[]
+  to: Array<string>
   subject: string
   html: string
+  /** Plain-text alternative for multipart emails. */
+  text?: string
   fromDisplayName?: string | null
 }): Promise<ResendSendResult> {
   const fromEmail = getDefaultFromEmail()
   const fromName = params.fromDisplayName ?? getDefaultFromName()
+
+  const payload: Record<string, unknown> = {
+    from: formatFromHeader(fromName, fromEmail),
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+  }
+  if (params.text?.trim()) {
+    payload.text = params.text.trim()
+  }
 
   const res = await fetch(RESEND_API_URL, {
     method: 'POST',
@@ -62,12 +74,7 @@ export async function sendResendHtmlEmail(params: {
       Authorization: `Bearer ${params.apiKey}`,
       'User-Agent': 'Grid-App/1.0',
     },
-    body: JSON.stringify({
-      from: formatFromHeader(fromName, fromEmail),
-      to: params.to,
-      subject: params.subject,
-      html: params.html,
-    }),
+    body: JSON.stringify(payload),
   })
 
   const bodyText = await res.text()
@@ -82,7 +89,11 @@ export async function sendResendHtmlEmail(params: {
     // non-JSON success body — ignore
   }
   const messageId =
-    raw && typeof raw === 'object' && raw !== null && 'id' in raw && typeof (raw as { id: unknown }).id === 'string'
+    raw &&
+    typeof raw === 'object' &&
+    raw !== null &&
+    'id' in raw &&
+    typeof (raw as { id: unknown }).id === 'string'
       ? (raw as { id: string }).id
       : null
 

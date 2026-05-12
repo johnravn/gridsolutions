@@ -64,8 +64,14 @@ function showCurrent() {
     log('Current: Unknown configuration', 'yellow')
   }
   log('', 'reset')
-  log('Note: The app badge (bottom left) uses env from when the dev server started.', 'yellow')
-  log('If the badge and status disagree, restart the dev server: npm run dev', 'yellow')
+  log(
+    'Note: The app badge (bottom left) uses env from when the dev server started.',
+    'yellow',
+  )
+  log(
+    'If the badge and status disagree, restart the dev server: npm run dev',
+    'yellow',
+  )
 }
 
 function switchToLocal() {
@@ -148,10 +154,15 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
   )
   const supabaseVars = getSupabaseLines(remoteConfig)
   if (supabaseVars.length === 0) {
-    log(`No Supabase vars found in ${REMOTE_ENV}. Add at least VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.`, 'yellow')
+    log(
+      `No Supabase vars found in ${REMOTE_ENV}. Add at least VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.`,
+      'yellow',
+    )
     return
   }
-  const hasUrl = supabaseVars.some((line) => line.startsWith('VITE_SUPABASE_URL='))
+  const hasUrl = supabaseVars.some((line) =>
+    line.startsWith('VITE_SUPABASE_URL='),
+  )
   if (!hasUrl) {
     log('Warning: VITE_SUPABASE_URL not found in remote config.', 'yellow')
   }

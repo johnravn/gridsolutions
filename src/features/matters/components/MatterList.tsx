@@ -25,8 +25,18 @@ import { mattersIndexQueryAll } from '../api/queries'
 import type { Matter, MatterType } from '../types'
 
 const MONTH_SHORT = [
-  'jan', 'feb', 'mar', 'apr', 'mai', 'jun',
-  'jul', 'aug', 'sep', 'okt', 'nov', 'des',
+  'jan',
+  'feb',
+  'mar',
+  'apr',
+  'mai',
+  'jun',
+  'jul',
+  'aug',
+  'sep',
+  'okt',
+  'nov',
+  'des',
 ]
 
 function formatMatterDate(dateInput: string | Date): string {
@@ -60,16 +70,14 @@ export default function MatterList({
   selectedId: string | null
   onSelect: (id: string | null) => void
   unreadFilter: boolean
-  companyFilter: string[]
-  typeFilter: MatterType[]
+  companyFilter: Array<string>
+  typeFilter: Array<MatterType>
   companies: Array<{ id: string; name: string }>
   onCreateMatter?: () => void
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
   const canCreateAnnouncement =
-    companyRole === 'owner' ||
-    companyRole === 'employee' ||
-    isGlobalSuperuser
+    companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('created')
@@ -221,7 +229,10 @@ export default function MatterList({
     }
     const v = variants[type] ?? variants.announcement
     return (
-      <Badge radius="full" color={v.color as 'blue' | 'purple' | 'gray' | 'green' | 'amber'}>
+      <Badge
+        radius="full"
+        color={v.color as 'blue' | 'purple' | 'gray' | 'green' | 'amber'}
+      >
         {v.label}
       </Badge>
     )
@@ -251,7 +262,9 @@ export default function MatterList({
         align="center"
         wrap="wrap"
         mb="2"
-        direction={isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'}
+        direction={
+          isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'
+        }
         justify={isMobile ? 'start' : 'between'}
       >
         <TextField.Root
@@ -305,7 +318,14 @@ export default function MatterList({
           overflowY: 'hidden',
         }}
       >
-        <div style={{ minWidth: 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div
+          style={{
+            minWidth: 'max-content',
+            display: 'flex',
+            flexDirection: 'column',
+            height: '100%',
+          }}
+        >
           {/* Table header */}
           <div
             style={{
@@ -319,28 +339,28 @@ export default function MatterList({
             }}
           >
             {SORTABLE_COLUMNS.map((col) => {
-          const isActive = sortBy === col.id
-          const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
-          return (
-            <div
-              key={col.id}
-              onClick={() => handleSort(col.id)}
-              style={{
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                userSelect: 'none',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 'var(--space-1)',
-              }}
-              title="Click to sort"
-            >
-              {col.header}
-              {arrow}
-            </div>
-          )
-        })}
+              const isActive = sortBy === col.id
+              const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+              return (
+                <div
+                  key={col.id}
+                  onClick={() => handleSort(col.id)}
+                  style={{
+                    fontSize: 'var(--font-size-1)',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    userSelect: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-1)',
+                  }}
+                  title="Click to sort"
+                >
+                  {col.header}
+                  {arrow}
+                </div>
+              )
+            })}
             <div /> {/* Spacer for unread-dot column */}
           </div>
 
@@ -354,157 +374,158 @@ export default function MatterList({
               marginTop: 8,
             }}
           >
-        {rows.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              {allMatters.length === 0
-                ? 'No matters yet'
-                : 'No matters match your filters'}
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const matter = rows[virtualRow.index]
-              const isSelected = matter.id === selectedId
+            {rows.length === 0 ? (
+              <Flex align="center" justify="center" py="6">
+                <Text size="2" color="gray">
+                  {allMatters.length === 0
+                    ? 'No matters yet'
+                    : 'No matters match your filters'}
+                </Text>
+              </Flex>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const matter = rows[virtualRow.index]
+                  const isSelected = matter.id === selectedId
 
-              return (
-                <div
-                  key={matter.id}
-                  data-index={virtualRow.index}
-                  onClick={() => onSelect(matter.id)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    display: 'grid',
-                    gridTemplateColumns: GRID_COLUMNS,
-                    gap: 'var(--space-2)',
-                    alignItems: 'center',
-                    padding: '0 var(--space-3)',
-                    cursor: 'pointer',
-                    backgroundColor: isSelected
-                      ? 'var(--accent-a3)'
-                      : matter.is_unread
-                        ? 'var(--blue-a2)'
-                        : 'transparent',
-                    borderRadius: 'var(--radius-2)',
-                    boxShadow: matter.is_unread && !isSelected
-                      ? 'inset 3px 0 0 0 var(--blue-9)'
-                      : undefined,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = matter.is_unread
-                        ? 'var(--blue-a2)'
-                        : 'transparent'
-                    }
-                  }}
-                >
-                  <Flex align="center" gap="2">
-                    {getTypeBadge(matter.matter_type)}
-                  </Flex>
+                  return (
+                    <div
+                      key={matter.id}
+                      data-index={virtualRow.index}
+                      onClick={() => onSelect(matter.id)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: 'grid',
+                        gridTemplateColumns: GRID_COLUMNS,
+                        gap: 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: '0 var(--space-3)',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected
+                          ? 'var(--accent-a3)'
+                          : matter.is_unread
+                            ? 'var(--blue-a2)'
+                            : 'transparent',
+                        borderRadius: 'var(--radius-2)',
+                        boxShadow:
+                          matter.is_unread && !isSelected
+                            ? 'inset 3px 0 0 0 var(--blue-9)'
+                            : undefined,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor =
+                            'var(--gray-a2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor =
+                            matter.is_unread ? 'var(--blue-a2)' : 'transparent'
+                        }
+                      }}
+                    >
+                      <Flex align="center" gap="2">
+                        {getTypeBadge(matter.matter_type)}
+                      </Flex>
 
-                  <Box style={{ minWidth: 0 }}>
-                    <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                      {matter.is_unread && (
-                        <Box
-                          aria-hidden
-                          style={{
-                            width: 8,
-                            height: 8,
-                            borderRadius: '50%',
-                            backgroundColor: 'var(--blue-9)',
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <Tooltip content={matter.title} delayDuration={300}>
-                        <Box
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                            flex: 1,
-                          }}
-                        >
+                      <Box style={{ minWidth: 0 }}>
+                        <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                          {matter.is_unread && (
+                            <Box
+                              aria-hidden
+                              style={{
+                                width: 8,
+                                height: 8,
+                                borderRadius: '50%',
+                                backgroundColor: 'var(--blue-9)',
+                                flexShrink: 0,
+                              }}
+                            />
+                          )}
+                          <Tooltip content={matter.title} delayDuration={300}>
+                            <Box
+                              style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                minWidth: 0,
+                                flex: 1,
+                              }}
+                            >
+                              <Text
+                                weight={
+                                  isSelected || matter.is_unread
+                                    ? 'bold'
+                                    : 'medium'
+                                }
+                                size="2"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {matter.title}
+                              </Text>
+                            </Box>
+                          </Tooltip>
+                        </Flex>
+                        {matter.job && (
                           <Text
-                            weight={
-                              isSelected || matter.is_unread
-                                ? 'bold'
-                                : 'medium'
-                            }
-                            size="2"
+                            size="1"
+                            color="gray"
                             style={{
+                              display: 'block',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
                               whiteSpace: 'nowrap',
                             }}
                           >
-                            {matter.title}
+                            Job: {matter.job.title}
                           </Text>
-                        </Box>
-                      </Tooltip>
-                    </Flex>
-                    {matter.job && (
-                      <Text
-                        size="1"
-                        color="gray"
-                        style={{
-                          display: 'block',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        Job: {matter.job.title}
-                      </Text>
-                    )}
-                  </Box>
+                        )}
+                      </Box>
 
-                  <Text size="2" color="gray">
-                    {formatMatterDate(matter.created_at)}
-                  </Text>
-
-                  <Box>
-                    {getResponseIcon(matter) || (
                       <Text size="2" color="gray">
-                        —
+                        {formatMatterDate(matter.created_at)}
                       </Text>
-                    )}
-                  </Box>
 
-                  <Text size="2" color="gray">
-                    {matter.company?.name || '—'}
-                  </Text>
+                      <Box>
+                        {getResponseIcon(matter) || (
+                          <Text size="2" color="gray">
+                            —
+                          </Text>
+                        )}
+                      </Box>
 
-                  <Flex align="center" justify="end">
-                    {matter.is_unread && (
-                      <Text size="1" color="blue" weight="medium">
-                        New
+                      <Text size="2" color="gray">
+                        {matter.company?.name || '—'}
                       </Text>
-                    )}
-                  </Flex>
-                </div>
-              )
-            }        )}
-          </div>
-        )}
+
+                      <Flex align="center" justify="end">
+                        {matter.is_unread && (
+                          <Text size="1" color="blue" weight="medium">
+                            New
+                          </Text>
+                        )}
+                      </Flex>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

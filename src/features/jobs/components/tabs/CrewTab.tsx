@@ -648,15 +648,34 @@ export default function CrewTab({
                     }}
                     onClick={() => toggleRole(role.id)}
                   >
-                    <Flex align="center" gap="2" style={{ minWidth: 0, flex: '1 1 auto' }}>
+                    <Flex
+                      align="center"
+                      gap="2"
+                      style={{ minWidth: 0, flex: '1 1 auto' }}
+                    >
                       {isExpanded ? (
-                        <NavArrowDown width={18} height={18} style={{ flexShrink: 0 }} />
+                        <NavArrowDown
+                          width={18}
+                          height={18}
+                          style={{ flexShrink: 0 }}
+                        />
                       ) : (
-                        <NavArrowRight width={18} height={18} style={{ flexShrink: 0 }} />
+                        <NavArrowRight
+                          width={18}
+                          height={18}
+                          style={{ flexShrink: 0 }}
+                        />
                       )}
                       <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
                         <Flex align="center" gap="2" wrap="wrap">
-                          <Text weight="bold" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Text
+                            weight="bold"
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
                             {role.title ?? '—'}
                           </Text>
                           {role.role_category && (
@@ -664,20 +683,35 @@ export default function CrewTab({
                               size="1"
                               variant="outline"
                               color={getCategoryColor(role.role_category)}
-                              style={{ textTransform: 'capitalize', flexShrink: 0 }}
+                              style={{
+                                textTransform: 'capitalize',
+                                flexShrink: 0,
+                              }}
                             >
                               {role.role_category}
                             </Badge>
                           )}
                         </Flex>
-                        <Text size="2" color="gray" style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <Text
+                          size="2"
+                          color="gray"
+                          style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
                           {role.start_at && role.end_at
                             ? `${formatDateTime(role.start_at)} - ${formatDateTime(role.end_at)}`
                             : '—'}
                         </Text>
                       </Flex>
                     </Flex>
-                    <Flex direction="column" align="end" gap="2" style={{ flexShrink: 0 }}>
+                    <Flex
+                      direction="column"
+                      align="end"
+                      gap="2"
+                      style={{ flexShrink: 0 }}
+                    >
                       <Badge
                         radius="full"
                         highContrast
@@ -819,7 +853,9 @@ export default function CrewTab({
                                         <Text>{crewName}</Text>
                                         {internalNote && (
                                           <Text as="div" size="1" color="gray">
-                                            <Text weight="medium">Internal:</Text>{' '}
+                                            <Text weight="medium">
+                                              Internal:
+                                            </Text>{' '}
                                             {internalNote}
                                           </Text>
                                         )}
@@ -859,7 +895,9 @@ export default function CrewTab({
                                             )
                                           }
                                         >
-                                          <Select.Trigger style={{ minWidth: 100 }} />
+                                          <Select.Trigger
+                                            style={{ minWidth: 100 }}
+                                          />
                                           <Select.Content>
                                             <Select.Item value="planned">
                                               Planned

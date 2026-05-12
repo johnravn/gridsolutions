@@ -111,16 +111,14 @@ export async function setCrewInternalNote({
     return
   }
 
-  const { error } = await supabase
-    .from('company_user_internal_notes')
-    .upsert(
-      {
-        company_id: companyId,
-        user_id: userId,
-        note: trimmed,
-      },
-      { onConflict: 'company_id,user_id' },
-    )
+  const { error } = await supabase.from('company_user_internal_notes').upsert(
+    {
+      company_id: companyId,
+      user_id: userId,
+      note: trimmed,
+    },
+    { onConflict: 'company_id,user_id' },
+  )
 
   if (error) throw error
 }
@@ -221,7 +219,8 @@ export function crewDetailQuery({
           | 'rate_updated_at'
         >),
         bio: prof?.bio ?? null,
-        preferences: (prof?.preferences as unknown as CrewOptionalFields | null) ?? null,
+        preferences:
+          (prof?.preferences as unknown as CrewOptionalFields | null) ?? null,
         locale: prof?.locale ?? null,
         timezone: prof?.timezone ?? null,
         superuser: prof?.superuser ?? false,

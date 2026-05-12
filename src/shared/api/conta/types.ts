@@ -2062,7 +2062,9 @@ export interface components {
         emailAddresses?: Array<string>
         kraviaInvoiceStatus?: components['schemas']['enumKraviaInvoiceStatusEnum']
         /** @description An array with all the actions that's allowed for the invoice. */
-        allowedActions?: Array<components['schemas']['enumInvoiceActionTypeConst']>
+        allowedActions?: Array<
+          components['schemas']['enumInvoiceActionTypeConst']
+        >
       }>
       /** @description Flag indicating if there are paid invoices for the same period. */
       hasPaidInvoices?: boolean
@@ -5987,9 +5989,15 @@ export interface components {
        */
       messages: Array<components['schemas']['enumLanguageEnum']>
     }
-    arrayOfEnumBookkeepingAccountCategoryConst: Array<components['schemas']['enumBookkeepingAccountCategoryConst']>
-    arrayOfEnumDeliveryMethodTypeEnum: Array<components['schemas']['enumDeliveryMethodTypeEnum']>
-    arrayOfEnumKraviaInvoiceStatusEnum: Array<components['schemas']['enumKraviaInvoiceStatusEnum']>
+    arrayOfEnumBookkeepingAccountCategoryConst: Array<
+      components['schemas']['enumBookkeepingAccountCategoryConst']
+    >
+    arrayOfEnumDeliveryMethodTypeEnum: Array<
+      components['schemas']['enumDeliveryMethodTypeEnum']
+    >
+    arrayOfEnumKraviaInvoiceStatusEnum: Array<
+      components['schemas']['enumKraviaInvoiceStatusEnum']
+    >
     arrayOfFileMetaData: Array<components['schemas']['FileMetaData']>
     atLeastOneLineShouldBeInTheSameYearAsTransactionException: components['schemas']['errorResponseCustom'] & {
       /** @description Properties related to the exception */

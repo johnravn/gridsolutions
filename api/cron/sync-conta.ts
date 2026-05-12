@@ -5,13 +5,14 @@
  * Header: Authorization: Bearer <CRON_SECRET>
  */
 import { createClient } from '@supabase/supabase-js'
-import type { Database } from '../../src/shared/types/database.types'
 import { syncCustomersWithConta } from '../../src/features/customers/api/contaCustomerSync'
+import type { Database } from '../../src/shared/types/database.types'
 
 const contaBaseUrl =
   process.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
 const contaSandboxUrl =
-  process.env.VITE_CONTA_API_URL_SANDBOX || 'https://api.gateway.conta-sandbox.no'
+  process.env.VITE_CONTA_API_URL_SANDBOX ||
+  'https://api.gateway.conta-sandbox.no'
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -33,8 +34,7 @@ export default async function handler(req: any, res: any) {
     return
   }
 
-  const supabaseUrl =
-    process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceRoleKey) {
     res.status(500).json({ error: 'Missing Supabase config' })
@@ -47,7 +47,9 @@ export default async function handler(req: any, res: any) {
 
   const { data: companies } = await supabase
     .from('company_expansions')
-    .select('company_id, accounting_organization_id, accounting_api_environment')
+    .select(
+      'company_id, accounting_organization_id, accounting_api_environment',
+    )
     .not('accounting_organization_id', 'is', null)
     .eq('accounting_software', 'conta')
 
@@ -56,7 +58,7 @@ export default async function handler(req: any, res: any) {
     updated: number
     created: number
     skipped: number
-    errors: string[]
+    errors: Array<string>
   }> = []
 
   for (const row of companies ?? []) {

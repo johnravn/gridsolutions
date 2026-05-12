@@ -127,7 +127,9 @@ export function notificationPreferencesQuery({
   })
 }
 
-export async function markNotificationRead(notificationId: string): Promise<void> {
+export async function markNotificationRead(
+  notificationId: string,
+): Promise<void> {
   const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
@@ -139,7 +141,7 @@ export async function markNotificationRead(notificationId: string): Promise<void
 export async function markNotificationReadByEntity(
   userId: string,
   entityType: string,
-  entityId: string
+  entityId: string,
 ): Promise<void> {
   const { error } = await supabase
     .from('notifications')
@@ -153,7 +155,7 @@ export async function markNotificationReadByEntity(
 
 export async function markAllNotificationsRead(
   userId: string,
-  companyId: string | null
+  companyId: string | null,
 ): Promise<void> {
   let q = supabase
     .from('notifications')
@@ -170,8 +172,8 @@ export async function markAllNotificationsRead(
 /** Get entity_ids of unread notifications with entity_type='matter' (for syncing matter_recipients.viewed_at). */
 export async function getUnreadMatterEntityIds(
   userId: string,
-  companyId: string | null
-): Promise<string[]> {
+  companyId: string | null,
+): Promise<Array<string>> {
   let q = supabase
     .from('notifications')
     .select('entity_id')
@@ -185,23 +187,21 @@ export async function getUnreadMatterEntityIds(
   const { data, error } = await q
   if (error) throw error
   const ids = [...new Set((data ?? []).map((r) => r.entity_id).filter(Boolean))]
-  return ids as string[]
+  return ids as Array<string>
 }
 
-export async function upsertNotificationPreferences(
-  payload: {
-    user_id: string
-    company_id: string
-    email_offer_updates?: boolean
-    email_crew_invites?: boolean
-    email_matter_replies?: boolean
-    email_reminders?: boolean
-    email_announcements?: boolean
-    email_matter_announcements?: boolean
-    email_matter_updates?: boolean
-    email_matter_invites?: boolean
-  }
-): Promise<void> {
+export async function upsertNotificationPreferences(payload: {
+  user_id: string
+  company_id: string
+  email_offer_updates?: boolean
+  email_crew_invites?: boolean
+  email_matter_replies?: boolean
+  email_reminders?: boolean
+  email_announcements?: boolean
+  email_matter_announcements?: boolean
+  email_matter_updates?: boolean
+  email_matter_invites?: boolean
+}): Promise<void> {
   const { error } = await supabase.from('notification_preferences').upsert(
     {
       user_id: payload.user_id,
@@ -215,7 +215,7 @@ export async function upsertNotificationPreferences(
       email_matter_updates: payload.email_matter_updates ?? true,
       email_matter_invites: payload.email_matter_invites ?? true,
     },
-    { onConflict: 'user_id,company_id' }
+    { onConflict: 'user_id,company_id' },
   )
   if (error) throw error
 }
@@ -234,7 +234,7 @@ export type CreateNotificationPayload = {
 }
 
 export async function createNotification(
-  payload: CreateNotificationPayload
+  payload: CreateNotificationPayload,
 ): Promise<string> {
   const {
     data: { user },
@@ -268,7 +268,7 @@ export async function createNotification(
  */
 export async function createNotificationAndSendEmail(
   payload: CreateNotificationPayload,
-  options?: { forceEmail?: boolean }
+  options?: { forceEmail?: boolean },
 ): Promise<string> {
   return createNotification({
     ...payload,

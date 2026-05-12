@@ -24,19 +24,11 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import {
-  NavArrowDown,
-  NavArrowUp,
-  Plus,
-  Trash,
-} from 'iconoir-react'
+import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import type { LocalTransportGroup, LocalTransportItem } from './types'
 import { formatVehicleCategory } from './utils'
-import {
-  SortableEquipmentGroupCard,
-  SortableEquipmentRow,
-} from './sortable'
+import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
+import type { LocalTransportGroup, LocalTransportItem } from './types'
 
 export function TransportSection({
   groups,
@@ -445,10 +437,16 @@ export function TransportSection({
                                           <Select.Item value="van_big">
                                             Van - Big
                                           </Select.Item>
-                                          <Select.Item value="C1">C1</Select.Item>
-                                          <Select.Item value="C1E">C1E</Select.Item>
+                                          <Select.Item value="C1">
+                                            C1
+                                          </Select.Item>
+                                          <Select.Item value="C1E">
+                                            C1E
+                                          </Select.Item>
                                           <Select.Item value="C">C</Select.Item>
-                                          <Select.Item value="CE">CE</Select.Item>
+                                          <Select.Item value="CE">
+                                            CE
+                                          </Select.Item>
                                         </Select.Content>
                                       </Select.Root>
                                     )}
@@ -1071,4 +1069,3 @@ export function TransportSection({
     </Flex>
   )
 }
-

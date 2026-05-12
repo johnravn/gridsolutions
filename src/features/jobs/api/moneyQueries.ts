@@ -40,9 +40,9 @@ export type JobMoneyItemUpdate = {
 }
 
 export function jobMoneyItemsQuery(jobId: string) {
-  return queryOptions<JobMoneyItem[]>({
+  return queryOptions<Array<JobMoneyItem>>({
     queryKey: ['jobs', jobId, 'money-items'],
-    queryFn: async (): Promise<JobMoneyItem[]> => {
+    queryFn: async (): Promise<Array<JobMoneyItem>> => {
       const { data, error } = await supabase
         .from('job_money_items')
         .select('*')
@@ -51,7 +51,7 @@ export function jobMoneyItemsQuery(jobId: string) {
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      return (data ?? []) as JobMoneyItem[]
+      return (data ?? []) as Array<JobMoneyItem>
     },
   })
 }

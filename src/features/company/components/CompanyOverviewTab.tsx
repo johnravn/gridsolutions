@@ -30,9 +30,7 @@ export default function CompanyOverviewTab() {
   const { companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
   const canSendCompanyAnnouncement =
-    companyRole === 'owner' ||
-    companyRole === 'employee' ||
-    isGlobalSuperuser
+    companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser
   const [editOpen, setEditOpen] = React.useState(false)
   const [announcementOpen, setAnnouncementOpen] = React.useState(false)
   const [logoExpanded, setLogoExpanded] = React.useState(false)

@@ -287,6 +287,7 @@ export type Database = {
           logo_light_path: string | null
           logo_path: string | null
           name: string
+          offer_number_counter: number
           owner_daily_rate: number | null
           owner_hourly_rate: number | null
           terms_and_conditions_pdf_path: string | null
@@ -312,6 +313,7 @@ export type Database = {
           logo_light_path?: string | null
           logo_path?: string | null
           name: string
+          offer_number_counter?: number
           owner_daily_rate?: number | null
           owner_hourly_rate?: number | null
           terms_and_conditions_pdf_path?: string | null
@@ -337,6 +339,7 @@ export type Database = {
           logo_light_path?: string | null
           logo_path?: string | null
           name?: string
+          offer_number_counter?: number
           owner_daily_rate?: number | null
           owner_hourly_rate?: number | null
           terms_and_conditions_pdf_path?: string | null
@@ -1497,6 +1500,7 @@ export type Database = {
           job_id: string
           locked: boolean
           offer_type: Database["public"]["Enums"]["offer_type"]
+          offernr: number | null
           rejected_at: string | null
           rejected_by_name: string | null
           rejected_by_phone: string | null
@@ -1542,6 +1546,7 @@ export type Database = {
           job_id: string
           locked?: boolean
           offer_type: Database["public"]["Enums"]["offer_type"]
+          offernr?: number | null
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null
@@ -1587,6 +1592,7 @@ export type Database = {
           job_id?: string
           locked?: boolean
           offer_type?: Database["public"]["Enums"]["offer_type"]
+          offernr?: number | null
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null

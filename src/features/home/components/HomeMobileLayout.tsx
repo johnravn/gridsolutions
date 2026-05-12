@@ -1,25 +1,33 @@
 import { Box, Flex } from '@radix-ui/themes'
 import { ConflictsSection } from '@features/conflicts/components/ConflictsSection'
+import { CompanyJobsWeekSection } from './CompanyJobsWeekSection'
 import { DailyInspirationSection } from './DailyInspirationSection'
-import { LatestSection } from './LatestSection'
+import { JobsReadyToInvoiceSection } from './JobsReadyToInvoiceSection'
 import { MattersSection } from './MattersSection'
 import { UpcomingJobsSection } from './UpcomingJobsSection'
 import type {
   CrewConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { ActivityFeedItem } from '@features/latest/types'
-import type { HomeMatter, UpcomingJob } from '../types'
+import type { JobListRow } from '@features/jobs/types'
+import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
+import type { CompanyJobsWeekOffset } from '../api/companyJobsWeekQuery'
+import type { HomeJobReadyToInvoice, HomeMatter, UpcomingJob } from '../types'
 import type { HomeDashboardLayoutPreferences } from '../api/profileHomeLayoutQuery'
 
 type HomeMobileLayoutProps = {
   userId: string | null
-  canSeeLatest: boolean
-  latestActivities: Array<ActivityFeedItem>
-  latestLoading: boolean
-  onLatestClick: (activityId: string) => void
+  canVisitJobs: boolean
+  companyWeekJobs: Array<JobListRow>
+  companyWeekJobsLoading: boolean
+  companyWeekBookingSummaries: Record<string, WeekJobBookingSummary>
+  companyWeekBookingsDetailLoading: boolean
+  jobsWeekOffset: CompanyJobsWeekOffset
+  onJobsWeekOffsetChange: (offset: CompanyJobsWeekOffset) => void
   unreadMatters: Array<HomeMatter>
   mattersLoading: boolean
+  jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
+  jobsReadyToInvoiceLoading: boolean
   upcomingJobs: Array<UpcomingJob>
   upcomingJobsLoading: boolean
   showMyJobsOnly: boolean
@@ -37,12 +45,17 @@ type HomeMobileLayoutProps = {
 
 export function HomeMobileLayout({
   userId,
-  canSeeLatest,
-  latestActivities,
-  latestLoading,
-  onLatestClick,
+  canVisitJobs,
+  companyWeekJobs,
+  companyWeekJobsLoading,
+  companyWeekBookingSummaries,
+  companyWeekBookingsDetailLoading,
+  jobsWeekOffset,
+  onJobsWeekOffsetChange,
   unreadMatters,
   mattersLoading,
+  jobsReadyToInvoice,
+  jobsReadyToInvoiceLoading,
   upcomingJobs,
   upcomingJobsLoading,
   showMyJobsOnly,
@@ -72,7 +85,17 @@ export function HomeMobileLayout({
             <DailyInspirationSection userId={userId} />
           </Box>
         )}
-        {canSeeLatest && homeLayout.showLatest && (
+        {homeLayout.showMatters && unreadMatters.length > 0 && (
+          <Box style={{ minHeight: 0 }}>
+            <MattersSection
+              matters={unreadMatters}
+              loading={mattersLoading}
+              getInitials={getInitials}
+              getAvatarUrl={getAvatarUrl}
+            />
+          </Box>
+        )}
+        {canVisitJobs && homeLayout.showLatest && (
           <Box
             style={{
               height: '60vh',
@@ -85,36 +108,37 @@ export function HomeMobileLayout({
             }}
           >
             <Box style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <LatestSection
-              activities={latestActivities}
-              loading={latestLoading}
-              onActivityClick={onLatestClick}
-              getInitials={getInitials}
-              getAvatarUrl={getAvatarUrl}
-            />
+              <CompanyJobsWeekSection
+                jobs={companyWeekJobs}
+                loading={companyWeekJobsLoading}
+                weekOffset={jobsWeekOffset}
+                onWeekOffsetChange={onJobsWeekOffsetChange}
+                getInitials={getInitials}
+                getAvatarUrl={getAvatarUrl}
+                bookingSummaries={companyWeekBookingSummaries}
+                bookingsDetailLoading={companyWeekBookingsDetailLoading}
+              />
             </Box>
           </Box>
         )}
-        {homeLayout.showMatters && unreadMatters.length > 0 && (
+        {jobsReadyToInvoice.length > 0 && (
           <Box style={{ minHeight: 0 }}>
-            <MattersSection
-              matters={unreadMatters}
-              loading={mattersLoading}
-              getInitials={getInitials}
-              getAvatarUrl={getAvatarUrl}
+            <JobsReadyToInvoiceSection
+              jobs={jobsReadyToInvoice}
+              loading={jobsReadyToInvoiceLoading}
             />
           </Box>
         )}
         {homeLayout.showConflicts &&
           (crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
-          <Box style={{ minHeight: 0 }}>
-            <ConflictsSection
-              crewConflicts={crewConflicts}
-              vehicleConflicts={vehicleConflicts}
-              loading={conflictsLoading}
-            />
-          </Box>
-        )}
+            <Box style={{ minHeight: 0 }}>
+              <ConflictsSection
+                crewConflicts={crewConflicts}
+                vehicleConflicts={vehicleConflicts}
+                loading={conflictsLoading}
+              />
+            </Box>
+          )}
         {homeLayout.showUpcomingJobs && (
           <Box style={{ height: '70dvh', flexShrink: 0 }}>
             <UpcomingJobsSection

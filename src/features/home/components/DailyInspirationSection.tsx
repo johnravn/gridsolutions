@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { normalizeDailyInspirationType } from '../utils/dailyInspiration'
 import { BibleVerseSection } from './BibleVerseSection'
 import { QuoteSection } from './QuoteSection'
-import { normalizeDailyInspirationType } from '../utils/dailyInspiration'
 
 export function DailyInspirationSection({ userId }: { userId: string | null }) {
   const { data: inspirationType } = useQuery({

@@ -15,10 +15,10 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import {
+  CloudSync,
   Edit,
   NavArrowDown,
   NavArrowRight,
-  Refresh,
   Trash,
 } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
@@ -307,14 +307,6 @@ export default function CustomerInspector({
           </Button>
           <Button
             size="2"
-            variant="soft"
-            onClick={() => setContaCheckOpen(true)}
-            title="Check if customer exists in Conta"
-          >
-            <Refresh />
-          </Button>
-          <Button
-            size="2"
             variant="surface"
             color="red"
             onClick={() => setDeleteCustomerOpen(true)}
@@ -325,6 +317,174 @@ export default function CustomerInspector({
       </Flex>
 
       <Separator my="3" />
+
+      {/* Conta — high in the inspector when the company uses Conta */}
+      {accountingConfig?.accounting_software === 'conta' &&
+        accountingConfig.accounting_organization_id && (
+          <>
+            <Box mb="4">
+              <Flex align="center" gap="2" mb="2" wrap="wrap">
+                <Text as="div" size="2" weight="medium">
+                  Conta
+                </Text>
+                {c.conta_customer_id != null ? (
+                  <Tooltip content="Synced with Conta">
+                    <Badge variant="soft" color="green" size="1">
+                      Linked
+                    </Badge>
+                  </Tooltip>
+                ) : (
+                  <Tooltip content="This customer is not yet linked to a Conta contact">
+                    <Badge variant="soft" color="amber" size="1">
+                      Not linked
+                    </Badge>
+                  </Tooltip>
+                )}
+              </Flex>
+              <Text size="1" color="gray" as="p" mb="2">
+                Look up this customer in Conta using their organization number.
+                You can link an existing Conta contact to pull in read-only
+                billing figures, create a new customer in Conta from Subb, or
+                refresh data after changes in Conta.
+              </Text>
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => setContaCheckOpen(true)}
+              >
+                <Flex align="center" gap="2">
+                  <CloudSync width={18} height={18} />
+                  Look up in Conta
+                </Flex>
+              </Button>
+              {c.conta_customer_id != null ? (
+                <Text size="1" color="gray" as="p" mt="2" mb="0">
+                  The fields below are synced from Conta. Edit them in Conta
+                  only.
+                </Text>
+              ) : (
+                <Text size="1" color="gray" as="p" mt="2" mb="0">
+                  To sync many customers at once, use the customer list.
+                </Text>
+              )}
+              <Flex direction="column" gap="2" wrap="wrap" mt="3">
+                {c.conta_customer_id != null && (
+                  <Tooltip content="Edit in Conta only">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Conta ID:
+                      </Text>
+                      <Text size="2">{c.conta_customer_id}</Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_customer_id != null &&
+                  (c.conta_days_until_payment_reminder != null ||
+                    companyExpansion?.default_invoice_days_until_due !=
+                      null) && (
+                    <Tooltip content="Standard payment terms: days from invoice date to due date. Edit in Conta only.">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Standard invoice due (days):
+                        </Text>
+                        <Text size="2">
+                          {(c.conta_days_until_payment_reminder ??
+                            companyExpansion?.default_invoice_days_until_due) !=
+                          null
+                            ? `${c.conta_days_until_payment_reminder ?? companyExpansion?.default_invoice_days_until_due} days`
+                            : '—'}
+                        </Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                {c.conta_days_until_estimate_overdue != null && (
+                  <Tooltip content="Edit in Conta only">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Days until estimate overdue:
+                      </Text>
+                      <Text size="2">
+                        {c.conta_days_until_estimate_overdue} days
+                      </Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_invoice_delivery_method != null && (
+                  <Tooltip content="Edit in Conta only">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Invoice delivery:
+                      </Text>
+                      <Text size="2">{c.conta_invoice_delivery_method}</Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_invoice_count != null && (
+                  <Tooltip content="Synced from Conta">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Invoices sent:
+                      </Text>
+                      <Text size="2">{c.conta_invoice_count}</Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_total_invoiced != null && (
+                  <Tooltip content="Synced from Conta">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Total invoiced:
+                      </Text>
+                      <Text size="2">
+                        {new Intl.NumberFormat('nb-NO', {
+                          style: 'currency',
+                          currency: 'NOK',
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        }).format(Number(c.conta_total_invoiced))}
+                      </Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_total_unpaid != null && (
+                  <Tooltip content="Synced from Conta">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Total not paid:
+                      </Text>
+                      <Text
+                        size="2"
+                        color={
+                          Number(c.conta_total_unpaid) > 0 ? 'red' : undefined
+                        }
+                      >
+                        {new Intl.NumberFormat('nb-NO', {
+                          style: 'currency',
+                          currency: 'NOK',
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 0,
+                        }).format(Number(c.conta_total_unpaid))}
+                      </Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+                {c.conta_last_synced_at != null && (
+                  <Tooltip content="Synced from Conta">
+                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                      <Text size="1" color="gray">
+                        Last synced:
+                      </Text>
+                      <Text size="2">
+                        {formatContaDate(c.conta_last_synced_at)}
+                      </Text>
+                    </Flex>
+                  </Tooltip>
+                )}
+              </Flex>
+            </Box>
+            <Separator my="3" />
+          </>
+        )}
 
       {/* Logo Upload */}
       <Box mb="4">
@@ -431,134 +591,6 @@ export default function CustomerInspector({
           </Flex>
         </Flex>
       </Box>
-
-      {/* Conta — show when company uses Conta */}
-      {accountingConfig?.accounting_software === 'conta' &&
-        accountingConfig.accounting_organization_id && (
-        <>
-          <Separator my="3" />
-          <Box mb="4">
-            <Flex align="center" gap="2" mb="2" wrap="wrap">
-              <Text as="div" size="1" color="gray">
-                {c.conta_customer_id != null ? 'Conta (read-only)' : 'Conta'}
-              </Text>
-              {c.conta_customer_id != null ? (
-                <Tooltip content="Synced with Conta">
-                  <Badge variant="soft" color="green">
-                    Conta
-                  </Badge>
-                </Tooltip>
-              ) : (
-                <Tooltip content="This customer is not yet synced with Conta">
-                  <Badge variant="soft" color="amber">
-                    Not synced to Conta
-                  </Badge>
-                </Tooltip>
-              )}
-            </Flex>
-            {c.conta_customer_id != null ? (
-              <Text size="1" color="gray" as="p" mb="2">
-                This data is synced from Conta. Edit in Conta only.
-              </Text>
-            ) : (
-              <Text size="1" color="gray" as="p" mb="2">
-                Use the refresh button above to check if this customer exists in
-                Conta, or sync all customers from the list.
-              </Text>
-            )}
-            <Flex direction="column" gap="2" wrap="wrap">
-              {c.conta_customer_id != null && (
-                <Tooltip content="Edit in Conta only">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Conta ID:</Text>
-                    <Text size="2">{c.conta_customer_id}</Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {(c.conta_customer_id != null &&
-                (c.conta_days_until_payment_reminder != null ||
-                  companyExpansion?.default_invoice_days_until_due != null)) && (
-                <Tooltip content="Standard payment terms: days from invoice date to due date. Edit in Conta only.">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Standard invoice due (days):</Text>
-                    <Text size="2">
-                      {(c.conta_days_until_payment_reminder ??
-                        companyExpansion?.default_invoice_days_until_due) !=
-                      null
-                        ? `${c.conta_days_until_payment_reminder ?? companyExpansion?.default_invoice_days_until_due} days`
-                        : '—'}
-                    </Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_days_until_estimate_overdue != null && (
-                <Tooltip content="Edit in Conta only">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Days until estimate overdue:</Text>
-                    <Text size="2">{c.conta_days_until_estimate_overdue} days</Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_invoice_delivery_method != null && (
-                <Tooltip content="Edit in Conta only">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Invoice delivery:</Text>
-                    <Text size="2">{c.conta_invoice_delivery_method}</Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_invoice_count != null && (
-                <Tooltip content="Synced from Conta">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Invoices sent:</Text>
-                    <Text size="2">{c.conta_invoice_count}</Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_total_invoiced != null && (
-                <Tooltip content="Synced from Conta">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Total invoiced:</Text>
-                    <Text size="2">
-                      {new Intl.NumberFormat('nb-NO', {
-                        style: 'currency',
-                        currency: 'NOK',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      }).format(Number(c.conta_total_invoiced))}
-                    </Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_total_unpaid != null && (
-                <Tooltip content="Synced from Conta">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Total not paid:</Text>
-                    <Text size="2" color={Number(c.conta_total_unpaid) > 0 ? 'red' : undefined}>
-                      {new Intl.NumberFormat('nb-NO', {
-                        style: 'currency',
-                        currency: 'NOK',
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 0,
-                      }).format(Number(c.conta_total_unpaid))}
-                    </Text>
-                  </Flex>
-                </Tooltip>
-              )}
-              {c.conta_last_synced_at != null && (
-                <Tooltip content="Synced from Conta">
-                  <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                    <Text size="1" color="gray">Last synced:</Text>
-                    <Text size="2">
-                      {formatContaDate(c.conta_last_synced_at)}
-                    </Text>
-                  </Flex>
-                </Tooltip>
-              )}
-            </Flex>
-          </Box>
-        </>
-      )}
 
       <Separator my="3" />
 
@@ -796,16 +828,12 @@ export default function CustomerInspector({
                   </Table.Cell>
                   <Table.Cell>
                     <Text size="2">
-                      {job.start_at
-                        ? formatDisplayDate(job.start_at)
-                        : '—'}
+                      {job.start_at ? formatDisplayDate(job.start_at) : '—'}
                     </Text>
                   </Table.Cell>
                   <Table.Cell>
                     <Text size="2">
-                      {job.end_at
-                        ? formatDisplayDate(job.end_at)
-                        : '—'}
+                      {job.end_at ? formatDisplayDate(job.end_at) : '—'}
                     </Text>
                   </Table.Cell>
                 </Table.Row>

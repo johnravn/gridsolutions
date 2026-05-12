@@ -225,10 +225,10 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
         id: data.id,
         name: data.name,
         created_at: data.created_at,
-        address: (data.address ?? null),
-        vat_number: (data.vat_number ?? null),
-        general_email: (data.general_email ?? null),
-        contact_person_id: (data.contact_person_id ?? null),
+        address: data.address ?? null,
+        vat_number: data.vat_number ?? null,
+        general_email: data.general_email ?? null,
+        contact_person_id: data.contact_person_id ?? null,
         accent_color: (data.accent_color as RadixAccentColor | null) ?? null,
         theme_radius: (data.theme_radius as RadixRadius | null) ?? null,
         theme_gray_color:
@@ -236,9 +236,9 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
         theme_panel_background:
           (data.theme_panel_background as RadixPanelBackground | null) ?? null,
         theme_scaling: (data.theme_scaling as RadixScaling | null) ?? null,
-        logo_path: (data.logo_path) ?? null,
-        logo_light_path: (data.logo_light_path) ?? null,
-        logo_dark_path: (data.logo_dark_path) ?? null,
+        logo_path: data.logo_path ?? null,
+        logo_light_path: data.logo_light_path ?? null,
+        logo_dark_path: data.logo_dark_path ?? null,
         contact_person: person as {
           user_id: string
           display_name: string | null

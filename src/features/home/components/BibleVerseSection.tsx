@@ -1,5 +1,5 @@
 import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
-import { Message } from 'iconoir-react'
+import { Quote } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
 import { DashboardCard } from './DashboardCard'
 
@@ -35,7 +35,7 @@ export function BibleVerseSection() {
   return (
     <DashboardCard
       title="Today's Bible verse"
-      icon={<Message width={18} height={18} />}
+      icon={<Quote width={18} height={18} />}
       notFullHeight
     >
       {isLoading ? (

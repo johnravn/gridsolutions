@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Avatar,
@@ -20,7 +20,8 @@ import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
-import { jobsIndexQuery } from '../api/queries'
+import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
+import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { getJobStatusColor } from '../utils/statusColors'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
@@ -60,6 +61,7 @@ export default function JobsList({
   compact?: boolean
 }) {
   const { companyId } = useCompany()
+  const qc = useQueryClient()
   const { userId, companyRole } = useAuthz()
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
@@ -86,6 +88,51 @@ export default function JobsList({
     }),
     enabled: !!companyId,
   })
+
+  useAutoUpdateJobsListJobStatuses(allData, !!companyId)
+
+  const selectedJobDetail = useQuery({
+    ...jobDetailQuery({ jobId: selectedId ?? '__none__' }),
+    enabled: !!companyId && !!selectedId,
+  })
+
+  React.useEffect(() => {
+    if (!companyId || !selectedId) return
+    const detail = selectedJobDetail.data
+    if (!detail) return
+    const nextStatus = detail.status
+    const row = allData.find((r) => r.id === selectedId)
+    if (row?.status === nextStatus) return
+
+    qc.setQueriesData<Array<JobListRow>>(
+      { queryKey: ['company', companyId, 'jobs-index'], exact: false },
+      (old) => {
+        if (!old) return old
+        return old.map((r) =>
+          r.id === selectedId ? { ...r, status: nextStatus } : r,
+        )
+      },
+    )
+    qc.setQueriesData<{ rows: Array<JobListRow>; count: number }>(
+      { queryKey: ['company', companyId, 'jobs-index-page'], exact: false },
+      (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          rows: old.rows.map((r) =>
+            r.id === selectedId ? { ...r, status: nextStatus } : r,
+          ),
+        }
+      },
+    )
+  }, [
+    allData,
+    companyId,
+    qc,
+    selectedId,
+    selectedJobDetail.data,
+    selectedJobDetail.dataUpdatedAt,
+  ])
 
   const rows = React.useMemo(() => {
     let filtered = allData
@@ -191,53 +238,60 @@ export default function JobsList({
           overflowY: 'hidden',
         }}
       >
-        <div style={{ minWidth: compact ? undefined : 'max-content', display: 'flex', flexDirection: 'column', height: '100%' }}>
-          {!compact && (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: GRID_COLUMNS,
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-3)',
-              backgroundColor: 'var(--gray-a2)',
-              borderRadius: 'var(--radius-2)',
-              flexShrink: 0,
-            }}
-          >
-            <div
-          onClick={() => handleSort('start_at')}
+        <div
           style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-            cursor: 'pointer',
-            userSelect: 'none',
+            minWidth: compact ? undefined : 'max-content',
             display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-1)',
-          }}
-          title="Click to sort by date"
-        >
-          General
-          {sortBy === 'start_at' && (sortDir === 'asc' ? ' ↑' : ' ↓')}
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-            justifySelf: 'start',
-          }}
-          aria-hidden
-        />
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-            justifySelf: 'start',
+            flexDirection: 'column',
+            height: '100%',
           }}
         >
-          Lead
-        </div>
-          </div>
+          {!compact && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: GRID_COLUMNS,
+                gap: 'var(--space-2)',
+                padding: 'var(--space-2) var(--space-3)',
+                backgroundColor: 'var(--gray-a2)',
+                borderRadius: 'var(--radius-2)',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                onClick={() => handleSort('start_at')}
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--space-1)',
+                }}
+                title="Click to sort by date"
+              >
+                General
+                {sortBy === 'start_at' && (sortDir === 'asc' ? ' ↑' : ' ↓')}
+              </div>
+              <div
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                  justifySelf: 'start',
+                }}
+                aria-hidden
+              />
+              <div
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                  justifySelf: 'start',
+                }}
+              >
+                Lead
+              </div>
+            </div>
           )}
 
           <div
@@ -249,256 +303,307 @@ export default function JobsList({
               marginTop: 8,
             }}
           >
-        {rows.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              {allData.length === 0
-                ? 'No jobs yet'
-                : 'No jobs match your filters'}
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-              const job = rows[virtualRow.index]
-              const isSelected = job.id === selectedId
-              const displayStatus = getDisplayStatus(job.status, companyRole)
-              const myRole = getMyJobRole(job)
-              const isCanceled = job.status === 'canceled'
-              const showCrewBadge = !isCanceled && (myRole === 'crew' || myRole === 'both')
-              const customerName =
-                job.customer?.name ??
-                job.customer_user?.display_name ??
-                job.customer_user?.email ??
-                '—'
-              const leadName =
-                job.project_lead?.display_name ||
-                job.project_lead?.email ||
-                'Unassigned'
-              const initials = getInitials(
-                job.project_lead?.display_name ?? job.project_lead?.email ?? '',
-              )
-              const avatarUrl = getAvatarUrl(
-                job.project_lead?.avatar_url ?? null,
-              )
+            {rows.length === 0 ? (
+              <Flex align="center" justify="center" py="6">
+                <Text size="2" color="gray">
+                  {allData.length === 0
+                    ? 'No jobs yet'
+                    : 'No jobs match your filters'}
+                </Text>
+              </Flex>
+            ) : (
+              <div
+                style={{
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const job = rows[virtualRow.index]
+                  const isSelected = job.id === selectedId
+                  const displayStatus = getDisplayStatus(
+                    job.status,
+                    companyRole,
+                  )
+                  const myRole = getMyJobRole(job)
+                  const isCanceled = job.status === 'canceled'
+                  const showCrewBadge =
+                    !isCanceled && (myRole === 'crew' || myRole === 'both')
+                  const customerName =
+                    job.customer?.name ??
+                    job.customer_user?.display_name ??
+                    job.customer_user?.email ??
+                    '—'
+                  const leadName =
+                    job.project_lead?.display_name ||
+                    job.project_lead?.email ||
+                    'Unassigned'
+                  const initials = getInitials(
+                    job.project_lead?.display_name ??
+                      job.project_lead?.email ??
+                      '',
+                  )
+                  const avatarUrl = getAvatarUrl(
+                    job.project_lead?.avatar_url ?? null,
+                  )
 
-              return (
-                <div
-                  key={job.id}
-                  data-index={virtualRow.index}
-                  onClick={() => onSelect(job.id)}
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                    display: compact ? 'block' : 'grid',
-                    gridTemplateColumns: compact ? undefined : GRID_COLUMNS,
-                    gap: compact ? undefined : 'var(--space-2)',
-                    alignItems: 'center',
-                    padding: compact ? 'var(--space-3)' : '0 var(--space-3)',
-                    cursor: 'pointer',
-                    backgroundColor: isSelected
-                      ? 'var(--accent-a3)'
-                      : compact
-                        ? 'var(--gray-a2)'
-                        : 'transparent',
-                    borderRadius: compact ? 'var(--radius-3)' : 'var(--radius-2)',
-                    marginBottom: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isSelected) {
-                      e.currentTarget.style.backgroundColor = compact ? 'var(--gray-a2)' : 'transparent'
-                    }
-                  }}
-                >
-                  {compact ? (
-                    <Flex justify="between" align="start" gap="3" style={{ width: '100%', minWidth: 0 }}>
-                      <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
-                        <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
-                          <Text
-                            weight={isSelected ? 'bold' : 'medium'}
-                            size="2"
-                            style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              minWidth: 0,
-                            }}
+                  return (
+                    <div
+                      key={job.id}
+                      data-index={virtualRow.index}
+                      onClick={() => onSelect(job.id)}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        display: compact ? 'block' : 'grid',
+                        gridTemplateColumns: compact ? undefined : GRID_COLUMNS,
+                        gap: compact ? undefined : 'var(--space-2)',
+                        alignItems: 'center',
+                        padding: compact
+                          ? 'var(--space-3)'
+                          : '0 var(--space-3)',
+                        cursor: 'pointer',
+                        backgroundColor: isSelected
+                          ? 'var(--accent-a3)'
+                          : compact
+                            ? 'var(--gray-a2)'
+                            : 'transparent',
+                        borderRadius: compact
+                          ? 'var(--radius-3)'
+                          : 'var(--radius-2)',
+                        marginBottom: 0,
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor =
+                            'var(--gray-a2)'
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor = compact
+                            ? 'var(--gray-a2)'
+                            : 'transparent'
+                        }
+                      }}
+                    >
+                      {compact ? (
+                        <Flex
+                          justify="between"
+                          align="start"
+                          gap="3"
+                          style={{ width: '100%', minWidth: 0 }}
+                        >
+                          <Flex
+                            direction="column"
+                            gap="1"
+                            style={{ minWidth: 0, flex: 1 }}
                           >
-                            {job.title}
-                          </Text>
-                          {showCrewBadge && (
-                            <Badge size="1" color="orange" variant="soft">
-                              You are crew
+                            <Flex
+                              gap="2"
+                              align="center"
+                              wrap="wrap"
+                              style={{ minWidth: 0 }}
+                            >
+                              <Text
+                                weight={isSelected ? 'bold' : 'medium'}
+                                size="2"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  minWidth: 0,
+                                }}
+                              >
+                                {job.title}
+                              </Text>
+                              {showCrewBadge && (
+                                <Badge size="1" color="orange" variant="soft">
+                                  You are crew
+                                </Badge>
+                              )}
+                            </Flex>
+                            <Flex
+                              gap="2"
+                              align="center"
+                              style={{ minWidth: 0 }}
+                            >
+                              <Text
+                                size="1"
+                                color="gray"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  minWidth: 0,
+                                }}
+                              >
+                                {customerName}
+                              </Text>
+                              <Text size="1" color="gray">
+                                •
+                              </Text>
+                              <Text size="1" color="gray">
+                                {job.start_at
+                                  ? format(
+                                      new Date(job.start_at),
+                                      'd. MMM yyyy',
+                                      { locale: nb },
+                                    )
+                                  : '—'}
+                              </Text>
+                            </Flex>
+                          </Flex>
+                          <Flex
+                            gap="2"
+                            align="center"
+                            style={{ flexShrink: 0 }}
+                          >
+                            <Badge
+                              color={getJobStatusColor(displayStatus)}
+                              radius="full"
+                              size="2"
+                              highContrast
+                              style={{
+                                width: 'fit-content',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {makeWordPresentable(displayStatus)}
                             </Badge>
-                          )}
+                            <Avatar
+                              size="2"
+                              src={avatarUrl ?? undefined}
+                              fallback={initials}
+                              radius="full"
+                              style={{ flexShrink: 0 }}
+                            />
+                          </Flex>
                         </Flex>
-                        <Flex gap="2" align="center" style={{ minWidth: 0 }}>
-                          <Text
-                            size="1"
-                            color="gray"
+                      ) : (
+                        <>
+                          <Box style={{ minWidth: 0 }}>
+                            <Flex
+                              gap="2"
+                              align="center"
+                              wrap="wrap"
+                              style={{ minWidth: 0 }}
+                            >
+                              <Tooltip content={job.title} delayDuration={300}>
+                                <Text
+                                  weight={isSelected ? 'bold' : 'medium'}
+                                  size="2"
+                                  style={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    minWidth: 0,
+                                  }}
+                                >
+                                  {job.title}
+                                </Text>
+                              </Tooltip>
+                              {showCrewBadge && (
+                                <Badge size="1" color="orange" variant="soft">
+                                  You are crew
+                                </Badge>
+                              )}
+                            </Flex>
+                            <Flex
+                              gap="2"
+                              align="center"
+                              style={{
+                                minWidth: 0,
+                                marginTop: 'var(--space-1)',
+                              }}
+                            >
+                              <Text
+                                size="1"
+                                color="gray"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  minWidth: 0,
+                                }}
+                              >
+                                {customerName}
+                              </Text>
+                              <Text size="1" color="gray">
+                                •
+                              </Text>
+                              <Text size="1" color="gray">
+                                {job.start_at
+                                  ? format(
+                                      new Date(job.start_at),
+                                      'd. MMM yyyy',
+                                      {
+                                        locale: nb,
+                                      },
+                                    )
+                                  : '—'}
+                              </Text>
+                            </Flex>
+                          </Box>
+                          <Box
                             style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
                               minWidth: 0,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'flex-start',
+                              justifySelf: 'start',
                             }}
                           >
-                            {customerName}
-                          </Text>
-                          <Text size="1" color="gray">•</Text>
-                          <Text size="1" color="gray">
-                            {job.start_at
-                              ? format(new Date(job.start_at), 'd. MMM yyyy', { locale: nb })
-                              : '—'}
-                          </Text>
-                        </Flex>
-                      </Flex>
-                      <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
-                        <Badge
-                          color={getJobStatusColor(displayStatus)}
-                          radius="full"
-                          size="2"
-                          highContrast
-                          style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
-                        >
-                          {makeWordPresentable(displayStatus)}
-                        </Badge>
-                        <Avatar
-                          size="2"
-                          src={avatarUrl ?? undefined}
-                          fallback={initials}
-                          radius="full"
-                          style={{ flexShrink: 0 }}
-                        />
-                      </Flex>
-                    </Flex>
-                  ) : (
-                    <>
-                  <Box style={{ minWidth: 0 }}>
-                    <Flex
-                      gap="2"
-                      align="center"
-                      wrap="wrap"
-                      style={{ minWidth: 0 }}
-                    >
-                      <Tooltip content={job.title} delayDuration={300}>
-                        <Text
-                          weight={isSelected ? 'bold' : 'medium'}
-                          size="2"
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                          }}
-                        >
-                          {job.title}
-                        </Text>
-                      </Tooltip>
-                      {showCrewBadge && (
-                        <Badge size="1" color="orange" variant="soft">
-                          You are crew
-                        </Badge>
+                            <Badge
+                              color={getJobStatusColor(displayStatus)}
+                              radius="full"
+                              size="2"
+                              highContrast
+                              style={{
+                                width: 'fit-content',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {makeWordPresentable(displayStatus)}
+                            </Badge>
+                          </Box>
+                          <Flex
+                            gap="2"
+                            align="center"
+                            style={{ minWidth: 0, justifySelf: 'start' }}
+                          >
+                            <Text
+                              size="1"
+                              color="gray"
+                              style={{
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                whiteSpace: 'nowrap',
+                                minWidth: 0,
+                              }}
+                            >
+                              {leadName}
+                            </Text>
+                            <Avatar
+                              size="2"
+                              src={avatarUrl ?? undefined}
+                              fallback={initials}
+                              radius="full"
+                              style={{ flexShrink: 0 }}
+                            />
+                          </Flex>
+                        </>
                       )}
-                    </Flex>
-                    <Flex
-                      gap="2"
-                      align="center"
-                      style={{
-                        minWidth: 0,
-                        marginTop: 'var(--space-1)',
-                      }}
-                    >
-                      <Text
-                        size="1"
-                        color="gray"
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          minWidth: 0,
-                        }}
-                      >
-                        {customerName}
-                      </Text>
-                      <Text size="1" color="gray">
-                        •
-                      </Text>
-                      <Text size="1" color="gray">
-                        {job.start_at
-                          ? format(new Date(job.start_at), 'd. MMM yyyy', {
-                              locale: nb,
-                            })
-                          : '—'}
-                      </Text>
-                    </Flex>
-                  </Box>
-                  <Box
-                    style={{
-                      minWidth: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-start',
-                      justifySelf: 'start',
-                    }}
-                  >
-                    <Badge
-                      color={getJobStatusColor(displayStatus)}
-                      radius="full"
-                      size="2"
-                      highContrast
-                      style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
-                    >
-                      {makeWordPresentable(displayStatus)}
-                    </Badge>
-                  </Box>
-                  <Flex
-                    gap="2"
-                    align="center"
-                    style={{ minWidth: 0, justifySelf: 'start' }}
-                  >
-                    <Text
-                      size="1"
-                      color="gray"
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0,
-                      }}
-                    >
-                      {leadName}
-                    </Text>
-                    <Avatar
-                      size="2"
-                      src={avatarUrl ?? undefined}
-                      fallback={initials}
-                      radius="full"
-                      style={{ flexShrink: 0 }}
-                    />
-                  </Flex>
-                </>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

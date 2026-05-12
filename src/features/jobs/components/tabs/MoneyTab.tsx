@@ -33,14 +33,11 @@ import {
 } from '@shared/ui/components/IncomeExpensesChart'
 import { contaClient } from '@shared/api/conta/client'
 import { findContaProjectId } from '../../utils/contaProjects'
-import {
-  deleteJobMoneyItem,
-  jobMoneyItemsQuery,
-  type JobMoneyItem,
-  type JobMoneyItemSource,
-} from '../../api/moneyQueries'
+import { formatOfferNumberDisplay } from '../../utils/offerNumber'
+import { deleteJobMoneyItem, jobMoneyItemsQuery } from '../../api/moneyQueries'
 import MoneyItemEditDialog from '../dialogs/MoneyItemEditDialog'
 import MoneyItemsFilter from './MoneyItemsFilter'
+import type { JobMoneyItem, JobMoneyItemSource } from '../../api/moneyQueries'
 import type { JobOffer } from '../../types'
 
 type ContaLedgerLine = {
@@ -293,7 +290,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
 
       const { data: companyExpansion } = await supabase
         .from('company_expansions')
-        .select('crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit')
+        .select(
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit',
+        )
         .eq('company_id', companyId!)
         .maybeSingle()
 
@@ -305,11 +304,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           ? 'hour'
           : 'day'
       const crewRatePerDay =
-        crewLevel?.crew_rate_per_day ??
-        (companyExpansion?.crew_rate_per_day ?? 0)
+        crewLevel?.crew_rate_per_day ?? companyExpansion?.crew_rate_per_day ?? 0
       const crewRatePerHour =
         crewLevel?.crew_rate_per_hour ??
-        (companyExpansion?.crew_rate_per_hour ?? 0)
+        companyExpansion?.crew_rate_per_hour ??
+        0
 
       return {
         crewRatePerDay: Number(crewRatePerDay) || 0,
@@ -430,7 +429,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           rateType = booking.rate_type
         } else if (booking.role === 'employee') {
           const useHourly =
-            crewExpenseBillingUnit === 'hour' && companyRates.employee_hourly_rate
+            crewExpenseBillingUnit === 'hour' &&
+            companyRates.employee_hourly_rate
           const useDaily =
             crewExpenseBillingUnit === 'day' && companyRates.employee_daily_rate
           if (useHourly) {
@@ -518,7 +518,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     [confirmedItems],
   )
 
-  const crewIncomeSuggestionsRaw = React.useMemo<Suggestion[]>(() => {
+  const crewIncomeSuggestionsRaw = React.useMemo<Array<Suggestion>>(() => {
     if (!crewBookings || !jobCrewPricing) return []
     const { crewRatePerDay, crewRatePerHour } = jobCrewPricing
     if (crewRatePerDay <= 0 && crewRatePerHour <= 0) return []
@@ -555,14 +555,19 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       .filter((s): s is NonNullable<typeof s> => s !== null)
   }, [crewBookings, jobCrewPricing, crewExpenseBillingUnit])
 
-  const incomeSuggestions = React.useMemo<Suggestion[]>(() => {
+  const incomeSuggestions = React.useMemo<Array<Suggestion>>(() => {
     const offers = acceptedOffers
       .filter((o) => !confirmedSourceIds.has(`offer-${o.id}`))
       .map((offer) => ({
         id: `offer-${offer.id}`,
         sourceId: `offer-${offer.id}`,
         type: 'income' as const,
-        description: offer.title || `Offer v${offer.version_number}`,
+        description: [
+          formatOfferNumberDisplay(offer.offernr),
+          offer.title || `Offer v${offer.version_number}`,
+        ]
+          .filter(Boolean)
+          .join(' — '),
         amount: offer.total_with_vat,
         date: offer.accepted_at || null,
         reference: undefined as string | undefined,
@@ -574,7 +579,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     return [...offers, ...crew]
   }, [acceptedOffers, crewIncomeSuggestionsRaw, confirmedSourceIds])
 
-  const expenseSuggestions = React.useMemo<Suggestion[]>(() => {
+  const expenseSuggestions = React.useMemo<Array<Suggestion>>(() => {
     const crew = crewExpenseSuggestionsRaw.filter(
       (e) => !confirmedSourceIds.has(e.sourceId),
     )
@@ -588,7 +593,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     confirmedSourceIds,
   ])
 
-  const suggestions: Suggestion[] = React.useMemo(
+  const suggestions: Array<Suggestion> = React.useMemo(
     () => [...incomeSuggestions, ...expenseSuggestions],
     [incomeSuggestions, expenseSuggestions],
   )
@@ -616,17 +621,16 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     [suggestions, showIncome, showExpenses],
   )
 
-  const totalIncome = confirmedIncomeItems.reduce(
-    (sum, i) => sum + i.amount,
-    0,
-  )
+  const totalIncome = confirmedIncomeItems.reduce((sum, i) => sum + i.amount, 0)
   const totalExpenses = confirmedExpenseItems.reduce(
     (sum, i) => sum + i.amount,
     0,
   )
   const profitLoss = totalIncome - totalExpenses
 
-  const crewIncomeItems = confirmedIncomeItems.filter((i) => i.source === 'crew')
+  const crewIncomeItems = confirmedIncomeItems.filter(
+    (i) => i.source === 'crew',
+  )
   const crewExpenseItems = confirmedExpenseItems.filter(
     (i) => i.source === 'crew',
   )
@@ -828,15 +832,15 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               </Flex>
             )}
             {accountingConfig?.accounting_organization_id && (
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => refetchContaExpenses()}
-                  disabled={isContaExpensesLoading}
-                >
-                  Sync Conta
-                </Button>
-              )}
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => refetchContaExpenses()}
+                disabled={isContaExpensesLoading}
+              >
+                Sync Conta
+              </Button>
+            )}
           </Flex>
           <Text size="2" color="gray" mb="3">
             Add items from real events. You can edit before adding.
@@ -848,7 +852,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell align="right">Amount</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell align="right">
+                  Amount
+                </Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell style={{ width: 80 }} />
               </Table.Row>
             </Table.Header>
@@ -943,7 +949,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell align="right">Amount</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell align="right">
+                  Amount
+                </Table.ColumnHeaderCell>
                 <Table.ColumnHeaderCell style={{ width: 90 }} />
               </Table.Row>
             </Table.Header>

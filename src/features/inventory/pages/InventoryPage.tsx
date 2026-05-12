@@ -148,7 +148,10 @@ export default function InventoryPage() {
   // On small screens: when an item is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      inspectorRef.current.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
     }
   }, [isLarge, selectedId])
 
@@ -172,7 +175,12 @@ export default function InventoryPage() {
               minWidth: 0,
             }}
           >
-            <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0, gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+            <Flex
+              align="center"
+              justify="between"
+              mb="3"
+              style={{ flexShrink: 0, gap: 'var(--space-2)', flexWrap: 'wrap' }}
+            >
               <Heading size="5">Overview</Heading>
               {/* Filter dropdown hidden on small screens so search + Add item/group fit */}
             </Flex>
@@ -289,15 +297,11 @@ export default function InventoryPage() {
             <Box
               onClick={handleGlowingBarClick}
               onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '24px'
               }}
               onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector(
-                  '[data-glowing-bar]',
-                )
+                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
                 if (bar instanceof HTMLElement) bar.style.width = '12px'
               }}
               style={{

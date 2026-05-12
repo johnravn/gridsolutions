@@ -3,8 +3,8 @@ import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {  setCompanyUserRole } from '../../api/queries'
-import type {CompanyRole} from '../../api/queries';
+import { setCompanyUserRole } from '../../api/queries'
+import type { CompanyRole } from '../../api/queries'
 
 export default function ChangeRoleConfirmDialog({
   open,

@@ -21,13 +21,12 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 
 import {
-  type RentalFactorConfig,
-  crewPricingLevelsQuery,
   createCrewPricingLevel,
-  updateCrewPricingLevel,
+  crewPricingLevelsQuery,
   deleteCrewPricingLevel,
-  type CrewPricingLevelRow,
+  updateCrewPricingLevel,
 } from '../api/queries'
+import type { CrewPricingLevelRow, RentalFactorConfig } from '../api/queries'
 
 type CompanyRates = {
   crew_rate_per_day: number | null

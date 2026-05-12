@@ -52,9 +52,13 @@ function parseCustomerAddress(address: string) {
       .map((p) => p.trim())
       .filter(Boolean)
     addressCity = afterParts[0] || ''
-    if (afterParts.length > 1) addressCountry = afterParts[afterParts.length - 1] || ''
+    if (afterParts.length > 1)
+      addressCountry = afterParts[afterParts.length - 1] || ''
   } else {
-    const parts = normalized.split(/[,\n]+/).map((p) => p.trim()).filter(Boolean)
+    const parts = normalized
+      .split(/[,\n]+/)
+      .map((p) => p.trim())
+      .filter(Boolean)
     addressLine1 = parts[0] || ''
     const zipPart = parts.find((p) => /\d{4,5}/.test(p))
     if (zipPart) {
@@ -74,7 +78,7 @@ export type SyncResult = {
   updated: number
   created: number
   skipped: number
-  errors: string[]
+  errors: Array<string>
 }
 
 function makeContaFetch(opt: ContaClientOptions) {
@@ -129,12 +133,15 @@ export async function syncCustomersWithConta(
   while (hasMore) {
     const res = (await conta.get(
       `/invoice/organizations/${organizationId}/customers?hits=${hitsPerPage}&page=${page}`,
-    )) as { hits?: ContaCustomerHit[]; totalHits?: number }
+    )) as { hits?: Array<ContaCustomerHit>; totalHits?: number }
     const hits = Array.isArray(res?.hits) ? res.hits : []
     for (const h of hits) {
       const orgNo = (h.orgNo || '').replace(/\D/g, '').trim()
       if (orgNo && h.id) {
-        contaCustomersByOrgNo.set(orgNo, { ...h, name: h.name ?? h.customerName })
+        contaCustomersByOrgNo.set(orgNo, {
+          ...h,
+          name: h.name ?? h.customerName,
+        })
       }
     }
     const total = res?.totalHits ?? 0
@@ -167,7 +174,8 @@ export async function syncCustomersWithConta(
     let contaHit = contaCustomersByOrgNo.get(orgNo) ?? null
 
     // If we have conta_customer_id, try to fetch full customer from Conta
-    const contaId = (c as { conta_customer_id?: number | null })?.conta_customer_id ?? null
+    const contaId =
+      (c as { conta_customer_id?: number | null })?.conta_customer_id ?? null
 
     if (contaId && !contaHit) {
       try {
@@ -200,12 +208,21 @@ export async function syncCustomersWithConta(
           .from('customers')
           .update({
             conta_customer_id: contaHit.id,
-            conta_days_until_payment_reminder: contaHit.daysUntilPaymentReminder ?? null,
-            conta_days_until_estimate_overdue: contaHit.daysUntilEstimateOverdue ?? null,
-            conta_invoice_delivery_method: contaHit.invoiceDeliveryMethod ?? null,
+            conta_days_until_payment_reminder:
+              contaHit.daysUntilPaymentReminder ?? null,
+            conta_days_until_estimate_overdue:
+              contaHit.daysUntilEstimateOverdue ?? null,
+            conta_invoice_delivery_method:
+              contaHit.invoiceDeliveryMethod ?? null,
             conta_invoice_count: invoiceCount,
-            conta_total_invoiced: contaHit.sumTotalInvoiced != null ? contaHit.sumTotalInvoiced : null,
-            conta_total_unpaid: contaHit.sumRemainingInvoices != null ? contaHit.sumRemainingInvoices : null,
+            conta_total_invoiced:
+              contaHit.sumTotalInvoiced != null
+                ? contaHit.sumTotalInvoiced
+                : null,
+            conta_total_unpaid:
+              contaHit.sumRemainingInvoices != null
+                ? contaHit.sumRemainingInvoices
+                : null,
             conta_last_synced_at: now,
           })
           .eq('id', c.id)
@@ -264,9 +281,7 @@ export async function syncCustomersWithConta(
  * Fetch Conta customer data and sync to our DB (conta_customer_id and read-only fields).
  * Use when a customer exists in Conta and you want to pull their data into Subb.
  */
-export type FetchFromContaResult =
-  | { ok: true }
-  | { ok: false; error: string }
+export type FetchFromContaResult = { ok: true } | { ok: false; error: string }
 
 export async function fetchAndSyncContaCustomer(
   companyId: string,
@@ -298,8 +313,10 @@ export async function fetchAndSyncContaCustomer(
       .from('customers')
       .update({
         conta_customer_id: full.id,
-        conta_days_until_payment_reminder: full.daysUntilPaymentReminder ?? null,
-        conta_days_until_estimate_overdue: full.daysUntilEstimateOverdue ?? null,
+        conta_days_until_payment_reminder:
+          full.daysUntilPaymentReminder ?? null,
+        conta_days_until_estimate_overdue:
+          full.daysUntilEstimateOverdue ?? null,
         conta_invoice_delivery_method: full.invoiceDeliveryMethod ?? null,
         conta_invoice_count: invoiceCount,
         conta_total_invoiced:
@@ -340,12 +357,19 @@ export async function createCustomerInConta(
 ): Promise<CreateInContaResult> {
   const orgNo = (customer.vat_number || '').replace(/\D/g, '').trim()
   if (!orgNo || orgNo.length < 6) {
-    return { ok: false, error: 'Organization number is required to create in Conta.' }
+    return {
+      ok: false,
+      error: 'Organization number is required to create in Conta.',
+    }
   }
 
   const addr = parseCustomerAddress(customer.address || '')
   if (!addr.addressLine1 || !addr.addressPostcode || !addr.addressCity) {
-    return { ok: false, error: 'Valid address (street, postal code, city) is required to create in Conta.' }
+    return {
+      ok: false,
+      error:
+        'Valid address (street, postal code, city) is required to create in Conta.',
+    }
   }
 
   try {
@@ -365,7 +389,8 @@ export async function createCustomerInConta(
     )) as { id?: number }
 
     const newId = created?.id
-    if (!newId) return { ok: false, error: 'Conta did not return a customer ID.' }
+    if (!newId)
+      return { ok: false, error: 'Conta did not return a customer ID.' }
 
     const { error } = await supabase
       .from('customers')

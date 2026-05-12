@@ -275,6 +275,7 @@ export type JobOffer = {
   company_id: UUID
   offer_type: OfferType
   version_number: number
+  offernr: number | null
   status: OfferStatus
   access_token: string
   title: string
@@ -449,7 +450,9 @@ export type OfferDetail = JobOffer & {
   groups?: Array<OfferEquipmentGroup & { items: Array<OfferEquipmentItem> }>
   crew_items?: Array<OfferCrewItem>
   transport_items?: Array<OfferTransportItem>
-  transport_groups?: Array<OfferTransportGroup & { items: Array<OfferTransportItem> }>
+  transport_groups?: Array<
+    OfferTransportGroup & { items: Array<OfferTransportItem> }
+  >
   pretty_sections?: Array<OfferPrettySection>
   job_title?: string | null
   job_start_at?: string | null

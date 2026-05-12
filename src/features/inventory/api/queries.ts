@@ -547,10 +547,15 @@ export const inventoryIndexQueryAll = ({
         if (error) throw error
 
         totalCount = count ?? totalCount
-        const batch = (Array.isArray(data) ? data : []) as Array<InventoryIndexRow>
+        const batch = (
+          Array.isArray(data) ? data : []
+        ) as Array<InventoryIndexRow>
         allRows = allRows.concat(batch)
 
-        if (batch.length < BATCH_SIZE || (totalCount != null && allRows.length >= totalCount)) {
+        if (
+          batch.length < BATCH_SIZE ||
+          (totalCount != null && allRows.length >= totalCount)
+        ) {
           hasMore = false
         } else {
           offset = to + 1
