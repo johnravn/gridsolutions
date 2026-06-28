@@ -53,18 +53,16 @@ const extractProjectHits = (response: ContaProjectSearchResponse) => {
 }
 
 const asSearchBody = (response: unknown): ContaProjectSearchBody =>
-  response && typeof response === 'object' ? (response as ContaProjectSearchBody) : {}
+  response && typeof response === 'object'
+    ? (response as ContaProjectSearchBody)
+    : {}
 
 /** Conta supports a per-page `hits` cap; use a high value so we do not miss matches. */
 const SEARCH_HITS = 500
 const CATALOG_PAGE_SIZE = 200
 
 function normalizeForCompare(s: string): string {
-  return s
-    .normalize('NFKC')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
+  return s.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
 }
 
 async function searchProjects(
@@ -156,14 +154,18 @@ function pickProjectIdFromHits(
   })
   if (match?.id != null) return Number(match.id)
 
-  if (options.allowSingleHitFallback && hits.length === 1 && hits[0].id != null) {
+  if (
+    options.allowSingleHitFallback &&
+    hits.length === 1 &&
+    hits[0].id != null
+  ) {
     return Number(hits[0].id)
   }
   return null
 }
 
-function collectPrimarySearchQueries(input: ContaProjectInput): string[] {
-  const queries: string[] = []
+function collectPrimarySearchQueries(input: ContaProjectInput): Array<string> {
+  const queries: Array<string> = []
   const fullName = buildContaJobProjectName(input)
   queries.push(fullName)
   queries.push(`Subb job ${input.jobId}`)
@@ -206,7 +208,8 @@ function isLikelyDuplicateProjectError(error: unknown): boolean {
   ) {
     return false
   }
-  if (m.includes('could not attach this job to the linked customer')) return false
+  if (m.includes('could not attach this job to the linked customer'))
+    return false
   return (
     m.includes('409') ||
     m.includes('already') ||
@@ -313,7 +316,10 @@ async function postContaJobProject(
     return conflictId
   }
 
-  if (contaParsedExceptionName(parsed) === 'ForeignKeyViolationDatabaseToolException') {
+  if (
+    contaParsedExceptionName(parsed) ===
+    'ForeignKeyViolationDatabaseToolException'
+  ) {
     throw new Error(
       'Conta could not attach this job to the linked customer (invalid reference or customer from another Conta organization). Re-sync or re-link the customer with Conta from customer settings, then try again.',
     )
@@ -342,13 +348,17 @@ async function findContaProjectIdAfterDuplicateConflict(
       // ignore
     }
   }
-  let hits = mergeHitsById(merged)
-  let picked = pickProjectIdFromHits(hits, input, { allowSingleHitFallback: false })
+  const hits = mergeHitsById(merged)
+  let picked = pickProjectIdFromHits(hits, input, {
+    allowSingleHitFallback: false,
+  })
   if (picked) return picked
 
   try {
     const catalog = await fetchProjectsCatalog(organizationId)
-    picked = pickProjectIdFromHits(catalog, input, { allowSingleHitFallback: false })
+    picked = pickProjectIdFromHits(catalog, input, {
+      allowSingleHitFallback: false,
+    })
     if (picked) return picked
   } catch {
     // catalog not supported or failed
@@ -385,14 +395,11 @@ export async function ensureContaProjectId(
     // Conta rejected the canonical name but search did not return the row: create a disambiguated project so invoicing can proceed.
     const fallbackName = `${name} (${input.jobId.slice(0, 8)})`
     try {
-      return await postContaJobProject(
-        organizationId,
-        {
-          name: fallbackName,
-          description,
-          ...(input.customerId ? { customerId: input.customerId } : {}),
-        },
-      )
+      return await postContaJobProject(organizationId, {
+        name: fallbackName,
+        description,
+        ...(input.customerId ? { customerId: input.customerId } : {}),
+      })
     } catch {
       // fall through
     }

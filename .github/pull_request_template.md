@@ -14,7 +14,7 @@ Brief description of changes in this PR.
 
 - [ ] No database changes
 - [ ] Migration created: `YYYYMMDDHHMMSS_description.sql`
-- [ ] Migration tested locally (`npm run db:reset`)
+- [ ] Migration tested locally (`npm run db:reset` — includes remote data copy)
 - [ ] Migration pushed to production (if backward-compatible)
 - [ ] Types updated (`npm run db:types:remote`)
 - [ ] Types file committed
@@ -28,11 +28,13 @@ Brief description of changes in this PR.
 ## Testing
 
 - [ ] Tested locally
+- [ ] Automated tests added or updated (`npm run test`)
 - [ ] Tested with local database
 - [ ] Tested with production database (read-only)
 - [ ] RLS policies verified with different user roles
 - [ ] No console errors or warnings
 - [ ] Build succeeds (`npm run build`)
+- [ ] Unit tests pass (`npm run test`)
 
 ## Checklist
 

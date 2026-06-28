@@ -81,7 +81,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         .from('reserved_vehicles')
         .select(
           `
-          id, time_period_id, vehicle_id, status, external_status, external_note,
+          id, time_period_id, vehicle_id, status, forced, external_status, external_note,
           vehicle:vehicle_id (
             id, name, image_path, external_owner_id, deleted,
             external_owner:external_owner_id ( id, name )
@@ -512,6 +512,12 @@ function VehicleBookingCard({
             {isInternal && (
               <Badge variant="soft" color="indigo">
                 Internal
+              </Badge>
+            )}
+
+            {row.forced && (
+              <Badge variant="soft" color="amber">
+                Forced
               </Badge>
             )}
 

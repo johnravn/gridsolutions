@@ -139,7 +139,7 @@ export default function CrewTab({
         .from('reserved_crew')
         .select(
           `
-          id, time_period_id, user_id, notes, placeholder_name, status,
+          id, time_period_id, user_id, notes, placeholder_name, status, forced,
           user:user_id ( user_id, display_name, email )
         `,
         )
@@ -863,6 +863,11 @@ export default function CrewTab({
                                       {!crew.user_id && (
                                         <Badge size="1" color="amber">
                                           Placeholder
+                                        </Badge>
+                                      )}
+                                      {crew.forced && (
+                                        <Badge size="1" color="amber">
+                                          Forced
                                         </Badge>
                                       )}
                                     </Flex>

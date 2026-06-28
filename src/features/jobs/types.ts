@@ -218,6 +218,7 @@ export type ReservedCrewRow = {
   notes: string | null
   placeholder_name?: string | null
   status: BookingStatus
+  forced?: boolean
   start_at: string | null
   end_at: string | null
   user?: {
@@ -234,6 +235,7 @@ export type ReservedVehicleRow = {
   time_period_id: UUID
   vehicle_id: UUID
   status: BookingStatus
+  forced?: boolean
   external_status: ExternalReqStatus | null
   external_note: string | null
   vehicle?: {

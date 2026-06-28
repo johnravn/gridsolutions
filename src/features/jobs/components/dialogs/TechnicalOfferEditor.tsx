@@ -1471,7 +1471,9 @@ export default function TechnicalOfferEditor({
         }}
       >
         <Dialog.Title>
-          {hasPersistedOffer ? 'Edit Technical Offer' : 'Create Technical Offer'}
+          {hasPersistedOffer
+            ? 'Edit Technical Offer'
+            : 'Create Technical Offer'}
         </Dialog.Title>
         <Dialog.Description>
           {hasPersistedOffer

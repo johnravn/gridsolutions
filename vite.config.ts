@@ -118,6 +118,7 @@ export default defineConfig(({ mode }) => {
         '@app': path.resolve(__dirname, 'src/app'),
         '@shared': path.resolve(__dirname, 'src/shared'),
         '@features': path.resolve(__dirname, 'src/features'),
+        '@test': path.resolve(__dirname, 'src/test'),
       },
     },
     optimizeDeps: {
@@ -127,6 +128,12 @@ export default defineConfig(({ mode }) => {
     preview: {
       // Ensure preview server handles SPA routing correctly
       port: 3000,
+    },
+    test: {
+      environment: 'jsdom',
+      setupFiles: ['src/test/setup.ts'],
+      include: ['src/**/*.test.{ts,tsx}', 'api/**/*.test.ts'],
+      exclude: ['src/test/integration/**'],
     },
   }
 })

@@ -139,7 +139,8 @@ Deno.serve(async (req) => {
       ? job?.customer[0]
       : job?.customer
 
-    const companyName = (company?.name as string | undefined)?.trim() || 'Our team'
+    const companyName =
+      (company?.name as string | undefined)?.trim() || 'Our team'
     const subject = `Offer: ${offer.title ?? 'Offer'}`
     const customerName = customer?.name ?? null
     const jobTitle = job?.title ?? null

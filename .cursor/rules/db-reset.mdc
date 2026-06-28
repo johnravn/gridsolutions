@@ -1,16 +1,20 @@
 ---
-description: Always use db:reset:with-data instead of db:reset for local database resets
+description: Local database reset always repopulates from remote (db:reset includes data)
 alwaysApply: true
 ---
 
 # Local DB Reset
 
-When you need to reset the local Supabase database, ALWAYS run:
+When you need to reset the local Supabase database (e.g. to apply migrations), ALWAYS run:
 
 ```bash
-npm run db:reset:with-data
+npm run db:reset
 ```
 
-Never run `npm run db:reset` directly. The `:with-data` variant wraps `db:reset` + `db:copy-data` (see `scripts/reset-with-data.js`) so the local DB is repopulated from remote and is actually usable for development. A bare `db:reset` leaves an empty database.
+This runs the full reset-with-data workflow: applies migrations, then copies auth users, table data, and storage from remote so the local DB is actually usable for development.
 
-This applies everywhere — including docs, READMEs, suggested commands, migration workflows, and instructions you write for other agents or users. If you see `npm run db:reset` referenced as a standalone step, treat it as a bug and replace it with `npm run db:reset:with-data` (unless the context is explicitly the script definition in `package.json`).
+**Do not** run `npm run db:reset:schema-only` unless you explicitly need an empty database (migrations + seed.sql only, no remote data). That variant is for internal scripts and edge cases — not normal agent or migration testing workflows.
+
+`npm run db:reset:with-data` is an alias for the same full workflow.
+
+This applies everywhere — including docs, READMEs, suggested commands, and migration workflows. If you see `db:reset:schema-only` referenced as the default local reset step, treat it as a bug and replace it with `npm run db:reset`.

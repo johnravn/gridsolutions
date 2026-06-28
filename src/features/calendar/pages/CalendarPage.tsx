@@ -10,9 +10,9 @@ import {
   IconButton,
   Select,
   Text,
-  TextField,
 } from '@radix-ui/themes'
-import { Calendar, List, Search, ShareAndroid } from 'iconoir-react'
+import { Calendar, List, ShareAndroid } from 'iconoir-react'
+import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro'
@@ -33,16 +33,16 @@ type Category = 'jobDuration' | 'equipment' | 'crew' | 'transport' | 'all'
 export default function CalendarPage() {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
+  const isFreelancer = companyRole === 'freelancer'
   const [category, setCategory] = React.useState<Category>('jobDuration')
-  const [searchQuery, setSearchQuery] = React.useState('')
-  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, { wait: 300 })
+  const [searchInput, setSearchInput] = React.useState('')
+  const [debouncedSearchInput] = useDebouncedValue(searchInput, { wait: 300 })
   const [selectedEntityId, setSelectedEntityId] = React.useState<string | null>(
     null,
   )
-  const [showSuggestions, setShowSuggestions] = React.useState(false)
+  const [suggestionsOpen, setSuggestionsOpen] = React.useState(false)
   const [listMode, setListMode] = React.useState(false)
   const [subscribeDialogOpen, setSubscribeDialogOpen] = React.useState(false)
-  const searchRef = React.useRef<HTMLDivElement>(null)
 
   const calendarWindow = React.useMemo(() => {
     const from = new Date()
@@ -54,29 +54,17 @@ export default function CalendarPage() {
 
   // Set default category based on role
   React.useEffect(() => {
-    if (companyRole === 'freelancer') {
+    if (isFreelancer) {
       setCategory('crew')
     }
-  }, [companyRole])
+  }, [isFreelancer])
 
-  // Close suggestions when clicking outside
+  // Freelancers only see their own crew shifts — no crew directory search needed
   React.useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        searchRef.current &&
-        !searchRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false)
-      }
+    if (isFreelancer) {
+      setSelectedEntityId(null)
     }
-
-    if (showSuggestions) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside)
-      }
-    }
-  }, [showSuggestions])
+  }, [isFreelancer])
 
   // Fetch all calendar events for the company (all categories)
   const { data: calendarRecords = [] } = useQuery({
@@ -94,14 +82,14 @@ export default function CalendarPage() {
   // Important: these index queries can be very expensive if they fire on every keystroke.
   // Only fetch when the suggestion dropdown is actually open.
   const shouldFetchSuggestions =
-    category !== 'all' && !!companyId && showSuggestions
+    !isFreelancer && category !== 'all' && !!companyId && suggestionsOpen
 
   // Vehicles for transport
   const { data: vehicles = [] } = useQuery({
     ...vehiclesIndexQuery({
       companyId: companyId ?? '',
       includeExternal: true,
-      search: debouncedSearchQuery,
+      search: debouncedSearchInput,
     }),
     enabled: shouldFetchSuggestions && category === 'transport',
   })
@@ -112,7 +100,7 @@ export default function CalendarPage() {
       companyId: companyId ?? '',
       page: 1,
       pageSize: 100,
-      search: debouncedSearchQuery,
+      search: debouncedSearchInput,
       showActive: true,
       showInactive: false,
       showInternal: true,
@@ -141,7 +129,9 @@ export default function CalendarPage() {
   const { data: jobs = [] } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: debouncedSearchQuery,
+      search: debouncedSearchInput,
+      userId,
+      companyRole,
     }),
     enabled: shouldFetchSuggestions && category === 'jobDuration',
   })
@@ -180,18 +170,18 @@ export default function CalendarPage() {
       }))
     }
 
-    // Apply fuzzy search filtering if search query exists
-    if (searchQuery.trim()) {
+    // Apply fuzzy search filtering if search input exists
+    if (searchInput.trim()) {
       return fuzzySearch(
         allSuggestions,
-        searchQuery,
+        searchInput,
         [(s) => s.name, (s) => s.subtitle ?? ''],
         0.3,
       )
     }
 
     return allSuggestions
-  }, [category, vehicles, items, crew, jobs, searchQuery])
+  }, [category, vehicles, items, crew, jobs, searchInput])
 
   // Helper to check if time period is Job duration
   const isJobDuration = (record: { title?: string | null }) =>
@@ -246,21 +236,31 @@ export default function CalendarPage() {
     })
   }, [calendarRecords, category, selectedEntityId])
 
-  const handleSelectSuggestion = (id: string) => {
-    setSelectedEntityId(id)
-    const suggestion = suggestions.find((s) => s.id === id)
-    if (suggestion) {
-      setSearchQuery(suggestion.name)
-    }
-    setShowSuggestions(false)
-  }
-
   const handleCategoryChange = (value: string) => {
     setCategory(value as Category)
     setSelectedEntityId(null)
-    setSearchQuery('')
-    setShowSuggestions(false)
+    setSearchInput('')
+    setSuggestionsOpen(false)
   }
+
+  const entitySearchPlaceholder =
+    category === 'transport'
+      ? 'Search vehicles...'
+      : category === 'equipment'
+        ? 'Search items...'
+        : category === 'crew'
+          ? 'Search crew...'
+          : 'Search jobs...'
+
+  const entityOptions = React.useMemo(
+    () =>
+      suggestions.map((s) => ({
+        value: s.id,
+        label: s.name,
+        description: s.subtitle,
+      })),
+    [suggestions],
+  )
 
   return (
     <Card>
@@ -275,17 +275,21 @@ export default function CalendarPage() {
             <Select.Root value={category} onValueChange={handleCategoryChange}>
               <Select.Trigger style={{ minWidth: 150 }} />
               <Select.Content>
-                <Select.Item value="all">All</Select.Item>
+                {!isFreelancer && <Select.Item value="all">All</Select.Item>}
                 <Select.Item value="jobDuration">Jobs</Select.Item>
-                <Select.Item value="equipment">Equipment</Select.Item>
-                <Select.Item value="transport">Transport</Select.Item>
+                {!isFreelancer && (
+                  <>
+                    <Select.Item value="equipment">Equipment</Select.Item>
+                    <Select.Item value="transport">Transport</Select.Item>
+                  </>
+                )}
                 <Select.Item value="crew">Crew</Select.Item>
               </Select.Content>
             </Select.Root>
           </Flex>
 
-          {/* Search with Autocomplete */}
-          {category !== 'all' && (
+          {/* Search with Autocomplete — hidden for freelancers (data is already scoped to them) */}
+          {!isFreelancer && category !== 'all' && (
             <Flex
               align="center"
               gap="2"
@@ -294,94 +298,20 @@ export default function CalendarPage() {
               <Text weight="bold" size="2">
                 Search:
               </Text>
-              <div ref={searchRef} style={{ position: 'relative', flex: 1 }}>
-                <TextField.Root
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    setShowSuggestions(true)
-                    if (!e.target.value) {
-                      setSelectedEntityId(null)
-                    }
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  placeholder={
-                    category === 'transport'
-                      ? 'Search vehicles...'
-                      : category === 'equipment'
-                        ? 'Search items...'
-                        : category === 'crew'
-                          ? 'Search crew...'
-                          : 'Search jobs...'
-                  }
-                  style={{ width: '100%' }}
-                >
-                  <TextField.Slot side="left">
-                    <Search />
-                  </TextField.Slot>
-                </TextField.Root>
-
-                {/* Suggestions Dropdown */}
-                {showSuggestions && suggestions.length > 0 && (
-                  <Box
-                    style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      zIndex: 100,
-                      marginTop: 4,
-                      maxHeight: 300,
-                      overflowY: 'auto',
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: 8,
-                      backgroundColor: 'var(--color-panel-solid)',
-                      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                    }}
-                  >
-                    {suggestions.map((suggestion) => (
-                      <Box
-                        key={suggestion.id}
-                        onClick={() => handleSelectSuggestion(suggestion.id)}
-                        style={{
-                          padding: '12px 16px',
-                          cursor: 'pointer',
-                          borderBottom: '1px solid var(--gray-a6)',
-                          backgroundColor:
-                            selectedEntityId === suggestion.id
-                              ? 'var(--accent-a3)'
-                              : 'transparent',
-                        }}
-                        onMouseEnter={(e) => {
-                          if (selectedEntityId !== suggestion.id) {
-                            e.currentTarget.style.backgroundColor =
-                              'var(--gray-a2)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (selectedEntityId !== suggestion.id) {
-                            e.currentTarget.style.backgroundColor =
-                              'transparent'
-                          }
-                        }}
-                      >
-                        <Text size="2" weight="medium">
-                          {suggestion.name}
-                        </Text>
-                        {suggestion.subtitle && (
-                          <Text
-                            size="1"
-                            color="gray"
-                            style={{ display: 'block', marginTop: 4 }}
-                          >
-                            {suggestion.subtitle}
-                          </Text>
-                        )}
-                      </Box>
-                    ))}
-                  </Box>
-                )}
-              </div>
+              <SearchableSelect
+                options={entityOptions}
+                value={selectedEntityId ?? ''}
+                onValueChange={(v) => setSelectedEntityId(v || null)}
+                onInputChange={(v) => {
+                  setSearchInput(v)
+                  if (!v) setSelectedEntityId(null)
+                }}
+                onOpenChange={setSuggestionsOpen}
+                filterLocally={false}
+                placeholder={entitySearchPlaceholder}
+                dropdownMaxHeight={300}
+                style={{ flex: 1, maxWidth: 'none' }}
+              />
             </Flex>
           )}
 

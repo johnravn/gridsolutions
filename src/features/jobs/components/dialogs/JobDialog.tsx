@@ -21,7 +21,10 @@ import {
 } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
 import { Sparks } from 'iconoir-react'
 import type { JobDetail, JobStatus, UUID } from '../../types'
@@ -652,24 +655,8 @@ export default function JobDialog({
       <Dialog.Content
         maxWidth="820px"
         style={{ display: 'flex', flexDirection: 'column' }}
-        onPointerDownOutside={(e) => {
-          const ev = e as unknown as {
-            detail?: { originalEvent?: PointerEvent }
-          }
-          const el = (ev.detail?.originalEvent?.target ??
-            e.target) as HTMLElement
-          if (el.closest('[data-searchable-select-dropdown]')) {
-            e.preventDefault()
-          }
-        }}
-        onInteractOutside={(e) => {
-          const ev = e as unknown as { detail?: { originalEvent?: FocusEvent } }
-          const el = (ev.detail?.originalEvent?.target ??
-            e.target) as HTMLElement
-          if (el.closest('[data-searchable-select-dropdown]')) {
-            e.preventDefault()
-          }
-        }}
+        onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+        onInteractOutside={preventDialogCloseOnSearchableSelect}
       >
         <Flex align="center" justify="between">
           <Dialog.Title>

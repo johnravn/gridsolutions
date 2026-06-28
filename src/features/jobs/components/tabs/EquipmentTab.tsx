@@ -214,10 +214,7 @@ function InternalEquipmentTable({
   onViewChange,
 }: {
   rows: Array<any>
-  groupItemsByGroupId: Map<
-    string,
-    Array<{ item_id: string; quantity: number }>
-  >
+  groupItemsByGroupId: Map<string, Array<{ item_id: string; quantity: number }>>
   jobId: string
   canBook: boolean
   companyId: string | undefined
@@ -684,8 +681,7 @@ function InternalEquipmentTable({
                             ? firstRow?.source_group[0]
                             : firstRow?.source_group
                           const groupName =
-                            sourceGroup?.name ??
-                            `Group ${groupId.slice(0, 8)}`
+                            sourceGroup?.name ?? `Group ${groupId.slice(0, 8)}`
                           const groupCategory = Array.isArray(
                             sourceGroup?.category,
                           )
@@ -725,130 +721,157 @@ function InternalEquipmentTable({
                                   !editMode && toggleGroup(expandKey)
                                 }
                               >
-                              <Table.Cell>
-                                <Box
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 8,
-                                  }}
-                                >
-                                  {!editMode &&
-                                    (isExpanded ? (
-                                      <NavArrowDown width={18} height={18} />
-                                    ) : (
-                                      <NavArrowRight width={18} height={18} />
-                                    ))}
-                                  <Text>{groupName}</Text>
-                                  <Badge color="pink" variant="soft">
-                                    Group
-                                  </Badge>
-                                </Box>
-                              </Table.Cell>
-                              <Table.Cell>
-                                <Text weight="bold">{totalQty}</Text>
-                              </Table.Cell>
-                              <Table.Cell>—</Table.Cell>
-                              <Table.Cell>—</Table.Cell>
-                              <Table.Cell>{groupCategory ?? '—'}</Table.Cell>
-                              <Table.Cell>
-                                <Box
-                                  onMouseEnter={() =>
-                                    !isReadOnly && setHoveredRowId(statusKey)
-                                  }
-                                  onMouseLeave={() => setHoveredRowId(null)}
-                                >
-                                  <Flex align="center" gap="2">
-                                    <Badge
-                                      radius="full"
-                                      highContrast
-                                      color={
-                                        firstRow?.status === 'confirmed'
-                                          ? 'green'
-                                          : firstRow?.status === 'canceled'
-                                            ? 'red'
-                                            : 'gray'
-                                      }
-                                    >
-                                      {firstRow?.status ?? 'planned'}
+                                <Table.Cell>
+                                  <Box
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                    }}
+                                  >
+                                    {!editMode &&
+                                      (isExpanded ? (
+                                        <NavArrowDown width={18} height={18} />
+                                      ) : (
+                                        <NavArrowRight width={18} height={18} />
+                                      ))}
+                                    <Text>{groupName}</Text>
+                                    <Badge color="pink" variant="soft">
+                                      Group
                                     </Badge>
-                                    {!isReadOnly && (
-                                      <>
-                                        {decoupledGroups.has(statusKey) ? (
-                                          <>
-                                            <Popover.Root
-                                              open={
-                                                statusPopoverOpen === statusKey
-                                              }
-                                              onOpenChange={(open) =>
-                                                setStatusPopoverOpen(
-                                                  open ? statusKey : null,
-                                                )
-                                              }
-                                            >
-                                              <Popover.Trigger>
-                                                <IconButton
-                                                  size="1"
-                                                  variant="ghost"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation()
-                                                  }}
-                                                >
-                                                  <Edit
-                                                    width={14}
-                                                    height={14}
-                                                  />
-                                                </IconButton>
-                                              </Popover.Trigger>
-                                              <Popover.Content
-                                                style={{ width: 180 }}
+                                  </Box>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <Text weight="bold">{totalQty}</Text>
+                                </Table.Cell>
+                                <Table.Cell>—</Table.Cell>
+                                <Table.Cell>—</Table.Cell>
+                                <Table.Cell>{groupCategory ?? '—'}</Table.Cell>
+                                <Table.Cell>
+                                  <Box
+                                    onMouseEnter={() =>
+                                      !isReadOnly && setHoveredRowId(statusKey)
+                                    }
+                                    onMouseLeave={() => setHoveredRowId(null)}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Badge
+                                        radius="full"
+                                        highContrast
+                                        color={
+                                          firstRow?.status === 'confirmed'
+                                            ? 'green'
+                                            : firstRow?.status === 'canceled'
+                                              ? 'red'
+                                              : 'gray'
+                                        }
+                                      >
+                                        {firstRow?.status ?? 'planned'}
+                                      </Badge>
+                                      {!isReadOnly && (
+                                        <>
+                                          {decoupledGroups.has(statusKey) ? (
+                                            <>
+                                              <Popover.Root
+                                                open={
+                                                  statusPopoverOpen ===
+                                                  statusKey
+                                                }
+                                                onOpenChange={(open) =>
+                                                  setStatusPopoverOpen(
+                                                    open ? statusKey : null,
+                                                  )
+                                                }
                                               >
-                                                <Flex
-                                                  direction="column"
-                                                  gap="2"
-                                                >
-                                                  <Text
-                                                    size="2"
-                                                    weight="medium"
-                                                  >
-                                                    Change status
-                                                  </Text>
-                                                  <Select.Root
-                                                    value={
-                                                      (firstRow?.status ??
-                                                        'planned') as BookingStatus
-                                                    }
-                                                    onValueChange={(value) => {
-                                                      handleUpdateGroupStatus(
-                                                        groupId,
-                                                        periodId,
-                                                        value as BookingStatus,
-                                                      )
-                                                      setStatusPopoverOpen(null)
+                                                <Popover.Trigger>
+                                                  <IconButton
+                                                    size="1"
+                                                    variant="ghost"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
                                                     }}
                                                   >
-                                                    <Select.Trigger />
-                                                    <Select.Content>
-                                                      <Select.Item value="planned">
-                                                        Planned
-                                                      </Select.Item>
-                                                      <Select.Item value="confirmed">
-                                                        Confirmed
-                                                      </Select.Item>
-                                                      <Select.Item value="canceled">
-                                                        Canceled
-                                                      </Select.Item>
-                                                    </Select.Content>
-                                                  </Select.Root>
-                                                </Flex>
-                                              </Popover.Content>
-                                            </Popover.Root>
+                                                    <Edit
+                                                      width={14}
+                                                      height={14}
+                                                    />
+                                                  </IconButton>
+                                                </Popover.Trigger>
+                                                <Popover.Content
+                                                  style={{ width: 180 }}
+                                                >
+                                                  <Flex
+                                                    direction="column"
+                                                    gap="2"
+                                                  >
+                                                    <Text
+                                                      size="2"
+                                                      weight="medium"
+                                                    >
+                                                      Change status
+                                                    </Text>
+                                                    <Select.Root
+                                                      value={
+                                                        (firstRow?.status ??
+                                                          'planned') as BookingStatus
+                                                      }
+                                                      onValueChange={(
+                                                        value,
+                                                      ) => {
+                                                        handleUpdateGroupStatus(
+                                                          groupId,
+                                                          periodId,
+                                                          value as BookingStatus,
+                                                        )
+                                                        setStatusPopoverOpen(
+                                                          null,
+                                                        )
+                                                      }}
+                                                    >
+                                                      <Select.Trigger />
+                                                      <Select.Content>
+                                                        <Select.Item value="planned">
+                                                          Planned
+                                                        </Select.Item>
+                                                        <Select.Item value="confirmed">
+                                                          Confirmed
+                                                        </Select.Item>
+                                                        <Select.Item value="canceled">
+                                                          Canceled
+                                                        </Select.Item>
+                                                      </Select.Content>
+                                                    </Select.Root>
+                                                  </Flex>
+                                                </Popover.Content>
+                                              </Popover.Root>
+                                              <IconButton
+                                                size="1"
+                                                variant="ghost"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  handleRecoupleGroup(statusKey)
+                                                }}
+                                                style={{
+                                                  opacity:
+                                                    hoveredRowId === statusKey
+                                                      ? 1
+                                                      : 0,
+                                                  pointerEvents:
+                                                    hoveredRowId === statusKey
+                                                      ? 'auto'
+                                                      : 'none',
+                                                }}
+                                              >
+                                                <Link width={14} height={14} />
+                                              </IconButton>
+                                            </>
+                                          ) : (
                                             <IconButton
                                               size="1"
                                               variant="ghost"
                                               onClick={(e) => {
                                                 e.stopPropagation()
-                                                handleRecoupleGroup(statusKey)
+                                                handleDecoupleGroup(statusKey)
                                               }}
                                               style={{
                                                 opacity:
@@ -861,92 +884,74 @@ function InternalEquipmentTable({
                                                     : 'none',
                                               }}
                                             >
-                                              <Link width={14} height={14} />
+                                              <LinkSlash
+                                                width={14}
+                                                height={14}
+                                              />
                                             </IconButton>
-                                          </>
-                                        ) : (
-                                          <IconButton
-                                            size="1"
-                                            variant="ghost"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              handleDecoupleGroup(statusKey)
-                                            }}
-                                            style={{
-                                              opacity:
-                                                hoveredRowId === statusKey
-                                                  ? 1
-                                                  : 0,
-                                              pointerEvents:
-                                                hoveredRowId === statusKey
-                                                  ? 'auto'
-                                                  : 'none',
-                                            }}
-                                          >
-                                            <LinkSlash width={14} height={14} />
-                                          </IconButton>
-                                        )}
-                                      </>
-                                    )}
-                                  </Flex>
-                                </Box>
-                              </Table.Cell>
-                              <Table.Cell>
-                                {firstRow?.time_period?.title ??
-                                  `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
-                              </Table.Cell>
-                              {editMode && (
-                                <Table.Cell align="right">
-                                  <Button
-                                    size="1"
-                                    variant="soft"
-                                    color="red"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      handleDeleteGroup(groupId, periodId)
-                                    }}
-                                  >
-                                    <Trash width={14} height={14} />
-                                  </Button>
+                                          )}
+                                        </>
+                                      )}
+                                    </Flex>
+                                  </Box>
                                 </Table.Cell>
-                              )}
-                            </Table.Row>
+                                <Table.Cell>
+                                  {firstRow?.time_period?.title ??
+                                    `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
+                                </Table.Cell>
+                                {editMode && (
+                                  <Table.Cell align="right">
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      color="red"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleDeleteGroup(groupId, periodId)
+                                      }}
+                                    >
+                                      <Trash width={14} height={14} />
+                                    </Button>
+                                  </Table.Cell>
+                                )}
+                              </Table.Row>
 
-                            {/* Expanded group items */}
-                            {isExpanded &&
-                              !editMode &&
-                              groupRows.map((r) => {
-                                const item = firstItem(r.item)
-                                return (
-                                  <Table.Row
-                                    key={r.id}
-                                    style={{
-                                      backgroundColor: 'var(--gray-a1)',
-                                    }}
-                                  >
-                                    <Table.Cell style={{ paddingLeft: 32 }}>
-                                      <Text color="gray">
-                                        ↳ {item?.name ?? '—'}
-                                      </Text>
-                                    </Table.Cell>
-                                    <Table.Cell>{r.quantity}</Table.Cell>
-                                    <Table.Cell>
-                                      {item?.brand?.name ?? '—'}
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      {item?.model ?? '—'}
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      {item?.category?.name ?? '—'}
-                                    </Table.Cell>
-                                    <Table.Cell>—</Table.Cell>
-                                    <Table.Cell>—</Table.Cell>
-                                  </Table.Row>
-                                )
-                              })}
-                          </React.Fragment>
-                        )
-                      })}
+                              {/* Expanded group items */}
+                              {isExpanded &&
+                                !editMode &&
+                                groupRows.map((r) => {
+                                  const item = firstItem(r.item)
+                                  return (
+                                    <Table.Row
+                                      key={r.id}
+                                      style={{
+                                        backgroundColor: 'var(--gray-a1)',
+                                      }}
+                                    >
+                                      <Table.Cell style={{ paddingLeft: 32 }}>
+                                        <Text color="gray">
+                                          ↳ {item?.name ?? '—'}
+                                        </Text>
+                                      </Table.Cell>
+                                      <Table.Cell>{r.quantity}</Table.Cell>
+                                      <Table.Cell>
+                                        {item?.brand?.name ?? '—'}
+                                      </Table.Cell>
+                                      <Table.Cell>
+                                        {item?.model ?? '—'}
+                                      </Table.Cell>
+                                      <Table.Cell>
+                                        {item?.category?.name ?? '—'}
+                                      </Table.Cell>
+                                      <Table.Cell>—</Table.Cell>
+                                      <Table.Cell>—</Table.Cell>
+                                    </Table.Row>
+                                  )
+                                })}
+                            </React.Fragment>
+                          )
+                        },
+                      )}
 
                       {/* Render direct items */}
                       {category.directRows.map((r) => {
@@ -1046,6 +1051,11 @@ function InternalEquipmentTable({
                                 >
                                   {r.status ?? 'planned'}
                                 </Badge>
+                                {r.forced && (
+                                  <Badge radius="full" color="amber">
+                                    Forced
+                                  </Badge>
+                                )}
                                 {!isReadOnly && (
                                   <>
                                     {decoupledRows.has(r.id) ? (
@@ -1990,6 +2000,11 @@ function ExternalEquipmentTable({
                                         >
                                           {r.external_status ?? 'planned'}
                                         </Badge>
+                                        {r.forced && (
+                                          <Badge radius="full" color="amber">
+                                            Forced
+                                          </Badge>
+                                        )}
                                         {!isReadOnly && (
                                           <>
                                             {decoupledRows.has(r.id) ? (

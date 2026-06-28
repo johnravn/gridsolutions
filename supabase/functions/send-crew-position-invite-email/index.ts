@@ -286,8 +286,7 @@ Deno.serve(async (req) => {
       .join(' ')
       .trim()
     const inviterName =
-      (inviterProfile?.display_name?.trim() ?? inviterFromParts) ||
-      'Someone'
+      (inviterProfile?.display_name?.trim() ?? inviterFromParts) || 'Someone'
 
     const roleTitle = tp.title || 'Role'
     const subject = `Crew invitation: ${roleTitle}`

@@ -99,3 +99,106 @@ export async function sendResendHtmlEmail(params: {
 
   return { ok: true, messageId, raw }
 }
+
+export type ResendEmailListItem = {
+  id: string
+  message_id: string | null
+  to: Array<string>
+  from: string
+  created_at: string
+  subject: string
+  bcc: Array<string> | null
+  cc: Array<string> | null
+  reply_to: Array<string> | null
+  last_event: string | null
+  scheduled_at: string | null
+}
+
+export type ResendEmailListResponse = {
+  object: 'list'
+  has_more: boolean
+  data: Array<ResendEmailListItem>
+}
+
+export type ResendListResult =
+  | { ok: true; page: ResendEmailListResponse }
+  | { ok: false; status: number; bodyText: string }
+
+/** List sent emails from Resend (source of truth — not app DB). */
+export async function listResendSentEmails(params: {
+  apiKey: string
+  limit?: number
+  after?: string
+  before?: string
+}): Promise<ResendListResult> {
+  const search = new URLSearchParams()
+  const limit = Math.min(100, Math.max(1, params.limit ?? 50))
+  search.set('limit', String(limit))
+  if (params.after) search.set('after', params.after)
+  if (params.before) search.set('before', params.before)
+
+  const res = await fetch(`${RESEND_API_URL}?${search.toString()}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      'User-Agent': 'Grid-App/1.0',
+    },
+  })
+
+  const bodyText = await res.text()
+  if (!res.ok) {
+    return { ok: false, status: res.status, bodyText }
+  }
+
+  let page: ResendEmailListResponse
+  try {
+    page = JSON.parse(bodyText) as ResendEmailListResponse
+  } catch {
+    return {
+      ok: false,
+      status: res.status,
+      bodyText: 'Invalid JSON from Resend',
+    }
+  }
+
+  return { ok: true, page }
+}
+
+export type ResendEmailDetail = ResendEmailListItem & {
+  html?: string | null
+  text?: string | null
+}
+
+export type ResendRetrieveResult =
+  | { ok: true; email: ResendEmailDetail }
+  | { ok: false; status: number; bodyText: string }
+
+/** Retrieve a single sent email (includes html/text when available). */
+export async function retrieveResendSentEmail(params: {
+  apiKey: string
+  id: string
+}): Promise<ResendRetrieveResult> {
+  const res = await fetch(`${RESEND_API_URL}/${params.id}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${params.apiKey}`,
+      'User-Agent': 'Grid-App/1.0',
+    },
+  })
+
+  const bodyText = await res.text()
+  if (!res.ok) {
+    return { ok: false, status: res.status, bodyText }
+  }
+
+  try {
+    const email = JSON.parse(bodyText) as ResendEmailDetail
+    return { ok: true, email }
+  } catch {
+    return {
+      ok: false,
+      status: res.status,
+      bodyText: 'Invalid JSON from Resend',
+    }
+  }
+}

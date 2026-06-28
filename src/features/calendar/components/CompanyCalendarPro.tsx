@@ -284,7 +284,7 @@ export default function CompanyCalendarPro({
       isCrew && userId
         ? (crewStatusByUserId[userId] ?? jobCrewStatusByUserId[userId])
         : undefined
-    const isConfirmedCrew = isCrew && crewStatus === 'accepted'
+    const isConfirmedCrew = isCrew && crewStatus === 'confirmed'
 
     const avatarUrl = projectLead?.avatar_url
       ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url)

@@ -2023,13 +2023,13 @@ export default function OffersTab({
                   cursor: createEmptyTechnicalOfferMutation.isPending
                     ? 'not-allowed'
                     : 'pointer',
-                  opacity: createEmptyTechnicalOfferMutation.isPending ? 0.6 : 1,
+                  opacity: createEmptyTechnicalOfferMutation.isPending
+                    ? 0.6
+                    : 1,
                   transition: 'all 100ms',
                 }}
                 role="button"
-                tabIndex={
-                  createEmptyTechnicalOfferMutation.isPending ? -1 : 0
-                }
+                tabIndex={createEmptyTechnicalOfferMutation.isPending ? -1 : 0}
                 onClick={() => {
                   if (createEmptyTechnicalOfferMutation.isPending) return
                   setCreateDialogOpen(false)

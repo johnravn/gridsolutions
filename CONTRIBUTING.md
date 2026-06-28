@@ -25,7 +25,7 @@ This project is primarily developed using AI agents. This guide ensures all cont
 3. **Test locally:**
 
    ```bash
-   npm run db:reset  # Resets local DB and applies all migrations
+   npm run db:reset  # Resets local DB, applies migrations, and repopulates from remote
    ```
 
 4. **Push to production:**
@@ -142,3 +142,7 @@ Always commit updated `src/shared/types/database.types.ts` after schema changes.
 ---
 
 **Remember**: When in doubt about database changes, always create a migration file and test it locally first!
+
+## Automated testing
+
+See **[docs/TESTING.md](docs/TESTING.md)** for unit, integration, and E2E test commands, setup, seed data, and troubleshooting.

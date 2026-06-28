@@ -1,16 +1,11 @@
 // src/features/super/components/CompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import {
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  Separator,
-  Spinner,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
@@ -50,7 +45,8 @@ export default function CompanyDialog({
 }) {
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
-  const [contactPersonSearch, setContactPersonSearch] = React.useState('')
+  const dialogPortalRef = React.useRef<HTMLElement | null>(null)
+  const [searchTerm, setSearchTerm] = React.useState('')
 
   // Format VAT number on initial load
   const formatVATForInput = (vat: string | null | undefined): string => {
@@ -108,7 +104,7 @@ export default function CompanyDialog({
     queryKey: [
       'profiles',
       'contact-person-search',
-      contactPersonSearch,
+      searchTerm,
       form.contact_person_id,
     ],
     enabled: open,
@@ -118,10 +114,10 @@ export default function CompanyDialog({
         .select('user_id, display_name, email, first_name, last_name')
         .limit(20)
 
-      if (contactPersonSearch.trim()) {
+      if (searchTerm.trim()) {
         // Search mode: filter by search term
         q = q.or(
-          `display_name.ilike.%${contactPersonSearch.trim()}%,email.ilike.%${contactPersonSearch.trim()}%,first_name.ilike.%${contactPersonSearch.trim()}%,last_name.ilike.%${contactPersonSearch.trim()}%`,
+          `display_name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%,first_name.ilike.%${searchTerm.trim()}%,last_name.ilike.%${searchTerm.trim()}%`,
         )
       } else if (form.contact_person_id) {
         // Show selected person when no search
@@ -145,10 +141,16 @@ export default function CompanyDialog({
     staleTime: 30_000,
   })
 
-  // Get the selected profile for display
-  const selectedProfile = React.useMemo(
-    () => profiles.find((p) => p.id === form.contact_person_id),
-    [profiles, form.contact_person_id],
+  const contactPersonOptions = React.useMemo(
+    () => [
+      { value: '', label: 'None' },
+      ...profiles.map((p) => ({
+        value: p.id,
+        label: p.label,
+        description: p.display_name ? p.email : undefined,
+      })),
+    ],
+    [profiles],
   )
 
   // Prefill form on edit
@@ -164,7 +166,7 @@ export default function CompanyDialog({
         vat_number: '',
         contact_person_id: null,
       })
-      setContactPersonSearch('')
+      setSearchTerm('')
       return
     }
 
@@ -180,8 +182,7 @@ export default function CompanyDialog({
         vat_number: formatVATForInput(initialData.vat_number),
         contact_person_id: initialData.contact_person_id || null,
       })
-      // Search will be set when selectedProfile loads
-      setContactPersonSearch('')
+      setSearchTerm('')
     } else if (mode === 'create') {
       setForm({
         name: '',
@@ -193,16 +194,9 @@ export default function CompanyDialog({
         vat_number: '',
         contact_person_id: null,
       })
-      setContactPersonSearch('')
+      setSearchTerm('')
     }
   }, [open, mode, initialData?.id])
-
-  // Update search display when selected profile is loaded
-  React.useEffect(() => {
-    if (selectedProfile && form.contact_person_id) {
-      setContactPersonSearch(selectedProfile.label)
-    }
-  }, [selectedProfile, form.contact_person_id])
 
   const createMutation = useMutation({
     mutationFn: async (f: FormState) => {
@@ -295,232 +289,142 @@ export default function CompanyDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="600px">
+      <Dialog.Content
+        maxWidth="600px"
+        onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+        onInteractOutside={preventDialogCloseOnSearchableSelect}
+      >
         <Dialog.Title>
           {mode === 'create' ? 'Create Company' : 'Edit Company'}
         </Dialog.Title>
 
         <form onSubmit={handleSubmit}>
-          <Flex direction="column" gap="3" mt="3">
-            <Field
-              label={
-                <>
-                  Name <Text color="red">*</Text>
-                </>
-              }
-            >
-              <TextField.Root
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                placeholder="Company name"
-                required
-                disabled={isLoading}
-              />
-            </Field>
+          <Box
+            ref={(el: HTMLElement | null) => {
+              dialogPortalRef.current = el
+            }}
+            style={{ position: 'relative' }}
+          >
+            <Flex direction="column" gap="3" mt="3">
+              <Field
+                label={
+                  <>
+                    Name <Text color="red">*</Text>
+                  </>
+                }
+              >
+                <TextField.Root
+                  value={form.name}
+                  onChange={(e) => set('name', e.target.value)}
+                  placeholder="Company name"
+                  required
+                  disabled={isLoading}
+                />
+              </Field>
 
-            <Field label="General Email">
-              <TextField.Root
-                type="email"
-                value={form.general_email}
-                onChange={(e) => set('general_email', e.target.value)}
-                placeholder="info@company.com"
-                disabled={isLoading}
-              />
-            </Field>
+              <Field label="General Email">
+                <TextField.Root
+                  type="email"
+                  value={form.general_email}
+                  onChange={(e) => set('general_email', e.target.value)}
+                  placeholder="info@company.com"
+                  disabled={isLoading}
+                />
+              </Field>
 
-            <Field label="Address line">
-              <TextField.Root
-                value={form.address_line}
-                onChange={(e) => setAddr('address_line', e.target.value)}
-                placeholder="Street and number"
-                disabled={isLoading}
-              />
-            </Field>
+              <Field label="Address line">
+                <TextField.Root
+                  value={form.address_line}
+                  onChange={(e) => setAddr('address_line', e.target.value)}
+                  placeholder="Street and number"
+                  disabled={isLoading}
+                />
+              </Field>
 
-            <FieldRow>
-              <Flex gap={'2'} width={'100%'}>
-                <Field label="ZIP">
-                  <TextField.Root
-                    value={form.zip_code}
-                    onChange={(e) => setAddr('zip_code', e.target.value)}
-                    placeholder="e.g., 0361"
-                    disabled={isLoading}
-                  />
-                </Field>
-                <Field label="City" style={{ flex: 1 }}>
-                  <TextField.Root
-                    value={form.city}
-                    onChange={(e) => setAddr('city', e.target.value)}
-                    placeholder="e.g., Oslo"
-                    disabled={isLoading}
-                  />
-                </Field>
-              </Flex>
-            </FieldRow>
+              <FieldRow>
+                <Flex gap={'2'} width={'100%'}>
+                  <Field label="ZIP">
+                    <TextField.Root
+                      value={form.zip_code}
+                      onChange={(e) => setAddr('zip_code', e.target.value)}
+                      placeholder="e.g., 0361"
+                      disabled={isLoading}
+                    />
+                  </Field>
+                  <Field label="City" style={{ flex: 1 }}>
+                    <TextField.Root
+                      value={form.city}
+                      onChange={(e) => setAddr('city', e.target.value)}
+                      placeholder="e.g., Oslo"
+                      disabled={isLoading}
+                    />
+                  </Field>
+                </Flex>
+              </FieldRow>
 
-            <Field label="Country">
-              <TextField.Root
-                value={form.country}
-                onChange={(e) => setAddr('country', e.target.value)}
-                disabled={isLoading}
-              />
-            </Field>
+              <Field label="Country">
+                <TextField.Root
+                  value={form.country}
+                  onChange={(e) => setAddr('country', e.target.value)}
+                  disabled={isLoading}
+                />
+              </Field>
 
-            <Field label="VAT Number">
-              <TextField.Root
-                value={form.vat_number}
-                onChange={(e) => {
-                  const input = e.target.value.replace(/[\s-]/g, '')
-                  // Only allow digits, max 9 digits
-                  if (input === '' || /^\d{0,9}$/.test(input)) {
-                    // Format as "xxx xxx xxx" as user types
-                    const formatted =
-                      input.length <= 3
-                        ? input
-                        : input.length <= 6
-                          ? `${input.slice(0, 3)} ${input.slice(3)}`
-                          : `${input.slice(0, 3)} ${input.slice(3, 6)} ${input.slice(6)}`
-                    set('vat_number', formatted)
-                  }
-                }}
-                placeholder="123 456 789"
-                disabled={isLoading}
-              />
-            </Field>
-
-            <Field label="Contact Person">
-              <TextField.Root
-                placeholder="Search by name or email…"
-                value={contactPersonSearch}
-                onChange={(e) => {
-                  setContactPersonSearch(e.target.value)
-                  // Clear selection if user starts typing
-                  if (e.target.value !== selectedProfile?.label) {
-                    set('contact_person_id', null)
-                  }
-                }}
-                disabled={isLoading}
-              />
-              <TextField.Slot side="right">
-                {profilesLoading && <Spinner size="1" />}
-              </TextField.Slot>
-              {(contactPersonSearch.trim() || form.contact_person_id) && (
-                <Box
-                  mt="2"
-                  style={{
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 8,
-                    maxHeight: 220,
-                    overflow: 'auto',
+              <Field label="VAT Number">
+                <TextField.Root
+                  value={form.vat_number}
+                  onChange={(e) => {
+                    const input = e.target.value.replace(/[\s-]/g, '')
+                    // Only allow digits, max 9 digits
+                    if (input === '' || /^\d{0,9}$/.test(input)) {
+                      // Format as "xxx xxx xxx" as user types
+                      const formatted =
+                        input.length <= 3
+                          ? input
+                          : input.length <= 6
+                            ? `${input.slice(0, 3)} ${input.slice(3)}`
+                            : `${input.slice(0, 3)} ${input.slice(3, 6)} ${input.slice(6)}`
+                      set('vat_number', formatted)
+                    }
                   }}
-                >
-                  {profilesLoading && (
-                    <Box p="3">
-                      <Text size="2" color="gray">
-                        Searching…
-                      </Text>
-                    </Box>
-                  )}
-                  {!profilesLoading && profiles.length === 0 && (
-                    <Box p="3">
-                      <Text size="2" color="gray">
-                        No results
-                      </Text>
-                    </Box>
-                  )}
-                  {!profilesLoading && profiles.length > 0 && (
-                    <>
-                      {/* Option to clear selection */}
-                      <Box
-                        p="2"
-                        style={{
-                          cursor: 'pointer',
-                          borderRadius: 6,
-                          background: !form.contact_person_id
-                            ? 'var(--blue-a3)'
-                            : 'transparent',
-                        }}
-                        onClick={() => {
-                          set('contact_person_id', null)
-                          setContactPersonSearch('')
-                        }}
-                      >
-                        <Flex align="center" justify="between">
-                          <Text size="2" color="gray">
-                            None
-                          </Text>
-                          {!form.contact_person_id && (
-                            <Text size="1" color="blue">
-                              Selected
-                            </Text>
-                          )}
-                        </Flex>
-                      </Box>
-                      {profiles.map((profile, idx) => (
-                        <React.Fragment key={profile.id}>
-                          {idx > 0 && <Separator />}
-                          <Box
-                            p="2"
-                            style={{
-                              cursor: 'pointer',
-                              borderRadius: 6,
-                              background:
-                                form.contact_person_id === profile.id
-                                  ? 'var(--blue-a3)'
-                                  : 'transparent',
-                            }}
-                            onClick={() => {
-                              set('contact_person_id', profile.id)
-                              setContactPersonSearch(profile.label)
-                            }}
-                          >
-                            <Flex align="center" justify="between">
-                              <div>
-                                <Text weight="medium" size="2">
-                                  {profile.label}
-                                </Text>
-                                {profile.display_name && (
-                                  <Text
-                                    size="1"
-                                    color="gray"
-                                    style={{ marginLeft: 6 }}
-                                  >
-                                    {profile.email}
-                                  </Text>
-                                )}
-                              </div>
-                              {form.contact_person_id === profile.id && (
-                                <Text size="1" color="blue">
-                                  Selected
-                                </Text>
-                              )}
-                            </Flex>
-                          </Box>
-                        </React.Fragment>
-                      ))}
-                    </>
-                  )}
-                </Box>
-              )}
-            </Field>
+                  placeholder="123 456 789"
+                  disabled={isLoading}
+                />
+              </Field>
 
-            <Flex gap="3" justify="end" mt="4">
-              <Dialog.Close>
-                <Button type="button" variant="soft" disabled={isLoading}>
-                  Cancel
+              <Field label="Contact Person">
+                <SearchableSelect
+                  options={contactPersonOptions}
+                  value={form.contact_person_id ?? ''}
+                  onValueChange={(v) => set('contact_person_id', v || null)}
+                  onInputChange={setSearchTerm}
+                  filterLocally={false}
+                  loading={profilesLoading}
+                  placeholder="Search by name or email…"
+                  disabled={isLoading}
+                  portalContainer={() => dialogPortalRef.current}
+                  style={{ maxWidth: 'none' }}
+                />
+              </Field>
+
+              <Flex gap="3" justify="end" mt="4">
+                <Dialog.Close>
+                  <Button type="button" variant="soft" disabled={isLoading}>
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <Button type="submit" disabled={isLoading}>
+                  {isLoading
+                    ? mode === 'create'
+                      ? 'Creating…'
+                      : 'Saving…'
+                    : mode === 'create'
+                      ? 'Create'
+                      : 'Save'}
                 </Button>
-              </Dialog.Close>
-              <Button type="submit" disabled={isLoading}>
-                {isLoading
-                  ? mode === 'create'
-                    ? 'Creating…'
-                    : 'Saving…'
-                  : mode === 'create'
-                    ? 'Create'
-                    : 'Save'}
-              </Button>
+              </Flex>
             </Flex>
-          </Flex>
+          </Box>
         </form>
       </Dialog.Content>
     </Dialog.Root>

@@ -98,14 +98,21 @@ export function DashboardCard({
             <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
               <Heading size="4">{title}</Heading>
               {subtitle != null ? (
-                <Text as="div" size="2" color="gray" style={{ lineHeight: 1.35 }}>
+                <Text
+                  as="div"
+                  size="2"
+                  color="gray"
+                  style={{ lineHeight: 1.35 }}
+                >
                   {subtitle}
                 </Text>
               ) : null}
             </Flex>
           </Flex>
           {headerAction ? (
-            <Box style={{ flexShrink: 0, alignSelf: 'start' }}>{headerAction}</Box>
+            <Box style={{ flexShrink: 0, alignSelf: 'start' }}>
+              {headerAction}
+            </Box>
           ) : null}
         </Flex>
 

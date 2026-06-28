@@ -14,10 +14,20 @@ import { supabase } from '@shared/api/supabase'
 import { Check } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
+import {
+  findCrewOverlaps,
+  getTimePeriodWindow,
+} from '@features/conflicts/api/overlapChecks'
+import {
+  forcedBookingFields,
+  isCrewOverlapError,
+} from '@features/conflicts/api/forceBooking'
 import {
   addMemberOrInvite,
   crewInternalNotesQuery,
 } from '../../../crew/api/queries'
+import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { UUID } from '../../types'
 
 export default function AddCrewToRoleDialog({
@@ -35,11 +45,16 @@ export default function AddCrewToRoleDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
-  const { companyRole, isGlobalSuperuser } = useAuthz()
+  const { companyRole, isGlobalSuperuser, userId: authUserId } = useAuthz()
   const [search, setSearch] = React.useState('')
   const [selectedIds, setSelectedIds] = React.useState<Set<UUID>>(new Set())
   const [placeholderName, setPlaceholderName] = React.useState('')
   const [placeholderEmail, setPlaceholderEmail] = React.useState('')
+  const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
+  const [forceConflicts, setForceConflicts] = React.useState<
+    Array<OverlapConflict>
+  >([])
+  const [forceResourceLabel, setForceResourceLabel] = React.useState('')
 
   const canSeeInternalNotes =
     !!isGlobalSuperuser ||
@@ -122,16 +137,43 @@ export default function AddCrewToRoleDialog({
   }
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
       if (selectedIds.size === 0) {
         throw new Error('Please select at least one crew member')
       }
+
+      const window = await getTimePeriodWindow(timePeriodId)
+      if (!force && window) {
+        const overlaps = await findCrewOverlaps({
+          userIds: Array.from(selectedIds),
+          startAt: window.startAt,
+          endAt: window.endAt,
+          excludePeriodId: timePeriodId,
+        })
+        if (overlaps.size > 0) {
+          const allConflicts: Array<OverlapConflict> = []
+          const names: Array<string> = []
+          for (const [userId, conflicts] of overlaps) {
+            const person = people.find((p) => p.user_id === userId)
+            names.push(person?.display_name ?? person?.email ?? 'Crew member')
+            allConflicts.push(...conflicts)
+          }
+          setForceResourceLabel(names.join(', '))
+          setForceConflicts(allConflicts)
+          setForceDialogOpen(true)
+          throw new Error('OVERLAP_NEEDS_FORCE')
+        }
+      }
+
+      const forcedFields =
+        force && authUserId ? forcedBookingFields(authUserId) : {}
 
       const payload = Array.from(selectedIds).map((userId) => ({
         time_period_id: timePeriodId,
         user_id: userId,
         status: 'planned' as const,
         notes: null,
+        ...forcedFields,
       }))
 
       const { error } = await supabase.from('reserved_crew').insert(payload)
@@ -139,20 +181,27 @@ export default function AddCrewToRoleDialog({
       if (error) throw error
     },
     onSuccess: () => {
+      setForceDialogOpen(false)
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
+      qc.invalidateQueries({ queryKey: ['conflicts'] })
       success('Success', `Added ${selectedIds.size} crew member(s) to role`)
       setSelectedIds(new Set())
       onOpenChange(false)
     },
     onError: (e: any) => {
-      toastError(
-        'Failed to add crew',
-        e?.hint || e?.message || 'Please try again.',
-      )
+      if (e?.message === 'OVERLAP_NEEDS_FORCE') return
+      const msg = e?.hint || e?.message || 'Please try again.'
+      if (isCrewOverlapError(msg) && !forceDialogOpen) {
+        setForceResourceLabel('Selected crew')
+        setForceConflicts([])
+        setForceDialogOpen(true)
+        return
+      }
+      toastError('Failed to add crew', msg)
     },
   })
 
@@ -255,164 +304,177 @@ export default function AddCrewToRoleDialog({
   }, [open])
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content style={{ maxWidth: 600 }}>
-        <Dialog.Title>Add Crew to Role</Dialog.Title>
-        <Dialog.Description>
-          Select crew members to add to this role
-        </Dialog.Description>
+    <>
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Content style={{ maxWidth: 600 }}>
+          <Dialog.Title>Add Crew to Role</Dialog.Title>
+          <Dialog.Description>
+            Select crew members to add to this role
+          </Dialog.Description>
 
-        <Box my="4">
-          <TextField.Root
-            placeholder="Search by name or email…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </Box>
-
-        <Box mb="4">
-          <Text as="div" size="2" weight="medium">
-            Add placeholder
-          </Text>
-          <Text as="div" size="1" color="gray">
-            Add a named crew member without a user account
-          </Text>
-          <Flex gap="2" mt="2">
+          <Box my="4">
             <TextField.Root
-              placeholder="Placeholder name"
-              value={placeholderName}
-              onChange={(e) => setPlaceholderName(e.target.value)}
+              placeholder="Search by name or email…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
-            <Button
-              variant="soft"
-              onClick={() => addPlaceholder.mutate()}
-              disabled={addPlaceholder.isPending || !placeholderName.trim()}
-            >
-              {addPlaceholder.isPending ? 'Adding…' : 'Add placeholder'}
-            </Button>
-          </Flex>
-        </Box>
+          </Box>
 
-        <Box mb="4">
-          <Text as="div" size="2" weight="medium">
-            Invite by email
-          </Text>
-          <Text as="div" size="1" color="gray">
-            Adds them to the company (or creates a pending invite) and sends an
-            email to sign up if needed.
-          </Text>
-          <Flex gap="2" mt="2">
-            <TextField.Root
-              placeholder="Name (optional)"
-              value={placeholderName}
-              onChange={(e) => setPlaceholderName(e.target.value)}
-            />
-            <TextField.Root
-              placeholder="Email"
-              value={placeholderEmail}
-              onChange={(e) => setPlaceholderEmail(e.target.value)}
-            />
-            <Button
-              variant="solid"
-              onClick={() => inviteByEmail.mutate()}
-              disabled={inviteByEmail.isPending || !placeholderEmail.trim()}
-            >
-              {inviteByEmail.isPending ? 'Inviting…' : 'Invite'}
-            </Button>
-          </Flex>
-        </Box>
-
-        <Box
-          style={{
-            maxHeight: 400,
-            overflowY: 'auto',
-            border: '1px solid var(--gray-a6)',
-            borderRadius: 8,
-            padding: 8,
-          }}
-        >
-          {isFetching && (
-            <Text size="2" color="gray">
-              Searching…
+          <Box mb="4">
+            <Text as="div" size="2" weight="medium">
+              Add placeholder
             </Text>
-          )}
-          {!isFetching && people.length === 0 && (
-            <Text size="2" color="gray">
-              No crew members found
+            <Text as="div" size="1" color="gray">
+              Add a named crew member without a user account
             </Text>
-          )}
-          {!isFetching &&
-            people.map((p, idx) => {
-              const isSelected = selectedIds.has(p.user_id)
-              const internalNote = internalNotesByUserId[p.user_id]
-              return (
-                <React.Fragment key={p.user_id}>
-                  <Box
-                    p="2"
-                    style={{
-                      cursor: 'pointer',
-                      borderRadius: 6,
-                      background: isSelected ? 'var(--blue-a3)' : 'transparent',
-                    }}
-                    onClick={() => toggleSelection(p.user_id)}
-                  >
-                    <Flex align="center" justify="between">
-                      <Flex align="center" gap="2">
-                        {isSelected && (
-                          <Check
-                            width={18}
-                            height={18}
-                            style={{ color: 'var(--blue-11)' }}
-                          />
-                        )}
-                        <div>
-                          <Text weight="medium">
-                            {p.display_name ?? p.email}
-                          </Text>
-                          {p.display_name && (
-                            <Text
-                              size="1"
-                              color="gray"
-                              style={{ marginLeft: 6 }}
-                            >
-                              {p.email}
-                            </Text>
-                          )}
-                          {internalNote && (
-                            <Text as="div" size="1" color="gray" mt="1">
-                              <Text weight="medium">Internal:</Text>{' '}
-                              {internalNote}
-                            </Text>
-                          )}
-                        </div>
-                      </Flex>
-                      {isSelected && (
-                        <Text size="1" color="blue">
-                          Selected
-                        </Text>
-                      )}
-                    </Flex>
-                  </Box>
-                  {idx < people.length - 1 && <Separator my="2" />}
-                </React.Fragment>
-              )
-            })}
-        </Box>
+            <Flex gap="2" mt="2">
+              <TextField.Root
+                placeholder="Placeholder name"
+                value={placeholderName}
+                onChange={(e) => setPlaceholderName(e.target.value)}
+              />
+              <Button
+                variant="soft"
+                onClick={() => addPlaceholder.mutate()}
+                disabled={addPlaceholder.isPending || !placeholderName.trim()}
+              >
+                {addPlaceholder.isPending ? 'Adding…' : 'Add placeholder'}
+              </Button>
+            </Flex>
+          </Box>
 
-        <Flex mt="4" gap="2" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => save.mutate()}
-            disabled={selectedIds.size === 0 || save.isPending}
+          <Box mb="4">
+            <Text as="div" size="2" weight="medium">
+              Invite by email
+            </Text>
+            <Text as="div" size="1" color="gray">
+              Adds them to the company (or creates a pending invite) and sends
+              an email to sign up if needed.
+            </Text>
+            <Flex gap="2" mt="2">
+              <TextField.Root
+                placeholder="Name (optional)"
+                value={placeholderName}
+                onChange={(e) => setPlaceholderName(e.target.value)}
+              />
+              <TextField.Root
+                placeholder="Email"
+                value={placeholderEmail}
+                onChange={(e) => setPlaceholderEmail(e.target.value)}
+              />
+              <Button
+                variant="solid"
+                onClick={() => inviteByEmail.mutate()}
+                disabled={inviteByEmail.isPending || !placeholderEmail.trim()}
+              >
+                {inviteByEmail.isPending ? 'Inviting…' : 'Invite'}
+              </Button>
+            </Flex>
+          </Box>
+
+          <Box
+            style={{
+              maxHeight: 400,
+              overflowY: 'auto',
+              border: '1px solid var(--gray-a6)',
+              borderRadius: 8,
+              padding: 8,
+            }}
           >
-            {save.isPending
-              ? 'Adding…'
-              : `Add ${selectedIds.size} crew member${selectedIds.size !== 1 ? 's' : ''}`}
-          </Button>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
+            {isFetching && (
+              <Text size="2" color="gray">
+                Searching…
+              </Text>
+            )}
+            {!isFetching && people.length === 0 && (
+              <Text size="2" color="gray">
+                No crew members found
+              </Text>
+            )}
+            {!isFetching &&
+              people.map((p, idx) => {
+                const isSelected = selectedIds.has(p.user_id)
+                const internalNote = internalNotesByUserId[p.user_id]
+                return (
+                  <React.Fragment key={p.user_id}>
+                    <Box
+                      p="2"
+                      style={{
+                        cursor: 'pointer',
+                        borderRadius: 6,
+                        background: isSelected
+                          ? 'var(--blue-a3)'
+                          : 'transparent',
+                      }}
+                      onClick={() => toggleSelection(p.user_id)}
+                    >
+                      <Flex align="center" justify="between">
+                        <Flex align="center" gap="2">
+                          {isSelected && (
+                            <Check
+                              width={18}
+                              height={18}
+                              style={{ color: 'var(--blue-11)' }}
+                            />
+                          )}
+                          <div>
+                            <Text weight="medium">
+                              {p.display_name ?? p.email}
+                            </Text>
+                            {p.display_name && (
+                              <Text
+                                size="1"
+                                color="gray"
+                                style={{ marginLeft: 6 }}
+                              >
+                                {p.email}
+                              </Text>
+                            )}
+                            {internalNote && (
+                              <Text as="div" size="1" color="gray" mt="1">
+                                <Text weight="medium">Internal:</Text>{' '}
+                                {internalNote}
+                              </Text>
+                            )}
+                          </div>
+                        </Flex>
+                        {isSelected && (
+                          <Text size="1" color="blue">
+                            Selected
+                          </Text>
+                        )}
+                      </Flex>
+                    </Box>
+                    {idx < people.length - 1 && <Separator my="2" />}
+                  </React.Fragment>
+                )
+              })}
+          </Box>
+
+          <Flex mt="4" gap="2" justify="end">
+            <Dialog.Close>
+              <Button variant="soft">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              onClick={() => save.mutate({})}
+              disabled={selectedIds.size === 0 || save.isPending}
+            >
+              {save.isPending
+                ? 'Adding…'
+                : `Add ${selectedIds.size} crew member${selectedIds.size !== 1 ? 's' : ''}`}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <ForceBookingDialog
+        open={forceDialogOpen}
+        onOpenChange={setForceDialogOpen}
+        resourceLabel={forceResourceLabel}
+        conflicts={forceConflicts}
+        loading={save.isPending}
+        onConfirm={() => save.mutate({ force: true })}
+      />
+    </>
   )
 }

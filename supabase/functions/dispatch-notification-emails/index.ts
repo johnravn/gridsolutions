@@ -10,35 +10,82 @@ const corsHeaders = emailFunctionCorsHeaders
 
 type DispatchResult = {
   ok: true
+  runId?: string | null
   scanned: number
   attempted: number
   sentOrProcessed: number
   errors: number
 }
 
+type JobRunStatus = 'running' | 'success' | 'partial' | 'failed'
+
+async function startJobRun(
+  supabase: ReturnType<typeof createClient>,
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('scheduled_job_runs')
+    .insert({
+      job_key: 'notification_email_dispatch',
+      status: 'running',
+      trigger_source: 'pg_cron',
+      details: {},
+    })
+    .select('id')
+    .single()
+
+  if (error) {
+    console.error('Failed to start scheduled_job_runs row:', error.message)
+    return null
+  }
+  return data.id as string
+}
+
+async function finishJobRun(
+  supabase: ReturnType<typeof createClient>,
+  runId: string | null,
+  status: JobRunStatus,
+  details: Record<string, unknown>,
+  errorMessage?: string | null,
+): Promise<void> {
+  if (!runId) return
+
+  const { error } = await supabase
+    .from('scheduled_job_runs')
+    .update({
+      finished_at: new Date().toISOString(),
+      status,
+      details,
+      error_message: errorMessage ?? null,
+    })
+    .eq('id', runId)
+
+  if (error) {
+    console.error('Failed to finish scheduled_job_runs row:', error.message)
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS')
     return new Response('ok', { headers: corsHeaders })
 
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+  if (!supabaseUrl || !serviceKey) {
+    return new Response(
+      JSON.stringify({
+        error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      },
+    )
+  }
+
+  const supabase = createClient(supabaseUrl, serviceKey)
+  const runId = await startJobRun(supabase)
+
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    if (!supabaseUrl || !serviceKey) {
-      return new Response(
-        JSON.stringify({
-          error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
-        }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        },
-      )
-    }
-
-    // Service role: bypass RLS so this can run unattended.
-    const supabase = createClient(supabaseUrl, serviceKey)
-
-    // Keep batches small to stay within function limits.
     const { data: pending, error } = await supabase
       .from('notifications')
       .select('id, created_at, email_force_send')
@@ -60,7 +107,6 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // use service role to invoke without relying on anon keys/vault
           Authorization: `Bearer ${serviceKey}`,
         },
         body: JSON.stringify({
@@ -78,12 +124,16 @@ Deno.serve(async (req) => {
         errors++
         continue
       }
-      // send-notification-email marks email_sent_at when sent AND when skipped-by-preferences.
       sentOrProcessed++
     }
 
+    const details = { scanned, attempted, sentOrProcessed, errors }
+    const status: JobRunStatus = errors > 0 ? 'partial' : 'success'
+    await finishJobRun(supabase, runId, status, details)
+
     const out: DispatchResult = {
       ok: true,
+      runId,
       scanned,
       attempted,
       sentOrProcessed,
@@ -95,7 +145,15 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })
   } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), {
+    const message = e instanceof Error ? e.message : String(e)
+    await finishJobRun(
+      supabase,
+      runId,
+      'failed',
+      { scanned: 0, attempted: 0, sentOrProcessed: 0, errors: 0 },
+      message,
+    )
+    return new Response(JSON.stringify({ error: message, runId }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     })

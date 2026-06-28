@@ -16,7 +16,13 @@ import {
 import { Search } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { addThreeHours } from '@shared/lib/generalFunctions'
+import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
+import {
+  forcedBookingFields,
+  isEquipmentCapacityError,
+} from '@features/conflicts/api/forceBooking'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
@@ -113,6 +119,9 @@ export default function BookItemsDialog({
   } | null>(null)
   const lastItemNameMapRef = React.useRef<Map<string, string>>(new Map())
   const { success, error, info } = useToast()
+  const { userId: authUserId } = useAuthz()
+  const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
+  const [forceWarnings, setForceWarnings] = React.useState<Array<string>>([])
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
 
   // State for custom time pickers when no equipment period exists
@@ -452,7 +461,7 @@ export default function BookItemsDialog({
   }
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
       if (rows.length === 0) return
 
       // If no time period selected but custom times are set, we'll create one
@@ -697,6 +706,7 @@ export default function BookItemsDialog({
           Array<{ item_id: string; quantity: number }>
         >()
         for (const m of groupMembers) {
+          if (!m.item_id) continue
           const arr = byGroup.get(m.group_id) ?? []
           arr.push({ item_id: m.item_id, quantity: m.quantity })
           byGroup.set(m.group_id, arr)
@@ -750,7 +760,12 @@ export default function BookItemsDialog({
       lastItemNameMapRef.current = itemNameMap
 
       // 3) Split into updates and inserts
-      const toUpdate: Array<{ id: string; quantity: number }> = []
+      const toUpdate: Array<{
+        id: string
+        item_id: string
+        quantity: number
+        delta: number
+      }> = []
       const toInsert: Array<any> = []
 
       for (const item of payload) {
@@ -758,24 +773,16 @@ export default function BookItemsDialog({
         const existing = existingMap.get(key)
 
         if (existing) {
-          // Update existing reservation by adding quantities
           toUpdate.push({
             id: existing.id,
+            item_id: item.item_id,
             quantity: existing.quantity + item.quantity,
+            delta: item.quantity,
           })
         } else {
           // Insert new reservation
           toInsert.push(item)
         }
-      }
-
-      // 4) Execute updates
-      for (const update of toUpdate) {
-        const { error: updateErr } = await supabase
-          .from('reserved_items')
-          .update({ quantity: update.quantity })
-          .eq('id', update.id)
-        if (updateErr) throw updateErr
       }
 
       // Check availability before saving
@@ -863,6 +870,11 @@ export default function BookItemsDialog({
         }
       }
 
+      for (const update of toUpdate) {
+        const current = existingReservedMap.get(update.item_id) ?? 0
+        existingReservedMap.set(update.item_id, current + update.delta)
+      }
+
       // Calculate new bookings per item (only for inserts, not updates)
       // Updates are already reflected in existingReservedMap above
       const newBookingMap = new Map<string, number>()
@@ -871,14 +883,11 @@ export default function BookItemsDialog({
         newBookingMap.set(item.item_id, current + item.quantity)
       }
 
-      // Track potential conflicts as warnings (do not block booking)
+      // Track potential conflicts as warnings (do not block booking unless not forcing)
       const bookingWarnings: Array<string> = []
       for (const itemId of allItemIds) {
         const onHand = itemOnHandMap.get(itemId) ?? 0
         if (onHand > 0) {
-          // Only check availability for items with on_hand set
-          // existingQty includes updated quantities from booking periods
-          // newQty only includes quantities from new inserts
           const existingQty = existingReservedMap.get(itemId) ?? 0
           const newQty = newBookingMap.get(itemId) ?? 0
           const finalTotal = existingQty + newQty
@@ -902,21 +911,46 @@ export default function BookItemsDialog({
         }
       }
 
+      if (!force && bookingWarnings.length > 0) {
+        setForceWarnings(bookingWarnings)
+        setForceDialogOpen(true)
+        throw new Error('OVERLAP_NEEDS_FORCE')
+      }
+
+      const forcedFields =
+        force && authUserId ? forcedBookingFields(authUserId) : {}
+
+      for (const update of toUpdate) {
+        const payload: Record<string, unknown> = { quantity: update.quantity }
+        if (force) Object.assign(payload, forcedFields)
+        const { error: updateErr } = await supabase
+          .from('reserved_items')
+          .update(payload)
+          .eq('id', update.id)
+        if (updateErr) throw updateErr
+      }
+
       // 5) Execute inserts
       if (toInsert.length > 0) {
+        const insertPayload = toInsert.map((item) => ({
+          ...item,
+          ...forcedFields,
+        }))
         const { error: insErr } = await supabase
           .from('reserved_items')
-          .insert(toInsert)
+          .insert(insertPayload)
         if (insErr) throw insErr
       }
 
-      return { warnings: bookingWarnings }
+      return { warnings: force ? bookingWarnings : [] }
     },
     onSuccess: async (result) => {
+      setForceDialogOpen(false)
       lastItemNameMapRef.current = new Map()
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
       await qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       // If we created a new equipment period, it will be auto-selected on next open
       // Reset custom times state
       setCustomStartTime(null)
@@ -931,411 +965,327 @@ export default function BookItemsDialog({
       }
     },
     onError: (e: any) => {
+      if (e?.message === 'OVERLAP_NEEDS_FORCE') return
       const uuidRegex =
         /[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}/g
       const rawMessage = e?.hint || e?.message || 'Please try again.'
       const itemNameMap = lastItemNameMapRef.current
       const friendlyMessage =
         itemNameMap.size > 0
-          ? rawMessage.replace(uuidRegex, (match) => {
+          ? rawMessage.replace(uuidRegex, (match: string) => {
               const name = itemNameMap.get(match)
               return name ? `${name} (${match})` : match
             })
           : rawMessage
 
-      // For other errors, show toast
+      if (isEquipmentCapacityError(rawMessage) && !forceDialogOpen) {
+        setForceWarnings([friendlyMessage])
+        setForceDialogOpen(true)
+        return
+      }
+
       error('Failed to update', friendlyMessage)
     },
   })
 
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content
-        maxWidth={isSmallScreen ? '100%' : '90%'}
-        style={{
-          height: isSmallScreen ? '100vh' : '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          ...(isSmallScreen
-            ? { margin: 0, borderRadius: 0, maxHeight: '100vh' }
-            : {}),
-        }}
-      >
-        <Dialog.Title>Book equipment</Dialog.Title>
-
-        {/* Top section: Time Period Picker + Messages */}
-        <div
+    <>
+      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+        <Dialog.Content
+          maxWidth={isSmallScreen ? '100%' : '90%'}
           style={{
-            display: 'grid',
-            gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
-            gap: 16,
-            marginTop: 8,
-            alignItems: 'stretch',
+            height: isSmallScreen ? '100vh' : '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            ...(isSmallScreen
+              ? { margin: 0, borderRadius: 0, maxHeight: '100vh' }
+              : {}),
           }}
         >
-          {/* LEFT: Time Period Picker or Custom Time Pickers */}
-          <div>
-            {selectedTimePeriodId ? (
-              <TimePeriodPicker
-                jobId={jobId}
-                value={selectedTimePeriodId}
-                onChange={(id) => {
-                  setSelectedTimePeriodId(id)
-                  // Clear custom times when selecting a period
-                  if (id) {
-                    setCustomStartTime(null)
-                    setCustomEndTime(null)
-                    setTimesTouched(false)
-                  }
-                }}
-                categoryFilter="equipment"
-                defaultCategory="equipment"
-              />
-            ) : (
-              <Box
-                p="3"
-                style={{
-                  border: '1px dashed var(--gray-a6)',
-                  borderRadius: 10,
-                  background: 'var(--gray-a2)',
-                }}
-              >
-                <Flex direction="column" gap="3">
-                  <Text size="2" weight="bold" color="gray">
-                    {externalOnly
-                      ? 'Set time period for external equipment'
-                      : 'Set equipment time period'}
-                  </Text>
-                  <Text size="1" color="gray">
-                    {externalOnly
-                      ? 'Each external owner will get their own time period with these times.'
-                      : job && job.start_at && job.end_at
-                        ? 'Default times match job duration. Adjust if needed.'
-                        : 'Set start and end times for equipment booking.'}
-                  </Text>
-                  <Flex
-                    gap="2"
-                    wrap="wrap"
-                    align="center"
-                    direction={isSmallScreen ? 'column' : 'row'}
-                    style={{
-                      alignItems: isSmallScreen ? 'stretch' : undefined,
-                    }}
-                  >
-                    <Box style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}>
-                      <Text size="1" color="gray" mb="1" as="div">
-                        Start time
-                      </Text>
-                      <DateTimePicker
-                        value={customStartTime || ''}
-                        onChange={(iso) => {
-                          setCustomStartTime(iso)
-                          setTimesTouched(true)
-                          setAutoSetEndTime(true)
-                        }}
-                      />
-                    </Box>
-                    <Box style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}>
-                      <Text size="1" color="gray" mb="1" as="div">
-                        End time
-                      </Text>
-                      <DateTimePicker
-                        value={customEndTime || ''}
-                        onChange={(iso) => {
-                          setCustomEndTime(iso)
-                          setTimesTouched(true)
-                          setAutoSetEndTime(false)
-                        }}
-                      />
-                    </Box>
-                  </Flex>
-                  {!externalOnly && (
-                    <Button
-                      size="1"
-                      variant="soft"
-                      onClick={() => {
-                        // Switch to time period picker view
-                        const equipmentPeriod = timePeriods.find(
-                          (tp) =>
-                            tp.category === 'equipment' &&
-                            tp.title === 'Equipment period',
-                        )
-                        if (equipmentPeriod) {
-                          setSelectedTimePeriodId(equipmentPeriod.id)
-                        }
+          <Dialog.Title>Book equipment</Dialog.Title>
+
+          {/* Top section: Time Period Picker + Messages */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
+              gap: 16,
+              marginTop: 8,
+              alignItems: 'stretch',
+            }}
+          >
+            {/* LEFT: Time Period Picker or Custom Time Pickers */}
+            <div>
+              {selectedTimePeriodId ? (
+                <TimePeriodPicker
+                  jobId={jobId}
+                  value={selectedTimePeriodId}
+                  onChange={(id) => {
+                    setSelectedTimePeriodId(id)
+                    // Clear custom times when selecting a period
+                    if (id) {
+                      setCustomStartTime(null)
+                      setCustomEndTime(null)
+                      setTimesTouched(false)
+                    }
+                  }}
+                  categoryFilter="equipment"
+                  defaultCategory="equipment"
+                />
+              ) : (
+                <Box
+                  p="3"
+                  style={{
+                    border: '1px dashed var(--gray-a6)',
+                    borderRadius: 10,
+                    background: 'var(--gray-a2)',
+                  }}
+                >
+                  <Flex direction="column" gap="3">
+                    <Text size="2" weight="bold" color="gray">
+                      {externalOnly
+                        ? 'Set time period for external equipment'
+                        : 'Set equipment time period'}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {externalOnly
+                        ? 'Each external owner will get their own time period with these times.'
+                        : job && job.start_at && job.end_at
+                          ? 'Default times match job duration. Adjust if needed.'
+                          : 'Set start and end times for equipment booking.'}
+                    </Text>
+                    <Flex
+                      gap="2"
+                      wrap="wrap"
+                      align="center"
+                      direction={isSmallScreen ? 'column' : 'row'}
+                      style={{
+                        alignItems: isSmallScreen ? 'stretch' : undefined,
                       }}
                     >
-                      Use existing time period
-                    </Button>
-                  )}
-                </Flex>
-              </Box>
-            )}
-          </div>
-
-          {/* RIGHT: Message Area */}
-          <div
-            style={{
-              transition: '100ms',
-              borderRadius: 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 12,
-              background: message
-                ? message.type === 'error'
-                  ? 'var(--red-a3)'
-                  : message.type === 'warning'
-                    ? 'var(--amber-a3)'
-                    : 'var(--blue-a3)'
-                : 'var(--gray-a2)',
-              border: message
-                ? message.type === 'error'
-                  ? '1px solid var(--red-a6)'
-                  : message.type === 'warning'
-                    ? '1px solid var(--amber-a6)'
-                    : '1px solid var(--blue-a6)'
-                : '1px solid var(--gray-a4)',
-            }}
-          >
-            {message ? (
-              <Text
-                size="2"
-                weight="medium"
-                color={
-                  message.type === 'error'
-                    ? 'red'
-                    : message.type === 'warning'
-                      ? 'amber'
-                      : 'blue'
-                }
-                style={{
-                  textAlign: 'center',
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                }}
-              >
-                {message.text}
-              </Text>
-            ) : (
-              <Text size="2" color="gray" style={{ textAlign: 'center' }}>
-                Messages will appear here
-              </Text>
-            )}
-          </div>
-        </div>
-
-        <div
-          style={{
-            marginTop: 8,
-            display: 'grid',
-            gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
-            gap: 16,
-            flex: 1,
-            minHeight: 0,
-          }}
-        >
-          {/* LEFT: search & results */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              overflowY: 'auto',
-            }}
-          >
-            <Flex gap="2" align="center" wrap="wrap" mb="2">
-              {/* category filter */}
-              <Select.Root
-                value={categoryFilter ?? ALL}
-                onValueChange={(v) => setCategoryFilter(v === ALL ? null : v)}
-              >
-                <Select.Trigger placeholder="Filter category…" />
-                <Select.Content style={{ zIndex: 10000 }}>
-                  <Select.Item value={ALL}>All</Select.Item>
-                  {categories.map((name: string) => (
-                    <Select.Item key={name} value={name}>
-                      {name}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
-
-              {/* External only toggle */}
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={externalOnly}
-                  onChange={(e) => setExternalOnly(e.target.checked)}
-                />
-                <Text as="span">External only</Text>
-              </label>
-            </Flex>
-            <TextField.Root
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name…"
-            >
-              <TextField.Slot side="left">
-                <Search />
-              </TextField.Slot>
-            </TextField.Root>
-            {isFetching ? (
-              <Flex align="center" gap="1">
-                <Text>Thinking</Text>
-                <Spinner />
-              </Flex>
-            ) : groupedPicker.length === 0 ? (
-              <Text color="gray">No results</Text>
-            ) : isSmallScreen ? (
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-              >
-                {groupedPicker.map((group) => (
-                  <Box
-                    key={group.category}
-                    p="2"
-                    style={{
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: 8,
-                      background: 'var(--gray-a1)',
-                    }}
-                  >
-                    <Text size="2" weight="medium" mb="2">
-                      {group.category}
-                    </Text>
-                    <Flex direction="column" gap="2">
-                      {group.rows.map((r) => (
-                        <Box
-                          key={`${r.kind}:${r.id}`}
-                          p="2"
-                          style={{
-                            border: '1px solid var(--gray-a5)',
-                            borderRadius: 6,
-                            background: 'var(--gray-a2)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 8,
+                      <Box
+                        style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}
+                      >
+                        <Text size="1" color="gray" mb="1" as="div">
+                          Start time
+                        </Text>
+                        <DateTimePicker
+                          value={customStartTime || ''}
+                          onChange={(iso) => {
+                            setCustomStartTime(iso)
+                            setTimesTouched(true)
+                            setAutoSetEndTime(true)
                           }}
-                        >
-                          <Flex
-                            justify="between"
-                            align="center"
-                            gap="2"
-                            wrap="wrap"
-                            style={{ flexWrap: 'wrap' }}
+                        />
+                      </Box>
+                      <Box
+                        style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}
+                      >
+                        <Text size="1" color="gray" mb="1" as="div">
+                          End time
+                        </Text>
+                        <DateTimePicker
+                          value={customEndTime || ''}
+                          onChange={(iso) => {
+                            setCustomEndTime(iso)
+                            setTimesTouched(true)
+                            setAutoSetEndTime(false)
+                          }}
+                        />
+                      </Box>
+                    </Flex>
+                    {!externalOnly && (
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => {
+                          // Switch to time period picker view
+                          const equipmentPeriod = timePeriods.find(
+                            (tp) =>
+                              tp.category === 'equipment' &&
+                              tp.title === 'Equipment period',
+                          )
+                          if (equipmentPeriod) {
+                            setSelectedTimePeriodId(equipmentPeriod.id)
+                          }
+                        }}
+                      >
+                        Use existing time period
+                      </Button>
+                    )}
+                  </Flex>
+                </Box>
+              )}
+            </div>
+
+            {/* RIGHT: Message Area */}
+            <div
+              style={{
+                transition: '100ms',
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 12,
+                background: message
+                  ? message.type === 'error'
+                    ? 'var(--red-a3)'
+                    : message.type === 'warning'
+                      ? 'var(--amber-a3)'
+                      : 'var(--blue-a3)'
+                  : 'var(--gray-a2)',
+                border: message
+                  ? message.type === 'error'
+                    ? '1px solid var(--red-a6)'
+                    : message.type === 'warning'
+                      ? '1px solid var(--amber-a6)'
+                      : '1px solid var(--blue-a6)'
+                  : '1px solid var(--gray-a4)',
+              }}
+            >
+              {message ? (
+                <Text
+                  size="2"
+                  weight="medium"
+                  color={
+                    message.type === 'error'
+                      ? 'red'
+                      : message.type === 'warning'
+                        ? 'amber'
+                        : 'blue'
+                  }
+                  style={{
+                    textAlign: 'center',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {message.text}
+                </Text>
+              ) : (
+                <Text size="2" color="gray" style={{ textAlign: 'center' }}>
+                  Messages will appear here
+                </Text>
+              )}
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 8,
+              display: 'grid',
+              gridTemplateColumns: isSmallScreen ? '1fr' : '65fr 35fr',
+              gap: 16,
+              flex: 1,
+              minHeight: 0,
+            }}
+          >
+            {/* LEFT: search & results */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                overflowY: 'auto',
+              }}
+            >
+              <Flex gap="2" align="center" wrap="wrap" mb="2">
+                {/* category filter */}
+                <Select.Root
+                  value={categoryFilter ?? ALL}
+                  onValueChange={(v) => setCategoryFilter(v === ALL ? null : v)}
+                >
+                  <Select.Trigger placeholder="Filter category…" />
+                  <Select.Content style={{ zIndex: 10000 }}>
+                    <Select.Item value={ALL}>All</Select.Item>
+                    {categories.map((name: string) => (
+                      <Select.Item key={name} value={name}>
+                        {name}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+
+                {/* External only toggle */}
+                <label
+                  style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={externalOnly}
+                    onChange={(e) => setExternalOnly(e.target.checked)}
+                  />
+                  <Text as="span">External only</Text>
+                </label>
+              </Flex>
+              <TextField.Root
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search by name…"
+              >
+                <TextField.Slot side="left">
+                  <Search />
+                </TextField.Slot>
+              </TextField.Root>
+              {isFetching ? (
+                <Flex align="center" gap="1">
+                  <Text>Thinking</Text>
+                  <Spinner />
+                </Flex>
+              ) : groupedPicker.length === 0 ? (
+                <Text color="gray">No results</Text>
+              ) : isSmallScreen ? (
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                >
+                  {groupedPicker.map((group) => (
+                    <Box
+                      key={group.category}
+                      p="2"
+                      style={{
+                        border: '1px solid var(--gray-a6)',
+                        borderRadius: 8,
+                        background: 'var(--gray-a1)',
+                      }}
+                    >
+                      <Text size="2" weight="medium" mb="2">
+                        {group.category}
+                      </Text>
+                      <Flex direction="column" gap="2">
+                        {group.rows.map((r) => (
+                          <Box
+                            key={`${r.kind}:${r.id}`}
+                            p="2"
+                            style={{
+                              border: '1px solid var(--gray-a5)',
+                              borderRadius: 6,
+                              background: 'var(--gray-a2)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 8,
+                            }}
                           >
                             <Flex
+                              justify="between"
                               align="center"
                               gap="2"
                               wrap="wrap"
-                              style={{ minWidth: 0, flex: 1 }}
+                              style={{ flexWrap: 'wrap' }}
                             >
-                              <Text
-                                size="2"
-                                weight="medium"
-                                style={{
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                }}
+                              <Flex
+                                align="center"
+                                gap="2"
+                                wrap="wrap"
+                                style={{ minWidth: 0, flex: 1 }}
                               >
-                                {r.name}
-                              </Text>
-                              {r.is_group && (
-                                <Badge size="1" variant="soft" color="pink">
-                                  Group
-                                </Badge>
-                              )}
-                              {r.internally_owned ? (
-                                <Badge size="1" variant="soft" color="indigo">
-                                  Internal
-                                </Badge>
-                              ) : (
-                                <Badge size="1" variant="soft" color="amber">
-                                  {r.external_owner_name ?? 'External'}
-                                </Badge>
-                              )}
-                            </Flex>
-                            <Button
-                              size="1"
-                              variant="solid"
-                              onClick={() => addRow(r)}
-                              style={{ flexShrink: 0 }}
-                            >
-                              Add
-                            </Button>
-                          </Flex>
-                          <Flex
-                            gap="3"
-                            wrap="wrap"
-                            style={{ fontSize: 12, color: 'var(--gray-11)' }}
-                          >
-                            {r.category_name && (
-                              <Text size="1" color="gray">
-                                {r.category_name}
-                              </Text>
-                            )}
-                            {r.brand_name && (
-                              <Text size="1" color="gray">
-                                {r.brand_name}
-                              </Text>
-                            )}
-                            {r.on_hand != null && (
-                              <Text size="1" color="gray">
-                                On hand: {r.on_hand}
-                              </Text>
-                            )}
-                            {r.current_price != null && (
-                              <Text size="1" color="gray">
-                                {formatNOK(r.current_price)}
-                              </Text>
-                            )}
-                          </Flex>
-                        </Box>
-                      ))}
-                    </Flex>
-                  </Box>
-                ))}
-              </div>
-            ) : (
-              <div
-                style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
-              >
-                {groupedPicker.map((group) => (
-                  <Box
-                    key={group.category}
-                    p="2"
-                    style={{
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: 8,
-                      background: 'var(--gray-a1)',
-                    }}
-                  >
-                    <Text size="2" weight="medium" mb="2">
-                      {group.category}
-                    </Text>
-                    <Table.Root variant="surface">
-                      <Table.Header>
-                        <Table.Row>
-                          <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>
-                            Category
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>
-                            On hand
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Price</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Owner</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell />
-                        </Table.Row>
-                      </Table.Header>
-                      <Table.Body>
-                        {group.rows.map((r) => (
-                          <Table.Row key={`${r.kind}:${r.id}`}>
-                            <Table.Cell>
-                              <Flex align="center" gap="2">
-                                <Text size="2" weight="medium">
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  style={{
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                  }}
+                                >
                                   {r.name}
                                 </Text>
                                 {r.is_group && (
@@ -1343,74 +1293,179 @@ export default function BookItemsDialog({
                                     Group
                                   </Badge>
                                 )}
-                                {r.is_group && r.unique === true && (
-                                  <Badge size="1" variant="soft">
-                                    Unique
+                                {r.internally_owned ? (
+                                  <Badge size="1" variant="soft" color="indigo">
+                                    Internal
                                   </Badge>
-                                )}
-                                {r.active === false && (
-                                  <Badge size="1" variant="soft" color="red">
-                                    Inactive
+                                ) : (
+                                  <Badge size="1" variant="soft" color="amber">
+                                    {r.external_owner_name ?? 'External'}
                                   </Badge>
                                 )}
                               </Flex>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Text size="2" color="gray">
-                                {r.category_name ?? ''}
-                              </Text>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <Text size="2" color="gray">
-                                {r.brand_name ?? ''}
-                              </Text>
-                            </Table.Cell>
-                            <Table.Cell>{r.on_hand ?? ''}</Table.Cell>
-                            <Table.Cell>
-                              {r.current_price != null
-                                ? formatNOK(r.current_price)
-                                : ''}
-                            </Table.Cell>
-                            <Table.Cell>
-                              {r.internally_owned ? (
-                                <Badge size="1" variant="soft" color="indigo">
-                                  Internal
-                                </Badge>
-                              ) : (
-                                <Badge size="1" variant="soft" color="amber">
-                                  {r.external_owner_name ?? 'External'}
-                                </Badge>
-                              )}
-                            </Table.Cell>
-                            <Table.Cell align="right">
                               <Button
                                 size="1"
                                 variant="solid"
                                 onClick={() => addRow(r)}
+                                style={{ flexShrink: 0 }}
                               >
                                 Add
                               </Button>
-                            </Table.Cell>
-                          </Table.Row>
+                            </Flex>
+                            <Flex
+                              gap="3"
+                              wrap="wrap"
+                              style={{ fontSize: 12, color: 'var(--gray-11)' }}
+                            >
+                              {r.category_name && (
+                                <Text size="1" color="gray">
+                                  {r.category_name}
+                                </Text>
+                              )}
+                              {r.brand_name && (
+                                <Text size="1" color="gray">
+                                  {r.brand_name}
+                                </Text>
+                              )}
+                              {r.on_hand != null && (
+                                <Text size="1" color="gray">
+                                  On hand: {r.on_hand}
+                                </Text>
+                              )}
+                              {r.current_price != null && (
+                                <Text size="1" color="gray">
+                                  {formatNOK(r.current_price)}
+                                </Text>
+                              )}
+                            </Flex>
+                          </Box>
                         ))}
-                      </Table.Body>
-                    </Table.Root>
-                  </Box>
-                ))}
-              </div>
-            )}
-          </div>
+                      </Flex>
+                    </Box>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
+                >
+                  {groupedPicker.map((group) => (
+                    <Box
+                      key={group.category}
+                      p="2"
+                      style={{
+                        border: '1px solid var(--gray-a6)',
+                        borderRadius: 8,
+                        background: 'var(--gray-a1)',
+                      }}
+                    >
+                      <Text size="2" weight="medium" mb="2">
+                        {group.category}
+                      </Text>
+                      <Table.Root variant="surface">
+                        <Table.Header>
+                          <Table.Row>
+                            <Table.ColumnHeaderCell>
+                              Name
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>
+                              Category
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>
+                              Brand
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>
+                              On hand
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>
+                              Price
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell>
+                              Owner
+                            </Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell />
+                          </Table.Row>
+                        </Table.Header>
+                        <Table.Body>
+                          {group.rows.map((r) => (
+                            <Table.Row key={`${r.kind}:${r.id}`}>
+                              <Table.Cell>
+                                <Flex align="center" gap="2">
+                                  <Text size="2" weight="medium">
+                                    {r.name}
+                                  </Text>
+                                  {r.is_group && (
+                                    <Badge size="1" variant="soft" color="pink">
+                                      Group
+                                    </Badge>
+                                  )}
+                                  {r.is_group && r.unique === true && (
+                                    <Badge size="1" variant="soft">
+                                      Unique
+                                    </Badge>
+                                  )}
+                                  {r.active === false && (
+                                    <Badge size="1" variant="soft" color="red">
+                                      Inactive
+                                    </Badge>
+                                  )}
+                                </Flex>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" color="gray">
+                                  {r.category_name ?? ''}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2" color="gray">
+                                  {r.brand_name ?? ''}
+                                </Text>
+                              </Table.Cell>
+                              <Table.Cell>{r.on_hand ?? ''}</Table.Cell>
+                              <Table.Cell>
+                                {r.current_price != null
+                                  ? formatNOK(r.current_price)
+                                  : ''}
+                              </Table.Cell>
+                              <Table.Cell>
+                                {r.internally_owned ? (
+                                  <Badge size="1" variant="soft" color="indigo">
+                                    Internal
+                                  </Badge>
+                                ) : (
+                                  <Badge size="1" variant="soft" color="amber">
+                                    {r.external_owner_name ?? 'External'}
+                                  </Badge>
+                                )}
+                              </Table.Cell>
+                              <Table.Cell align="right">
+                                <Button
+                                  size="1"
+                                  variant="solid"
+                                  onClick={() => addRow(r)}
+                                >
+                                  Add
+                                </Button>
+                              </Table.Cell>
+                            </Table.Row>
+                          ))}
+                        </Table.Body>
+                      </Table.Root>
+                    </Box>
+                  ))}
+                </div>
+              )}
+            </div>
 
-          {/* RIGHT: selection */}
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 8,
-              overflowY: 'auto',
-            }}
-          >
-            {/* <div
+            {/* RIGHT: selection */}
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8,
+                overflowY: 'auto',
+              }}
+            >
+              {/* <div
               style={{
                 padding: 8,
                 border: '1px solid var(--gray-a6)',
@@ -1441,102 +1496,112 @@ export default function BookItemsDialog({
               )}
             </div> */}
 
-            <Text size="2" color="gray">
-              Selected
-            </Text>
-            {rows.length === 0 ? (
-              <Text color="gray">Nothing selected yet.</Text>
-            ) : (
-              <Table.Root variant="surface">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: 110 }}>
-                      Qty
-                    </Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {rows.map((r) => (
-                    <Table.Row key={rowKey(r)}>
-                      <Table.Cell>
-                        <Flex align="center" gap="2">
-                          <Text>{r.name}</Text>
-                          {r.kind === 'group' && (
-                            <Badge size="1" variant="soft" color="pink">
-                              Group
-                            </Badge>
-                          )}
-                        </Flex>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <TextField.Root
-                          type="number"
-                          min="1"
-                          max={r.on_hand ?? undefined}
-                          value={
-                            quantityDrafts[rowKey(r)] ?? String(r.quantity)
-                          }
-                          onChange={(e) => {
-                            const nextValue = e.target.value
-                            const key = rowKey(r)
-                            setQuantityDrafts((prev) => ({
-                              ...prev,
-                              [key]: nextValue,
-                            }))
-
-                            if (nextValue === '') return
-                            const parsed = Number(nextValue)
-                            if (Number.isNaN(parsed)) return
-
-                            updateQty(r, Math.max(1, parsed), r.on_hand)
-                            clearQuantityDraft(key)
-                          }}
-                          onBlur={() => {
-                            const key = rowKey(r)
-                            if (quantityDrafts[key] === '') {
-                              clearQuantityDraft(key)
-                            }
-                          }}
-                        />
-                      </Table.Cell>
-                      <Table.Cell align="right">
-                        <Button
-                          size="1"
-                          variant="soft"
-                          color="red"
-                          onClick={() => removeRow(r)}
-                        >
-                          Remove
-                        </Button>
-                      </Table.Cell>
+              <Text size="2" color="gray">
+                Selected
+              </Text>
+              {rows.length === 0 ? (
+                <Text color="gray">Nothing selected yet.</Text>
+              ) : (
+                <Table.Root variant="surface">
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell style={{ width: 110 }}>
+                        Qty
+                      </Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell />
                     </Table.Row>
-                  ))}
-                </Table.Body>
-              </Table.Root>
-            )}
-          </div>
-        </div>
+                  </Table.Header>
+                  <Table.Body>
+                    {rows.map((r) => (
+                      <Table.Row key={rowKey(r)}>
+                        <Table.Cell>
+                          <Flex align="center" gap="2">
+                            <Text>{r.name}</Text>
+                            {r.kind === 'group' && (
+                              <Badge size="1" variant="soft" color="pink">
+                                Group
+                              </Badge>
+                            )}
+                          </Flex>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <TextField.Root
+                            type="number"
+                            min="1"
+                            max={r.on_hand ?? undefined}
+                            value={
+                              quantityDrafts[rowKey(r)] ?? String(r.quantity)
+                            }
+                            onChange={(e) => {
+                              const nextValue = e.target.value
+                              const key = rowKey(r)
+                              setQuantityDrafts((prev) => ({
+                                ...prev,
+                                [key]: nextValue,
+                              }))
 
-        <Flex justify="end" gap="2" mt="3">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            variant="solid"
-            onClick={() => save.mutate()}
-            disabled={
-              save.isPending ||
-              rows.length === 0 ||
-              (!selectedTimePeriodId && !customStartTime && !customEndTime)
-            }
-          >
-            {save.isPending ? 'Booking…' : 'Book items'}
-          </Button>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
+                              if (nextValue === '') return
+                              const parsed = Number(nextValue)
+                              if (Number.isNaN(parsed)) return
+
+                              updateQty(r, Math.max(1, parsed), r.on_hand)
+                              clearQuantityDraft(key)
+                            }}
+                            onBlur={() => {
+                              const key = rowKey(r)
+                              if (quantityDrafts[key] === '') {
+                                clearQuantityDraft(key)
+                              }
+                            }}
+                          />
+                        </Table.Cell>
+                        <Table.Cell align="right">
+                          <Button
+                            size="1"
+                            variant="soft"
+                            color="red"
+                            onClick={() => removeRow(r)}
+                          >
+                            Remove
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              )}
+            </div>
+          </div>
+
+          <Flex justify="end" gap="2" mt="3">
+            <Dialog.Close>
+              <Button variant="soft">Cancel</Button>
+            </Dialog.Close>
+            <Button
+              variant="solid"
+              onClick={() => save.mutate({})}
+              disabled={
+                save.isPending ||
+                rows.length === 0 ||
+                (!selectedTimePeriodId && !customStartTime && !customEndTime)
+              }
+            >
+              {save.isPending ? 'Booking…' : 'Book items'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
+
+      <ForceBookingDialog
+        open={forceDialogOpen}
+        onOpenChange={setForceDialogOpen}
+        resourceLabel="Equipment booking"
+        warningLines={forceWarnings}
+        loading={save.isPending}
+        onConfirm={() => save.mutate({ force: true })}
+      />
+    </>
   )
 }
 

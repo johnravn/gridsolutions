@@ -332,10 +332,7 @@ export function companyWeekJobsBookingsQuery({
               display_name?: string | null
               email?: string | null
             }>(row.user)
-            label =
-              u?.display_name?.trim() ||
-              u?.email?.trim() ||
-              null
+            label = u?.display_name?.trim() || u?.email?.trim() || null
           } else {
             const ph = row.placeholder_name
             if (ph?.trim()) label = ph.trim()

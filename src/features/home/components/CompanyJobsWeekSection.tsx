@@ -47,7 +47,10 @@ function weekRangeLabel(weekOffset: CompanyJobsWeekOffset): string {
   const base = addWeeks(new Date(), weekOffset)
   const ws = startOfWeek(base, { weekStartsOn: 1 })
   const we = endOfWeek(base, { weekStartsOn: 1 })
-  if (ws.getFullYear() === we.getFullYear() && ws.getMonth() === we.getMonth()) {
+  if (
+    ws.getFullYear() === we.getFullYear() &&
+    ws.getMonth() === we.getMonth()
+  ) {
     return `${format(ws, 'd.', { locale: nb })}–${format(we, 'd. MMM yyyy', { locale: nb })}`
   }
   return `${format(ws, 'd. MMM', { locale: nb })} – ${format(we, 'd. MMM yyyy', { locale: nb })}`
@@ -72,9 +75,7 @@ function WeekJobBookingRecap({
   }
 
   const hasAny =
-    summary.hasEquipment ||
-    summary.hasVehicles ||
-    summary.crewLabels.length > 0
+    summary.hasEquipment || summary.hasVehicles || summary.crewLabels.length > 0
 
   if (!hasAny) {
     return (
@@ -245,13 +246,9 @@ export function CompanyJobsWeekSection({
                 job.customer_user?.email ??
                 '—'
               const leadName =
-                job.project_lead?.display_name ||
-                job.project_lead?.email ||
-                '—'
+                job.project_lead?.display_name || job.project_lead?.email || '—'
               const initials = getInitials(
-                job.project_lead?.display_name ??
-                  job.project_lead?.email ??
-                  '',
+                job.project_lead?.display_name ?? job.project_lead?.email ?? '',
                 job.project_lead?.email ?? '',
               )
               const avatarUrl = getAvatarUrl(
@@ -283,8 +280,7 @@ export function CompanyJobsWeekSection({
                     })
                   }
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow =
-                      '0 0 0 1px var(--gray-a6)'
+                    e.currentTarget.style.boxShadow = '0 0 0 1px var(--gray-a6)'
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.boxShadow = 'none'

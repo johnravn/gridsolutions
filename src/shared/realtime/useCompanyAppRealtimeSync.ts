@@ -164,6 +164,14 @@ function invalidateScheduleQueries(
     exact: false,
   })
   void qc.invalidateQueries({
+    queryKey: ['conflicts', 'equipment', companyId],
+    exact: false,
+  })
+  void qc.invalidateQueries({
+    queryKey: ['conflicts', 'job'],
+    exact: false,
+  })
+  void qc.invalidateQueries({
     queryKey: ['jobs', 'crew-role-ids', companyId],
     exact: false,
   })
@@ -352,10 +360,8 @@ export function useCompanyAppRealtimeSync(
               filter: `company_id=eq.${cid}`,
             },
             (payload: RealtimePostgresChangesPayload<TpRow>) => {
-              const row = (
-                (payload.new as TpRow | null) ??
-                (payload.old as TpRow | null)
-              )
+              const row =
+                (payload.new as TpRow | null) ?? (payload.old as TpRow | null)
               if (row?.company_id && row.company_id !== cid) return
 
               const jobIds = jobIdsFromTimePeriodPayload(payload)

@@ -9,7 +9,7 @@ This directory contains all database migration files. Migrations are applied in 
 1. **ALWAYS create a migration file** - Never make changes directly in Supabase Dashboard
 2. **ALWAYS enable RLS** - Every table must have Row Level Security enabled
 3. **ALWAYS add RLS policies** - Create policies for SELECT, INSERT, UPDATE, DELETE
-4. **ALWAYS test locally** - Use `npm run db:reset` before pushing
+4. **ALWAYS test locally** - Use `npm run db:reset` before pushing (applies migrations and repopulates from remote)
 5. **ALWAYS update types** - Run `npm run db:types:remote` after schema changes
 
 ## Migration Workflow
@@ -53,7 +53,7 @@ CREATE POLICY "Users can view company data"
 ### Testing Locally
 
 ```bash
-npm run db:reset  # Resets local DB and applies all migrations
+npm run db:reset  # Resets local DB, applies migrations, and repopulates from remote
 ```
 
 ### Pushing to Production

@@ -6,6 +6,14 @@
     "prettier.config.js",
     "vite.config.js"
   ],
+  "exclude": [
+    "e2e/**",
+    "playwright.config.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "vitest.integration.config.ts",
+    "src/test/integration/**"
+  ],
 
   "compilerOptions": {
     "target": "ES2022",
@@ -31,7 +39,8 @@
     "paths": {
       "@app/*": ["app/*"],
       "@shared/*": ["shared/*"],
-      "@features/*": ["features/*"]
+      "@features/*": ["features/*"],
+      "@test/*": ["test/*"]
     }
   }
 }

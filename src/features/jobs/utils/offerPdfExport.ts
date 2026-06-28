@@ -1,9 +1,9 @@
 // src/features/jobs/utils/offerPdfExport.ts
 import jsPDF from 'jspdf'
 import { calculateRentalFactor } from './offerCalculations'
+import { formatOfferNumberDisplay } from './offerNumber'
 import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
-import { formatOfferNumberDisplay } from './offerNumber'
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('nb-NO', {
@@ -774,7 +774,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   const safeTitle = offer.title.replace(/[^a-z0-9]/gi, '_')
   const numPart =
     offer.offernr != null
-      ? formatOfferNumberDisplay(offer.offernr)?.replace(/^#/, '') ?? ''
+      ? (formatOfferNumberDisplay(offer.offernr)?.replace(/^#/, '') ?? '')
       : ''
   const filename = numPart
     ? `${safeTitle}_${numPart}_v${offer.version_number}.pdf`

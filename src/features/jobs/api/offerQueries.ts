@@ -786,7 +786,10 @@ export async function createTechnicalOfferFromBookings({
     const bookedLines = Array.from(byItem.entries()).map(
       ([item_id, quantity]) => ({ item_id, quantity }),
     )
-    groupQuantityMap.set(groupId, impliedBookedGroupCount(groupItems, bookedLines))
+    groupQuantityMap.set(
+      groupId,
+      impliedBookedGroupCount(groupItems, bookedLines),
+    )
   }
 
   const equipmentByCategory = new Map<
@@ -901,7 +904,8 @@ export async function createTechnicalOfferFromBookings({
       period.start_at || job?.start_at || new Date().toISOString()
     const endDate = period.end_at || job?.end_at || new Date().toISOString()
     const dailyRate = crewDailyRate
-    const totalPrice = dailyRate * crewCount * offerDaySpanBetween(startDate, endDate)
+    const totalPrice =
+      dailyRate * crewCount * offerDaySpanBetween(startDate, endDate)
 
     const { error: crewInsertError } = await supabase
       .from('offer_crew_items')

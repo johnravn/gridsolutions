@@ -15,13 +15,17 @@ import { CheckCircle, Eye, GoogleDocs, XmarkCircle } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { contaClient, getEffectiveContaApiEnvironment } from '@shared/api/conta/client'
+import {
+  contaClient,
+  getEffectiveContaApiEnvironment,
+} from '@shared/api/conta/client'
 import {
   addLocalCalendarDays,
   formatLocalYmd,
   makeWordPresentable,
 } from '@shared/lib/generalFunctions'
 import { companyDetailQuery } from '@features/company/api/queries'
+import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
@@ -99,8 +103,7 @@ function buildBookingsForInvoiceSendPayload(
   lineDiscountOverrides: Record<string, number>,
   vatIncluded: boolean,
 ): BookingsForInvoice {
-  const lines =
-    editedLines.length > 0 ? editedLines : previewBookings.all
+  const lines = editedLines.length > 0 ? editedLines : previewBookings.all
   const equipment = lines.filter((l) => l.type === 'equipment')
   const crew = lines.filter((l) => l.type === 'crew')
   const transport = lines.filter((l) => l.type === 'transport')
@@ -1141,8 +1144,8 @@ export default function InvoiceTab({
             </Text>
             <Text size="2" color="gray">
               Invoices are sent to the Conta sandbox (same environment as the
-              Conta API client). They do not appear in your production accounting
-              system.
+              Conta API client). They do not appear in your production
+              accounting system.
             </Text>
           </Flex>
         </Card>
@@ -1160,7 +1163,12 @@ export default function InvoiceTab({
           }
         }}
       >
-        <Dialog.Content size="4" style={{ maxWidth: '800px' }}>
+        <Dialog.Content
+          size="4"
+          style={{ maxWidth: '800px' }}
+          onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+          onInteractOutside={preventDialogCloseOnSearchableSelect}
+        >
           <Box
             ref={(el) => {
               invoicePreviewPortalRef.current = el
