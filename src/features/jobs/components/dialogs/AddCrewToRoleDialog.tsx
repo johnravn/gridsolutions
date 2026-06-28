@@ -305,7 +305,10 @@ export default function AddCrewToRoleDialog({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Root
+        open={open && !forceDialogOpen}
+        onOpenChange={onOpenChange}
+      >
         <Dialog.Content style={{ maxWidth: 600 }}>
           <Dialog.Title>Add Crew to Role</Dialog.Title>
           <Dialog.Description>

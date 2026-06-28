@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { mergeEquipmentConflicts } from '../utils/mergeEquipmentConflicts'
 
 export type CrewConflictRow = {
   user_id: string
@@ -125,7 +126,9 @@ export function equipmentConflictsQuery({
         p_to: to ?? undefined,
       })
       if (error) throw error
-      return (data ?? []) as Array<EquipmentConflictRow>
+      return mergeEquipmentConflicts(
+        (data ?? []) as Array<EquipmentConflictRow>,
+      )
     },
     enabled: !!companyId,
     staleTime: 5 * 60 * 1000,
@@ -160,7 +163,7 @@ export function jobBookingConflictsQuery({
       return {
         crew: parsed.crew ?? [],
         vehicles: parsed.vehicles ?? [],
-        equipment: parsed.equipment ?? [],
+        equipment: mergeEquipmentConflicts(parsed.equipment ?? []),
       }
     },
     enabled: !!jobId,

@@ -10,6 +10,7 @@ import {
   splitEquipmentConflicts,
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
+import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
 
 function formatPeriod(start: string, end: string) {
   const s = new Date(start)
@@ -130,6 +131,8 @@ function ConflictCallout({
     total_reserved: number
     start_at: string
     end_at: string
+    job_ids?: Array<string> | null
+    job_titles?: Array<string> | null
   }>
 }) {
   const bg = tone === 'red' ? 'var(--red-a2)' : 'var(--amber-a2)'
@@ -208,7 +211,8 @@ function ConflictCallout({
             {equipment.slice(0, 3).map((row, i) => (
               <Text key={i} size="1" color="gray" as="div">
                 {row.item_name ?? 'Item'}: {row.total_reserved}/{row.capacity}{' '}
-                booked ({formatPeriod(row.start_at, row.end_at)})
+                booked ({formatPeriod(row.start_at, row.end_at)}) — also on{' '}
+                {formatEquipmentConflictJobs(row)}
               </Text>
             ))}
           </Box>

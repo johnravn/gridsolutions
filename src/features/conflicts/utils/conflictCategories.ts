@@ -3,6 +3,7 @@ import type {
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '../api/queries'
+import { mergeEquipmentConflicts } from './mergeEquipmentConflicts'
 
 export function isForcedPair(forced1: boolean, forced2: boolean): boolean {
   return forced1 || forced2
@@ -35,9 +36,10 @@ export function splitVehicleConflicts(rows: Array<VehicleConflictRow>) {
 }
 
 export function splitEquipmentConflicts(rows: Array<EquipmentConflictRow>) {
+  const merged = mergeEquipmentConflicts(rows)
   const unresolved: Array<EquipmentConflictRow> = []
   const forced: Array<EquipmentConflictRow> = []
-  for (const row of rows) {
+  for (const row of merged) {
     if (row.has_forced) {
       forced.push(row)
     } else {

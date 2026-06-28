@@ -172,7 +172,9 @@ type Props = {
   companyId: string
   offerId?: string | null // If provided, edit mode; otherwise create mode
   onSaved?: (offerId: string) => void
-  onSyncBookingsAfterSave?: (offerId: string) => void
+  onSyncBookingsAfterSave?: (
+    offerId: string,
+  ) => Promise<'overlap' | 'done' | undefined> | void
 }
 
 export default function TechnicalOfferEditor({
@@ -1351,10 +1353,12 @@ export default function TechnicalOfferEditor({
         await saveMutation.mutateAsync({ closeAfterSave: false })
       }
       if (onSyncBookingsAfterSave) {
-        await onSyncBookingsAfterSave(currentOfferId)
+        const outcome = await onSyncBookingsAfterSave(currentOfferId)
+        if (outcome !== 'done') return
       }
       success('Bookings synced', 'Job bookings now match this offer.')
     } catch (e: any) {
+      if (e?.message === 'OVERLAP_NEEDS_FORCE') return
       toastError(
         'Sync failed',
         e?.message ?? 'Could not sync bookings. Try again.',

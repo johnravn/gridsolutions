@@ -156,9 +156,7 @@ export default function SuperResendEmailsSection() {
   } = useInfiniteQuery({
     queryKey: ['super', 'monitor', 'resend-emails'],
     queryFn: ({ pageParam }) =>
-      fetchResendSentEmails(
-        pageParam ? { after: pageParam } : undefined,
-      ),
+      fetchResendSentEmails(pageParam ? { after: pageParam } : undefined),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
       if (!lastPage.has_more || lastPage.data.length === 0) return undefined

@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { Box, Flex, Select, Spinner, Text } from '@radix-ui/themes'
-import { useNavigate } from '@tanstack/react-router'
+import { Box, Flex, Link, Select, Spinner, Text } from '@radix-ui/themes'
+import { Link as RouterLink } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
@@ -65,8 +65,6 @@ export function ConflictsSection({
   onDaysFilterChange: (value: ConflictDaysFilter) => void
   rangeLabel: string
 }) {
-  const navigate = useNavigate()
-
   const { unresolved, forced } = React.useMemo(() => {
     const crew = splitCrewConflicts(crewConflicts)
     const vehicles = splitVehicleConflicts(vehicleConflicts)
@@ -119,9 +117,6 @@ export function ConflictsSection({
               crew={unresolved.crew}
               vehicles={unresolved.vehicles}
               equipment={unresolved.equipment}
-              onJobClick={(jobId) =>
-                navigate({ to: '/jobs', search: { jobId, tab: undefined } })
-              }
             />
           )}
           {forcedCount > 0 && (
@@ -131,9 +126,6 @@ export function ConflictsSection({
               crew={forced.crew}
               vehicles={forced.vehicles}
               equipment={forced.equipment}
-              onJobClick={(jobId) =>
-                navigate({ to: '/jobs', search: { jobId, tab: undefined } })
-              }
             />
           )}
         </Flex>
@@ -148,14 +140,12 @@ function ConflictGroup({
   crew,
   vehicles,
   equipment,
-  onJobClick,
 }: {
   title: string
   tone: 'red' | 'amber'
   crew: Array<CrewConflictRow>
   vehicles: Array<VehicleConflictRow>
   equipment: Array<EquipmentConflictRow>
-  onJobClick: (jobId: string) => void
 }) {
   const bg = tone === 'red' ? 'var(--red-a2)' : 'var(--amber-a2)'
   const border = tone === 'red' ? 'var(--red-a4)' : 'var(--amber-a4)'
@@ -180,7 +170,7 @@ function ConflictGroup({
             <Text size="2" weight="medium" as="div">
               Crew: {row.user_display_name ?? 'Unknown'}
             </Text>
-            <JobPairLinks row={row} onJobClick={onJobClick} />
+            <JobPairLinks row={row} />
           </Box>
         ))}
         {vehicles.map((row, i) => (
@@ -196,12 +186,12 @@ function ConflictGroup({
             <Text size="2" weight="medium" as="div">
               Vehicle: {row.vehicle_name ?? 'Unknown'}
             </Text>
-            <JobPairLinks row={row} onJobClick={onJobClick} />
+            <JobPairLinks row={row} />
           </Box>
         ))}
         {equipment.map((row, i) => (
           <Box
-            key={`equipment-${row.item_id}-${row.start_at}-${row.end_at}-${i}`}
+            key={`equipment-${row.item_id}-${jobIdsKey(row.job_ids)}-${row.start_at}-${i}`}
             p="2"
             style={{
               borderRadius: 8,
@@ -216,10 +206,25 @@ function ConflictGroup({
             <Text size="1" color="gray" as="div">
               {formatPeriod(row.start_at, row.end_at)}
             </Text>
-            {(row.job_titles ?? []).length > 0 && (
-              <Text size="1" color="gray" as="div" mt="1">
-                Jobs: {(row.job_titles ?? []).join(', ')}
-              </Text>
+            {(row.job_ids ?? []).length > 0 && (
+              <Flex gap="1" wrap="wrap" align="center" mt="1">
+                <Text size="1" color="gray">
+                  Also booked on
+                </Text>
+                {(row.job_ids ?? []).map((jobId, jobIndex) => (
+                  <React.Fragment key={jobId}>
+                    {jobIndex > 0 && (
+                      <Text size="1" color="gray">
+                        and
+                      </Text>
+                    )}
+                    <ConflictJobLink jobId={jobId}>
+                      {row.job_titles?.[jobIndex]?.trim() ||
+                        `Job ${jobIndex + 1}`}
+                    </ConflictJobLink>
+                  </React.Fragment>
+                ))}
+              </Flex>
             )}
           </Box>
         ))}
@@ -228,9 +233,32 @@ function ConflictGroup({
   )
 }
 
+function jobIdsKey(ids: Array<string> | null | undefined): string {
+  return [...(ids ?? [])].sort().join('|')
+}
+
+function ConflictJobLink({
+  jobId,
+  children,
+}: {
+  jobId: string
+  children: React.ReactNode
+}) {
+  return (
+    <Link asChild size="1" underline="hover" weight="medium" color="blue">
+      <RouterLink
+        to="/jobs"
+        search={{ jobId, tab: undefined }}
+        style={{ cursor: 'pointer' }}
+      >
+        {children}
+      </RouterLink>
+    </Link>
+  )
+}
+
 function JobPairLinks({
   row,
-  onJobClick,
 }: {
   row: {
     job_id_1: string | null
@@ -242,32 +270,21 @@ function JobPairLinks({
     start_2: string
     end_2: string
   }
-  onJobClick: (jobId: string) => void
 }) {
   return (
-    <Flex gap="2" wrap="wrap" mt="1">
+    <Flex gap="2" wrap="wrap" align="center" mt="1">
       {row.job_id_1 && (
-        <Text
-          size="1"
-          color="blue"
-          style={{ cursor: 'pointer', textDecoration: 'underline' }}
-          onClick={() => onJobClick(row.job_id_1!)}
-        >
+        <ConflictJobLink jobId={row.job_id_1}>
           {row.job_title_1 ?? 'Job'} ({formatPeriod(row.start_1, row.end_1)})
-        </Text>
+        </ConflictJobLink>
       )}
       <Text size="1" color="gray">
         and
       </Text>
       {row.job_id_2 && (
-        <Text
-          size="1"
-          color="blue"
-          style={{ cursor: 'pointer', textDecoration: 'underline' }}
-          onClick={() => onJobClick(row.job_id_2!)}
-        >
+        <ConflictJobLink jobId={row.job_id_2}>
           {row.job_title_2 ?? 'Job'} ({formatPeriod(row.start_2, row.end_2)})
-        </Text>
+        </ConflictJobLink>
       )}
     </Flex>
   )

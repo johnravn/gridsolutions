@@ -171,9 +171,15 @@ export default function AddCrewDialog({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Root
+        open={open && !forceDialogOpen}
+        onOpenChange={onOpenChange}
+      >
         <Dialog.Content maxWidth="520px">
           <Dialog.Title>Add crew booking</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="2">
+            Search for a person and add them to this job&apos;s crew time period.
+          </Dialog.Description>
 
           <Field label="Person">
             <TextField.Root

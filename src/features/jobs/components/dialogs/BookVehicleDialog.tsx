@@ -369,9 +369,15 @@ export default function BookVehicleDialog({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Root
+        open={open && !forceDialogOpen}
+        onOpenChange={onOpenChange}
+      >
         <Dialog.Content maxWidth="900px" style={{ maxHeight: '90vh' }}>
           <Dialog.Title>Book vehicle</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="2">
+            Select a vehicle and reserve it for this job&apos;s transport period.
+          </Dialog.Description>
 
           <Flex direction="column" gap="4" mt="4" style={{ overflowY: 'auto' }}>
             {/* Vehicle Selection */}

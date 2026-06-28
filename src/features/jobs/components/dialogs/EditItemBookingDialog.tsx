@@ -101,9 +101,15 @@ export default function EditItemBookingDialog({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Root
+        open={open && !forceDialogOpen}
+        onOpenChange={onOpenChange}
+      >
         <Dialog.Content maxWidth="460px">
           <Dialog.Title>Edit item booking</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="2">
+            Update the quantity for this equipment booking.
+          </Dialog.Description>
           <Field label="Quantity">
             <TextField.Root
               type="number"

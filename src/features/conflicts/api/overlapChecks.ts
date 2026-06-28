@@ -1,9 +1,81 @@
 import { supabase } from '@shared/api/supabase'
 
 export type OverlapConflict = {
+  jobId?: string | null
   jobTitle: string | null
   startAt: string
   endAt: string
+  customerName?: string | null
+  projectLeadName?: string | null
+  itemName?: string | null
+  quantity?: number
+}
+
+export function dedupeOverlapConflicts(
+  conflicts: Array<OverlapConflict>,
+): Array<OverlapConflict> {
+  const merged: Array<OverlapConflict> = []
+
+  for (const conflict of conflicts) {
+    const key = [
+      conflict.itemName ?? '',
+      conflict.jobId ?? conflict.jobTitle ?? '',
+    ].join(':')
+    const existing = merged.find((candidate) => {
+      const candidateKey = [
+        candidate.itemName ?? '',
+        candidate.jobId ?? candidate.jobTitle ?? '',
+      ].join(':')
+      return (
+        candidateKey === key &&
+        periodsOverlap(
+          candidate.startAt,
+          candidate.endAt,
+          conflict.startAt,
+          conflict.endAt,
+        )
+      )
+    })
+
+    if (existing) {
+      if (conflict.startAt < existing.startAt)
+        existing.startAt = conflict.startAt
+      if (conflict.endAt > existing.endAt) existing.endAt = conflict.endAt
+      if ((conflict.quantity ?? 0) > (existing.quantity ?? 0)) {
+        existing.quantity = conflict.quantity
+      }
+      continue
+    }
+
+    merged.push({ ...conflict })
+  }
+
+  return merged
+}
+
+type JobJoin = {
+  title: string | null
+  customer: { name: string | null } | null
+  project_lead: { display_name: string | null; email: string | null } | null
+} | null
+
+type TimePeriodJoin = {
+  start_at: string
+  end_at: string
+  job: JobJoin
+} | null
+
+function conflictFromTimePeriod(tp: TimePeriodJoin): OverlapConflict | null {
+  if (!tp?.start_at || !tp.end_at) return null
+  const job = tp.job
+  return {
+    jobTitle: job?.title ?? null,
+    startAt: tp.start_at,
+    endAt: tp.end_at,
+    customerName: job?.customer?.name ?? null,
+    projectLeadName:
+      job?.project_lead?.display_name ?? job?.project_lead?.email ?? null,
+  }
 }
 
 function periodsOverlap(
@@ -38,7 +110,11 @@ export async function findCrewOverlaps({
       time_period:time_period_id (
         start_at,
         end_at,
-        job:job_id ( title )
+        job:job_id (
+          title,
+          customer:customer_id ( name ),
+          project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
+        )
       )
     `,
     )
@@ -50,21 +126,16 @@ export async function findCrewOverlaps({
   for (const row of data ?? []) {
     const userId = row.user_id
     if (!userId) continue
-    const tp = row.time_period as {
-      start_at: string
-      end_at: string
-      job: { title: string | null } | null
-    } | null
+    const tp = row.time_period as TimePeriodJoin
     if (!tp?.start_at || !tp.end_at) continue
     if (excludePeriodId && row.time_period_id === excludePeriodId) continue
     if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
 
+    const conflict = conflictFromTimePeriod(tp)
+    if (!conflict) continue
+
     const conflicts = result.get(userId) ?? []
-    conflicts.push({
-      jobTitle: tp.job?.title ?? null,
-      startAt: tp.start_at,
-      endAt: tp.end_at,
-    })
+    conflicts.push(conflict)
     result.set(userId, conflicts)
   }
 
@@ -90,7 +161,11 @@ export async function findVehicleOverlaps({
       time_period:time_period_id (
         start_at,
         end_at,
-        job:job_id ( title )
+        job:job_id (
+          title,
+          customer:customer_id ( name ),
+          project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
+        )
       )
     `,
     )
@@ -102,18 +177,11 @@ export async function findVehicleOverlaps({
   const conflicts: Array<OverlapConflict> = []
   for (const row of data ?? []) {
     if (excludeReservationId && row.id === excludeReservationId) continue
-    const tp = row.time_period as {
-      start_at: string
-      end_at: string
-      job: { title: string | null } | null
-    } | null
+    const tp = row.time_period as TimePeriodJoin
     if (!tp?.start_at || !tp.end_at) continue
     if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
-    conflicts.push({
-      jobTitle: tp.job?.title ?? null,
-      startAt: tp.start_at,
-      endAt: tp.end_at,
-    })
+    const conflict = conflictFromTimePeriod(tp)
+    if (conflict) conflicts.push(conflict)
   }
 
   return conflicts

@@ -1,6 +1,11 @@
 // src/features/jobs/api/offerQueries.ts
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { getEquipmentConflictsForOfferBooking } from '@features/conflicts/api/equipmentConflictCheck'
+import {
+  BookingOverlapError,
+  forcedBookingFields,
+} from '@features/conflicts/api/forceBooking'
 import {
   calculateOfferTotals,
   calculateRentalFactor,
@@ -1473,6 +1478,7 @@ async function markJobOfferBookingsSynced(offerId: string): Promise<void> {
 export async function createBookingsFromOffer(
   offerId: string,
   userId: string,
+  options?: { force?: boolean; skipConflictCheck?: boolean },
 ): Promise<void> {
   // Fetch the offer with all details
   const offer = await (offerDetailQuery(offerId).queryFn as any)()
@@ -1491,6 +1497,21 @@ export async function createBookingsFromOffer(
   const companyId = job.company_id
   const defaultStart = job.start_at || new Date().toISOString()
   const defaultEnd = job.end_at || new Date().toISOString()
+
+  if (!options?.skipConflictCheck && !options?.force) {
+    const preview = await getEquipmentConflictsForOfferBooking({
+      offer,
+      companyId,
+      jobId: offer.job_id,
+      startAt: defaultStart,
+      endAt: defaultEnd,
+    })
+    if (preview.summaryLines.length > 0 || preview.conflicts.length > 0) {
+      throw new BookingOverlapError(preview.summaryLines, preview.conflicts)
+    }
+  }
+
+  const forcedFields = options?.force ? forcedBookingFields(userId) : {}
 
   // Helper to create or find time period
   const getOrCreateTimePeriod = async (
@@ -1680,11 +1701,12 @@ export async function createBookingsFromOffer(
             quantity: entry.quantity,
             source_kind: 'direct',
             source_group_id: null,
-            forced: false,
+            forced: !!options?.force,
             start_at: null,
             end_at: null,
             external_status: entry.is_internal ? null : 'planned',
             external_note: null,
+            ...forcedFields,
           })
           continue
         }
@@ -1697,11 +1719,12 @@ export async function createBookingsFromOffer(
             quantity: groupItem.quantity * entry.quantity,
             source_kind: 'group',
             source_group_id: entry.group_id,
-            forced: false,
+            forced: !!options?.force,
             start_at: null,
             end_at: null,
             external_status: entry.is_internal ? null : 'planned',
             external_note: null,
+            ...forcedFields,
           })
         }
       }
@@ -1979,174 +2002,10 @@ export async function createBookingsFromOffer(
   }
 }
 
-async function getEquipmentConflictWarningsFromOffer(
-  offer: OfferDetail,
-  companyId: string,
-  defaultStart: string,
-  defaultEnd: string,
-): Promise<Array<string>> {
-  if (!offer.groups || offer.groups.length === 0) return []
-
-  const groupIds = new Set<string>()
-  const groupEntries: Array<{ group_id: string; quantity: number }> = []
-  const itemQuantityMap = new Map<string, number>()
-
-  for (const group of offer.groups) {
-    for (const item of group.items) {
-      if (item.group_id) {
-        groupIds.add(item.group_id)
-        groupEntries.push({ group_id: item.group_id, quantity: item.quantity })
-        continue
-      }
-      if (item.item_id) {
-        const current = itemQuantityMap.get(item.item_id) ?? 0
-        itemQuantityMap.set(item.item_id, current + item.quantity)
-      }
-    }
-  }
-
-  if (groupIds.size > 0) {
-    const { data: groupItems, error: groupItemsError } = await supabase
-      .from('group_items')
-      .select('group_id, item_id, quantity')
-      .in('group_id', Array.from(groupIds))
-
-    if (groupItemsError) throw groupItemsError
-
-    const groupItemsMap = new Map<
-      string,
-      Array<{ item_id: string; quantity: number }>
-    >()
-    for (const row of groupItems || []) {
-      if (!row.item_id) continue
-      const list = groupItemsMap.get(row.group_id) ?? []
-      list.push({
-        item_id: row.item_id,
-        quantity: row.quantity ?? 1,
-      })
-      groupItemsMap.set(row.group_id, list)
-    }
-
-    for (const entry of groupEntries) {
-      const members = groupItemsMap.get(entry.group_id) ?? []
-      for (const member of members) {
-        const current = itemQuantityMap.get(member.item_id) ?? 0
-        itemQuantityMap.set(
-          member.item_id,
-          current + member.quantity * entry.quantity,
-        )
-      }
-    }
-  }
-
-  if (itemQuantityMap.size === 0) return []
-
-  const allItemIds = Array.from(itemQuantityMap.keys())
-  const { data: inventoryRows, error: inventoryErr } = await supabase
-    .from('inventory_index')
-    .select('id, name, on_hand')
-    .eq('company_id', companyId)
-    .eq('is_group', false)
-    .in('id', allItemIds)
-
-  if (inventoryErr) throw inventoryErr
-
-  const itemNameMap = new Map<string, string>()
-  const itemOnHandMap = new Map<string, number>()
-  for (const row of inventoryRows || []) {
-    if (!row.id) continue
-    itemNameMap.set(row.id, row.name || 'Item')
-    itemOnHandMap.set(row.id, row.on_hand ?? 0)
-  }
-
-  const { data: equipmentPeriods, error: periodsErr } = await supabase
-    .from('time_periods')
-    .select('id, start_at, end_at, job_id')
-    .eq('company_id', companyId)
-    .eq('category', 'equipment')
-    .eq('deleted', false)
-
-  if (periodsErr) throw periodsErr
-
-  const periodsOverlap = (
-    start1: string,
-    end1: string,
-    start2: string,
-    end2: string,
-  ): boolean => {
-    return (
-      new Date(start1) < new Date(end2) && new Date(start2) < new Date(end1)
-    )
-  }
-
-  const overlappingPeriodIds = (equipmentPeriods || [])
-    .filter(
-      (period) =>
-        period.job_id !== offer.job_id &&
-        periodsOverlap(
-          defaultStart,
-          defaultEnd,
-          period.start_at,
-          period.end_at,
-        ),
-    )
-    .map((period) => period.id)
-
-  if (overlappingPeriodIds.length === 0) return []
-
-  const { data: reservations, error: reservationsErr } = await supabase
-    .from('reserved_items')
-    .select('item_id, quantity, status, time_period_id')
-    .in('item_id', allItemIds)
-    .in('time_period_id', overlappingPeriodIds)
-
-  if (reservationsErr) throw reservationsErr
-
-  const existingReservedMap = new Map<string, number>()
-  const plannedReservedMap = new Map<string, number>()
-  for (const res of reservations || []) {
-    if (res.status === 'canceled') continue
-    const current = existingReservedMap.get(res.item_id) ?? 0
-    existingReservedMap.set(res.item_id, current + res.quantity)
-    if (res.status === 'planned') {
-      const plannedCurrent = plannedReservedMap.get(res.item_id) ?? 0
-      plannedReservedMap.set(res.item_id, plannedCurrent + res.quantity)
-    }
-  }
-
-  const warnings: Array<string> = []
-  for (const [itemId, newQty] of itemQuantityMap.entries()) {
-    const itemName = itemNameMap.get(itemId) ?? 'Item'
-    const plannedQty = plannedReservedMap.get(itemId) ?? 0
-    if (plannedQty > 0) {
-      warnings.push(
-        `${itemName}: ${plannedQty} already planned in overlapping period`,
-      )
-    }
-
-    const onHand = itemOnHandMap.get(itemId) ?? 0
-    if (onHand > 0) {
-      const existingQty = existingReservedMap.get(itemId) ?? 0
-      const finalTotal = existingQty + newQty
-      if (finalTotal > onHand) {
-        warnings.push(
-          `${itemName}: total booked ${finalTotal} exceeds ${onHand} on hand`,
-        )
-      }
-    }
-  }
-
-  return warnings
-}
-
-/**
- * Sync bookings to match the offer.
- * Clears existing equipment/crew/transport bookings for the job
- * and recreates them from the offer.
- */
 export async function syncBookingsFromOffer(
   offerId: string,
   userId: string,
+  options?: { force?: boolean },
 ): Promise<Array<string>> {
   const offer = await (offerDetailQuery(offerId).queryFn as any)()
   if (!offer) throw new Error('Offer not found')
@@ -2162,12 +2021,20 @@ export async function syncBookingsFromOffer(
 
   const defaultStart = job.start_at || new Date().toISOString()
   const defaultEnd = job.end_at || new Date().toISOString()
-  const warnings = await getEquipmentConflictWarningsFromOffer(
+  const preview = await getEquipmentConflictsForOfferBooking({
     offer,
-    job.company_id,
-    defaultStart,
-    defaultEnd,
-  )
+    companyId: job.company_id,
+    jobId: offer.job_id,
+    startAt: defaultStart,
+    endAt: defaultEnd,
+  })
+
+  if (
+    !options?.force &&
+    (preview.summaryLines.length > 0 || preview.conflicts.length > 0)
+  ) {
+    throw new BookingOverlapError(preview.summaryLines, preview.conflicts)
+  }
 
   const { data: timePeriods, error: timePeriodsError } = await supabase
     .from('time_periods')
@@ -2205,8 +2072,11 @@ export async function syncBookingsFromOffer(
     if (periodsError) throw periodsError
   }
 
-  await createBookingsFromOffer(offerId, userId)
-  return warnings
+  await createBookingsFromOffer(offerId, userId, {
+    force: options?.force,
+    skipConflictCheck: true,
+  })
+  return options?.force ? preview.summaryLines : []
 }
 
 /**

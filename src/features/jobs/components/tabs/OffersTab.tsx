@@ -37,6 +37,11 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
+import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
+import {
+  OVERLAP_NEEDS_FORCE,
+  isBookingOverlapError,
+} from '@features/conflicts/api/forceBooking'
 import {
   createBookingsFromOffer,
   createEmptyDraftTechnicalOffer,
@@ -52,6 +57,7 @@ import {
 import TechnicalOfferEditor from '../dialogs/TechnicalOfferEditor'
 import PrettyOfferEditor from '../dialogs/PrettyOfferEditor'
 import { formatOfferNumberDisplay } from '../../utils/offerNumber'
+import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { JobOffer, OfferDetail, OfferType } from '../../types'
 
 function getOfferStatusBadgeColor(offer: JobOffer) {
@@ -109,6 +115,17 @@ export default function OffersTab({
       crew: Array<string>
       transport: Array<string>
     }
+  } | null>(null)
+  const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
+  const [forceSummaryLines, setForceSummaryLines] = React.useState<
+    Array<string>
+  >([])
+  const [forceConflicts, setForceConflicts] = React.useState<
+    Array<OverlapConflict>
+  >([])
+  const pendingForceBookingRef = React.useRef<{
+    offerId: string
+    action: 'sync' | 'create'
   } | null>(null)
   const [deleteOpen, setDeleteOpen] = React.useState<JobOffer | null>(null)
   const [editorOpen, setEditorOpen] = React.useState(false)
@@ -981,14 +998,29 @@ export default function OffersTab({
     },
   })
 
+  const handleBookingOverlapError = React.useCallback((err: unknown) => {
+    if (!isBookingOverlapError(err)) return false
+    setForceSummaryLines(err.summaryLines)
+    setForceConflicts(err.conflicts)
+    setForceDialogOpen(true)
+    return true
+  }, [])
+
   const createBookingsMutation = useMutation({
-    mutationFn: async (offerId: string) => {
+    mutationFn: async ({
+      offerId,
+      force = false,
+    }: {
+      offerId: string
+      force?: boolean
+    }) => {
       if (!user?.id) throw new Error('User not authenticated')
-      await createBookingsFromOffer(offerId, user.id)
+      await createBookingsFromOffer(offerId, user.id, { force })
     },
     onSuccess: () => {
+      setForceDialogOpen(false)
+      pendingForceBookingRef.current = null
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      // Invalidate calendar queries to show new bookings
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
       qc.invalidateQueries({ queryKey: ['time-periods', jobId] })
       invalidateBookingQueries()
@@ -997,29 +1029,38 @@ export default function OffersTab({
         'Time periods and reservations have been created from the offer.',
       )
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
+      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
+      if (handleBookingOverlapError(err)) return
       toastError(
         'Failed to create bookings',
-        err?.message || 'Please try again.',
+        err instanceof Error ? err.message : 'Please try again.',
       )
     },
   })
 
   const syncBookingsMutation = useMutation({
-    mutationFn: async (offerId: string) => {
+    mutationFn: async ({
+      offerId,
+      force = false,
+    }: {
+      offerId: string
+      force?: boolean
+    }) => {
       if (!user?.id) throw new Error('User not authenticated')
-      return await syncBookingsFromOffer(offerId, user.id)
+      return await syncBookingsFromOffer(offerId, user.id, { force })
     },
-    onMutate: (offerId) => {
+    onMutate: ({ offerId }) => {
       setSyncingOfferId(offerId)
     },
     onSuccess: (warnings) => {
+      setForceDialogOpen(false)
+      pendingForceBookingRef.current = null
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
       qc.invalidateQueries({ queryKey: ['time-periods', jobId] })
       invalidateBookingQueries()
       success('Bookings synced', 'Bookings were synced from the offer.')
-      // Re-check immediately so the "Synced" badge updates in realtime.
       offersQuery.refetch()
       bookingsSnapshotQuery.refetch()
       if (warnings.length) {
@@ -1028,12 +1069,16 @@ export default function OffersTab({
     },
     onSettled: () => {
       setSyncingOfferId(null)
-      // Defensive refetch: ensures UI settles even if queries were fresh.
       bookingsSnapshotQuery.refetch()
     },
-    onError: (err: any) => {
+    onError: (err: unknown) => {
       setSyncingOfferId(null)
-      toastError('Failed to sync bookings', err?.message || 'Please try again.')
+      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
+      if (handleBookingOverlapError(err)) return
+      toastError(
+        'Failed to sync bookings',
+        err instanceof Error ? err.message : 'Please try again.',
+      )
     },
   })
 
@@ -1245,12 +1290,34 @@ export default function OffersTab({
       })
   }
 
+  const startOfferBooking = React.useCallback(
+    async (
+      offerId: string,
+      action: 'sync' | 'create',
+      force = false,
+    ): Promise<'overlap' | 'done'> => {
+      pendingForceBookingRef.current = { offerId, action }
+      try {
+        if (action === 'sync') {
+          await syncBookingsMutation.mutateAsync({ offerId, force })
+        } else {
+          await createBookingsMutation.mutateAsync({ offerId, force })
+        }
+        return 'done'
+      } catch (err) {
+        if (isBookingOverlapError(err)) return 'overlap'
+        throw err
+      }
+    },
+    [createBookingsMutation, syncBookingsMutation],
+  )
+
   const handleCreateBookings = (offer: JobOffer) => {
     if (!user?.id) {
       toastError('Authentication required', 'Please log in to create bookings.')
       return
     }
-    createBookingsMutation.mutate(offer.id)
+    startOfferBooking(offer.id, 'create')
   }
 
   const fetchGroupItemsMap = React.useCallback(
@@ -1304,10 +1371,10 @@ export default function OffersTab({
   )
 
   const handleSyncBookings = React.useCallback(
-    async (offer: JobOffer) => {
+    async (offer: JobOffer): Promise<'overlap' | 'done' | undefined> => {
       if (!user?.id) {
         toastError('Authentication required', 'Please log in to sync bookings.')
-        return
+        return undefined
       }
       // If syncing would remove anything, warn before proceeding.
       let diff: OfferDiff | null = null
@@ -1391,11 +1458,11 @@ export default function OffersTab({
             transport: transportRemovals,
           },
         })
-        return
+        return undefined
       }
 
       setSyncingOfferId(offer.id)
-      syncBookingsMutation.mutate(offer.id)
+      return await startOfferBooking(offer.id, 'sync')
     },
     [
       bookingsSnapshotQuery,
@@ -1403,6 +1470,7 @@ export default function OffersTab({
       groupItemsQuery,
       info,
       offersQuery,
+      startOfferBooking,
       syncBookingsMutation,
       toastError,
       user?.id,
@@ -1987,8 +2055,7 @@ export default function OffersTab({
                 color="yellow"
                 variant="surface"
                 onClick={() => {
-                  setSyncingOfferId(syncConfirm.offer.id)
-                  syncBookingsMutation.mutate(syncConfirm.offer.id)
+                  void startOfferBooking(syncConfirm.offer.id, 'sync')
                   setSyncConfirm(null)
                 }}
                 disabled={syncBookingsMutation.isPending}
@@ -2226,12 +2293,16 @@ export default function OffersTab({
                 )
                 return
               }
-              await handleSyncBookings(createdOffer)
-            } catch (e: any) {
+              return await handleSyncBookings(createdOffer)
+            } catch (e: unknown) {
+              if (e instanceof Error && e.message === OVERLAP_NEEDS_FORCE) {
+                return 'overlap'
+              }
               toastError(
                 'Failed to sync bookings',
-                e?.message || 'Please try again.',
+                e instanceof Error ? e.message : 'Please try again.',
               )
+              return undefined
             }
           }}
         />
@@ -2373,6 +2444,32 @@ export default function OffersTab({
           </Dialog.Content>
         </Dialog.Root>
       )}
+
+      <ForceBookingDialog
+        open={forceDialogOpen}
+        onOpenChange={setForceDialogOpen}
+        resourceLabel="Equipment booking"
+        warningLines={forceSummaryLines}
+        conflicts={forceConflicts}
+        loading={
+          syncBookingsMutation.isPending || createBookingsMutation.isPending
+        }
+        onConfirm={() => {
+          const pending = pendingForceBookingRef.current
+          if (!pending) return
+          if (pending.action === 'sync') {
+            syncBookingsMutation.mutate({
+              offerId: pending.offerId,
+              force: true,
+            })
+            return
+          }
+          createBookingsMutation.mutate({
+            offerId: pending.offerId,
+            force: true,
+          })
+        }}
+      />
     </Box>
   )
 }

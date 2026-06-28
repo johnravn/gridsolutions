@@ -28,6 +28,8 @@ import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
+import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { UUID } from '../../types'
 
 const ALL = '__ALL__'
@@ -121,7 +123,12 @@ export default function BookItemsDialog({
   const { success, error, info } = useToast()
   const { userId: authUserId } = useAuthz()
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
-  const [forceWarnings, setForceWarnings] = React.useState<Array<string>>([])
+  const [forceConflicts, setForceConflicts] = React.useState<
+    Array<OverlapConflict>
+  >([])
+  const [forceSummaryLines, setForceSummaryLines] = React.useState<
+    Array<string>
+  >([])
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
 
   // State for custom time pickers when no equipment period exists
@@ -850,11 +857,64 @@ export default function BookItemsDialog({
       const { data: overlappingReservations, error: overlapResErr } =
         await supabase
           .from('reserved_items')
-          .select('item_id, quantity, time_period_id, status')
+          .select(
+            `
+            id,
+            item_id,
+            quantity,
+            time_period_id,
+            status,
+            time_period:time_period_id (
+              start_at,
+              end_at,
+              job_id
+            )
+          `,
+          )
           .in('item_id', Array.from(allItemIds))
           .in('time_period_id', Array.from(overlappingTimePeriodIds))
 
       if (overlapResErr) throw overlapResErr
+
+      const overlappingJobIds = new Set<string>()
+      for (const res of overlappingReservations ?? []) {
+        const tp = res.time_period as { job_id: string | null } | null
+        if (tp?.job_id) overlappingJobIds.add(tp.job_id)
+      }
+
+      const overlappingJobMap = new Map<
+        string,
+        {
+          title: string | null
+          customerName: string | null
+          projectLeadName: string | null
+        }
+      >()
+
+      if (overlappingJobIds.size > 0) {
+        const { data: overlappingJobs, error: jobsErr } = await supabase
+          .from('jobs')
+          .select(
+            `
+            id,
+            title,
+            customer:customer_id ( name ),
+            project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
+          `,
+          )
+          .in('id', Array.from(overlappingJobIds))
+
+        if (jobsErr) throw jobsErr
+
+        for (const row of overlappingJobs ?? []) {
+          overlappingJobMap.set(row.id, {
+            title: row.title,
+            customerName: row.customer?.name ?? null,
+            projectLeadName:
+              row.project_lead?.display_name ?? row.project_lead?.email ?? null,
+          })
+        }
+      }
 
       // Calculate total reserved per item (only from overlapping time periods)
       // Note: This includes updated quantities from the booking periods (after updates executed above)
@@ -883,36 +943,84 @@ export default function BookItemsDialog({
         newBookingMap.set(item.item_id, current + item.quantity)
       }
 
-      // Track potential conflicts as warnings (do not block booking unless not forcing)
+      // Track potential conflicts (do not block booking unless not forcing)
       const bookingWarnings: Array<string> = []
+      const bookingConflicts: Array<OverlapConflict> = []
+      const updatingReservationIds = new Set(toUpdate.map((u) => u.id))
+
       for (const itemId of allItemIds) {
         const onHand = itemOnHandMap.get(itemId) ?? 0
-        if (onHand > 0) {
-          const existingQty = existingReservedMap.get(itemId) ?? 0
-          const newQty = newBookingMap.get(itemId) ?? 0
-          const finalTotal = existingQty + newQty
-
-          if (finalTotal > onHand) {
-            const itemName = itemNameMap.get(itemId) ?? 'Item'
-            const existingPart =
-              existingQty > 0 ? ` (${existingQty} already booked)` : ''
-            bookingWarnings.push(
-              `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-            )
-          }
-        }
-
+        const existingQty = existingReservedMap.get(itemId) ?? 0
+        const newQty = newBookingMap.get(itemId) ?? 0
+        const finalTotal = existingQty + newQty
+        const hasCapacityConflict = onHand > 0 && finalTotal > onHand
         const plannedQty = plannedReservedMap.get(itemId) ?? 0
-        if (plannedQty > 0 && (newBookingMap.get(itemId) ?? 0) > 0) {
-          const itemName = itemNameMap.get(itemId) ?? 'Item'
+        const hasPlannedConflict =
+          plannedQty > 0 && newQty > 0 && !hasCapacityConflict
+
+        if (!hasCapacityConflict && !hasPlannedConflict) continue
+
+        const itemName = itemNameMap.get(itemId) ?? 'Item'
+
+        if (hasCapacityConflict) {
+          const existingPart =
+            existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+          bookingWarnings.push(
+            `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+          )
+        } else {
           bookingWarnings.push(
             `${itemName}: ${plannedQty} already planned in overlapping period`,
           )
         }
+
+        const itemReservations = (overlappingReservations ?? []).filter(
+          (res) =>
+            res.item_id === itemId &&
+            res.status !== 'canceled' &&
+            !updatingReservationIds.has(res.id),
+        )
+
+        const otherJobReservations = itemReservations.filter((res) => {
+          const tp = res.time_period as {
+            job_id: string | null
+          } | null
+          return tp?.job_id && tp.job_id !== jobId
+        })
+        const reservationsToShow =
+          otherJobReservations.length > 0
+            ? otherJobReservations
+            : itemReservations
+
+        for (const res of reservationsToShow) {
+          const tp = res.time_period as {
+            start_at: string
+            end_at: string
+            job_id: string | null
+          } | null
+          if (!tp?.start_at || !tp.end_at) continue
+          const conflictJob = tp.job_id
+            ? overlappingJobMap.get(tp.job_id)
+            : undefined
+          bookingConflicts.push({
+            jobId: tp.job_id,
+            itemName,
+            quantity: res.quantity,
+            jobTitle: conflictJob?.title ?? null,
+            startAt: tp.start_at,
+            endAt: tp.end_at,
+            customerName: conflictJob?.customerName ?? null,
+            projectLeadName: conflictJob?.projectLeadName ?? null,
+          })
+        }
       }
 
-      if (!force && bookingWarnings.length > 0) {
-        setForceWarnings(bookingWarnings)
+      if (
+        !force &&
+        (bookingWarnings.length > 0 || bookingConflicts.length > 0)
+      ) {
+        setForceSummaryLines(bookingWarnings)
+        setForceConflicts(dedupeOverlapConflicts(bookingConflicts))
         setForceDialogOpen(true)
         throw new Error('OVERLAP_NEEDS_FORCE')
       }
@@ -946,6 +1054,8 @@ export default function BookItemsDialog({
     },
     onSuccess: async (result) => {
       setForceDialogOpen(false)
+      setForceConflicts([])
+      setForceSummaryLines([])
       lastItemNameMapRef.current = new Map()
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
@@ -979,7 +1089,8 @@ export default function BookItemsDialog({
           : rawMessage
 
       if (isEquipmentCapacityError(rawMessage) && !forceDialogOpen) {
-        setForceWarnings([friendlyMessage])
+        setForceSummaryLines([friendlyMessage])
+        setForceConflicts([])
         setForceDialogOpen(true)
         return
       }
@@ -990,7 +1101,10 @@ export default function BookItemsDialog({
 
   return (
     <>
-      <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Root
+        open={open && !forceDialogOpen}
+        onOpenChange={onOpenChange}
+      >
         <Dialog.Content
           maxWidth={isSmallScreen ? '100%' : '90%'}
           style={{
@@ -1003,6 +1117,9 @@ export default function BookItemsDialog({
           }}
         >
           <Dialog.Title>Book equipment</Dialog.Title>
+          <Dialog.Description size="2" color="gray" mb="2">
+            Search and reserve equipment for this job&apos;s time period.
+          </Dialog.Description>
 
           {/* Top section: Time Period Picker + Messages */}
           <div
@@ -1597,7 +1714,8 @@ export default function BookItemsDialog({
         open={forceDialogOpen}
         onOpenChange={setForceDialogOpen}
         resourceLabel="Equipment booking"
-        warningLines={forceWarnings}
+        warningLines={forceSummaryLines}
+        conflicts={forceConflicts}
         loading={save.isPending}
         onConfirm={() => save.mutate({ force: true })}
       />
