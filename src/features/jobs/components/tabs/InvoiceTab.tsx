@@ -234,7 +234,6 @@ export default function InvoiceTab({
   const [editedInvoiceLines, setEditedInvoiceLines] = React.useState<
     Array<BookingsForInvoice['all'][0]>
   >([])
-  const invoicePreviewPortalRef = React.useRef<HTMLElement | null>(null)
 
   // Company detail for invoice preview (sender info)
   const { data: companyDetail } = useQuery({
@@ -1169,12 +1168,7 @@ export default function InvoiceTab({
           onPointerDownOutside={preventDialogCloseOnSearchableSelect}
           onInteractOutside={preventDialogCloseOnSearchableSelect}
         >
-          <Box
-            ref={(el) => {
-              invoicePreviewPortalRef.current = el
-            }}
-            style={{ position: 'relative' }}
-          >
+          <Box>
             <Dialog.Title>Invoice Preview</Dialog.Title>
             <Dialog.Description size="2" color="gray" mb="4">
               Review the invoice details before creating it in your accounting
@@ -1257,9 +1251,6 @@ export default function InvoiceTab({
                   onLineChange={handleLineChange}
                   onAddLine={handleAddInvoiceLine}
                   onRemoveLine={handleRemoveInvoiceLine}
-                  refFieldPortalContainer={() =>
-                    invoicePreviewPortalRef.current
-                  }
                 />
               </>
             )}

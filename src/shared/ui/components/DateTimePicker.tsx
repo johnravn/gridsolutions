@@ -1,6 +1,14 @@
 import * as React from 'react'
 import { Box, Flex, IconButton, Popover, Text } from '@radix-ui/themes'
 import { Calendar } from 'iconoir-react'
+import {
+  formatDateLabel,
+  fromLocalInput,
+  getInitialMonth,
+  parseIso,
+  toLocalDate,
+} from './pickers/dateTimeUtils'
+import type { PickerLocale } from './pickers/dateTimeUtils'
 
 type Props = {
   value: string // ISO string or empty string
@@ -16,7 +24,7 @@ type Props = {
   /** Icon button size (only used when iconButton is true) */
   iconButtonSize?: '1' | '2' | '3'
   /** Use Norwegian date format (e.g. 3. aug 2026 with mai, okt) */
-  locale?: 'en' | 'nb'
+  locale?: PickerLocale
   disabled?: boolean
 }
 
@@ -38,58 +46,20 @@ export default function DateTimePicker({
   locale = 'en',
   disabled = false,
 }: Props) {
-  const monthNames =
-    locale === 'nb'
-      ? [
-          'jan',
-          'feb',
-          'mar',
-          'apr',
-          'mai',
-          'jun',
-          'jul',
-          'aug',
-          'sep',
-          'okt',
-          'nov',
-          'des',
-        ]
-      : [
-          'jan',
-          'feb',
-          'mar',
-          'apr',
-          'may',
-          'jun',
-          'jul',
-          'aug',
-          'sep',
-          'oct',
-          'nov',
-          'dec',
-        ]
   const defaultPlaceholder = dateOnly ? 'Select date' : 'Select date and time'
   const finalPlaceholder = placeholder || defaultPlaceholder
 
   const [open, setOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<'date' | 'time'>('date')
-  const [currentMonth, setCurrentMonth] = React.useState(() => {
-    if (value) {
-      const d = new Date(value)
-      return new Date(d.getFullYear(), d.getMonth(), 1)
-    }
-    return new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-  })
+  const [currentMonth, setCurrentMonth] = React.useState(() =>
+    getInitialMonth(value),
+  )
   const [showYearPicker, setShowYearPicker] = React.useState(false)
   const yearPickerRef = React.useRef<HTMLDivElement>(null)
 
   // Single parsed date from value so display and picker always match (avoids mismatch when
   // parent sets value programmatically, e.g. end time from start time)
-  const parsedDate = React.useMemo(() => {
-    if (!value) return null
-    const d = new Date(value)
-    return Number.isNaN(d.getTime()) ? null : d
-  }, [value])
+  const parsedDate = React.useMemo(() => parseIso(value), [value])
 
   // Parse ISO string to local date/time components (all from parsedDate for consistency)
   const dateValue = parsedDate ? toLocalDate(parsedDate.toISOString()) : ''
@@ -203,18 +173,14 @@ export default function DateTimePicker({
 
   const formatDisplayValue = () => {
     if (!parsedDate) return finalPlaceholder
-    const d = parsedDate
-    const day = d.getDate()
-    const month = monthNames[d.getMonth()]
-    const year = d.getFullYear()
-    const dateLabel = `${day}. ${month} ${year}`
+    const dateLabel = formatDateLabel(parsedDate, locale)
 
     if (dateOnly) {
       return dateLabel
     }
 
-    const h = d.getHours()
-    const m = d.getMinutes()
+    const h = parsedDate.getHours()
+    const m = parsedDate.getMinutes()
     const displayHour = String(h).padStart(2, '0')
     const displayMin = String(m).padStart(2, '0')
     return `${dateLabel}, ${displayHour}:${displayMin}`
@@ -518,10 +484,12 @@ export default function DateTimePicker({
                 {calendarDays.map(({ day, date, isCurrentMonth }, idx) => {
                   const dateSelected = isSelected(date)
                   const today = isToday(date)
+                  const localDate = toLocalDate(date.toISOString())
                   return (
                     <button
                       key={idx}
                       type="button"
+                      aria-label={localDate}
                       onClick={() => handleDateClick(date)}
                       style={{
                         padding: '8px 4px',
@@ -741,25 +709,4 @@ export default function DateTimePicker({
       </Popover.Root>
     </Box>
   )
-}
-
-/**
- * Convert ISO string to local date string (YYYY-MM-DD)
- */
-function toLocalDate(iso: string): string {
-  const d = new Date(iso)
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-/**
- * Convert local datetime string (YYYY-MM-DDTHH:MM) to ISO string
- */
-function fromLocalInput(local: string): string {
-  if (!local) return ''
-  // Parse as local time and convert to ISO
-  const d = new Date(local)
-  return d.toISOString()
 }

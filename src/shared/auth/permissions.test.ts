@@ -68,6 +68,24 @@ describe('capabilitiesFor', () => {
     expect(caps.has('visit:inventory')).toBe(false)
     expect(caps.has('visit:crew')).toBe(false)
     expect(caps.has('visit:vehicles')).toBe(false)
+    expect(caps.has('visit:logging')).toBe(false)
+    expect(caps.has('visit:customers')).toBe(false)
+    expect(caps.has('visit:calendar')).toBe(true)
+  })
+
+  it('grants superuser visit:super only to global superuser', () => {
+    expect(
+      capabilitiesFor({
+        isGlobalSuperuser: true,
+        companyRole: 'owner',
+      }).has('visit:super'),
+    ).toBe(true)
+    expect(
+      capabilitiesFor({
+        isGlobalSuperuser: false,
+        companyRole: 'owner',
+      }).has('visit:super'),
+    ).toBe(false)
   })
 })
 

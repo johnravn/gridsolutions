@@ -1810,6 +1810,7 @@ export type Database = {
           job_address_id: string | null
           jobnr: number | null
           project_lead_user_id: string | null
+          recurring_job_id: string | null
           start_at: string | null
           status: Database['public']['Enums']['job_status']
           title: string
@@ -1829,6 +1830,7 @@ export type Database = {
           job_address_id?: string | null
           jobnr?: number | null
           project_lead_user_id?: string | null
+          recurring_job_id?: string | null
           start_at?: string | null
           status: Database['public']['Enums']['job_status']
           title: string
@@ -1848,6 +1850,7 @@ export type Database = {
           job_address_id?: string | null
           jobnr?: number | null
           project_lead_user_id?: string | null
+          recurring_job_id?: string | null
           start_at?: string | null
           status?: Database['public']['Enums']['job_status']
           title?: string
@@ -1895,6 +1898,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'profiles'
             referencedColumns: ['user_id']
+          },
+          {
+            foreignKeyName: 'jobs_recurring_job_id_fkey'
+            columns: ['recurring_job_id']
+            isOneToOne: false
+            referencedRelation: 'recurring_jobs'
+            referencedColumns: ['id']
           },
         ]
       }
@@ -2889,6 +2899,147 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'companies'
             referencedColumns: ['id']
+          },
+        ]
+      }
+      recurring_job_templates: {
+        Row: {
+          company_id: string
+          created_at: string
+          crew_roles: Json
+          description: string | null
+          duration_hours: number
+          id: string
+          name: string
+          recurring_job_id: string
+          sort_order: number
+          start_time: string | null
+          status: Database['public']['Enums']['job_status']
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          crew_roles?: Json
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          name: string
+          recurring_job_id: string
+          sort_order?: number
+          start_time?: string | null
+          status?: Database['public']['Enums']['job_status']
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          crew_roles?: Json
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          name?: string
+          recurring_job_id?: string
+          sort_order?: number
+          start_time?: string | null
+          status?: Database['public']['Enums']['job_status']
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'recurring_job_templates_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'recurring_job_templates_recurring_job_id_fkey'
+            columns: ['recurring_job_id']
+            isOneToOne: false
+            referencedRelation: 'recurring_jobs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      recurring_jobs: {
+        Row: {
+          archived: boolean
+          company_id: string
+          created_at: string
+          customer_contact_id: string | null
+          customer_id: string | null
+          customer_user_id: string | null
+          description: string | null
+          id: string
+          project_lead_user_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          company_id: string
+          created_at?: string
+          customer_contact_id?: string | null
+          customer_id?: string | null
+          customer_user_id?: string | null
+          description?: string | null
+          id?: string
+          project_lead_user_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          company_id?: string
+          created_at?: string
+          customer_contact_id?: string | null
+          customer_id?: string | null
+          customer_user_id?: string | null
+          description?: string | null
+          id?: string
+          project_lead_user_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'recurring_jobs_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'recurring_jobs_customer_contact_id_fkey'
+            columns: ['customer_contact_id']
+            isOneToOne: false
+            referencedRelation: 'contacts'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'recurring_jobs_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'recurring_jobs_customer_user_id_fkey'
+            columns: ['customer_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
+          },
+          {
+            foreignKeyName: 'recurring_jobs_project_lead_user_id_fkey'
+            columns: ['project_lead_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
           },
         ]
       }

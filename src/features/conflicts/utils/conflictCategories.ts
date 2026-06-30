@@ -1,9 +1,9 @@
+import { mergeEquipmentConflicts } from './mergeEquipmentConflicts'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '../api/queries'
-import { mergeEquipmentConflicts } from './mergeEquipmentConflicts'
 
 export function isForcedPair(forced1: boolean, forced2: boolean): boolean {
   return forced1 || forced2

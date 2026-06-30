@@ -33,10 +33,6 @@ type Props = {
   onInputChange?: (value: string) => void
   onOpenChange?: (open: boolean) => void
   loading?: boolean
-  /** When inside a Dialog, pass any value (e.g. a container getter) to portal the
-   *  dropdown to document.body with fixed positioning so it is not clipped by
-   *  dialog overflow. Pair with preventDialogCloseOnSearchableSelect on Dialog.Content. */
-  portalContainer?: HTMLElement | null | (() => HTMLElement | null)
 }
 
 export const SEARCHABLE_SELECT_DROPDOWN_SELECTOR =
@@ -57,12 +53,11 @@ export function preventDialogCloseOnSearchableSelect(e: {
 function useFixedDropdownPosition(
   inputRef: React.RefObject<HTMLInputElement | null>,
   open: boolean,
-  enabled: boolean,
 ) {
   const [position, setPosition] = React.useState<DropdownPosition | null>(null)
 
   React.useLayoutEffect(() => {
-    if (!open || !enabled || !inputRef.current) {
+    if (!open || !inputRef.current) {
       setPosition(null)
       return
     }
@@ -95,7 +90,7 @@ function useFixedDropdownPosition(
       vv?.removeEventListener('resize', onLayoutChange)
       vv?.removeEventListener('scroll', onLayoutChange)
     }
-  }, [open, inputRef, enabled])
+  }, [open, inputRef])
 
   return position
 }
@@ -124,7 +119,6 @@ export function SearchableSelect({
   onInputChange,
   onOpenChange,
   loading,
-  portalContainer,
 }: Props) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
@@ -132,9 +126,7 @@ export function SearchableSelect({
   const listRef = React.useRef<HTMLDivElement>(null)
   const selectingRef = React.useRef(false)
 
-  const inDialog = portalContainer !== undefined
-
-  const fixedPosition = useFixedDropdownPosition(inputRef, open, inDialog)
+  const fixedPosition = useFixedDropdownPosition(inputRef, open)
 
   const selectedOption = React.useMemo(
     () => options.find((o) => o.value === value),
@@ -208,45 +200,26 @@ export function SearchableSelect({
   }
 
   const dropdownEl =
-    open && (!inDialog || fixedPosition) ? (
+    open && fixedPosition ? (
       <Box
         ref={listRef}
         data-searchable-select-dropdown
         onPointerDownCapture={(e) => e.preventDefault()}
         onMouseDown={(e) => e.preventDefault()}
-        style={
-          inDialog && fixedPosition
-            ? {
-                position: 'fixed',
-                top: fixedPosition.top,
-                left: fixedPosition.left,
-                width: Math.min(fixedPosition.width, dropdownMaxWidth),
-                zIndex: 2147483647,
-                pointerEvents: 'auto',
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 6,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                maxHeight: dropdownMaxHeight,
-                overflowY: 'auto',
-              }
-            : {
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                right: 0,
-                marginTop: 4,
-                width: '100%',
-                maxWidth: dropdownMaxWidth,
-                zIndex: 2147483647,
-                backgroundColor: 'var(--color-background)',
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 6,
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                maxHeight: dropdownMaxHeight,
-                overflowY: 'auto',
-              }
-        }
+        style={{
+          position: 'fixed',
+          top: fixedPosition.top,
+          left: fixedPosition.left,
+          width: Math.min(fixedPosition.width, dropdownMaxWidth),
+          zIndex: 2147483647,
+          pointerEvents: 'auto',
+          backgroundColor: 'var(--color-background)',
+          border: '1px solid var(--gray-a6)',
+          borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+          maxHeight: dropdownMaxHeight,
+          overflowY: 'auto',
+        }}
       >
         {loading ? (
           <Box px="3" py="2">
@@ -325,8 +298,7 @@ export function SearchableSelect({
           </TextField.Slot>
         )}
       </TextField.Root>
-      {dropdownEl &&
-        (inDialog ? createPortal(dropdownEl, document.body) : dropdownEl)}
+      {dropdownEl && createPortal(dropdownEl, document.body)}
     </Box>
   )
 }

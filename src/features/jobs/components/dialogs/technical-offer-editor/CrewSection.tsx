@@ -23,7 +23,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import { calculateHoursPerDay } from './utils'
 import { SortableCrewCard } from './sortable'
 import type { LocalCrewItem } from './types'
@@ -664,7 +664,7 @@ export function CrewSection({
                                                 e.stopPropagation()
                                               }
                                             >
-                                              <DateTimePicker
+                                              <DatePicker
                                                 value={item.start_date}
                                                 onChange={(value) =>
                                                   updateItem(item.id, {
@@ -694,7 +694,7 @@ export function CrewSection({
                                                 e.stopPropagation()
                                               }
                                             >
-                                              <DateTimePicker
+                                              <DatePicker
                                                 value={item.end_date}
                                                 onChange={(value) =>
                                                   updateItem(item.id, {

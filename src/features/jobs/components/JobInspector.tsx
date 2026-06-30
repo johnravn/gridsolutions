@@ -20,7 +20,7 @@ import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { copyJob, jobDetailQuery } from '../api/queries'
+import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
 import OverviewTab from './tabs/OverviewTab'
@@ -133,30 +133,7 @@ export default function JobInspector({
   useAutoUpdateJobStatus(data)
 
   const deleteJob = useMutation({
-    mutationFn: async (jobId: string) => {
-      // Delete related data first (cascade should handle most, but being explicit)
-      // Delete invite matters referencing this job
-      const { error: mattersErr } = await supabase
-        .from('matters')
-        .delete()
-        .eq('job_id', jobId)
-        .eq('matter_type', 'crew_invite')
-      if (mattersErr) throw mattersErr
-
-      // Delete time_periods (which will cascade to reserved_items, reserved_crew, reserved_vehicles)
-      const { error: periodsErr } = await supabase
-        .from('time_periods')
-        .delete()
-        .eq('job_id', jobId)
-      if (periodsErr) throw periodsErr
-
-      // Delete the job
-      const { error: jobErr } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('id', jobId)
-      if (jobErr) throw jobErr
-    },
+    mutationFn: (jobId: string) => deleteJobById(jobId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['company'] })
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
@@ -214,7 +191,14 @@ export default function JobInspector({
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
       setCopyOpen(false)
       success('Job copied', 'A new job was created from this one.')
-      navigate({ to: '/jobs', search: { jobId: newJobId, tab: undefined } })
+      navigate({
+        to: '/jobs',
+        search: {
+          jobId: newJobId,
+          recurringJobId: undefined,
+          tab: undefined,
+        },
+      })
     },
     onError: (err: any) => {
       toastError('Failed to copy job', err?.message || 'Please try again.')
@@ -240,22 +224,57 @@ export default function JobInspector({
         }}
       >
         <Flex
-          align="center"
-          gap="3"
-          wrap="wrap"
+          direction="column"
+          gap="2"
           style={{ minWidth: 0, flex: '1 1 auto' }}
         >
-          <Heading
-            size="4"
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+          <Flex
+            align="center"
+            gap="3"
+            wrap="wrap"
+            justify="between"
+            style={{ width: '100%' }}
           >
-            {job.title}
-          </Heading>
-          {job.jobnr && (
-            <Text size="3" color="gray" weight="medium">
-              #{String(job.jobnr).padStart(6, '0')}
-            </Text>
-          )}
+            <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0 }}>
+              <Heading
+                size="4"
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {job.title}
+              </Heading>
+              {job.jobnr && (
+                <Text size="3" color="gray" weight="medium">
+                  #{String(job.jobnr).padStart(6, '0')}
+                </Text>
+              )}
+            </Flex>
+            {job.recurring_job && (
+              <Tooltip content="Open recurring job series">
+                <Badge
+                  size="1"
+                  variant="outline"
+                  color="violet"
+                  style={{
+                    width: 'fit-content',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                  onClick={() =>
+                    navigate({
+                      to: '/jobs',
+                      search: {
+                        jobId: undefined,
+                        recurringJobId: job.recurring_job!.id,
+                        tab: undefined,
+                      },
+                    })
+                  }
+                >
+                  Recurring job
+                </Badge>
+              </Tooltip>
+            )}
+          </Flex>
         </Flex>
         <div
           style={{

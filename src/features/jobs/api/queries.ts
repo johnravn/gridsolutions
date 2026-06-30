@@ -62,10 +62,11 @@ export function jobsIndexQuery({
         .from('jobs')
         .select(
           `
-          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived,
+          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
           customer:customer_id ( id, name ),
           customer_user:customer_user_id ( user_id, display_name, email ),
-          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )
+          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
+          recurring_job:recurring_job_id ( id, title )
         `,
         )
         .eq('company_id', companyId)
@@ -369,10 +370,11 @@ export function jobsIndexPageQuery({
         .from('jobs')
         .select(
           `
-          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived,
+          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
           customer:customer_id ( id, name ),
           customer_user:customer_user_id ( user_id, display_name, email ),
-          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )
+          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
+          recurring_job:recurring_job_id ( id, title )
         `,
           { count: 'estimated' },
         )
@@ -491,13 +493,14 @@ export function jobDetailQuery({ jobId }: { jobId: string }) {
         .from('jobs')
         .select(
           `
-          id, company_id, title, jobnr, description, status, start_at, end_at, archived, invoice_basis,
+          id, company_id, title, jobnr, description, status, start_at, end_at, archived, invoice_basis, recurring_job_id,
           project_lead_user_id, customer_id, customer_user_id, customer_contact_id, job_address_id,
           customer:customer_id ( id, name, email, phone, address, vat_number, conta_customer_id, conta_days_until_payment_reminder ),
           customer_user:customer_user_id ( user_id, display_name, email, phone ),
           project_lead:project_lead_user_id ( user_id, display_name, email ),
           customer_contact:customer_contact_id ( id, name, email, phone, title ),
-          address:job_address_id ( id, name, address_line, zip_code, city, country )
+          address:job_address_id ( id, name, address_line, zip_code, city, country ),
+          recurring_job:recurring_job_id ( id, title )
         `,
         )
         .eq('id', jobId)
@@ -581,4 +584,23 @@ export async function copyJob(payload: {
   })
   if (error) throw error
   return data as string
+}
+
+/** Permanently delete a job and its direct booking data. */
+export async function deleteJobById(jobId: string): Promise<void> {
+  const { error: mattersErr } = await supabase
+    .from('matters')
+    .delete()
+    .eq('job_id', jobId)
+    .eq('matter_type', 'crew_invite')
+  if (mattersErr) throw mattersErr
+
+  const { error: periodsErr } = await supabase
+    .from('time_periods')
+    .delete()
+    .eq('job_id', jobId)
+  if (periodsErr) throw periodsErr
+
+  const { error: jobErr } = await supabase.from('jobs').delete().eq('id', jobId)
+  if (jobErr) throw jobErr
 }

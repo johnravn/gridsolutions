@@ -3,7 +3,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 
 type InitialRole = {
   id: string
@@ -127,18 +127,14 @@ export default function EditRoleDialog({
               style={{ width: 120 }}
             />
           </Box>
-          <Flex gap="3">
-            <Box style={{ flex: 1 }}>
-              <DateTimePicker
-                label="Start"
-                value={startAt}
-                onChange={setStartAt}
-              />
-            </Box>
-            <Box style={{ flex: 1 }}>
-              <DateTimePicker label="End" value={endAt} onChange={setEndAt} />
-            </Box>
-          </Flex>
+          <DateTimeRangePicker
+            startAt={startAt}
+            endAt={endAt}
+            onChange={({ startAt: s, endAt: e }) => {
+              setStartAt(s)
+              setEndAt(e)
+            }}
+          />
           <Box>
             <Text size="2" color="gray" mb="1">
               Role Category

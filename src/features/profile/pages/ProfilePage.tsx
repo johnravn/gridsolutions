@@ -18,7 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import { Camera, Lock } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
@@ -650,7 +650,7 @@ export default function ProfilePage() {
 
                   <Column title="Optional details">
                     <Field label="Date of birth">
-                      <DateTimePicker
+                      <DatePicker
                         value={
                           form.date_of_birth
                             ? new Date(
@@ -667,7 +667,6 @@ export default function ProfilePage() {
                             set('date_of_birth', '')
                           }
                         }}
-                        dateOnly
                       />
                     </Field>
                     <Field label="Driver’s license">

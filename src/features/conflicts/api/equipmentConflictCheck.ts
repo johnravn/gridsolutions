@@ -1,9 +1,6 @@
 import { supabase } from '@shared/api/supabase'
-import {
-  
-  dedupeOverlapConflicts
-} from '@features/conflicts/api/overlapChecks'
-import type {OverlapConflict} from '@features/conflicts/api/overlapChecks';
+import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
+import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { OfferDetail } from '@features/jobs/types'
 
 export type EquipmentConflictPreview = {

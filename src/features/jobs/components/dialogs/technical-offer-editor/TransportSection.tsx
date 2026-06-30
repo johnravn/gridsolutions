@@ -25,7 +25,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import { formatVehicleCategory } from './utils'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
 import type { LocalTransportGroup, LocalTransportItem } from './types'
@@ -631,7 +631,7 @@ export function TransportSection({
                                           : '—'}
                                       </Text>
                                     ) : (
-                                      <DateTimePicker
+                                      <DatePicker
                                         value={item.start_date}
                                         onChange={(value) =>
                                           updateItem(group.id, item.id, {
@@ -653,7 +653,7 @@ export function TransportSection({
                                           : '—'}
                                       </Text>
                                     ) : (
-                                      <DateTimePicker
+                                      <DatePicker
                                         value={item.end_date}
                                         onChange={(value) =>
                                           updateItem(group.id, item.id, {

@@ -12,7 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { CalendarXmark, TransitionLeft } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
@@ -24,13 +24,17 @@ import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
+import RecurringJobInspector from '../components/RecurringJobInspector'
+import type { JobsPageSelection } from '../types'
 
 export default function JobsPage() {
   const { companyId } = useCompany()
   const location = useLocation()
-  const search = location.search as { jobId?: string; tab?: string }
-  const jobId = search?.jobId
-  const tab = search?.tab
+  const search = location.search as Record<string, unknown>
+  const jobId = (search.jobId as string | undefined) || undefined
+  const recurringJobId =
+    (search.recurringJobId as string | undefined) || undefined
+  const tab = (search.tab as string | undefined) || undefined
 
   // Fetch company expansion for vehicle/transport rates
   const expansionQueryOptions = React.useMemo(() => {
@@ -46,19 +50,35 @@ export default function JobsPage() {
     enabled: !!companyId,
   })
 
-  const [selectedId, setSelectedId] = React.useState<string | null>(
-    jobId || null,
-  )
+  const [selection, setSelection] = React.useState<JobsPageSelection>(() => {
+    if (recurringJobId) return { kind: 'recurring_job', id: recurringJobId }
+    if (jobId) return { kind: 'job', id: jobId }
+    return null
+  })
   const [statusFilter, setStatusFilter] = React.useState(DEFAULT_STATUS_FILTER)
   const [showOnlyArchived, setShowOnlyArchived] = React.useState(false)
   const [selectedDate, setSelectedDate] = React.useState<string>('')
 
-  // Update selectedId when jobId from URL changes
+  // Update selection when URL search params change
   React.useEffect(() => {
-    if (jobId) {
-      setSelectedId(jobId)
+    if (recurringJobId) {
+      setSelection({ kind: 'recurring_job', id: recurringJobId })
+    } else if (jobId) {
+      setSelection({ kind: 'job', id: jobId })
     }
-  }, [jobId])
+  }, [jobId, recurringJobId])
+
+  const handleSelectJob = React.useCallback((id: string | null) => {
+    setSelection(id ? { kind: 'job', id } : null)
+  }, [])
+
+  const handleSelectRecurringJob = React.useCallback((id: string | null) => {
+    setSelection(id ? { kind: 'recurring_job', id } : null)
+  }, [])
+
+  const handleSelectJobFromRecurring = React.useCallback((id: string) => {
+    setSelection({ kind: 'job', id })
+  }, [])
 
   // match InventoryPage behavior
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -169,13 +189,13 @@ export default function JobsPage() {
 
   // On phone: when a job is selected, scroll to the inspector
   React.useEffect(() => {
-    if (!isLarge && selectedId != null && inspectorRef.current) {
+    if (!isLarge && selection != null && inspectorRef.current) {
       inspectorRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       })
     }
-  }, [isLarge, selectedId])
+  }, [isLarge, selection])
 
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
@@ -221,7 +241,7 @@ export default function JobsPage() {
                     </IconButton>
                   </Tooltip>
                 ) : (
-                  <DateTimePicker
+                  <DatePicker
                     value=""
                     onChange={(iso) => {
                       if (iso) {
@@ -231,7 +251,6 @@ export default function JobsPage() {
                         )
                       }
                     }}
-                    dateOnly
                     iconButton
                     iconButtonSize="2"
                   />
@@ -257,8 +276,9 @@ export default function JobsPage() {
               }}
             >
               <JobsList
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selection={selection}
+                onSelectJob={handleSelectJob}
+                onSelectRecurringJob={handleSelectRecurringJob}
                 statusFilter={statusFilter}
                 showOnlyArchived={showOnlyArchived}
                 selectedDate={selectedDate}
@@ -302,11 +322,20 @@ export default function JobsPage() {
                   maxWidth: '100%',
                 }}
               >
-                <JobInspector
-                  id={selectedId}
-                  onDeleted={() => setSelectedId(null)}
-                  initialTab={tab}
-                />
+                {selection?.kind === 'recurring_job' ? (
+                  <RecurringJobInspector
+                    id={selection.id}
+                    onSelectJob={handleSelectJobFromRecurring}
+                    onArchived={() => setSelection(null)}
+                    onDeleted={() => setSelection(null)}
+                  />
+                ) : (
+                  <JobInspector
+                    id={selection?.kind === 'job' ? selection.id : null}
+                    onDeleted={() => setSelection(null)}
+                    initialTab={tab}
+                  />
+                )}
               </Box>
             </Card>
           </div>
@@ -433,7 +462,7 @@ export default function JobsPage() {
                       </IconButton>
                     </Tooltip>
                   ) : (
-                    <DateTimePicker
+                    <DatePicker
                       value=""
                       onChange={(iso) => {
                         if (iso) {
@@ -443,7 +472,6 @@ export default function JobsPage() {
                           )
                         }
                       }}
-                      dateOnly
                       iconButton
                       iconButtonSize="2"
                     />
@@ -481,8 +509,9 @@ export default function JobsPage() {
                 }}
               >
                 <JobsList
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  selection={selection}
+                  onSelectJob={handleSelectJob}
+                  onSelectRecurringJob={handleSelectRecurringJob}
                   statusFilter={statusFilter}
                   showOnlyArchived={showOnlyArchived}
                   selectedDate={selectedDate}
@@ -554,11 +583,20 @@ export default function JobsPage() {
               overflowY: isLarge ? 'auto' : 'visible',
             }}
           >
-            <JobInspector
-              id={selectedId}
-              onDeleted={() => setSelectedId(null)}
-              initialTab={tab}
-            />
+            {selection?.kind === 'recurring_job' ? (
+              <RecurringJobInspector
+                id={selection.id}
+                onSelectJob={handleSelectJobFromRecurring}
+                onArchived={() => setSelection(null)}
+                onDeleted={() => setSelection(null)}
+              />
+            ) : (
+              <JobInspector
+                id={selection?.kind === 'job' ? selection.id : null}
+                onDeleted={() => setSelection(null)}
+                initialTab={tab}
+              />
+            )}
           </Box>
         </Card>
       </Flex>

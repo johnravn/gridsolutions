@@ -13,7 +13,7 @@ import { Filter } from 'iconoir-react'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import type { JobStatus } from '../types'
 
-const ALL_STATUSES: Array<JobStatus> = [
+export const ALL_STATUSES: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',

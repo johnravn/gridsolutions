@@ -3,8 +3,7 @@ import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { addThreeHours } from '@shared/lib/generalFunctions'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import {
   createPersonalVehicleBooking,
   updatePersonalVehicleBooking,
@@ -42,7 +41,6 @@ export default function BookPersonalVehicleDialog({
   const [title, setTitle] = React.useState(initial?.title ?? '')
   const [startAt, setStartAt] = React.useState(initial?.startAt ?? '')
   const [endAt, setEndAt] = React.useState(initial?.endAt ?? '')
-  const [autoSetEnd, setAutoSetEnd] = React.useState(true)
 
   React.useEffect(() => {
     if (!open) return
@@ -50,23 +48,12 @@ export default function BookPersonalVehicleDialog({
       setTitle(initial.title)
       setStartAt(initial.startAt)
       setEndAt(initial.endAt)
-      setAutoSetEnd(false)
     } else {
       setTitle('')
-      const now = new Date()
-      const start = new Date(now.getTime() + 60 * 60 * 1000)
-      start.setMinutes(0, 0, 0)
-      const end = addThreeHours(start.toISOString())
-      setStartAt(start.toISOString())
-      setEndAt(end)
-      setAutoSetEnd(true)
+      setStartAt('')
+      setEndAt('')
     }
   }, [open, mode, initial])
-
-  React.useEffect(() => {
-    if (!open || !autoSetEnd || mode === 'edit') return
-    if (startAt) setEndAt(addThreeHours(startAt))
-  }, [startAt, autoSetEnd, open, mode])
 
   const createMut = useMutation({
     mutationFn: () =>
@@ -152,28 +139,14 @@ export default function BookPersonalVehicleDialog({
             />
           </Box>
 
-          <Flex gap="3">
-            <Box style={{ flex: 1 }}>
-              <DateTimePicker
-                label="Start"
-                value={startAt}
-                onChange={(v) => {
-                  setStartAt(v)
-                  setAutoSetEnd(true)
-                }}
-              />
-            </Box>
-            <Box style={{ flex: 1 }}>
-              <DateTimePicker
-                label="End"
-                value={endAt}
-                onChange={(v) => {
-                  setEndAt(v)
-                  setAutoSetEnd(false)
-                }}
-              />
-            </Box>
-          </Flex>
+          <DateTimeRangePicker
+            startAt={startAt}
+            endAt={endAt}
+            onChange={({ startAt: s, endAt: e }) => {
+              setStartAt(s)
+              setEndAt(e)
+            }}
+          />
 
           <Flex justify="end" gap="2" mt="2">
             <Dialog.Close>

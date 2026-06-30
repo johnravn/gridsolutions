@@ -1,7 +1,7 @@
 // src/features/super/components/AssignUserToCompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Box, Button, Dialog, Flex, Select, Text } from '@radix-ui/themes'
+import { Button, Dialog, Flex, Select, Text } from '@radix-ui/themes'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
@@ -25,7 +25,6 @@ export default function AssignUserToCompanyDialog({
 }) {
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
-  const dialogPortalRef = React.useRef<HTMLElement | null>(null)
   const [searchTerm, setSearchTerm] = React.useState('')
   const [selectedUserId, setSelectedUserId] = React.useState<string | null>(
     null,
@@ -123,90 +122,75 @@ export default function AssignUserToCompanyDialog({
       >
         <Dialog.Title>Assign User to Company</Dialog.Title>
 
-        <Box
-          ref={(el: HTMLElement | null) => {
-            dialogPortalRef.current = el
-          }}
-          style={{ position: 'relative' }}
-        >
-          <Flex direction="column" gap="3" mt="3">
+        <Flex direction="column" gap="3" mt="3">
+          <div>
+            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+              Search for user
+            </Text>
+            <SearchableSelect
+              options={userOptions}
+              value={selectedUserId ?? ''}
+              onValueChange={(v) => setSelectedUserId(v || null)}
+              onInputChange={setSearchTerm}
+              filterLocally={false}
+              loading={searching}
+              placeholder="Search by name or email…"
+              emptyMessage="No users found (excluding users already in company)"
+              disabled={assignMutation.isPending}
+              style={{ maxWidth: 'none' }}
+            />
+          </div>
+
+          {selectedUserId && (
             <div>
               <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-                Search for user
+                Role
               </Text>
-              <SearchableSelect
-                options={userOptions}
-                value={selectedUserId ?? ''}
-                onValueChange={(v) => setSelectedUserId(v || null)}
-                onInputChange={setSearchTerm}
-                filterLocally={false}
-                loading={searching}
-                placeholder="Search by name or email…"
-                emptyMessage="No users found (excluding users already in company)"
+              <Select.Root
+                value={selectedRole}
+                onValueChange={(value) => setSelectedRole(value as CompanyRole)}
                 disabled={assignMutation.isPending}
-                portalContainer={() => dialogPortalRef.current}
-                style={{ maxWidth: 'none' }}
-              />
+              >
+                <Select.Trigger />
+                <Select.Content>
+                  <Select.Item value="owner">Owner</Select.Item>
+                  <Select.Item value="employee">Employee</Select.Item>
+                  <Select.Item value="freelancer">Freelancer</Select.Item>
+                  <Select.Item value="super_user">Super User</Select.Item>
+                </Select.Content>
+              </Select.Root>
+              <Text size="1" color="gray" mt="1">
+                {selectedRole === 'owner' &&
+                  'Full access to company settings and all resources'}
+                {selectedRole === 'employee' &&
+                  'Access to most company resources, but not settings'}
+                {selectedRole === 'freelancer' &&
+                  'Limited access to jobs and calendar'}
+                {selectedRole === 'super_user' &&
+                  'Full access similar to owner'}
+              </Text>
             </div>
+          )}
 
-            {selectedUserId && (
-              <div>
-                <Text
-                  as="div"
-                  size="2"
-                  color="gray"
-                  style={{ marginBottom: 6 }}
-                >
-                  Role
-                </Text>
-                <Select.Root
-                  value={selectedRole}
-                  onValueChange={(value) =>
-                    setSelectedRole(value as CompanyRole)
-                  }
-                  disabled={assignMutation.isPending}
-                >
-                  <Select.Trigger />
-                  <Select.Content>
-                    <Select.Item value="owner">Owner</Select.Item>
-                    <Select.Item value="employee">Employee</Select.Item>
-                    <Select.Item value="freelancer">Freelancer</Select.Item>
-                    <Select.Item value="super_user">Super User</Select.Item>
-                  </Select.Content>
-                </Select.Root>
-                <Text size="1" color="gray" mt="1">
-                  {selectedRole === 'owner' &&
-                    'Full access to company settings and all resources'}
-                  {selectedRole === 'employee' &&
-                    'Access to most company resources, but not settings'}
-                  {selectedRole === 'freelancer' &&
-                    'Limited access to jobs and calendar'}
-                  {selectedRole === 'super_user' &&
-                    'Full access similar to owner'}
-                </Text>
-              </div>
-            )}
-
-            <Flex gap="3" justify="end" mt="4">
-              <Dialog.Close>
-                <Button
-                  type="button"
-                  variant="soft"
-                  disabled={assignMutation.isPending}
-                >
-                  Cancel
-                </Button>
-              </Dialog.Close>
+          <Flex gap="3" justify="end" mt="4">
+            <Dialog.Close>
               <Button
                 type="button"
-                onClick={() => assignMutation.mutate()}
-                disabled={!canSubmit || assignMutation.isPending}
+                variant="soft"
+                disabled={assignMutation.isPending}
               >
-                {assignMutation.isPending ? 'Assigning…' : 'Assign'}
+                Cancel
               </Button>
-            </Flex>
+            </Dialog.Close>
+            <Button
+              type="button"
+              onClick={() => assignMutation.mutate()}
+              disabled={!canSubmit || assignMutation.isPending}
+            >
+              {assignMutation.isPending ? 'Assigning…' : 'Assign'}
+            </Button>
           </Flex>
-        </Box>
+        </Flex>
       </Dialog.Content>
     </Dialog.Root>
   )

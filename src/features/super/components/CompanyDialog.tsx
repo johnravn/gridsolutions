@@ -1,7 +1,7 @@
 // src/features/super/components/CompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
@@ -45,7 +45,6 @@ export default function CompanyDialog({
 }) {
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
-  const dialogPortalRef = React.useRef<HTMLElement | null>(null)
   const [searchTerm, setSearchTerm] = React.useState('')
 
   // Format VAT number on initial load
@@ -299,132 +298,124 @@ export default function CompanyDialog({
         </Dialog.Title>
 
         <form onSubmit={handleSubmit}>
-          <Box
-            ref={(el: HTMLElement | null) => {
-              dialogPortalRef.current = el
-            }}
-            style={{ position: 'relative' }}
-          >
-            <Flex direction="column" gap="3" mt="3">
-              <Field
-                label={
-                  <>
-                    Name <Text color="red">*</Text>
-                  </>
-                }
-              >
-                <TextField.Root
-                  value={form.name}
-                  onChange={(e) => set('name', e.target.value)}
-                  placeholder="Company name"
-                  required
-                  disabled={isLoading}
-                />
-              </Field>
+          <Flex direction="column" gap="3" mt="3">
+            <Field
+              label={
+                <>
+                  Name <Text color="red">*</Text>
+                </>
+              }
+            >
+              <TextField.Root
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+                placeholder="Company name"
+                required
+                disabled={isLoading}
+              />
+            </Field>
 
-              <Field label="General Email">
-                <TextField.Root
-                  type="email"
-                  value={form.general_email}
-                  onChange={(e) => set('general_email', e.target.value)}
-                  placeholder="info@company.com"
-                  disabled={isLoading}
-                />
-              </Field>
+            <Field label="General Email">
+              <TextField.Root
+                type="email"
+                value={form.general_email}
+                onChange={(e) => set('general_email', e.target.value)}
+                placeholder="info@company.com"
+                disabled={isLoading}
+              />
+            </Field>
 
-              <Field label="Address line">
-                <TextField.Root
-                  value={form.address_line}
-                  onChange={(e) => setAddr('address_line', e.target.value)}
-                  placeholder="Street and number"
-                  disabled={isLoading}
-                />
-              </Field>
+            <Field label="Address line">
+              <TextField.Root
+                value={form.address_line}
+                onChange={(e) => setAddr('address_line', e.target.value)}
+                placeholder="Street and number"
+                disabled={isLoading}
+              />
+            </Field>
 
-              <FieldRow>
-                <Flex gap={'2'} width={'100%'}>
-                  <Field label="ZIP">
-                    <TextField.Root
-                      value={form.zip_code}
-                      onChange={(e) => setAddr('zip_code', e.target.value)}
-                      placeholder="e.g., 0361"
-                      disabled={isLoading}
-                    />
-                  </Field>
-                  <Field label="City" style={{ flex: 1 }}>
-                    <TextField.Root
-                      value={form.city}
-                      onChange={(e) => setAddr('city', e.target.value)}
-                      placeholder="e.g., Oslo"
-                      disabled={isLoading}
-                    />
-                  </Field>
-                </Flex>
-              </FieldRow>
-
-              <Field label="Country">
-                <TextField.Root
-                  value={form.country}
-                  onChange={(e) => setAddr('country', e.target.value)}
-                  disabled={isLoading}
-                />
-              </Field>
-
-              <Field label="VAT Number">
-                <TextField.Root
-                  value={form.vat_number}
-                  onChange={(e) => {
-                    const input = e.target.value.replace(/[\s-]/g, '')
-                    // Only allow digits, max 9 digits
-                    if (input === '' || /^\d{0,9}$/.test(input)) {
-                      // Format as "xxx xxx xxx" as user types
-                      const formatted =
-                        input.length <= 3
-                          ? input
-                          : input.length <= 6
-                            ? `${input.slice(0, 3)} ${input.slice(3)}`
-                            : `${input.slice(0, 3)} ${input.slice(3, 6)} ${input.slice(6)}`
-                      set('vat_number', formatted)
-                    }
-                  }}
-                  placeholder="123 456 789"
-                  disabled={isLoading}
-                />
-              </Field>
-
-              <Field label="Contact Person">
-                <SearchableSelect
-                  options={contactPersonOptions}
-                  value={form.contact_person_id ?? ''}
-                  onValueChange={(v) => set('contact_person_id', v || null)}
-                  onInputChange={setSearchTerm}
-                  filterLocally={false}
-                  loading={profilesLoading}
-                  placeholder="Search by name or email…"
-                  disabled={isLoading}
-                  portalContainer={() => dialogPortalRef.current}
-                  style={{ maxWidth: 'none' }}
-                />
-              </Field>
-
-              <Flex gap="3" justify="end" mt="4">
-                <Dialog.Close>
-                  <Button type="button" variant="soft" disabled={isLoading}>
-                    Cancel
-                  </Button>
-                </Dialog.Close>
-                <Button type="submit" disabled={isLoading}>
-                  {isLoading
-                    ? mode === 'create'
-                      ? 'Creating…'
-                      : 'Saving…'
-                    : mode === 'create'
-                      ? 'Create'
-                      : 'Save'}
-                </Button>
+            <FieldRow>
+              <Flex gap={'2'} width={'100%'}>
+                <Field label="ZIP">
+                  <TextField.Root
+                    value={form.zip_code}
+                    onChange={(e) => setAddr('zip_code', e.target.value)}
+                    placeholder="e.g., 0361"
+                    disabled={isLoading}
+                  />
+                </Field>
+                <Field label="City" style={{ flex: 1 }}>
+                  <TextField.Root
+                    value={form.city}
+                    onChange={(e) => setAddr('city', e.target.value)}
+                    placeholder="e.g., Oslo"
+                    disabled={isLoading}
+                  />
+                </Field>
               </Flex>
+            </FieldRow>
+
+            <Field label="Country">
+              <TextField.Root
+                value={form.country}
+                onChange={(e) => setAddr('country', e.target.value)}
+                disabled={isLoading}
+              />
+            </Field>
+
+            <Field label="VAT Number">
+              <TextField.Root
+                value={form.vat_number}
+                onChange={(e) => {
+                  const input = e.target.value.replace(/[\s-]/g, '')
+                  // Only allow digits, max 9 digits
+                  if (input === '' || /^\d{0,9}$/.test(input)) {
+                    // Format as "xxx xxx xxx" as user types
+                    const formatted =
+                      input.length <= 3
+                        ? input
+                        : input.length <= 6
+                          ? `${input.slice(0, 3)} ${input.slice(3)}`
+                          : `${input.slice(0, 3)} ${input.slice(3, 6)} ${input.slice(6)}`
+                    set('vat_number', formatted)
+                  }
+                }}
+                placeholder="123 456 789"
+                disabled={isLoading}
+              />
+            </Field>
+
+            <Field label="Contact Person">
+              <SearchableSelect
+                options={contactPersonOptions}
+                value={form.contact_person_id ?? ''}
+                onValueChange={(v) => set('contact_person_id', v || null)}
+                onInputChange={setSearchTerm}
+                filterLocally={false}
+                loading={profilesLoading}
+                placeholder="Search by name or email…"
+                disabled={isLoading}
+                style={{ maxWidth: 'none' }}
+              />
+            </Field>
+
+            <Flex gap="3" justify="end" mt="4">
+              <Dialog.Close>
+                <Button type="button" variant="soft" disabled={isLoading}>
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button type="submit" disabled={isLoading}>
+                {isLoading
+                  ? mode === 'create'
+                    ? 'Creating…'
+                    : 'Saving…'
+                  : mode === 'create'
+                    ? 'Create'
+                    : 'Save'}
+              </Button>
             </Flex>
-          </Box>
+          </Flex>
         </form>
       </Dialog.Content>
     </Dialog.Root>

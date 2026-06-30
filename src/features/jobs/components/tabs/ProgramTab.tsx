@@ -20,7 +20,7 @@ import {
 } from '@features/jobs/api/queries'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { supabase } from '@shared/api/supabase'
 import { addThreeHours } from '@shared/lib/generalFunctions'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -454,7 +454,6 @@ function EditTimePeriodDialog({
   const [programGroup, setProgramGroup] = React.useState(
     timePeriod.program_group || '',
   )
-  const [autoSetEndTime, setAutoSetEndTime] = React.useState(!timePeriod.id)
   const getDateMs = (value: string) => {
     const ms = new Date(value).getTime()
     return Number.isNaN(ms) ? null : ms
@@ -466,12 +465,6 @@ function EditTimePeriodDialog({
     return endMs < startMs
   })()
 
-  // Auto-set end time when start time changes (only for new time periods)
-  React.useEffect(() => {
-    if (!startAt || !autoSetEndTime || timePeriod.id) return
-    setEndAt(addThreeHours(startAt))
-  }, [startAt, autoSetEndTime, timePeriod.id])
-
   // Reset form when timePeriod changes
   React.useEffect(() => {
     if (open) {
@@ -479,7 +472,6 @@ function EditTimePeriodDialog({
       setStartAt(timePeriod.start_at)
       setEndAt(timePeriod.end_at)
       setProgramGroup(timePeriod.program_group || '')
-      setAutoSetEndTime(!timePeriod.id)
     }
   }, [timePeriod, open])
 
@@ -594,22 +586,14 @@ function EditTimePeriodDialog({
             )}
           </Box>
 
-          <DateTimePicker
-            label="Start"
-            value={startAt}
-            onChange={(value) => {
-              setStartAt(value)
-              setAutoSetEndTime(!timePeriod.id)
+          <DateTimeRangePicker
+            startAt={startAt}
+            endAt={endAt}
+            onChange={({ startAt: s, endAt: e }) => {
+              setStartAt(s)
+              setEndAt(e)
             }}
-          />
-          <DateTimePicker
-            label="End"
-            value={endAt}
             invalid={hasInvalidTimeRange}
-            onChange={(value) => {
-              setEndAt(value)
-              setAutoSetEndTime(false)
-            }}
           />
         </Flex>
 

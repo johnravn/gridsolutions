@@ -157,7 +157,18 @@ npm run test:coverage     # with V8 coverage report
 | --------------------- | --------------------------------------------------- |
 | `src/test/setup.ts`   | jest-dom matchers, RTL cleanup                      |
 | `src/test/render.tsx` | `renderWithProviders()` — QueryClient + Radix Theme |
-| `src/test/fixtures/`  | Shared test objects (e.g. `offers.ts`)              |
+| `src/test/fixtures/`  | Shared test objects (see below)                     |
+
+**Fixture modules** (`src/test/fixtures/`):
+
+| File               | Used by                                    |
+| ------------------ | ------------------------------------------ |
+| `offers.ts`        | Offer validation, calculations, PDF export |
+| `conflicts.ts`     | Overlap / conflict unit tests              |
+| `calendar.ts`      | Calendar domain tests                      |
+| `recurringJobs.ts` | Recurring job util + integration tests     |
+| `logging.ts`       | Logging date range tests                   |
+| `latest.ts`        | Latest feed util tests                     |
 
 Path alias: `@test/*` → `src/test/*`
 
@@ -179,6 +190,15 @@ Path alias: `@test/*` → `src/test/*`
 - Supabase RPCs (`public_offer_get`, `public_offer_accept`, …)
 - RLS policies (owner vs freelancer, cross-company isolation)
 - Postgres triggers/side effects that unit tests cannot see
+
+**Integration test files:**
+
+| File                        | Coverage                                      |
+| --------------------------- | --------------------------------------------- |
+| `offers.public.test.ts`     | Public offer RPCs, jobs RLS, job_copy         |
+| `conflicts.booking.test.ts` | Time periods, reserved items, force-book cols |
+| `recurringJobs.test.ts`     | Recurring job CRUD + templates                |
+| `inventory.booking.test.ts` | Inventory index, items RLS, reserved items    |
 
 **Run:**
 
@@ -207,12 +227,24 @@ RUN_INTEGRATION_TESTS=1 npm run test:integration
 
 **Current tests** (`e2e/`):
 
-| File                   | Coverage                                                       |
-| ---------------------- | -------------------------------------------------------------- |
-| `login.spec.ts`        | Sign in → dashboard                                            |
-| `jobs.spec.ts`         | Open jobs page, create a job                                   |
-| `public-offer.spec.ts` | View public offer, accept, reject, request revision            |
-| `offers.spec.ts`       | Create offer, lock & send, customer accepts, owner sees status |
+| File                     | Coverage                                                       |
+| ------------------------ | -------------------------------------------------------------- |
+| `login.spec.ts`          | Sign in → dashboard                                            |
+| `jobs.spec.ts`           | Create job, tab navigation, edit title                         |
+| `offers.spec.ts`         | Create offer, lock & send, customer accepts, owner sees status |
+| `public-offer.spec.ts`   | View public offer, accept, reject, request revision            |
+| `inventory.spec.ts`      | Open inventory, search                                         |
+| `customers.spec.ts`      | Open customers page                                            |
+| `calendar.spec.ts`       | Open calendar page                                             |
+| `logging.spec.ts`        | Open logging page                                              |
+| `bookings.spec.ts`       | Open bookings tab on a job                                     |
+| `vehicles.spec.ts`       | Open vehicles page                                             |
+| `crew.spec.ts`           | Open crew page                                                 |
+| `company.spec.ts`        | Open company settings                                          |
+| `roles.spec.ts`          | Freelancer denied inventory nav                                |
+| `recurring-jobs.spec.ts` | Recurring jobs tab (when present)                              |
+
+**Shared helpers:** `e2e/helpers/navigation.ts` — `openJobsPage`, `createDraftJob`, and page openers for inventory, customers, calendar, etc.
 
 **Auth fixture:** `e2e/fixtures.ts` provides `authedPage` — logs in as the test owner before each test that needs it.
 
@@ -272,6 +304,8 @@ Sent offers include one equipment line (“Test microphone”) so the public off
 
 A seeded inventory item (`Test Seeded Item`) supports employee vs freelancer permission integration tests.
 
+**Conflict booking fixture** on **Conflict Seed Job** (`14141414-…`): `Test Seeded Item` is reserved for `2026-07-01T08:00:00Z` – `2026-07-01T18:00:00Z` (quantity 1). Use for overlap / force-book integration and E2E tests. Separate from E2E Test Job so `job_copy` tests stay isolated.
+
 Accept offers are on **separate jobs** so accepting one does not block the other (Postgres rejects accept when a newer sent version exists on the same job).
 
 ### Supabase CLI note
@@ -297,13 +331,36 @@ Runs on every push to `main` and on pull requests.
 
 ## Where to add new tests
 
-| Change type                        | Add test in                                  |
-| ---------------------------------- | -------------------------------------------- |
-| Offer math, validation, formatters | Unit — `src/features/jobs/utils/*.test.ts`   |
-| Permissions / role matrix          | Unit — `src/shared/auth/permissions.test.ts` |
-| New RPC or RLS rule                | Integration — `src/test/integration/`        |
-| New critical user flow             | E2E — `e2e/*.spec.ts`                        |
-| Calendar ICS formatting            | Unit — `api/calendar/icsHelpers.test.ts`     |
+| Change type                        | Add test in                                                 |
+| ---------------------------------- | ----------------------------------------------------------- |
+| Offer math, validation, formatters | Unit — `src/features/jobs/utils/*.test.ts`                  |
+| Conflict overlap / force-book      | Unit — `src/features/conflicts/api/*.test.ts`               |
+| Logging date ranges                | Unit — `src/features/logging/lib/*.test.ts`                 |
+| Latest feed utils                  | Unit — `src/features/latest/utils/*.test.ts`                |
+| Calendar domain transforms         | Unit — `src/features/calendar/components/domain.test.ts`    |
+| Permissions / role matrix          | Unit — `src/shared/auth/permissions.test.ts`                |
+| Conta sync / customer check        | Unit — `src/shared/conta/`, `src/features/customers/utils/` |
+| API cron handlers                  | Unit — `api/cron/*.test.ts`, `api/super/*.test.ts`          |
+| Offer editor sections              | Component — `technical-offer-editor/*.test.tsx`             |
+| Shared UI (SearchableSelect)       | Component — `src/shared/ui/components/*.test.tsx`           |
+| New RPC or RLS rule                | Integration — `src/test/integration/`                       |
+| New critical user flow             | E2E — `e2e/*.spec.ts`                                       |
+| Calendar ICS formatting            | Unit — `api/calendar/icsHelpers.test.ts`                    |
+
+### Unit test inventory (by feature)
+
+| Area           | Test files                                                                                                                                                                                                             |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **jobs/utils** | `offerCalculations`, `offerValidation`, `offerNumber`, `jobStatusAutoTransition`, `groupBookingQuantity`, `aggregateRecurringJobCrew`, `recurringJobCreateDefaults`, `statusColors`, `contaProjects`, `offerPdfExport` |
+| **conflicts**  | `overlapChecks`, `forceBooking`, `equipmentConflictCheck`, `conflictCategories`, `mergeEquipmentConflicts`                                                                                                             |
+| **logging**    | `timeEntryRange`                                                                                                                                                                                                       |
+| **latest**     | `formatActivityDate`, `groupInventoryActivities`, `activityNavigation`                                                                                                                                                 |
+| **calendar**   | `domain`, `freelancerCalendarVisibility`                                                                                                                                                                               |
+| **home**       | `dailyInspiration`                                                                                                                                                                                                     |
+| **customers**  | `contaCustomerCheck`                                                                                                                                                                                                   |
+| **shared**     | `permissions`, `phone`, `generalFunctions`, `fuzzySearch`, `customerSyncCore`, `contaCustomerSyncCron`                                                                                                                 |
+| **api**        | `icsHelpers`, `feed`, `sync-conta`, `trigger-conta-sync`                                                                                                                                                               |
+| **components** | `TotalsSection`, `EquipmentSection`, `CrewSection`, `TransportSection`, `SearchableSelect`                                                                                                                             |
 
 **Regression rule:** every bug fix in jobs/offers should get a test (unit or integration) that would have caught it.
 

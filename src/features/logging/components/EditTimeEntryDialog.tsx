@@ -9,7 +9,7 @@ import {
 } from '@radix-ui/themes'
 import { useMutation } from '@tanstack/react-query'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { updateTimeEntry } from '../api/timeEntries'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
 
@@ -133,21 +133,22 @@ export default function EditTimeEntryDialog({
             />
           </label>
 
-          <DateTimePicker
-            label="Start"
-            value={form.startAt}
-            onChange={(value) => set('startAt', value)}
-            disabled={disabled}
-            locale="nb"
-          />
-          <DateTimePicker
-            label="End"
-            value={form.endAt}
-            onChange={(value) => set('endAt', value)}
-            disabled={disabled}
-            invalid={hasInvalidTimeRange}
-            locale="nb"
-          />
+          <label>
+            <Text as="div" size="2" mb="1" weight="medium">
+              Time period
+            </Text>
+            <DateTimeRangePicker
+              startAt={form.startAt}
+              endAt={form.endAt}
+              onChange={({ startAt, endAt }) => {
+                set('startAt', startAt)
+                set('endAt', endAt)
+              }}
+              invalid={hasInvalidTimeRange}
+              disabled={disabled}
+              locale="nb"
+            />
+          </label>
 
           <label>
             <Text as="div" size="2" mb="1" weight="medium">

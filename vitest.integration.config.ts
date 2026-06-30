@@ -11,6 +11,7 @@ export default defineConfig({
     },
   },
   test: {
+    pool: 'threads',
     environment: 'node',
     include: ['src/test/integration/**/*.test.ts'],
     globalSetup: ['./src/test/integration/global-setup.ts'],

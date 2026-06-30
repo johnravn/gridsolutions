@@ -17,8 +17,7 @@ import { Search } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { addThreeHours } from '@shared/lib/generalFunctions'
-import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import {
   forcedBookingFields,
   isEquipmentCapacityError,
@@ -27,9 +26,9 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
+import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import type { UUID } from '../../types'
 
 const ALL = '__ALL__'
@@ -137,7 +136,6 @@ export default function BookItemsDialog({
   )
   const [customEndTime, setCustomEndTime] = React.useState<string | null>(null)
   const [timesTouched, setTimesTouched] = React.useState(false)
-  const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
 
   // Fetch job details to get duration times
   const { data: job } = useQuery({
@@ -161,7 +159,6 @@ export default function BookItemsDialog({
       setCustomStartTime(null)
       setCustomEndTime(null)
       setTimesTouched(false)
-      setAutoSetEndTime(true)
       return
     }
 
@@ -174,7 +171,6 @@ export default function BookItemsDialog({
         setCustomStartTime(job.start_at)
         setCustomEndTime(job.end_at)
         setTimesTouched(false)
-        setAutoSetEndTime(false) // Don't auto-set when loading from job
       } else {
         // For internal items, check for exact "Equipment period" match
         const equipmentPeriod = timePeriods.find(
@@ -187,17 +183,10 @@ export default function BookItemsDialog({
           setCustomStartTime(job.start_at)
           setCustomEndTime(job.end_at)
           setTimesTouched(false)
-          setAutoSetEndTime(false) // Don't auto-set when loading from job
         }
       }
     }
   }, [open, job, timePeriods, selectedTimePeriodId, externalOnly])
-
-  // Auto-set end time when start time changes
-  React.useEffect(() => {
-    if (!customStartTime || !autoSetEndTime) return
-    setCustomEndTime(addThreeHours(customStartTime))
-  }, [customStartTime, autoSetEndTime])
 
   // Set default time period when dialog opens - only use equipment periods
   React.useEffect(() => {
@@ -1101,10 +1090,7 @@ export default function BookItemsDialog({
 
   return (
     <>
-      <Dialog.Root
-        open={open && !forceDialogOpen}
-        onOpenChange={onOpenChange}
-      >
+      <Dialog.Root open={open && !forceDialogOpen} onOpenChange={onOpenChange}>
         <Dialog.Content
           maxWidth={isSmallScreen ? '100%' : '90%'}
           style={{
@@ -1180,36 +1166,15 @@ export default function BookItemsDialog({
                         alignItems: isSmallScreen ? 'stretch' : undefined,
                       }}
                     >
-                      <Box
-                        style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}
-                      >
-                        <Text size="1" color="gray" mb="1" as="div">
-                          Start time
-                        </Text>
-                        <DateTimePicker
-                          value={customStartTime || ''}
-                          onChange={(iso) => {
-                            setCustomStartTime(iso)
-                            setTimesTouched(true)
-                            setAutoSetEndTime(true)
-                          }}
-                        />
-                      </Box>
-                      <Box
-                        style={{ flex: 1, minWidth: isSmallScreen ? 0 : 200 }}
-                      >
-                        <Text size="1" color="gray" mb="1" as="div">
-                          End time
-                        </Text>
-                        <DateTimePicker
-                          value={customEndTime || ''}
-                          onChange={(iso) => {
-                            setCustomEndTime(iso)
-                            setTimesTouched(true)
-                            setAutoSetEndTime(false)
-                          }}
-                        />
-                      </Box>
+                      <DateTimeRangePicker
+                        startAt={customStartTime || ''}
+                        endAt={customEndTime || ''}
+                        onChange={({ startAt: s, endAt: e }) => {
+                          setCustomStartTime(s)
+                          setCustomEndTime(e)
+                          setTimesTouched(true)
+                        }}
+                      />
                     </Flex>
                     {!externalOnly && (
                       <Button

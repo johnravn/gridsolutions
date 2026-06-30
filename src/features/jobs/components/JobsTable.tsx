@@ -16,7 +16,7 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import {
   Archive,
   ArrowDown,
@@ -344,7 +344,7 @@ export default function JobsTable({
               </IconButton>
             </Tooltip>
           ) : (
-            <DateTimePicker
+            <DatePicker
               value=""
               onChange={(iso) => {
                 // Convert ISO to YYYY-MM-DD for the query (which expects date string)
@@ -354,7 +354,6 @@ export default function JobsTable({
                   setSelectedDate(dateStr)
                 }
               }}
-              dateOnly
               iconButton
               iconButtonSize="2"
             />

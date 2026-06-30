@@ -130,10 +130,26 @@ export default defineConfig(({ mode }) => {
       port: 3000,
     },
     test: {
+      // threads avoids orphaned fork workers when the parent is killed abruptly
+      // (IDE cancel, piped output, etc.) — see vitest-dev/vitest#8800
+      pool: 'threads',
       environment: 'jsdom',
       setupFiles: ['src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}', 'api/**/*.test.ts'],
       exclude: ['src/test/integration/**'],
+      coverage: {
+        provider: 'v8',
+        include: [
+          'src/features/jobs/utils/**',
+          'src/features/conflicts/**',
+          'src/shared/auth/**',
+        ],
+        thresholds: {
+          lines: 40,
+          branches: 65,
+          functions: 55,
+        },
+      },
     },
   }
 })

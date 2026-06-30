@@ -4,8 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Select, TextField } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { addThreeHours } from '@shared/lib/generalFunctions'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import {
   forcedBookingFields,
@@ -40,7 +39,6 @@ export default function EditItemBookingDialog({
   )
   const [lineStart, setLineStart] = React.useState<string>(row.start_at || '')
   const [lineEnd, setLineEnd] = React.useState<string>(row.end_at || '')
-  const [autoSetEndTime, setAutoSetEndTime] = React.useState(false)
 
   React.useEffect(() => {
     if (!open) return
@@ -51,14 +49,7 @@ export default function EditItemBookingDialog({
     setUseTimePeriodWindow(!row.start_at && !row.end_at)
     setLineStart(row.start_at || '')
     setLineEnd(row.end_at || '')
-    setAutoSetEndTime(false) // Don't auto-set when loading existing data
   }, [open, row])
-
-  // Auto-set end time when start time changes
-  React.useEffect(() => {
-    if (!lineStart || !autoSetEndTime || useTimePeriodWindow) return
-    setLineEnd(addThreeHours(lineStart))
-  }, [lineStart, autoSetEndTime, useTimePeriodWindow])
 
   const save = useMutation({
     mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
@@ -101,10 +92,7 @@ export default function EditItemBookingDialog({
 
   return (
     <>
-      <Dialog.Root
-        open={open && !forceDialogOpen}
-        onOpenChange={onOpenChange}
-      >
+      <Dialog.Root open={open && !forceDialogOpen} onOpenChange={onOpenChange}>
         <Dialog.Content maxWidth="460px">
           <Dialog.Title>Edit item booking</Dialog.Title>
           <Dialog.Description size="2" color="gray" mb="2">
@@ -163,28 +151,16 @@ export default function EditItemBookingDialog({
               <span>Use time period window</span>
             </label>
             {!useTimePeriodWindow && (
-              <Flex gap="2" mt="2">
-                <Box style={{ flex: 1 }}>
-                  <DateTimePicker
-                    label="Start"
-                    value={lineStart}
-                    onChange={(value) => {
-                      setLineStart(value)
-                      setAutoSetEndTime(true)
-                    }}
-                  />
-                </Box>
-                <Box style={{ flex: 1 }}>
-                  <DateTimePicker
-                    label="End"
-                    value={lineEnd}
-                    onChange={(value) => {
-                      setLineEnd(value)
-                      setAutoSetEndTime(false)
-                    }}
-                  />
-                </Box>
-              </Flex>
+              <Box mt="2">
+                <DateTimeRangePicker
+                  startAt={lineStart}
+                  endAt={lineEnd}
+                  onChange={({ startAt: s, endAt: e }) => {
+                    setLineStart(s)
+                    setLineEnd(e)
+                  }}
+                />
+              </Box>
             )}
           </Field>
 

@@ -27,6 +27,7 @@ export type JobListRow = {
   end_at: string | null
   customer_contact_id: UUID | null
   archived: boolean
+  recurring_job_id?: UUID | null
   customer?: {
     id: UUID
     name: string | null
@@ -42,7 +43,110 @@ export type JobListRow = {
     email: string
     avatar_url: string | null
   } | null
+  recurring_job?: {
+    id: UUID
+    title: string
+  } | null
 }
+
+/* ---------- Recurring jobs ---------- */
+
+export type RecurringJobListRow = {
+  id: UUID
+  company_id: UUID
+  title: string
+  description: string | null
+  archived: boolean
+  job_count: number
+  customer?: {
+    id: UUID
+    name: string | null
+  } | null
+  customer_user?: {
+    user_id: UUID
+    display_name: string | null
+    email: string
+  } | null
+  project_lead?: {
+    user_id: UUID
+    display_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
+  customer_contact?: {
+    id: UUID
+    name: string
+    email: string | null
+    phone: string | null
+  } | null
+}
+
+export type RecurringJobDetail = RecurringJobListRow & {
+  project_lead_user_id: UUID | null
+  customer_id: UUID | null
+  customer_user_id: UUID | null
+  customer_contact_id: UUID | null
+  jobs: Array<JobListRow>
+}
+
+export type RecurringJobTemplateCrewRole = {
+  title: string
+  needed_count: number
+  role_category: string | null
+}
+
+export type RecurringJobTemplate = {
+  id: UUID
+  recurring_job_id: UUID
+  company_id: UUID
+  name: string
+  title: string
+  description: string | null
+  status: JobStatus
+  duration_hours: number
+  start_time: string | null
+  crew_roles: Array<RecurringJobTemplateCrewRole>
+  sort_order: number
+}
+
+export type RecurringJobCrewEntry = {
+  user_id: UUID
+  display_name: string | null
+  email: string
+  avatar_url: string | null
+  bookings: Array<{
+    job_id: UUID
+    job_title: string
+    jobnr: number | null
+    role_title: string | null
+    start_at: string | null
+    end_at: string | null
+    status: string
+  }>
+}
+
+export type RecurringJobInvoiceEntry = {
+  job_id: UUID
+  job_title: string
+  jobnr: number | null
+  status: JobStatus
+  invoice_count: number
+  last_invoice_at: string | null
+}
+
+export type RecurringJobBookingSummary = {
+  job_id: UUID
+  job_title: string
+  jobnr: number | null
+  equipment_count: number
+  crew_count: number
+  transport_count: number
+}
+
+export type JobsPageSelection =
+  | { kind: 'job'; id: UUID }
+  | { kind: 'recurring_job'; id: UUID }
+  | null
 
 export type AddressListRow = {
   id: UUID
@@ -69,6 +173,7 @@ export type JobDetail = {
   load_out_at: string | null
   archived: boolean
   invoice_basis: InvoiceBasis | null
+  recurring_job_id: UUID | null
 
   project_lead_user_id: UUID | null
   customer_id: UUID | null
@@ -98,6 +203,11 @@ export type JobDetail = {
     user_id: UUID
     display_name: string | null
     email: string
+  } | null
+
+  recurring_job?: {
+    id: UUID
+    title: string
   } | null
 
   customer_contact?: {

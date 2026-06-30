@@ -1,33 +1,5 @@
 import { test, expect } from './fixtures'
-
-async function openJobsPage(page: import('@playwright/test').Page) {
-  await page.getByRole('link', { name: 'Jobs', exact: true }).click()
-  await expect(page).toHaveURL(/\/jobs/)
-  await expect(
-    page.getByRole('heading', { name: 'Jobs', exact: true }),
-  ).toBeVisible({
-    timeout: 15_000,
-  })
-}
-
-async function createDraftJob(page: import('@playwright/test').Page) {
-  await openJobsPage(page)
-  await page.getByRole('button', { name: 'New job' }).first().click()
-
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByText('New job')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Auto-fill' }).click()
-
-  const title = `E2E Offer Job ${Date.now()}`
-  await dialog.getByRole('textbox').first().fill(title)
-  await dialog.getByRole('button', { name: 'Create' }).click()
-
-  await expect(page.getByRole('heading', { name: title })).toBeVisible({
-    timeout: 20_000,
-  })
-
-  return title
-}
+import { createDraftJob, openJobsPage } from './helpers/navigation'
 
 async function createTechnicalOfferWithEquipment(
   page: import('@playwright/test').Page,

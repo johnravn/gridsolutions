@@ -19,6 +19,15 @@ export const TEST_IDS = {
   revisionOfferId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
   lockDraftOfferId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
   testItemId: 'ffffffff-ffff-4fff-8fff-fffffffffff1',
+  conflictSeedJobId: '14141414-1414-4414-8414-141414141414',
+  conflictTimePeriodId: '12121212-1212-4212-8212-121212121212',
+  conflictReservedItemId: '13131313-1313-4313-8313-131313131313',
+}
+
+/** Fixed overlap window on E2E Test Job for conflict / force-book tests. */
+export const TEST_CONFLICT_BOOKING = {
+  startAt: '2026-07-01T08:00:00.000Z',
+  endAt: '2026-07-01T18:00:00.000Z',
 }
 
 export const TEST_CREDENTIALS = {
@@ -235,6 +244,82 @@ async function seedEquipmentGroup(offerId, groupId, itemId) {
   if (itemError) throw itemError
 }
 
+async function seedConflictBooking(ownerId) {
+  await admin
+    .from('reserved_items')
+    .delete()
+    .eq('id', TEST_IDS.conflictReservedItemId)
+  await admin
+    .from('time_periods')
+    .delete()
+    .eq('id', TEST_IDS.conflictTimePeriodId)
+
+  const { error: jobError } = await admin.from('jobs').upsert(
+    {
+      id: TEST_IDS.conflictSeedJobId,
+      company_id: TEST_IDS.companyId,
+      title: 'Conflict Seed Job',
+      description: 'Seeded job for overlap / force-book tests',
+      status: 'planned',
+      start_at: TEST_CONFLICT_BOOKING.startAt,
+      end_at: TEST_CONFLICT_BOOKING.endAt,
+      project_lead_user_id: ownerId,
+      jobnr: 999010,
+    },
+    { onConflict: 'id' },
+  )
+  if (jobError) throw jobError
+
+  const { error: tpError } = await admin.from('time_periods').upsert(
+    {
+      id: TEST_IDS.conflictTimePeriodId,
+      company_id: TEST_IDS.companyId,
+      job_id: TEST_IDS.conflictSeedJobId,
+      title: 'Equipment period',
+      category: 'equipment',
+      start_at: TEST_CONFLICT_BOOKING.startAt,
+      end_at: TEST_CONFLICT_BOOKING.endAt,
+      reserved_by_user_id: ownerId,
+      deleted: false,
+    },
+    { onConflict: 'id' },
+  )
+  if (tpError) throw tpError
+
+  const { error: riError } = await admin.from('reserved_items').upsert(
+    {
+      id: TEST_IDS.conflictReservedItemId,
+      time_period_id: TEST_IDS.conflictTimePeriodId,
+      item_id: TEST_IDS.testItemId,
+      quantity: 1,
+      status: 'planned',
+      source_kind: 'direct',
+      start_at: TEST_CONFLICT_BOOKING.startAt,
+      end_at: TEST_CONFLICT_BOOKING.endAt,
+      forced: false,
+      forced_at: null,
+      forced_by_user_id: null,
+    },
+    { onConflict: 'id' },
+  )
+  if (riError) throw riError
+}
+
+/** Keep E2E Test Job free of equipment bookings so job_copy tests stay stable. */
+async function cleanupE2eJobEquipmentBookings() {
+  const { data: periods } = await admin
+    .from('time_periods')
+    .select('id')
+    .eq('job_id', TEST_IDS.jobId)
+    .eq('category', 'equipment')
+
+  if (!periods?.length) return
+
+  const periodIds = periods.map((p) => p.id)
+  await admin.from('reserved_items').delete().in('time_period_id', periodIds)
+  await admin.from('time_periods').delete().in('id', periodIds)
+}
+
 async function main() {
   console.log('Seeding test users and data…')
 
@@ -284,6 +369,8 @@ async function main() {
     jobnr: 999001,
     ownerId,
   })
+  await seedConflictBooking(ownerId)
+  await cleanupE2eJobEquipmentBookings()
   await seedJob({
     id: TEST_IDS.acceptJobId,
     title: 'Integration Accept Job',
@@ -426,6 +513,9 @@ async function main() {
   console.log(`  Accept offer token: ${TEST_OFFER_TOKENS.accept}`)
   console.log(`  Reject offer token: ${TEST_OFFER_TOKENS.reject}`)
   console.log(`  Revision offer token: ${TEST_OFFER_TOKENS.revision}`)
+  console.log(
+    `  Conflict booking: ${TEST_IDS.testItemId} on job ${TEST_IDS.conflictSeedJobId} (${TEST_CONFLICT_BOOKING.startAt} – ${TEST_CONFLICT_BOOKING.endAt})`,
+  )
 }
 
 main().catch((err) => {

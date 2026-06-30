@@ -1,6 +1,9 @@
 import * as React from 'react'
 import { Button, Dialog, Flex, Separator, Text } from '@radix-ui/themes'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import {
+  DateTimeRangePicker,
+  isInvalidTimeRange,
+} from '@shared/ui/components/pickers'
 
 function addYearsKeepingTime(iso: string, years: number): string {
   const d = new Date(iso)
@@ -35,17 +38,7 @@ export default function CopyJobDialog({
     else setEndAt('')
   }, [open, initialStartAt, initialEndAt])
 
-  const getDateMs = (value: string) => {
-    const ms = new Date(value).getTime()
-    return Number.isNaN(ms) ? null : ms
-  }
-  const hasInvalidTimeRange = (() => {
-    const startMs = getDateMs(startAt)
-    const endMs = getDateMs(endAt)
-    if (startMs === null || endMs === null) return false
-    return endMs < startMs
-  })()
-
+  const hasInvalidTimeRange = isInvalidTimeRange(startAt, endAt)
   const canSubmit = Boolean(startAt && endAt && !hasInvalidTimeRange)
 
   return (
@@ -58,19 +51,15 @@ export default function CopyJobDialog({
         <Separator my="3" />
 
         <Flex direction="column" gap="3">
-          <Flex direction="column" gap="1">
-            <Text size="2" weight="medium" color="gray">
-              Start
-            </Text>
-            <DateTimePicker value={startAt} onChange={(v) => setStartAt(v)} />
-          </Flex>
-
-          <Flex direction="column" gap="1">
-            <Text size="2" weight="medium" color="gray">
-              End
-            </Text>
-            <DateTimePicker value={endAt} onChange={(v) => setEndAt(v)} />
-          </Flex>
+          <DateTimeRangePicker
+            startAt={startAt}
+            endAt={endAt}
+            onChange={({ startAt: s, endAt: e }) => {
+              setStartAt(s)
+              setEndAt(e)
+            }}
+            invalid={hasInvalidTimeRange}
+          />
 
           {hasInvalidTimeRange && (
             <Text size="2" color="red">

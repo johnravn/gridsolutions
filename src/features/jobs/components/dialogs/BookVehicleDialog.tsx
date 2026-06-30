@@ -19,8 +19,7 @@ import { Car } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { addThreeHours } from '@shared/lib/generalFunctions'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
@@ -76,7 +75,6 @@ export default function BookVehicleDialog({
   >('')
   const [timePeriodStartAt, setTimePeriodStartAt] = React.useState<string>('')
   const [timePeriodEndAt, setTimePeriodEndAt] = React.useState<string>('')
-  const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
 
   // External fields
   const [status, setStatus] = React.useState<ExternalReqStatus>('planned')
@@ -200,20 +198,12 @@ export default function BookVehicleDialog({
     if (createNewTimePeriod && job) {
       if (job.start_at) {
         setTimePeriodStartAt(job.start_at)
-        setAutoSetEndTime(true)
       }
       if (job.end_at) {
         setTimePeriodEndAt(job.end_at)
-        setAutoSetEndTime(false)
       }
     }
   }, [createNewTimePeriod, job])
-
-  // Auto-set end time when start time changes (only when creating new time period)
-  React.useEffect(() => {
-    if (!timePeriodStartAt || !autoSetEndTime || !createNewTimePeriod) return
-    setTimePeriodEndAt(addThreeHours(timePeriodStartAt))
-  }, [timePeriodStartAt, autoSetEndTime, createNewTimePeriod])
 
   // Update dates when selected time period changes
   React.useEffect(() => {
@@ -369,14 +359,12 @@ export default function BookVehicleDialog({
 
   return (
     <>
-      <Dialog.Root
-        open={open && !forceDialogOpen}
-        onOpenChange={onOpenChange}
-      >
+      <Dialog.Root open={open && !forceDialogOpen} onOpenChange={onOpenChange}>
         <Dialog.Content maxWidth="900px" style={{ maxHeight: '90vh' }}>
           <Dialog.Title>Book vehicle</Dialog.Title>
           <Dialog.Description size="2" color="gray" mb="2">
-            Select a vehicle and reserve it for this job&apos;s transport period.
+            Select a vehicle and reserve it for this job&apos;s transport
+            period.
           </Dialog.Description>
 
           <Flex direction="column" gap="4" mt="4" style={{ overflowY: 'auto' }}>
@@ -499,28 +487,14 @@ export default function BookVehicleDialog({
                       </Text>
                     </Box>
 
-                    <Flex gap="3">
-                      <Box style={{ flex: 1 }}>
-                        <DateTimePicker
-                          label="Start"
-                          value={timePeriodStartAt}
-                          onChange={(value) => {
-                            setTimePeriodStartAt(value)
-                            setAutoSetEndTime(true)
-                          }}
-                        />
-                      </Box>
-                      <Box style={{ flex: 1 }}>
-                        <DateTimePicker
-                          label="End"
-                          value={timePeriodEndAt}
-                          onChange={(value) => {
-                            setTimePeriodEndAt(value)
-                            setAutoSetEndTime(false)
-                          }}
-                        />
-                      </Box>
-                    </Flex>
+                    <DateTimeRangePicker
+                      startAt={timePeriodStartAt}
+                      endAt={timePeriodEndAt}
+                      onChange={({ startAt: s, endAt: e }) => {
+                        setTimePeriodStartAt(s)
+                        setTimePeriodEndAt(e)
+                      }}
+                    />
                   </>
                 )}
               </Box>

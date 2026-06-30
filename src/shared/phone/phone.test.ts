@@ -42,4 +42,18 @@ describe('prettyPhone', () => {
     expect(prettyPhone(null)).toBe('—')
     expect(prettyPhone('invalid')).toBe('invalid')
   })
+
+  it('formats empty string as em dash', () => {
+    expect(prettyPhone('')).toBe('—')
+  })
+})
+
+describe('international numbers', () => {
+  it('normalizes numbers with country code prefix', () => {
+    expect(normalizeToE164('+4791234567', 'NO')).toBe('+4791234567')
+  })
+
+  it('rejects too-short international input', () => {
+    expect(normalizeToE164('+47', 'NO')).toBeNull()
+  })
 })
