@@ -22,6 +22,8 @@ import {
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import InventoryTable from '../components/InventoryTable'
 import InventoryInspector from '../components/InventoryInspector'
 
@@ -155,11 +157,14 @@ export default function InventoryPage() {
     }
   }, [isLarge, selectedId])
 
+  const clearSelection = React.useCallback(() => {
+    setSelectedId(null)
+  }, [])
+
+  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+
   if (!companyId) return <PageSkeleton columns="2fr 1fr" />
 
-  // On small screens, use Grid layout (stack): list fills viewport, inspector below
-  // Card height accounts for: top bar (~56px) + content padding top (16px) + content padding bottom (16px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -170,7 +175,7 @@ export default function InventoryPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -217,7 +222,7 @@ export default function InventoryPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -225,7 +230,7 @@ export default function InventoryPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

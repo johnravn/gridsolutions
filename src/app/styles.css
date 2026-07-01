@@ -1,5 +1,28 @@
 @import 'tailwindcss';
 
+/* Main app only — avoid scanning Storybook scaffold/build output (prevents stale asset refs). */
+@source not "../stories/**";
+@source not "../../storybook-static/**";
+@source not "../**/*.stories.{ts,tsx}";
+
+:root {
+  --motion-duration-reveal: 200ms;
+  --motion-ease-reveal: ease;
+  --motion-ease-reveal-out: ease-out;
+  --motion-ease-reveal-in: ease-in;
+  --motion-offset-reveal-x: -6px;
+  --motion-offset-reveal-y: -4px;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --app-topbar-height: 56px;
+  --app-content-padding: 32px;
+  --app-chrome-height: calc(
+    var(--app-topbar-height) + var(--app-content-padding) + var(--app-safe-top)
+  );
+}
+
 body {
   @apply m-0;
   font-family:
@@ -7,6 +30,19 @@ body {
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+a,
+[role='button'],
+.rt-IconButton,
+.rt-Button,
+.rt-Link {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-main-scroll {
+  overscroll-behavior-y: contain;
 }
 
 /* iOS Safari zooms when focusing inputs with font-size < 16px */
@@ -62,6 +98,8 @@ code {
 /* Target Radix UI Toast elements */
 [data-radix-toast-viewport] {
   z-index: 2147483647 !important; /* Maximum z-index value */
+  bottom: calc(16px + var(--app-safe-bottom)) !important;
+  right: calc(16px + var(--app-safe-right)) !important;
 }
 
 [data-radix-toast-root] {
@@ -77,7 +115,8 @@ code {
 
   [data-radix-toast-root][data-swipe='cancel'] {
     transform: translateX(0) translateY(0);
-    transition: transform 200ms ease-out;
+    transition: transform var(--motion-duration-reveal)
+      var(--motion-ease-reveal-out);
   }
 
   [data-radix-toast-root][data-swipe='end'] {

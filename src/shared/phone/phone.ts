@@ -45,6 +45,28 @@ export function isPhoneValid(value: string, defaultCountry?: CountryCode) {
   return !!p?.isValid()
 }
 
+/** Paste text that starts with + or 0 is treated as including a country code. */
+export function parsePastedPhoneNumber(
+  pasted: string,
+  defaultCountry?: CountryCode,
+): { country: CountryCode; e164: string } | null {
+  const trimmed = pasted.trim()
+  if (!trimmed.startsWith('+') && !trimmed.startsWith('0')) {
+    return null
+  }
+
+  const normalized = trimmed.startsWith('00') ? `+${trimmed.slice(2)}` : trimmed
+  const parsed = parsePhoneNumberFromString(normalized, defaultCountry)
+  if (!parsed?.country || !parsed.isPossible()) {
+    return null
+  }
+
+  return {
+    country: parsed.country,
+    e164: parsed.number,
+  }
+}
+
 export function prettyPhone(e164?: string | null) {
   if (!e164) return '—'
   try {

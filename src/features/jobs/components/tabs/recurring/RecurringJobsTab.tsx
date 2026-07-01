@@ -8,6 +8,7 @@ import {
   Dialog,
   DropdownMenu,
   Flex,
+  IconButton,
   Separator,
   Spinner,
   Table,
@@ -33,6 +34,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { motionOffsetRevealX, motionRevealTransition } from '@shared/lib/motion'
 import JobDialog from '../../dialogs/JobDialog'
 import CopyJobDialog from '../../dialogs/CopyJobDialog'
 import RecurringJobTemplateDialog from '../../dialogs/RecurringJobTemplateDialog'
@@ -103,6 +105,10 @@ export default function RecurringJobsTab({ detail, onSelectJob }: Props) {
   const [deleteJob, setDeleteJob] = React.useState<JobListRow | null>(null)
   const [copyJob, setCopyJob] = React.useState<JobListRow | null>(null)
   const [templatesOpen, setTemplatesOpen] = React.useState(true)
+  const [hoveredTemplateId, setHoveredTemplateId] = React.useState<UUID | null>(
+    null,
+  )
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [debouncedAssignSearch] = useDebouncedValue(assignSearch, {
     wait: 300,
   })
@@ -237,81 +243,109 @@ export default function RecurringJobsTab({ detail, onSelectJob }: Props) {
             </Text>
           ) : (
             <Flex direction="column" gap="2">
-              {templates.map((template) => (
-                <Flex
-                  key={template.id}
-                  align="center"
-                  justify="between"
-                  gap="3"
-                  p="2"
-                  wrap="wrap"
-                  style={{
-                    borderRadius: 'var(--radius-2)',
-                    background: 'var(--gray-a2)',
-                  }}
-                >
+              {templates.map((template) => {
+                const showTemplateActions =
+                  isSmallScreen || hoveredTemplateId === template.id
+
+                return (
                   <Flex
-                    direction="column"
-                    gap="1"
-                    style={{ minWidth: 0, flex: 1 }}
+                    key={template.id}
+                    align="center"
+                    justify="between"
+                    gap="3"
+                    p="2"
+                    wrap="wrap"
+                    onMouseEnter={() => setHoveredTemplateId(template.id)}
+                    onMouseLeave={() => setHoveredTemplateId(null)}
+                    style={{
+                      borderRadius: 'var(--radius-2)',
+                      background: 'var(--gray-a2)',
+                    }}
                   >
-                    <Text size="2" weight="medium">
-                      {template.name}
-                    </Text>
-                    <Text size="1" color="gray">
-                      Job title: {template.title}
-                    </Text>
-                    <Flex gap="2" wrap="wrap">
-                      <Text size="1" color="gray">
-                        {makeWordPresentable(template.status)}
+                    <Flex
+                      direction="column"
+                      gap="1"
+                      style={{ minWidth: 0, flex: 1 }}
+                    >
+                      <Text size="2" weight="medium">
+                        {template.name}
                       </Text>
-                      {formatTemplateStartTimeLabel(template.start_time) && (
-                        <Text size="1" color="gray">
-                          Starts{' '}
-                          {formatTemplateStartTimeLabel(template.start_time)}
-                        </Text>
-                      )}
                       <Text size="1" color="gray">
-                        {template.duration_hours}h
+                        Job title: {template.title}
                       </Text>
-                      {template.crew_roles.length > 0 && (
+                      <Flex gap="2" wrap="wrap">
                         <Text size="1" color="gray">
-                          {template.crew_roles.length} crew role
-                          {template.crew_roles.length !== 1 ? 's' : ''}
+                          {makeWordPresentable(template.status)}
                         </Text>
-                      )}
+                        {formatTemplateStartTimeLabel(template.start_time) && (
+                          <Text size="1" color="gray">
+                            Starts{' '}
+                            {formatTemplateStartTimeLabel(template.start_time)}
+                          </Text>
+                        )}
+                        <Text size="1" color="gray">
+                          {template.duration_hours}h
+                        </Text>
+                        {template.crew_roles.length > 0 && (
+                          <Text size="1" color="gray">
+                            {template.crew_roles.length} crew role
+                            {template.crew_roles.length !== 1 ? 's' : ''}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Flex>
+                    <Flex gap="1" align="center" wrap="wrap">
+                      <Flex
+                        gap="1"
+                        align="center"
+                        style={{
+                          maxWidth: showTemplateActions ? 80 : 0,
+                          overflow: 'hidden',
+                          opacity: showTemplateActions ? 1 : 0,
+                          transform: showTemplateActions
+                            ? 'translateX(0)'
+                            : `translateX(${motionOffsetRevealX})`,
+                          pointerEvents: showTemplateActions ? 'auto' : 'none',
+                          transition: motionRevealTransition([
+                            'opacity',
+                            'transform',
+                            'max-width',
+                          ]),
+                        }}
+                      >
+                        <IconButton
+                          size="2"
+                          variant="ghost"
+                          color="gray"
+                          aria-label="Edit template"
+                          onClick={() => {
+                            setEditingTemplate(template)
+                            setTemplateDialogOpen(true)
+                          }}
+                        >
+                          <Edit width={18} height={18} />
+                        </IconButton>
+                        <IconButton
+                          size="2"
+                          variant="ghost"
+                          color="red"
+                          aria-label="Delete template"
+                          onClick={() => deleteTemplate.mutate(template.id)}
+                        >
+                          <Trash width={18} height={18} />
+                        </IconButton>
+                      </Flex>
+                      <Button
+                        size="2"
+                        variant="soft"
+                        onClick={() => openTemplateCreate(template)}
+                      >
+                        Use template
+                      </Button>
                     </Flex>
                   </Flex>
-                  <Flex gap="1" wrap="wrap">
-                    <Button
-                      size="1"
-                      variant="soft"
-                      onClick={() => openTemplateCreate(template)}
-                    >
-                      Use template
-                    </Button>
-                    <Button
-                      size="1"
-                      variant="ghost"
-                      color="gray"
-                      onClick={() => {
-                        setEditingTemplate(template)
-                        setTemplateDialogOpen(true)
-                      }}
-                    >
-                      <Edit width={14} height={14} />
-                    </Button>
-                    <Button
-                      size="1"
-                      variant="ghost"
-                      color="red"
-                      onClick={() => deleteTemplate.mutate(template.id)}
-                    >
-                      <Trash width={14} height={14} />
-                    </Button>
-                  </Flex>
-                </Flex>
-              ))}
+                )
+              })}
             </Flex>
           ))}
       </Box>

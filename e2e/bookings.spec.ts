@@ -23,7 +23,10 @@ test.describe('Bookings', () => {
     await createDraftJob(page)
     await openBookingsEquipmentTab(page)
 
-    await page.getByText(/Book items|Add items/).first().click()
+    await page
+      .getByText(/Book items|Add items/)
+      .first()
+      .click()
     const dialog = bookEquipmentDialog(page)
     await expect(dialog).toBeVisible({ timeout: 15_000 })
     await dialog.getByPlaceholder('Search by name…').fill('Test Seeded')

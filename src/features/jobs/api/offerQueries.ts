@@ -13,6 +13,11 @@ import {
 } from '../utils/offerCalculations'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
 import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
+import {
+  copyPrettyOfferChildren,
+  fetchPrettyOfferDetail,
+  recalculatePrettyOfferTotals,
+} from './prettyOfferQueries'
 import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
   JobOffer,
@@ -1255,6 +1260,49 @@ export async function duplicateOffer(offerId: string): Promise<string> {
     basedOnOfferId: offer.based_on_offer_id,
   })
 
+  if (offer.offer_type === 'pretty') {
+    if (offer.source_technical_offer_id) {
+      await supabase
+        .from('job_offers')
+        .update({
+          source_technical_offer_id: offer.source_technical_offer_id,
+        })
+        .eq('id', newOfferId)
+    }
+
+    await copyPrettyOfferChildren(offerId, newOfferId)
+
+    if (offer.pretty_sections && offer.pretty_sections.length > 0) {
+      const sectionsToInsert = offer.pretty_sections.map(
+        (section: OfferPrettySection) => ({
+          offer_id: newOfferId,
+          section_type: section.section_type,
+          title: section.title,
+          content: section.content,
+          image_url: section.image_url,
+          sort_order: section.sort_order,
+        }),
+      )
+
+      const { error: sectionsError } = await supabase
+        .from('offer_pretty_sections')
+        .insert(sectionsToInsert)
+
+      if (sectionsError) throw sectionsError
+    }
+
+    try {
+      await recalculatePrettyOfferTotals(newOfferId)
+    } catch (recalcError) {
+      console.warn(
+        'Failed to recalculate pretty offer totals after duplication:',
+        recalcError,
+      )
+    }
+
+    return newOfferId
+  }
+
   // Copy equipment groups and items
   if (offer.groups) {
     for (const group of offer.groups) {
@@ -2083,7 +2131,15 @@ export async function syncBookingsFromOffer(
  * Export offer as PDF
  */
 export async function exportOfferPDF(offerId: string): Promise<void> {
-  const offer = await (offerDetailQuery(offerId).queryFn as any)()
-  if (!offer) throw new Error('Offer not found')
-  await exportOfferAsPDF(offer)
+  const baseOffer = await (offerDetailQuery(offerId).queryFn as any)()
+  if (!baseOffer) throw new Error('Offer not found')
+
+  if (baseOffer.offer_type === 'pretty') {
+    const prettyOffer = await fetchPrettyOfferDetail(offerId)
+    if (!prettyOffer) throw new Error('Offer not found')
+    await exportOfferAsPDF(prettyOffer)
+    return
+  }
+
+  await exportOfferAsPDF(baseOffer)
 }

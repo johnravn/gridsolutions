@@ -11,10 +11,7 @@ import {
 import { fireEvent, screen, within } from '@testing-library/react'
 import { renderWithProviders } from '@test/render'
 import DateTimePicker from './DateTimePicker'
-import {
-  formatDateLabel,
-  formatTimeLabel,
-} from './pickers/dateTimeUtils'
+import { formatDateLabel, formatTimeLabel } from './pickers/dateTimeUtils'
 
 /** Mirror trigger label formatting (uses local timezone like the component). */
 function triggerLabel(
@@ -35,6 +32,7 @@ type RenderOptions = {
   placeholder?: string
   invalid?: boolean
   dateOnly?: boolean
+  timeOnly?: boolean
   iconButton?: boolean
   locale?: 'en' | 'nb'
   disabled?: boolean
@@ -135,6 +133,18 @@ describe('DateTimePicker', () => {
       ).toBeInTheDocument()
     })
 
+    it('shows time-only placeholder when timeOnly is true', () => {
+      renderDateTimePicker({ timeOnly: true })
+      expect(
+        screen.getByRole('button', { name: 'Select time' }),
+      ).toBeInTheDocument()
+    })
+
+    it('formats time-only value as HH:MM', () => {
+      renderDateTimePicker({ timeOnly: true, value: '14:30' })
+      expect(screen.getByRole('button', { name: '14:30' })).toBeInTheDocument()
+    })
+
     it('formats datetime value for en locale', () => {
       const value = '2026-05-15T10:30:00.000Z'
       renderDateTimePicker({
@@ -161,22 +171,14 @@ describe('DateTimePicker', () => {
       const octValue = '2026-10-15T10:30:00.000Z'
       const decValue = '2026-12-15T10:30:00.000Z'
       const { rerender } = renderWithProviders(
-        <DateTimePicker
-          value={octValue}
-          onChange={vi.fn()}
-          locale="nb"
-        />,
+        <DateTimePicker value={octValue} onChange={vi.fn()} locale="nb" />,
       )
       expect(
         screen.getByRole('button', { name: triggerLabel(octValue, 'nb') }),
       ).toBeInTheDocument()
 
       rerender(
-        <DateTimePicker
-          value={decValue}
-          onChange={vi.fn()}
-          locale="nb"
-        />,
+        <DateTimePicker value={decValue} onChange={vi.fn()} locale="nb" />,
       )
       expect(
         screen.getByRole('button', { name: triggerLabel(decValue, 'nb') }),
@@ -239,6 +241,16 @@ describe('DateTimePicker', () => {
       const popover = getPopover()
       expect(within(popover).queryByRole('button', { name: 'Time' })).toBeNull()
       expect(screen.getByText('Mo')).toBeInTheDocument()
+    })
+
+    it('shows time picker directly in timeOnly mode without tabs', () => {
+      renderDateTimePicker({ timeOnly: true })
+      openPicker('Select time')
+
+      const popover = getPopover()
+      expect(within(popover).queryByRole('button', { name: 'Date' })).toBeNull()
+      expect(within(popover).queryByRole('button', { name: 'Time' })).toBeNull()
+      expect(within(popover).getByText('Hour')).toBeInTheDocument()
     })
   })
 
@@ -346,6 +358,38 @@ describe('DateTimePicker', () => {
     })
   })
 
+  describe('time-only selection', () => {
+    it('updates hour and returns HH:MM', () => {
+      const onChange = vi.fn()
+      renderDateTimePicker({ timeOnly: true, value: '09:00', onChange })
+
+      openPicker('09:00')
+      clickHour('14')
+
+      expect(onChange).toHaveBeenCalledWith('14:00')
+    })
+
+    it('updates minute and returns HH:MM', () => {
+      const onChange = vi.fn()
+      renderDateTimePicker({ timeOnly: true, value: '14:00', onChange })
+
+      openPicker('14:00')
+      clickMinute(':30')
+
+      expect(onChange).toHaveBeenCalledWith('14:30')
+    })
+
+    it('defaults to 09:00 when picking minute with no prior value', () => {
+      const onChange = vi.fn()
+      renderDateTimePicker({ timeOnly: true, onChange })
+
+      openPicker('Select time')
+      clickMinute(':15')
+
+      expect(onChange).toHaveBeenCalledWith('09:15')
+    })
+  })
+
   describe('year navigation', () => {
     it('opens year picker and changes the visible calendar year', () => {
       const value = '2026-06-10T09:00:00.000Z'
@@ -389,10 +433,7 @@ describe('DateTimePicker', () => {
         const [value, setValue] = React.useState(initialValue)
         return (
           <>
-            <button
-              type="button"
-              onClick={() => setValue(updatedValue)}
-            >
+            <button type="button" onClick={() => setValue(updatedValue)}>
               Update value
             </button>
             <DateTimePicker value={value} onChange={vi.fn()} />

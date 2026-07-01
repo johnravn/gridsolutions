@@ -24,6 +24,7 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { DatePicker } from '@shared/ui/components/pickers'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { calculateHoursPerDay } from './utils'
 import { SortableCrewCard } from './sortable'
 import type { LocalCrewItem } from './types'
@@ -70,6 +71,10 @@ export function CrewSection({
   const [roleCategoryDrafts, setRoleCategoryDrafts] = React.useState<
     Record<string, string>
   >({})
+  const [focusedSuggestion, setFocusedSuggestion] = React.useState<{
+    itemId: string
+    field: 'role_title' | 'role_category'
+  } | null>(null)
 
   const roleSuggestions = [
     'Technician',
@@ -399,35 +404,43 @@ export function CrewSection({
                                             placeholder="e.g., Technician"
                                             readOnly={readOnly}
                                             onClick={(e) => e.stopPropagation()}
+                                            onFocus={(e) => {
+                                              e.stopPropagation()
+                                              setFocusedSuggestion({
+                                                itemId: item.id,
+                                                field: 'role_title',
+                                              })
+                                            }}
+                                            onBlur={() =>
+                                              setFocusedSuggestion((prev) =>
+                                                prev?.itemId === item.id &&
+                                                prev.field === 'role_title'
+                                                  ? null
+                                                  : prev,
+                                              )
+                                            }
                                           />
-                                          {!readOnly && !item.role_title && (
-                                            <Flex gap="2" wrap="wrap" mt="2">
-                                              <Text
-                                                size="1"
-                                                color="gray"
-                                                style={{ width: '100%' }}
-                                              >
-                                                Quick suggestions:
-                                              </Text>
-                                              {roleSuggestions.map(
-                                                (suggestion) => (
-                                                  <Button
-                                                    key={suggestion}
-                                                    size="1"
-                                                    variant="soft"
-                                                    color="gray"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      updateItem(item.id, {
-                                                        role_title: suggestion,
-                                                      })
-                                                    }}
-                                                  >
-                                                    {suggestion}
-                                                  </Button>
-                                                ),
-                                              )}
-                                            </Flex>
+                                          {!readOnly && (
+                                            <AnimatedQuickSuggestions
+                                              suggestions={roleSuggestions}
+                                              open={
+                                                focusedSuggestion?.itemId ===
+                                                  item.id &&
+                                                focusedSuggestion.field ===
+                                                  'role_title'
+                                              }
+                                              staticOpen={!item.role_title}
+                                              showLabel
+                                              stopPropagation
+                                              onSelect={(suggestion) =>
+                                                updateItem(item.id, {
+                                                  role_title: suggestion,
+                                                })
+                                              }
+                                              onAfterSelect={() =>
+                                                setFocusedSuggestion(null)
+                                              }
+                                            />
                                           )}
                                         </Box>
 
@@ -446,9 +459,15 @@ export function CrewSection({
                                                 [item.id]: nextValue,
                                               }))
                                             }}
-                                            onBlur={() =>
+                                            onBlur={() => {
                                               commitRoleCategory(item.id)
-                                            }
+                                              setFocusedSuggestion((prev) =>
+                                                prev?.itemId === item.id &&
+                                                prev.field === 'role_category'
+                                                  ? null
+                                                  : prev,
+                                              )
+                                            }}
                                             onKeyDown={(e) => {
                                               if (e.key === 'Enter') {
                                                 e.preventDefault()
@@ -457,36 +476,36 @@ export function CrewSection({
                                             }}
                                             readOnly={readOnly}
                                             onClick={(e) => e.stopPropagation()}
+                                            onFocus={(e) => {
+                                              e.stopPropagation()
+                                              setFocusedSuggestion({
+                                                itemId: item.id,
+                                                field: 'role_category',
+                                              })
+                                            }}
                                           />
                                           {!readOnly && (
-                                            <Flex gap="2" wrap="wrap" mt="2">
-                                              <Text
-                                                size="1"
-                                                color="gray"
-                                                style={{ width: '100%' }}
-                                              >
-                                                Quick suggestions:
-                                              </Text>
-                                              {categorySuggestions.map(
-                                                (suggestion) => (
-                                                  <Button
-                                                    key={suggestion}
-                                                    size="1"
-                                                    variant="soft"
-                                                    color="gray"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      updateItem(item.id, {
-                                                        role_category:
-                                                          suggestion.toLowerCase(),
-                                                      })
-                                                    }}
-                                                  >
-                                                    {suggestion}
-                                                  </Button>
-                                                ),
-                                              )}
-                                            </Flex>
+                                            <AnimatedQuickSuggestions
+                                              suggestions={categorySuggestions}
+                                              open={
+                                                focusedSuggestion?.itemId ===
+                                                  item.id &&
+                                                focusedSuggestion.field ===
+                                                  'role_category'
+                                              }
+                                              staticOpen
+                                              showLabel
+                                              stopPropagation
+                                              onSelect={(suggestion) =>
+                                                updateItem(item.id, {
+                                                  role_category:
+                                                    suggestion.toLowerCase(),
+                                                })
+                                              }
+                                              onAfterSelect={() =>
+                                                setFocusedSuggestion(null)
+                                              }
+                                            />
                                           )}
                                         </Box>
                                       </Flex>

@@ -23,7 +23,9 @@ test.describe('Crew', () => {
       roleDialog.getByRole('heading', { name: 'Add role' }),
     ).toBeVisible()
     await roleDialog.getByRole('button', { name: 'Technician' }).click()
-    await expect(roleDialog.getByRole('button', { name: 'Add role' })).toBeEnabled({
+    await expect(
+      roleDialog.getByRole('button', { name: 'Add role' }),
+    ).toBeEnabled({
       timeout: 15_000,
     })
     await roleDialog.getByRole('button', { name: 'Add role' }).click()

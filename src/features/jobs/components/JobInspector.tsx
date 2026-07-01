@@ -31,6 +31,8 @@ import CalendarTab from './tabs/CalendarTab'
 import ProgramTab from './tabs/ProgramTab'
 import FilesTab from './tabs/FilesTab'
 import OffersTab from './tabs/OffersTab'
+import PrettyOffersTab from './tabs/PrettyOffersTab'
+import { PrettyOfferBetaBadge } from './PrettyOfferBetaBadge'
 import InvoiceTab from './tabs/InvoiceTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
@@ -77,7 +79,15 @@ export default function JobInspector({
   const filesTabRef = React.useRef<FilesTabHandle>(null)
 
   const blockedFreelancerTabs = React.useMemo(
-    () => new Set(['bookings', 'offers', 'invoice', 'money', 'todo']),
+    () =>
+      new Set([
+        'bookings',
+        'offers',
+        'pretty-offers',
+        'invoice',
+        'money',
+        'todo',
+      ]),
     [],
   )
 
@@ -112,6 +122,7 @@ export default function JobInspector({
       { value: 'bookings', label: 'Bookings' },
       { value: 'packing', label: 'Packing' },
       { value: 'offers', label: 'Offers' },
+      { value: 'pretty-offers', label: 'Pretty Offers' },
       { value: 'invoice', label: 'Invoice' },
       { value: 'money', label: 'Money' },
       { value: 'todo', label: 'To Do' },
@@ -298,9 +309,16 @@ export default function JobInspector({
           })()}
           {companyRole !== 'freelancer' && (
             <>
-              <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-                <Edit width={16} height={16} />
-              </Button>
+              <Tooltip content="Edit job">
+                <Button
+                  size="2"
+                  variant="soft"
+                  aria-label="Edit job"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Edit width={16} height={16} />
+                </Button>
+              </Tooltip>
               <Tooltip content="Copy job">
                 <Button
                   size="2"
@@ -406,8 +424,15 @@ export default function JobInspector({
                     justifyContent: 'space-between',
                   }}
                 >
-                  {tabOptions.find((o) => o.value === activeTab)?.label ??
-                    'Overview'}
+                  {activeTab === 'pretty-offers' ? (
+                    <Flex align="center" gap="2">
+                      Pretty Offers
+                      <PrettyOfferBetaBadge />
+                    </Flex>
+                  ) : (
+                    (tabOptions.find((o) => o.value === activeTab)?.label ??
+                      'Overview')
+                  )}
                   <NavArrowDown width={18} height={18} />
                 </Button>
               </DropdownMenu.Trigger>
@@ -438,7 +463,14 @@ export default function JobInspector({
                     }}
                     style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
                   >
-                    {opt.label}
+                    {opt.value === 'pretty-offers' ? (
+                      <Flex align="center" gap="2">
+                        {opt.label}
+                        <PrettyOfferBetaBadge />
+                      </Flex>
+                    ) : (
+                      opt.label
+                    )}
                   </DropdownMenu.Item>
                 ))}
               </DropdownMenu.Content>
@@ -456,6 +488,14 @@ export default function JobInspector({
             <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
             {!isFreelancer && (
               <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
+            )}
+            {!isFreelancer && (
+              <Tabs.Trigger value="pretty-offers">
+                <Flex align="center" gap="1">
+                  Pretty Offers
+                  <PrettyOfferBetaBadge />
+                </Flex>
+              </Tabs.Trigger>
             )}
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
@@ -493,6 +533,15 @@ export default function JobInspector({
               jobId={job.id}
               companyId={job.company_id}
               isActive={activeTab === 'offers'}
+            />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="pretty-offers" mt={'10px'}>
+            <PrettyOffersTab
+              jobId={job.id}
+              companyId={job.company_id}
+              isActive={activeTab === 'pretty-offers'}
             />
           </Tabs.Content>
         )}

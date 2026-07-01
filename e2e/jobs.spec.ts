@@ -38,17 +38,29 @@ test.describe('Jobs', () => {
   })
 
   test('owner can edit job title', async ({ authedPage: page }) => {
+    test.setTimeout(60_000)
     const title = await createDraftJob(page)
     const updated = `${title} Updated`
 
     await page.getByRole('button', { name: 'Edit job' }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('textbox').first().fill(updated)
-    await dialog.getByRole('button', { name: 'Save' }).click()
+    const editDialog = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Edit job' }),
+    })
+    await expect(editDialog).toBeVisible()
+    await editDialog.getByPlaceholder('Enter job title').fill(updated)
+    await expect(editDialog.getByPlaceholder('Enter job title')).toHaveValue(
+      updated,
+    )
+    await expect(
+      editDialog.getByPlaceholder('Search project lead…'),
+    ).not.toHaveValue('', { timeout: 15_000 })
+    const saveButton = editDialog.getByRole('button', { name: 'Save' })
+    await expect(saveButton).toBeEnabled()
+    await saveButton.click()
 
+    await expect(editDialog).toBeHidden({ timeout: 15_000 })
     await expect(page.getByRole('heading', { name: updated })).toBeVisible({
-      timeout: 20_000,
+      timeout: 15_000,
     })
   })
 

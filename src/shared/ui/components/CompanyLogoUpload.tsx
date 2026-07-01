@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Box, Button, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { motionFadeTransition } from '@shared/lib/motion'
 import { Upload } from 'iconoir-react'
 
 interface CompanyLogoUploadProps {
@@ -241,7 +242,7 @@ export default function CompanyLogoUpload({
                     height: '100%',
                     objectFit: 'contain',
                     opacity: lightImageLoading ? 0 : 1,
-                    transition: 'opacity 0.2s ease-in-out',
+                    transition: motionFadeTransition(),
                   }}
                   onLoad={() => setLightImageLoading(false)}
                   onError={() => setLightImageLoading(false)}
@@ -339,7 +340,7 @@ export default function CompanyLogoUpload({
                     height: '100%',
                     objectFit: 'contain',
                     opacity: darkImageLoading ? 0 : 1,
-                    transition: 'opacity 0.2s ease-in-out',
+                    transition: motionFadeTransition(),
                   }}
                   onLoad={() => setDarkImageLoading(false)}
                   onError={() => setDarkImageLoading(false)}

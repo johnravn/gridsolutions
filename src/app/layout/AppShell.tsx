@@ -23,7 +23,10 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
+import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
+import OfflineBanner from '@shared/ui/components/OfflineBanner'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useAppResume } from '../hooks/useAppResume'
 import { NAV, Sidebar } from './Sidebar'
 
 const prefersReducedMotionQuery = '(prefers-reduced-motion: reduce)'
@@ -36,6 +39,8 @@ export default function AppShell() {
   const systemPrefersReducedMotion = useMediaQuery(prefersReducedMotionQuery)
   const navigate = useNavigate()
   const { companies, companyId, loading: companyLoading } = useCompany()
+  useStandaloneClassEffect()
+  useAppResume(companyId)
   const isLocal =
     import.meta.env.DEV ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
@@ -223,11 +228,13 @@ export default function AppShell() {
             justify="between"
             px="4"
             py="3"
-            style={
-              !isPublic && isMobile && open
+            style={{
+              flexShrink: 0,
+              paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
+              ...(!isPublic && isMobile && open
                 ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
-                : undefined
-            }
+                : {}),
+            }}
           >
             {!isPublic && isMobile && (
               <IconButton
@@ -285,12 +292,17 @@ export default function AppShell() {
           {/* Content area should be the ONLY scroller */}
           <Box
             p={isPublic ? undefined : '4'}
+            className={isPublic ? undefined : 'app-main-scroll'}
             style={{
               flex: 1, // <-- grow to fill
               minHeight: 0, // <-- allow scrolling area to shrink
               overflow: isPublic ? 'visible' : 'auto', // <-- scroll here
+              paddingBottom: isPublic
+                ? undefined
+                : 'calc(var(--space-4) + var(--app-safe-bottom))',
             }}
           >
+            {!isPublic && <OfflineBanner />}
             {/* <AnimatePresence mode="wait">
               <motion.div
                 key={currentPath}
@@ -327,7 +339,12 @@ export default function AppShell() {
         <Flex
           direction="column"
           gap="2"
-          style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}
+          style={{
+            position: 'fixed',
+            left: 12,
+            bottom: 'calc(12px + var(--app-safe-bottom))',
+            zIndex: 50,
+          }}
         >
           {isProductionContaInDev && (
             <Badge

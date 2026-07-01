@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Flex, Text } from '@radix-ui/themes'
 import { Calendar } from 'iconoir-react'
+import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
 
 export type FieldDisplay = {
   label: string
@@ -87,7 +88,9 @@ function FieldHighlight({ active }: { active: boolean }) {
         background: 'var(--blue-a3)',
         boxShadow: 'inset 0 0 0 1px var(--blue-a6)',
         opacity: active ? 1 : 0,
-        transition: 'opacity 150ms ease-out',
+        transition: motionRevealTransition(['opacity'], {
+          ease: motionEaseRevealOut,
+        }),
         pointerEvents: 'none',
       }}
     />
@@ -173,7 +176,12 @@ function FieldsRow({
   disabled?: boolean
 }) {
   return (
-    <Flex align="stretch" justify="between" gap="3" style={{ width: '100%', flex: 1 }}>
+    <Flex
+      align="stretch"
+      justify="between"
+      gap="3"
+      style={{ width: '100%', flex: 1 }}
+    >
       {fields.map((field) => {
         const id = fieldId(field.label)
         const interactive =
@@ -299,6 +307,34 @@ export const PickerTrigger = React.forwardRef<
   )
 })
 
+/** Matches Radix TextField size 2 (default) height and typography. */
+export function textFieldLikeTriggerStyle(
+  invalid: boolean,
+  hasValue: boolean,
+  disabled: boolean,
+): React.CSSProperties {
+  return {
+    width: '100%',
+    boxSizing: 'border-box',
+    height: 'var(--space-6)',
+    padding: '0 var(--space-2)',
+    borderRadius: 'max(var(--radius-2), var(--radius-full))',
+    border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
+    background: 'var(--color-panel-solid)',
+    color: hasValue ? 'var(--gray-12)' : 'var(--gray-9)',
+    fontSize: 'var(--font-size-2)',
+    lineHeight: 'var(--line-height-2)',
+    fontFamily: 'inherit',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 'var(--space-2)',
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.6 : 1,
+    transition: 'border-color 0.15s, background-color 0.15s',
+    textAlign: 'left',
+  }
+}
+
 /** Single-field text trigger for date/time pickers. */
 export const SinglePickerTrigger = React.forwardRef<
   HTMLButtonElement,
@@ -307,6 +343,7 @@ export const SinglePickerTrigger = React.forwardRef<
     placeholder: string
     invalid?: boolean
     disabled?: boolean
+    icon?: React.ReactNode
   } & React.ButtonHTMLAttributes<HTMLButtonElement>
 >(function SinglePickerTrigger(
   {
@@ -314,6 +351,7 @@ export const SinglePickerTrigger = React.forwardRef<
     placeholder,
     invalid = false,
     disabled = false,
+    icon,
     ...buttonProps
   },
   ref,
@@ -327,26 +365,25 @@ export const SinglePickerTrigger = React.forwardRef<
       disabled={disabled}
       {...buttonProps}
       style={{
-        width: '100%',
-        padding: '8px 12px',
-        borderRadius: 'var(--radius-3)',
-        border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
-        background: 'var(--color-panel-solid)',
-        color: hasValue ? 'var(--gray-12)' : 'var(--gray-9)',
-        fontSize: 'var(--font-size-3)',
-        lineHeight: 'var(--line-height-3)',
-        fontFamily: 'inherit',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'border-color 0.15s, background-color 0.15s',
-        textAlign: 'left',
+        ...textFieldLikeTriggerStyle(invalid, hasValue, disabled),
         ...buttonProps.style,
       }}
+      onMouseEnter={(e) => {
+        buttonProps.onMouseEnter?.(e)
+        if (disabled) return
+        e.currentTarget.style.borderColor = invalid
+          ? 'var(--red-9)'
+          : 'var(--gray-a8)'
+      }}
+      onMouseLeave={(e) => {
+        buttonProps.onMouseLeave?.(e)
+        if (disabled) return
+        e.currentTarget.style.borderColor = invalid
+          ? 'var(--red-8)'
+          : 'var(--gray-a6)'
+      }}
     >
-      <Calendar width={16} height={16} />
+      {icon ?? <Calendar width={16} height={16} />}
       {displayValue}
     </button>
   )

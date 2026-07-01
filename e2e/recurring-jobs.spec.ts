@@ -8,7 +8,10 @@ test.describe('Recurring jobs', () => {
     test.setTimeout(60_000)
     await openJobsPage(page)
 
-    await page.getByRole('button', { name: 'New recurring job' }).click()
+    const moreActions = page.getByRole('button', { name: 'More job actions' })
+    await expect(moreActions).toBeVisible({ timeout: 15_000 })
+    await moreActions.click()
+    await page.getByRole('menuitem', { name: 'New recurring job' }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog).toBeVisible()
 

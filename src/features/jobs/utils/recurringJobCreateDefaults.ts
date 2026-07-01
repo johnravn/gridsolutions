@@ -17,6 +17,8 @@ export type RecurringJobCreateDefaults = {
   startAt?: string
   endAt?: string
   crewRoles?: Array<RecurringJobTemplateCrewRole>
+  /** True when defaults come from a recurring job template (not series defaults alone). */
+  fromTemplate?: boolean
 }
 
 const TERMINAL_STATUSES: Array<JobStatus> = ['canceled', 'paid']
@@ -151,7 +153,10 @@ export function buildJobDefaultsFromTemplate(
     ).toISOString()
   }
 
-  return defaults
+  return {
+    ...defaults,
+    fromTemplate: true,
+  }
 }
 
 /** Format template start time for HTML time input ("HH:MM"). */

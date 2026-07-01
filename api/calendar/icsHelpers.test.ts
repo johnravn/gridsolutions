@@ -6,6 +6,7 @@ import {
   icsEscape,
   parseTstzRange,
   rangesOverlap,
+  withRecurringJobPrefix,
 } from './icsHelpers'
 
 describe('icsEscape', () => {
@@ -68,6 +69,19 @@ describe('rangesOverlap', () => {
         '2026-06-01T12:00:00.000Z',
       ),
     ).toBe(false)
+  })
+})
+
+describe('withRecurringJobPrefix', () => {
+  it('prefixes titles with the recurring job series name', () => {
+    expect(withRecurringJobPrefix('JOB: Concert', 'Weekly Show')).toBe(
+      'Weekly Show: JOB: Concert',
+    )
+  })
+
+  it('returns the original title when no recurring job name is set', () => {
+    expect(withRecurringJobPrefix('JOB: Concert', null)).toBe('JOB: Concert')
+    expect(withRecurringJobPrefix('JOB: Concert', '   ')).toBe('JOB: Concert')
   })
 })
 

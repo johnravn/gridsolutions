@@ -20,6 +20,8 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
@@ -189,11 +191,14 @@ export default function CustomerPage() {
     }
   }, [isLarge, selectedId])
 
+  const clearSelection = React.useCallback(() => {
+    setSelectedId(null)
+  }, [])
+
+  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+
   if (!companyId) return <div>No company selected.</div>
 
-  // On small screens, use Grid layout (stack): list fills viewport, inspector below
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
       <section
@@ -217,7 +222,7 @@ export default function CustomerPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -271,7 +276,7 @@ export default function CustomerPage() {
               minWidth: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               overflow: 'hidden',
             }}
           >
@@ -280,7 +285,7 @@ export default function CustomerPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

@@ -20,6 +20,8 @@ import {
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
@@ -178,10 +180,14 @@ export default function MattersPage() {
     }
   }, [isLarge, selectedId])
 
+  const clearSelection = React.useCallback(() => {
+    setSelectedId(null)
+  }, [])
+
+  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -192,7 +198,7 @@ export default function MattersPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -247,7 +253,7 @@ export default function MattersPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -255,7 +261,7 @@ export default function MattersPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

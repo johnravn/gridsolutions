@@ -4,47 +4,47 @@
 
 Update this table as packages merge. **One agent = one package = one branch = one PR.**
 
-| Package     | Status      | Branch                     | Notes                                                       |
-| ----------- | ----------- | -------------------------- | ----------------------------------------------------------- |
-| P0-FIX      | merged      | —                          | All fixtures in `src/test/fixtures/`                        |
-| P0-E2E      | merged      | —                          | `e2e/helpers/navigation.ts`                                 |
-| U-C1        | done        | `test/U-C1-overlap-checks` | `overlapChecks.test.ts` — 7 tests                           |
-| U-C2        | done        | `test/U-C2-force-booking`  | `forceBooking.test.ts` — 11 tests                           |
-| U-L1        | done        | `test/U-L1-logging-ranges` | `timeEntryRange.test.ts` — 10 tests                         |
-| U-LT1       | done        | —                          | 3 files in `src/features/latest/utils/`                     |
-| U-CAL1      | done        | —                          | `domain.test.ts` — 7 tests                                  |
-| U-S1        | done        | —                          | `fuzzySearch.test.ts` — 4 tests                             |
-| U-S2        | done        | —                          | Expanded `permissions.test.ts`, `phone.test.ts`             |
-| U-J2        | done        | —                          | `contaProjects`, `statusColors`, `offerPdfExport`           |
-| U-J3        | done        | —                          | `aggregateRecurringJobCrew`, `recurringJobCreateDefaults`   |
-| U-HOME1     | done        | —                          | `dailyInspiration.test.ts` — 5 tests                        |
-| U-C3        | done        | —                          | `equipmentConflictCheck.test.ts` — 3 tests                  |
-| U-CUST1     | done        | —                          | `contaCustomerCheck.test.ts` — 4 tests                      |
-| U-S3        | done        | —                          | `customerSyncCore.test.ts` — 2 tests                        |
-| U-API1      | done        | —                          | `feed.test.ts` — 4 tests (token, 405, OPTIONS, env)         |
-| U-API2      | done        | —                          | `sync-conta.test.ts`, `trigger-conta-sync.test.ts`          |
-| U-CMP1–4    | done        | —                          | Equipment, Crew, Transport, SearchableSelect (fixed U-CMP4) |
-| I-CONF1     | done        | —                          | `conflicts.booking.test.ts`                                 |
-| I-REC1      | done        | —                          | `recurringJobs.test.ts`                                     |
-| I-INV1      | done        | —                          | `inventory.booking.test.ts`                                 |
-| E-J1        | done        | —                          | `e2e/jobs.spec.ts` — 6 tests incl. status change            |
-| E-OFF1      | smoke       | —                          | Lock flow covered; duplicate/pretty offer still optional    |
-| E-INV1      | done        | —                          | Add item flow + search                                      |
-| E-CUST1     | done        | —                          | Create customer + inspector                                 |
-| E-CAL1      | done        | —                          | Category filter → equipment search                          |
-| E-LOG1      | done        | —                          | Month switch on entries view                                |
-| E-BOOK1     | done        | —                          | Book equipment, conflict dialog, force-book                 |
-| E-VEH1      | done        | —                          | Book vehicle on job transport tab                           |
-| E-CREW1     | done        | —                          | Add role + Add Crew to Role dialog                          |
-| E-COMP1     | done        | —                          | Owner settings smoke                                        |
-| E-AUTH1     | done        | —                          | employeePage/freelancerPage + route matrix                  |
-| E-J2        | done        | —                          | Create recurring job + inspector tabs                       |
-| FIX-HYGIENE | done        | —                          | DateTimeRangePicker stability, fixture wiring               |
-| I-SEED      | done        | —                          | Conflict booking seed (dedicated conflict job)              |
-| I-CONF2     | done        | —                          | Force-book write-path integration                           |
-| I-REC2      | done        | —                          | Recurring template CRUD integration                         |
-| I-INV2      | done        | —                          | Reserve item golden-path integration                        |
-| CI-COV      | done        | —                          | Folder-scoped coverage thresholds in CI                     |
+| Package     | Status | Branch                     | Notes                                                       |
+| ----------- | ------ | -------------------------- | ----------------------------------------------------------- |
+| P0-FIX      | merged | —                          | All fixtures in `src/test/fixtures/`                        |
+| P0-E2E      | merged | —                          | `e2e/helpers/navigation.ts`                                 |
+| U-C1        | done   | `test/U-C1-overlap-checks` | `overlapChecks.test.ts` — 7 tests                           |
+| U-C2        | done   | `test/U-C2-force-booking`  | `forceBooking.test.ts` — 11 tests                           |
+| U-L1        | done   | `test/U-L1-logging-ranges` | `timeEntryRange.test.ts` — 10 tests                         |
+| U-LT1       | done   | —                          | 3 files in `src/features/latest/utils/`                     |
+| U-CAL1      | done   | —                          | `domain.test.ts` — 7 tests                                  |
+| U-S1        | done   | —                          | `fuzzySearch.test.ts` — 4 tests                             |
+| U-S2        | done   | —                          | Expanded `permissions.test.ts`, `phone.test.ts`             |
+| U-J2        | done   | —                          | `contaProjects`, `statusColors`, `offerPdfExport`           |
+| U-J3        | done   | —                          | `aggregateRecurringJobCrew`, `recurringJobCreateDefaults`   |
+| U-HOME1     | done   | —                          | `dailyInspiration.test.ts` — 5 tests                        |
+| U-C3        | done   | —                          | `equipmentConflictCheck.test.ts` — 3 tests                  |
+| U-CUST1     | done   | —                          | `contaCustomerCheck.test.ts` — 4 tests                      |
+| U-S3        | done   | —                          | `customerSyncCore.test.ts` — 2 tests                        |
+| U-API1      | done   | —                          | `feed.test.ts` — 4 tests (token, 405, OPTIONS, env)         |
+| U-API2      | done   | —                          | `sync-conta.test.ts`, `trigger-conta-sync.test.ts`          |
+| U-CMP1–4    | done   | —                          | Equipment, Crew, Transport, SearchableSelect (fixed U-CMP4) |
+| I-CONF1     | done   | —                          | `conflicts.booking.test.ts`                                 |
+| I-REC1      | done   | —                          | `recurringJobs.test.ts`                                     |
+| I-INV1      | done   | —                          | `inventory.booking.test.ts`                                 |
+| E-J1        | done   | —                          | `e2e/jobs.spec.ts` — 6 tests incl. status change            |
+| E-OFF1      | smoke  | —                          | Lock flow covered; duplicate/pretty offer still optional    |
+| E-INV1      | done   | —                          | Add item flow + search                                      |
+| E-CUST1     | done   | —                          | Create customer + inspector                                 |
+| E-CAL1      | done   | —                          | Category filter → equipment search                          |
+| E-LOG1      | done   | —                          | Month switch on entries view                                |
+| E-BOOK1     | done   | —                          | Book equipment, conflict dialog, force-book                 |
+| E-VEH1      | done   | —                          | Book vehicle on job transport tab                           |
+| E-CREW1     | done   | —                          | Add role + Add Crew to Role dialog                          |
+| E-COMP1     | done   | —                          | Owner settings smoke                                        |
+| E-AUTH1     | done   | —                          | employeePage/freelancerPage + route matrix                  |
+| E-J2        | done   | —                          | Create recurring job + inspector tabs                       |
+| FIX-HYGIENE | done   | —                          | DateTimeRangePicker stability, fixture wiring               |
+| I-SEED      | done   | —                          | Conflict booking seed (dedicated conflict job)              |
+| I-CONF2     | done   | —                          | Force-book write-path integration                           |
+| I-REC2      | done   | —                          | Recurring template CRUD integration                         |
+| I-INV2      | done   | —                          | Reserve item golden-path integration                        |
+| CI-COV      | done   | —                          | Folder-scoped coverage thresholds in CI                     |
 
 **Extra (outside plan):** DateTimePicker + picker subcomponents — done (9 component test files).
 

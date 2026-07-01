@@ -52,7 +52,7 @@ export function MinuteGrid({
           let border = '1px solid var(--gray-6)'
           let background = 'var(--gray-2)'
           let color = 'var(--gray-12)'
-          let fontWeight: number = 400
+          let fontWeight = 400
 
           if (rangePos === 'start' || rangePos === 'end' || minuteSelected) {
             border = '2px solid var(--blue-7)'

@@ -50,7 +50,7 @@ export function HourGrid({
           let border = '1px solid var(--gray-6)'
           let background = 'var(--gray-2)'
           let color = 'var(--gray-12)'
-          let fontWeight: number = 400
+          let fontWeight = 400
 
           if (rangePos === 'start' || rangePos === 'end' || hourSelected) {
             border = '2px solid var(--blue-7)'
@@ -64,9 +64,7 @@ export function HourGrid({
           }
 
           const ariaLabel =
-            isRangeMode || !label
-              ? hourLabel
-              : `${label} ${hourAriaLabel}`
+            isRangeMode || !label ? hourLabel : `${label} ${hourAriaLabel}`
 
           return (
             <button

@@ -14,6 +14,12 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { formatVATInput } from '@shared/lib/generalFunctions'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import { crewPricingLevelsQuery } from '@features/company/api/queries'
+import {
+  CustomerBrandColorsFields,
+  normalizeAccentColor,
+  normalizeCustomHex,
+  sanitizeCustomHexInput,
+} from '../CustomerBrandColorsFields'
 import { upsertCustomer } from '../../api/queries'
 
 type Initial = {
@@ -23,6 +29,8 @@ type Initial = {
   address: string
   is_partner: boolean
   logo_path?: string | null
+  accent_color?: string | null
+  accent_color_custom?: string | null
   crew_pricing_level_id?: string | null
 }
 
@@ -58,6 +66,10 @@ export default function EditCustomerDialog({
   const [form, setForm] = React.useState({
     ...initial,
     crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
+    accent_color: normalizeAccentColor(
+      initial.accent_color,
+    ),
+    accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
     ...parseAddress(initial.address),
   })
@@ -72,6 +84,8 @@ export default function EditCustomerDialog({
     setForm({
       ...initial,
       crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
+      accent_color: normalizeAccentColor(initial.accent_color),
+      accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
       vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
       ...parseAddress(initial.address),
     })
@@ -83,6 +97,8 @@ export default function EditCustomerDialog({
     initial.address,
     initial.is_partner,
     initial.logo_path,
+    initial.accent_color,
+    initial.accent_color_custom,
     initial.crew_pricing_level_id,
     parseAddress,
   ])
@@ -119,6 +135,8 @@ export default function EditCustomerDialog({
         is_partner: !!form.is_partner,
         logo_path: form.logo_path ?? null,
         crew_pricing_level_id: form.crew_pricing_level_id ?? null,
+        accent_color: form.accent_color,
+        accent_color_custom: sanitizeCustomHexInput(form.accent_color_custom),
       })
     },
     onSuccess: () => {
@@ -198,6 +216,14 @@ export default function EditCustomerDialog({
               </Select.Content>
             </Select.Root>
           </Field>
+          <CustomerBrandColorsFields
+            accentColor={form.accent_color}
+            accentColorCustom={form.accent_color_custom}
+            onAccentColorChange={(color) => set('accent_color', color)}
+            onAccentColorCustomChange={(value) =>
+              set('accent_color_custom', value)
+            }
+          />
           <Flex align="center" gap="2">
             <Text size="2" color="gray">
               Partner

@@ -647,6 +647,8 @@ export type Database = {
       }
       customers: {
         Row: {
+          accent_color: string | null
+          accent_color_custom: string | null
           address: string | null
           company_id: string
           conta_customer_id: number | null
@@ -670,6 +672,8 @@ export type Database = {
           vat_number: string | null
         }
         Insert: {
+          accent_color?: string | null
+          accent_color_custom?: string | null
           address?: string | null
           company_id: string
           conta_customer_id?: number | null
@@ -693,6 +697,8 @@ export type Database = {
           vat_number?: string | null
         }
         Update: {
+          accent_color?: string | null
+          accent_color_custom?: string | null
           address?: string | null
           company_id?: string
           conta_customer_id?: number | null
@@ -1521,6 +1527,8 @@ export type Database = {
           locked: boolean
           offer_type: Database['public']['Enums']['offer_type']
           offernr: number | null
+          pretty_use_customer_accent: boolean
+          pretty_use_customer_background: boolean
           rejected_at: string | null
           rejected_by_name: string | null
           rejected_by_phone: string | null
@@ -1533,6 +1541,7 @@ export type Database = {
           sent_via_email_at: string | null
           sent_via_email_to: string | null
           show_price_per_line: boolean
+          source_technical_offer_id: string | null
           status: Database['public']['Enums']['offer_status']
           title: string
           total_after_discount: number
@@ -1567,6 +1576,8 @@ export type Database = {
           locked?: boolean
           offer_type: Database['public']['Enums']['offer_type']
           offernr?: number | null
+          pretty_use_customer_accent?: boolean
+          pretty_use_customer_background?: boolean
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null
@@ -1579,6 +1590,7 @@ export type Database = {
           sent_via_email_at?: string | null
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
+          source_technical_offer_id?: string | null
           status?: Database['public']['Enums']['offer_status']
           title: string
           total_after_discount?: number
@@ -1613,6 +1625,8 @@ export type Database = {
           locked?: boolean
           offer_type?: Database['public']['Enums']['offer_type']
           offernr?: number | null
+          pretty_use_customer_accent?: boolean
+          pretty_use_customer_background?: boolean
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null
@@ -1625,6 +1639,7 @@ export type Database = {
           sent_via_email_at?: string | null
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
+          source_technical_offer_id?: string | null
           status?: Database['public']['Enums']['offer_status']
           title?: string
           total_after_discount?: number
@@ -1691,6 +1706,13 @@ export type Database = {
             columns: ['job_id']
             isOneToOne: false
             referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'job_offers_source_technical_offer_id_fkey'
+            columns: ['source_technical_offer_id']
+            isOneToOne: false
+            referencedRelation: 'job_offers'
             referencedColumns: ['id']
           },
         ]
@@ -2829,6 +2851,339 @@ export type Database = {
             columns: ['company_id']
             isOneToOne: false
             referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_module_block_items: {
+        Row: {
+          block_id: string
+          detail: string | null
+          end_at: string | null
+          id: string
+          label: string
+          sort_order: number
+          start_at: string | null
+          summary: string | null
+          url: string | null
+        }
+        Insert: {
+          block_id: string
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+          url?: string | null
+        }
+        Update: {
+          block_id?: string
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_module_block_items_block_id_fkey'
+            columns: ['block_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_module_blocks'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_module_blocks: {
+        Row: {
+          block_type: Database['public']['Enums']['pretty_module_block_type']
+          caption: string | null
+          id: string
+          link_title: string | null
+          module_id: string
+          sort_order: number
+          text_content: string | null
+          url: string | null
+        }
+        Insert: {
+          block_type: Database['public']['Enums']['pretty_module_block_type']
+          caption?: string | null
+          id?: string
+          link_title?: string | null
+          module_id: string
+          sort_order?: number
+          text_content?: string | null
+          url?: string | null
+        }
+        Update: {
+          block_type?: Database['public']['Enums']['pretty_module_block_type']
+          caption?: string | null
+          id?: string
+          link_title?: string | null
+          module_id?: string
+          sort_order?: number
+          text_content?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_module_blocks_module_id_fkey'
+            columns: ['module_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_modules'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_module_category_mappings: {
+        Row: {
+          category_key: string
+          category_type: Database['public']['Enums']['pretty_category_type']
+          id: string
+          module_id: string
+        }
+        Insert: {
+          category_key: string
+          category_type: Database['public']['Enums']['pretty_category_type']
+          id?: string
+          module_id: string
+        }
+        Update: {
+          category_key?: string
+          category_type?: Database['public']['Enums']['pretty_category_type']
+          id?: string
+          module_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_module_category_mappings_module_id_fkey'
+            columns: ['module_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_modules'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_module_manual_fields: {
+        Row: {
+          id: string
+          label: string
+          module_id: string
+          sort_order: number
+          value: string
+        }
+        Insert: {
+          id?: string
+          label?: string
+          module_id: string
+          sort_order?: number
+          value?: string
+        }
+        Update: {
+          id?: string
+          label?: string
+          module_id?: string
+          sort_order?: number
+          value?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_module_manual_fields_module_id_fkey'
+            columns: ['module_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_modules'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_module_media: {
+        Row: {
+          caption: string | null
+          id: string
+          media_type: Database['public']['Enums']['pretty_module_media_type']
+          module_id: string
+          sort_order: number
+          title: string | null
+          url: string
+        }
+        Insert: {
+          caption?: string | null
+          id?: string
+          media_type?: Database['public']['Enums']['pretty_module_media_type']
+          module_id: string
+          sort_order?: number
+          title?: string | null
+          url: string
+        }
+        Update: {
+          caption?: string | null
+          id?: string
+          media_type?: Database['public']['Enums']['pretty_module_media_type']
+          module_id?: string
+          sort_order?: number
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_module_media_module_id_fkey'
+            columns: ['module_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_modules'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_modules: {
+        Row: {
+          basis_type: Database['public']['Enums']['pretty_module_basis_type']
+          computed_cost: number
+          created_at: string
+          display_price: number | null
+          id: string
+          offer_id: string
+          show_price: boolean
+          sort_order: number
+          subtitle: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          basis_type?: Database['public']['Enums']['pretty_module_basis_type']
+          computed_cost?: number
+          created_at?: string
+          display_price?: number | null
+          id?: string
+          offer_id: string
+          show_price?: boolean
+          sort_order?: number
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          basis_type?: Database['public']['Enums']['pretty_module_basis_type']
+          computed_cost?: number
+          created_at?: string
+          display_price?: number | null
+          id?: string
+          offer_id?: string
+          show_price?: boolean
+          sort_order?: number
+          subtitle?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_modules_offer_id_fkey'
+            columns: ['offer_id']
+            isOneToOne: false
+            referencedRelation: 'job_offers'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_subcontractor_allocations: {
+        Row: {
+          allocation_mode: Database['public']['Enums']['pretty_allocation_mode']
+          allocation_value: number
+          id: string
+          module_id: string
+          quote_id: string
+        }
+        Insert: {
+          allocation_mode?: Database['public']['Enums']['pretty_allocation_mode']
+          allocation_value?: number
+          id?: string
+          module_id: string
+          quote_id: string
+        }
+        Update: {
+          allocation_mode?: Database['public']['Enums']['pretty_allocation_mode']
+          allocation_value?: number
+          id?: string
+          module_id?: string
+          quote_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_subcontractor_allocations_module_id_fkey'
+            columns: ['module_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_modules'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pretty_offer_subcontractor_allocations_quote_id_fkey'
+            columns: ['quote_id']
+            isOneToOne: false
+            referencedRelation: 'pretty_offer_subcontractor_quotes'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      pretty_offer_subcontractor_quotes: {
+        Row: {
+          created_at: string
+          customer_id: string | null
+          id: string
+          mime_type: string | null
+          note: string | null
+          offer_id: string
+          pdf_filename: string | null
+          pdf_path: string | null
+          size_bytes: number | null
+          sort_order: number
+          total_amount: number
+          vendor_name: string
+        }
+        Insert: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          mime_type?: string | null
+          note?: string | null
+          offer_id: string
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          total_amount?: number
+          vendor_name?: string
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string | null
+          id?: string
+          mime_type?: string | null
+          note?: string | null
+          offer_id?: string
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          sort_order?: number
+          total_amount?: number
+          vendor_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'pretty_offer_subcontractor_quotes_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pretty_offer_subcontractor_quotes_offer_id_fkey'
+            columns: ['offer_id']
+            isOneToOne: false
+            referencedRelation: 'job_offers'
             referencedColumns: ['id']
           },
         ]
@@ -4449,6 +4804,23 @@ export type Database = {
         | 'rejected'
         | 'superseded'
       offer_type: 'technical' | 'pretty'
+      pretty_allocation_mode: 'percent' | 'amount'
+      pretty_category_type:
+        | 'equipment_group'
+        | 'crew_category'
+        | 'transport_group'
+      pretty_module_basis_type: 'manual' | 'subcontractor' | 'technical'
+      pretty_module_block_type:
+        | 'subtitle'
+        | 'description'
+        | 'simple_list'
+        | 'interactive_list'
+        | 'image'
+        | 'video'
+        | 'link'
+        | 'timeline'
+        | 'gallery'
+      pretty_module_media_type: 'image' | 'video' | 'link'
       pretty_section_type:
         | 'hero'
         | 'problem'
@@ -4676,6 +5048,25 @@ export const Constants = {
         'superseded',
       ],
       offer_type: ['technical', 'pretty'],
+      pretty_allocation_mode: ['percent', 'amount'],
+      pretty_category_type: [
+        'equipment_group',
+        'crew_category',
+        'transport_group',
+      ],
+      pretty_module_basis_type: ['manual', 'subcontractor', 'technical'],
+      pretty_module_block_type: [
+        'subtitle',
+        'description',
+        'simple_list',
+        'interactive_list',
+        'image',
+        'video',
+        'link',
+        'timeline',
+        'gallery',
+      ],
+      pretty_module_media_type: ['image', 'video', 'link'],
       pretty_section_type: [
         'hero',
         'problem',

@@ -270,10 +270,8 @@ export default function DateTimeRangePicker({
 
     const startDateLabel = formatDateLabel(startDateObj, locale)
     const startTime =
-      formatSelectionTime(
-        timeSelection.startHour,
-        timeSelection.startMinute,
-      ) ?? (startAt ? formatIsoTime(startAt, false) : undefined)
+      formatSelectionTime(timeSelection.startHour, timeSelection.startMinute) ??
+      (startAt ? formatIsoTime(startAt, false) : undefined)
 
     const endDateObj = parseIso(startOfDay(displayEnd))
     if (!endDateObj) return []
@@ -480,11 +478,12 @@ export default function DateTimeRangePicker({
             </Box>
           )}
 
-          {(phase === 'hours' || phase === 'minutes') && !dateSelection.start && (
-            <Text size="2" color="gray">
-              Select a date first.
-            </Text>
-          )}
+          {(phase === 'hours' || phase === 'minutes') &&
+            !dateSelection.start && (
+              <Text size="2" color="gray">
+                Select a date first.
+              </Text>
+            )}
         </Popover.Content>
       </Popover.Root>
     </Box>

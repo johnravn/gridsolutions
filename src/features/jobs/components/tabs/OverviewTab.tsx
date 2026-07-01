@@ -22,6 +22,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { motionFadeTransition } from '@shared/lib/motion'
 import { logActivity } from '@features/latest/api/queries'
 import {
   getJobStatusColor,
@@ -301,7 +302,7 @@ function MapWithSkeleton({ query, zoom }: { query: string; zoom?: number }) {
           position: 'absolute',
           inset: 0,
           opacity: isLoading ? 0 : 1,
-          transition: 'opacity 0.3s ease-in-out',
+          transition: motionFadeTransition(),
         }}
       >
         <iframe

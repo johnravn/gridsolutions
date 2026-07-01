@@ -10,15 +10,15 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { InfoCircle } from 'iconoir-react'
+import { BoxIso, Car, Clock, Group, InfoCircle } from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { recurringJobBookingSummaryQuery } from '../../../api/recurringJobQueries'
 import {
-  recurringJobBookingSummaryQuery,
-  recurringJobInvoiceSummaryQuery,
-} from '../../../api/recurringJobQueries'
-import { getJobStatusColor } from '../../../utils/statusColors'
+  getJobStatusColor,
+  getStatusTimelineColors,
+} from '../../../utils/statusColors'
 import type { JobListRow, JobStatus, RecurringJobDetail } from '../../../types'
 
 type Props = {
@@ -26,7 +26,7 @@ type Props = {
   onSelectJob: (jobId: string) => void
 }
 
-const STATUS_ORDER: Array<JobStatus> = [
+const JOB_STATUS_FLOW: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',
@@ -35,7 +35,6 @@ const STATUS_ORDER: Array<JobStatus> = [
   'completed',
   'invoiced',
   'paid',
-  'canceled',
 ]
 
 function countByStatus(jobs: Array<JobListRow>) {
@@ -46,53 +45,254 @@ function countByStatus(jobs: Array<JobListRow>) {
   return counts
 }
 
-function StatCard({
-  label,
-  tooltip,
-  value,
-}: {
+type SubStat = {
+  icon?: React.ReactNode
   label: string
-  tooltip: string
   value: React.ReactNode
+}
+
+function SeriesStatusTimeline({
+  total,
+  statusCounts,
+}: {
+  total: number
+  statusCounts: Map<JobStatus, number>
 }) {
+  const canceledCount = statusCounts.get('canceled') ?? 0
+
   return (
-    <Card size="3" style={{ minHeight: 120 }}>
-      <Flex
-        direction="column"
-        gap="3"
-        justify="between"
-        style={{ height: '100%' }}
-      >
+    <Card size="3">
+      <Flex align="center" justify="between" gap="3" mb="4">
         <Flex align="center" gap="1">
-          <Text size="2" color="gray" weight="medium">
-            {label}
+          <Text size="2" weight="medium">
+            Jobs in series
           </Text>
-          <Tooltip content={tooltip}>
+          <Tooltip content="How jobs in this recurring series are distributed across each status stage.">
             <IconButton
               variant="ghost"
               size="1"
               color="gray"
               style={{ cursor: 'help' }}
               tabIndex={-1}
-              aria-label={`About ${label}`}
+              aria-label="About jobs in series"
             >
               <InfoCircle width={14} height={14} />
             </IconButton>
           </Tooltip>
         </Flex>
+        <Text size="6" weight="bold" style={{ lineHeight: 1 }}>
+          {total}
+        </Text>
+      </Flex>
+
+      <Box style={{ overflowX: 'auto', paddingBottom: 4 }}>
+        <Flex align="start" style={{ minWidth: 520, position: 'relative' }}>
+          {JOB_STATUS_FLOW.map((status, idx) => {
+            const count = statusCounts.get(status) ?? 0
+            const hasJobs = count > 0
+            const colors = getStatusTimelineColors(status)
+            const nextStatus = JOB_STATUS_FLOW[idx + 1]
+            const nextCount = nextStatus
+              ? (statusCounts.get(nextStatus) ?? 0)
+              : 0
+            const nextColors = nextStatus
+              ? getStatusTimelineColors(nextStatus)
+              : null
+            const connectorActive = hasJobs || nextCount > 0
+
+            return (
+              <Flex
+                key={status}
+                direction="column"
+                align="center"
+                style={{ flex: 1, minWidth: 0, position: 'relative' }}
+              >
+                {idx < JOB_STATUS_FLOW.length - 1 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 13,
+                      left: 'calc(50% + 14px)',
+                      width: 'calc(100% - 28px)',
+                      height: 2,
+                      background: connectorActive
+                        ? nextColors
+                          ? `linear-gradient(to right, ${hasJobs ? colors.dotBg : 'var(--gray-a5)'}, ${nextCount > 0 ? nextColors.dotBg : 'var(--gray-a5)'})`
+                          : hasJobs
+                            ? colors.dotBg
+                            : 'var(--gray-a4)'
+                        : 'var(--gray-a4)',
+                      zIndex: 0,
+                      borderRadius: 1,
+                    }}
+                  />
+                )}
+
+                <Tooltip
+                  content={`${count} job${count !== 1 ? 's' : ''} at ${makeWordPresentable(status)}`}
+                >
+                  <Flex
+                    align="center"
+                    justify="center"
+                    style={{
+                      width: 28,
+                      height: 28,
+                      borderRadius: '50%',
+                      background: hasJobs ? colors.dotBg : 'var(--gray-a3)',
+                      zIndex: 1,
+                      position: 'relative',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Text
+                      size="1"
+                      weight="bold"
+                      style={{
+                        color: hasJobs ? 'white' : 'var(--gray-9)',
+                        fontSize: count > 9 ? 10 : 11,
+                        lineHeight: 1,
+                      }}
+                    >
+                      {count}
+                    </Text>
+                  </Flex>
+                </Tooltip>
+
+                <Text
+                  size="1"
+                  mt="2"
+                  weight={hasJobs ? 'medium' : 'regular'}
+                  style={{
+                    color: hasJobs ? colors.text : 'var(--gray-9)',
+                    textAlign: 'center',
+                    fontSize: 10,
+                    lineHeight: 1.2,
+                    opacity: hasJobs ? 1 : 0.65,
+                    wordBreak: 'break-word',
+                  }}
+                >
+                  {makeWordPresentable(status)}
+                </Text>
+              </Flex>
+            )
+          })}
+        </Flex>
+      </Box>
+
+      {canceledCount > 0 && (
+        <Flex
+          align="center"
+          gap="2"
+          mt="3"
+          pt="3"
+          style={{ borderTop: '1px solid var(--gray-a4)' }}
+        >
+          <Badge color="red" variant="soft" size="1">
+            Canceled
+          </Badge>
+          <Text size="2" weight="medium">
+            {canceledCount}
+          </Text>
+        </Flex>
+      )}
+    </Card>
+  )
+}
+
+function StatCard({
+  label,
+  tooltip,
+  value,
+  icon,
+  subStats = [],
+}: {
+  label: string
+  tooltip: string
+  value: React.ReactNode
+  icon: React.ReactNode
+  subStats?: Array<SubStat>
+}) {
+  return (
+    <Card size="3" style={{ minHeight: 132 }}>
+      <Flex
+        direction="column"
+        gap="3"
+        justify="between"
+        style={{ height: '100%' }}
+      >
+        <Flex align="center" justify="between" gap="2">
+          <Flex align="center" gap="1" style={{ minWidth: 0 }}>
+            <Text size="2" color="gray" weight="medium">
+              {label}
+            </Text>
+            <Tooltip content={tooltip}>
+              <IconButton
+                variant="ghost"
+                size="1"
+                color="gray"
+                style={{ cursor: 'help' }}
+                tabIndex={-1}
+                aria-label={`About ${label}`}
+              >
+                <InfoCircle width={14} height={14} />
+              </IconButton>
+            </Tooltip>
+          </Flex>
+          <Flex
+            align="center"
+            justify="center"
+            width="28px"
+            height="28px"
+            style={{
+              flexShrink: 0,
+              borderRadius: 6,
+              background: 'var(--gray-a3)',
+              color: 'var(--gray-11)',
+            }}
+          >
+            <Box style={{ lineHeight: 0 }}>{icon}</Box>
+          </Flex>
+        </Flex>
+
         <Text size="7" weight="bold" style={{ lineHeight: 1.1 }}>
           {value}
         </Text>
+
+        {subStats.length > 0 && (
+          <Flex gap="2" wrap="wrap">
+            {subStats.map((sub) => (
+              <Flex
+                key={sub.label}
+                align="center"
+                gap="1"
+                px="2"
+                py="1"
+                style={{
+                  borderRadius: 'var(--radius-2)',
+                  background: 'var(--gray-a2)',
+                }}
+              >
+                {sub.icon ? (
+                  <Box style={{ lineHeight: 0, color: 'var(--gray-9)' }}>
+                    {sub.icon}
+                  </Box>
+                ) : null}
+                <Text size="1" color="gray">
+                  {sub.label}
+                </Text>
+                <Text size="1" weight="bold">
+                  {sub.value}
+                </Text>
+              </Flex>
+            ))}
+          </Flex>
+        )}
       </Flex>
     </Card>
   )
 }
 
 export default function RecurringOverviewTab({ detail, onSelectJob }: Props) {
-  const { data: invoiceSummary = [] } = useQuery({
-    ...recurringJobInvoiceSummaryQuery({ recurringJobId: detail.id }),
-  })
-
   const { data: bookingSummary = [] } = useQuery({
     ...recurringJobBookingSummaryQuery({ recurringJobId: detail.id }),
   })
@@ -132,13 +332,20 @@ export default function RecurringOverviewTab({ detail, onSelectJob }: Props) {
         new Date(j.end_at).getTime() < now,
     )
 
-    const invoicedOrPaid =
-      (statusCounts.get('invoiced') ?? 0) + (statusCounts.get('paid') ?? 0)
+    const crewBookings = bookingSummary.reduce(
+      (sum, b) => sum + b.crew_count,
+      0,
+    )
+    const equipmentBookings = bookingSummary.reduce(
+      (sum, b) => sum + b.equipment_count,
+      0,
+    )
+    const transportBookings = bookingSummary.reduce(
+      (sum, b) => sum + b.transport_count,
+      0,
+    )
 
-    const totalBookings =
-      bookingSummary.reduce((sum, b) => sum + b.crew_count, 0) +
-      bookingSummary.reduce((sum, b) => sum + b.equipment_count, 0) +
-      bookingSummary.reduce((sum, b) => sum + b.transport_count, 0)
+    const totalBookings = crewBookings + equipmentBookings + transportBookings
 
     return {
       statusCounts,
@@ -147,14 +354,12 @@ export default function RecurringOverviewTab({ detail, onSelectJob }: Props) {
       upcoming,
       nextJob,
       needsAttention,
-      invoicedOrPaid,
       totalBookings,
+      crewBookings,
+      equipmentBookings,
+      transportBookings,
     }
   }, [detail.jobs, bookingSummary])
-
-  const statusEntries = STATUS_ORDER.filter((status) =>
-    stats.statusCounts.has(status),
-  ).map((status) => [status, stats.statusCounts.get(status)!] as const)
 
   const scheduleValue =
     stats.upcoming.length > 0 ? stats.upcoming.length : stats.earliest ? 0 : '—'
@@ -166,93 +371,87 @@ export default function RecurringOverviewTab({ detail, onSelectJob }: Props) {
         ? `No upcoming jobs. Series spans ${format(new Date(stats.earliest), 'd. MMM yyyy', { locale: nb })} – ${format(new Date(stats.latest), 'd. MMM yyyy', { locale: nb })}.`
         : 'Jobs in this series that have not been canceled and still have a future start date.'
 
+  const nextJobDateLabel = stats.nextJob?.start_at
+    ? format(new Date(stats.nextJob.start_at), 'd. MMM', { locale: nb })
+    : null
+
+  const hasNotes = Boolean(detail.description?.trim())
+
   return (
     <Flex direction="column" gap="5">
-      <Card size="3">
-        <Text size="2" weight="medium" mb="2">
-          Notes
-        </Text>
-        {detail.description?.trim() ? (
+      {hasNotes && (
+        <Card size="3">
+          <Text size="2" weight="medium" mb="2">
+            Notes
+          </Text>
           <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
             {detail.description}
           </Text>
-        ) : (
-          <Text size="2" color="gray">
-            No notes yet. Add notes when editing the recurring job.
-          </Text>
-        )}
-      </Card>
+        </Card>
+      )}
 
       <Grid columns={{ initial: '1', sm: '2' }} gap="4">
-        <StatCard
-          label="Jobs in series"
-          tooltip="Total number of individual jobs linked to this recurring job."
-          value={detail.job_count}
-        />
-        <StatCard
-          label="Invoiced or paid"
-          tooltip="Jobs marked as invoiced or paid — the series is financially closed for these dates."
-          value={stats.invoicedOrPaid}
-        />
+        <Box style={{ gridColumn: '1 / -1' }}>
+          <SeriesStatusTimeline
+            total={detail.job_count}
+            statusCounts={stats.statusCounts}
+          />
+        </Box>
+
         <StatCard
           label="Booking lines"
           tooltip="Total crew, equipment, and transport booking lines across all jobs in this series."
           value={stats.totalBookings}
+          icon={<BoxIso width={16} height={16} />}
+          subStats={[
+            {
+              icon: <Group width={12} height={12} />,
+              label: 'Crew',
+              value: stats.crewBookings,
+            },
+            {
+              icon: <BoxIso width={12} height={12} />,
+              label: 'Equipment',
+              value: stats.equipmentBookings,
+            },
+            {
+              icon: <Car width={12} height={12} />,
+              label: 'Transport',
+              value: stats.transportBookings,
+            },
+          ]}
         />
         <StatCard
           label="Upcoming jobs"
           tooltip={scheduleTooltip}
           value={scheduleValue}
+          icon={<Clock width={16} height={16} />}
+          subStats={[
+            ...(nextJobDateLabel
+              ? [{ label: 'Next', value: nextJobDateLabel }]
+              : []),
+            ...(stats.needsAttention.length > 0
+              ? [
+                  {
+                    label: 'Needs attention',
+                    value: stats.needsAttention.length,
+                  },
+                ]
+              : []),
+            ...(stats.upcoming.length === 0 &&
+            stats.earliest &&
+            stats.latest &&
+            !nextJobDateLabel
+              ? [
+                  {
+                    label: 'Span',
+                    value: `${format(new Date(stats.earliest), 'd. MMM', { locale: nb })} – ${format(new Date(stats.latest), 'd. MMM', { locale: nb })}`,
+                  },
+                ]
+              : []),
+          ]}
         />
       </Grid>
-
-      {statusEntries.length > 0 && (
-        <Card size="3">
-          <Flex align="center" gap="1" mb="3">
-            <Text size="2" weight="medium">
-              Status breakdown
-            </Text>
-            <Tooltip content="How many jobs in this series currently have each status.">
-              <IconButton
-                variant="ghost"
-                size="1"
-                color="gray"
-                style={{ cursor: 'help' }}
-                tabIndex={-1}
-                aria-label="About status breakdown"
-              >
-                <InfoCircle width={14} height={14} />
-              </IconButton>
-            </Tooltip>
-          </Flex>
-          <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="3">
-            {statusEntries.map(([status, count]) => (
-              <Flex
-                key={status}
-                align="center"
-                justify="between"
-                gap="3"
-                p="3"
-                style={{
-                  borderRadius: 'var(--radius-3)',
-                  background: 'var(--gray-a2)',
-                }}
-              >
-                <Badge
-                  color={getJobStatusColor(status)}
-                  variant="soft"
-                  size="2"
-                >
-                  {makeWordPresentable(status)}
-                </Badge>
-                <Text size="4" weight="bold">
-                  {count}
-                </Text>
-              </Flex>
-            ))}
-          </Grid>
-        </Card>
-      )}
 
       {stats.needsAttention.length > 0 && (
         <Card size="3">

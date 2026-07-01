@@ -8,6 +8,7 @@ import {
   Dialog,
   Flex,
   Heading,
+  Spinner,
   Text,
   Tooltip,
 } from '@radix-ui/themes'
@@ -167,6 +168,36 @@ export default function InvoiceTab({
   const [pendingInvoiceRecipients, setPendingInvoiceRecipients] =
     React.useState<Array<InvoiceRecipient> | null>(null)
   const [invoiceWithVat, setInvoiceWithVat] = React.useState(true)
+  const [invoiceSendPhase, setInvoiceSendPhase] = React.useState<
+    'idle' | 'sending' | 'success'
+  >('idle')
+  const invoiceSendInFlightRef = React.useRef(false)
+
+  const beginInvoiceSend = (): boolean => {
+    if (invoiceSendInFlightRef.current) return false
+    invoiceSendInFlightRef.current = true
+    setInvoiceSendPhase('sending')
+    return true
+  }
+
+  const resetInvoiceSend = () => {
+    invoiceSendInFlightRef.current = false
+    setInvoiceSendPhase('idle')
+  }
+
+  const closeInvoicePreview = () => {
+    setPreviewOffer(null)
+    setPreviewBookings(null)
+    setPreviewSourceOffer(null)
+    setEhfStatus(null)
+  }
+
+  const closeManualSendDialog = () => {
+    setManualSendDialogOpen(false)
+    setPendingInvoiceAction(null)
+    setPendingInvoiceRecipients(null)
+    setManualSendReason('')
+  }
 
   // Get current user ID for tracking
   const { data: authUser } = useQuery({
@@ -665,9 +696,12 @@ export default function InvoiceTab({
       return { response, invoiceRecord }
     },
     onSuccess: async (data, variables) => {
+      setInvoiceSendPhase('success')
       success(
-        'Invoice created and sent through Conta.',
-        isSandboxConta ? 'Sandbox Conta' : undefined,
+        'Invoice sent successfully',
+        isSandboxConta
+          ? 'The invoice was created and sent through Conta sandbox.'
+          : 'The invoice was created and sent through Conta.',
       )
 
       // Update job status to 'invoiced' if not already
@@ -712,8 +746,15 @@ export default function InvoiceTab({
       if (variables.downloadPdfAfterCreate) {
         await downloadContaInvoicePdf(variables.organizationId, data.response)
       }
+
+      window.setTimeout(() => {
+        closeInvoicePreview()
+        closeManualSendDialog()
+        resetInvoiceSend()
+      }, 1500)
     },
     onError: (err: any) => {
+      resetInvoiceSend()
       toastError(
         'Failed to Create Invoice',
         err?.message ||
@@ -721,6 +762,9 @@ export default function InvoiceTab({
       )
     },
   })
+
+  const isSendingInvoice =
+    invoiceSendPhase !== 'idle' || createInvoiceFromBookingsMutation.isPending
 
   const openManualSendDialog = (
     action: PendingInvoiceAction,
@@ -735,13 +779,14 @@ export default function InvoiceTab({
 
   const confirmManualSend = () => {
     if (!pendingInvoiceAction || !pendingInvoiceRecipients) {
-      setManualSendDialogOpen(false)
+      closeManualSendDialog()
       return
     }
     if (!accountingConfig?.accounting_organization_id) {
-      setManualSendDialogOpen(false)
+      closeManualSendDialog()
       return
     }
+    if (!beginInvoiceSend()) return
     const organizationId = accountingConfig.accounting_organization_id
     const a = pendingInvoiceAction
     createInvoiceFromBookingsMutation.mutate({
@@ -757,14 +802,6 @@ export default function InvoiceTab({
       invoiceWithVat: a.invoiceWithVat ?? true,
       offerId: a.offerId ?? null,
     })
-    setPreviewBookings(null)
-    setPreviewOffer(null)
-    setPreviewSourceOffer(null)
-    setEhfStatus(null)
-    setManualSendDialogOpen(false)
-    setPendingInvoiceAction(null)
-    setPendingInvoiceRecipients(null)
-    setManualSendReason('')
   }
 
   /** Open the unified invoice preview from the accepted offer (one line = offer total). */
@@ -937,12 +974,19 @@ export default function InvoiceTab({
     theirRefOverride?: string,
     invoiceWithVatParam: boolean = true,
     offerId: string | null = null,
-  ): Promise<{ sent: true } | { sent: false } | undefined> => {
-    if (!accountingConfig?.accounting_organization_id) return undefined
+  ): Promise<void> => {
+    if (!beginInvoiceSend()) return
+    if (!accountingConfig?.accounting_organization_id) {
+      resetInvoiceSend()
+      return
+    }
     const hasBankAccount = await ensureContaBankAccount(
       accountingConfig.accounting_organization_id,
     )
-    if (!hasBankAccount) return undefined
+    if (!hasBankAccount) {
+      resetInvoiceSend()
+      return
+    }
 
     const bookingsData = buildBookingsForInvoiceSendPayload(
       sourceBookings,
@@ -953,6 +997,7 @@ export default function InvoiceTab({
 
     const recipientResult = await resolveInvoiceRecipients(job.customer)
     if (recipientResult.requiresManualSend) {
+      resetInvoiceSend()
       openManualSendDialog(
         {
           bookingsData,
@@ -966,7 +1011,7 @@ export default function InvoiceTab({
         recipientResult.recipients,
         recipientResult.reason,
       )
-      return { sent: false as const }
+      return
     }
 
     createInvoiceFromBookingsMutation.mutate({
@@ -980,7 +1025,6 @@ export default function InvoiceTab({
       invoiceWithVat: invoiceWithVatParam,
       offerId,
     })
-    return { sent: true as const }
   }
 
   // Display version of preview bookings: when VAT is off, show zero-VAT totals without refetching
@@ -1086,9 +1130,7 @@ export default function InvoiceTab({
                   variant="soft"
                   onClick={handleCreateInvoiceFromOffer}
                   disabled={
-                    !hasAcceptedOffers ||
-                    !canSendInvoice ||
-                    createInvoiceFromBookingsMutation.isPending
+                    !hasAcceptedOffers || !canSendInvoice || isSendingInvoice
                   }
                 >
                   <Eye width={16} height={16} />
@@ -1111,9 +1153,7 @@ export default function InvoiceTab({
                   variant="soft"
                   onClick={() => handleCreateInvoiceFromBookings()}
                   disabled={
-                    !bookings?.all.length ||
-                    !canSendInvoice ||
-                    createInvoiceFromBookingsMutation.isPending
+                    !bookings?.all.length || !canSendInvoice || isSendingInvoice
                   }
                 >
                   <Eye width={16} height={16} />
@@ -1154,21 +1194,75 @@ export default function InvoiceTab({
       <Dialog.Root
         open={!!previewOffer || !!previewBookings}
         onOpenChange={(open) => {
+          if (!open && isSendingInvoice) return
           if (!open) {
-            setPreviewOffer(null)
-            setPreviewBookings(null)
-            setPreviewSourceOffer(null)
-            setEhfStatus(null)
+            closeInvoicePreview()
           }
         }}
       >
         <Dialog.Content
           size="4"
           style={{ maxWidth: '800px' }}
-          onPointerDownOutside={preventDialogCloseOnSearchableSelect}
-          onInteractOutside={preventDialogCloseOnSearchableSelect}
+          onPointerDownOutside={(event) => {
+            if (isSendingInvoice) {
+              event.preventDefault()
+              return
+            }
+            preventDialogCloseOnSearchableSelect(event)
+          }}
+          onInteractOutside={(event) => {
+            if (isSendingInvoice) {
+              event.preventDefault()
+              return
+            }
+            preventDialogCloseOnSearchableSelect(event)
+          }}
         >
-          <Box>
+          <Box style={{ position: 'relative' }}>
+            {isSendingInvoice && (
+              <Box
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  zIndex: 10,
+                  borderRadius: 8,
+                  background:
+                    'color-mix(in srgb, var(--color-panel-solid) 92%, transparent)',
+                }}
+              >
+                {invoiceSendPhase === 'success' ? (
+                  <>
+                    <CheckCircle
+                      width={40}
+                      height={40}
+                      color="var(--green-9)"
+                    />
+                    <Text size="3" weight="medium" color="green">
+                      Invoice sent successfully
+                    </Text>
+                    <Text size="2" color="gray" align="center">
+                      Conta confirmed the invoice was created.
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Spinner size="3" />
+                    <Text size="3" weight="medium">
+                      Sending invoice…
+                    </Text>
+                    <Text size="2" color="gray" align="center">
+                      Waiting for confirmation from Conta. Please do not close
+                      this window.
+                    </Text>
+                  </>
+                )}
+              </Box>
+            )}
             <Dialog.Title>Invoice Preview</Dialog.Title>
             <Dialog.Description size="2" color="gray" mb="4">
               Review the invoice details before creating it in your accounting
@@ -1266,38 +1360,39 @@ export default function InvoiceTab({
                 >
                   <span style={{ display: 'inline-block' }}>
                     <Button
-                      onClick={async () => {
-                        const result =
-                          await createInvoiceFromBookingsWithMessage(
-                            previewBookings,
-                            editedInvoiceLines,
-                            lineDiscountOverrides,
-                            invoicePreviewMessage,
-                            invoicePreviewOurRef || undefined,
-                            invoicePreviewTheirRef || undefined,
-                            invoiceWithVat,
-                            previewSourceOffer?.id ?? null,
-                          )
-                        if (result?.sent === true) {
-                          setPreviewBookings(null)
-                          setPreviewOffer(null)
-                          setPreviewSourceOffer(null)
-                          setEhfStatus(null)
-                        }
+                      onClick={() => {
+                        void createInvoiceFromBookingsWithMessage(
+                          previewBookings,
+                          editedInvoiceLines,
+                          lineDiscountOverrides,
+                          invoicePreviewMessage,
+                          invoicePreviewOurRef || undefined,
+                          invoicePreviewTheirRef || undefined,
+                          invoiceWithVat,
+                          previewSourceOffer?.id ?? null,
+                        )
                       }}
-                      disabled={
-                        createInvoiceFromBookingsMutation.isPending ||
-                        !canSendInvoice
-                      }
+                      disabled={isSendingInvoice || !canSendInvoice}
                     >
-                      <GoogleDocs width={16} height={16} />
-                      Send Invoice
+                      {isSendingInvoice ? (
+                        <>
+                          <Spinner size="1" />
+                          Sending…
+                        </>
+                      ) : (
+                        <>
+                          <GoogleDocs width={16} height={16} />
+                          Send Invoice
+                        </>
+                      )}
                     </Button>
                   </span>
                 </Tooltip>
               )}
               <Dialog.Close>
-                <Button variant="soft">Close</Button>
+                <Button variant="soft" disabled={isSendingInvoice}>
+                  Close
+                </Button>
               </Dialog.Close>
             </Flex>
           </Box>
@@ -1308,47 +1403,100 @@ export default function InvoiceTab({
       <Dialog.Root
         open={manualSendDialogOpen}
         onOpenChange={(open) => {
+          if (!open && isSendingInvoice) return
           if (!open) {
-            setManualSendDialogOpen(false)
-            setPendingInvoiceAction(null)
-            setPendingInvoiceRecipients(null)
-            setManualSendReason('')
+            closeManualSendDialog()
           }
         }}
       >
         <Dialog.Content size="3" style={{ maxWidth: '520px' }}>
-          <Dialog.Title>Customer cannot receive EHF</Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="2">
-            This customer is not set up to receive invoices through the
-            Norwegian electronic invoicing network (EHF). Conta cannot deliver
-            the invoice to them automatically.
-          </Dialog.Description>
-          {manualSendReason ? (
-            <Box
-              mb="3"
-              p="2"
-              style={{
-                borderRadius: 6,
-                background: 'var(--gray-a3)',
-              }}
-            >
-              <Text size="2" color="gray">
-                {manualSendReason}
-              </Text>
-            </Box>
-          ) : null}
-          <Text size="2" weight="medium" mb="4" as="p">
-            Do you want to create the invoice in Conta anyway and download the
-            PDF so you can send it to the customer yourself (email, post, etc.)?
-          </Text>
-          <Flex gap="3" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button onClick={confirmManualSend}>
-              Download PDF and send myself
-            </Button>
-          </Flex>
+          <Box style={{ position: 'relative' }}>
+            {isSendingInvoice && (
+              <Box
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 12,
+                  zIndex: 10,
+                  borderRadius: 8,
+                  background:
+                    'color-mix(in srgb, var(--color-panel-solid) 92%, transparent)',
+                }}
+              >
+                {invoiceSendPhase === 'success' ? (
+                  <>
+                    <CheckCircle
+                      width={40}
+                      height={40}
+                      color="var(--green-9)"
+                    />
+                    <Text size="3" weight="medium" color="green">
+                      Invoice created successfully
+                    </Text>
+                    <Text size="2" color="gray" align="center">
+                      Downloading PDF…
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Spinner size="3" />
+                    <Text size="3" weight="medium">
+                      Creating invoice…
+                    </Text>
+                    <Text size="2" color="gray" align="center">
+                      Waiting for confirmation from Conta.
+                    </Text>
+                  </>
+                )}
+              </Box>
+            )}
+            <Dialog.Title>Customer cannot receive EHF</Dialog.Title>
+            <Dialog.Description size="2" color="gray" mb="2">
+              This customer is not set up to receive invoices through the
+              Norwegian electronic invoicing network (EHF). Conta cannot deliver
+              the invoice to them automatically.
+            </Dialog.Description>
+            {manualSendReason ? (
+              <Box
+                mb="3"
+                p="2"
+                style={{
+                  borderRadius: 6,
+                  background: 'var(--gray-a3)',
+                }}
+              >
+                <Text size="2" color="gray">
+                  {manualSendReason}
+                </Text>
+              </Box>
+            ) : null}
+            <Text size="2" weight="medium" mb="4" as="p">
+              Do you want to create the invoice in Conta anyway and download the
+              PDF so you can send it to the customer yourself (email, post,
+              etc.)?
+            </Text>
+            <Flex gap="3" justify="end">
+              <Dialog.Close>
+                <Button variant="soft" disabled={isSendingInvoice}>
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <Button onClick={confirmManualSend} disabled={isSendingInvoice}>
+                {isSendingInvoice ? (
+                  <>
+                    <Spinner size="1" />
+                    Creating…
+                  </>
+                ) : (
+                  'Download PDF and send myself'
+                )}
+              </Button>
+            </Flex>
+          </Box>
         </Dialog.Content>
       </Dialog.Root>
     </Box>

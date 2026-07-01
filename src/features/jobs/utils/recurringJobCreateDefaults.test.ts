@@ -162,6 +162,7 @@ describe('buildJobDefaultsFromRecurringJob', () => {
     )
 
     expect(defaults.title).toBe('Evening show')
+    expect(defaults.fromTemplate).toBe(true)
     expect(defaults.status).toBe('confirmed')
     expect(defaults.description).toBe('Stage notes')
     expect(defaults.crewRoles).toEqual([

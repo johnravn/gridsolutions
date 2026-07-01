@@ -1,17 +1,21 @@
 import * as React from 'react'
 import { Box, Flex, IconButton, Popover, Text } from '@radix-ui/themes'
-import { Calendar } from 'iconoir-react'
+import { Calendar, Clock } from 'iconoir-react'
+import { SinglePickerTrigger } from './pickers/PickerTrigger'
 import {
   formatDateLabel,
+  formatTimeLabel,
   fromLocalInput,
   getInitialMonth,
   parseIso,
+  parseTimeInput,
   toLocalDate,
 } from './pickers/dateTimeUtils'
 import type { PickerLocale } from './pickers/dateTimeUtils'
 
 type Props = {
-  value: string // ISO string or empty string
+  /** ISO string when date/datetime; HH:MM when timeOnly */
+  value: string
   onChange: (value: string) => void
   label?: string
   placeholder?: string
@@ -19,6 +23,8 @@ type Props = {
   invalid?: boolean
   /** If true, shows only date picker (no time) */
   dateOnly?: boolean
+  /** If true, shows only time picker (HH:MM in/out, no date) */
+  timeOnly?: boolean
   /** If true, uses an icon button trigger instead of text field */
   iconButton?: boolean
   /** Icon button size (only used when iconButton is true) */
@@ -32,7 +38,7 @@ type Props = {
  * DateTimePicker with 5-minute precision
  * Visual grid-based date and hour selection, minute slider
  * Wrapped in a Popover for compact display
- * Takes and returns ISO strings (empty string for no value)
+ * Takes and returns ISO strings (empty string for no value), or HH:MM when timeOnly
  */
 export default function DateTimePicker({
   value,
@@ -41,31 +47,52 @@ export default function DateTimePicker({
   placeholder,
   invalid = false,
   dateOnly = false,
+  timeOnly = false,
   iconButton = false,
   iconButtonSize = '2',
   locale = 'en',
   disabled = false,
 }: Props) {
-  const defaultPlaceholder = dateOnly ? 'Select date' : 'Select date and time'
+  const defaultPlaceholder = timeOnly
+    ? 'Select time'
+    : dateOnly
+      ? 'Select date'
+      : 'Select date and time'
   const finalPlaceholder = placeholder || defaultPlaceholder
 
   const [open, setOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState<'date' | 'time'>('date')
+  const [activeTab, setActiveTab] = React.useState<'date' | 'time'>(
+    timeOnly ? 'time' : 'date',
+  )
   const [currentMonth, setCurrentMonth] = React.useState(() =>
     getInitialMonth(value),
   )
   const [showYearPicker, setShowYearPicker] = React.useState(false)
   const yearPickerRef = React.useRef<HTMLDivElement>(null)
 
-  // Single parsed date from value so display and picker always match (avoids mismatch when
-  // parent sets value programmatically, e.g. end time from start time)
-  const parsedDate = React.useMemo(() => parseIso(value), [value])
+  // Single parsed date/time from value so display and picker always match
+  const parsedTime = React.useMemo(
+    () => (timeOnly ? parseTimeInput(value) : null),
+    [timeOnly, value],
+  )
+  const parsedDate = React.useMemo(
+    () => (!timeOnly ? parseIso(value) : null),
+    [timeOnly, value],
+  )
 
-  // Parse ISO string to local date/time components (all from parsedDate for consistency)
+  // Parse value to local date/time components (all from parsed values for consistency)
   const dateValue = parsedDate ? toLocalDate(parsedDate.toISOString()) : ''
   const selectedDate = parsedDate
-  const hour = parsedDate ? parsedDate.getHours() : 9
-  const minute = parsedDate ? parsedDate.getMinutes() : 0
+  const hour = timeOnly
+    ? (parsedTime?.hours ?? 9)
+    : parsedDate
+      ? parsedDate.getHours()
+      : 9
+  const minute = timeOnly
+    ? (parsedTime?.minutes ?? 0)
+    : parsedDate
+      ? parsedDate.getMinutes()
+      : 0
 
   // Keep calendar month in sync when value changes (e.g. auto-set end time)
   React.useEffect(() => {
@@ -142,6 +169,11 @@ export default function DateTimePicker({
 
   const handleHourClick = (h: number) => {
     if (disabled) return
+    if (timeOnly) {
+      const m = parsedTime ? minute : 0
+      onChange(formatTimeLabel(h, m))
+      return
+    }
     if (!dateValue) {
       // If no date selected, set today
       const today = toLocalDate(new Date().toISOString())
@@ -158,6 +190,11 @@ export default function DateTimePicker({
 
   const handleMinuteClick = (m: number) => {
     if (disabled) return
+    if (timeOnly) {
+      const h = parsedTime ? hour : 9
+      onChange(formatTimeLabel(h, m))
+      return
+    }
     if (!dateValue) {
       const today = toLocalDate(new Date().toISOString())
       const timeStr = `${String(hour).padStart(2, '0')}:${String(m).padStart(2, '0')}`
@@ -172,6 +209,10 @@ export default function DateTimePicker({
   }
 
   const formatDisplayValue = () => {
+    if (timeOnly) {
+      if (!parsedTime) return finalPlaceholder
+      return formatTimeLabel(parsedTime.hours, parsedTime.minutes)
+    }
     if (!parsedDate) return finalPlaceholder
     const dateLabel = formatDateLabel(parsedDate, locale)
 
@@ -229,6 +270,8 @@ export default function DateTimePicker({
     selectedDate &&
     toLocalDate(date.toISOString()) === toLocalDate(selectedDate.toISOString())
 
+  const TriggerIcon = timeOnly ? Clock : Calendar
+
   const triggerButton = iconButton ? (
     <IconButton
       variant="soft"
@@ -243,46 +286,16 @@ export default function DateTimePicker({
           : undefined
       }
     >
-      <Calendar width={16} height={16} />
+      <TriggerIcon width={16} height={16} />
     </IconButton>
   ) : (
-    <button
-      type="button"
+    <SinglePickerTrigger
+      displayValue={formatDisplayValue()}
+      placeholder={finalPlaceholder}
+      invalid={invalid}
       disabled={disabled}
-      style={{
-        width: '100%',
-        padding: '8px 12px',
-        borderRadius: 'var(--radius-3)',
-        border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
-        background: 'var(--color-panel-solid)',
-        color: parsedDate ? 'var(--gray-12)' : 'var(--gray-9)',
-        fontSize: 'var(--font-size-3)',
-        lineHeight: 'var(--line-height-3)',
-        fontFamily: 'inherit',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled ? 0.6 : 1,
-        transition: 'border-color 0.15s, background-color 0.15s',
-        textAlign: 'left',
-      }}
-      onMouseEnter={(e) => {
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-9)'
-          : 'var(--gray-a8)'
-      }}
-      onMouseLeave={(e) => {
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-8)'
-          : 'var(--gray-a6)'
-      }}
-    >
-      <Calendar width={16} height={16} />
-      {formatDisplayValue()}
-    </button>
+      icon={<TriggerIcon width={16} height={16} />}
+    />
   )
 
   return (
@@ -319,7 +332,7 @@ export default function DateTimePicker({
         >
           {/* Tabs with close button */}
           <Flex align="center" justify="between" mb="3" gap="2">
-            {!dateOnly && (
+            {!dateOnly && !timeOnly && (
               <Flex
                 gap="1"
                 style={{
@@ -376,234 +389,238 @@ export default function DateTimePicker({
           </Flex>
 
           {/* Date picker */}
-          {(dateOnly || activeTab === 'date') && !showYearPicker && (
-            <Box>
-              {/* Month navigation */}
-              <Flex align="center" justify="between" mb="3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentMonth(
-                      new Date(
-                        currentMonth.getFullYear(),
-                        currentMonth.getMonth() - 1,
-                        1,
-                      ),
-                    )
-                  }}
-                  style={{
-                    padding: '4px 8px',
-                    border: '1px solid var(--gray-6)',
-                    borderRadius: 4,
-                    background: 'var(--gray-2)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  ←
-                </button>
-                <Flex align="center" gap="2">
-                  <Text size="2" weight="medium">
-                    {monthNameOnly}
-                  </Text>
+          {!timeOnly &&
+            (dateOnly || activeTab === 'date') &&
+            !showYearPicker && (
+              <Box>
+                {/* Month navigation */}
+                <Flex align="center" justify="between" mb="3">
                   <button
                     type="button"
-                    onClick={() => setShowYearPicker(true)}
+                    onClick={() => {
+                      setCurrentMonth(
+                        new Date(
+                          currentMonth.getFullYear(),
+                          currentMonth.getMonth() - 1,
+                          1,
+                        ),
+                      )
+                    }}
                     style={{
-                      padding: '2px 8px',
-                      border: 'none',
+                      padding: '4px 8px',
+                      border: '1px solid var(--gray-6)',
                       borderRadius: 4,
-                      background: 'transparent',
+                      background: 'var(--gray-2)',
                       cursor: 'pointer',
-                      color: 'var(--gray-11)',
-                      fontSize: 'var(--font-size-2)',
-                      fontWeight: 500,
-                      transition: 'background-color 0.15s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'var(--gray-3)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent'
                     }}
                   >
-                    {currentYear}
+                    ←
+                  </button>
+                  <Flex align="center" gap="2">
+                    <Text size="2" weight="medium">
+                      {monthNameOnly}
+                    </Text>
+                    <button
+                      type="button"
+                      onClick={() => setShowYearPicker(true)}
+                      style={{
+                        padding: '2px 8px',
+                        border: 'none',
+                        borderRadius: 4,
+                        background: 'transparent',
+                        cursor: 'pointer',
+                        color: 'var(--gray-11)',
+                        fontSize: 'var(--font-size-2)',
+                        fontWeight: 500,
+                        transition: 'background-color 0.15s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'var(--gray-3)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent'
+                      }}
+                    >
+                      {currentYear}
+                    </button>
+                  </Flex>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentMonth(
+                        new Date(
+                          currentMonth.getFullYear(),
+                          currentMonth.getMonth() + 1,
+                          1,
+                        ),
+                      )
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid var(--gray-6)',
+                      borderRadius: 4,
+                      background: 'var(--gray-2)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    →
                   </button>
                 </Flex>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCurrentMonth(
-                      new Date(
-                        currentMonth.getFullYear(),
-                        currentMonth.getMonth() + 1,
-                        1,
-                      ),
-                    )
-                  }}
+
+                {/* Day labels */}
+                <Flex
+                  mb="2"
                   style={{
-                    padding: '4px 8px',
-                    border: '1px solid var(--gray-6)',
-                    borderRadius: 4,
-                    background: 'var(--gray-2)',
-                    cursor: 'pointer',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: 4,
                   }}
                 >
-                  →
-                </button>
-              </Flex>
-
-              {/* Day labels */}
-              <Flex
-                mb="2"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(7, 1fr)',
-                  gap: 4,
-                }}
-              >
-                {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
-                  <Text
-                    key={day}
-                    size="1"
-                    color="gray"
-                    style={{ textAlign: 'center', fontWeight: 500 }}
-                  >
-                    {day}
-                  </Text>
-                ))}
-              </Flex>
-
-              {/* Calendar grid */}
-              <Box
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(7, 1fr)',
-                  gap: 4,
-                }}
-              >
-                {calendarDays.map(({ day, date, isCurrentMonth }, idx) => {
-                  const dateSelected = isSelected(date)
-                  const today = isToday(date)
-                  const localDate = toLocalDate(date.toISOString())
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      aria-label={localDate}
-                      onClick={() => handleDateClick(date)}
-                      style={{
-                        padding: '8px 4px',
-                        borderRadius: 6,
-                        border: `${
-                          dateSelected
-                            ? '2px solid var(--blue-7)'
-                            : today
-                              ? '1px solid var(--gray-8)'
-                              : '1px solid var(--gray-6)'
-                        }`,
-                        background: dateSelected
-                          ? 'transparent'
-                          : today
-                            ? 'var(--gray-3)'
-                            : isCurrentMonth
-                              ? 'var(--gray-2)'
-                              : 'var(--gray-1)',
-                        color: dateSelected
-                          ? 'var(--blue-10)'
-                          : isCurrentMonth
-                            ? 'var(--gray-12)'
-                            : 'var(--gray-9)',
-                        cursor: 'pointer',
-                        fontSize: 'var(--font-size-2)',
-                        fontWeight: dateSelected ? 500 : 400,
-                        transition: 'all 0.15s',
-                        textAlign: 'center',
-                      }}
+                  {['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].map((day) => (
+                    <Text
+                      key={day}
+                      size="1"
+                      color="gray"
+                      style={{ textAlign: 'center', fontWeight: 500 }}
                     >
                       {day}
-                    </button>
-                  )
-                })}
-              </Box>
-            </Box>
-          )}
+                    </Text>
+                  ))}
+                </Flex>
 
-          {/* Year picker */}
-          {(dateOnly || activeTab === 'date') && showYearPicker && (
-            <Box>
-              <Flex align="center" justify="between" mb="3">
-                <button
-                  type="button"
-                  onClick={() => setShowYearPicker(false)}
+                {/* Calendar grid */}
+                <Box
                   style={{
-                    padding: '4px 8px',
-                    border: '1px solid var(--gray-6)',
-                    borderRadius: 4,
-                    background: 'var(--gray-2)',
-                    cursor: 'pointer',
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(7, 1fr)',
+                    gap: 4,
                   }}
                 >
-                  ← Back
-                </button>
-                <Text size="2" weight="medium">
-                  Select Year
-                </Text>
-                <Box style={{ width: 60 }} /> {/* Spacer for alignment */}
-              </Flex>
-
-              {/* Year grid */}
-              <Box
-                ref={yearPickerRef}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(4, 1fr)',
-                  gap: 8,
-                  maxHeight: '400px',
-                  overflowY: 'auto',
-                }}
-              >
-                {yearRange.map((year) => {
-                  const yearSelected = year === currentYear
-                  const isCurrentYear = year === new Date().getFullYear()
-                  return (
-                    <button
-                      key={year}
-                      type="button"
-                      data-year={year}
-                      onClick={() => handleYearSelect(year)}
-                      style={{
-                        padding: '12px 8px',
-                        borderRadius: 6,
-                        border: `${
-                          yearSelected
-                            ? '2px solid var(--blue-7)'
-                            : '1px solid var(--gray-6)'
-                        }`,
-                        background: yearSelected
-                          ? 'transparent'
-                          : isCurrentYear
-                            ? 'var(--gray-3)'
-                            : 'var(--gray-2)',
-                        color: yearSelected
-                          ? 'var(--blue-10)'
-                          : 'var(--gray-12)',
-                        cursor: 'pointer',
-                        fontSize: 'var(--font-size-2)',
-                        fontWeight: yearSelected ? 500 : 400,
-                        transition: 'all 0.15s',
-                        textAlign: 'center',
-                      }}
-                    >
-                      {year}
-                    </button>
-                  )
-                })}
+                  {calendarDays.map(({ day, date, isCurrentMonth }, idx) => {
+                    const dateSelected = isSelected(date)
+                    const today = isToday(date)
+                    const localDate = toLocalDate(date.toISOString())
+                    return (
+                      <button
+                        key={idx}
+                        type="button"
+                        aria-label={localDate}
+                        onClick={() => handleDateClick(date)}
+                        style={{
+                          padding: '8px 4px',
+                          borderRadius: 6,
+                          border: `${
+                            dateSelected
+                              ? '2px solid var(--blue-7)'
+                              : today
+                                ? '1px solid var(--gray-8)'
+                                : '1px solid var(--gray-6)'
+                          }`,
+                          background: dateSelected
+                            ? 'transparent'
+                            : today
+                              ? 'var(--gray-3)'
+                              : isCurrentMonth
+                                ? 'var(--gray-2)'
+                                : 'var(--gray-1)',
+                          color: dateSelected
+                            ? 'var(--blue-10)'
+                            : isCurrentMonth
+                              ? 'var(--gray-12)'
+                              : 'var(--gray-9)',
+                          cursor: 'pointer',
+                          fontSize: 'var(--font-size-2)',
+                          fontWeight: dateSelected ? 500 : 400,
+                          transition: 'all 0.15s',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {day}
+                      </button>
+                    )
+                  })}
+                </Box>
               </Box>
-            </Box>
-          )}
+            )}
+
+          {/* Year picker */}
+          {!timeOnly &&
+            (dateOnly || activeTab === 'date') &&
+            showYearPicker && (
+              <Box>
+                <Flex align="center" justify="between" mb="3">
+                  <button
+                    type="button"
+                    onClick={() => setShowYearPicker(false)}
+                    style={{
+                      padding: '4px 8px',
+                      border: '1px solid var(--gray-6)',
+                      borderRadius: 4,
+                      background: 'var(--gray-2)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    ← Back
+                  </button>
+                  <Text size="2" weight="medium">
+                    Select Year
+                  </Text>
+                  <Box style={{ width: 60 }} /> {/* Spacer for alignment */}
+                </Flex>
+
+                {/* Year grid */}
+                <Box
+                  ref={yearPickerRef}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: 8,
+                    maxHeight: '400px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  {yearRange.map((year) => {
+                    const yearSelected = year === currentYear
+                    const isCurrentYear = year === new Date().getFullYear()
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        data-year={year}
+                        onClick={() => handleYearSelect(year)}
+                        style={{
+                          padding: '12px 8px',
+                          borderRadius: 6,
+                          border: `${
+                            yearSelected
+                              ? '2px solid var(--blue-7)'
+                              : '1px solid var(--gray-6)'
+                          }`,
+                          background: yearSelected
+                            ? 'transparent'
+                            : isCurrentYear
+                              ? 'var(--gray-3)'
+                              : 'var(--gray-2)',
+                          color: yearSelected
+                            ? 'var(--blue-10)'
+                            : 'var(--gray-12)',
+                          cursor: 'pointer',
+                          fontSize: 'var(--font-size-2)',
+                          fontWeight: yearSelected ? 500 : 400,
+                          transition: 'all 0.15s',
+                          textAlign: 'center',
+                        }}
+                      >
+                        {year}
+                      </button>
+                    )
+                  })}
+                </Box>
+              </Box>
+            )}
 
           {/* Time picker */}
-          {!dateOnly && activeTab === 'time' && (
+          {((!dateOnly && activeTab === 'time') || timeOnly) && (
             <Box>
               {/* Hour grid */}
               <Box mb="3">

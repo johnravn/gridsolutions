@@ -426,6 +426,9 @@ export type JobOffer = {
   delivered_via_email_at?: string | null
   copied_from_job_id?: UUID | null
   copied_from_offer_id?: UUID | null
+  source_technical_offer_id?: UUID | null
+  pretty_use_customer_accent?: boolean
+  pretty_use_customer_background?: boolean
 }
 
 export type OfferEquipmentGroup = {
@@ -557,6 +560,131 @@ export type OfferPrettySection = {
   sort_order: number
 }
 
+export type PrettyModuleBasisType = 'manual' | 'subcontractor' | 'technical'
+export type PrettyAllocationMode = 'percent' | 'amount'
+export type PrettyCategoryType =
+  | 'equipment_group'
+  | 'crew_category'
+  | 'transport_group'
+export type PrettyModuleMediaType = 'image' | 'video' | 'link'
+
+export type PrettyModuleBlockType =
+  | 'subtitle'
+  | 'description'
+  | 'simple_list'
+  | 'interactive_list'
+  | 'gallery'
+  | 'video'
+  | 'link'
+  | 'timeline'
+
+export type PrettyOfferModuleBlockItem = {
+  id: UUID
+  block_id: UUID
+  sort_order: number
+  label: string
+  summary: string | null
+  detail: string | null
+  url?: string | null
+  start_at?: string | null
+  end_at?: string | null
+}
+
+export type PrettyOfferModuleBlock = {
+  id: UUID
+  module_id: UUID
+  block_type: PrettyModuleBlockType
+  sort_order: number
+  text_content: string | null
+  url: string | null
+  link_title: string | null
+  caption: string | null
+  items?: Array<PrettyOfferModuleBlockItem>
+}
+
+export type PrettyOfferModuleManualField = {
+  id: UUID
+  module_id: UUID
+  label: string
+  value: string
+  sort_order: number
+}
+
+export type PrettyOfferModuleMedia = {
+  id: UUID
+  module_id: UUID
+  media_type: PrettyModuleMediaType
+  url: string
+  title: string | null
+  caption: string | null
+  sort_order: number
+}
+
+export type PrettyOfferModuleCategoryMapping = {
+  id: UUID
+  module_id: UUID
+  category_type: PrettyCategoryType
+  category_key: string
+}
+
+export type PrettyOfferSubcontractorAllocation = {
+  id: UUID
+  quote_id: UUID
+  module_id: UUID
+  allocation_mode: PrettyAllocationMode
+  allocation_value: number
+}
+
+export type PrettyOfferSubcontractorQuote = {
+  id: UUID
+  offer_id: UUID
+  vendor_name: string
+  note: string | null
+  total_amount: number
+  customer_id: UUID | null
+  pdf_path: string | null
+  pdf_filename: string | null
+  mime_type: string | null
+  size_bytes: number | null
+  sort_order: number
+  created_at?: string
+  allocations?: Array<PrettyOfferSubcontractorAllocation>
+}
+
+export type PrettyOfferModule = {
+  id: UUID
+  offer_id: UUID
+  title: string
+  subtitle: string | null
+  sort_order: number
+  basis_type: PrettyModuleBasisType
+  display_price: number | null
+  show_price: boolean
+  computed_cost: number
+  manual_fields?: Array<PrettyOfferModuleManualField>
+  category_mappings?: Array<PrettyOfferModuleCategoryMapping>
+  content_blocks?: Array<PrettyOfferModuleBlock>
+  /** Customer-facing blocks from public_offer_get */
+  blocks?: Array<PrettyOfferModuleBlock>
+  /** @deprecated use content_blocks */
+  media?: Array<PrettyOfferModuleMedia>
+}
+
+/** Customer-visible module shape returned by public_offer_get */
+export type PublicPrettyOfferModule = {
+  id: UUID
+  title: string
+  sort_order: number
+  display_price: number | null
+  show_price: boolean
+  blocks: Array<PrettyOfferModuleBlock>
+}
+
+export type PrettyOfferDetail = OfferDetail & {
+  modules?: Array<PrettyOfferModule>
+  subcontractor_quotes?: Array<PrettyOfferSubcontractorQuote>
+}
+
 // Detail with joined relations
 export type OfferDetail = JobOffer & {
   groups?: Array<OfferEquipmentGroup & { items: Array<OfferEquipmentItem> }>
@@ -566,6 +694,8 @@ export type OfferDetail = JobOffer & {
     OfferTransportGroup & { items: Array<OfferTransportItem> }
   >
   pretty_sections?: Array<OfferPrettySection>
+  modules?: Array<PrettyOfferModule>
+  subcontractor_quotes?: Array<PrettyOfferSubcontractorQuote>
   job_title?: string | null
   job_start_at?: string | null
   job_end_at?: string | null
@@ -588,6 +718,8 @@ export type OfferDetail = JobOffer & {
     phone: string | null
     address: string | null
     logo_path: string | null
+    accent_color?: string | null
+    accent_color_custom?: string | null
   }
   customer_contact?: {
     id: string

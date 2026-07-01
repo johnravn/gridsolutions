@@ -26,6 +26,7 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { escapeForPostgrestOr } from './utils'
 import { ItemSearchField } from './ItemSearchField'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
@@ -99,6 +100,9 @@ export function EquipmentSection({
   const [expandedGroupItems, setExpandedGroupItems] = React.useState<
     Set<string>
   >(new Set())
+  const [focusedGroupNameId, setFocusedGroupNameId] = React.useState<
+    string | null
+  >(null)
 
   const groupNameSuggestions = ['Audio', 'Lights', 'Rigging', 'AV', 'General']
 
@@ -539,6 +543,15 @@ export function EquipmentSection({
                                     })
                                   }}
                                   onClick={(e) => e.stopPropagation()}
+                                  onFocus={(e) => {
+                                    e.stopPropagation()
+                                    setFocusedGroupNameId(group.id)
+                                  }}
+                                  onBlur={() =>
+                                    setFocusedGroupNameId((prev) =>
+                                      prev === group.id ? null : prev,
+                                    )
+                                  }
                                   placeholder="Enter group name"
                                   style={{ width: 200 }}
                                   readOnly={readOnly}
@@ -566,36 +579,28 @@ export function EquipmentSection({
                                 )}
                               </Flex>
                             </Flex>
+                            {!readOnly && (
+                              <AnimatedQuickSuggestions
+                                suggestions={groupNameSuggestions}
+                                open={focusedGroupNameId === group.id}
+                                staticOpen={!group.group_name}
+                                label="Group name suggestions:"
+                                showLabel
+                                stopPropagation
+                                onSelect={(suggestion) =>
+                                  updateGroup(group.id, {
+                                    group_name: suggestion,
+                                  })
+                                }
+                                onAfterSelect={() =>
+                                  setFocusedGroupNameId(null)
+                                }
+                              />
+                            )}
                           </Box>
 
                           {isExpanded && (
                             <Box p="3" style={{ background: 'var(--gray-a1)' }}>
-                              {/* Group name suggestions */}
-                              {!readOnly && !group.group_name && (
-                                <Box mb="3">
-                                  <Text size="1" color="gray" mb="1">
-                                    Group name suggestions:
-                                  </Text>
-                                  <Flex gap="2" wrap="wrap">
-                                    {groupNameSuggestions.map((suggestion) => (
-                                      <Button
-                                        key={suggestion}
-                                        size="1"
-                                        variant="soft"
-                                        color="gray"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          updateGroup(group.id, {
-                                            group_name: suggestion,
-                                          })
-                                        }}
-                                      >
-                                        {suggestion}
-                                      </Button>
-                                    ))}
-                                  </Flex>
-                                </Box>
-                              )}
                               {/* Search for items */}
                               {!readOnly && (
                                 <Flex

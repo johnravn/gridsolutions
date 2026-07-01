@@ -123,6 +123,8 @@ export function Sidebar({
               borderRight: '1px solid var(--gray-a5)',
               boxShadow: 'var(--shadow-4)',
               padding: 0,
+              paddingTop: 'var(--app-safe-top)',
+              paddingBottom: 'var(--app-safe-bottom)',
               overflow: 'hidden',
             }}
           >

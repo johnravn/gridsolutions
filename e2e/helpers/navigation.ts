@@ -66,7 +66,7 @@ export async function openCompanyPage(page: Page) {
   await page.getByRole('link', { name: 'Company', exact: true }).click()
   await expect(page).toHaveURL(/\/company/)
   await expect(
-    page.getByRole('heading', { name: 'Company', exact: true }),
+    page.getByRole('heading', { name: 'Grid Test Company' }),
   ).toBeVisible({
     timeout: 15_000,
   })
@@ -100,9 +100,7 @@ export async function openBookingsEquipmentTab(page: Page) {
   const equipmentTab = page.getByRole('tab', { name: 'Equipment' })
   await expect(equipmentTab).toBeVisible({ timeout: 15_000 })
   await equipmentTab.click()
-  await expect(
-    page.getByText(/Book items|Add items/).first(),
-  ).toBeVisible({
+  await expect(page.getByText(/Book items|Add items/).first()).toBeVisible({
     timeout: 15_000,
   })
 }
@@ -162,7 +160,10 @@ export async function bookSeededItemOnJob(
   page: Page,
   options: { conflictWindow?: boolean } = {},
 ) {
-  await page.getByText(/Book items|Add items/).first().click()
+  await page
+    .getByText(/Book items|Add items/)
+    .first()
+    .click()
   const dialog = bookEquipmentDialog(page)
   await expect(dialog).toBeVisible({ timeout: 15_000 })
 

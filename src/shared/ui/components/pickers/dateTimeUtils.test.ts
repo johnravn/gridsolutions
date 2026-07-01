@@ -179,7 +179,10 @@ describe('dateTimeUtils', () => {
     }
 
     const mayFirst = days.filter(
-      (d) => d.date.getFullYear() === 2026 && d.date.getMonth() === 4 && d.date.getDate() === 1,
+      (d) =>
+        d.date.getFullYear() === 2026 &&
+        d.date.getMonth() === 4 &&
+        d.date.getDate() === 1,
     )
     expect(mayFirst).toHaveLength(1)
     expect(mayFirst[0]?.isCurrentMonth).toBe(true)

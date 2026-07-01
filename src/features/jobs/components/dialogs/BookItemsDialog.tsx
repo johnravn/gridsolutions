@@ -27,8 +27,8 @@ import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
 import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
-import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
+import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { UUID } from '../../types'
 
 const ALL = '__ALL__'
@@ -1144,26 +1144,54 @@ export default function BookItemsDialog({
                     background: 'var(--gray-a2)',
                   }}
                 >
-                  <Flex direction="column" gap="3">
-                    <Text size="2" weight="bold" color="gray">
-                      {externalOnly
-                        ? 'Set time period for external equipment'
-                        : 'Set equipment time period'}
-                    </Text>
-                    <Text size="1" color="gray">
-                      {externalOnly
-                        ? 'Each external owner will get their own time period with these times.'
-                        : job && job.start_at && job.end_at
-                          ? 'Default times match job duration. Adjust if needed.'
-                          : 'Set start and end times for equipment booking.'}
-                    </Text>
+                  <Flex
+                    direction={isSmallScreen ? 'column' : 'row'}
+                    gap="4"
+                    align={isSmallScreen ? 'stretch' : 'center'}
+                    justify="between"
+                  >
                     <Flex
+                      direction="column"
                       gap="2"
-                      wrap="wrap"
-                      align="center"
-                      direction={isSmallScreen ? 'column' : 'row'}
+                      align="start"
+                      style={{ flex: '1 1 auto', minWidth: 0 }}
+                    >
+                      <Text size="2" weight="bold" color="gray">
+                        {externalOnly
+                          ? 'Set time period for external equipment'
+                          : 'Set equipment time period'}
+                      </Text>
+                      <Text size="1" color="gray">
+                        {externalOnly
+                          ? 'Each external owner will get their own time period with these times.'
+                          : job && job.start_at && job.end_at
+                            ? 'Default times match job duration. Adjust if needed.'
+                            : 'Set start and end times for equipment booking.'}
+                      </Text>
+                      {!externalOnly && (
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => {
+                            const equipmentPeriod = timePeriods.find(
+                              (tp) =>
+                                tp.category === 'equipment' &&
+                                tp.title === 'Equipment period',
+                            )
+                            if (equipmentPeriod) {
+                              setSelectedTimePeriodId(equipmentPeriod.id)
+                            }
+                          }}
+                        >
+                          Use existing time period
+                        </Button>
+                      )}
+                    </Flex>
+                    <Box
                       style={{
-                        alignItems: isSmallScreen ? 'stretch' : undefined,
+                        flexShrink: 0,
+                        width: isSmallScreen ? '100%' : 400,
+                        minWidth: isSmallScreen ? undefined : 400,
                       }}
                     >
                       <DateTimeRangePicker
@@ -1175,26 +1203,7 @@ export default function BookItemsDialog({
                           setTimesTouched(true)
                         }}
                       />
-                    </Flex>
-                    {!externalOnly && (
-                      <Button
-                        size="1"
-                        variant="soft"
-                        onClick={() => {
-                          // Switch to time period picker view
-                          const equipmentPeriod = timePeriods.find(
-                            (tp) =>
-                              tp.category === 'equipment' &&
-                              tp.title === 'Equipment period',
-                          )
-                          if (equipmentPeriod) {
-                            setSelectedTimePeriodId(equipmentPeriod.id)
-                          }
-                        }}
-                      >
-                        Use existing time period
-                      </Button>
-                    )}
+                    </Box>
                   </Flex>
                 </Box>
               )}

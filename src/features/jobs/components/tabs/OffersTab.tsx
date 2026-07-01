@@ -55,7 +55,6 @@ import {
   syncBookingsFromOffer,
 } from '../../api/offerQueries'
 import TechnicalOfferEditor from '../dialogs/TechnicalOfferEditor'
-import PrettyOfferEditor from '../dialogs/PrettyOfferEditor'
 import { formatOfferNumberDisplay } from '../../utils/offerNumber'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { JobOffer, OfferDetail, OfferType } from '../../types'
@@ -1179,7 +1178,6 @@ export default function OffersTab({
     },
     onSuccess: (newOfferId) => {
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      setEditorType('technical')
       setEditingOfferId(newOfferId)
       setEditorOpen(true)
       success(
@@ -1201,7 +1199,6 @@ export default function OffersTab({
     },
     onSuccess: (newOfferId) => {
       qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      setEditorType('technical')
       setEditingOfferId(newOfferId)
       setEditorOpen(true)
       success(
@@ -1227,18 +1224,8 @@ export default function OffersTab({
     },
   })
 
-  const [editorType, setEditorType] = React.useState<'technical' | 'pretty'>(
-    'technical',
-  )
-
   const handleCreateTechnicalOffer = () => {
     createEmptyTechnicalOfferMutation.mutate()
-  }
-
-  const handleCreatePrettyOffer = () => {
-    setEditingOfferId(null)
-    setEditorType('pretty')
-    setEditorOpen(true)
   }
 
   const handleCreateOfferFromBookings = () => {
@@ -1523,7 +1510,7 @@ export default function OffersTab({
 
       {isLoading ? (
         <Text>Loading offers...</Text>
-      ) : offers.length === 0 && !isReadOnly ? (
+      ) : technicalOffers.length === 0 && !isReadOnly ? (
         <Box
           p="4"
           style={{
@@ -1550,7 +1537,7 @@ export default function OffersTab({
             </Text>
           </Flex>
         </Box>
-      ) : offers.length === 0 && isReadOnly ? (
+      ) : technicalOffers.length === 0 && isReadOnly ? (
         <Box
           p="4"
           style={{
@@ -1580,7 +1567,7 @@ export default function OffersTab({
               </Table.Row>
             </Table.Header>
             <Table.Body>
-              {offers.map((offer) => (
+              {technicalOffers.map((offer) => (
                 <Table.Row key={offer.id}>
                   <Table.Cell>
                     <Text weight="medium">
@@ -1685,11 +1672,6 @@ export default function OffersTab({
                       if (!hasAnyAction) return null
 
                       const openEditor = () => {
-                        setEditorType(
-                          offer.offer_type === 'technical'
-                            ? 'technical'
-                            : 'pretty',
-                        )
                         if (offer.locked) {
                           handleViewOffer(offer)
                         } else {
@@ -1741,66 +1723,26 @@ export default function OffersTab({
                               </IconButton>
                             </DropdownMenu.Trigger>
                             <DropdownMenu.Content align="end">
-                              {offer.offer_type === 'technical' ? (
-                                <>
-                                  {offer.locked ? (
-                                    <DropdownMenu.Item
-                                      onSelect={() => {
-                                        setEditorType('technical')
-                                        handleViewOffer(offer)
-                                      }}
-                                    >
-                                      <Flex align="center" gap="2">
-                                        <Eye width={14} height={14} />
-                                        <Text>View</Text>
-                                      </Flex>
-                                    </DropdownMenu.Item>
-                                  ) : (
-                                    !isReadOnly && (
-                                      <DropdownMenu.Item
-                                        onSelect={() => {
-                                          setEditorType('technical')
-                                          handleEditOffer(offer)
-                                        }}
-                                      >
-                                        <Flex align="center" gap="2">
-                                          <Edit width={14} height={14} />
-                                          <Text>Edit</Text>
-                                        </Flex>
-                                      </DropdownMenu.Item>
-                                    )
-                                  )}
-                                </>
+                              {offer.locked ? (
+                                <DropdownMenu.Item
+                                  onSelect={() => handleViewOffer(offer)}
+                                >
+                                  <Flex align="center" gap="2">
+                                    <Eye width={14} height={14} />
+                                    <Text>View</Text>
+                                  </Flex>
+                                </DropdownMenu.Item>
                               ) : (
-                                <>
-                                  {offer.locked ? (
-                                    <DropdownMenu.Item
-                                      onSelect={() => {
-                                        setEditorType('pretty')
-                                        handleViewOffer(offer)
-                                      }}
-                                    >
-                                      <Flex align="center" gap="2">
-                                        <Eye width={14} height={14} />
-                                        <Text>View</Text>
-                                      </Flex>
-                                    </DropdownMenu.Item>
-                                  ) : (
-                                    !isReadOnly && (
-                                      <DropdownMenu.Item
-                                        onSelect={() => {
-                                          setEditorType('pretty')
-                                          handleEditOffer(offer)
-                                        }}
-                                      >
-                                        <Flex align="center" gap="2">
-                                          <Edit width={14} height={14} />
-                                          <Text>Edit</Text>
-                                        </Flex>
-                                      </DropdownMenu.Item>
-                                    )
-                                  )}
-                                </>
+                                !isReadOnly && (
+                                  <DropdownMenu.Item
+                                    onSelect={() => handleEditOffer(offer)}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Edit width={14} height={14} />
+                                      <Text>Edit</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
+                                )
                               )}
 
                               {canCopyLink && (
@@ -1852,17 +1794,15 @@ export default function OffersTab({
                                       </Flex>
                                     </DropdownMenu.Item>
                                   )}
-                                  {offer.offer_type === 'technical' && (
-                                    <DropdownMenu.Item
-                                      onSelect={() => handleSyncBookings(offer)}
-                                      disabled={syncBookingsMutation.isPending}
-                                    >
-                                      <Flex align="center" gap="2">
-                                        <Refresh width={14} height={14} />
-                                        <Text>Sync bookings</Text>
-                                      </Flex>
-                                    </DropdownMenu.Item>
-                                  )}
+                                  <DropdownMenu.Item
+                                    onSelect={() => handleSyncBookings(offer)}
+                                    disabled={syncBookingsMutation.isPending}
+                                  >
+                                    <Flex align="center" gap="2">
+                                      <Refresh width={14} height={14} />
+                                      <Text>Sync bookings</Text>
+                                    </Flex>
+                                  </DropdownMenu.Item>
                                   <DropdownMenu.Item
                                     onSelect={() => handleExportPDF(offer)}
                                     disabled={exportPdfMutation.isPending}
@@ -2172,44 +2112,6 @@ export default function OffersTab({
                   Creates a technical offer based on the current bookings.
                 </Text>
               </Box>
-              <Box
-                p="3"
-                style={{
-                  border: '1px solid var(--gray-a6)',
-                  borderRadius: 8,
-                  cursor: 'pointer',
-                  transition: 'all 100ms',
-                }}
-                role="button"
-                tabIndex={0}
-                onClick={() => {
-                  setCreateDialogOpen(false)
-                  handleCreatePrettyOffer()
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    setCreateDialogOpen(false)
-                    handleCreatePrettyOffer()
-                  }
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--gray-a8)'
-                  e.currentTarget.style.background = 'var(--gray-a2)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'var(--gray-a6)'
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <Flex align="center" gap="2" mb="1">
-                  <Plus width={16} height={16} />
-                  <Text weight="medium">Create Pretty Offer</Text>
-                </Flex>
-                <Text size="2" color="gray">
-                  Create a customer-friendly offer with a polished layout.
-                </Text>
-              </Box>
             </Flex>
             <Flex gap="2" mt="4" justify="end">
               <Dialog.Close>
@@ -2262,7 +2164,7 @@ export default function OffersTab({
       )}
 
       {/* Offer Editor */}
-      {editorOpen && editorType === 'technical' && (
+      {editorOpen && (
         <TechnicalOfferEditor
           open={editorOpen}
           onOpenChange={(open) => {
@@ -2304,23 +2206,6 @@ export default function OffersTab({
               )
               return undefined
             }
-          }}
-        />
-      )}
-      {editorOpen && editorType === 'pretty' && (
-        <PrettyOfferEditor
-          open={editorOpen}
-          onOpenChange={(open) => {
-            setEditorOpen(open)
-            if (!open) {
-              setEditingOfferId(null)
-            }
-          }}
-          jobId={jobId}
-          companyId={companyId}
-          offerId={editingOfferId}
-          onSaved={() => {
-            qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
           }}
         />
       )}

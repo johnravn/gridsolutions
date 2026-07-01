@@ -2,7 +2,19 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+
+const TITLE_SUGGESTIONS = [
+  'Technician',
+  'Loader',
+  'FOH',
+  'Monitors',
+  'Hands',
+  'Driver',
+]
+
+const CATEGORY_SUGGESTIONS = ['Audio', 'Lights', 'AV', 'Transport', 'Rigging']
 
 export default function AddRoleDialog({
   open,
@@ -20,6 +32,9 @@ export default function AddRoleDialog({
   const [startAt, setStartAt] = React.useState('')
   const [endAt, setEndAt] = React.useState('')
   const [roleCategory, setRoleCategory] = React.useState('')
+  const [focusedField, setFocusedField] = React.useState<
+    'title' | 'category' | null
+  >(null)
 
   // Fetch company_id from job
   const { data: job } = useQuery({
@@ -52,16 +67,9 @@ export default function AddRoleDialog({
     }
   }, [open, job, startAt, endAt])
 
-  const titleSuggestions = [
-    'Technician',
-    'Loader',
-    'FOH',
-    'Monitors',
-    'Hands',
-    'Driver',
-  ]
-
-  const categorySuggestions = ['Audio', 'Lights', 'AV', 'Transport', 'Rigging']
+  React.useEffect(() => {
+    if (!open) setFocusedField(null)
+  }, [open])
 
   const save = useMutation({
     mutationFn: async () => {
@@ -95,6 +103,7 @@ export default function AddRoleDialog({
       setStartAt('')
       setEndAt('')
       setRoleCategory('')
+      setFocusedField(null)
     },
   })
 
@@ -113,23 +122,19 @@ export default function AddRoleDialog({
               placeholder="e.g. FOH, Monitor, Loader"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              onFocus={() => setFocusedField('title')}
+              onBlur={() =>
+                setFocusedField((prev) => (prev === 'title' ? null : prev))
+              }
             />
-            <Flex gap="2" wrap="wrap" mt="2">
-              <Text size="1" color="gray" style={{ width: '100%' }}>
-                Quick suggestions:
-              </Text>
-              {titleSuggestions.map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  size="1"
-                  variant="soft"
-                  color="gray"
-                  onClick={() => setTitle(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </Flex>
+            <AnimatedQuickSuggestions
+              suggestions={TITLE_SUGGESTIONS}
+              open={focusedField === 'title'}
+              staticOpen={!title.trim()}
+              showLabel
+              onSelect={setTitle}
+              onAfterSelect={() => setFocusedField(null)}
+            />
           </Box>
           <Box>
             <Text size="2" color="gray" mb="1">
@@ -174,23 +179,19 @@ export default function AddRoleDialog({
               placeholder="e.g. Audio, Lights, AV"
               value={roleCategory}
               onChange={(e) => setRoleCategory(e.target.value)}
+              onFocus={() => setFocusedField('category')}
+              onBlur={() =>
+                setFocusedField((prev) => (prev === 'category' ? null : prev))
+              }
             />
-            <Flex gap="2" wrap="wrap" mt="2">
-              <Text size="1" color="gray" style={{ width: '100%' }}>
-                Quick suggestions:
-              </Text>
-              {categorySuggestions.map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  size="1"
-                  variant="soft"
-                  color="gray"
-                  onClick={() => setRoleCategory(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </Flex>
+            <AnimatedQuickSuggestions
+              suggestions={CATEGORY_SUGGESTIONS}
+              open={focusedField === 'category'}
+              staticOpen
+              showLabel
+              onSelect={setRoleCategory}
+              onAfterSelect={() => setFocusedField(null)}
+            />
           </Box>
         </Flex>
         <Flex justify="end" gap="2" mt="4">

@@ -39,10 +39,17 @@ import {
   deleteCustomer,
   upsertCustomer,
 } from '../api/queries'
+import {
+  CustomerBrandColorsFields,
+  normalizeAccentColor,
+  normalizeCustomHex,
+  sanitizeCustomHexInput,
+} from './CustomerBrandColorsFields'
 import EditCustomerDialog from './dialogs/EditCustomerDialog'
 import ContaCustomerCheckDialog from './dialogs/ContaCustomerCheckDialog'
 import AddContactDialog from './dialogs/AddContactDialog'
 import EditContactDialog from './dialogs/EditContactDialog'
+import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
 import type { ContactRow } from '../api/queries'
 
 function formatContaDate(iso: string): string {
@@ -79,6 +86,10 @@ export default function CustomerInspector({
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = React.useState(false)
   const [logoExpanded, setLogoExpanded] = React.useState(false)
+  const [brandColorsExpanded, setBrandColorsExpanded] = React.useState(false)
+  const [brandAccentColor, setBrandAccentColor] =
+    React.useState<RadixAccentColor>('indigo')
+  const [brandCustomHex, setBrandCustomHex] = React.useState('')
 
   // NEW: dialog state for contacts
   const [addOpen, setAddOpen] = React.useState(false)
@@ -206,6 +217,8 @@ export default function CustomerInspector({
         vat_number: data.vat_number ?? null,
         is_partner: data.is_partner,
         logo_path: logoPath,
+        accent_color: data.accent_color ?? null,
+        accent_color_custom: data.accent_color_custom ?? null,
       })
     },
     onSuccess: () => {
@@ -217,6 +230,40 @@ export default function CustomerInspector({
       })
     },
   })
+
+  const updateBrandColorsMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId || !id || !data)
+        throw new Error('Missing company or customer')
+      await upsertCustomer({
+        id: data.id,
+        company_id: companyId,
+        name: data.name,
+        address: data.address ?? null,
+        vat_number: data.vat_number ?? null,
+        is_partner: data.is_partner,
+        logo_path: data.logo_path ?? null,
+        accent_color: brandAccentColor,
+        accent_color_custom: sanitizeCustomHexInput(brandCustomHex),
+      })
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'customer-detail', id],
+      })
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'customers-index'],
+      })
+      success('Saved', 'Brand colors updated.')
+    },
+    onError: (e: Error) => toastError('Save failed', e.message),
+  })
+
+  React.useEffect(() => {
+    if (!data) return
+    setBrandAccentColor(normalizeAccentColor(data.accent_color))
+    setBrandCustomHex(normalizeCustomHex(data.accent_color_custom))
+  }, [data?.id, data?.accent_color, data?.accent_color_custom])
 
   // If query returns no data (customer was deleted), clear selection
   React.useEffect(() => {
@@ -291,6 +338,8 @@ export default function CustomerInspector({
               vat_number: c.vat_number ?? '',
               is_partner: c.is_partner,
               logo_path: c.logo_path ?? null,
+              accent_color: c.accent_color ?? null,
+              accent_color_custom: c.accent_color_custom ?? null,
               crew_pricing_level_id: c.crew_pricing_level_id ?? null,
             }}
             onSaved={() => {
@@ -528,6 +577,57 @@ export default function CustomerInspector({
             }}
             disabled={updateLogoMutation.isPending}
           />
+        )}
+      </Box>
+
+      <Separator my="3" />
+
+      <Box mb="4">
+        <Flex
+          align="center"
+          gap="2"
+          mb="2"
+          style={{ cursor: 'pointer' }}
+          onClick={() => setBrandColorsExpanded((v) => !v)}
+        >
+          {brandColorsExpanded ? (
+            <NavArrowDown width={16} height={16} />
+          ) : (
+            <NavArrowRight width={16} height={16} />
+          )}
+          <Text as="div" size="2" color="gray">
+            Brand colors
+          </Text>
+          {c.accent_color_custom || c.accent_color ? (
+            <Badge variant="soft" color="green" size="1">
+              Configured
+            </Badge>
+          ) : (
+            <Badge variant="soft" color="gray" size="1">
+              Default
+            </Badge>
+          )}
+        </Flex>
+        {brandColorsExpanded && (
+          <Box>
+            <CustomerBrandColorsFields
+              accentColor={brandAccentColor}
+              accentColorCustom={brandCustomHex}
+              onAccentColorChange={setBrandAccentColor}
+              onAccentColorCustomChange={setBrandCustomHex}
+            />
+            <Button
+              size="2"
+              variant="soft"
+              mt="3"
+              disabled={updateBrandColorsMutation.isPending}
+              onClick={() => updateBrandColorsMutation.mutate()}
+            >
+              {updateBrandColorsMutation.isPending
+                ? 'Saving…'
+                : 'Save brand colors'}
+            </Button>
+          </Box>
         )}
       </Box>
 

@@ -21,6 +21,8 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
@@ -197,11 +199,14 @@ export default function JobsPage() {
     }
   }, [isLarge, selection])
 
+  const clearSelection = React.useCallback(() => {
+    setSelection(null)
+  }, [])
+
+  useMobileDetailBack(!isLarge, selection != null, clearSelection)
+
   if (!companyId) return <PageSkeleton columns="2fr 3fr" />
 
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
-  // On small screens, use Grid layout (stack): jobs card fills viewport, inspector below
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -212,7 +217,7 @@ export default function JobsPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -294,7 +299,7 @@ export default function JobsPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -302,7 +307,7 @@ export default function JobsPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: isLarge ? '100%' : mobileCardHeight,
+                height: isLarge ? '100%' : MOBILE_CARD_HEIGHT,
                 maxHeight: isLarge ? '100%' : undefined,
                 overflow: isLarge ? 'hidden' : 'hidden',
                 minHeight: 0,

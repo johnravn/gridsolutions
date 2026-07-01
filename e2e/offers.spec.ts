@@ -25,7 +25,12 @@ async function createTechnicalOfferWithEquipment(
 
   await editor.getByRole('tab', { name: 'Equipment' }).click()
   await editor.getByRole('button', { name: 'Add Group' }).click()
-  await editor.getByRole('button', { name: 'Add custom line' }).click()
+  await expect(editor.getByPlaceholder('Enter group name')).toBeVisible({
+    timeout: 15_000,
+  })
+  const addCustomLine = editor.getByRole('button', { name: 'Add custom line' })
+  await expect(addCustomLine).toBeVisible({ timeout: 15_000 })
+  await addCustomLine.click()
 
   await editor
     .getByPlaceholder('Description (e.g. one-off fee)')

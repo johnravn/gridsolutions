@@ -15,6 +15,8 @@ import {
 import { Plus, Trash } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import {
   createRecurringJobTemplate,
@@ -64,6 +66,16 @@ function TemplateCrewRoleFields({
   onRemove: () => void
 }) {
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
+  const [focusedField, setFocusedField] = React.useState<
+    'title' | 'category' | null
+  >(null)
+
+  const suggestions =
+    focusedField === 'title'
+      ? TITLE_SUGGESTIONS
+      : focusedField === 'category'
+        ? CATEGORY_SUGGESTIONS
+        : null
 
   return (
     <Box
@@ -82,6 +94,10 @@ function TemplateCrewRoleFields({
             placeholder="e.g. FOH"
             value={role.title}
             onChange={(e) => onChange({ title: e.target.value })}
+            onFocus={() => setFocusedField('title')}
+            onBlur={() =>
+              setFocusedField((prev) => (prev === 'title' ? null : prev))
+            }
           />
         </label>
         <label style={{ flex: '0 1 72px' }}>
@@ -120,6 +136,10 @@ function TemplateCrewRoleFields({
             onChange={(e) =>
               onChange({ role_category: e.target.value || null })
             }
+            onFocus={() => setFocusedField('category')}
+            onBlur={() =>
+              setFocusedField((prev) => (prev === 'category' ? null : prev))
+            }
           />
         </label>
         <IconButton
@@ -132,19 +152,18 @@ function TemplateCrewRoleFields({
           <Trash width={14} height={14} />
         </IconButton>
       </Flex>
-      <Flex gap="1" wrap="wrap" mt="1">
-        {TITLE_SUGGESTIONS.map((suggestion) => (
-          <Button
-            key={suggestion}
-            size="1"
-            variant="soft"
-            color="gray"
-            onClick={() => onChange({ title: suggestion })}
-          >
-            {suggestion}
-          </Button>
-        ))}
-      </Flex>
+      <AnimatedQuickSuggestions
+        suggestions={suggestions ?? []}
+        open={suggestions !== null}
+        onSelect={(suggestion) => {
+          if (focusedField === 'title') {
+            onChange({ title: suggestion })
+          } else {
+            onChange({ role_category: suggestion.toLowerCase() })
+          }
+        }}
+        onAfterSelect={() => setFocusedField(null)}
+      />
     </Box>
   )
 }
@@ -378,7 +397,7 @@ export default function RecurringJobTemplateDialog({
                   onValueChange={(v) => setStatus(v as JobStatus)}
                 >
                   <Select.Trigger />
-                  <Select.Content>
+                  <Select.Content style={{ zIndex: 10000 }}>
                     {STATUS_OPTIONS.map((s) => (
                       <Select.Item key={s} value={s}>
                         {makeWordPresentable(s)}
@@ -406,10 +425,10 @@ export default function RecurringJobTemplateDialog({
                   <Text as="div" size="2" mb="1" weight="medium">
                     Start time
                   </Text>
-                  <TextField.Root
-                    type="time"
+                  <DateTimePicker
+                    timeOnly
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
+                    onChange={setStartTime}
                   />
                 </label>
               </Flex>
@@ -482,28 +501,6 @@ export default function RecurringJobTemplateDialog({
                       }
                     />
                   ))}
-                  <Flex gap="1" wrap="wrap" pt="1">
-                    {CATEGORY_SUGGESTIONS.map((suggestion) => (
-                      <Button
-                        key={suggestion}
-                        size="1"
-                        variant="soft"
-                        color="gray"
-                        onClick={() => {
-                          const emptyIndex = crewRoles.findIndex(
-                            (r) => !r.role_category,
-                          )
-                          if (emptyIndex >= 0) {
-                            updateCrewRole(emptyIndex, {
-                              role_category: suggestion.toLowerCase(),
-                            })
-                          }
-                        }}
-                      >
-                        {suggestion}
-                      </Button>
-                    ))}
-                  </Flex>
                 </Flex>
               )}
             </Box>

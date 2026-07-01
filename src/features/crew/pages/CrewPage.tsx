@@ -21,6 +21,8 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
 import { crewInternalNotesQuery } from '../api/queries'
@@ -163,11 +165,14 @@ export default function CrewPage() {
     }
   }, [isLarge, selectedUserId])
 
+  const clearSelection = React.useCallback(() => {
+    setSelectedUserId(null)
+  }, [])
+
+  useMobileDetailBack(!isLarge, selectedUserId != null, clearSelection)
+
   if (!companyId) return <div>No company selected.</div>
 
-  // On small screens, use Grid layout (stack): list fills viewport, inspector below
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -178,7 +183,7 @@ export default function CrewPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -231,7 +236,7 @@ export default function CrewPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -239,7 +244,7 @@ export default function CrewPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

@@ -4,7 +4,12 @@
  * Uses premade subscription kinds; builds rich event titles (job title, project lead, customer, location).
  */
 import { createClient } from '@supabase/supabase-js'
-import { buildICS, parseTstzRange, rangesOverlap } from './icsHelpers'
+import {
+  buildICS,
+  parseTstzRange,
+  rangesOverlap,
+  withRecurringJobPrefix,
+} from './icsHelpers'
 import type { Database } from '../../src/shared/types/database.types'
 
 type SubscriptionKind =
@@ -231,7 +236,10 @@ export default async function handler(req: any, res: any) {
             const vehicleLabel = vehicle
               ? `${vehicle.name}${vehicle.registration_no ? ` (${vehicle.registration_no})` : ''}`
               : 'Transport'
-            const title = `${vehicleLabel}: ${rest}`.trim() || 'Transport'
+            const title = withRecurringJobPrefix(
+              `${vehicleLabel}: ${rest}`.trim() || 'Transport',
+              info?.recurringJobTitle,
+            )
             const jobNo = info ? formatJobNumber(info.jobnr) : ''
             const descParts = [
               jobNo && `Job no: ${jobNo}`,
@@ -276,9 +284,10 @@ export default async function handler(req: any, res: any) {
             : ''
           const parts = [jobTitle, customer, projectLead].filter(Boolean)
           const rest = parts.join(' · ')
-          const title = vehicleLabel
-            ? `${vehicleLabel}: ${rest}`
-            : rest || 'Transport'
+          const title = withRecurringJobPrefix(
+            vehicleLabel ? `${vehicleLabel}: ${rest}` : rest || 'Transport',
+            info?.recurringJobTitle,
+          )
           const jobNo = info ? formatJobNumber(info.jobnr) : ''
           const descParts = [
             jobNo && `Job no: ${jobNo}`,
@@ -436,7 +445,10 @@ export default async function handler(req: any, res: any) {
 
         return {
           id: row.id, // unique per booking row (can be multiple crew on same period)
-          title: 'CREW: ' + (jobTitle || 'Event'),
+          title: withRecurringJobPrefix(
+            'CREW: ' + (jobTitle || 'Event'),
+            info?.recurringJobTitle,
+          ),
           start,
           end,
           description: descParts.length > 0 ? descParts.join('\n') : undefined,
@@ -521,7 +533,10 @@ export default async function handler(req: any, res: any) {
         const statusLabel = info ? formatJobStatus(info.status) : ''
 
         if (kind === 'all_jobs') {
-          const title = prefix + jobTitle
+          const title = withRecurringJobPrefix(
+            prefix + jobTitle,
+            info?.recurringJobTitle,
+          )
           const descLines: Array<string> = []
           if (jobNo) descLines.push(`Job no: ${jobNo}`)
           if (statusLabel) descLines.push(`Status: ${statusLabel}`)
@@ -541,7 +556,10 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        const title = prefix + jobTitle
+        const title = withRecurringJobPrefix(
+          prefix + jobTitle,
+          info?.recurringJobTitle,
+        )
         const descParts: Array<string> = []
         if (jobNo) descParts.push(`Job no: ${jobNo}`)
         if (info?.projectLeadName)
@@ -594,6 +612,7 @@ type JobInfo = {
   location: string
   jobnr: number | null
   status: string
+  recurringJobTitle: string | null
 }
 
 async function fetchJobInfo(
@@ -607,11 +626,30 @@ async function fetchJobInfo(
   const { data: jobs } = await supabase
     .from('jobs')
     .select(
-      'id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status',
+      'id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status, recurring_job_id',
     )
     .in('id', jobIds)
 
   if (!jobs || jobs.length === 0) return out
+
+  const recurringJobIds = Array.from(
+    new Set(
+      jobs
+        .map((j: { recurring_job_id: string | null }) => j.recurring_job_id)
+        .filter(Boolean),
+    ),
+  ) as Array<string>
+  const { data: recurringJobs } =
+    recurringJobIds.length > 0
+      ? await supabase
+          .from('recurring_jobs')
+          .select('id, title')
+          .in('id', recurringJobIds)
+      : { data: [] as Array<{ id: string; title: string }> }
+  const recurringJobTitles = new Map<string, string>()
+  ;(recurringJobs || []).forEach((rj: { id: string; title: string }) => {
+    recurringJobTitles.set(rj.id, rj.title || '')
+  })
 
   const leadUserIds = Array.from(
     new Set(
@@ -688,6 +726,7 @@ async function fetchJobInfo(
       job_address_id: string | null
       jobnr: number | null
       status: string
+      recurring_job_id: string | null
     }) => {
       out.set(j.id, {
         title: j.title || 'Job',
@@ -702,6 +741,9 @@ async function fetchJobInfo(
           : '',
         jobnr: j.jobnr ?? null,
         status: j.status || '',
+        recurringJobTitle: j.recurring_job_id
+          ? (recurringJobTitles.get(j.recurring_job_id) ?? null)
+          : null,
       })
     },
   )

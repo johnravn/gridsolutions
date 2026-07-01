@@ -39,6 +39,18 @@ jobs:
       - run: npm ci
       - run: npm run build:check
 
+  storybook:
+    name: Storybook build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build-storybook
+
   integration:
     name: Integration tests
     runs-on: ubuntu-latest

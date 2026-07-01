@@ -92,7 +92,7 @@ export default function JobDialog({
     setStatus(d?.status ?? 'planned')
     setStartAt(d?.startAt ?? '')
     setEndAt(d?.endAt ?? '')
-    setCreateCrewBookingForProjectLead(true)
+    setCreateCrewBookingForProjectLead(!d?.fromTemplate)
     setProjectLead(d?.projectLeadUserId ?? '')
     setIsCompanyCustomer(Boolean(d?.customerUserId))
     setCustomerId(d?.customerId ?? '')
@@ -311,7 +311,10 @@ export default function JobDialog({
   const upsert = useMutation({
     mutationFn: async () => {
       if (projectLead) {
-        const isValidLead = leads.some((l) => l.user_id === projectLead)
+        const unchangedLead =
+          mode === 'edit' && projectLead === initialData?.project_lead_user_id
+        const isValidLead =
+          unchangedLead || leads.some((l) => l.user_id === projectLead)
         if (!isValidLead) {
           showError(
             'Invalid project lead',
@@ -456,18 +459,21 @@ export default function JobDialog({
       } else {
         if (!initialData) throw new Error('Missing initial data')
         const previousStatus = initialData.status
-        const { error } = await supabase.from('jobs').update({
-          title: title.trim(),
-          description: description || null,
-          status,
-          start_at: startAt || null,
-          end_at: endAt || null,
-          project_lead_user_id: projectLead || null,
-          customer_id: customerId || null,
-          customer_user_id: customerUserId || null,
-          customer_contact_id: contactId || null,
-          recurring_job_id: recurringJobId || null,
-        })
+        const { error } = await supabase
+          .from('jobs')
+          .update({
+            title: title.trim(),
+            description: description || null,
+            status,
+            start_at: startAt || null,
+            end_at: endAt || null,
+            project_lead_user_id: projectLead || null,
+            customer_id: customerId || null,
+            customer_user_id: customerUserId || null,
+            customer_contact_id: contactId || null,
+            recurring_job_id: recurringJobId || null,
+          })
+          .eq('id', initialData.id)
         if (error) throw error
 
         // Always keep the "Job duration" time period in sync with the job
@@ -559,12 +565,17 @@ export default function JobDialog({
         return initialData.id
       }
     },
-    onSuccess: async (id) => {
+    onSuccess: (id) => {
       const action = mode === 'create' ? 'created' : 'updated'
-      // fire toast first so the user sees it even if the dialog closes quickly
       success(`Job ${action}`, `“${title.trim()}” was ${action} successfully.`)
 
-      await Promise.all([
+      if (mode === 'create') {
+        resetCreateFields()
+      }
+      onOpenChange(false)
+      onSaved?.(id)
+
+      void Promise.all([
         qc.invalidateQueries({ queryKey: ['jobs-index'], exact: false }),
         qc.invalidateQueries({ queryKey: ['jobs-detail', id], exact: false }),
         qc.invalidateQueries({
@@ -575,18 +586,13 @@ export default function JobDialog({
           queryKey: ['company', companyId, 'latest-feed'],
           exact: false,
         }),
-        // Force refetch of latest feed to ensure new activity appears immediately
         qc.refetchQueries({
           queryKey: ['company', companyId, 'latest-feed'],
           exact: false,
         }),
-      ])
-
-      if (mode === 'create') {
-        resetCreateFields()
-      }
-      onOpenChange(false)
-      onSaved?.(id)
+      ]).catch((err) => {
+        console.error('Failed to refresh job queries after save', err)
+      })
     },
     onError: (e: any) => {
       const errorMessage = String(e?.message ?? '')

@@ -1,5 +1,7 @@
 import * as React from 'react'
 import PhoneInput, { isValidPhoneNumber } from 'react-phone-number-input'
+import { parsePhoneNumberFromString } from 'libphonenumber-js'
+import { parsePastedPhoneNumber } from './phone'
 import type { CountryCode } from 'libphonenumber-js/core'
 import 'react-phone-number-input/style.css'
 import './phone-input-radix-shim.css'
@@ -22,7 +24,32 @@ export function PhoneInputField({
   id,
 }: Props) {
   const [touched, setTouched] = React.useState(false)
+  const [country, setCountry] = React.useState<CountryCode | undefined>(
+    defaultCountry,
+  )
   const invalid = !!(touched && value && !isValidPhoneNumber(value))
+
+  React.useEffect(() => {
+    if (!value) return
+    const parsed = parsePhoneNumberFromString(value)
+    if (parsed?.country) {
+      setCountry(parsed.country)
+    }
+  }, [value])
+
+  const handlePaste = React.useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      const pasted = e.clipboardData.getData('text')
+      const parsed = parsePastedPhoneNumber(pasted, defaultCountry)
+      if (!parsed) return
+
+      e.preventDefault()
+      e.stopPropagation()
+      setCountry(parsed.country)
+      onChange(parsed.e164)
+    },
+    [defaultCountry, onChange],
+  )
 
   // ⬇️ Create this ONCE so the input isn't remounted on invalid/disabled changes
   const RadixTextFieldShim = React.useMemo(
@@ -74,12 +101,15 @@ export function PhoneInputField({
       className="radix-phone"
       data-invalid={invalid ? 'true' : 'false'}
       style={{ minWidth: 220 }}
+      onPasteCapture={handlePaste}
     >
       <PhoneInput
         id={id}
         international
         countryCallingCodeEditable={false}
         defaultCountry={defaultCountry}
+        country={country}
+        onCountryChange={setCountry}
         value={value}
         onChange={onChange}
         placeholder={placeholder}

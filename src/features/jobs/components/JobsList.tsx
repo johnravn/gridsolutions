@@ -6,6 +6,7 @@ import {
   Badge,
   Box,
   Button,
+  DropdownMenu,
   Flex,
   Spinner,
   Text,
@@ -14,11 +15,13 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { Plus, Search } from 'iconoir-react'
+import { MoreHoriz, NavArrowRight, Plus, Search } from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
+import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
 import { supabase } from '@shared/api/supabase'
 import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
 import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
@@ -68,12 +71,16 @@ export default function JobsList({
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { userId, companyRole } = useAuthz()
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
   const [createOpen, setCreateOpen] = React.useState(false)
   const [createRecurringOpen, setCreateRecurringOpen] = React.useState(false)
+  const [recurringJobsOpen, setRecurringJobsOpen] = React.useState(true)
+  const [recurringHeaderHovered, setRecurringHeaderHovered] =
+    React.useState(false)
 
   const selectedJobId = selection?.kind === 'job' ? selection.id : null
   const selectedRecurringJobId =
@@ -194,6 +201,9 @@ export default function JobsList({
     return null
   }
 
+  const showRecurringHide =
+    recurringJobsOpen && (isSmallScreen || compact || recurringHeaderHovered)
+
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
@@ -234,9 +244,7 @@ export default function JobsList({
           onChange={(e) => setSearch(e.target.value)}
           size={compact ? '4' : '3'}
           style={
-            compact
-              ? { width: '100%' }
-              : { flex: '1 1 200px', minWidth: 140 }
+            compact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 140 }
           }
         >
           <TextField.Slot side="left">
@@ -246,48 +254,49 @@ export default function JobsList({
             {isFetching && <Spinner size={compact ? '3' : '2'} />}
           </TextField.Slot>
         </TextField.Root>
-        {companyRole !== 'freelancer' &&
-          (compact ? (
-            <Flex direction="column" gap="2" style={{ width: '100%' }}>
-              <Button
-                variant="solid"
-                size="3"
-                onClick={() => setCreateOpen(true)}
-                style={{ width: '100%' }}
-              >
-                <Plus width={18} height={18} />
-                New job
-              </Button>
-              <Button
-                variant="soft"
-                size="3"
-                onClick={() => setCreateRecurringOpen(true)}
-                style={{ width: '100%' }}
-              >
-                <Plus width={18} height={18} />
-                New recurring job
-              </Button>
-            </Flex>
-          ) : (
-            <>
-              <Button
-                variant="solid"
-                size="2"
-                onClick={() => setCreateOpen(true)}
-              >
-                <Plus width={18} height={18} />
-                New job
-              </Button>
-              <Button
-                variant="soft"
-                size="2"
-                onClick={() => setCreateRecurringOpen(true)}
-              >
-                <Plus width={18} height={18} />
-                New recurring job
-              </Button>
-            </>
-          ))}
+        {companyRole !== 'freelancer' && (
+          <Flex
+            gap="2"
+            align="center"
+            style={compact ? { width: '100%' } : undefined}
+          >
+            <Button
+              variant="solid"
+              size={compact ? '3' : '2'}
+              onClick={() => setCreateOpen(true)}
+              style={compact ? { flex: 1 } : undefined}
+            >
+              <Plus width={compact ? 18 : 16} height={compact ? 18 : 16} />
+              New job
+            </Button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Button
+                  variant="soft"
+                  size={compact ? '3' : '2'}
+                  aria-label="More job actions"
+                  style={{
+                    padding: 0,
+                    width: 'var(--base-button-height)',
+                    minWidth: 'var(--base-button-height)',
+                  }}
+                >
+                  <MoreHoriz
+                    width={compact ? 18 : 16}
+                    height={compact ? 18 : 16}
+                  />
+                </Button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.Item
+                  onSelect={() => setCreateRecurringOpen(true)}
+                >
+                  New recurring job
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Flex>
+        )}
       </Flex>
 
       <JobDialog
@@ -313,18 +322,83 @@ export default function JobsList({
 
       {pinnedRecurringJobs.length > 0 && (
         <Box mb="2">
-          <Text size="1" weight="medium" color="gray" mb="1">
-            Your recurring jobs
-          </Text>
-          {pinnedRecurringJobs.map((row) => (
-            <RecurringJobListRow
-              key={row.id}
-              row={row}
-              compact={compact}
-              isSelected={selectedRecurringJobId === row.id}
-              onClick={() => onSelectRecurringJob(row.id)}
-            />
-          ))}
+          <Flex
+            align="center"
+            justify="between"
+            gap="2"
+            mb={recurringJobsOpen ? '1' : '0'}
+            onMouseEnter={() => setRecurringHeaderHovered(true)}
+            onMouseLeave={() => setRecurringHeaderHovered(false)}
+            onClick={
+              !recurringJobsOpen ? () => setRecurringJobsOpen(true) : undefined
+            }
+            onKeyDown={
+              !recurringJobsOpen
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setRecurringJobsOpen(true)
+                    }
+                  }
+                : undefined
+            }
+            role={!recurringJobsOpen ? 'button' : undefined}
+            tabIndex={!recurringJobsOpen ? 0 : undefined}
+            aria-expanded={recurringJobsOpen}
+            style={{
+              minHeight: 24,
+              cursor: !recurringJobsOpen ? 'pointer' : undefined,
+              borderRadius: 'var(--radius-2)',
+              padding: '2px 4px',
+              margin: '-2px -4px',
+            }}
+          >
+            <Flex align="center" gap="1" style={{ minWidth: 0 }}>
+              {!recurringJobsOpen && (
+                <NavArrowRight width={14} height={14} color="var(--gray-11)" />
+              )}
+              <Text size="1" weight="medium" color="gray">
+                Your recurring jobs
+              </Text>
+              {!recurringJobsOpen && (
+                <Badge variant="soft" color="gray" size="1">
+                  {pinnedRecurringJobs.length}
+                </Badge>
+              )}
+            </Flex>
+            {recurringJobsOpen && (
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                aria-label="Hide recurring jobs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setRecurringJobsOpen(false)
+                }}
+                style={{
+                  flexShrink: 0,
+                  opacity: showRecurringHide ? 1 : 0,
+                  pointerEvents: showRecurringHide ? 'auto' : 'none',
+                  transition: motionRevealTransition(['opacity'], {
+                    ease: motionEaseRevealOut,
+                  }),
+                }}
+              >
+                Hide
+              </Button>
+            )}
+          </Flex>
+          {recurringJobsOpen &&
+            pinnedRecurringJobs.map((row) => (
+              <RecurringJobListRow
+                key={row.id}
+                row={row}
+                compact={compact}
+                isSelected={selectedRecurringJobId === row.id}
+                onClick={() => onSelectRecurringJob(row.id)}
+              />
+            ))}
         </Box>
       )}
 

@@ -19,9 +19,7 @@ test.describe('Customers', () => {
     ).toBeVisible()
 
     const customerName = `E2E Customer ${Date.now()}`
-    await dialog
-      .getByPlaceholder('Company or customer name')
-      .fill(customerName)
+    await dialog.getByPlaceholder('Company or customer name').fill(customerName)
     await dialog.getByRole('button', { name: 'Create' }).click()
 
     await expect(dialog).toBeHidden({ timeout: 20_000 })

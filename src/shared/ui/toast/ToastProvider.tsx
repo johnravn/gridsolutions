@@ -281,8 +281,8 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
       // Fixed viewport so toasts appear above dialogs, not inside them
       style={{
         position: 'fixed',
-        bottom: 16,
-        right: 16,
+        bottom: 'calc(16px + var(--app-safe-bottom))',
+        right: 'calc(16px + var(--app-safe-right))',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,

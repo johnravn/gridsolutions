@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -36,6 +37,33 @@ export default defineConfig(({ mode }) => {
     plugins: [
       viteReact(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'prompt',
+        includeAssets: [
+          'grid-icon-light.svg',
+          'grid-icon-dark.svg',
+          'icons/*.png',
+        ],
+        manifest: false,
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /\/api\/.*/i,
+              handler: 'NetworkOnly',
+            },
+          ],
+        },
+        devOptions: {
+          // generateSW fails in dev on Node 22+ (workbox source-phase imports)
+          enabled: false,
+        },
+      }),
       {
         name: 'youversion-dev-api',
         configureServer(server) {

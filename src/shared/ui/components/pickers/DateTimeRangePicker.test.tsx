@@ -136,9 +136,7 @@ describe('DateTimeRangePicker', () => {
     fireEvent.click(dialog.getByRole('button', { name: '17' }))
 
     switchPhase('Minutes')
-    fireEvent.click(
-      dialog.getByRole('button', { name: 'Start minute :15' }),
-    )
+    fireEvent.click(dialog.getByRole('button', { name: 'Start minute :15' }))
     act(() => {
       vi.advanceTimersByTime(300)
     })

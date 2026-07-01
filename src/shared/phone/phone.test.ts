@@ -4,6 +4,7 @@ import {
   formatNational,
   isPhoneValid,
   normalizeToE164,
+  parsePastedPhoneNumber,
   prettyPhone,
 } from './phone'
 
@@ -55,5 +56,36 @@ describe('international numbers', () => {
 
   it('rejects too-short international input', () => {
     expect(normalizeToE164('+47', 'NO')).toBeNull()
+  })
+})
+
+describe('parsePastedPhoneNumber', () => {
+  it('parses E.164 paste and extracts country', () => {
+    expect(parsePastedPhoneNumber('+4791234567', 'NO')).toEqual({
+      country: 'NO',
+      e164: '+4791234567',
+    })
+  })
+
+  it('parses 00 international prefix', () => {
+    expect(parsePastedPhoneNumber('004791234567', 'NO')).toEqual({
+      country: 'NO',
+      e164: '+4791234567',
+    })
+  })
+
+  it('parses foreign numbers with country code', () => {
+    expect(parsePastedPhoneNumber('+46701234567', 'NO')).toEqual({
+      country: 'SE',
+      e164: '+46701234567',
+    })
+  })
+
+  it('ignores national numbers without country code indicator', () => {
+    expect(parsePastedPhoneNumber('91234567', 'NO')).toBeNull()
+  })
+
+  it('ignores bare country codes', () => {
+    expect(parsePastedPhoneNumber('+47', 'NO')).toBeNull()
   })
 })

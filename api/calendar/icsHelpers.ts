@@ -66,6 +66,16 @@ export function rangesOverlap(
   return aStart < bEnd && bStart < aEnd
 }
 
+/** Prefix calendar event titles with the recurring job series name when applicable. */
+export function withRecurringJobPrefix(
+  title: string,
+  recurringJobTitle: string | null | undefined,
+): string {
+  const seriesName = recurringJobTitle?.trim()
+  if (!seriesName) return title
+  return `${seriesName}: ${title}`
+}
+
 export function buildICS(
   events: Array<{
     id: string

@@ -78,6 +78,27 @@ export function formatTimeLabel(hour: number, minute = 0): string {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
 }
 
+/** Parse HH:MM or HH:MM:SS into local hours and minutes. */
+export function parseTimeInput(
+  value: string,
+): { hours: number; minutes: number } | null {
+  const match = /^(\d{1,2}):(\d{2})(?::\d{2})?$/.exec(value.trim())
+  if (!match) return null
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (
+    !Number.isFinite(hours) ||
+    !Number.isFinite(minutes) ||
+    hours < 0 ||
+    hours > 23 ||
+    minutes < 0 ||
+    minutes > 59
+  ) {
+    return null
+  }
+  return { hours, minutes }
+}
+
 /** Format time for display at hour precision (e.g. "09:00"). */
 export function formatHourLabel(hour: number): string {
   return formatTimeLabel(hour, 0)
@@ -370,9 +391,9 @@ export function extractRangeTimes(
   const startHasTime = start && !isFullDayStart(startAt)
   const endHasTime = end && !isFullDayEnd(endAt)
   return {
-    startHour: startHasTime ? start!.getHours() : null,
-    endHour: endHasTime ? end!.getHours() : null,
-    startMinute: startHasTime ? start!.getMinutes() : null,
-    endMinute: endHasTime ? end!.getMinutes() : null,
+    startHour: startHasTime ? start.getHours() : null,
+    endHour: endHasTime ? end.getHours() : null,
+    startMinute: startHasTime ? start.getMinutes() : null,
+    endMinute: endHasTime ? end.getMinutes() : null,
   }
 }

@@ -9,7 +9,9 @@ test.describe('Logging', () => {
   test('owner can switch logging month', async ({ authedPage: page }) => {
     await openLoggingPage(page)
 
-    await page.getByRole('heading', { name: /Entries for/ }).scrollIntoViewIfNeeded()
+    await page
+      .getByRole('heading', { name: /Entries for/ })
+      .scrollIntoViewIfNeeded()
     const febMonth = page.getByRole('radio', { name: 'feb', exact: true })
     await expect(febMonth).toBeVisible({ timeout: 15_000 })
     await febMonth.click()
