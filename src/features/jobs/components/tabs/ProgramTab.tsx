@@ -23,12 +23,11 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { supabase } from '@shared/api/supabase'
 import { addThreeHours } from '@shared/lib/generalFunctions'
-import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import type { TimePeriodLite } from '../../types'
 
 export default function ProgramTab({ jobId }: { jobId: string }) {
-  const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const { data: job } = useQuery(jobDetailQuery({ jobId }))
   const { companyId } = useCompany()
   const { data: timePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))

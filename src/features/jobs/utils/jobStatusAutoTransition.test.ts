@@ -1,5 +1,23 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getScheduledJobStatusTransition } from './jobStatusAutoTransition'
+import {
+  getScheduledJobStatusTransition,
+  persistJobStatusTransition,
+} from './jobStatusAutoTransition'
+
+const updateMock = vi.fn()
+
+vi.mock('@shared/api/supabase', () => ({
+  supabase: {
+    from: () => ({
+      update: () => ({
+        eq: async () => {
+          await updateMock()
+          return { error: null }
+        },
+      }),
+    }),
+  },
+}))
 
 describe('getScheduledJobStatusTransition', () => {
   beforeEach(() => {
@@ -67,5 +85,29 @@ describe('getScheduledJobStatusTransition', () => {
         end_at: '2026-06-10T18:00:00.000Z',
       }),
     ).toBeNull()
+  })
+
+  it('returns null for canceled jobs', () => {
+    vi.setSystemTime(new Date('2026-06-10T12:00:00.000Z'))
+    expect(
+      getScheduledJobStatusTransition({
+        id: 'job-1',
+        status: 'canceled',
+        start_at: '2026-06-10T08:00:00.000Z',
+        end_at: '2026-06-10T18:00:00.000Z',
+      }),
+    ).toBeNull()
+  })
+})
+
+describe('persistJobStatusTransition', () => {
+  beforeEach(() => {
+    updateMock.mockReset()
+  })
+
+  it('updates job status via supabase', async () => {
+    updateMock.mockResolvedValue({ error: null })
+    await persistJobStatusTransition('job-1', 'completed')
+    expect(updateMock).toHaveBeenCalled()
   })
 })

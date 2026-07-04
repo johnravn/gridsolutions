@@ -1,16 +1,19 @@
 import { Box, Flex, Separator, Text } from '@radix-ui/themes'
 import {
-  calculateModuleCost,
+  applyComputedCostsToModules,
+  basisSubtotal,
   calculatePrettyOfferTotals,
+  calculateSplitAmount,
 } from '../../../utils/prettyOfferCalculations'
-import type { LocalPrettyModule, LocalSubcontractorQuote } from './types'
-import type { OfferDetail } from '../../../types'
+import type { LocalPrettyModule, LocalPricingBasis } from './types'
+import type { JobSubcontractorQuote, OfferDetail } from '../../../types'
 import type { RentalFactorConfig } from '../../../utils/offerCalculations'
 
 type Props = {
   modules: Array<LocalPrettyModule>
-  quotes: Array<LocalSubcontractorQuote>
-  technicalOffer: OfferDetail | null
+  pricingBases: Array<LocalPricingBasis>
+  technicalOffersById: Map<string, OfferDetail>
+  jobQuotesById: Map<string, JobSubcontractorQuote>
   vatPercent: number
   rentalFactorConfig?: RentalFactorConfig | null
   vehicleDistanceRate?: number | null
@@ -28,23 +31,27 @@ function formatMoney(value: number) {
 
 export function TotalsSection({
   modules,
-  quotes,
-  technicalOffer,
+  pricingBases,
+  technicalOffersById,
+  jobQuotesById,
   vatPercent,
   rentalFactorConfig,
   vehicleDistanceRate,
   vehicleDistanceIncrement,
   vehicleDailyRate,
 }: Props) {
-  const modulesWithCost = modules.map((module) => ({
-    ...module,
-    computed_cost: calculateModuleCost(module, quotes, technicalOffer, {
-      rentalFactorConfig,
-      vehicleDistanceRate,
-      vehicleDistanceIncrement,
-      vehicleDailyRate,
-    }),
-  }))
+  const technicalContext = {
+    rentalFactorConfig,
+    vehicleDistanceRate,
+    vehicleDistanceIncrement,
+    vehicleDailyRate,
+  }
+
+  const modulesWithCost = applyComputedCostsToModules(modules, pricingBases, {
+    technicalOffersById,
+    jobQuotesById,
+    technicalContext,
+  })
 
   const totals = calculatePrettyOfferTotals(modulesWithCost, vatPercent)
   const customerDisplayTotal = modulesWithCost.reduce((sum, module) => {
@@ -60,6 +67,64 @@ export function TotalsSection({
         Cost summary
       </Text>
 
+      {pricingBases.length > 0 && (
+        <Box mb="4">
+          <Text size="2" weight="medium" mb="2" as="div">
+            By pricing basis
+          </Text>
+          <Flex direction="column" gap="3">
+            {pricingBases.map((basis) => (
+              <Box key={basis.id}>
+                <Flex justify="between" mb="1">
+                  <Text size="2" weight="medium">
+                    {basis.title || basis.basis_type}
+                  </Text>
+                  <Text size="2">
+                    {formatMoney(
+                      basisSubtotal(basis, {
+                        technicalOffersById,
+                        jobQuotesById,
+                        technicalContext,
+                      }),
+                    )}
+                  </Text>
+                </Flex>
+                {(basis.splits ?? []).map((split) => {
+                  const module = modulesWithCost.find(
+                    (m) => m.id === split.module_id,
+                  )
+                  return (
+                    <Flex
+                      key={split.id}
+                      justify="between"
+                      pl="3"
+                      style={{ opacity: 0.9 }}
+                    >
+                      <Text size="1" color="gray">
+                        {split.title} → {module?.title || 'Module'}
+                      </Text>
+                      <Text size="1">
+                        {formatMoney(
+                          calculateSplitAmount(split, basis, {
+                            technicalOffersById,
+                            jobQuotesById,
+                            technicalContext,
+                          }),
+                        )}
+                      </Text>
+                    </Flex>
+                  )
+                })}
+              </Box>
+            ))}
+          </Flex>
+          <Separator size="4" my="3" />
+        </Box>
+      )}
+
+      <Text size="2" weight="medium" mb="2" as="div">
+        By module
+      </Text>
       <Flex direction="column" gap="2" mb="4">
         {modulesWithCost.map((module) => (
           <Flex key={module.id} justify="between" align="center">
@@ -78,7 +143,7 @@ export function TotalsSection({
         ))}
         {modulesWithCost.length === 0 && (
           <Text size="2" color="gray">
-            Add modules to see cost breakdown.
+            No modules yet.
           </Text>
         )}
       </Flex>
@@ -87,22 +152,22 @@ export function TotalsSection({
 
       <Flex direction="column" gap="2">
         <Flex justify="between">
-          <Text size="2">Internal subtotal</Text>
+          <Text size="2">Subtotal (internal cost)</Text>
           <Text size="2" weight="medium">
             {formatMoney(totals.totalBeforeDiscount)}
           </Text>
         </Flex>
         <Flex justify="between">
           <Text size="2">VAT ({vatPercent}%)</Text>
-          <Text size="2" weight="medium">
+          <Text size="2">
             {formatMoney(totals.totalWithVat - totals.totalAfterDiscount)}
           </Text>
         </Flex>
         <Flex justify="between">
-          <Text size="3" weight="bold">
-            Total incl. VAT
+          <Text size="2" weight="bold">
+            Total with VAT
           </Text>
-          <Text size="3" weight="bold">
+          <Text size="2" weight="bold">
             {formatMoney(totals.totalWithVat)}
           </Text>
         </Flex>

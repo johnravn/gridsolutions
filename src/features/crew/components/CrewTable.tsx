@@ -12,6 +12,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { ArrowDown, ArrowUp, Plus, Search, Trash } from 'iconoir-react'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
@@ -54,6 +55,7 @@ export default function CrewTable({
   internalNotesByUserId,
 }: Props) {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
@@ -267,15 +269,17 @@ export default function CrewTable({
             </TextField.Slot>
           </TextField.Root>
 
-          <Button
-            variant="solid"
-            onClick={() => setAddOpen(true)}
-            style={isMobile ? { width: '100%' } : undefined}
-            size={isMobile ? '3' : '2'}
-          >
-            <Plus width={18} height={18} />
-            Add freelancer
-          </Button>
+          {canWrite && (
+            <Button
+              variant="solid"
+              onClick={() => setAddOpen(true)}
+              style={isMobile ? { width: '100%' } : undefined}
+              size={isMobile ? '3' : '2'}
+            >
+              <Plus width={18} height={18} />
+              Add freelancer
+            </Button>
+          )}
 
           <AddFreelancerDialog
             open={addOpen}

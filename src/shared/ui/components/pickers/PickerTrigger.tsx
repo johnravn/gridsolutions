@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Flex, Text } from '@radix-ui/themes'
 import { Calendar } from 'iconoir-react'
 import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
+import './PickerTrigger.css'
 
 export type FieldDisplay = {
   label: string
@@ -35,19 +36,109 @@ function fieldAriaLabel(field: FieldDisplay): string {
   return `${field.label} ${field.primary}${field.secondary ? ` ${field.secondary}` : ''}`
 }
 
+const SURFACE_INPUT_FOCUS_OUTLINE: React.CSSProperties = {
+  outline: '2px solid var(--focus-8)',
+  outlineOffset: '-1px',
+}
+
+const PICKER_SURFACE_TRIGGER_CLASS = 'picker-surface-trigger'
+
+function mergeTriggerClassName(className?: string): string {
+  return [PICKER_SURFACE_TRIGGER_CLASS, className].filter(Boolean).join(' ')
+}
+
+function surfaceInputHoverShadow(invalid: boolean): string {
+  return `inset 0 0 0 1px ${invalid ? 'var(--red-9)' : 'var(--gray-a8)'}`
+}
+
+function surfaceInputRestShadow(invalid: boolean): string {
+  return `inset 0 0 0 1px ${invalid ? 'var(--red-8)' : 'var(--gray-a7)'}`
+}
+
+/** Matches Radix TextField/TextArea surface variant (translucent fill + inset border). */
+function radixSurfaceInputStyle(
+  invalid: boolean,
+  hovered = false,
+): React.CSSProperties {
+  return {
+    backgroundColor: 'var(--color-surface)',
+    border: 'none',
+    boxShadow: hovered
+      ? surfaceInputHoverShadow(invalid)
+      : surfaceInputRestShadow(invalid),
+  }
+}
+
+function surfaceInputOutline(active: boolean): React.CSSProperties {
+  return active ? SURFACE_INPUT_FOCUS_OUTLINE : { outline: 'none' }
+}
+
+function useSurfaceInputActiveState(
+  props: React.HTMLAttributes<HTMLElement>,
+) {
+  const [focusVisible, setFocusVisible] = React.useState(false)
+  const [pressed, setPressed] = React.useState(false)
+  const [hovered, setHovered] = React.useState(false)
+  const dataState = props['data-state']
+  const active = focusVisible || dataState === 'open' || pressed
+
+  const focusHandlers = {
+    onFocus: (e: React.FocusEvent<HTMLElement>) => {
+      props.onFocus?.(e)
+      if (e.currentTarget.matches(':focus-visible')) {
+        setFocusVisible(true)
+      }
+    },
+    onBlur: (e: React.FocusEvent<HTMLElement>) => {
+      props.onBlur?.(e)
+      setFocusVisible(false)
+    },
+  }
+
+  const interactionHandlers = {
+    ...focusHandlers,
+    onPointerDown: (e: React.PointerEvent<HTMLElement>) => {
+      props.onPointerDown?.(e)
+      if (e.button !== 0 || e.defaultPrevented) return
+      setPressed(true)
+    },
+    onPointerUp: (e: React.PointerEvent<HTMLElement>) => {
+      props.onPointerUp?.(e)
+      setPressed(false)
+    },
+    onPointerCancel: (e: React.PointerEvent<HTMLElement>) => {
+      props.onPointerCancel?.(e)
+      setPressed(false)
+    },
+    onMouseEnter: (e: React.MouseEvent<HTMLElement>) => {
+      props.onMouseEnter?.(e)
+      setHovered(true)
+    },
+    onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+      props.onMouseLeave?.(e)
+      setHovered(false)
+      setPressed(false)
+    },
+  }
+
+  return { active, hovered, interactionHandlers }
+}
+
 const containerStyle = (
   invalid: boolean,
   disabled: boolean,
   hasValue: boolean,
+  active: boolean,
+  hovered: boolean,
 ): React.CSSProperties => ({
   width: '100%',
   minHeight: hasValue ? 78 : 72,
   padding: '11px 14px',
   borderRadius: 'var(--radius-3)',
-  border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
-  background: 'var(--gray-2)',
+  ...radixSurfaceInputStyle(invalid, active ? false : hovered),
+  ...surfaceInputOutline(active),
   opacity: disabled ? 0.6 : 1,
-  transition: 'border-color 0.15s, background-color 0.15s',
+  transition: 'box-shadow 0.15s, outline-color 0.15s',
   textAlign: 'left',
   fontFamily: 'inherit',
   display: 'flex',
@@ -220,6 +311,9 @@ export const PickerTrigger = React.forwardRef<
   const hasValue = fields.some((f) => !f.muted)
   const useInteractiveFields =
     fieldInteraction && hasValue && onFieldClick != null
+  const { className, ...restButtonProps } = buttonProps
+  const { active, hovered, interactionHandlers } =
+    useSurfaceInputActiveState(restButtonProps)
 
   if (compact) {
     return (
@@ -229,18 +323,21 @@ export const PickerTrigger = React.forwardRef<
         disabled={disabled}
         aria-label={placeholder}
         onClick={onOpen}
-        {...buttonProps}
+        {...restButtonProps}
+        {...interactionHandlers}
+        className={mergeTriggerClassName(className)}
         style={{
           padding: '8px 12px',
           borderRadius: 'var(--radius-3)',
-          border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
-          background: 'var(--color-panel-solid)',
+          ...radixSurfaceInputStyle(invalid, active ? false : hovered),
+          ...surfaceInputOutline(active),
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.6 : 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          ...buttonProps.style,
+          transition: 'box-shadow 0.15s, outline-color 0.15s',
+          ...restButtonProps.style,
         }}
       >
         <Calendar width={16} height={16} />
@@ -252,7 +349,13 @@ export const PickerTrigger = React.forwardRef<
     return (
       <div
         ref={ref as React.Ref<HTMLDivElement>}
-        style={containerStyle(invalid, disabled, hasValue)}
+        {...restButtonProps}
+        {...interactionHandlers}
+        className={mergeTriggerClassName(className)}
+        style={{
+          ...containerStyle(invalid, disabled, hasValue, active, hovered),
+          ...restButtonProps.style,
+        }}
       >
         <FieldsRow
           fields={fields}
@@ -270,27 +373,13 @@ export const PickerTrigger = React.forwardRef<
       type="button"
       disabled={disabled}
       onClick={onOpen}
-      {...buttonProps}
+      {...restButtonProps}
+      {...interactionHandlers}
+      className={mergeTriggerClassName(className)}
       style={{
-        ...containerStyle(invalid, disabled, hasValue),
+        ...containerStyle(invalid, disabled, hasValue, active, hovered),
         cursor: disabled ? 'not-allowed' : 'pointer',
-        ...buttonProps.style,
-      }}
-      onMouseEnter={(e) => {
-        buttonProps.onMouseEnter?.(e)
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-9)'
-          : 'var(--gray-a8)'
-        e.currentTarget.style.background = 'var(--gray-3)'
-      }}
-      onMouseLeave={(e) => {
-        buttonProps.onMouseLeave?.(e)
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-8)'
-          : 'var(--gray-a6)'
-        e.currentTarget.style.background = 'var(--gray-2)'
+        ...restButtonProps.style,
       }}
     >
       {!hasValue ? (
@@ -312,6 +401,8 @@ export function textFieldLikeTriggerStyle(
   invalid: boolean,
   hasValue: boolean,
   disabled: boolean,
+  active: boolean,
+  hovered: boolean,
 ): React.CSSProperties {
   return {
     width: '100%',
@@ -319,8 +410,8 @@ export function textFieldLikeTriggerStyle(
     height: 'var(--space-6)',
     padding: '0 var(--space-2)',
     borderRadius: 'max(var(--radius-2), var(--radius-full))',
-    border: `1px solid ${invalid ? 'var(--red-8)' : 'var(--gray-a6)'}`,
-    background: 'var(--color-panel-solid)',
+    ...radixSurfaceInputStyle(invalid, active ? false : hovered),
+    ...surfaceInputOutline(active),
     color: hasValue ? 'var(--gray-12)' : 'var(--gray-9)',
     fontSize: 'var(--font-size-2)',
     lineHeight: 'var(--line-height-2)',
@@ -330,7 +421,7 @@ export function textFieldLikeTriggerStyle(
     gap: 'var(--space-2)',
     cursor: disabled ? 'not-allowed' : 'pointer',
     opacity: disabled ? 0.6 : 1,
-    transition: 'border-color 0.15s, background-color 0.15s',
+    transition: 'box-shadow 0.15s, outline-color 0.15s',
     textAlign: 'left',
   }
 }
@@ -357,30 +448,27 @@ export const SinglePickerTrigger = React.forwardRef<
   ref,
 ) {
   const hasValue = displayValue !== placeholder
+  const { className, ...restButtonProps } = buttonProps
+  const { active, hovered, interactionHandlers } =
+    useSurfaceInputActiveState(restButtonProps)
 
   return (
     <button
       ref={ref}
       type="button"
       disabled={disabled}
-      {...buttonProps}
+      {...restButtonProps}
+      {...interactionHandlers}
+      className={mergeTriggerClassName(className)}
       style={{
-        ...textFieldLikeTriggerStyle(invalid, hasValue, disabled),
-        ...buttonProps.style,
-      }}
-      onMouseEnter={(e) => {
-        buttonProps.onMouseEnter?.(e)
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-9)'
-          : 'var(--gray-a8)'
-      }}
-      onMouseLeave={(e) => {
-        buttonProps.onMouseLeave?.(e)
-        if (disabled) return
-        e.currentTarget.style.borderColor = invalid
-          ? 'var(--red-8)'
-          : 'var(--gray-a6)'
+        ...textFieldLikeTriggerStyle(
+          invalid,
+          hasValue,
+          disabled,
+          active,
+          hovered,
+        ),
+        ...restButtonProps.style,
       }}
     >
       {icon ?? <Calendar width={16} height={16} />}

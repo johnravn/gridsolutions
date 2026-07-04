@@ -26,7 +26,11 @@ test.describe('Inventory', () => {
     await dialog.getByPlaceholder('e.g. XLR 3m').fill(itemName)
     await dialog.getByRole('button', { name: 'Create' }).click()
 
-    await expect(page.getByText('Item was added to inventory')).toBeVisible({
+    await expect(
+      page
+        .getByRole('status')
+        .filter({ hasText: 'Item was added to inventory' }),
+    ).toBeVisible({
       timeout: 20_000,
     })
     await expect(dialog).toBeHidden({ timeout: 20_000 })

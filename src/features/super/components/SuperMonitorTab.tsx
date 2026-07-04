@@ -23,6 +23,7 @@ import {
   summarizeRunDetails,
   systemMonitorSnapshotQuery,
   triggerContaSyncNow,
+  triggerDemoTimelineAdvance,
 } from '../api/monitorQueries'
 import SuperResendEmailsSection from './SuperResendEmailsSection'
 import type { MonitorJobLastRun, MonitorRecentRun } from '../api/monitorQueries'
@@ -187,6 +188,23 @@ export default function SuperMonitorTab() {
     },
   })
 
+  const demoTimelineMutation = useMutation({
+    mutationFn: triggerDemoTimelineAdvance,
+    onSuccess: (result) => {
+      void qc.invalidateQueries({ queryKey: ['super', 'monitor', 'snapshot'] })
+      success(
+        'Demo timeline advanced',
+        summarizeRunDetails('demo_timeline_advance', result),
+      )
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Demo timeline advance failed',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
   const lastRunByKey = React.useMemo(() => {
     const map = new Map<string, MonitorJobLastRun>()
     for (const row of data?.jobs ?? []) {
@@ -310,6 +328,18 @@ export default function SuperMonitorTab() {
                       <CloudSync width={16} height={16} />
                       {syncMutation.isPending ? 'Syncing…' : 'Run sync now'}
                     </Flex>
+                  </Button>
+                ) : def.jobKey === 'demo_timeline_advance' ? (
+                  <Button
+                    type="button"
+                    size="2"
+                    variant="soft"
+                    disabled={demoTimelineMutation.isPending}
+                    onClick={() => demoTimelineMutation.mutate()}
+                  >
+                    {demoTimelineMutation.isPending
+                      ? 'Advancing…'
+                      : 'Advance +7 days now'}
                   </Button>
                 ) : undefined
               }

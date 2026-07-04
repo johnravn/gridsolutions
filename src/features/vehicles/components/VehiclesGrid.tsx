@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Badge, Card, Flex, Text } from '@radix-ui/themes'
 import { Car } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { vehicleOwnerBadge } from '../lib/ownership'
 import type { VehicleIndexRow } from '../api/queries'
 
 export default function VehiclesGrid({
@@ -62,6 +63,7 @@ function VehicleCard({
 
   const fuelColor: React.ComponentProps<typeof Badge>['color'] =
     v.fuel === 'electric' ? 'green' : v.fuel === 'diesel' ? 'orange' : 'blue'
+  const ownerBadge = vehicleOwnerBadge(v)
 
   return (
     <Card
@@ -108,15 +110,9 @@ function VehicleCard({
           <Badge variant="soft" color={fuelColor}>
             {v.fuel ?? '—'}
           </Badge>
-          {v.internally_owned ? (
-            <Badge variant="soft" color="indigo">
-              Internal
-            </Badge>
-          ) : (
-            <Badge variant="soft" color="violet">
-              {v.external_owner_name ?? 'External'}
-            </Badge>
-          )}
+          <Badge variant="soft" color={ownerBadge.color}>
+            {ownerBadge.label}
+          </Badge>
         </Flex>
       </Flex>
     </Card>

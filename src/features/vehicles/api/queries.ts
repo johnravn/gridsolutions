@@ -25,6 +25,8 @@ export type VehicleIndexRow = {
   internally_owned: boolean
   external_owner_id: string | null
   external_owner_name: string | null
+  owner_user_id: string | null
+  owner_user_name: string | null
   deleted: boolean | null
 }
 
@@ -39,6 +41,8 @@ export type VehicleDetail = {
   internally_owned: boolean
   external_owner_id: string | null
   external_owner_name: string | null
+  owner_user_id: string | null
+  owner_user_name: string | null
   created_at: string
 }
 
@@ -73,8 +77,10 @@ export function vehiclesIndexQuery({
           vehicle_category,
           internally_owned,
           external_owner_id,
+          owner_user_id,
           deleted,
-          external_owner:customers!vehicles_external_owner_id_fkey ( id, name )
+          external_owner:customers!vehicles_external_owner_id_fkey ( id, name ),
+          owner_user:profiles!vehicles_owner_user_id_fkey ( user_id, display_name, email )
         `,
         )
         .eq('company_id', companyId)
@@ -103,18 +109,25 @@ export function vehiclesIndexQuery({
       const { data, error } = await q.order('name', { ascending: true })
       if (error) throw error
 
-      return data.map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        registration_no: r.registration_no ?? null,
-        image_path: r.image_path ?? null,
-        fuel: r.fuel ?? null,
-        vehicle_category: r.vehicle_category ?? null,
-        internally_owned: !!r.internally_owned,
-        external_owner_id: r.external_owner_id ?? null,
-        external_owner_name: r.external_owner?.name ?? null,
-        deleted: r.deleted ?? null,
-      }))
+      return data.map((r: any) => {
+        const ownerUser = Array.isArray(r.owner_user)
+          ? r.owner_user[0]
+          : r.owner_user
+        return {
+          id: r.id,
+          name: r.name,
+          registration_no: r.registration_no ?? null,
+          image_path: r.image_path ?? null,
+          fuel: r.fuel ?? null,
+          vehicle_category: r.vehicle_category ?? null,
+          internally_owned: !!r.internally_owned,
+          external_owner_id: r.external_owner_id ?? null,
+          external_owner_name: r.external_owner?.name ?? null,
+          owner_user_id: r.owner_user_id ?? null,
+          owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
+          deleted: r.deleted ?? null,
+        }
+      })
     },
   }
 }
@@ -143,8 +156,10 @@ export function vehicleDetailQuery({
           vehicle_category,
           internally_owned,
           external_owner_id,
+          owner_user_id,
           created_at,
-          external_owner:customers!vehicles_external_owner_id_fkey ( id, name )
+          external_owner:customers!vehicles_external_owner_id_fkey ( id, name ),
+          owner_user:profiles!vehicles_owner_user_id_fkey ( user_id, display_name, email )
         `,
         )
         .eq('company_id', companyId)
@@ -155,6 +170,9 @@ export function vehicleDetailQuery({
       if (!data) return null
 
       const d: any = data
+      const ownerUser = Array.isArray(d.owner_user)
+        ? d.owner_user[0]
+        : d.owner_user
       return {
         id: d.id,
         name: d.name,
@@ -166,6 +184,8 @@ export function vehicleDetailQuery({
         internally_owned: !!d.internally_owned,
         external_owner_id: d.external_owner_id ?? null,
         external_owner_name: d.external_owner?.name ?? null,
+        owner_user_id: d.owner_user_id ?? null,
+        owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
         created_at: d.created_at,
       }
     },
@@ -182,6 +202,7 @@ export type UpsertVehiclePayload = {
   vehicle_category?: VehicleCategory | null
   internally_owned: boolean
   external_owner_id?: string | null
+  owner_user_id?: string | null
   image_path?: string | null
   notes?: string | null
 }

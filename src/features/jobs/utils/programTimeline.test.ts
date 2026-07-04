@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterProgramPeriods,
+  formatProgramDateTime,
   formatProgramDuration,
+  formatProgramTime,
+  groupProgramPeriods,
   mapProgramPeriodsToTimelineItems,
   sortProgramPeriods,
 } from './programTimeline'
@@ -76,5 +79,32 @@ describe('programTimeline', () => {
         '2026-07-01T11:00:00.000Z',
       ),
     ).toBe('2h')
+    expect(
+      formatProgramDuration(
+        '2026-07-01T09:00:00.000Z',
+        '2026-07-01T09:45:00.000Z',
+      ),
+    ).toBe('45m')
+    expect(
+      formatProgramDuration(
+        '2026-07-01T09:00:00.000Z',
+        '2026-07-01T10:30:00.000Z',
+      ),
+    ).toBe('1h 30m')
+  })
+
+  it('groups periods by program_group', () => {
+    const programOnly = filterProgramPeriods(periods)
+    const grouped = groupProgramPeriods(programOnly)
+    expect(grouped).toHaveLength(1)
+    expect(grouped[0]?.[0]).toBe('Day 1')
+    expect(grouped[0]?.[1]).toHaveLength(1)
+  })
+
+  it('formats program time and datetime labels', () => {
+    expect(formatProgramTime('2026-07-01T09:05:00.000Z')).toMatch(
+      /^\d{2}:\d{2}$/,
+    )
+    expect(formatProgramDateTime('2026-07-01T09:05:00.000Z')).toContain('juli')
   })
 })

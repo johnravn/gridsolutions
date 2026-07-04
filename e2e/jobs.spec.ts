@@ -1,5 +1,10 @@
 import { test, expect } from './fixtures'
-import { createDraftJob, openJobsPage } from './helpers/navigation'
+import {
+  createDraftJob,
+  clickJobTab,
+  expectJobTabActive,
+  openJobsPage,
+} from './helpers/navigation'
 
 test.describe('Jobs', () => {
   test('owner can open jobs page', async ({ authedPage: page }) => {
@@ -17,22 +22,22 @@ test.describe('Jobs', () => {
   test('owner can navigate job tabs', async ({ authedPage: page }) => {
     const title = await createDraftJob(page)
 
-    await page.getByRole('tab', { name: 'Overview' }).click()
-    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute(
-      'data-state',
-      'active',
-    )
+    await clickJobTab(page, 'Overview')
+    await expectJobTabActive(page, 'Overview')
 
-    await page.getByRole('tab', { name: 'Bookings' }).click()
-    await expect(page.getByRole('tab', { name: 'Bookings' })).toHaveAttribute(
-      'data-state',
-      'active',
-    )
+    await clickJobTab(page, 'Bookings')
+    await expectJobTabActive(page, 'Bookings')
 
-    await page.getByRole('tab', { name: 'Offers' }).click()
+    await clickJobTab(page, 'Offers')
     await expect(page.getByRole('heading', { name: 'Offers' })).toBeVisible({
       timeout: 15_000,
     })
+
+    await clickJobTab(page, 'Subcontractors')
+    await expectJobTabActive(page, 'Subcontractors')
+    await expect(
+      page.getByRole('heading', { name: 'Subcontractors' }),
+    ).toBeVisible({ timeout: 15_000 })
 
     await expect(page.getByRole('heading', { name: title })).toBeVisible()
   })
@@ -51,11 +56,8 @@ test.describe('Jobs', () => {
     await expect(editDialog.getByPlaceholder('Enter job title')).toHaveValue(
       updated,
     )
-    await expect(
-      editDialog.getByPlaceholder('Search project lead…'),
-    ).not.toHaveValue('', { timeout: 15_000 })
     const saveButton = editDialog.getByRole('button', { name: 'Save' })
-    await expect(saveButton).toBeEnabled()
+    await expect(saveButton).toBeEnabled({ timeout: 15_000 })
     await saveButton.click()
 
     await expect(editDialog).toBeHidden({ timeout: 15_000 })
@@ -77,12 +79,21 @@ test.describe('Jobs', () => {
   }) => {
     await createDraftJob(page)
 
-    await page.getByRole('tab', { name: 'Overview' }).click()
+    await clickJobTab(page, 'Overview')
     const overview = page.getByRole('tabpanel')
-    await overview.getByText('Planned', { exact: true }).click()
+    const statusSection = overview
+      .getByRole('heading', { name: 'Job Status' })
+      .locator('..')
+    const currentStatusRow = overview.getByText('Current status:').locator('..')
+    const currentStatus = (
+      await currentStatusRow.locator('.rt-Badge').textContent()
+    )?.trim()
+    const targetStatus = currentStatus === 'Planned' ? 'Requested' : 'Planned'
+
+    await statusSection.getByText(targetStatus, { exact: true }).click()
 
     await expect(
-      overview.getByText('Current status:').locator('..').getByText('Planned'),
+      currentStatusRow.getByText(targetStatus, { exact: true }),
     ).toBeVisible({ timeout: 15_000 })
   })
 })

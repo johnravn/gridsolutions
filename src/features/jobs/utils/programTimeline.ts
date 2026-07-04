@@ -1,4 +1,4 @@
-import type { PrettyOfferModuleBlockItem, TimePeriodLite  } from '../types'
+import type { PrettyOfferModuleBlockItem, TimePeriodLite } from '../types'
 
 export type TimelineBlockItem = PrettyOfferModuleBlockItem & {
   start_at: string | null

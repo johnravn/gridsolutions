@@ -16,7 +16,7 @@ import {
 import { Download, Edit, GoogleDocs, Plus, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
-import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import type { JobDetail } from '../../types'
 
@@ -26,8 +26,7 @@ export type FilesTabHandle = {
 
 const FilesTab = React.forwardRef<FilesTabHandle, { job: JobDetail }>(
   ({ job }, ref) => {
-    const { companyRole } = useAuthz()
-    const isReadOnly = companyRole === 'freelancer'
+    const { isReadOnly } = useCompanyWriteAccess()
     const { success, error, info } = useToast()
     const qc = useQueryClient()
     const [addOpen, setAddOpen] = React.useState(false)

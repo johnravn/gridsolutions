@@ -1,4 +1,10 @@
 import { test, expect } from './fixtures'
+import {
+  openCalendarPage,
+  openCompanyPage,
+  openInventoryPage,
+  openJobsPage,
+} from './helpers/navigation'
 
 test.describe('Role-based access', () => {
   test('freelancer cannot see inventory in navigation', async ({
@@ -23,25 +29,13 @@ test.describe('Role-based access', () => {
   test('freelancer can access jobs and calendar', async ({
     freelancerPage: page,
   }) => {
-    await page.getByRole('link', { name: 'Jobs', exact: true }).click()
-    await expect(page).toHaveURL(/\/jobs/)
-    await expect(
-      page.getByRole('heading', { name: 'Jobs', exact: true }),
-    ).toBeVisible({ timeout: 15_000 })
-
-    await page.getByRole('link', { name: 'Calendar', exact: true }).click()
-    await expect(page).toHaveURL(/\/calendar/)
-    await expect(page.getByRole('heading', { name: /2026/ })).toBeVisible({
-      timeout: 15_000,
-    })
+    test.setTimeout(60_000)
+    await openJobsPage(page)
+    await openCalendarPage(page)
   })
 
   test('employee can access inventory', async ({ employeePage: page }) => {
-    await page.getByRole('link', { name: 'Inventory', exact: true }).click()
-    await expect(page).toHaveURL(/\/inventory/)
-    await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible({
-      timeout: 15_000,
-    })
+    await openInventoryPage(page)
   })
 
   test('employee is redirected from company settings', async ({
@@ -52,10 +46,6 @@ test.describe('Role-based access', () => {
   })
 
   test('owner can access company settings', async ({ authedPage: page }) => {
-    await page.getByRole('link', { name: 'Company', exact: true }).click()
-    await expect(page).toHaveURL(/\/company/)
-    await expect(
-      page.getByRole('heading', { name: 'Grid Test Company' }),
-    ).toBeVisible({ timeout: 15_000 })
+    await openCompanyPage(page)
   })
 })

@@ -66,9 +66,7 @@ export default function EditCustomerDialog({
   const [form, setForm] = React.useState({
     ...initial,
     crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
-    accent_color: normalizeAccentColor(
-      initial.accent_color,
-    ),
+    accent_color: normalizeAccentColor(initial.accent_color),
     accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
     ...parseAddress(initial.address),

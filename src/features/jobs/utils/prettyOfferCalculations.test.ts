@@ -1,120 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import {
-  allocationAmountForModule,
-  calculateManualModuleCost,
+  applyComputedCostsToModules,
   calculatePrettyOfferTotals,
-  calculateTechnicalModuleCost,
-  parseManualFieldNumericValue,
-  validateSubcontractorAllocations,
+  calculateSplitAmount,
+  calculateTechnicalSplitAmount,
+  suggestTechnicalSplitsForModule,
+  validatePricingBases,
 } from './prettyOfferCalculations'
 import type {
+  JobSubcontractorQuote,
   OfferDetail,
   PrettyOfferModule,
-  PrettyOfferSubcontractorQuote,
+  PrettyOfferPricingBasis,
 } from '../types'
 
 describe('prettyOfferCalculations', () => {
-  it('parses manual field numeric values', () => {
-    expect(parseManualFieldNumericValue('1 234,50')).toBe(1234.5)
-    expect(parseManualFieldNumericValue('not-a-number')).toBe(0)
-  })
-
-  it('sums manual fields', () => {
-    const module: PrettyOfferModule = {
-      id: 'm1',
-      offer_id: 'o1',
-      title: 'Audio',
-      subtitle: null,
-      sort_order: 0,
-      basis_type: 'manual',
-      display_price: null,
-      show_price: false,
-      computed_cost: 0,
-      manual_fields: [
-        {
-          id: 'f1',
-          module_id: 'm1',
-          label: 'Rig',
-          value: '10000',
-          sort_order: 0,
-        },
-        {
-          id: 'f2',
-          module_id: 'm1',
-          label: 'Ops',
-          value: '2500',
-          sort_order: 1,
-        },
-      ],
-    }
-    expect(calculateManualModuleCost(module)).toBe(12500)
-  })
-
-  it('allocates subcontractor quote by percent and amount', () => {
-    const quote: PrettyOfferSubcontractorQuote = {
-      id: 'q1',
-      offer_id: 'o1',
-      vendor_name: 'Vendor',
-      note: null,
-      total_amount: 10000,
-      customer_id: null,
-      pdf_path: null,
-      pdf_filename: null,
-      mime_type: null,
-      size_bytes: null,
-      sort_order: 0,
-      allocations: [
-        {
-          id: 'a1',
-          quote_id: 'q1',
-          module_id: 'm1',
-          allocation_mode: 'percent',
-          allocation_value: 60,
-        },
-        {
-          id: 'a2',
-          quote_id: 'q1',
-          module_id: 'm2',
-          allocation_mode: 'amount',
-          allocation_value: 4000,
-        },
-      ],
-    }
-
-    expect(allocationAmountForModule(quote, 'm1')).toBe(6000)
-    expect(allocationAmountForModule(quote, 'm2')).toBe(4000)
-  })
-
-  it('validates subcontractor allocations', () => {
-    const quotes: Array<PrettyOfferSubcontractorQuote> = [
-      {
-        id: 'q1',
-        offer_id: 'o1',
-        vendor_name: 'Vendor',
-        note: null,
-        total_amount: 1000,
-        customer_id: null,
-        pdf_path: null,
-        pdf_filename: null,
-        mime_type: null,
-        size_bytes: null,
-        sort_order: 0,
-        allocations: [
-          {
-            id: 'a1',
-            quote_id: 'q1',
-            module_id: 'm1',
-            allocation_mode: 'percent',
-            allocation_value: 50,
-          },
-        ],
-      },
-    ]
-
-    expect(validateSubcontractorAllocations(quotes)).toHaveLength(1)
-  })
-
-  it('calculates technical module cost with proportional equipment discount', () => {
+  it('calculates technical split amount with proportional equipment discount', () => {
     const technicalOffer = {
       days_of_use: 1,
       discount_percent: 10,
@@ -140,65 +41,153 @@ describe('prettyOfferCalculations', () => {
             },
           ],
         },
-        {
-          id: 'g2',
-          offer_id: 't1',
-          group_name: 'Lights',
-          sort_order: 1,
-          created_at: '',
-          items: [
-            {
-              id: 'i2',
-              offer_group_id: 'g2',
-              item_id: null,
-              group_id: null,
-              quantity: 1,
-              unit_price: 1000,
-              total_price: 1000,
-              is_internal: true,
-              sort_order: 0,
-            },
-          ],
-        },
       ],
-      crew_items: [
-        {
-          id: 'c1',
-          offer_id: 't1',
-          role_title: 'FOH',
-          role_category: 'audio',
-          crew_count: 1,
-          start_date: '2026-01-01T08:00:00Z',
-          end_date: '2026-01-02T08:00:00Z',
-          daily_rate: 500,
-          total_price: 500,
-          sort_order: 0,
-        },
-      ],
+      crew_items: [],
       transport_items: [],
       transport_groups: [],
     } as unknown as OfferDetail
 
-    const cost = calculateTechnicalModuleCost({
+    const amount = calculateTechnicalSplitAmount(
+      {
+        category_type: 'equipment_group',
+        category_key: 'Audio',
+        amount: 0,
+      },
       technicalOffer,
-      mappings: [
-        {
-          id: 'map1',
-          module_id: 'm1',
-          category_type: 'equipment_group',
-          category_key: 'Audio',
-        },
-        {
-          id: 'map2',
-          module_id: 'm1',
-          category_type: 'crew_category',
-          category_key: 'audio',
-        },
-      ],
-    })
+    )
 
-    // Audio equipment 1000 - 50% of 200 total equipment discount (100) + crew 500
-    expect(cost).toBe(1400)
+    expect(amount).toBe(900)
+  })
+
+  it('sums module cost from multiple splits across basises', () => {
+    const modules: Array<PrettyOfferModule> = [
+      {
+        id: 'm1',
+        offer_id: 'o1',
+        title: 'Audio',
+        subtitle: null,
+        sort_order: 0,
+        display_price: null,
+        show_price: false,
+        computed_cost: 0,
+      },
+    ]
+
+    const pricingBases: Array<PrettyOfferPricingBasis> = [
+      {
+        id: 'b1',
+        offer_id: 'o1',
+        basis_type: 'custom',
+        title: 'Custom A',
+        sort_order: 0,
+        source_technical_offer_id: null,
+        job_subcontractor_quote_id: null,
+        splits: [
+          {
+            id: 's1',
+            basis_id: 'b1',
+            module_id: 'm1',
+            title: 'Line 1',
+            amount: 1000,
+            sort_order: 0,
+            category_type: null,
+            category_key: null,
+          },
+        ],
+      },
+      {
+        id: 'b2',
+        offer_id: 'o1',
+        basis_type: 'custom',
+        title: 'Custom B',
+        sort_order: 1,
+        source_technical_offer_id: null,
+        job_subcontractor_quote_id: null,
+        splits: [
+          {
+            id: 's2',
+            basis_id: 'b2',
+            module_id: 'm1',
+            title: 'Line 2',
+            amount: 500,
+            sort_order: 0,
+            category_type: null,
+            category_key: null,
+          },
+        ],
+      },
+    ]
+
+    const withCost = applyComputedCostsToModules(modules, pricingBases)
+    expect(withCost[0]?.computed_cost).toBe(1500)
+  })
+
+  it('validates subcontractor basis split totals', () => {
+    const quote: JobSubcontractorQuote = {
+      id: 'q1',
+      job_id: 'j1',
+      job_subcontractor_id: 'js1',
+      version_number: 1,
+      total_amount: 1000,
+      note: null,
+      pdf_path: null,
+      pdf_filename: null,
+      mime_type: null,
+      size_bytes: null,
+      created_at: '',
+    }
+
+    const bases: Array<PrettyOfferPricingBasis> = [
+      {
+        id: 'b1',
+        offer_id: 'o1',
+        basis_type: 'subcontractor',
+        title: 'Vendor',
+        sort_order: 0,
+        source_technical_offer_id: null,
+        job_subcontractor_quote_id: 'q1',
+        splits: [
+          {
+            id: 's1',
+            basis_id: 'b1',
+            module_id: 'm1',
+            title: 'Rigging',
+            amount: 400,
+            sort_order: 0,
+            category_type: null,
+            category_key: null,
+          },
+        ],
+      },
+    ]
+
+    const issues = validatePricingBases(
+      bases,
+      [{ id: 'm1' }],
+      new Map([['q1', quote]]),
+    )
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.message).toContain('must sum to quote total')
+  })
+
+  it('suggests technical splits from module title', () => {
+    const technicalOffer = {
+      groups: [{ id: 'g1', group_name: 'Audio' }],
+      crew_items: [{ id: 'c1', role_category: 'audio' }],
+      transport_groups: [],
+    } as unknown as OfferDetail
+
+    const suggestions = suggestTechnicalSplitsForModule(
+      'Audio',
+      technicalOffer,
+      'm1',
+    )
+    expect(suggestions.some((s) => s.category_type === 'equipment_group')).toBe(
+      true,
+    )
+    expect(suggestions.some((s) => s.category_type === 'crew_category')).toBe(
+      true,
+    )
   })
 
   it('calculates pretty offer totals with VAT', () => {
@@ -209,7 +198,6 @@ describe('prettyOfferCalculations', () => {
         title: 'A',
         subtitle: null,
         sort_order: 0,
-        basis_type: 'manual',
         display_price: null,
         show_price: false,
         computed_cost: 1000,
@@ -220,7 +208,6 @@ describe('prettyOfferCalculations', () => {
         title: 'B',
         subtitle: null,
         sort_order: 1,
-        basis_type: 'manual',
         display_price: null,
         show_price: false,
         computed_cost: 500,
@@ -230,5 +217,29 @@ describe('prettyOfferCalculations', () => {
     const totals = calculatePrettyOfferTotals(modules, 25)
     expect(totals.totalBeforeDiscount).toBe(1500)
     expect(totals.totalWithVat).toBe(1875)
+  })
+
+  it('uses stored amount for custom splits', () => {
+    const basis: PrettyOfferPricingBasis = {
+      id: 'b1',
+      offer_id: 'o1',
+      basis_type: 'custom',
+      title: 'Custom',
+      sort_order: 0,
+      source_technical_offer_id: null,
+      job_subcontractor_quote_id: null,
+      splits: [],
+    }
+    const split = {
+      id: 's1',
+      basis_id: 'b1',
+      module_id: 'm1',
+      title: 'Line',
+      amount: 2500,
+      sort_order: 0,
+      category_type: null,
+      category_key: null,
+    }
+    expect(calculateSplitAmount(split, basis)).toBe(2500)
   })
 })

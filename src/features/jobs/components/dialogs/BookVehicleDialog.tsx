@@ -21,6 +21,10 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
+import {
+  vehicleOwnerBadge,
+  vehicleOwnerKey,
+} from '@features/vehicles/lib/ownership'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import {
@@ -31,6 +35,7 @@ import {
   forcedBookingFields,
   isVehicleOverlapError,
 } from '@features/conflicts/api/forceBooking'
+import type { VehicleOwnerKind } from '@features/vehicles/lib/ownership'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { ExternalReqStatus, UUID } from '../../types'
 import type { Database } from '@shared/types/database.types'
@@ -39,7 +44,7 @@ type ReservedVehicleInsert =
   Database['public']['Tables']['reserved_vehicles']['Insert']
 
 type ViewMode = 'grid' | 'list'
-type OwnerType = 'internal' | 'external'
+type OwnerType = VehicleOwnerKind
 
 export default function BookVehicleDialog({
   open,
@@ -64,7 +69,7 @@ export default function BookVehicleDialog({
 
   // Vehicle selection
   const [vehicleId, setVehicleId] = React.useState<UUID | ''>('')
-  const [ownerType, setOwnerType] = React.useState<OwnerType>('internal')
+  const [ownerType, setOwnerType] = React.useState<OwnerType>('company')
   const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
   const [search, setSearch] = React.useState('')
 
@@ -100,7 +105,13 @@ export default function BookVehicleDialog({
   const vehicles = React.useMemo(() => {
     return allVehicles
       .filter((v) => !v.deleted)
-      .filter((v) => v.internally_owned === (ownerType === 'internal'))
+      .filter((v) => {
+        if (ownerType === 'company') return v.internally_owned
+        if (ownerType === 'partner') {
+          return !v.internally_owned && !v.owner_user_id
+        }
+        return !v.internally_owned && !!v.owner_user_id
+      })
   }, [allVehicles, ownerType])
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId)
@@ -111,7 +122,7 @@ export default function BookVehicleDialog({
       'jobs',
       jobId,
       'transport-periods-by-owner',
-      selectedVehicle?.external_owner_id || 'internal',
+      selectedVehicle ? vehicleOwnerKey(selectedVehicle) : 'company',
     ],
     enabled: open && !!selectedVehicle && !!jobId,
     queryFn: async () => {
@@ -134,12 +145,14 @@ export default function BookVehicleDialog({
       // Get vehicles on these time periods
       const { data: reservedVehicles, error: rvErr } = await supabase
         .from('reserved_vehicles')
-        .select('time_period_id, vehicle:vehicle_id(id, external_owner_id)')
+        .select(
+          'time_period_id, vehicle:vehicle_id(id, internally_owned, external_owner_id, owner_user_id)',
+        )
         .in('time_period_id', timePeriodIds)
 
       if (rvErr) throw rvErr
 
-      const selectedOwnerId = selectedVehicle.external_owner_id || null
+      const selectedOwnerKey = vehicleOwnerKey(selectedVehicle)
 
       // Filter to time periods that have vehicles from the same owner
       const matchingPeriods = timePeriods.filter((tp) => {
@@ -149,15 +162,13 @@ export default function BookVehicleDialog({
 
         if (vehiclesOnPeriod.length === 0) return false
 
-        // Check if all vehicles have the same owner as selected vehicle
-        const owners = new Set<string | null>()
+        const owners = new Set<string>()
         vehiclesOnPeriod.forEach((rv: any) => {
           const vehicle = Array.isArray(rv.vehicle) ? rv.vehicle[0] : rv.vehicle
-          owners.add(vehicle?.external_owner_id || null)
+          if (vehicle) owners.add(vehicleOwnerKey(vehicle))
         })
 
-        // Must have only one owner type and it must match selected vehicle's owner
-        return owners.size === 1 && owners.has(selectedOwnerId)
+        return owners.size === 1 && owners.has(selectedOwnerKey)
       })
 
       return matchingPeriods
@@ -226,11 +237,12 @@ export default function BookVehicleDialog({
   // Generate time period title
   const timePeriodTitle = React.useMemo(() => {
     if (!selectedVehicle) return ''
-    if (
-      !selectedVehicle.internally_owned &&
-      selectedVehicle.external_owner_name
-    ) {
-      return `${selectedVehicle.external_owner_name} Transport period`
+    if (!selectedVehicle.internally_owned) {
+      const ownerLabel =
+        selectedVehicle.owner_user_name ??
+        selectedVehicle.external_owner_name ??
+        'External'
+      return `${ownerLabel} Transport period`
     }
     return `${selectedVehicle.name} Transport period`
   }, [selectedVehicle])
@@ -239,7 +251,7 @@ export default function BookVehicleDialog({
   React.useEffect(() => {
     if (!open) {
       setVehicleId('')
-      setOwnerType('internal')
+      setOwnerType('company')
       setViewMode('grid')
       setSearch('')
       setCreateNewTimePeriod(false)
@@ -318,7 +330,7 @@ export default function BookVehicleDialog({
         Object.assign(payload, forcedBookingFields(authUserId))
       }
 
-      if (selectedV.external_owner_id) {
+      if (!selectedV.internally_owned) {
         payload.external_status = status
         if (note.trim()) {
           payload.external_note = note.trim()
@@ -382,11 +394,14 @@ export default function BookVehicleDialog({
                       setVehicleId('')
                     }}
                   >
-                    <SegmentedControl.Item value="internal">
-                      Internal
+                    <SegmentedControl.Item value="company">
+                      Company
                     </SegmentedControl.Item>
-                    <SegmentedControl.Item value="external">
-                      External
+                    <SegmentedControl.Item value="partner">
+                      Partner
+                    </SegmentedControl.Item>
+                    <SegmentedControl.Item value="person">
+                      Personal
                     </SegmentedControl.Item>
                   </SegmentedControl.Root>
 
@@ -650,6 +665,7 @@ function VehicleCard({
 
   const fuelColor: React.ComponentProps<typeof Badge>['color'] =
     v.fuel === 'electric' ? 'green' : v.fuel === 'diesel' ? 'orange' : 'blue'
+  const ownerBadge = vehicleOwnerBadge(v)
 
   return (
     <Card
@@ -700,15 +716,9 @@ function VehicleCard({
               {v.fuel}
             </Badge>
           )}
-          {v.internally_owned ? (
-            <Badge variant="soft" color="indigo" size="1">
-              Internal
-            </Badge>
-          ) : (
-            <Badge variant="soft" color="violet" size="1">
-              {v.external_owner_name ?? 'External'}
-            </Badge>
-          )}
+          <Badge variant="soft" color={ownerBadge.color} size="1">
+            {ownerBadge.label}
+          </Badge>
         </Flex>
       </Flex>
     </Card>
@@ -750,6 +760,7 @@ function VehicleList({
         ) : (
           vehicles.map((v) => {
             const active = v.id === selectedId
+            const ownerBadge = vehicleOwnerBadge(v)
             return (
               <Table.Row
                 key={v.id}
@@ -785,15 +796,9 @@ function VehicleList({
                   )}
                 </Table.Cell>
                 <Table.Cell>
-                  {v.internally_owned ? (
-                    <Badge variant="soft" color="indigo">
-                      Internal
-                    </Badge>
-                  ) : (
-                    <Badge variant="soft" color="violet">
-                      {v.external_owner_name ?? 'External'}
-                    </Badge>
-                  )}
+                  <Badge variant="soft" color={ownerBadge.color}>
+                    {ownerBadge.label}
+                  </Badge>
                 </Table.Cell>
               </Table.Row>
             )

@@ -48,7 +48,8 @@ Set these in the **Supabase project** (Dashboard → Edge Functions → Secrets,
 
 | Variable                    | Required   | Notes                                                                                          |
 | --------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `RESEND_API_KEY`            | Yes        | Resend dashboard                                                                               |
+| `RESEND_API_KEY`            | Yes*       | Resend dashboard. *Optional when `RESEND_DRY_RUN=true` (local/staging).                        |
+| `RESEND_DRY_RUN`            | No         | Set to `true` on a Supabase project to exercise email flows **without** calling Resend. **Never set on production.** |
 | `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default |
 | `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                               |
 | `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                         |
@@ -83,9 +84,24 @@ Set **`APP_URL` in the same Supabase project** whose functions are invoked (loca
 - **Quick local experiments**: omitting `RESEND_FROM_EMAIL` falls back to Resend’s test sender (`notifications@resend.dev`); Resend may restrict who you can send to—check their docs for the current test rules.
 - **Staging / prod**: use a verified domain and a dedicated API key per Resend environment if you want clear separation and easier key rotation.
 
+### Dry run (no Resend HTTP calls)
+
+Set **`RESEND_DRY_RUN=true`** as an Edge Function secret on the **local** (or staging) Supabase project:
+
+```bash
+supabase secrets set RESEND_DRY_RUN=true
+npm run supabase:restart   # or redeploy functions on hosted projects
+```
+
+`sendResendHtmlEmail()` in `_shared/email/resend.ts` then returns success without POSTing to Resend. DB triggers, UI flows, and `email_sent_at` updates behave as if mail was sent. Edge logs include `[resend] RESEND_DRY_RUN: skipped send` with to/subject.
+
+- **`RESEND_API_KEY` is optional** while dry run is on (functions still need `SUPABASE_*`).
+- **Production is unaffected** unless you set this secret on the production Supabase project — secrets are per project; leave `RESEND_DRY_RUN` unset in prod.
+- Turn off: `supabase secrets unset RESEND_DRY_RUN` and restart.
+
 ### Same code path everywhere
 
-The app always calls **`@shared/email/supabaseEdgeEmail`**. Do not branch “real Resend vs mock” in the Vite app: if you need a **dry run**, implement it in an Edge Function behind an explicit secret or a separate project, not scattered `if (import.meta.env.DEV)` sends.
+The app always calls **`@shared/email/supabaseEdgeEmail`**. Do not branch “real Resend vs mock” in the Vite app; use **`RESEND_DRY_RUN`** on the Supabase project instead of scattered `if (import.meta.env.DEV)` sends.
 
 `import.meta.env.DEV` in this repo is only used for **extra logging** (e.g. `fireAndForgetWelcomeEmail` warns on failure in dev); it does not change whether mail is sent.
 

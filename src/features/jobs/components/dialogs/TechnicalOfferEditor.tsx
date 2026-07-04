@@ -399,6 +399,7 @@ export default function TechnicalOfferEditor({
     transportGroups: [] as Array<LocalTransportGroup>,
   })
   const lockOutcomeRef = React.useRef<'close' | 'stay_open'>('close')
+  const initializedOfferIdRef = React.useRef<string | null>(null)
 
   // Equipment groups and items
   const [equipmentGroups, setEquipmentGroups] = React.useState<
@@ -462,6 +463,7 @@ export default function TechnicalOfferEditor({
       setCloseGuardOpen(false)
       setLockSendStep(null)
       setGridEmailDraft('')
+      initializedOfferIdRef.current = null
     }
   }, [open])
 
@@ -484,8 +486,14 @@ export default function TechnicalOfferEditor({
     if (!open) return
     // Wait for query to finish loading before initializing
     if (isLoadingOffer) return
+    if (hasPersistedOffer && !existingOffer) return
 
     if (existingOffer && currentOfferId) {
+      if (initializedOfferIdRef.current === currentOfferId) {
+        return
+      }
+      initializedOfferIdRef.current = currentOfferId
+
       setTitle(existingOffer.title)
       setDaysOfUse(existingOffer.days_of_use)
       setDiscountPercent(existingOffer.discount_percent)
@@ -526,9 +534,7 @@ export default function TechnicalOfferEditor({
                 ? {
                     id: rawItem.id,
                     name: rawItem.name,
-                    externally_owned: !rawItem.internally_owned,
-                    external_owner_id: rawItem.external_owner_id ?? null,
-                    external_owner_name: rawItem.external_owner?.name ?? null,
+                    item_kind: rawItem.item_kind ?? 'stock',
                     brand: brand ?? null,
                     model: rawItem.model ?? null,
                   }
@@ -537,9 +543,7 @@ export default function TechnicalOfferEditor({
                 ? {
                     id: rawGroup.id,
                     name: rawGroup.name,
-                    externally_owned: !rawGroup.internally_owned,
-                    external_owner_id: rawGroup.external_owner_id ?? null,
-                    external_owner_name: rawGroup.external_owner?.name ?? null,
+                    item_kind: rawGroup.item_kind ?? 'stock',
                   }
                 : null,
             }
@@ -667,7 +671,8 @@ export default function TechnicalOfferEditor({
           transportGroups: transportBaseline,
         }),
       )
-    } else {
+    } else if (!hasPersistedOffer) {
+      initializedOfferIdRef.current = null
       // Reset for new offer
       setTitle(defaultTitle)
       setDaysOfUse(defaultDaysOfUse)

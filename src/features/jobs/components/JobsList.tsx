@@ -15,6 +15,7 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { MoreHoriz, NavArrowRight, Plus, Search } from 'iconoir-react'
@@ -71,6 +72,7 @@ export default function JobsList({
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { userId, companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
@@ -254,7 +256,7 @@ export default function JobsList({
             {isFetching && <Spinner size={compact ? '3' : '2'} />}
           </TextField.Slot>
         </TextField.Root>
-        {companyRole !== 'freelancer' && (
+        {canWrite && (
           <Flex
             gap="2"
             align="center"

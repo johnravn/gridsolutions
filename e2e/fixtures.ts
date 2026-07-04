@@ -18,7 +18,7 @@ export const ROLE_CREDENTIALS = {
 
 export const TEST_OFFER_TOKENS = {
   sent: 'e2e-test-sent-offer-token',
-  accept: 'e2e-test-e2e-accept-offer-token',
+  accept: 'e2e-test-accept-offer-token',
   reject: 'e2e-test-reject-offer-token',
   revision: 'e2e-test-revision-offer-token',
 }

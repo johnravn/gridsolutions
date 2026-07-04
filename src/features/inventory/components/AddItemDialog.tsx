@@ -15,10 +15,11 @@ import {
 import { useNavigate } from '@tanstack/react-router'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { Plus, Sparks } from 'iconoir-react'
-import { partnerCustomersQuery } from '../api/partners'
 import BrandAutocomplete from './BrandAutocomplete'
+import type { InventoryItemKind } from '../api/queries'
 
 type FormState = {
   name: string
@@ -31,8 +32,7 @@ type FormState = {
   notes?: string
   nicknames?: string
   price?: number | null
-  internally_owned: boolean
-  external_owner_id: string | null
+  item_kind: InventoryItemKind
 }
 
 type Option = { id: string; name: string }
@@ -49,8 +49,7 @@ type EditInitialData = {
   notes?: string | null
   nicknames?: string | null
   price: number | null
-  internally_owned: boolean
-  external_owner_id: string | null
+  item_kind: InventoryItemKind
 }
 
 export default function AddItemDialog({
@@ -74,7 +73,8 @@ export default function AddItemDialog({
   const qc = useQueryClient()
   const navigate = useNavigate()
   const { companyRole } = useAuthz()
-  const isOwner = companyRole === 'owner'
+  const { canWrite } = useCompanyWriteAccess()
+  const isOwner = companyRole === 'owner' && canWrite
 
   const [form, setForm] = React.useState<FormState>({
     name: '',
@@ -87,8 +87,7 @@ export default function AddItemDialog({
     notes: '',
     nicknames: '',
     price: undefined,
-    internally_owned: true,
-    external_owner_id: null,
+    item_kind: 'stock',
   })
   const [totalQuantityDraft, setTotalQuantityDraft] = React.useState<
     string | null
@@ -114,8 +113,7 @@ export default function AddItemDialog({
       notes: '',
       nicknames: '',
       price: undefined,
-      internally_owned: true,
-      external_owner_id: null,
+      item_kind: 'stock',
     })
     setBrandName(null)
     setTotalQuantityDraft(null)
@@ -144,11 +142,6 @@ export default function AddItemDialog({
 
   // Brand name state (for autocomplete)
   const [brandName, setBrandName] = React.useState<string | null>(null)
-
-  const { data: partners = [] } = useQuery({
-    ...partnerCustomersQuery({ companyId: companyId }),
-    enabled: !!companyId && open,
-  })
 
   /* -------- Reset form in CREATE mode when dialog opens -------- */
   React.useEffect(() => {
@@ -215,8 +208,7 @@ export default function AddItemDialog({
         notes: initialData.notes ?? '',
         nicknames: initialData.nicknames ?? '',
         price: initialData.price,
-        internally_owned: initialData.internally_owned,
-        external_owner_id: initialData.external_owner_id ?? null,
+        item_kind: initialData.item_kind,
       }
     })
     // Only run this effect when dialog is opened in edit mode, or when categories are loaded
@@ -277,13 +269,12 @@ export default function AddItemDialog({
       )
       if (error) throw error
 
-      // Update internally_owned and external_owner_id separately since the function doesn't support them
+      // Update item_kind separately since the function doesn't support it
       if (itemId) {
         const { error: updateError } = await supabase
           .from('items')
           .update({
-            internally_owned: f.internally_owned,
-            external_owner_id: f.internally_owned ? null : f.external_owner_id,
+            item_kind: f.item_kind,
           })
           .eq('id', itemId)
         if (updateError) throw updateError
@@ -388,8 +379,7 @@ export default function AddItemDialog({
           active: f.active,
           notes: f.notes || null,
           nicknames: f.nicknames || null,
-          internally_owned: f.internally_owned,
-          external_owner_id: f.internally_owned ? null : f.external_owner_id,
+          item_kind: f.item_kind,
         })
         .eq('company_id', companyId)
         .eq('id', initialData.id)
@@ -524,12 +514,7 @@ export default function AddItemDialog({
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
 
-    // Set random external owner if available and not internally owned
-    const randomPartner =
-      partners.length > 0
-        ? partners[Math.floor(Math.random() * partners.length)]
-        : null
-    const isInternal = Math.random() > 0.3 // 70% chance of being internal
+    const isStock = Math.random() > 0.3 // 70% chance of being stock
 
     setForm({
       name: randomName,
@@ -537,13 +522,12 @@ export default function AddItemDialog({
       brandId: null, // Will be set via brandName
       model: randomModel,
       allow_individual_booking: Math.random() > 0.5,
-      total_quantity: randomQuantity,
+      total_quantity: isStock ? randomQuantity : 0,
       active: Math.random() > 0.2, // 80% chance of being active
       notes: randomNotes,
       nicknames: '',
       price: randomPrice,
-      internally_owned: isInternal,
-      external_owner_id: isInternal ? null : (randomPartner?.id ?? null),
+      item_kind: isStock ? 'stock' : 'subrental',
     })
 
     // Set brand name for autocomplete
@@ -666,38 +650,17 @@ export default function AddItemDialog({
                   placeholder="e.g. Pro, Standard, 2024"
                 />
               </Field>
-              <Field label="Owner">
+              <Field label="Type">
                 <Select.Root
-                  value={form.internally_owned ? 'internal' : 'external'}
-                  onValueChange={(v: string) => {
-                    const internal = v === 'internal'
-                    set('internally_owned', internal)
-                    if (internal) set('external_owner_id', null)
-                  }}
+                  value={form.item_kind}
+                  onValueChange={(v: string) =>
+                    set('item_kind', v as InventoryItemKind)
+                  }
                 >
                   <Select.Trigger />
                   <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Item value="internal">Internal</Select.Item>
-                    <Select.Item value="external">External</Select.Item>
-                  </Select.Content>
-                </Select.Root>
-              </Field>
-
-              <Field label="External owner">
-                <Select.Root
-                  value={form.external_owner_id ?? undefined}
-                  onValueChange={(v) => set('external_owner_id', v)}
-                  disabled={form.internally_owned}
-                >
-                  <Select.Trigger placeholder="Select partner…" />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Group>
-                      {partners.map((p) => (
-                        <Select.Item key={p.id} value={p.id}>
-                          {p.name}
-                        </Select.Item>
-                      ))}
-                    </Select.Group>
+                    <Select.Item value="stock">Stock</Select.Item>
+                    <Select.Item value="subrental">Subrental</Select.Item>
                   </Select.Content>
                 </Select.Root>
               </Field>

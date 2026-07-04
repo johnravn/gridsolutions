@@ -203,7 +203,7 @@ async function seedTestItem() {
       company_id: TEST_IDS.companyId,
       name: 'Test Seeded Item',
       total_quantity: 1,
-      internally_owned: true,
+      item_kind: 'stock',
       active: true,
       deleted: false,
     },
@@ -245,10 +245,9 @@ async function seedEquipmentGroup(offerId, groupId, itemId) {
 }
 
 async function seedConflictBooking(ownerId) {
-  await admin
-    .from('reserved_items')
-    .delete()
-    .eq('id', TEST_IDS.conflictReservedItemId)
+  // Drop all bookings on the shared test item so integration leftovers cannot
+  // exhaust capacity (total_quantity is 1).
+  await admin.from('reserved_items').delete().eq('item_id', TEST_IDS.testItemId)
   await admin
     .from('time_periods')
     .delete()

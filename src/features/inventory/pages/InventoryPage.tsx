@@ -45,8 +45,8 @@ export default function InventoryPage() {
   }, [inventoryId])
   const [showActive, setShowActive] = React.useState(true)
   const [showInactive, setShowInactive] = React.useState(false)
-  const [showInternal, setShowInternal] = React.useState(true)
-  const [showExternal, setShowExternal] = React.useState(true)
+  const [showStock, setShowStock] = React.useState(true)
+  const [showSubrental, setShowSubrental] = React.useState(true)
   const [showGroupOnlyItems, setShowGroupOnlyItems] = React.useState(false)
   const [showGroups, setShowGroups] = React.useState(true)
   const [showItems, setShowItems] = React.useState(true)
@@ -206,8 +206,8 @@ export default function InventoryPage() {
                 onSelect={setSelectedId}
                 showActive={showActive}
                 showInactive={showInactive}
-                showInternal={showInternal}
-                showExternal={showExternal}
+                showStock={showStock}
+                showSubrental={showSubrental}
                 showGroupOnlyItems={showGroupOnlyItems}
                 showGroups={showGroups}
                 showItems={showItems}
@@ -356,15 +356,15 @@ export default function InventoryPage() {
                   <InventoryFilter
                     showActive={showActive}
                     showInactive={showInactive}
-                    showInternal={showInternal}
-                    showExternal={showExternal}
+                    showStock={showStock}
+                    showSubrental={showSubrental}
                     showGroupOnlyItems={showGroupOnlyItems}
                     showGroups={showGroups}
                     showItems={showItems}
                     onShowActiveChange={setShowActive}
                     onShowInactiveChange={setShowInactive}
-                    onShowInternalChange={setShowInternal}
-                    onShowExternalChange={setShowExternal}
+                    onShowStockChange={setShowStock}
+                    onShowSubrentalChange={setShowSubrental}
                     onShowGroupOnlyItemsChange={setShowGroupOnlyItems}
                     onShowGroupsChange={setShowGroups}
                     onShowItemsChange={setShowItems}
@@ -398,8 +398,8 @@ export default function InventoryPage() {
                   onSelect={setSelectedId}
                   showActive={showActive}
                   showInactive={showInactive}
-                  showInternal={showInternal}
-                  showExternal={showExternal}
+                  showStock={showStock}
+                  showSubrental={showSubrental}
                   showGroupOnlyItems={showGroupOnlyItems}
                   showGroups={showGroups}
                   showItems={showItems}
@@ -482,30 +482,30 @@ export default function InventoryPage() {
 function InventoryFilter({
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
   onShowActiveChange,
   onShowInactiveChange,
-  onShowInternalChange,
-  onShowExternalChange,
+  onShowStockChange,
+  onShowSubrentalChange,
   onShowGroupOnlyItemsChange,
   onShowGroupsChange,
   onShowItemsChange,
 }: {
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
   onShowActiveChange: (v: boolean) => void
   onShowInactiveChange: (v: boolean) => void
-  onShowInternalChange: (v: boolean) => void
-  onShowExternalChange: (v: boolean) => void
+  onShowStockChange: (v: boolean) => void
+  onShowSubrentalChange: (v: boolean) => void
   onShowGroupOnlyItemsChange: (v: boolean) => void
   onShowGroupsChange: (v: boolean) => void
   onShowItemsChange: (v: boolean) => void
@@ -514,8 +514,8 @@ function InventoryFilter({
   const selectedCount = [
     showActive,
     showInactive,
-    showInternal,
-    showExternal,
+    showStock,
+    showSubrental,
     showGroupOnlyItems,
     showGroups,
     showItems,
@@ -582,33 +582,30 @@ function InventoryFilter({
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Separator />
-        <DropdownMenu.Label>Ownership</DropdownMenu.Label>
+        <DropdownMenu.Label>Kind</DropdownMenu.Label>
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()
-            onShowInternalChange(!showInternal)
+            onShowStockChange(!showStock)
           }}
         >
           <Flex align="center" gap="2">
-            <Checkbox
-              checked={showInternal}
-              onCheckedChange={onShowInternalChange}
-            />
-            <Text>Internal</Text>
+            <Checkbox checked={showStock} onCheckedChange={onShowStockChange} />
+            <Text>Stock</Text>
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()
-            onShowExternalChange(!showExternal)
+            onShowSubrentalChange(!showSubrental)
           }}
         >
           <Flex align="center" gap="2">
             <Checkbox
-              checked={showExternal}
-              onCheckedChange={onShowExternalChange}
+              checked={showSubrental}
+              onCheckedChange={onShowSubrentalChange}
             />
-            <Text>External</Text>
+            <Text>Subrental</Text>
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Separator />

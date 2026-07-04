@@ -23,6 +23,7 @@ import {
 } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { sendCrewInvite, sendCrewInvites } from '../../../matters/api/queries'
 import { crewInternalNotesQuery } from '../../../crew/api/queries'
@@ -68,7 +69,7 @@ export default function CrewTab({
   companyId: string
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [addRoleOpen, setAddRoleOpen] = React.useState(false)
   const [expandedRoles, setExpandedRoles] = React.useState<Set<string>>(

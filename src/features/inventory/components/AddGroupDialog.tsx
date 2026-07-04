@@ -21,9 +21,10 @@ import {
 import { NewTab, Plus, Search, Sparks, Trash } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { partnerCustomersQuery } from '../api/partners'
+import type { InventoryItemKind } from '../api/queries'
 
 type Option = { id: string; name: string }
 type PickerItem = {
@@ -53,8 +54,7 @@ type FormState = {
   active: boolean
   price: number | null
   parts: Array<Part>
-  internally_owned: boolean
-  external_owner_id: string | null
+  item_kind: InventoryItemKind
 }
 
 type EditInitialData = {
@@ -72,8 +72,7 @@ type EditInitialData = {
     item_current_price: number | null
     part_type: 'item' | 'group'
   }>
-  internally_owned: boolean
-  external_owner_id: string | null
+  item_kind: InventoryItemKind
 }
 
 export default function AddGroupDialog({
@@ -97,7 +96,8 @@ export default function AddGroupDialog({
   const { success, error: toastError } = useToast()
   const navigate = useNavigate()
   const { companyRole } = useAuthz()
-  const isOwner = companyRole === 'owner'
+  const { canWrite } = useCompanyWriteAccess()
+  const isOwner = companyRole === 'owner' && canWrite
 
   const fmtCurrency = React.useMemo(
     () =>
@@ -116,8 +116,7 @@ export default function AddGroupDialog({
     active: true,
     price: null,
     parts: [],
-    internally_owned: true,
-    external_owner_id: null,
+    item_kind: 'stock',
   })
   const [partQuantityDrafts, setPartQuantityDrafts] = React.useState<
     Record<string, string>
@@ -143,8 +142,7 @@ export default function AddGroupDialog({
       active: true,
       price: null,
       parts: [],
-      internally_owned: true,
-      external_owner_id: null,
+      item_kind: 'stock',
     })
     setSearch('')
     originalPriceRef.current = null
@@ -330,16 +328,6 @@ export default function AddGroupDialog({
     staleTime: 15_000,
   })
 
-  const { data: partners = [] } = useQuery({
-    ...(companyId
-      ? partnerCustomersQuery({ companyId })
-      : {
-          queryKey: ['company', '__none__', 'partner-customers'],
-          queryFn: async () => [],
-        }),
-    enabled: !!companyId && open,
-  })
-
   /* -------- Reset form in CREATE mode when dialog opens -------- */
   React.useEffect(() => {
     if (open && mode === 'create') {
@@ -374,8 +362,7 @@ export default function AddGroupDialog({
         active: initialData.active,
         price: initialData.price,
         parts: newParts,
-        internally_owned: initialData.internally_owned,
-        external_owner_id: initialData.external_owner_id,
+        item_kind: initialData.item_kind,
       }
     })
   }, [open, mode, initialData, categories])
@@ -398,8 +385,7 @@ export default function AddGroupDialog({
             category_id: f.categoryId,
             description: f.description || null,
             active: f.active,
-            internally_owned: f.internally_owned,
-            external_owner_id: f.internally_owned ? null : f.external_owner_id,
+            item_kind: f.item_kind,
           })
           .select('id')
           .single()
@@ -415,8 +401,7 @@ export default function AddGroupDialog({
             category_id: f.categoryId,
             description: f.description || null,
             active: f.active,
-            internally_owned: f.internally_owned,
-            external_owner_id: f.internally_owned ? null : f.external_owner_id,
+            item_kind: f.item_kind,
           })
           .select('id')
           .single()
@@ -517,8 +502,7 @@ export default function AddGroupDialog({
           category_id: f.categoryId,
           description: f.description || null,
           active: f.active,
-          internally_owned: f.internally_owned,
-          external_owner_id: f.internally_owned ? null : f.external_owner_id,
+          item_kind: f.item_kind,
         })
         .eq('company_id', companyId)
         .eq('id', initialData.id)
@@ -665,11 +649,7 @@ export default function AddGroupDialog({
     const randomDescription =
       descriptions[Math.floor(Math.random() * descriptions.length)]
     const randomPrice = Math.floor(Math.random() * 10000) + 1000
-    const isInternal = Math.random() > 0.3 // 70% chance of being internal
-    const randomPartner =
-      partners.length > 0
-        ? partners[Math.floor(Math.random() * partners.length)]
-        : null
+    const isStock = Math.random() > 0.3 // 70% chance of being stock
 
     // Set random category if available
     const randomCategory =
@@ -684,8 +664,7 @@ export default function AddGroupDialog({
       active: Math.random() > 0.2, // 80% chance of being active
       price: randomPrice,
       parts: [], // Don't auto-populate parts as it requires item/group selection
-      internally_owned: isInternal,
-      external_owner_id: isInternal ? null : (randomPartner?.id ?? null),
+      item_kind: isStock ? 'stock' : 'subrental',
     })
   }
   // ===== END TESTING ONLY =====
@@ -790,44 +769,20 @@ export default function AddGroupDialog({
               {/* Owner */}
               <Separator />
               <Text size="2" weight="bold">
-                Ownership
+                Type
               </Text>
-              <label
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              <Select.Root
+                value={form.item_kind}
+                onValueChange={(v: string) =>
+                  set('item_kind', v as InventoryItemKind)
+                }
               >
-                <input
-                  type="checkbox"
-                  checked={form.internally_owned}
-                  onChange={(e) => set('internally_owned', e.target.checked)}
-                />
-                Internally owned
-              </label>
-              {!form.internally_owned && (
-                <Select.Root
-                  value={form.external_owner_id ?? '__none__'}
-                  onValueChange={(value) =>
-                    set(
-                      'external_owner_id',
-                      value === '__none__' ? null : value,
-                    )
-                  }
-                >
-                  <Select.Trigger>
-                    {form.external_owner_id
-                      ? partners.find((p) => p.id === form.external_owner_id)
-                          ?.name || 'Select partner'
-                      : 'Select partner'}
-                  </Select.Trigger>
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Item value="__none__">None</Select.Item>
-                    {partners.map((partner) => (
-                      <Select.Item key={partner.id} value={partner.id}>
-                        {partner.name}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              )}
+                <Select.Trigger />
+                <Select.Content style={{ zIndex: 10000 }}>
+                  <Select.Item value="stock">Stock</Select.Item>
+                  <Select.Item value="subrental">Subrental</Select.Item>
+                </Select.Content>
+              </Select.Root>
 
               {/* Actions */}
               <Flex gap="2" justify="end" mt="auto">

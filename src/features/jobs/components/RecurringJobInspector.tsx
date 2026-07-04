@@ -14,6 +14,7 @@ import {
 import { Archive, Edit, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -41,6 +42,7 @@ export default function RecurringJobInspector({
   onDeleted?: () => void
 }) {
   const { companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const isFreelancer = companyRole === 'freelancer'
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
@@ -137,7 +139,7 @@ export default function RecurringJobInspector({
             </Badge>
           </Flex>
         </Flex>
-        {!isFreelancer && (
+        {canWrite && (
           <Flex gap="2">
             <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
               <Edit width={16} height={16} />

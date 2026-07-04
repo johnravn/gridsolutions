@@ -21,6 +21,7 @@ const config: StorybookConfig = {
     '@chromatic-com/storybook',
     '@storybook/addon-a11y',
     '@storybook/addon-docs',
+    '@storybook/addon-vitest',
   ],
   framework: '@storybook/react-vite',
   viteFinal(viteConfig) {

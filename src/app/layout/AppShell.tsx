@@ -25,6 +25,7 @@ import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
+import { DemoModeBadge } from '@features/demo/components/DemoModeBadge'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAppResume } from '../hooks/useAppResume'
 import { NAV, Sidebar } from './Sidebar'
@@ -167,7 +168,7 @@ export default function AppShell() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    navigate({ to: '/login' })
+    navigate({ to: '/' })
   }
 
   const title = getPageTitle(currentPath)
@@ -175,7 +176,9 @@ export default function AppShell() {
     currentPath === '/login' ||
     currentPath === '/signup' ||
     currentPath === '/legal' ||
+    currentPath === '/contact' ||
     currentPath === '/' ||
+    currentPath === '/demo' ||
     currentPath.startsWith('/offer/')
   const showNoCompanyMessage =
     !isPublic && !companyLoading && !!authUser?.id && companies.length === 0
@@ -324,7 +327,17 @@ export default function AppShell() {
                   You are not part of any company.
                 </Text>
                 <Text size="3" color="gray">
-                  If this is wrong, contact support.
+                  If this is wrong,{' '}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: 'var(--accent-11)',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    contact support
+                  </Link>
+                  .
                 </Text>
               </Flex>
             ) : (
@@ -335,6 +348,7 @@ export default function AppShell() {
           </Box>
         </Flex>
       </Box>
+      {!isPublic && <DemoModeBadge />}
       {isLocal && (
         <Flex
           direction="column"

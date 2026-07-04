@@ -1,6 +1,11 @@
 import { test, expect, TEST_OFFER_TOKENS } from './fixtures'
+import { openPublicOfferAction } from './helpers/public-offer'
+import { resetMutablePublicOffers } from './helpers/reset-public-offers.mjs'
 
 test.describe('Public offer', () => {
+  test.beforeEach(async () => {
+    await resetMutablePublicOffers()
+  })
   test('displays a sent offer to customers', async ({ page }) => {
     await page.goto(`/offer/${TEST_OFFER_TOKENS.sent}`)
     await expect(page.getByText(/Test microphone/i)).toBeVisible({
@@ -15,7 +20,7 @@ test.describe('Public offer', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('button', { name: 'Accept Offer' }).click()
+    await openPublicOfferAction(page, 'Accept Offer')
 
     await page.getByPlaceholder('First name').fill('Playwright')
     await page.getByPlaceholder('Last name').fill('Customer')
@@ -34,7 +39,7 @@ test.describe('Public offer', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('button', { name: 'Reject Offer' }).click()
+    await openPublicOfferAction(page, 'Reject Offer')
     await page.getByPlaceholder('First name').fill('Playwright')
     await page.getByPlaceholder('Last name').fill('Rejecter')
     await page.getByPlaceholder('Enter phone number').fill('91234567')
@@ -55,7 +60,7 @@ test.describe('Public offer', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('button', { name: 'Revise Offer' }).click()
+    await openPublicOfferAction(page, 'Revise Offer')
     await page.getByPlaceholder('First name').fill('Playwright')
     await page.getByPlaceholder('Last name').fill('Reviser')
     await page.getByPlaceholder('Enter phone number').fill('91234567')

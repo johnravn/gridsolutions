@@ -27,6 +27,7 @@ import {
   markVehicleDeleted,
   vehicleDetailQuery,
 } from '../api/queries'
+import { vehicleOwnerBadge, vehicleOwnerLabel } from '../lib/ownership'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
 import BookPersonalVehicleDialog from './dialogs/BookPersonalVehicleDialog'
 import VehicleBookingsList from './VehicleBookingsList'
@@ -377,6 +378,7 @@ export default function VehicleInspector({ id }: { id: string | null }) {
 
   const fuelColor: React.ComponentProps<typeof Badge>['color'] =
     v.fuel === 'electric' ? 'green' : v.fuel === 'diesel' ? 'orange' : 'blue'
+  const ownerBadge = vehicleOwnerBadge(v)
 
   return (
     <Box>
@@ -393,15 +395,9 @@ export default function VehicleInspector({ id }: { id: string | null }) {
               {v.fuel ?? '—'}
             </Badge>
             {' · '}
-            {v.internally_owned ? (
-              <Badge variant="soft" color="indigo">
-                Internal
-              </Badge>
-            ) : (
-              <Badge variant="soft" color="violet">
-                {v.external_owner_name ?? 'External'}
-              </Badge>
-            )}
+            <Badge variant="soft" color={ownerBadge.color}>
+              {ownerBadge.label}
+            </Badge>
           </Text>
         </div>
         <Flex gap="2">
@@ -460,14 +456,7 @@ export default function VehicleInspector({ id }: { id: string | null }) {
 
       {/* Meta */}
       <Flex direction="column" gap="2">
-        <Field
-          label="Owner"
-          value={
-            v.internally_owned
-              ? 'Internal (your company)'
-              : (v.external_owner_name ?? 'External')
-          }
-        />
+        <Field label="Owner" value={vehicleOwnerLabel(v)} />
         <Field
           label="Vehicle Category"
           value={
@@ -562,6 +551,7 @@ export default function VehicleInspector({ id }: { id: string | null }) {
           vehicle_category: v.vehicle_category ?? null,
           internally_owned: v.internally_owned,
           external_owner_id: v.external_owner_id,
+          owner_user_id: v.owner_user_id,
           image_path: v.image_path ?? null,
           notes: v.notes ?? '',
         }}

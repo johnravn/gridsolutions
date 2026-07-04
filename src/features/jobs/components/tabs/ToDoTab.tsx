@@ -105,7 +105,7 @@ export default function ToDoTab({
       const { data: bookings, error: bookErr } = await supabase
         .from('reserved_vehicles')
         .select(
-          'id, vehicle_id, external_status, vehicle:vehicle_id ( id, name, external_owner_id )',
+          'id, vehicle_id, external_status, vehicle:vehicle_id ( id, name, internally_owned, external_owner_id, owner_user_id )',
         )
         .in('time_period_id', tpIds)
       if (bookErr) throw bookErr
@@ -120,8 +120,8 @@ export default function ToDoTab({
           ? booking.vehicle[0]
           : booking.vehicle,
         is_external: !!(Array.isArray(booking.vehicle)
-          ? booking.vehicle[0]?.external_owner_id
-          : booking.vehicle?.external_owner_id),
+          ? !booking.vehicle[0]?.internally_owned
+          : !booking.vehicle?.internally_owned),
       }))
     },
   })

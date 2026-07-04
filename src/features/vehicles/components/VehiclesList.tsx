@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Badge, Table, Text } from '@radix-ui/themes'
+import { vehicleOwnerBadge } from '../lib/ownership'
 import type { VehicleIndexRow } from '../api/queries'
 
 export default function VehiclesList({
@@ -29,6 +30,7 @@ export default function VehiclesList({
         ) : (
           rows.map((v) => {
             const active = v.id === selectedId
+            const ownerBadge = vehicleOwnerBadge(v)
             return (
               <Table.Row
                 key={v.id}
@@ -64,15 +66,9 @@ export default function VehiclesList({
                   )}
                 </Table.Cell>
                 <Table.Cell>
-                  {v.internally_owned ? (
-                    <Badge variant="soft" color="indigo">
-                      Internal
-                    </Badge>
-                  ) : (
-                    <Badge variant="soft" color="violet">
-                      {v.external_owner_name ?? 'External'}
-                    </Badge>
-                  )}
+                  <Badge variant="soft" color={ownerBadge.color}>
+                    {ownerBadge.label}
+                  </Badge>
                 </Table.Cell>
               </Table.Row>
             )

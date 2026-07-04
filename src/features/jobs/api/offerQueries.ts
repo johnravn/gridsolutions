@@ -158,9 +158,7 @@ export function offerDetailQuery(offerId: string) {
         {
           id: string
           name: string
-          internally_owned: boolean
-          external_owner_id: string | null
-          external_owner_name: string | null
+          item_kind: 'stock' | 'subrental'
           brand?: { id: string; name: string } | null
           model?: string | null
         }
@@ -170,9 +168,7 @@ export function offerDetailQuery(offerId: string) {
         {
           id: string
           name: string
-          internally_owned: boolean
-          external_owner_id: string | null
-          external_owner_name: string | null
+          item_kind: 'stock' | 'subrental'
         }
       >()
 
@@ -183,10 +179,8 @@ export function offerDetailQuery(offerId: string) {
             `
                 id,
                 name,
-                internally_owned,
-                external_owner_id,
+                item_kind,
                 model,
-                external_owner:customers!items_external_owner_id_fkey ( id, name ),
                 brand:item_brands ( id, name )
               `,
           )
@@ -201,9 +195,7 @@ export function offerDetailQuery(offerId: string) {
           itemMap.set((item as any).id, {
             id: (item as any).id,
             name: (item as any).name,
-            internally_owned: !!(item as any).internally_owned,
-            external_owner_id: (item as any).external_owner_id ?? null,
-            external_owner_name: (item as any).external_owner?.name ?? null,
+            item_kind: (item as any).item_kind ?? 'stock',
             brand: brand || null,
             model: (item as any).model || null,
           })
@@ -217,9 +209,7 @@ export function offerDetailQuery(offerId: string) {
             `
                 id,
                 name,
-                internally_owned,
-                external_owner_id,
-                external_owner:customers!item_groups_external_owner_id_fkey ( id, name )
+                item_kind
               `,
           )
           .in('id', uniqGroupIds)
@@ -230,9 +220,7 @@ export function offerDetailQuery(offerId: string) {
           groupMap.set((g as any).id, {
             id: (g as any).id,
             name: (g as any).name,
-            internally_owned: !!(g as any).internally_owned,
-            external_owner_id: (g as any).external_owner_id ?? null,
-            external_owner_name: (g as any).external_owner?.name ?? null,
+            item_kind: (g as any).item_kind ?? 'stock',
           })
         }
       }
@@ -695,14 +683,14 @@ export async function createTechnicalOfferFromBookings({
   if (equipmentItemIds.length > 0) {
     const { data: items, error: itemsError } = await supabase
       .from('items')
-      .select('id, internally_owned')
+      .select('id, item_kind')
       .in('id', equipmentItemIds)
 
     if (itemsError) throw itemsError
 
     if (items) {
       for (const item of items) {
-        itemInternalMap.set(item.id, !!item.internally_owned)
+        itemInternalMap.set(item.id, item.item_kind === 'stock')
       }
     }
   }
@@ -736,14 +724,14 @@ export async function createTechnicalOfferFromBookings({
     {
       category_name: string | null
       current_price: number
-      internally_owned: boolean
+      item_kind: 'stock' | 'subrental'
     }
   >()
 
   if (groupIds.length > 0) {
     const { data: groupInfo, error: groupInfoError } = await supabase
       .from('inventory_index')
-      .select('id, category_name, current_price, internally_owned, is_group')
+      .select('id, category_name, current_price, item_kind, is_group')
       .in('id', groupIds)
 
     if (groupInfoError) throw groupInfoError
@@ -753,7 +741,7 @@ export async function createTechnicalOfferFromBookings({
       groupInfoMap.set(row.id, {
         category_name: row.category_name ?? null,
         current_price: row.current_price ?? 0,
-        internally_owned: !!row.internally_owned,
+        item_kind: row.item_kind ?? 'stock',
       })
     }
   }
@@ -883,7 +871,7 @@ export async function createTechnicalOfferFromBookings({
           quantity,
           unit_price: unitPrice,
           total_price: roundMoney(unitPrice * quantity * equipmentRentalFactor),
-          is_internal: info?.internally_owned ?? true,
+          is_internal: info?.item_kind === 'stock',
           sort_order: itemLines.length + groupIndex,
         }
       },
@@ -1613,59 +1601,35 @@ export async function createBookingsFromOffer(
 
   // 1. Create equipment bookings
   if (offer.groups && offer.groups.length > 0) {
-    // Group equipment by external owner for time periods
-    const equipmentByOwner = new Map<
-      string | null,
-      {
-        ownerName: string
-        items: Array<
-          | {
-              kind: 'item'
-              item_id: string
-              quantity: number
-              is_internal: boolean
-            }
-          | {
-              kind: 'group'
-              group_id: string
-              quantity: number
-              is_internal: boolean
-            }
-        >
-      }
-    >()
+    type EquipmentEntry =
+      | {
+          kind: 'item'
+          item_id: string
+          quantity: number
+          is_internal: boolean
+        }
+      | {
+          kind: 'group'
+          group_id: string
+          quantity: number
+          is_internal: boolean
+        }
 
+    const equipmentEntries: Array<EquipmentEntry> = []
     const groupIds = new Set<string>()
 
     for (const group of offer.groups) {
       for (const item of group.items) {
         if (item.group_id) {
           groupIds.add(item.group_id)
-        }
-
-        const ownerId = item.group_id
-          ? item.group?.external_owner_id || null
-          : item.item?.external_owner_id || null
-        const ownerName = ownerId
-          ? `External Owner ${ownerId}` // We'll fetch actual owner name
-          : 'Internal Equipment'
-
-        if (!equipmentByOwner.has(ownerId)) {
-          equipmentByOwner.set(ownerId, {
-            ownerName,
-            items: [],
-          })
-        }
-
-        if (item.group_id) {
-          equipmentByOwner.get(ownerId)!.items.push({
+          equipmentEntries.push({
             kind: 'group',
             group_id: item.group_id,
             quantity: item.quantity,
             is_internal: item.is_internal,
           })
         } else if (item.item_id) {
-          equipmentByOwner.get(ownerId)!.items.push({
+          equipmentEntries.push({
             kind: 'item',
             item_id: item.item_id,
             quantity: item.quantity,
@@ -1698,92 +1662,71 @@ export async function createBookingsFromOffer(
       }
     }
 
-    // Fetch external owner names
-    const externalOwnerIds = Array.from(equipmentByOwner.keys()).filter(
-      (id): id is string => id !== null,
+    const timePeriodId = await getOrCreateTimePeriod(
+      'Equipment period',
+      'equipment',
+      defaultStart,
+      defaultEnd,
     )
-    if (externalOwnerIds.length > 0) {
-      const { data: owners } = await supabase
-        .from('customers')
-        .select('id, name')
-        .in('id', externalOwnerIds)
 
-      if (owners) {
-        for (const owner of owners) {
-          const data = equipmentByOwner.get(owner.id)
-          if (data) {
-            data.ownerName = owner.name || `Customer ${owner.id}`
-          }
-        }
+    const reservedItems: Array<{
+      time_period_id: string
+      item_id: string
+      quantity: number
+      source_kind: 'direct' | 'group'
+      source_group_id: string | null
+      forced: boolean
+      start_at: null
+      end_at: null
+      external_status: 'planned' | null
+      external_note: null
+      subcontractor_id: null
+    }> = []
+
+    for (const entry of equipmentEntries) {
+      if (entry.kind === 'item') {
+        reservedItems.push({
+          time_period_id: timePeriodId,
+          item_id: entry.item_id,
+          quantity: entry.quantity,
+          source_kind: 'direct',
+          source_group_id: null,
+          forced: !!options?.force,
+          start_at: null,
+          end_at: null,
+          external_status: entry.is_internal ? null : 'planned',
+          external_note: null,
+          subcontractor_id: null,
+          ...forcedFields,
+        })
+        continue
+      }
+
+      const groupItems = groupItemsMap.get(entry.group_id) ?? []
+      for (const groupItem of groupItems) {
+        reservedItems.push({
+          time_period_id: timePeriodId,
+          item_id: groupItem.item_id,
+          quantity: groupItem.quantity * entry.quantity,
+          source_kind: 'group',
+          source_group_id: entry.group_id,
+          forced: !!options?.force,
+          start_at: null,
+          end_at: null,
+          external_status: entry.is_internal ? null : 'planned',
+          external_note: null,
+          subcontractor_id: null,
+          ...forcedFields,
+        })
       }
     }
 
-    // Create time periods and reserved items for each owner
-    for (const [_ownerId, data] of equipmentByOwner.entries()) {
-      const timePeriodId = await getOrCreateTimePeriod(
-        `${data.ownerName} Equipment period`,
-        'equipment',
-        defaultStart,
-        defaultEnd,
-      )
+    if (reservedItems.length > 0) {
+      const { error: itemsError } = await supabase
+        .from('reserved_items')
+        .insert(reservedItems)
 
-      // Create reserved items
-      const reservedItems: Array<{
-        time_period_id: string
-        item_id: string
-        quantity: number
-        source_kind: 'direct' | 'group'
-        source_group_id: string | null
-        forced: boolean
-        start_at: null
-        end_at: null
-        external_status: 'planned' | null
-        external_note: null
-      }> = []
-
-      for (const entry of data.items) {
-        if (entry.kind === 'item') {
-          reservedItems.push({
-            time_period_id: timePeriodId,
-            item_id: entry.item_id,
-            quantity: entry.quantity,
-            source_kind: 'direct',
-            source_group_id: null,
-            forced: !!options?.force,
-            start_at: null,
-            end_at: null,
-            external_status: entry.is_internal ? null : 'planned',
-            external_note: null,
-            ...forcedFields,
-          })
-          continue
-        }
-
-        const groupItems = groupItemsMap.get(entry.group_id) ?? []
-        for (const groupItem of groupItems) {
-          reservedItems.push({
-            time_period_id: timePeriodId,
-            item_id: groupItem.item_id,
-            quantity: groupItem.quantity * entry.quantity,
-            source_kind: 'group',
-            source_group_id: entry.group_id,
-            forced: !!options?.force,
-            start_at: null,
-            end_at: null,
-            external_status: entry.is_internal ? null : 'planned',
-            external_note: null,
-            ...forcedFields,
-          })
-        }
-      }
-
-      if (reservedItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('reserved_items')
-          .insert(reservedItems)
-
-        if (itemsError) throw itemsError
-      }
+      if (itemsError) throw itemsError
     }
   }
 
@@ -1876,13 +1819,14 @@ export async function createBookingsFromOffer(
       name: string
       internally_owned: boolean
       external_owner_id: string | null
+      owner_user_id: string | null
       vehicle_category: string | null
     }
 
     const { data: vehicleRows, error: vehiclesFetchError } = await supabase
       .from('vehicles')
       .select(
-        'id, name, internally_owned, external_owner_id, vehicle_category, deleted',
+        'id, name, internally_owned, external_owner_id, owner_user_id, vehicle_category, deleted',
       )
       .eq('company_id', companyId)
       .or('deleted.is.null,deleted.eq.false')
@@ -1896,6 +1840,7 @@ export async function createBookingsFromOffer(
         name: row.name as string,
         internally_owned: !!row.internally_owned,
         external_owner_id: row.external_owner_id ?? null,
+        owner_user_id: row.owner_user_id ?? null,
         vehicle_category: row.vehicle_category ?? null,
       }))
 
@@ -1971,6 +1916,9 @@ export async function createBookingsFromOffer(
             external_owner_id: transportItem.is_internal
               ? null
               : (transportItem.vehicle?.external_owner_id ?? null),
+            owner_user_id: transportItem.is_internal
+              ? null
+              : (transportItem.vehicle?.owner_user_id ?? null),
             vehicle_category: category,
           }
         }

@@ -1,6 +1,11 @@
 // src/features/jobs/components/dialogs/PrettyOfferEditor.tsx
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Box,
   Button,
@@ -13,10 +18,10 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { Download, Eye, Lock } from 'iconoir-react'
-import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
+import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import {
   exportOfferPDF,
   lockOffer,
@@ -24,6 +29,7 @@ import {
 } from '../../api/offerQueries'
 import {
   createEmptyDraftPrettyOffer,
+  jobSubcontractorQuotesQuery,
   jobTechnicalOffersQuery,
   prettyOfferDetailQuery,
   savePrettyOffer,
@@ -32,14 +38,13 @@ import { canEditOffer, canLockOffer } from '../../utils/offerValidation'
 import { ModulesSection } from './pretty-offer-editor/ModulesSection'
 import { PreviewSection } from './pretty-offer-editor/PreviewSection'
 import { AppearanceSection } from './pretty-offer-editor/AppearanceSection'
-import { SubcontractorSection } from './pretty-offer-editor/SubcontractorSection'
-import { TechnicalBasisSection } from './pretty-offer-editor/TechnicalBasisSection'
+import { PricingBasisSection } from './pretty-offer-editor/PricingBasisSection'
 import { TotalsSection } from './pretty-offer-editor/TotalsSection'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
-import type { PrettyOfferDetail } from '../../types'
+import type { OfferDetail, PrettyOfferDetail } from '../../types'
 import type {
   LocalPrettyModule,
-  LocalSubcontractorQuote,
+  LocalPricingBasis,
 } from './pretty-offer-editor/types'
 
 type Props = {
@@ -56,8 +61,6 @@ function toLocalModules(
 ): Array<LocalPrettyModule> {
   return (modules ?? []).map((module) => ({
     ...module,
-    manual_fields: module.manual_fields ?? [],
-    category_mappings: module.category_mappings ?? [],
     content_blocks: (module.content_blocks ?? []).map((block) => ({
       ...block,
       items: block.items ?? [],
@@ -65,12 +68,12 @@ function toLocalModules(
   }))
 }
 
-function toLocalQuotes(
-  quotes: PrettyOfferDetail['subcontractor_quotes'],
-): Array<LocalSubcontractorQuote> {
-  return (quotes ?? []).map((quote) => ({
-    ...quote,
-    allocations: quote.allocations ?? [],
+function toLocalPricingBases(
+  bases: PrettyOfferDetail['pricing_bases'],
+): Array<LocalPricingBasis> {
+  return (bases ?? []).map((basis) => ({
+    ...basis,
+    splits: (basis.splits ?? []).map((split) => ({ ...split })),
   }))
 }
 
@@ -90,11 +93,10 @@ export default function PrettyOfferEditor({
   const [title, setTitle] = React.useState('')
   const [daysOfUse, setDaysOfUse] = React.useState(1)
   const [vatPercent, setVatPercent] = React.useState<0 | 25>(25)
-  const [sourceTechnicalOfferId, setSourceTechnicalOfferId] = React.useState<
-    string | null
-  >(null)
   const [modules, setModules] = React.useState<Array<LocalPrettyModule>>([])
-  const [quotes, setQuotes] = React.useState<Array<LocalSubcontractorQuote>>([])
+  const [pricingBases, setPricingBases] = React.useState<
+    Array<LocalPricingBasis>
+  >([])
   const [selectedModuleId, setSelectedModuleId] = React.useState<string | null>(
     null,
   )
@@ -118,10 +120,42 @@ export default function PrettyOfferEditor({
     enabled: open,
   })
 
-  const { data: sourceTechnicalOffer } = useQuery({
-    ...offerDetailQuery(sourceTechnicalOfferId ?? ''),
-    enabled: open && !!sourceTechnicalOfferId,
+  const { data: jobQuotes = [] } = useQuery({
+    ...jobSubcontractorQuotesQuery({ jobId }),
+    enabled: open,
   })
+
+  const technicalOfferIds = React.useMemo(
+    () => [
+      ...new Set(
+        pricingBases
+          .map((b) => b.source_technical_offer_id)
+          .filter((id): id is string => !!id),
+      ),
+    ],
+    [pricingBases],
+  )
+
+  const technicalOfferResults = useQueries({
+    queries: technicalOfferIds.map((id) => ({
+      ...offerDetailQuery(id),
+      enabled: open && !!id,
+    })),
+  })
+
+  const technicalOffersById = React.useMemo(() => {
+    const map = new Map<string, OfferDetail>()
+    technicalOfferIds.forEach((id, index) => {
+      const data = technicalOfferResults[index]?.data
+      if (data) map.set(id, data)
+    })
+    return map
+  }, [technicalOfferIds, technicalOfferResults])
+
+  const jobQuotesById = React.useMemo(
+    () => new Map(jobQuotes.map((q) => [q.id, q])),
+    [jobQuotes],
+  )
 
   const { data: companyExpansion } = useQuery({
     ...companyExpansionQuery({ companyId }),
@@ -133,17 +167,25 @@ export default function PrettyOfferEditor({
     setTitle(offer.title)
     setDaysOfUse(offer.days_of_use)
     setVatPercent(offer.vat_percent === 0 ? 0 : 25)
-    setSourceTechnicalOfferId(offer.source_technical_offer_id ?? null)
     setPrettyUseCustomerAccent(offer.pretty_use_customer_accent ?? false)
     setPrettyUseCustomerBackground(
       offer.pretty_use_customer_background ?? false,
     )
     setModules(toLocalModules(offer.modules))
-    setQuotes(toLocalQuotes(offer.subcontractor_quotes))
+    setPricingBases(toLocalPricingBases(offer.pricing_bases))
   }, [offer])
 
   const readOnly = offer ? !canEditOffer(offer) : false
   const canLock = offer ? canLockOffer(offer) : false
+
+  const expansionContext = {
+    rentalFactorConfig: (companyExpansion?.rental_factor_config ??
+      null) as RentalFactorConfig | null,
+    vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
+    vehicleDistanceIncrement:
+      companyExpansion?.vehicle_distance_increment ?? null,
+    vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
+  }
 
   const createMutation = useMutation({
     mutationFn: () => createEmptyDraftPrettyOffer({ jobId, companyId }),
@@ -168,28 +210,35 @@ export default function PrettyOfferEditor({
     }
   }, [shouldBootstrap, createMutation.isPending, createMutation.isSuccess])
 
+  const persistOffer = async () => {
+    if (!activeOfferId) throw new Error('No offer to save')
+
+    const offersById = new Map(technicalOffersById)
+    for (const id of technicalOfferIds) {
+      if (offersById.has(id)) continue
+      const detail = await (
+        offerDetailQuery(id).queryFn as () => Promise<OfferDetail | null>
+      )()
+      if (detail) offersById.set(id, detail)
+    }
+
+    await savePrettyOffer({
+      offerId: activeOfferId,
+      jobId,
+      title,
+      daysOfUse,
+      vatPercent,
+      prettyUseCustomerAccent,
+      prettyUseCustomerBackground,
+      modules,
+      pricingBases,
+      technicalOffersById: offersById,
+      ...expansionContext,
+    })
+  }
+
   const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!activeOfferId) throw new Error('No offer to save')
-      await savePrettyOffer({
-        offerId: activeOfferId,
-        title,
-        daysOfUse,
-        vatPercent,
-        sourceTechnicalOfferId,
-        prettyUseCustomerAccent,
-        prettyUseCustomerBackground,
-        modules,
-        subcontractorQuotes: quotes,
-        technicalOffer: sourceTechnicalOffer ?? null,
-        rentalFactorConfig: (companyExpansion?.rental_factor_config ??
-          null) as RentalFactorConfig | null,
-        vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
-        vehicleDistanceIncrement:
-          companyExpansion?.vehicle_distance_increment ?? null,
-        vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
-      })
-    },
+    mutationFn: persistOffer,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pretty-offer-detail', activeOfferId] })
       qc.invalidateQueries({ queryKey: ['job-pretty-offers', jobId] })
@@ -204,24 +253,7 @@ export default function PrettyOfferEditor({
   const lockMutation = useMutation({
     mutationFn: async () => {
       if (!activeOfferId || !offer) throw new Error('No offer')
-      await savePrettyOffer({
-        offerId: activeOfferId,
-        title,
-        daysOfUse,
-        vatPercent,
-        sourceTechnicalOfferId,
-        prettyUseCustomerAccent,
-        prettyUseCustomerBackground,
-        modules,
-        subcontractorQuotes: quotes,
-        technicalOffer: sourceTechnicalOffer ?? null,
-        rentalFactorConfig: (companyExpansion?.rental_factor_config ??
-          null) as RentalFactorConfig | null,
-        vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
-        vehicleDistanceIncrement:
-          companyExpansion?.vehicle_distance_increment ?? null,
-        vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
-      })
+      await persistOffer()
       await lockOffer(activeOfferId)
     },
     onSuccess: () => {
@@ -375,28 +407,6 @@ export default function PrettyOfferEditor({
                     </Select.Content>
                   </Select.Root>
                 </Box>
-                <Box style={{ flex: 2, minWidth: 220 }}>
-                  <Text size="2" weight="medium" mb="1" as="div">
-                    Source technical offer
-                  </Text>
-                  <Select.Root
-                    value={sourceTechnicalOfferId ?? 'none'}
-                    disabled={readOnly}
-                    onValueChange={(v) =>
-                      setSourceTechnicalOfferId(v === 'none' ? null : v)
-                    }
-                  >
-                    <Select.Trigger placeholder="None" />
-                    <Select.Content style={{ zIndex: 10000 }}>
-                      <Select.Item value="none">None</Select.Item>
-                      {technicalOffers.map((techOffer) => (
-                        <Select.Item key={techOffer.id} value={techOffer.id}>
-                          v{techOffer.version_number} — {techOffer.title}
-                        </Select.Item>
-                      ))}
-                    </Select.Content>
-                  </Select.Root>
-                </Box>
               </Flex>
 
               <Separator size="4" />
@@ -413,10 +423,7 @@ export default function PrettyOfferEditor({
               >
                 <Tabs.List>
                   <Tabs.Trigger value="modules">Modules</Tabs.Trigger>
-                  <Tabs.Trigger value="subcontractors">
-                    Subcontractors
-                  </Tabs.Trigger>
-                  <Tabs.Trigger value="technical">Technical basis</Tabs.Trigger>
+                  <Tabs.Trigger value="pricing">Pricing basis</Tabs.Trigger>
                   <Tabs.Trigger value="totals">Totals</Tabs.Trigger>
                   <Tabs.Trigger value="preview">
                     <Eye width={14} height={14} />
@@ -438,51 +445,31 @@ export default function PrettyOfferEditor({
                       companyId={companyId}
                       offerId={activeOfferId ?? ''}
                       modules={modules}
+                      pricingBases={pricingBases}
                       selectedModuleId={selectedModuleId}
                       readOnly={readOnly}
                       onModulesChange={setModules}
                       onSelectModule={setSelectedModuleId}
                     />
                   </Tabs.Content>
-                  <Tabs.Content value="subcontractors">
-                    {activeOfferId && (
-                      <SubcontractorSection
-                        offerId={activeOfferId}
-                        companyId={companyId}
-                        modules={modules}
-                        quotes={quotes}
-                        readOnly={readOnly}
-                        onQuotesChange={setQuotes}
-                      />
-                    )}
-                  </Tabs.Content>
-                  <Tabs.Content value="technical">
-                    <TechnicalBasisSection
+                  <Tabs.Content value="pricing">
+                    <PricingBasisSection
+                      jobId={jobId}
                       modules={modules}
-                      technicalOffer={sourceTechnicalOffer ?? null}
+                      pricingBases={pricingBases}
+                      technicalOffers={technicalOffers}
                       readOnly={readOnly}
-                      onModulesChange={setModules}
+                      onPricingBasesChange={setPricingBases}
                     />
                   </Tabs.Content>
                   <Tabs.Content value="totals">
                     <TotalsSection
                       modules={modules}
-                      quotes={quotes}
-                      technicalOffer={sourceTechnicalOffer ?? null}
+                      pricingBases={pricingBases}
+                      technicalOffersById={technicalOffersById}
+                      jobQuotesById={jobQuotesById}
                       vatPercent={vatPercent}
-                      rentalFactorConfig={
-                        (companyExpansion?.rental_factor_config ??
-                          null) as RentalFactorConfig | null
-                      }
-                      vehicleDistanceRate={
-                        companyExpansion?.vehicle_distance_rate ?? null
-                      }
-                      vehicleDistanceIncrement={
-                        companyExpansion?.vehicle_distance_increment ?? null
-                      }
-                      vehicleDailyRate={
-                        companyExpansion?.vehicle_daily_rate ?? null
-                      }
+                      {...expansionContext}
                     />
                   </Tabs.Content>
                   <Tabs.Content value="preview">

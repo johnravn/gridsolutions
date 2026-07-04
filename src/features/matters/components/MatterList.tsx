@@ -21,6 +21,7 @@ import {
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { mattersIndexQueryAll } from '../api/queries'
 import type { Matter, MatterType } from '../types'
 
@@ -76,8 +77,10 @@ export default function MatterList({
   onCreateMatter?: () => void
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const canCreateAnnouncement =
-    companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser
+    canWrite &&
+    (companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser)
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [sortBy, setSortBy] = React.useState<SortBy>('created')

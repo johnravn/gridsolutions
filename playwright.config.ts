@@ -1,5 +1,16 @@
 import { defineConfig, devices } from '@playwright/test'
 import { execSync } from 'node:child_process'
+import os from 'node:os'
+
+function resolveWorkerCount(): number {
+  const fromEnv = process.env.PLAYWRIGHT_WORKERS
+  if (fromEnv) {
+    const parsed = Number.parseInt(fromEnv, 10)
+    if (Number.isFinite(parsed) && parsed > 0) return parsed
+  }
+  if (process.env.CI) return 2
+  return Math.min(4, Math.max(2, os.cpus().length))
+}
 
 function loadSupabaseEnv(): Record<string, string> {
   const env: Record<string, string> = {}
@@ -39,7 +50,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: resolveWorkerCount(),
   reporter: [['list']],
   use: {
     baseURL: 'http://localhost:3000',

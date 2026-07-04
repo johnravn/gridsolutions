@@ -114,6 +114,13 @@ describeIntegration('force-book write path', () => {
     }
     const { session } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
     ownerUserId = session?.user.id ?? null
+
+    // Ephemeral integration bookings share one item with total_quantity=1.
+    await admin
+      .from('reserved_items')
+      .delete()
+      .eq('item_id', TEST_ITEM_ID)
+      .neq('id', TEST_CONFLICT_IDS.conflictReservedItemId)
   })
 
   it('owner can force-book an overlapping reservation on another job', async () => {

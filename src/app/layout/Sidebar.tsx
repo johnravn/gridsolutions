@@ -42,6 +42,7 @@ import { companyExpansionQuery } from '@features/company/api/queries'
 import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
+import { useDemoMode } from '@features/demo/hooks/useDemoMode'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useTheme } from '../hooks/useTheme'
 import { APP_VERSION } from '../config/version'
@@ -210,8 +211,9 @@ function SidebarContent({
   userAvatarUrl?: string | null
   onLogout?: () => void
 }) {
-  const { companies, companyId, setCompanyId, loading } = useCompany()
+  const { companies, companyId, setCompanyId, loading, company } = useCompany()
   const { caps, loading: authzLoading, isGlobalSuperuser } = useAuthz()
+  const { isDemoMode } = useDemoMode()
   const { isDark } = useTheme()
 
   // Get userId to check if user is logged in (for optimistic super tab display)
@@ -360,11 +362,14 @@ function SidebarContent({
               <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
                 Company
               </Text>
-              {!loading && (
+              {!loading && isDemoMode && company && (
+                <Text size="3" weight="medium">
+                  {company.name}
+                </Text>
+              )}
+              {!loading && !isDemoMode && (
                 <Select.Root
-                  // ✅ keep it undefined until you truly have an id
                   value={companyId ?? undefined}
-                  // ✅ avoid redundant state writes (prevents loops)
                   onValueChange={(next) => {
                     if (next && next !== companyId) setCompanyId(next)
                   }}

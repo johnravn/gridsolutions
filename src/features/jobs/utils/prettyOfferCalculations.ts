@@ -1,65 +1,68 @@
 import { calculateOfferTotals } from './offerCalculations'
 import type { RentalFactorConfig } from './offerCalculations'
 import type {
+  JobSubcontractorQuote,
   OfferDetail,
-  PrettyAllocationMode,
+  PrettyCategoryType,
   PrettyOfferModule,
-  PrettyOfferModuleCategoryMapping,
-  PrettyOfferSubcontractorQuote,
+  PrettyOfferPricingBasis,
+  PrettyOfferPricingBasisSplit,
 } from '../types'
 
 export function normalizeCategoryKey(key: string): string {
   return key.trim().toLowerCase()
 }
 
-export function parseManualFieldNumericValue(value: string): number {
-  const cleaned = value.replace(/\s/g, '').replace(',', '.')
-  const parsed = Number.parseFloat(cleaned)
-  return Number.isFinite(parsed) ? parsed : 0
-}
-
-export function calculateManualModuleCost(
-  module: Pick<PrettyOfferModule, 'manual_fields'>,
-): number {
-  return (module.manual_fields ?? []).reduce(
-    (sum, field) => sum + parseManualFieldNumericValue(field.value),
-    0,
-  )
-}
-
-export function allocationAmountForModule(
-  quote: PrettyOfferSubcontractorQuote,
-  moduleId: string,
-): number {
-  const allocation = (quote.allocations ?? []).find(
-    (a) => a.module_id === moduleId,
-  )
-  if (!allocation || allocation.allocation_value <= 0) return 0
-
-  if (allocation.allocation_mode === 'amount') {
-    return allocation.allocation_value
-  }
-
-  return (quote.total_amount * allocation.allocation_value) / 100
-}
-
-export function calculateSubcontractorModuleCost(
-  moduleId: string,
-  quotes: Array<PrettyOfferSubcontractorQuote>,
-): number {
-  return quotes.reduce(
-    (sum, quote) => sum + allocationAmountForModule(quote, moduleId),
-    0,
-  )
-}
-
-type TechnicalCostContext = {
-  technicalOffer: OfferDetail
-  mappings: Array<PrettyOfferModuleCategoryMapping>
+export type TechnicalCostContext = {
   rentalFactorConfig?: RentalFactorConfig | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
   vehicleDailyRate?: number | null
+}
+
+export type TechnicalCategoryOption = {
+  category_type: PrettyCategoryType
+  category_key: string
+  label: string
+}
+
+export function buildTechnicalCategoryOptions(
+  technicalOffer: OfferDetail,
+): Array<TechnicalCategoryOption> {
+  const options: Array<TechnicalCategoryOption> = []
+
+  for (const group of technicalOffer.groups ?? []) {
+    if (!group.group_name.trim()) continue
+    options.push({
+      category_type: 'equipment_group',
+      category_key: group.group_name,
+      label: `Equipment: ${group.group_name}`,
+    })
+  }
+
+  const crewCategories = new Set<string>()
+  for (const item of technicalOffer.crew_items ?? []) {
+    if (!item.role_category?.trim()) continue
+    crewCategories.add(item.role_category)
+  }
+  for (const category of crewCategories) {
+    options.push({
+      category_type: 'crew_category',
+      category_key: category,
+      label: `Crew: ${category}`,
+    })
+  }
+
+  for (const group of technicalOffer.transport_groups ?? []) {
+    if (!group.group_name.trim()) continue
+    options.push({
+      category_type: 'transport_group',
+      category_key: group.group_name,
+      label: `Transport: ${group.group_name}`,
+    })
+  }
+
+  return options
 }
 
 function equipmentGroupSubtotal(
@@ -103,15 +106,15 @@ function transportGroupSubtotal(
   return (group.items ?? []).reduce((sum, item) => sum + item.total_price, 0)
 }
 
-export function calculateTechnicalModuleCost({
-  technicalOffer,
-  mappings,
-  rentalFactorConfig,
-  vehicleDistanceRate,
-  vehicleDistanceIncrement,
-  vehicleDailyRate,
-}: TechnicalCostContext): number {
-  if (!mappings.length) return 0
+export function calculateTechnicalSplitAmount(
+  split: Pick<
+    PrettyOfferPricingBasisSplit,
+    'category_type' | 'category_key' | 'amount'
+  >,
+  technicalOffer: OfferDetail,
+  technicalContext?: TechnicalCostContext,
+): number {
+  if (!split.category_type || !split.category_key) return split.amount
 
   const equipmentItems = (technicalOffer.groups ?? []).flatMap((g) => g.items)
   const totals = calculateOfferTotals(
@@ -121,102 +124,195 @@ export function calculateTechnicalModuleCost({
     technicalOffer.days_of_use,
     technicalOffer.discount_percent,
     technicalOffer.vat_percent,
-    rentalFactorConfig,
-    vehicleDistanceRate,
-    vehicleDistanceIncrement,
-    vehicleDailyRate,
+    technicalContext?.rentalFactorConfig,
+    technicalContext?.vehicleDistanceRate,
+    technicalContext?.vehicleDistanceIncrement,
+    technicalContext?.vehicleDailyRate,
   )
 
   const rentalFactor = totals.equipmentRentalFactor
   const equipmentSubtotal = totals.equipmentSubtotal
   const discountAmount = totals.discountAmount
 
-  let cost = 0
-
-  for (const mapping of mappings) {
-    const key = mapping.category_key
-    if (mapping.category_type === 'equipment_group') {
-      const groupSubtotal = equipmentGroupSubtotal(
-        key,
-        technicalOffer,
-        rentalFactor,
-      )
-      const groupDiscount =
-        equipmentSubtotal > 0
-          ? (groupSubtotal / equipmentSubtotal) * discountAmount
-          : 0
-      cost += groupSubtotal - groupDiscount
-    } else if (mapping.category_type === 'crew_category') {
-      cost += crewCategorySubtotal(key, technicalOffer)
-    } else if (mapping.category_type === 'transport_group') {
-      cost += transportGroupSubtotal(key, technicalOffer)
-    }
-  }
-
-  return cost
-}
-
-export function calculateModuleCost(
-  module: PrettyOfferModule,
-  quotes: Array<PrettyOfferSubcontractorQuote>,
-  technicalOffer: OfferDetail | null,
-  technicalContext?: Omit<TechnicalCostContext, 'mappings' | 'technicalOffer'>,
-): number {
-  if (module.basis_type === 'manual') {
-    return calculateManualModuleCost(module)
-  }
-  if (module.basis_type === 'subcontractor') {
-    return calculateSubcontractorModuleCost(module.id, quotes)
-  }
-  if (module.basis_type === 'technical' && technicalOffer) {
-    return calculateTechnicalModuleCost({
+  if (split.category_type === 'equipment_group') {
+    const groupSubtotal = equipmentGroupSubtotal(
+      split.category_key,
       technicalOffer,
-      mappings: module.category_mappings ?? [],
-      ...technicalContext,
-    })
+      rentalFactor,
+    )
+    const groupDiscount =
+      equipmentSubtotal > 0
+        ? (groupSubtotal / equipmentSubtotal) * discountAmount
+        : 0
+    return groupSubtotal - groupDiscount
   }
+
+  if (split.category_type === 'crew_category') {
+    return crewCategorySubtotal(split.category_key, technicalOffer)
+  }
+
+  if (split.category_type === 'transport_group') {
+    return transportGroupSubtotal(split.category_key, technicalOffer)
+  }
+
   return 0
 }
 
-export type AllocationValidationIssue = {
-  quoteId: string
+export function calculateSplitAmount(
+  split: PrettyOfferPricingBasisSplit,
+  basis: PrettyOfferPricingBasis,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    jobQuotesById?: Map<string, JobSubcontractorQuote>
+    technicalContext?: TechnicalCostContext
+  } = {},
+): number {
+  if (basis.basis_type === 'technical') {
+    const technicalOfferId = basis.source_technical_offer_id
+    if (!technicalOfferId) return 0
+    const technicalOffer = options.technicalOffersById?.get(technicalOfferId)
+    if (!technicalOffer) return split.amount
+    return calculateTechnicalSplitAmount(
+      split,
+      technicalOffer,
+      options.technicalContext,
+    )
+  }
+
+  return split.amount
+}
+
+export function calculateModuleCostFromSplits(
+  moduleId: string,
+  pricingBases: Array<PrettyOfferPricingBasis>,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    jobQuotesById?: Map<string, JobSubcontractorQuote>
+    technicalContext?: TechnicalCostContext
+  } = {},
+): number {
+  let total = 0
+  for (const basis of pricingBases) {
+    for (const split of basis.splits ?? []) {
+      if (split.module_id !== moduleId) continue
+      total += calculateSplitAmount(split, basis, options)
+    }
+  }
+  return total
+}
+
+export function applyComputedCostsToModules(
+  modules: Array<PrettyOfferModule>,
+  pricingBases: Array<PrettyOfferPricingBasis>,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    jobQuotesById?: Map<string, JobSubcontractorQuote>
+    technicalContext?: TechnicalCostContext
+  } = {},
+): Array<PrettyOfferModule> {
+  return modules.map((module) => ({
+    ...module,
+    computed_cost: calculateModuleCostFromSplits(
+      module.id,
+      pricingBases,
+      options,
+    ),
+  }))
+}
+
+export function resolveSplitAmountsForSave(
+  pricingBases: Array<PrettyOfferPricingBasis>,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    technicalContext?: TechnicalCostContext
+  } = {},
+): Array<PrettyOfferPricingBasis> {
+  return pricingBases.map((basis) => ({
+    ...basis,
+    splits: (basis.splits ?? []).map((split) => {
+      if (basis.basis_type !== 'technical') return split
+      const technicalOfferId = basis.source_technical_offer_id
+      if (!technicalOfferId) return split
+      const technicalOffer = options.technicalOffersById?.get(technicalOfferId)
+      if (!technicalOffer) return split
+      return {
+        ...split,
+        amount: calculateTechnicalSplitAmount(
+          split,
+          technicalOffer,
+          options.technicalContext,
+        ),
+      }
+    }),
+  }))
+}
+
+export type PricingBasisValidationIssue = {
+  basisId: string
   message: string
 }
 
-export function validateSubcontractorAllocations(
-  quotes: Array<PrettyOfferSubcontractorQuote>,
-): Array<AllocationValidationIssue> {
-  const issues: Array<AllocationValidationIssue> = []
+export function validatePricingBases(
+  pricingBases: Array<PrettyOfferPricingBasis>,
+  modules: Array<Pick<PrettyOfferModule, 'id'>>,
+  jobQuotesById: Map<string, JobSubcontractorQuote>,
+): Array<PricingBasisValidationIssue> {
+  const issues: Array<PricingBasisValidationIssue> = []
+  const moduleIds = new Set(modules.map((m) => m.id))
 
-  for (const quote of quotes) {
-    const allocations = quote.allocations ?? []
-    if (allocations.length === 0) continue
+  for (const basis of pricingBases) {
+    const splits = basis.splits ?? []
 
-    const modes = new Set(allocations.map((a) => a.allocation_mode))
-    if (modes.size > 1) {
-      issues.push({
-        quoteId: quote.id,
-        message:
-          'All allocations for a quote must use the same mode (percent or amount).',
-      })
-      continue
+    if (splits.length === 0) continue
+
+    for (const split of splits) {
+      if (!split.module_id) {
+        issues.push({
+          basisId: basis.id,
+          message: `Every split in "${basis.title || 'Untitled basis'}" must be connected to a module.`,
+        })
+        break
+      }
+      if (!moduleIds.has(split.module_id)) {
+        issues.push({
+          basisId: basis.id,
+          message: `Split "${split.title}" references a module that no longer exists.`,
+        })
+      }
     }
 
-    const mode = allocations[0]?.allocation_mode
-    const sum = allocations.reduce((acc, a) => acc + a.allocation_value, 0)
-
-    if (mode === 'percent' && Math.abs(sum - 100) > 0.01) {
+    if (basis.basis_type === 'technical' && !basis.source_technical_offer_id) {
       issues.push({
-        quoteId: quote.id,
-        message: `Percent allocations must sum to 100% (currently ${sum.toFixed(2)}%).`,
+        basisId: basis.id,
+        message: `Technical basis "${basis.title || 'Untitled'}" must link to a technical offer.`,
       })
     }
 
-    if (mode === 'amount' && Math.abs(sum - quote.total_amount) > 0.01) {
-      issues.push({
-        quoteId: quote.id,
-        message: `Amount allocations must sum to quote total (${quote.total_amount}).`,
-      })
+    if (basis.basis_type === 'subcontractor') {
+      if (!basis.job_subcontractor_quote_id) {
+        issues.push({
+          basisId: basis.id,
+          message: `Subcontractor basis "${basis.title || 'Untitled'}" must link to a quote version.`,
+        })
+        continue
+      }
+
+      const quote = jobQuotesById.get(basis.job_subcontractor_quote_id)
+      if (!quote) {
+        issues.push({
+          basisId: basis.id,
+          message: `Subcontractor basis "${basis.title || 'Untitled'}" references a missing quote.`,
+        })
+        continue
+      }
+
+      const splitSum = splits.reduce((sum, split) => sum + split.amount, 0)
+      if (Math.abs(splitSum - quote.total_amount) > 0.01) {
+        issues.push({
+          basisId: basis.id,
+          message: `Subcontractor splits must sum to quote total (${quote.total_amount.toLocaleString('nb-NO')} NOK, currently ${splitSum.toLocaleString('nb-NO')} NOK).`,
+        })
+      }
     }
   }
 
@@ -245,20 +341,26 @@ export function calculatePrettyOfferTotals(
   }
 }
 
-export function suggestCategoryMappingsForModule(
+export function suggestTechnicalSplitsForModule(
   moduleTitle: string,
   technicalOffer: OfferDetail,
-): Array<PrettyOfferModuleCategoryMapping> {
+  moduleId: string,
+): Array<Omit<PrettyOfferPricingBasisSplit, 'id' | 'basis_id'>> {
   const normalizedTitle = normalizeCategoryKey(moduleTitle)
   if (!normalizedTitle) return []
 
-  const suggestions: Array<PrettyOfferModuleCategoryMapping> = []
+  const suggestions: Array<
+    Omit<PrettyOfferPricingBasisSplit, 'id' | 'basis_id'>
+  > = []
+  let sortOrder = 0
 
   for (const group of technicalOffer.groups ?? []) {
     if (normalizeCategoryKey(group.group_name) === normalizedTitle) {
       suggestions.push({
-        id: `temp-eq-${group.id}`,
-        module_id: '',
+        module_id: moduleId,
+        title: `Equipment: ${group.group_name}`,
+        amount: 0,
+        sort_order: sortOrder++,
         category_type: 'equipment_group',
         category_key: group.group_name,
       })
@@ -269,8 +371,10 @@ export function suggestCategoryMappingsForModule(
     const cat = item.role_category
     if (cat && normalizeCategoryKey(cat) === normalizedTitle) {
       suggestions.push({
-        id: `temp-crew-${item.id}`,
-        module_id: '',
+        module_id: moduleId,
+        title: `Crew: ${cat}`,
+        amount: 0,
+        sort_order: sortOrder++,
         category_type: 'crew_category',
         category_key: cat,
       })
@@ -280,8 +384,10 @@ export function suggestCategoryMappingsForModule(
   for (const group of technicalOffer.transport_groups ?? []) {
     if (normalizeCategoryKey(group.group_name) === normalizedTitle) {
       suggestions.push({
-        id: `temp-tr-${group.id}`,
-        module_id: '',
+        module_id: moduleId,
+        title: `Transport: ${group.group_name}`,
+        amount: 0,
+        sort_order: sortOrder++,
         category_type: 'transport_group',
         category_key: group.group_name,
       })
@@ -290,9 +396,23 @@ export function suggestCategoryMappingsForModule(
 
   const seen = new Set<string>()
   return suggestions.filter((s) => {
-    const key = `${s.category_type}:${normalizeCategoryKey(s.category_key)}`
+    const key = `${s.category_type}:${normalizeCategoryKey(s.category_key ?? '')}`
     if (seen.has(key)) return false
     seen.add(key)
     return true
   })
+}
+
+export function basisSubtotal(
+  basis: PrettyOfferPricingBasis,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    jobQuotesById?: Map<string, JobSubcontractorQuote>
+    technicalContext?: TechnicalCostContext
+  } = {},
+): number {
+  return (basis.splits ?? []).reduce(
+    (sum, split) => sum + calculateSplitAmount(split, basis, options),
+    0,
+  )
 }

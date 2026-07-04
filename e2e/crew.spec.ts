@@ -1,9 +1,13 @@
 import { test, expect } from './fixtures'
-import { createDraftJob, openBookingsCrewTab } from './helpers/navigation'
+import {
+  createDraftJob,
+  openBookingsCrewTab,
+  openCrewPage,
+} from './helpers/navigation'
 
 test.describe('Crew', () => {
   test('owner can open crew page', async ({ authedPage: page }) => {
-    await page.getByRole('link', { name: 'Crew', exact: true }).click()
+    await openCrewPage(page)
     await expect(page).toHaveURL(/\/crew/)
     await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({
       timeout: 15_000,

@@ -1,8 +1,5 @@
-import {
-  
-  isRadixAccentColor
-} from '@shared/theme/accentColorTypes'
-import type {RadixAccentColor} from '@shared/theme/accentColorTypes';
+import { isRadixAccentColor } from '@shared/theme/accentColorTypes'
+import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
 import type { OfferDetail } from '../types'
 
 export type PrettyOfferTheme = {

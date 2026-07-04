@@ -7,8 +7,7 @@ export type ItemSearchResult = {
   is_group: boolean
   on_hand: number | null
   price: number | null
-  internally_owned: boolean
-  external_owner_name: string | null
+  item_kind: 'stock' | 'subrental'
   brand_name: string | null
   model: string | null
 }
@@ -116,13 +115,13 @@ export function ItemSearchField({
                 >
                   <Flex align="center" gap="2" style={{ minWidth: 0 }}>
                     <Text style={{ flex: 1, minWidth: 0 }}>{item.name}</Text>
-                    {item.internally_owned ? (
+                    {item.item_kind === 'stock' ? (
                       <Badge size="1" variant="soft" color="indigo">
-                        Internal
+                        Stock
                       </Badge>
                     ) : (
                       <Badge size="1" variant="soft" color="amber">
-                        {item.external_owner_name ?? 'External'}
+                        Subrental
                       </Badge>
                     )}
                   </Flex>

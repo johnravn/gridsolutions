@@ -2,14 +2,15 @@ import * as React from 'react'
 import { Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
 import { ModuleEditor } from './ModuleEditor'
-import { BASIS_TYPE_LABELS, createEmptyModule } from './types'
-import type { LocalPrettyModule } from './types'
+import { createEmptyModule } from './types'
+import type { LocalPrettyModule, LocalPricingBasis } from './types'
 
 type Props = {
   jobId: string
   companyId: string
   offerId: string
   modules: Array<LocalPrettyModule>
+  pricingBases: Array<LocalPricingBasis>
   selectedModuleId: string | null
   readOnly: boolean
   onModulesChange: (modules: Array<LocalPrettyModule>) => void
@@ -21,6 +22,7 @@ export function ModulesSection({
   companyId,
   offerId,
   modules,
+  pricingBases,
   selectedModuleId,
   readOnly,
   onModulesChange,
@@ -105,9 +107,6 @@ export function ModulesSection({
                 <Text size="2" weight="medium" truncate>
                   {module.title || 'Untitled module'}
                 </Text>
-                <Text size="1" color="gray" as="div">
-                  {BASIS_TYPE_LABELS[module.basis_type]}
-                </Text>
               </Flex>
               {!readOnly && (
                 <Flex gap="0">
@@ -163,6 +162,7 @@ export function ModulesSection({
             jobId={jobId}
             companyId={companyId}
             offerId={offerId}
+            pricingBases={pricingBases}
             readOnly={readOnly}
             onChange={updateModule}
           />

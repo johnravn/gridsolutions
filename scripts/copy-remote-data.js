@@ -5,9 +5,13 @@
  */
 
 import { execSync } from 'child_process'
-import { writeFileSync, unlinkSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import {
+  buildSubrentalBackfillSql,
+  transformRemoteDataDump,
+} from './transform-remote-data-dump.mjs'
 
 const colors = {
   reset: '\x1b[0m',
@@ -66,6 +70,25 @@ async function copyData() {
     return
   }
 
+  // Step 1b: Transform remote dump when local schema is ahead (item_kind vs ownership)
+  log('1️⃣b Transforming dump for local schema...', 'cyan')
+  const rawDump = readFileSync(tempFile, 'utf8')
+  const {
+    sql: transformedDump,
+    transformed,
+    subrentalItems,
+  } = transformRemoteDataDump(rawDump)
+  writeFileSync(tempFile, transformedDump, 'utf8')
+  if (transformed) {
+    log(
+      `   ✅ Mapped internally_owned → item_kind (stock/subrental); ${subrentalItems} subrental item(s) tracked for reservation backfill`,
+      'green',
+    )
+  } else {
+    log('   ℹ️  No ownership → item_kind transform needed', 'cyan')
+  }
+  console.log('')
+
   // Step 2: Restore to local
   log('2️⃣  Restoring data to local database...', 'cyan')
 
@@ -88,19 +111,35 @@ async function copyData() {
     }
   }
 
+  const backfillFile = join(tmpdir(), `subrental_backfill_${Date.now()}.sql`)
+  const backfillSql = buildSubrentalBackfillSql()
+  if (backfillSql) {
+    writeFileSync(backfillFile, backfillSql, 'utf8')
+  }
+
   try {
     execSync(
       `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -f "${tempFile}"`,
       { stdio: 'inherit' },
     )
+
+    if (backfillSql) {
+      log('2️⃣b Backfilling reservation subcontractor links...', 'cyan')
+      execSync(
+        `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -f "${backfillFile}"`,
+        { stdio: 'inherit' },
+      )
+    }
   } catch (error) {
     log('❌ Failed to restore data to local database.', 'red')
     if (existsSync(tempFile)) unlinkSync(tempFile)
+    if (existsSync(backfillFile)) unlinkSync(backfillFile)
     process.exit(1)
   }
 
   // Cleanup
   if (existsSync(tempFile)) unlinkSync(tempFile)
+  if (existsSync(backfillFile)) unlinkSync(backfillFile)
 
   log('✅ Data copied successfully!', 'green')
   console.log('')

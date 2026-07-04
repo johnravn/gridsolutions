@@ -34,7 +34,7 @@ import {
   Trash,
 } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
@@ -102,8 +102,7 @@ export default function OffersTab({
   companyId: string
   isActive?: boolean
 }) {
-  const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const [syncingOfferId, setSyncingOfferId] = React.useState<string | null>(
     null,
   )

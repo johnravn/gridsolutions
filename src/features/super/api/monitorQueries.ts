@@ -81,6 +81,13 @@ export const MONITOR_JOB_DEFINITIONS: Array<{
     description:
       'Moves confirmed/planned/requested jobs to in_progress when start_at has passed.',
   },
+  {
+    jobKey: 'demo_timeline_advance',
+    name: 'Demo timeline advance',
+    schedule: 'Weekly on Monday at 04:00 UTC (pg_cron)',
+    description:
+      'Shifts all non-archived demo company jobs and related schedules forward by 7 days.',
+  },
 ]
 
 export function systemMonitorSnapshotQuery() {
@@ -110,6 +117,25 @@ export type TriggerContaSyncResult = {
     errors: Array<string>
   }>
   error?: string
+}
+
+export type AdvanceDemoTimelineResult = {
+  intervalDays: number
+  jobsUpdated: number
+  timePeriodsUpdated: number
+  reservedItemsUpdated: number
+  reservedVehiclesUpdated: number
+  offerCrewItemsUpdated: number
+  offerTransportItemsUpdated: number
+  offerBlockItemsUpdated: number
+  timeEntriesUpdated: number
+  message?: string
+}
+
+export async function triggerDemoTimelineAdvance(): Promise<AdvanceDemoTimelineResult> {
+  const { data, error } = await supabase.rpc('advance_demo_company_timeline')
+  if (error) throw error
+  return data as AdvanceDemoTimelineResult
 }
 
 export async function triggerContaSyncNow(): Promise<TriggerContaSyncResult> {
@@ -193,6 +219,15 @@ export function summarizeRunDetails(
   if (jobKey === 'job_status_auto_update') {
     const rows = details.rowsUpdated
     if (typeof rows === 'number') return `${rows} jobs updated`
+  }
+  if (jobKey === 'demo_timeline_advance') {
+    const jobs = details.jobsUpdated
+    const periods = details.timePeriodsUpdated
+    if (typeof jobs === 'number' && typeof periods === 'number') {
+      return `${jobs} jobs, ${periods} time periods +${details.intervalDays ?? 7}d`
+    }
+    const message = details.message
+    if (typeof message === 'string') return message
   }
   return 'Completed'
 }

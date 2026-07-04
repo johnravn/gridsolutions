@@ -232,6 +232,8 @@ export type JobDetail = {
 
 export type ExternalReqStatus = 'planned' | 'requested' | 'confirmed'
 
+export type InventoryItemKind = 'stock' | 'subrental'
+
 export type ItemLite = {
   id: string
   name: string
@@ -240,8 +242,7 @@ export type ItemLite = {
   model?: string | null
   total_quantity?: number | null
   active?: boolean
-  internally_owned?: boolean
-  external_owner_id?: string | null
+  item_kind?: InventoryItemKind
   notes?: string | null
 
   // Joined relations (optional)
@@ -274,11 +275,16 @@ export type ReservedItemRow = {
   external_status: ExternalReqStatus | null
   external_note: string | null
   forced: boolean
+  subcontractor_id?: UUID | null
   start_at: string | null // line override (ISO) - nullable => inherits header
   end_at: string | null // line override (ISO)
   item:
-    | { id: UUID; name: string; external_owner_id: UUID | null }
-    | Array<{ id: UUID; name: string; external_owner_id: UUID | null }>
+    | { id: UUID; name: string; item_kind?: InventoryItemKind }
+    | Array<{ id: UUID; name: string; item_kind?: InventoryItemKind }>
+  subcontractor?:
+    | { id: UUID; name: string }
+    | Array<{ id: UUID; name: string }>
+    | null
   source_group?:
     | {
         id: UUID
@@ -457,18 +463,14 @@ export type OfferEquipmentItem = {
   item?: {
     id: UUID
     name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
+    item_kind?: InventoryItemKind
     brand?: { id: UUID; name: string } | null
     model?: string | null
   } | null
   group?: {
     id: UUID
     name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
+    item_kind?: InventoryItemKind
   } | null
   /** Nested contents when this line is a group (item group / bundle). Supports nested groups. */
   group_contents?: Array<GroupContentEntry>
@@ -560,8 +562,7 @@ export type OfferPrettySection = {
   sort_order: number
 }
 
-export type PrettyModuleBasisType = 'manual' | 'subcontractor' | 'technical'
-export type PrettyAllocationMode = 'percent' | 'amount'
+export type PrettyPricingBasisType = 'technical' | 'subcontractor' | 'custom'
 export type PrettyCategoryType =
   | 'equipment_group'
   | 'crew_category'
@@ -602,14 +603,6 @@ export type PrettyOfferModuleBlock = {
   items?: Array<PrettyOfferModuleBlockItem>
 }
 
-export type PrettyOfferModuleManualField = {
-  id: UUID
-  module_id: UUID
-  label: string
-  value: string
-  sort_order: number
-}
-
 export type PrettyOfferModuleMedia = {
   id: UUID
   module_id: UUID
@@ -620,35 +613,40 @@ export type PrettyOfferModuleMedia = {
   sort_order: number
 }
 
-export type PrettyOfferModuleCategoryMapping = {
+export type JobSubcontractorQuote = {
   id: UUID
-  module_id: UUID
-  category_type: PrettyCategoryType
-  category_key: string
-}
-
-export type PrettyOfferSubcontractorAllocation = {
-  id: UUID
-  quote_id: UUID
-  module_id: UUID
-  allocation_mode: PrettyAllocationMode
-  allocation_value: number
-}
-
-export type PrettyOfferSubcontractorQuote = {
-  id: UUID
-  offer_id: UUID
-  vendor_name: string
-  note: string | null
+  job_id: UUID
+  job_subcontractor_id: UUID
+  version_number: number
   total_amount: number
-  customer_id: UUID | null
+  note: string | null
   pdf_path: string | null
   pdf_filename: string | null
   mime_type: string | null
   size_bytes: number | null
+  created_at: string
+}
+
+export type PrettyOfferPricingBasisSplit = {
+  id: UUID
+  basis_id: UUID
+  module_id: UUID
+  title: string
+  amount: number
   sort_order: number
-  created_at?: string
-  allocations?: Array<PrettyOfferSubcontractorAllocation>
+  category_type: PrettyCategoryType | null
+  category_key: string | null
+}
+
+export type PrettyOfferPricingBasis = {
+  id: UUID
+  offer_id: UUID
+  basis_type: PrettyPricingBasisType
+  title: string
+  sort_order: number
+  source_technical_offer_id: UUID | null
+  job_subcontractor_quote_id: UUID | null
+  splits?: Array<PrettyOfferPricingBasisSplit>
 }
 
 export type PrettyOfferModule = {
@@ -657,12 +655,9 @@ export type PrettyOfferModule = {
   title: string
   subtitle: string | null
   sort_order: number
-  basis_type: PrettyModuleBasisType
   display_price: number | null
   show_price: boolean
   computed_cost: number
-  manual_fields?: Array<PrettyOfferModuleManualField>
-  category_mappings?: Array<PrettyOfferModuleCategoryMapping>
   content_blocks?: Array<PrettyOfferModuleBlock>
   /** Customer-facing blocks from public_offer_get */
   blocks?: Array<PrettyOfferModuleBlock>
@@ -682,7 +677,7 @@ export type PublicPrettyOfferModule = {
 
 export type PrettyOfferDetail = OfferDetail & {
   modules?: Array<PrettyOfferModule>
-  subcontractor_quotes?: Array<PrettyOfferSubcontractorQuote>
+  pricing_bases?: Array<PrettyOfferPricingBasis>
 }
 
 // Detail with joined relations
@@ -695,7 +690,7 @@ export type OfferDetail = JobOffer & {
   >
   pretty_sections?: Array<OfferPrettySection>
   modules?: Array<PrettyOfferModule>
-  subcontractor_quotes?: Array<PrettyOfferSubcontractorQuote>
+  pricing_bases?: Array<PrettyOfferPricingBasis>
   job_title?: string | null
   job_start_at?: string | null
   job_end_at?: string | null

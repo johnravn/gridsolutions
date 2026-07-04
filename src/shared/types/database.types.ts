@@ -302,6 +302,7 @@ export type Database = {
           employee_hourly_rate: number | null
           general_email: string | null
           id: string
+          is_demo: boolean
           job_number_counter: number | null
           logo_dark_path: string | null
           logo_light_path: string | null
@@ -328,6 +329,7 @@ export type Database = {
           employee_hourly_rate?: number | null
           general_email?: string | null
           id?: string
+          is_demo?: boolean
           job_number_counter?: number | null
           logo_dark_path?: string | null
           logo_light_path?: string | null
@@ -354,6 +356,7 @@ export type Database = {
           employee_hourly_rate?: number | null
           general_email?: string | null
           id?: string
+          is_demo?: boolean
           job_number_counter?: number | null
           logo_dark_path?: string | null
           logo_light_path?: string | null
@@ -965,10 +968,9 @@ export type Database = {
           company_id: string
           deleted: boolean
           description: string | null
-          external_owner_id: string | null
           group_type: Database['public']['Enums']['group_type']
           id: string
-          internally_owned: boolean
+          item_kind: Database['public']['Enums']['inventory_item_kind']
           name: string
           unique: boolean
         }
@@ -978,10 +980,9 @@ export type Database = {
           company_id: string
           deleted?: boolean
           description?: string | null
-          external_owner_id?: string | null
           group_type?: Database['public']['Enums']['group_type']
           id?: string
-          internally_owned?: boolean
+          item_kind?: Database['public']['Enums']['inventory_item_kind']
           name: string
           unique?: boolean
         }
@@ -991,10 +992,9 @@ export type Database = {
           company_id?: string
           deleted?: boolean
           description?: string | null
-          external_owner_id?: string | null
           group_type?: Database['public']['Enums']['group_type']
           id?: string
-          internally_owned?: boolean
+          item_kind?: Database['public']['Enums']['inventory_item_kind']
           name?: string
           unique?: boolean
         }
@@ -1011,13 +1011,6 @@ export type Database = {
             columns: ['company_id']
             isOneToOne: false
             referencedRelation: 'companies'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'item_groups_external_owner_id_fkey'
-            columns: ['external_owner_id']
-            isOneToOne: false
-            referencedRelation: 'customers'
             referencedColumns: ['id']
           },
         ]
@@ -1153,10 +1146,8 @@ export type Database = {
           category_id: string | null
           company_id: string
           deleted: boolean
-          external_owner_id: string | null
           id: string
-          internal_owner_company_id: string | null
-          internally_owned: boolean
+          item_kind: Database['public']['Enums']['inventory_item_kind']
           model: string | null
           name: string
           nicknames: string | null
@@ -1170,10 +1161,8 @@ export type Database = {
           category_id?: string | null
           company_id: string
           deleted?: boolean
-          external_owner_id?: string | null
           id?: string
-          internal_owner_company_id?: string | null
-          internally_owned?: boolean
+          item_kind?: Database['public']['Enums']['inventory_item_kind']
           model?: string | null
           name: string
           nicknames?: string | null
@@ -1187,10 +1176,8 @@ export type Database = {
           category_id?: string | null
           company_id?: string
           deleted?: boolean
-          external_owner_id?: string | null
           id?: string
-          internal_owner_company_id?: string | null
-          internally_owned?: boolean
+          item_kind?: Database['public']['Enums']['inventory_item_kind']
           model?: string | null
           name?: string
           nicknames?: string | null
@@ -1215,20 +1202,6 @@ export type Database = {
           {
             foreignKeyName: 'items_company_id_fkey'
             columns: ['company_id']
-            isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'items_external_owner_id_fkey'
-            columns: ['external_owner_id']
-            isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'items_internal_owner_company_id_fkey'
-            columns: ['internal_owner_company_id']
             isOneToOne: false
             referencedRelation: 'companies'
             referencedColumns: ['id']
@@ -1810,6 +1783,102 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: 'job_status_history_job_id_fkey'
+            columns: ['job_id']
+            isOneToOne: false
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      job_subcontractor_quotes: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          job_subcontractor_id: string
+          mime_type: string | null
+          note: string | null
+          pdf_filename: string | null
+          pdf_path: string | null
+          size_bytes: number | null
+          total_amount: number
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          job_subcontractor_id: string
+          mime_type?: string | null
+          note?: string | null
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          total_amount?: number
+          version_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          job_subcontractor_id?: string
+          mime_type?: string | null
+          note?: string | null
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          total_amount?: number
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'job_subcontractor_quotes_job_id_fkey'
+            columns: ['job_id']
+            isOneToOne: false
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'job_subcontractor_quotes_job_subcontractor_id_fkey'
+            columns: ['job_subcontractor_id']
+            isOneToOne: false
+            referencedRelation: 'job_subcontractors'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      job_subcontractors: {
+        Row: {
+          created_at: string
+          customer_id: string
+          id: string
+          job_id: string
+          notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          customer_id: string
+          id?: string
+          job_id: string
+          notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          customer_id?: string
+          id?: string
+          job_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'job_subcontractors_customer_id_fkey'
+            columns: ['customer_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'job_subcontractors_job_id_fkey'
             columns: ['job_id']
             isOneToOne: false
             referencedRelation: 'jobs'
@@ -2940,67 +3009,6 @@ export type Database = {
           },
         ]
       }
-      pretty_offer_module_category_mappings: {
-        Row: {
-          category_key: string
-          category_type: Database['public']['Enums']['pretty_category_type']
-          id: string
-          module_id: string
-        }
-        Insert: {
-          category_key: string
-          category_type: Database['public']['Enums']['pretty_category_type']
-          id?: string
-          module_id: string
-        }
-        Update: {
-          category_key?: string
-          category_type?: Database['public']['Enums']['pretty_category_type']
-          id?: string
-          module_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'pretty_offer_module_category_mappings_module_id_fkey'
-            columns: ['module_id']
-            isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
-          },
-        ]
-      }
-      pretty_offer_module_manual_fields: {
-        Row: {
-          id: string
-          label: string
-          module_id: string
-          sort_order: number
-          value: string
-        }
-        Insert: {
-          id?: string
-          label?: string
-          module_id: string
-          sort_order?: number
-          value?: string
-        }
-        Update: {
-          id?: string
-          label?: string
-          module_id?: string
-          sort_order?: number
-          value?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: 'pretty_offer_module_manual_fields_module_id_fkey'
-            columns: ['module_id']
-            isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
-          },
-        ]
-      }
       pretty_offer_module_media: {
         Row: {
           caption: string | null
@@ -3041,7 +3049,6 @@ export type Database = {
       }
       pretty_offer_modules: {
         Row: {
-          basis_type: Database['public']['Enums']['pretty_module_basis_type']
           computed_cost: number
           created_at: string
           display_price: number | null
@@ -3054,7 +3061,6 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          basis_type?: Database['public']['Enums']['pretty_module_basis_type']
           computed_cost?: number
           created_at?: string
           display_price?: number | null
@@ -3067,7 +3073,6 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          basis_type?: Database['public']['Enums']['pretty_module_basis_type']
           computed_cost?: number
           created_at?: string
           display_price?: number | null
@@ -3089,101 +3094,111 @@ export type Database = {
           },
         ]
       }
-      pretty_offer_subcontractor_allocations: {
+      pretty_offer_pricing_bases: {
         Row: {
-          allocation_mode: Database['public']['Enums']['pretty_allocation_mode']
-          allocation_value: number
+          basis_type: Database['public']['Enums']['pretty_pricing_basis_type']
+          created_at: string
           id: string
-          module_id: string
-          quote_id: string
+          job_subcontractor_quote_id: string | null
+          offer_id: string
+          sort_order: number
+          source_technical_offer_id: string | null
+          title: string
         }
         Insert: {
-          allocation_mode?: Database['public']['Enums']['pretty_allocation_mode']
-          allocation_value?: number
+          basis_type: Database['public']['Enums']['pretty_pricing_basis_type']
+          created_at?: string
           id?: string
-          module_id: string
-          quote_id: string
+          job_subcontractor_quote_id?: string | null
+          offer_id: string
+          sort_order?: number
+          source_technical_offer_id?: string | null
+          title?: string
         }
         Update: {
-          allocation_mode?: Database['public']['Enums']['pretty_allocation_mode']
-          allocation_value?: number
+          basis_type?: Database['public']['Enums']['pretty_pricing_basis_type']
+          created_at?: string
           id?: string
-          module_id?: string
-          quote_id?: string
+          job_subcontractor_quote_id?: string | null
+          offer_id?: string
+          sort_order?: number
+          source_technical_offer_id?: string | null
+          title?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_subcontractor_allocations_module_id_fkey'
-            columns: ['module_id']
+            foreignKeyName: 'pretty_offer_pricing_bases_job_subcontractor_quote_id_fkey'
+            columns: ['job_subcontractor_quote_id']
             isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
+            referencedRelation: 'job_subcontractor_quotes'
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'pretty_offer_subcontractor_allocations_quote_id_fkey'
-            columns: ['quote_id']
+            foreignKeyName: 'pretty_offer_pricing_bases_offer_id_fkey'
+            columns: ['offer_id']
             isOneToOne: false
-            referencedRelation: 'pretty_offer_subcontractor_quotes'
+            referencedRelation: 'job_offers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pretty_offer_pricing_bases_source_technical_offer_id_fkey'
+            columns: ['source_technical_offer_id']
+            isOneToOne: false
+            referencedRelation: 'job_offers'
             referencedColumns: ['id']
           },
         ]
       }
-      pretty_offer_subcontractor_quotes: {
+      pretty_offer_pricing_basis_splits: {
         Row: {
-          created_at: string
-          customer_id: string | null
+          amount: number
+          basis_id: string
+          category_key: string | null
+          category_type:
+            | Database['public']['Enums']['pretty_category_type']
+            | null
           id: string
-          mime_type: string | null
-          note: string | null
-          offer_id: string
-          pdf_filename: string | null
-          pdf_path: string | null
-          size_bytes: number | null
+          module_id: string
           sort_order: number
-          total_amount: number
-          vendor_name: string
+          title: string
         }
         Insert: {
-          created_at?: string
-          customer_id?: string | null
+          amount?: number
+          basis_id: string
+          category_key?: string | null
+          category_type?:
+            | Database['public']['Enums']['pretty_category_type']
+            | null
           id?: string
-          mime_type?: string | null
-          note?: string | null
-          offer_id: string
-          pdf_filename?: string | null
-          pdf_path?: string | null
-          size_bytes?: number | null
+          module_id: string
           sort_order?: number
-          total_amount?: number
-          vendor_name?: string
+          title?: string
         }
         Update: {
-          created_at?: string
-          customer_id?: string | null
+          amount?: number
+          basis_id?: string
+          category_key?: string | null
+          category_type?:
+            | Database['public']['Enums']['pretty_category_type']
+            | null
           id?: string
-          mime_type?: string | null
-          note?: string | null
-          offer_id?: string
-          pdf_filename?: string | null
-          pdf_path?: string | null
-          size_bytes?: number | null
+          module_id?: string
           sort_order?: number
-          total_amount?: number
-          vendor_name?: string
+          title?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_subcontractor_quotes_customer_id_fkey'
-            columns: ['customer_id']
+            foreignKeyName: 'pretty_offer_pricing_basis_splits_basis_id_fkey'
+            columns: ['basis_id']
             isOneToOne: false
-            referencedRelation: 'customers'
+            referencedRelation: 'pretty_offer_pricing_bases'
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'pretty_offer_subcontractor_quotes_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: 'pretty_offer_pricing_basis_splits_module_id_fkey'
+            columns: ['module_id']
             isOneToOne: false
-            referencedRelation: 'job_offers'
+            referencedRelation: 'pretty_offer_modules'
             referencedColumns: ['id']
           },
         ]
@@ -3492,6 +3507,7 @@ export type Database = {
           source_kind: Database['public']['Enums']['reservation_source_kind']
           start_at: string | null
           status: Database['public']['Enums']['booking_status']
+          subcontractor_id: string | null
           time_period_id: string
         }
         Insert: {
@@ -3510,6 +3526,7 @@ export type Database = {
           source_kind?: Database['public']['Enums']['reservation_source_kind']
           start_at?: string | null
           status?: Database['public']['Enums']['booking_status']
+          subcontractor_id?: string | null
           time_period_id: string
         }
         Update: {
@@ -3528,6 +3545,7 @@ export type Database = {
           source_kind?: Database['public']['Enums']['reservation_source_kind']
           start_at?: string | null
           status?: Database['public']['Enums']['booking_status']
+          subcontractor_id?: string | null
           time_period_id?: string
         }
         Relationships: [
@@ -3571,6 +3589,13 @@ export type Database = {
             columns: ['source_group_id']
             isOneToOne: false
             referencedRelation: 'item_groups'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'reserved_items_subcontractor_id_fkey'
+            columns: ['subcontractor_id']
+            isOneToOne: false
+            referencedRelation: 'customers'
             referencedColumns: ['id']
           },
           {
@@ -3895,6 +3920,7 @@ export type Database = {
           internally_owned: boolean
           name: string
           notes: string | null
+          owner_user_id: string | null
           registration_no: string | null
           vehicle_category:
             | Database['public']['Enums']['vehicle_category']
@@ -3912,6 +3938,7 @@ export type Database = {
           internally_owned?: boolean
           name: string
           notes?: string | null
+          owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
             | Database['public']['Enums']['vehicle_category']
@@ -3929,6 +3956,7 @@ export type Database = {
           internally_owned?: boolean
           name?: string
           notes?: string | null
+          owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
             | Database['public']['Enums']['vehicle_category']
@@ -3948,6 +3976,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'customers'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'vehicles_owner_user_id_fkey'
+            columns: ['owner_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
           },
         ]
       }
@@ -4135,11 +4170,9 @@ export type Database = {
           currency: string | null
           current_price: number | null
           deleted: boolean | null
-          external_owner_id: string | null
-          external_owner_name: string | null
           id: string | null
-          internally_owned: boolean | null
           is_group: boolean | null
+          item_kind: Database['public']['Enums']['inventory_item_kind'] | null
           model: string | null
           name: string | null
           nicknames: string | null
@@ -4186,15 +4219,43 @@ export type Database = {
           category_id: string | null
           company_id: string | null
           deleted: boolean | null
-          external_owner_id: string | null
           id: string | null
-          internal_owner_company_id: string | null
-          is_external: boolean | null
+          is_subrental: boolean | null
+          item_kind: Database['public']['Enums']['inventory_item_kind'] | null
           model: string | null
           name: string | null
           notes: string | null
-          owner_name: string | null
           total_quantity: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          allow_individual_booking?: boolean | null
+          brand_id?: string | null
+          category_id?: string | null
+          company_id?: string | null
+          deleted?: boolean | null
+          id?: string | null
+          is_subrental?: never
+          item_kind?: Database['public']['Enums']['inventory_item_kind'] | null
+          model?: string | null
+          name?: string | null
+          notes?: string | null
+          total_quantity?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          allow_individual_booking?: boolean | null
+          brand_id?: string | null
+          category_id?: string | null
+          company_id?: string | null
+          deleted?: boolean | null
+          id?: string | null
+          is_subrental?: never
+          item_kind?: Database['public']['Enums']['inventory_item_kind'] | null
+          model?: string | null
+          name?: string | null
+          notes?: string | null
+          total_quantity?: number | null
         }
         Relationships: [
           {
@@ -4214,20 +4275,6 @@ export type Database = {
           {
             foreignKeyName: 'items_company_id_fkey'
             columns: ['company_id']
-            isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'items_external_owner_id_fkey'
-            columns: ['external_owner_id']
-            isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'items_internal_owner_company_id_fkey'
-            columns: ['internal_owner_company_id']
             isOneToOne: false
             referencedRelation: 'companies'
             referencedColumns: ['id']
@@ -4318,6 +4365,7 @@ export type Database = {
           notes: string | null
           owner_kind: string | null
           owner_name: string | null
+          owner_user_id: string | null
           registration_no: string | null
         }
         Relationships: [
@@ -4342,6 +4390,13 @@ export type Database = {
             referencedRelation: 'customers'
             referencedColumns: ['id']
           },
+          {
+            foreignKeyName: 'vehicles_owner_user_id_fkey'
+            columns: ['owner_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
+          },
         ]
       }
       vehicle_index: {
@@ -4357,6 +4412,8 @@ export type Database = {
           image_path: string | null
           internally_owned: boolean | null
           name: string | null
+          owner_user_id: string | null
+          owner_user_name: string | null
           reg_number: string | null
         }
         Relationships: [
@@ -4373,6 +4430,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'customers'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'vehicles_owner_user_id_fkey'
+            columns: ['owner_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
           },
         ]
       }
@@ -4440,6 +4504,10 @@ export type Database = {
         }
         Returns: Json
       }
+      advance_demo_company_timeline: {
+        Args: { p_interval?: string }
+        Returns: Json
+      }
       auto_update_jobs_to_in_progress: { Args: never; Returns: undefined }
       can_freelancer_view_job: {
         Args: { p_company_id: string; p_job_id: string }
@@ -4449,6 +4517,7 @@ export type Database = {
         Args: { p_company_id: string; p_time_period_id: string }
         Returns: boolean
       }
+      can_view_matter: { Args: { p_matter_id: string }; Returns: boolean }
       check_circular_group_reference: {
         Args: { p_child_group_id: string; p_parent_group_id: string }
         Returns: boolean
@@ -4514,6 +4583,50 @@ export type Database = {
             Args: { p_company_id: string; p_encrypted_key: string }
             Returns: string
           }
+      demo_company_blocks_activity_mutation: {
+        Args: { p_activity_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_group_mutation: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_item_mutation: {
+        Args: { p_item_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_job_mutation: {
+        Args: { p_job_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_matter_mutation: {
+        Args: { p_matter_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_module_block_mutation: {
+        Args: { p_block_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_module_mutation: {
+        Args: { p_module_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_mutation: {
+        Args: { p_company_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_offer_group_mutation: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_offer_mutation: {
+        Args: { p_offer_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_time_period_mutation: {
+        Args: { p_time_period_id: string }
+        Returns: boolean
+      }
       encrypt_api_key: {
         Args: { p_api_key: string; p_company_id: string }
         Returns: string
@@ -4526,6 +4639,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      enter_demo: { Args: never; Returns: string }
       fuzzy_search_multi: {
         Args: {
           fields: Array<string>
@@ -4765,6 +4879,7 @@ export type Database = {
         | 'canceled'
       fuel: 'electric' | 'diesel' | 'petrol'
       group_type: 'group' | 'bundle'
+      inventory_item_kind: 'stock' | 'subrental'
       item_kind: 'bulk' | 'unique'
       job_status:
         | 'draft'
@@ -4804,12 +4919,10 @@ export type Database = {
         | 'rejected'
         | 'superseded'
       offer_type: 'technical' | 'pretty'
-      pretty_allocation_mode: 'percent' | 'amount'
       pretty_category_type:
         | 'equipment_group'
         | 'crew_category'
         | 'transport_group'
-      pretty_module_basis_type: 'manual' | 'subcontractor' | 'technical'
       pretty_module_block_type:
         | 'subtitle'
         | 'description'
@@ -4821,6 +4934,7 @@ export type Database = {
         | 'timeline'
         | 'gallery'
       pretty_module_media_type: 'image' | 'video' | 'link'
+      pretty_pricing_basis_type: 'technical' | 'subcontractor' | 'custom'
       pretty_section_type:
         | 'hero'
         | 'problem'
@@ -5005,6 +5119,7 @@ export const Constants = {
       ],
       fuel: ['electric', 'diesel', 'petrol'],
       group_type: ['group', 'bundle'],
+      inventory_item_kind: ['stock', 'subrental'],
       item_kind: ['bulk', 'unique'],
       job_status: [
         'draft',
@@ -5048,13 +5163,11 @@ export const Constants = {
         'superseded',
       ],
       offer_type: ['technical', 'pretty'],
-      pretty_allocation_mode: ['percent', 'amount'],
       pretty_category_type: [
         'equipment_group',
         'crew_category',
         'transport_group',
       ],
-      pretty_module_basis_type: ['manual', 'subcontractor', 'technical'],
       pretty_module_block_type: [
         'subtitle',
         'description',
@@ -5067,6 +5180,7 @@ export const Constants = {
         'gallery',
       ],
       pretty_module_media_type: ['image', 'video', 'link'],
+      pretty_pricing_basis_type: ['technical', 'subcontractor', 'custom'],
       pretty_section_type: [
         'hero',
         'problem',

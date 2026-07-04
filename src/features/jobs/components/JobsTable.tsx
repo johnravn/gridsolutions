@@ -15,6 +15,7 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { DatePicker } from '@shared/ui/components/pickers'
 import {
@@ -63,6 +64,7 @@ export default function JobsTable({
 }) {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
   const [search, setSearch] = React.useState('')
@@ -359,7 +361,7 @@ export default function JobsTable({
             />
           )}
 
-          {companyRole !== 'freelancer' && (
+          {canWrite && (
             <Button
               size="2"
               variant="solid"

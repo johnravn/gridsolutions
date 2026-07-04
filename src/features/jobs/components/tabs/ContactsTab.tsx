@@ -14,7 +14,7 @@ import {
 import { supabase } from '@shared/api/supabase'
 import { prettyPhone } from '@shared/phone/phone'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import { Edit, NavArrowDown, Plus, Trash } from 'iconoir-react'
 import AddContactDialog, {
@@ -51,8 +51,7 @@ export default function ContactsTab({
   jobId: string
   companyId: string
 }) {
-  const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [addOpen, setAddOpen] = React.useState(false)

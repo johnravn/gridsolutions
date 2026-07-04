@@ -2,18 +2,23 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import {
-  calculateModuleCost,
+  applyComputedCostsToModules,
   calculatePrettyOfferTotals,
+  resolveSplitAmountsForSave,
+  validatePricingBases,
 } from '../utils/prettyOfferCalculations'
 import { createOffer, offerDetailQuery } from './offerQueries'
+import { jobSubcontractorQuotesQuery } from './subcontractorQueries'
 import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
+  JobSubcontractorQuote,
   OfferDetail,
   PrettyOfferDetail,
   PrettyOfferModule,
   PrettyOfferModuleBlock,
   PrettyOfferModuleBlockItem,
-  PrettyOfferSubcontractorQuote,
+  PrettyOfferPricingBasis,
+  PrettyOfferPricingBasisSplit,
 } from '../types'
 
 function isTempId(id: string): boolean {
@@ -69,29 +74,12 @@ async function fetchPrettyOfferModules(
 
   const moduleIds = moduleRows.map((m) => m.id)
 
-  const [
-    { data: manualFields, error: manualError },
-    { data: categoryMappings, error: categoryError },
-    { data: blocks, error: blocksError },
-  ] = await Promise.all([
-    supabase
-      .from('pretty_offer_module_manual_fields')
-      .select('*')
-      .in('module_id', moduleIds)
-      .order('sort_order', { ascending: true }),
-    supabase
-      .from('pretty_offer_module_category_mappings')
-      .select('*')
-      .in('module_id', moduleIds),
-    supabase
-      .from('pretty_offer_module_blocks')
-      .select('*')
-      .in('module_id', moduleIds)
-      .order('sort_order', { ascending: true }),
-  ])
+  const { data: blocks, error: blocksError } = await supabase
+    .from('pretty_offer_module_blocks')
+    .select('*')
+    .in('module_id', moduleIds)
+    .order('sort_order', { ascending: true })
 
-  if (manualError) throw manualError
-  if (categoryError) throw categoryError
   if (blocksError) throw blocksError
 
   const blockIds = (blocks || []).map((b) => b.id)
@@ -104,23 +92,6 @@ async function fetchPrettyOfferModules(
       .order('sort_order', { ascending: true })
     if (itemsError) throw itemsError
     blockItems = items || []
-  }
-
-  const manualByModule = new Map<string, PrettyOfferModule['manual_fields']>()
-  for (const field of manualFields || []) {
-    const list = manualByModule.get(field.module_id) ?? []
-    list.push(field)
-    manualByModule.set(field.module_id, list)
-  }
-
-  const mappingsByModule = new Map<
-    string,
-    PrettyOfferModule['category_mappings']
-  >()
-  for (const mapping of categoryMappings || []) {
-    const list = mappingsByModule.get(mapping.module_id) ?? []
-    list.push(mapping)
-    mappingsByModule.set(mapping.module_id, list)
   }
 
   const itemsByBlock = new Map<string, PrettyOfferModuleBlock['items']>()
@@ -142,46 +113,42 @@ async function fetchPrettyOfferModules(
 
   return moduleRows.map((module) => ({
     ...module,
-    manual_fields: manualByModule.get(module.id) ?? [],
-    category_mappings: mappingsByModule.get(module.id) ?? [],
     content_blocks: blocksByModule.get(module.id) ?? [],
   }))
 }
 
-async function fetchSubcontractorQuotes(
+async function fetchPricingBases(
   offerId: string,
-): Promise<Array<PrettyOfferSubcontractorQuote>> {
-  const { data: quotes, error: quotesError } = await supabase
-    .from('pretty_offer_subcontractor_quotes')
+): Promise<Array<PrettyOfferPricingBasis>> {
+  const { data: bases, error: basesError } = await supabase
+    .from('pretty_offer_pricing_bases')
     .select('*')
     .eq('offer_id', offerId)
     .order('sort_order', { ascending: true })
 
-  if (quotesError) throw quotesError
-  const quoteRows = (quotes || []) as Array<PrettyOfferSubcontractorQuote>
-  if (quoteRows.length === 0) return []
+  if (basesError) throw basesError
+  const basisRows = (bases || []) as Array<PrettyOfferPricingBasis>
+  if (basisRows.length === 0) return []
 
-  const quoteIds = quoteRows.map((q) => q.id)
-  const { data: allocations, error: allocError } = await supabase
-    .from('pretty_offer_subcontractor_allocations')
+  const basisIds = basisRows.map((b) => b.id)
+  const { data: splits, error: splitsError } = await supabase
+    .from('pretty_offer_pricing_basis_splits')
     .select('*')
-    .in('quote_id', quoteIds)
+    .in('basis_id', basisIds)
+    .order('sort_order', { ascending: true })
 
-  if (allocError) throw allocError
+  if (splitsError) throw splitsError
 
-  const allocByQuote = new Map<
-    string,
-    PrettyOfferSubcontractorQuote['allocations']
-  >()
-  for (const alloc of allocations || []) {
-    const list = allocByQuote.get(alloc.quote_id) ?? []
-    list.push(alloc)
-    allocByQuote.set(alloc.quote_id, list)
+  const splitsByBasis = new Map<string, Array<PrettyOfferPricingBasisSplit>>()
+  for (const split of (splits || []) as Array<PrettyOfferPricingBasisSplit>) {
+    const list = splitsByBasis.get(split.basis_id) ?? []
+    list.push(split)
+    splitsByBasis.set(split.basis_id, list)
   }
 
-  return quoteRows.map((quote) => ({
-    ...quote,
-    allocations: allocByQuote.get(quote.id) ?? [],
+  return basisRows.map((basis) => ({
+    ...basis,
+    splits: splitsByBasis.get(basis.id) ?? [],
   }))
 }
 
@@ -222,12 +189,12 @@ export async function fetchPrettyOfferDetail(
   if (!base.data) return null
 
   const offer = base.data as PrettyOfferDetail
-  const [modules, subcontractor_quotes] = await Promise.all([
+  const [modules, pricing_bases] = await Promise.all([
     fetchPrettyOfferModules(offerId),
-    fetchSubcontractorQuotes(offerId),
+    fetchPricingBases(offerId),
   ])
 
-  const job = (offer as any).job
+  const job = (offer as { job?: unknown }).job
   if (job) {
     const jobData = Array.isArray(job) ? job[0] : job
     offer.job_title = jobData?.title ?? null
@@ -275,7 +242,7 @@ export async function fetchPrettyOfferDetail(
     }
   }
 
-  const company = (offer as any).company
+  const company = (offer as { company?: unknown }).company
   if (company) {
     const companyData = Array.isArray(company) ? company[0] : company
     offer.company = {
@@ -291,7 +258,7 @@ export async function fetchPrettyOfferDetail(
   return {
     ...offer,
     modules,
-    subcontractor_quotes,
+    pricing_bases,
   }
 }
 
@@ -334,19 +301,46 @@ export async function createEmptyDraftPrettyOffer({
 
 type SavePrettyOfferPayload = {
   offerId: string
+  jobId: string
   title: string
   daysOfUse: number
   vatPercent: number
-  sourceTechnicalOfferId: string | null
   prettyUseCustomerAccent: boolean
   prettyUseCustomerBackground: boolean
   modules: Array<PrettyOfferModule>
-  subcontractorQuotes: Array<PrettyOfferSubcontractorQuote>
-  technicalOffer?: OfferDetail | null
+  pricingBases: Array<PrettyOfferPricingBasis>
+  technicalOffersById?: Map<string, OfferDetail>
   rentalFactorConfig?: RentalFactorConfig | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
   vehicleDailyRate?: number | null
+}
+
+async function loadJobQuotesForBases(
+  jobId: string,
+  pricingBases: Array<PrettyOfferPricingBasis>,
+): Promise<Map<string, JobSubcontractorQuote>> {
+  const quoteIds = [
+    ...new Set(
+      pricingBases
+        .map((b) => b.job_subcontractor_quote_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+
+  if (quoteIds.length === 0) return new Map()
+
+  const { data, error } = await supabase
+    .from('job_subcontractor_quotes')
+    .select('*')
+    .eq('job_id', jobId)
+    .in('id', quoteIds)
+
+  if (error) throw error
+
+  return new Map(
+    ((data ?? []) as Array<JobSubcontractorQuote>).map((q) => [q.id, q]),
+  )
 }
 
 export async function savePrettyOffer(
@@ -354,15 +348,15 @@ export async function savePrettyOffer(
 ): Promise<void> {
   const {
     offerId,
+    jobId,
     title,
     daysOfUse,
     vatPercent,
-    sourceTechnicalOfferId,
     prettyUseCustomerAccent,
     prettyUseCustomerBackground,
     modules,
-    subcontractorQuotes,
-    technicalOffer,
+    pricingBases,
+    technicalOffersById,
     rentalFactorConfig,
     vehicleDistanceRate,
     vehicleDistanceIncrement,
@@ -380,20 +374,33 @@ export async function savePrettyOffer(
     throw new Error('This offer is locked and cannot be edited.')
   }
 
-  const modulesWithCost = modules.map((module) => ({
-    ...module,
-    computed_cost: calculateModuleCost(
-      module,
-      subcontractorQuotes,
-      technicalOffer ?? null,
-      {
-        rentalFactorConfig,
-        vehicleDistanceRate,
-        vehicleDistanceIncrement,
-        vehicleDailyRate,
-      },
-    ),
-  }))
+  const jobQuotesById = await loadJobQuotesForBases(jobId, pricingBases)
+  const validationIssues = validatePricingBases(
+    pricingBases,
+    modules,
+    jobQuotesById,
+  )
+  if (validationIssues.length > 0) {
+    throw new Error(validationIssues[0].message)
+  }
+
+  const technicalContext = {
+    rentalFactorConfig,
+    vehicleDistanceRate,
+    vehicleDistanceIncrement,
+    vehicleDailyRate,
+  }
+
+  const resolvedBases = resolveSplitAmountsForSave(pricingBases, {
+    technicalOffersById,
+    technicalContext,
+  })
+
+  const modulesWithCost = applyComputedCostsToModules(modules, resolvedBases, {
+    technicalOffersById,
+    jobQuotesById,
+    technicalContext,
+  })
 
   const totals = calculatePrettyOfferTotals(modulesWithCost, vatPercent)
 
@@ -403,7 +410,6 @@ export async function savePrettyOffer(
       title,
       days_of_use: daysOfUse,
       vat_percent: vatPercent,
-      source_technical_offer_id: sourceTechnicalOfferId,
       pretty_use_customer_accent: prettyUseCustomerAccent,
       pretty_use_customer_background: prettyUseCustomerBackground,
       equipment_subtotal: 0,
@@ -448,7 +454,6 @@ export async function savePrettyOffer(
           title: module.title,
           subtitle: null,
           sort_order: module.sort_order,
-          basis_type: module.basis_type,
           display_price: module.display_price,
           show_price: module.show_price,
           computed_cost: module.computed_cost,
@@ -465,7 +470,6 @@ export async function savePrettyOffer(
           title: module.title,
           subtitle: null,
           sort_order: module.sort_order,
-          basis_type: module.basis_type,
           display_price: module.display_price,
           show_price: module.show_price,
           computed_cost: module.computed_cost,
@@ -479,82 +483,6 @@ export async function savePrettyOffer(
 
   for (const module of modulesWithCost) {
     const moduleId = moduleIdMap.get(module.id)!
-    const keepManualIds = (module.manual_fields ?? [])
-      .map((f) => f.id)
-      .filter((id) => !isTempId(id))
-
-    const { data: existingManual } = await supabase
-      .from('pretty_offer_module_manual_fields')
-      .select('id')
-      .eq('module_id', moduleId)
-
-    const manualToDelete = (existingManual || [])
-      .map((r) => r.id)
-      .filter((id) => !keepManualIds.includes(id))
-
-    if (manualToDelete.length > 0) {
-      await supabase
-        .from('pretty_offer_module_manual_fields')
-        .delete()
-        .in('id', manualToDelete)
-    }
-
-    for (const field of module.manual_fields ?? []) {
-      if (isTempId(field.id)) {
-        const { error } = await supabase
-          .from('pretty_offer_module_manual_fields')
-          .insert({
-            module_id: moduleId,
-            label: field.label,
-            value: field.value,
-            sort_order: field.sort_order,
-          })
-        if (error) throw error
-      } else {
-        const { error } = await supabase
-          .from('pretty_offer_module_manual_fields')
-          .update({
-            label: field.label,
-            value: field.value,
-            sort_order: field.sort_order,
-          })
-          .eq('id', field.id)
-        if (error) throw error
-      }
-    }
-
-    const keepMappingIds = (module.category_mappings ?? [])
-      .map((m) => m.id)
-      .filter((id) => !isTempId(id))
-
-    const { data: existingMappings } = await supabase
-      .from('pretty_offer_module_category_mappings')
-      .select('id')
-      .eq('module_id', moduleId)
-
-    const mappingsToDelete = (existingMappings || [])
-      .map((r) => r.id)
-      .filter((id) => !keepMappingIds.includes(id))
-
-    if (mappingsToDelete.length > 0) {
-      await supabase
-        .from('pretty_offer_module_category_mappings')
-        .delete()
-        .in('id', mappingsToDelete)
-    }
-
-    for (const mapping of module.category_mappings ?? []) {
-      if (isTempId(mapping.id)) {
-        const { error } = await supabase
-          .from('pretty_offer_module_category_mappings')
-          .insert({
-            module_id: moduleId,
-            category_type: mapping.category_type,
-            category_key: mapping.category_key,
-          })
-        if (error) throw error
-      }
-    }
 
     const keepBlockIds = (module.content_blocks ?? [])
       .map((b) => b.id)
@@ -668,163 +596,112 @@ export async function savePrettyOffer(
     }
   }
 
-  const keepQuoteIds = subcontractorQuotes
-    .map((q) => q.id)
+  const keepBasisIds = resolvedBases
+    .map((b) => b.id)
     .filter((id) => !isTempId(id))
 
-  const { data: existingQuotes } = await supabase
-    .from('pretty_offer_subcontractor_quotes')
+  const { data: existingBases } = await supabase
+    .from('pretty_offer_pricing_bases')
     .select('id')
     .eq('offer_id', offerId)
 
-  const quotesToDelete = (existingQuotes || [])
+  const basesToDelete = (existingBases || [])
     .map((r) => r.id)
-    .filter((id) => !keepQuoteIds.includes(id))
+    .filter((id) => !keepBasisIds.includes(id))
 
-  if (quotesToDelete.length > 0) {
+  if (basesToDelete.length > 0) {
     await supabase
-      .from('pretty_offer_subcontractor_quotes')
+      .from('pretty_offer_pricing_bases')
       .delete()
-      .in('id', quotesToDelete)
+      .in('id', basesToDelete)
   }
 
-  const quoteIdMap = new Map<string, string>()
+  const basisIdMap = new Map<string, string>()
 
-  for (const quote of subcontractorQuotes) {
-    if (isTempId(quote.id)) {
+  for (const basis of resolvedBases) {
+    if (isTempId(basis.id)) {
       const { data: inserted, error } = await supabase
-        .from('pretty_offer_subcontractor_quotes')
+        .from('pretty_offer_pricing_bases')
         .insert({
           offer_id: offerId,
-          vendor_name: quote.vendor_name,
-          note: quote.note,
-          total_amount: quote.total_amount,
-          customer_id: quote.customer_id,
-          pdf_path: quote.pdf_path,
-          pdf_filename: quote.pdf_filename,
-          mime_type: quote.mime_type,
-          size_bytes: quote.size_bytes,
-          sort_order: quote.sort_order,
+          basis_type: basis.basis_type,
+          title: basis.title,
+          sort_order: basis.sort_order,
+          source_technical_offer_id: basis.source_technical_offer_id,
+          job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
         })
         .select('id')
         .single()
       if (error) throw error
-      quoteIdMap.set(quote.id, inserted.id)
+      basisIdMap.set(basis.id, inserted.id)
     } else {
       const { error } = await supabase
-        .from('pretty_offer_subcontractor_quotes')
+        .from('pretty_offer_pricing_bases')
         .update({
-          vendor_name: quote.vendor_name,
-          note: quote.note,
-          total_amount: quote.total_amount,
-          customer_id: quote.customer_id,
-          pdf_path: quote.pdf_path,
-          pdf_filename: quote.pdf_filename,
-          mime_type: quote.mime_type,
-          size_bytes: quote.size_bytes,
-          sort_order: quote.sort_order,
+          basis_type: basis.basis_type,
+          title: basis.title,
+          sort_order: basis.sort_order,
+          source_technical_offer_id: basis.source_technical_offer_id,
+          job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
         })
-        .eq('id', quote.id)
+        .eq('id', basis.id)
       if (error) throw error
-      quoteIdMap.set(quote.id, quote.id)
+      basisIdMap.set(basis.id, basis.id)
     }
   }
 
-  for (const quote of subcontractorQuotes) {
-    const quoteId = quoteIdMap.get(quote.id)!
-    const keepAllocIds = (quote.allocations ?? [])
-      .map((a) => a.id)
-      .filter((id) => !isTempId(id))
+  for (const basis of resolvedBases) {
+    const basisId = basisIdMap.get(basis.id)!
+    const splits = basis.splits ?? []
+    const keepSplitIds = splits.map((s) => s.id).filter((id) => !isTempId(id))
 
-    const { data: existingAllocs } = await supabase
-      .from('pretty_offer_subcontractor_allocations')
+    const { data: existingSplits } = await supabase
+      .from('pretty_offer_pricing_basis_splits')
       .select('id')
-      .eq('quote_id', quoteId)
+      .eq('basis_id', basisId)
 
-    const allocsToDelete = (existingAllocs || [])
+    const splitsToDelete = (existingSplits || [])
       .map((r) => r.id)
-      .filter((id) => !keepAllocIds.includes(id))
+      .filter((id) => !keepSplitIds.includes(id))
 
-    if (allocsToDelete.length > 0) {
+    if (splitsToDelete.length > 0) {
       await supabase
-        .from('pretty_offer_subcontractor_allocations')
+        .from('pretty_offer_pricing_basis_splits')
         .delete()
-        .in('id', allocsToDelete)
+        .in('id', splitsToDelete)
     }
 
-    for (const alloc of quote.allocations ?? []) {
-      const moduleId = moduleIdMap.get(alloc.module_id) ?? alloc.module_id
-      if (isTempId(alloc.id)) {
+    for (const split of splits) {
+      const moduleId = moduleIdMap.get(split.module_id) ?? split.module_id
+      if (isTempId(split.id)) {
         const { error } = await supabase
-          .from('pretty_offer_subcontractor_allocations')
+          .from('pretty_offer_pricing_basis_splits')
           .insert({
-            quote_id: quoteId,
+            basis_id: basisId,
             module_id: moduleId,
-            allocation_mode: alloc.allocation_mode,
-            allocation_value: alloc.allocation_value,
+            title: split.title,
+            amount: split.amount,
+            sort_order: split.sort_order,
+            category_type: split.category_type,
+            category_key: split.category_key,
           })
         if (error) throw error
       } else {
         const { error } = await supabase
-          .from('pretty_offer_subcontractor_allocations')
+          .from('pretty_offer_pricing_basis_splits')
           .update({
             module_id: moduleId,
-            allocation_mode: alloc.allocation_mode,
-            allocation_value: alloc.allocation_value,
+            title: split.title,
+            amount: split.amount,
+            sort_order: split.sort_order,
+            category_type: split.category_type,
+            category_key: split.category_key,
           })
-          .eq('id', alloc.id)
+          .eq('id', split.id)
         if (error) throw error
       }
     }
   }
-}
-
-export async function uploadSubcontractorQuotePdf({
-  companyId,
-  offerId,
-  file,
-}: {
-  companyId: string
-  offerId: string
-  file: File
-}): Promise<{
-  path: string
-  filename: string
-  mimeType: string
-  sizeBytes: number
-}> {
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
-  const timestamp = Date.now()
-  const filename = `${timestamp}.${ext}`
-  const path = `${companyId}/${offerId}/${filename}`
-
-  const { error: uploadError } = await supabase.storage
-    .from('pretty_offer_quotes')
-    .upload(path, file, {
-      upsert: false,
-      cacheControl: '3600',
-      contentType: file.type || 'application/pdf',
-    })
-
-  if (uploadError) throw uploadError
-
-  return {
-    path,
-    filename: file.name,
-    mimeType: file.type || 'application/pdf',
-    sizeBytes: file.size,
-  }
-}
-
-export async function getSubcontractorQuotePdfUrl(
-  path: string,
-): Promise<string> {
-  const { data, error } = await supabase.storage
-    .from('pretty_offer_quotes')
-    .createSignedUrl(path, 3600)
-
-  if (error) throw error
-  return data.signedUrl
 }
 
 export async function recalculatePrettyOfferTotals(
@@ -833,22 +710,31 @@ export async function recalculatePrettyOfferTotals(
   const detail = await fetchPrettyOfferDetail(offerId)
   if (!detail) return
 
-  let technicalOffer: OfferDetail | null = null
-  if (detail.source_technical_offer_id) {
-    technicalOffer = await (
-      offerDetailQuery(detail.source_technical_offer_id)
-        .queryFn as () => Promise<OfferDetail | null>
+  const technicalOfferIds = [
+    ...new Set(
+      (detail.pricing_bases ?? [])
+        .map((b) => b.source_technical_offer_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+
+  const technicalOffersById = new Map<string, OfferDetail>()
+  for (const techId of technicalOfferIds) {
+    const techOffer = await (
+      offerDetailQuery(techId).queryFn as () => Promise<OfferDetail | null>
     )()
+    if (techOffer) technicalOffersById.set(techId, techOffer)
   }
 
-  const modules = (detail.modules ?? []).map((module) => ({
-    ...module,
-    computed_cost: calculateModuleCost(
-      module,
-      detail.subcontractor_quotes ?? [],
-      technicalOffer,
-    ),
-  }))
+  const jobQuotesById = detail.job_id
+    ? await loadJobQuotesForBases(detail.job_id, detail.pricing_bases ?? [])
+    : new Map()
+
+  const modules = applyComputedCostsToModules(
+    detail.modules ?? [],
+    detail.pricing_bases ?? [],
+    { technicalOffersById, jobQuotesById },
+  )
 
   const totals = calculatePrettyOfferTotals(modules, detail.vat_percent)
 
@@ -877,7 +763,7 @@ export async function copyPrettyOfferChildren(
   newOfferId: string,
 ): Promise<void> {
   const detail = await fetchPrettyOfferDetail(sourceOfferId)
-  if (!detail?.modules?.length && !detail?.subcontractor_quotes?.length) return
+  if (!detail?.modules?.length && !detail?.pricing_bases?.length) return
 
   const moduleIdMap = new Map<string, string>()
 
@@ -889,7 +775,6 @@ export async function copyPrettyOfferChildren(
         title: module.title,
         subtitle: null,
         sort_order: module.sort_order,
-        basis_type: module.basis_type,
         display_price: module.display_price,
         show_price: module.show_price,
         computed_cost: module.computed_cost,
@@ -899,23 +784,6 @@ export async function copyPrettyOfferChildren(
 
     if (error) throw error
     moduleIdMap.set(module.id, inserted.id)
-
-    for (const field of module.manual_fields ?? []) {
-      await supabase.from('pretty_offer_module_manual_fields').insert({
-        module_id: inserted.id,
-        label: field.label,
-        value: field.value,
-        sort_order: field.sort_order,
-      })
-    }
-
-    for (const mapping of module.category_mappings ?? []) {
-      await supabase.from('pretty_offer_module_category_mappings').insert({
-        module_id: inserted.id,
-        category_type: mapping.category_type,
-        category_key: mapping.category_key,
-      })
-    }
 
     for (const block of module.content_blocks ?? []) {
       const { data: insertedBlock, error: blockError } = await supabase
@@ -949,34 +817,33 @@ export async function copyPrettyOfferChildren(
     }
   }
 
-  for (const quote of detail.subcontractor_quotes ?? []) {
-    const { data: insertedQuote, error } = await supabase
-      .from('pretty_offer_subcontractor_quotes')
+  for (const basis of detail.pricing_bases ?? []) {
+    const { data: insertedBasis, error } = await supabase
+      .from('pretty_offer_pricing_bases')
       .insert({
         offer_id: newOfferId,
-        vendor_name: quote.vendor_name,
-        note: quote.note,
-        total_amount: quote.total_amount,
-        customer_id: quote.customer_id,
-        pdf_path: quote.pdf_path,
-        pdf_filename: quote.pdf_filename,
-        mime_type: quote.mime_type,
-        size_bytes: quote.size_bytes,
-        sort_order: quote.sort_order,
+        basis_type: basis.basis_type,
+        title: basis.title,
+        sort_order: basis.sort_order,
+        source_technical_offer_id: basis.source_technical_offer_id,
+        job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
       })
       .select('id')
       .single()
 
     if (error) throw error
 
-    for (const alloc of quote.allocations ?? []) {
-      const newModuleId = moduleIdMap.get(alloc.module_id)
+    for (const split of basis.splits ?? []) {
+      const newModuleId = moduleIdMap.get(split.module_id)
       if (!newModuleId) continue
-      await supabase.from('pretty_offer_subcontractor_allocations').insert({
-        quote_id: insertedQuote.id,
+      await supabase.from('pretty_offer_pricing_basis_splits').insert({
+        basis_id: insertedBasis.id,
         module_id: newModuleId,
-        allocation_mode: alloc.allocation_mode,
-        allocation_value: alloc.allocation_value,
+        title: split.title,
+        amount: split.amount,
+        sort_order: split.sort_order,
+        category_type: split.category_type,
+        category_key: split.category_key,
       })
     }
   }
@@ -987,3 +854,5 @@ export async function copyPrettyOfferChildren(
     // non-blocking
   }
 }
+
+export { jobSubcontractorQuotesQuery }

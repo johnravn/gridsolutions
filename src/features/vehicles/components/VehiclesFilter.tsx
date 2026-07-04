@@ -64,7 +64,7 @@ export default function VehiclesFilter({
               checked={includeExternal}
               onCheckedChange={onIncludeExternalChange}
             />
-            <Text>Show external</Text>
+            <Text>Show partner & personal</Text>
           </Flex>
         </DropdownMenu.Item>
       </DropdownMenu.Content>

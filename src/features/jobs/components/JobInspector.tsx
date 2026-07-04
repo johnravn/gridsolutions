@@ -16,6 +16,7 @@ import { Archive, Copy, Edit, NavArrowDown, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -39,6 +40,7 @@ import ToDoTab from './tabs/ToDoTab'
 import PackingTab from './tabs/PackingTab'
 import JobDialog from './dialogs/JobDialog'
 import CopyJobDialog from './dialogs/CopyJobDialog'
+import SubcontractorsTab from './tabs/SubcontractorsTab'
 import type { JobDetail, JobStatus } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
 
@@ -67,6 +69,7 @@ export default function JobInspector({
 }) {
   // ✅ hooks first
   const { companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const isFreelancer = companyRole === 'freelancer'
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = React.useState(false)
@@ -82,6 +85,7 @@ export default function JobInspector({
     () =>
       new Set([
         'bookings',
+        'subcontractors',
         'offers',
         'pretty-offers',
         'invoice',
@@ -120,6 +124,7 @@ export default function JobInspector({
       { value: 'program', label: 'Program' },
       { value: 'calendar', label: 'Calendar' },
       { value: 'bookings', label: 'Bookings' },
+      { value: 'subcontractors', label: 'Subcontractors' },
       { value: 'packing', label: 'Packing' },
       { value: 'offers', label: 'Offers' },
       { value: 'pretty-offers', label: 'Pretty Offers' },
@@ -307,7 +312,7 @@ export default function JobInspector({
               </Badge>
             )
           })()}
-          {companyRole !== 'freelancer' && (
+          {canWrite && (
             <>
               <Tooltip content="Edit job">
                 <Button
@@ -431,7 +436,7 @@ export default function JobInspector({
                     </Flex>
                   ) : (
                     (tabOptions.find((o) => o.value === activeTab)?.label ??
-                      'Overview')
+                    'Overview')
                   )}
                   <NavArrowDown width={18} height={18} />
                 </Button>
@@ -485,6 +490,9 @@ export default function JobInspector({
             {!isFreelancer && (
               <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
             )}
+            {!isFreelancer && (
+              <Tabs.Trigger value="subcontractors">Subcontractors</Tabs.Trigger>
+            )}
             <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
             {!isFreelancer && (
               <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
@@ -522,6 +530,11 @@ export default function JobInspector({
         {!isFreelancer && (
           <Tabs.Content value="bookings" mt={'10px'}>
             <BookingsTab jobId={job.id} />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="subcontractors" mt={'10px'}>
+            <SubcontractorsTab jobId={job.id} />
           </Tabs.Content>
         )}
         <Tabs.Content value="packing" mt={'10px'}>

@@ -1,24 +1,13 @@
 import type {
-  PrettyAllocationMode,
   PrettyCategoryType,
-  PrettyModuleBasisType,
   PrettyModuleBlockType,
   PrettyOfferModule,
   PrettyOfferModuleBlock,
   PrettyOfferModuleBlockItem,
-  PrettyOfferModuleCategoryMapping,
-  PrettyOfferModuleManualField,
-  PrettyOfferSubcontractorAllocation,
-  PrettyOfferSubcontractorQuote,
+  PrettyOfferPricingBasis,
+  PrettyOfferPricingBasisSplit,
+  PrettyPricingBasisType,
 } from '../../../types'
-
-export type LocalManualField = PrettyOfferModuleManualField & {
-  id: string
-}
-
-export type LocalCategoryMapping = PrettyOfferModuleCategoryMapping & {
-  id: string
-}
 
 export type LocalBlockItem = PrettyOfferModuleBlockItem & {
   id: string
@@ -31,23 +20,18 @@ export type LocalContentBlock = Omit<PrettyOfferModuleBlock, 'items'> & {
 
 export type LocalPrettyModule = Omit<
   PrettyOfferModule,
-  'manual_fields' | 'category_mappings' | 'content_blocks' | 'media'
+  'content_blocks' | 'media' | 'blocks'
 > & {
-  manual_fields: Array<LocalManualField>
-  category_mappings: Array<LocalCategoryMapping>
   content_blocks: Array<LocalContentBlock>
 }
 
-export type LocalSubcontractorAllocation =
-  PrettyOfferSubcontractorAllocation & {
-    id: string
-  }
+export type LocalPricingBasisSplit = PrettyOfferPricingBasisSplit & {
+  id: string
+}
 
-export type LocalSubcontractorQuote = Omit<
-  PrettyOfferSubcontractorQuote,
-  'allocations'
-> & {
-  allocations: Array<LocalSubcontractorAllocation>
+export type LocalPricingBasis = Omit<PrettyOfferPricingBasis, 'splits'> & {
+  id: string
+  splits: Array<LocalPricingBasisSplit>
 }
 
 export function createTempId(prefix: string): string {
@@ -61,26 +45,10 @@ export function createEmptyModule(sortOrder: number): LocalPrettyModule {
     title: '',
     subtitle: null,
     sort_order: sortOrder,
-    basis_type: 'manual',
     display_price: null,
     show_price: false,
     computed_cost: 0,
-    manual_fields: [],
-    category_mappings: [],
     content_blocks: [],
-  }
-}
-
-export function createEmptyManualField(
-  moduleId: string,
-  sortOrder: number,
-): LocalManualField {
-  return {
-    id: createTempId('field'),
-    module_id: moduleId,
-    label: '',
-    value: '',
-    sort_order: sortOrder,
   }
 }
 
@@ -127,41 +95,48 @@ export function createEmptyContentBlock(
   return base
 }
 
-export function createEmptyQuote(sortOrder: number): LocalSubcontractorQuote {
+export function createEmptyPricingBasis(
+  sortOrder: number,
+  basisType: PrettyPricingBasisType,
+): LocalPricingBasis {
+  const titles: Record<PrettyPricingBasisType, string> = {
+    technical: 'Technical offer',
+    subcontractor: 'Subcontractor quote',
+    custom: 'Custom basis',
+  }
   return {
-    id: createTempId('quote'),
+    id: createTempId('basis'),
     offer_id: '',
-    vendor_name: '',
-    note: '',
-    total_amount: 0,
-    customer_id: null,
-    pdf_path: null,
-    pdf_filename: null,
-    mime_type: null,
-    size_bytes: null,
+    basis_type: basisType,
+    title: titles[basisType],
     sort_order: sortOrder,
-    allocations: [],
+    source_technical_offer_id: null,
+    job_subcontractor_quote_id: null,
+    splits: [],
   }
 }
 
-export function createEmptyAllocation(
-  quoteId: string,
+export function createEmptySplit(
+  basisId: string,
   moduleId: string,
-  mode: PrettyAllocationMode = 'percent',
-): LocalSubcontractorAllocation {
+  sortOrder: number,
+): LocalPricingBasisSplit {
   return {
-    id: createTempId('alloc'),
-    quote_id: quoteId,
+    id: createTempId('split'),
+    basis_id: basisId,
     module_id: moduleId,
-    allocation_mode: mode,
-    allocation_value: 0,
+    title: '',
+    amount: 0,
+    sort_order: sortOrder,
+    category_type: null,
+    category_key: null,
   }
 }
 
-export const BASIS_TYPE_LABELS: Record<PrettyModuleBasisType, string> = {
-  manual: 'Manual inputs',
-  subcontractor: 'Subcontractor quotes',
-  technical: 'Technical offer categories',
+export const BASIS_TYPE_LABELS: Record<PrettyPricingBasisType, string> = {
+  technical: 'Internal technical offer',
+  subcontractor: 'Subcontractor basis',
+  custom: 'Custom',
 }
 
 export const CATEGORY_TYPE_LABELS: Record<PrettyCategoryType, string> = {

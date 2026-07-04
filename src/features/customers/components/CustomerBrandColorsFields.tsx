@@ -1,11 +1,10 @@
 import { Box, Flex, Text, TextField } from '@radix-ui/themes'
 import AccentColorPicker from '@shared/theme/AccentColorPicker'
 import {
-  
   isRadixAccentColor,
-  isValidHexColor
+  isValidHexColor,
 } from '@shared/theme/accentColorTypes'
-import type {RadixAccentColor} from '@shared/theme/accentColorTypes';
+import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
 
 type Props = {
   accentColor: RadixAccentColor

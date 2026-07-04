@@ -13,6 +13,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Package, Packages, Search } from 'iconoir-react'
 import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
@@ -28,8 +29,8 @@ type Props = {
   onSelect: (id: string) => void
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
@@ -40,13 +41,14 @@ export default function InventoryTable({
   onSelect,
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
 }: Props) {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [categoryFilter, setCategoryFilter] = React.useState<string | null>(
@@ -74,8 +76,8 @@ export default function InventoryTable({
       debouncedSearch,
       showActive,
       showInactive,
-      showInternal,
-      showExternal,
+      showStock,
+      showSubrental,
       showGroupOnlyItems,
       showGroups,
       showItems,
@@ -96,8 +98,8 @@ export default function InventoryTable({
         search: debouncedSearch,
         showActive,
         showInactive,
-        showInternal,
-        showExternal,
+        showStock,
+        showSubrental,
         showGroupOnlyItems,
         showGroups,
         showItems,
@@ -222,14 +224,14 @@ export default function InventoryTable({
       case 'current_price':
         if (row.current_price == null) return ''
         return fmt.format(Number(row.current_price))
-      case 'owner':
-        return row.internally_owned ? (
+      case 'item_kind':
+        return row.item_kind === 'stock' ? (
           <Badge size="1" variant="soft" color="indigo">
-            Internal
+            Stock
           </Badge>
         ) : (
           <Badge size="1" variant="soft" color="amber">
-            {row.external_owner_name ?? 'External'}
+            Subrental
           </Badge>
         )
       default:
@@ -243,7 +245,7 @@ export default function InventoryTable({
     { id: 'brand_name', header: 'Brand', sortable: true },
     { id: 'on_hand', header: 'On hand', sortable: true },
     { id: 'current_price', header: 'Price', sortable: true },
-    { id: 'owner', header: 'Owner', sortable: false },
+    { id: 'item_kind', header: 'Type', sortable: false },
   ]
 
   return (
@@ -302,38 +304,40 @@ export default function InventoryTable({
           </Select.Root>
         )}
 
-        <Flex
-          gap="2"
-          style={{
-            width: isSmallScreen ? '100%' : undefined,
-            flex: isSmallScreen ? '1 1 100%' : undefined,
-          }}
-        >
-          <Button
-            size={isSmallScreen ? '3' : '2'}
-            variant="outline"
-            onClick={() => setAddGroupDialog(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+        {canWrite && (
+          <Flex
+            gap="2"
+            style={{
+              width: isSmallScreen ? '100%' : undefined,
+              flex: isSmallScreen ? '1 1 100%' : undefined,
+            }}
           >
-            <Packages
-              width={isSmallScreen ? 20 : 16}
-              height={isSmallScreen ? 20 : 16}
-            />{' '}
-            Add group
-          </Button>
-          <Button
-            size={isSmallScreen ? '3' : '2'}
-            variant="solid"
-            onClick={() => setAddItemOpen(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-          >
-            <Package
-              width={isSmallScreen ? 20 : 16}
-              height={isSmallScreen ? 20 : 16}
-            />{' '}
-            Add item
-          </Button>
-        </Flex>
+            <Button
+              size={isSmallScreen ? '3' : '2'}
+              variant="outline"
+              onClick={() => setAddGroupDialog(true)}
+              style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+            >
+              <Packages
+                width={isSmallScreen ? 20 : 16}
+                height={isSmallScreen ? 20 : 16}
+              />{' '}
+              Add group
+            </Button>
+            <Button
+              size={isSmallScreen ? '3' : '2'}
+              variant="solid"
+              onClick={() => setAddItemOpen(true)}
+              style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+            >
+              <Package
+                width={isSmallScreen ? 20 : 16}
+                height={isSmallScreen ? 20 : 16}
+              />{' '}
+              Add item
+            </Button>
+          </Flex>
+        )}
       </Flex>
 
       {/* Table: header + body in horizontal scroll so headers scroll with rows */}

@@ -26,14 +26,13 @@ import {
   Plus,
   Trash,
 } from 'iconoir-react'
-import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
-import { jobDetailQuery, upsertTimePeriod } from '@features/jobs/api/queries'
-import { partnerCustomersQuery } from '@features/inventory/api/partners'
+import { jobDetailQuery } from '@features/jobs/api/queries'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
-import SelectExternalOwnerDialog from '../dialogs/SelectExternalOwnerDialog'
 import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
 import type {
   BookingStatus,
@@ -46,13 +45,14 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
   const [bookItemsOpen, setBookItemsOpen] = React.useState(false)
   const [editMode, setEditMode] = React.useState(false)
   const [externalEditMode, setExternalEditMode] = React.useState(false)
-  const [view, setView] = React.useState<'internal' | 'external'>('internal')
+  const [view, setView] = React.useState<'stock' | 'subrental'>('stock')
   const { companyId } = useCompany()
   const { companyRole } = useAuthz()
+  const { isReadOnly: _equipmentTabReadOnly } = useCompanyWriteAccess()
   const canBook = !!companyId && companyRole !== 'freelancer'
 
   const handleViewChange = (value: string) => {
-    if (value === 'internal' || value === 'external') {
+    if (value === 'stock' || value === 'subrental') {
       setView(value)
     }
   }
@@ -85,8 +85,8 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
 
       if (!resIds.length) {
         return {
-          internal: [],
-          external: [],
+          stock: [],
+          subrental: [],
           externalTimePeriods,
           groupItemsByGroupId: new Map<
             string,
@@ -100,14 +100,13 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
         .select(
           `
           id, time_period_id, item_id, quantity, source_group_id, source_kind,
-          status, external_status, external_note, forced,
+          status, external_status, external_note, forced, subcontractor_id,
           item:item_id (
-            id, name, category_id, brand_id, model,
+            id, name, category_id, brand_id, model, item_kind,
             category:category_id ( name ),
-            brand:brand_id ( name ),
-            external_owner_id,
-            external_owner:external_owner_id ( name )
+            brand:brand_id ( name )
           ),
+          subcontractor:subcontractor_id ( id, name ),
           source_group:source_group_id (
             id, name, category_id,
             category:category_id ( name )
@@ -119,8 +118,8 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
       if (error) throw error
 
       const rows = items as Array<ReservedItemRow & any>
-      const internal = rows.filter((x) => !extOwnerId(x.item))
-      const external = rows.filter((x) => !!extOwnerId(x.item))
+      const stock = rows.filter((x) => itemKind(x.item) !== 'subrental')
+      const subrental = rows.filter((x) => itemKind(x.item) === 'subrental')
 
       const groupIdsForTemplate = new Set<string>()
       for (const r of rows) {
@@ -151,8 +150,8 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
       }
 
       return {
-        internal,
-        external,
+        stock,
+        subrental,
         externalTimePeriods,
         groupItemsByGroupId,
       }
@@ -162,9 +161,9 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
   return (
     <Box>
       {/* INTERNAL VIEW */}
-      {view === 'internal' && (
+      {view === 'stock' && (
         <InternalEquipmentTable
-          rows={data?.internal ?? []}
+          rows={data?.stock ?? []}
           groupItemsByGroupId={
             data?.groupItemsByGroupId ??
             new Map<string, Array<{ item_id: string; quantity: number }>>()
@@ -182,9 +181,9 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
       )}
 
       {/* EXTERNAL VIEW */}
-      {view === 'external' && (
+      {view === 'subrental' && (
         <ExternalEquipmentTable
-          rows={data?.external ?? []}
+          rows={data?.subrental ?? []}
           externalTimePeriods={data?.externalTimePeriods ?? []}
           canBook={canBook}
           jobId={jobId}
@@ -222,13 +221,13 @@ function InternalEquipmentTable({
   setBookItemsOpen: (v: boolean) => void
   editMode: boolean
   setEditMode: (v: boolean) => void
-  view: 'internal' | 'external'
-  onViewChange: (v: 'internal' | 'external') => void
+  view: 'stock' | 'subrental'
+  onViewChange: (v: 'stock' | 'subrental') => void
 }) {
   const qc = useQueryClient()
   const { success, error } = useToast()
   const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(
     new Set(),
   )
@@ -536,7 +535,7 @@ function InternalEquipmentTable({
   }
 
   const handleViewChange = (value: string) => {
-    if (value === 'internal' || value === 'external') {
+    if (value === 'stock' || value === 'subrental') {
       onViewChange(value)
     }
   }
@@ -551,7 +550,7 @@ function InternalEquipmentTable({
           alignItems: 'center',
         }}
       >
-        <Heading size="3">Internal equipment</Heading>
+        <Heading size="3">Stock equipment</Heading>
         {companyRole !== 'freelancer' && (
           <Flex align="center" gap="3">
             {rows.length > 0 && (
@@ -586,8 +585,8 @@ function InternalEquipmentTable({
             <Select.Root value={view} onValueChange={handleViewChange}>
               <Select.Trigger style={{ minWidth: 120 }} />
               <Select.Content>
-                <Select.Item value="internal">Internal</Select.Item>
-                <Select.Item value="external">External</Select.Item>
+                <Select.Item value="stock">Stock</Select.Item>
+                <Select.Item value="subrental">Subrental</Select.Item>
               </Select.Content>
             </Select.Root>
           </Flex>
@@ -598,8 +597,6 @@ function InternalEquipmentTable({
             onOpenChange={setBookItemsOpen}
             jobId={jobId}
             companyId={companyId}
-            timePeriodId={undefined}
-            externalOnlyInitial={false}
           />
         )}
       </Box>
@@ -1229,7 +1226,7 @@ function InternalEquipmentTable({
 /* ------------------- External Table ------------------- */
 function ExternalEquipmentTable({
   rows,
-  externalTimePeriods,
+  externalTimePeriods: _externalTimePeriods,
   canBook,
   jobId,
   companyId,
@@ -1250,13 +1247,13 @@ function ExternalEquipmentTable({
   companyId: string | null
   editMode: boolean
   setEditMode: (v: boolean) => void
-  view: 'internal' | 'external'
-  onViewChange: (v: 'internal' | 'external') => void
+  view: 'stock' | 'subrental'
+  onViewChange: (v: 'stock' | 'subrental') => void
 }) {
   const qc = useQueryClient()
   const { success, error } = useToast()
   const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const [editingQty, setEditingQty] = React.useState<{
     id: string
     value: number
@@ -1270,12 +1267,7 @@ function ExternalEquipmentTable({
   const [ownerNotes, setOwnerNotes] = React.useState<Map<string, string>>(
     new Map(),
   )
-  const [selectOwnerOpen, setSelectOwnerOpen] = React.useState(false)
-  const [bookItemsOpenForOwner, setBookItemsOpenForOwner] = React.useState<{
-    ownerId: string
-    ownerName: string
-    timePeriodId: string
-  } | null>(null)
+  const [bookSubrentalOpen, setBookSubrentalOpen] = React.useState(false)
   const [deleteOwnerOpen, setDeleteOwnerOpen] = React.useState<{
     ownerId: string
     ownerName: string
@@ -1291,35 +1283,11 @@ function ExternalEquipmentTable({
   const [hoveredRowId, setHoveredRowId] = React.useState<string | null>(null)
 
   // Fetch job to get duration times
-  const { data: job } = useQuery({
+  const { data: _job } = useQuery({
     ...jobDetailQuery({ jobId }),
   })
 
-  // Fetch partners to map owner names to IDs
-  const { data: partners = [] } = useQuery({
-    ...partnerCustomersQuery({ companyId: companyId || '' }),
-    enabled: !!companyId,
-  })
-
-  // Extract owner info from time period titles (format: "{OwnerName} Equipment period")
-  const ownerTimePeriodMap = React.useMemo(() => {
-    const map = new Map<string, { timePeriodId: string; ownerName: string }>()
-    for (const tp of externalTimePeriods) {
-      // Extract owner name from title like "Acme Corp Equipment period"
-      const match = tp.title.match(/^(.+?)\s+Equipment period$/)
-      if (match) {
-        const ownerName = match[1]
-        // We need to find the owner ID - we'll look it up from items or fetch partners
-        map.set(ownerName, {
-          timePeriodId: tp.id,
-          ownerName,
-        })
-      }
-    }
-    return map
-  }, [externalTimePeriods])
-
-  // Group items by external owner and map to time periods
+  // Sync ownerNotes when data changes
   const ownerGroups = React.useMemo(() => {
     const groups = new Map<
       string,
@@ -1331,54 +1299,28 @@ function ExternalEquipmentTable({
       }
     >()
 
-    // First, add owners from existing items
     for (const row of rows) {
-      const item = firstItem(row.item) as any
-      const ownerId = item?.external_owner_id
-      if (!ownerId) continue
-
-      const ownerName = Array.isArray(item?.external_owner)
-        ? item?.external_owner[0]?.name
-        : item?.external_owner?.name
-
-      if (!ownerName) continue
+      const subcontractor = Array.isArray(row.subcontractor)
+        ? row.subcontractor[0]
+        : row.subcontractor
+      const ownerId = row.subcontractor_id ?? '__unassigned__'
+      const ownerName = subcontractor?.name ?? 'Unassigned'
 
       if (!groups.has(ownerId)) {
-        // Find time period for this owner
-        const timePeriodEntry = Array.from(ownerTimePeriodMap.entries()).find(
-          ([name]) => name === ownerName,
-        )
         groups.set(ownerId, {
           ownerId,
           ownerName,
           items: [],
-          timePeriodId: timePeriodEntry?.[1].timePeriodId ?? null,
+          timePeriodId: row.time_period_id ?? null,
         })
       }
-      const group = groups.get(ownerId)!
-      group.items.push(row)
+      groups.get(ownerId)!.items.push(row)
     }
 
-    // Also add owners from time periods that might not have items yet
-    for (const [ownerName, { timePeriodId }] of ownerTimePeriodMap.entries()) {
-      const existingOwner = Array.from(groups.values()).find(
-        (g) => g.ownerName === ownerName,
-      )
-      if (!existingOwner) {
-        // Find owner ID from partners list by matching name
-        const partner = partners.find((p) => p.name === ownerName)
-        const ownerId = partner?.id || `temp-${ownerName}`
-        groups.set(ownerId, {
-          ownerId,
-          ownerName,
-          items: [],
-          timePeriodId,
-        })
-      }
-    }
-
-    return groups
-  }, [rows, ownerTimePeriodMap, partners])
+    return Array.from(groups.values()).sort((a, b) =>
+      a.ownerName.localeCompare(b.ownerName),
+    )
+  }, [rows])
 
   // Sync ownerNotes when data changes
   React.useEffect(() => {
@@ -1394,9 +1336,7 @@ function ExternalEquipmentTable({
       >()
 
       for (const row of rows) {
-        const item = firstItem(row.item) as any
-        const ownerId = item?.external_owner_id
-        if (!ownerId) continue
+        const ownerId = row.subcontractor_id ?? '__unassigned__'
 
         if (!groups.has(ownerId)) {
           groups.set(ownerId, { ownerId, items: [] })
@@ -1490,56 +1430,7 @@ function ExternalEquipmentTable({
     }
   }
 
-  // Handle adding a new owner
-  const handleAddOwner = async (ownerId: string, ownerName: string) => {
-    if (!companyId || !job) return
-
-    try {
-      // Create time period for this owner with job duration times
-      const startTime = job.start_at || new Date().toISOString()
-      const endTime =
-        job.end_at || new Date(Date.now() + 86400000).toISOString()
-
-      const timePeriodId = await upsertTimePeriod({
-        job_id: jobId,
-        company_id: companyId,
-        title: `${ownerName} Equipment period`,
-        start_at: startTime,
-        end_at: endTime,
-        category: 'equipment',
-      })
-
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-
-      // Open book items dialog for this owner
-      setBookItemsOpenForOwner({
-        ownerId,
-        ownerName,
-        timePeriodId,
-      })
-
-      success('Success', `Time period created for ${ownerName}`)
-    } catch (e: any) {
-      error('Failed to create time period', e?.message || 'Please try again.')
-    }
-  }
-
-  // Get list of owner IDs that already have sections
-  const existingOwnerIds = React.useMemo(() => {
-    return Array.from(ownerGroups.values())
-      .map((g) => {
-        // Try to find real owner ID from items
-        if (g.items.length > 0) {
-          const item = firstItem(g.items[0].item) as any
-          return item?.external_owner_id ?? null
-        }
-        return null
-      })
-      .filter((id): id is string => id !== null && !id.startsWith('temp-'))
-  }, [ownerGroups])
-
-  // Handle deleting entire owner booking
+  // Sync ownerNotes when data changes
   const handleDeleteOwner = async () => {
     if (!deleteOwnerOpen) return
 
@@ -1631,7 +1522,7 @@ function ExternalEquipmentTable({
   }
 
   const handleViewChange = (value: string) => {
-    if (value === 'internal' || value === 'external') {
+    if (value === 'stock' || value === 'subrental') {
       onViewChange(value)
     }
   }
@@ -1646,7 +1537,7 @@ function ExternalEquipmentTable({
           alignItems: 'center',
         }}
       >
-        <Heading size="3">External equipment</Heading>
+        <Heading size="3">Subrental equipment</Heading>
         <Flex align="center" gap="3">
           {companyRole !== 'freelancer' && rows.length > 0 && (
             <Select.Root
@@ -1666,8 +1557,8 @@ function ExternalEquipmentTable({
             <Select.Root value={view} onValueChange={handleViewChange}>
               <Select.Trigger style={{ minWidth: 120 }} />
               <Select.Content>
-                <Select.Item value="internal">Internal</Select.Item>
-                <Select.Item value="external">External</Select.Item>
+                <Select.Item value="stock">Stock</Select.Item>
+                <Select.Item value="subrental">Subrental</Select.Item>
               </Select.Content>
             </Select.Root>
           )}
@@ -1676,7 +1567,7 @@ function ExternalEquipmentTable({
 
       {/* Owner Sections */}
       <Flex direction="column" gap="3">
-        {Array.from(ownerGroups.values()).map((group) => {
+        {ownerGroups.map((group) => {
           const ownerId = group.ownerId
           const ownerName = group.ownerName
           const ownerItems = group.items
@@ -1763,13 +1654,7 @@ function ExternalEquipmentTable({
                         <Button
                           size="2"
                           variant="soft"
-                          onClick={() =>
-                            setBookItemsOpenForOwner({
-                              ownerId,
-                              ownerName,
-                              timePeriodId,
-                            })
-                          }
+                          onClick={() => setBookSubrentalOpen(true)}
                           disabled={!timePeriodId || !canBook}
                         >
                           <Plus width={16} height={16} /> Book items
@@ -2170,7 +2055,7 @@ function ExternalEquipmentTable({
               cursor: 'pointer',
               transition: 'all 100ms',
             }}
-            onClick={() => setSelectOwnerOpen(true)}
+            onClick={() => setBookSubrentalOpen(true)}
             onMouseEnter={(e) => {
               e.currentTarget.style.borderColor = 'var(--gray-a8)'
               e.currentTarget.style.background = 'var(--gray-a2)'
@@ -2183,7 +2068,7 @@ function ExternalEquipmentTable({
             <Flex direction="column" align="center" gap="2">
               <Plus width={24} height={24} />
               <Text size="2" color="gray">
-                Add partner
+                Book subrental items
               </Text>
             </Flex>
           </Box>
@@ -2193,25 +2078,13 @@ function ExternalEquipmentTable({
       {/* Dialogs */}
       {canBook && companyId && (
         <>
-          <SelectExternalOwnerDialog
-            open={selectOwnerOpen}
-            onOpenChange={setSelectOwnerOpen}
+          <BookItemsDialog
+            open={bookSubrentalOpen}
+            onOpenChange={setBookSubrentalOpen}
+            jobId={jobId}
             companyId={companyId}
-            onSelect={handleAddOwner}
-            excludeOwnerIds={existingOwnerIds}
+            subrentalOnlyInitial
           />
-          {bookItemsOpenForOwner && (
-            <BookItemsDialog
-              open={!!bookItemsOpenForOwner}
-              onOpenChange={(open) => {
-                if (!open) setBookItemsOpenForOwner(null)
-              }}
-              jobId={jobId}
-              companyId={companyId}
-              timePeriodId={bookItemsOpenForOwner.timePeriodId}
-              externalOwnerId={bookItemsOpenForOwner.ownerId}
-            />
-          )}
           <AlertDialog.Root
             open={!!deleteOwnerOpen}
             onOpenChange={(open) => {
@@ -2285,8 +2158,8 @@ function StatusBadge({
 function firstItem(it: ReservedItemRow['item']): ItemLite | null {
   return Array.isArray(it) ? (it[0] ?? null) : it
 }
-function extOwnerId(it: ReservedItemRow['item']) {
-  return firstItem(it)?.external_owner_id ?? null
+function itemKind(it: ReservedItemRow['item']) {
+  return firstItem(it)?.item_kind ?? 'stock'
 }
 function fmtDate(v?: string) {
   return v ? new Date(v).toLocaleDateString() : ''

@@ -1,4 +1,5 @@
 import { test, expect, TEST_OFFER_TOKENS } from './fixtures'
+import { openPublicOfferAction } from './helpers/public-offer'
 import {
   expectPastedPhoneInput,
   openProfilePhoneInput,
@@ -49,7 +50,7 @@ test.describe('Phone input on public offer', () => {
       timeout: 15_000,
     })
 
-    await page.getByRole('button', { name: 'Accept Offer' }).click()
+    await openPublicOfferAction(page, 'Accept Offer')
 
     await pasteIntoPhoneInput(page, phoneNumberInput(page), '+4791234567')
     await expectPastedPhoneInput(page, {

@@ -8,8 +8,8 @@ export const inventoryIndexKey = (
   search: string,
   showActive: boolean,
   showInactive: boolean,
-  showInternal: boolean,
-  showExternal: boolean,
+  showStock: boolean,
+  showSubrental: boolean,
   showGroupOnlyItems: boolean,
   showGroups: boolean,
   showItems: boolean,
@@ -26,8 +26,8 @@ export const inventoryIndexKey = (
     search,
     showActive,
     showInactive,
-    showInternal,
-    showExternal,
+    showStock,
+    showSubrental,
     showGroupOnlyItems,
     showGroups,
     showItems,
@@ -41,8 +41,8 @@ export const inventoryIndexKeyAll = (
   search: string,
   showActive: boolean,
   showInactive: boolean,
-  showInternal: boolean,
-  showExternal: boolean,
+  showStock: boolean,
+  showSubrental: boolean,
   showGroupOnlyItems: boolean,
   showGroups: boolean,
   showItems: boolean,
@@ -57,8 +57,8 @@ export const inventoryIndexKeyAll = (
     search,
     showActive,
     showInactive,
-    showInternal,
-    showExternal,
+    showStock,
+    showSubrental,
     showGroupOnlyItems,
     showGroups,
     showItems,
@@ -78,6 +78,8 @@ function escapeForPostgrestOr(value: string) {
 
 /* ------------ Types (aligned to the views) ------------ */
 
+export type InventoryItemKind = 'stock' | 'subrental'
+
 export type InventoryIndexRow = {
   company_id: string
   id: string
@@ -93,10 +95,7 @@ export type InventoryIndexRow = {
   unique: boolean | null
   allow_individual_booking: boolean | null
   active: boolean // 👈 exists in the view (you filtered by it)
-  // 👇 NEW
-  internally_owned: boolean
-  external_owner_id: string | null
-  external_owner_name: string | null
+  item_kind: InventoryItemKind
 }
 
 export type ItemPriceHistoryRow = {
@@ -123,9 +122,7 @@ export type ItemDetail = {
   current_price: number | null
   on_hand: number | null
   price_history: Array<ItemPriceHistoryRow>
-  internally_owned: boolean
-  external_owner_id: string | null
-  external_owner_name: string | null
+  item_kind: InventoryItemKind
 }
 
 export type GroupPartRow = {
@@ -148,9 +145,7 @@ export type GroupDetail = {
   active: boolean
   parts: Array<GroupPartRow>
   price_history: Array<ItemPriceHistoryRow>
-  internally_owned: boolean
-  external_owner_id: string | null
-  external_owner_name: string | null
+  item_kind: InventoryItemKind
 }
 
 export type InventoryDetail = ItemDetail | GroupDetail
@@ -225,8 +220,8 @@ export const inventoryIndexQuery = ({
   search,
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
@@ -240,8 +235,8 @@ export const inventoryIndexQuery = ({
   search: string
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
@@ -262,8 +257,8 @@ export const inventoryIndexQuery = ({
       search,
       showActive,
       showInactive,
-      showInternal,
-      showExternal,
+      showStock,
+      showSubrental,
       showGroupOnlyItems,
       showGroups,
       showItems,
@@ -291,11 +286,11 @@ export const inventoryIndexQuery = ({
       }
       // If both are selected or both are unselected, show all (no filter)
 
-      // Filter by ownership
-      if (showInternal && !showExternal) {
-        q = q.eq('internally_owned', true)
-      } else if (!showInternal && showExternal) {
-        q = q.eq('internally_owned', false)
+      // Filter by item kind
+      if (showStock && !showSubrental) {
+        q = q.eq('item_kind', 'stock')
+      } else if (!showStock && showSubrental) {
+        q = q.eq('item_kind', 'subrental')
       }
       // If both are selected or both are unselected, show all (no filter)
 
@@ -418,8 +413,8 @@ export const inventoryIndexQueryAll = ({
   search,
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
@@ -431,8 +426,8 @@ export const inventoryIndexQueryAll = ({
   search: string
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
@@ -451,8 +446,8 @@ export const inventoryIndexQueryAll = ({
       search,
       showActive,
       showInactive,
-      showInternal,
-      showExternal,
+      showStock,
+      showSubrental,
       showGroupOnlyItems,
       showGroups,
       showItems,
@@ -479,10 +474,10 @@ export const inventoryIndexQueryAll = ({
           q = q.eq('active', false)
         }
 
-        if (showInternal && !showExternal) {
-          q = q.eq('internally_owned', true)
-        } else if (!showInternal && showExternal) {
-          q = q.eq('internally_owned', false)
+        if (showStock && !showSubrental) {
+          q = q.eq('item_kind', 'stock')
+        } else if (!showStock && showSubrental) {
+          q = q.eq('item_kind', 'subrental')
         }
 
         if (!showGroups && !showItems && !showGroupOnlyItems) {
@@ -728,9 +723,7 @@ export const inventoryDetailQuery = ({
             current_price: base.current_price ?? null,
             on_hand: base.on_hand ?? 0,
             price_history: hist as Array<ItemPriceHistoryRow>,
-            internally_owned: base.internally_owned,
-            external_owner_id: base.external_owner_id,
-            external_owner_name: base.external_owner_name,
+            item_kind: base.item_kind,
           }
 
           safeEnd()
@@ -813,9 +806,7 @@ export const inventoryDetailQuery = ({
             active: Boolean(gmeta?.active ?? base.active),
             parts: parts as Array<GroupPartRow>,
             price_history: ghist as Array<ItemPriceHistoryRow>,
-            internally_owned: base.internally_owned,
-            external_owner_id: base.external_owner_id,
-            external_owner_name: base.external_owner_name,
+            item_kind: base.item_kind,
           }
 
           safeEnd()

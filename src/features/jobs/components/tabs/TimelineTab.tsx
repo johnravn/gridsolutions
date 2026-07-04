@@ -23,7 +23,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { supabase } from '@shared/api/supabase'
-import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import type { TimePeriodLite } from '@features/jobs/types'
 
 export default function TimelineTab({ jobId }: { jobId: string }) {
@@ -54,8 +54,7 @@ function TimePeriodsManager({
   jobStartAt: string | null
   jobEndAt: string | null
 }) {
-  const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const { companyId } = useCompany()
   const { data: timePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))

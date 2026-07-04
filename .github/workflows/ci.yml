@@ -26,6 +26,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:coverage
+      - run: npm run test:coverage:report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: |
+            coverage/coverage-final.json
+            coverage/coverage-summary.json
+          retention-days: 14
 
   build:
     name: Build

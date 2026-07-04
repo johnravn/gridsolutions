@@ -10,6 +10,7 @@ import {
   WarningTriangle,
   Xmark,
 } from 'iconoir-react'
+import { wasDemoBlockRecently } from '@features/demo/lib/demoModeState'
 
 type ToastKind = 'success' | 'error' | 'info'
 type ToastItem = {
@@ -262,6 +263,7 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
         undoLabel,
       }),
     error: (title, description, duration) => {
+      if (wasDemoBlockRecently()) return
       // Log error to console for debugging
       console.error('[Toast Error]', {
         title,

@@ -6,8 +6,6 @@ import {
   Flex,
   Progress,
   Select,
-  Separator,
-  Switch,
   Text,
   TextArea,
   TextField,
@@ -16,8 +14,10 @@ import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { Camera, Sparks } from 'iconoir-react'
+import { crewIndexQuery } from '@features/crew/api/queries'
 import { partnerCustomersQuery, upsertVehicle } from '../../api/queries'
 import type { FuelType, VehicleCategory } from '../../api/queries'
+import type { VehicleOwnerKind } from '../../lib/ownership'
 
 type Mode = 'create' | 'edit'
 type Initial = {
@@ -28,6 +28,7 @@ type Initial = {
   vehicle_category: VehicleCategory | null
   internally_owned: boolean
   external_owner_id: string | null
+  owner_user_id: string | null
   image_path: string | null
   notes: string
 }
@@ -56,8 +57,9 @@ export default function AddEditVehicleDialog({
     registration_no: '',
     fuel: null as FuelType | null,
     vehicle_category: null as VehicleCategory | null,
-    internally_owned: true,
+    ownerType: 'company' as VehicleOwnerKind,
     external_owner_id: null as string | null,
+    owner_user_id: null as string | null,
     image_path: null as string | null,
     notes: '',
   })
@@ -68,13 +70,19 @@ export default function AddEditVehicleDialog({
 
   React.useEffect(() => {
     if (!open || mode !== 'edit' || !initial) return
+    const ownerType: VehicleOwnerKind = initial.internally_owned
+      ? 'company'
+      : initial.owner_user_id
+        ? 'person'
+        : 'partner'
     setForm({
       name: initial.name,
       registration_no: initial.registration_no,
       fuel: initial.fuel,
       vehicle_category: initial.vehicle_category ?? null,
-      internally_owned: initial.internally_owned,
+      ownerType,
       external_owner_id: initial.external_owner_id ?? null,
+      owner_user_id: initial.owner_user_id ?? null,
       image_path: initial.image_path ?? null,
       notes: initial.notes,
     })
@@ -82,6 +90,11 @@ export default function AddEditVehicleDialog({
 
   const { data: partners = [] } = useQuery({
     ...partnerCustomersQuery({ companyId: companyId ?? '__none__' }),
+    enabled: !!companyId && open,
+  })
+
+  const { data: crew = [] } = useQuery({
+    ...crewIndexQuery({ companyId: companyId ?? '__none__', kind: 'all' }),
     enabled: !!companyId && open,
   })
 
@@ -119,7 +132,6 @@ export default function AddEditVehicleDialog({
   const mut = useMutation({
     mutationFn: async () => {
       if (!companyId) throw new Error('No company selected')
-      // If internal, clear external_owner_id
       const payload = {
         company_id: companyId,
         id: initial?.id,
@@ -127,10 +139,10 @@ export default function AddEditVehicleDialog({
         registration_no: form.registration_no.trim() || null,
         fuel: form.fuel,
         vehicle_category: form.vehicle_category,
-        internally_owned: form.internally_owned,
-        external_owner_id: form.internally_owned
-          ? null
-          : form.external_owner_id,
+        internally_owned: form.ownerType === 'company',
+        external_owner_id:
+          form.ownerType === 'partner' ? form.external_owner_id : null,
+        owner_user_id: form.ownerType === 'person' ? form.owner_user_id : null,
         image_path: form.image_path,
         notes: form.notes.trim() || null,
       }
@@ -183,7 +195,10 @@ export default function AddEditVehicleDialog({
     onError: (e: any) => error('Failed', e?.message ?? 'Please try again.'),
   })
 
-  const canSave = form.name.trim().length > 0
+  const canSave =
+    form.name.trim().length > 0 &&
+    (form.ownerType !== 'partner' || !!form.external_owner_id) &&
+    (form.ownerType !== 'person' || !!form.owner_user_id)
 
   // ===== TESTING ONLY: Auto-populate function =====
   // TODO: Remove this function and button when testing is complete
@@ -235,19 +250,31 @@ export default function AddEditVehicleDialog({
     const randomCategory =
       categories[Math.floor(Math.random() * categories.length)]
     const randomNotes = notes[Math.floor(Math.random() * notes.length)]
-    const isInternal = Math.random() > 0.3 // 70% chance of being internal
+    const ownerRoll = Math.random()
+    const ownerType: VehicleOwnerKind =
+      ownerRoll > 0.55 ? 'company' : ownerRoll > 0.25 ? 'partner' : 'person'
     const randomPartner =
       partners.length > 0
         ? partners[Math.floor(Math.random() * partners.length)]
         : null
+    const randomCrew =
+      crew.length > 0 ? crew[Math.floor(Math.random() * crew.length)] : null
 
     setForm({
       name: randomName,
       registration_no: randomReg,
       fuel: randomFuel,
       vehicle_category: randomCategory,
-      internally_owned: isInternal,
-      external_owner_id: isInternal ? null : (randomPartner?.id ?? null),
+      ownerType:
+        ownerType === 'partner' && !randomPartner
+          ? 'company'
+          : ownerType === 'person' && !randomCrew
+            ? 'company'
+            : ownerType,
+      external_owner_id:
+        ownerType === 'partner' ? (randomPartner?.id ?? null) : null,
+      owner_user_id:
+        ownerType === 'person' ? (randomCrew?.user_id ?? null) : null,
       image_path: null,
       notes: randomNotes,
     })
@@ -350,50 +377,79 @@ export default function AddEditVehicleDialog({
               </Select.Root>
             </Field>
 
-            <Field label="Internally owned">
-              <Flex align="center" gap="2" style={{ height: 'var(--space-7)' }}>
-                <Switch
-                  checked={form.internally_owned}
-                  onCheckedChange={(v) => set('internally_owned', !!v)}
-                />
-                <Text size="2" color="gray">
-                  {form.internally_owned ? 'Yes' : 'No'}
-                </Text>
-              </Flex>
-            </Field>
-
-            <Field label="External owner (partner)">
+            <Field label="Owner">
               <Select.Root
-                value={form.external_owner_id as string}
-                onValueChange={(v) => set('external_owner_id', v || null)}
+                value={form.ownerType}
+                onValueChange={(v) => {
+                  const ownerType = v as VehicleOwnerKind
+                  setForm((s) => ({
+                    ...s,
+                    ownerType,
+                    external_owner_id:
+                      ownerType === 'partner' ? s.external_owner_id : null,
+                    owner_user_id:
+                      ownerType === 'person' ? s.owner_user_id : null,
+                  }))
+                }}
                 size="3"
-                disabled={form.internally_owned}
               >
                 <Select.Trigger
-                  placeholder={
-                    form.internally_owned
-                      ? 'Internal (disabled)'
-                      : 'Select partner'
-                  }
+                  placeholder="Select owner type"
                   style={{ minHeight: 'var(--space-7)' }}
                 />
                 <Select.Content style={{ zIndex: 10000 }}>
-                  <Select.Group>
-                    <Select.Label>Your company</Select.Label>
-                    <Select.Item value=" ">Internal (your company)</Select.Item>
-                  </Select.Group>
-                  <Separator my="1" />
-                  <Select.Group>
-                    <Select.Label>Partners</Select.Label>
+                  <Select.Item value="company">Company</Select.Item>
+                  <Select.Item value="partner">Partner</Select.Item>
+                  <Select.Item value="person">
+                    Employee / freelancer / owner
+                  </Select.Item>
+                </Select.Content>
+              </Select.Root>
+            </Field>
+
+            {form.ownerType === 'partner' && (
+              <Field label="Partner">
+                <Select.Root
+                  value={form.external_owner_id ?? ''}
+                  onValueChange={(v) => set('external_owner_id', v || null)}
+                  size="3"
+                >
+                  <Select.Trigger
+                    placeholder="Select partner"
+                    style={{ minHeight: 'var(--space-7)' }}
+                  />
+                  <Select.Content style={{ zIndex: 10000 }}>
                     {partners.map((p) => (
                       <Select.Item key={p.id} value={p.id}>
                         {p.name}
                       </Select.Item>
                     ))}
-                  </Select.Group>
-                </Select.Content>
-              </Select.Root>
-            </Field>
+                  </Select.Content>
+                </Select.Root>
+              </Field>
+            )}
+
+            {form.ownerType === 'person' && (
+              <Field label="Person">
+                <Select.Root
+                  value={form.owner_user_id ?? ''}
+                  onValueChange={(v) => set('owner_user_id', v || null)}
+                  size="3"
+                >
+                  <Select.Trigger
+                    placeholder="Select person"
+                    style={{ minHeight: 'var(--space-7)' }}
+                  />
+                  <Select.Content style={{ zIndex: 10000 }}>
+                    {crew.map((member) => (
+                      <Select.Item key={member.user_id} value={member.user_id}>
+                        {member.display_name ?? member.email}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Field>
+            )}
           </Flex>
 
           <Field label="Image">

@@ -13,7 +13,9 @@ import {
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { vehiclesIndexQuery } from '../api/queries'
+import { vehicleOwnerBadge, vehicleOwnerLabel } from '../lib/ownership'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
 import type { VehicleIndexRow } from '../api/queries'
 
@@ -54,14 +56,13 @@ function compareVehicles(
       })
       break
     case 'owner':
-      cmp = Number(a.internally_owned) - Number(b.internally_owned)
-      if (cmp === 0) {
-        cmp = (a.external_owner_name ?? '').localeCompare(
-          b.external_owner_name ?? '',
-          undefined,
-          { sensitivity: 'base' },
-        )
-      }
+      cmp = vehicleOwnerLabel(a).localeCompare(
+        vehicleOwnerLabel(b),
+        undefined,
+        {
+          sensitivity: 'base',
+        },
+      )
       break
     default:
       return 0
@@ -85,6 +86,7 @@ export default function VehiclesView({
   onSearch,
 }: Props) {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [addOpen, setAddOpen] = React.useState(false)
   const [sortBy, setSortBy] = React.useState<SortBy>('name')
@@ -162,15 +164,17 @@ export default function VehiclesView({
           </TextField.Slot>
         </TextField.Root>
 
-        <Button
-          variant="solid"
-          onClick={() => setAddOpen(true)}
-          style={isMobile ? { width: '100%' } : undefined}
-          size={isMobile ? '3' : '2'}
-        >
-          <Plus width={18} height={18} />
-          Add vehicle
-        </Button>
+        {canWrite && (
+          <Button
+            variant="solid"
+            onClick={() => setAddOpen(true)}
+            style={isMobile ? { width: '100%' } : undefined}
+            size={isMobile ? '3' : '2'}
+          >
+            <Plus width={18} height={18} />
+            Add vehicle
+          </Button>
+        )}
       </Flex>
 
       {/* Table: header + body in horizontal scroll so headers scroll with rows */}
@@ -258,6 +262,7 @@ export default function VehiclesView({
                   const row = rows[virtualRow.index]
                   const isActive = row.id === selectedId
 
+                  const ownerBadge = vehicleOwnerBadge(row)
                   return (
                     <div
                       key={row.id}
@@ -318,15 +323,9 @@ export default function VehiclesView({
                         )}
                       </Box>
                       <Box>
-                        {row.internally_owned ? (
-                          <Badge variant="soft" color="indigo">
-                            Internal
-                          </Badge>
-                        ) : (
-                          <Badge variant="soft" color="violet">
-                            {row.external_owner_name ?? 'External'}
-                          </Badge>
-                        )}
+                        <Badge variant="soft" color={ownerBadge.color}>
+                          {ownerBadge.label}
+                        </Badge>
                       </Box>
                     </div>
                   )

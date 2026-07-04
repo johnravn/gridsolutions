@@ -19,8 +19,18 @@ export function escapeHtml(s: string): string {
     .replace(/"/g, '&quot;')
 }
 
+/** When true, sendResendHtmlEmail skips the Resend HTTP call (local/staging only). */
+export function isResendDryRun(): boolean {
+  const v = Deno.env.get('RESEND_DRY_RUN')?.trim().toLowerCase()
+  return v === 'true' || v === '1' || v === 'yes'
+}
+
 export function getResendApiKey(): string | null {
-  return Deno.env.get('RESEND_API_KEY') ?? null
+  const key = Deno.env.get('RESEND_API_KEY') ?? null
+  if (key) return key
+  // Edge functions require a key before calling sendResendHtmlEmail; placeholder when dry-run only.
+  if (isResendDryRun()) return 'dry-run'
+  return null
 }
 
 /** Default "Name" part of the From header (falls back to app name). */
@@ -38,7 +48,7 @@ export function formatFromHeader(displayName: string, email: string): string {
 }
 
 export type ResendSendResult =
-  | { ok: true; messageId: string | null; raw: unknown }
+  | { ok: true; messageId: string | null; raw: unknown; dryRun?: boolean }
   | { ok: false; status: number; bodyText: string }
 
 /**
@@ -56,6 +66,23 @@ export async function sendResendHtmlEmail(params: {
 }): Promise<ResendSendResult> {
   const fromEmail = getDefaultFromEmail()
   const fromName = params.fromDisplayName ?? getDefaultFromName()
+
+  if (isResendDryRun()) {
+    console.log(
+      '[resend] RESEND_DRY_RUN: skipped send',
+      JSON.stringify({
+        from: formatFromHeader(fromName, fromEmail),
+        to: params.to,
+        subject: params.subject,
+      }),
+    )
+    return {
+      ok: true,
+      messageId: null,
+      dryRun: true,
+      raw: { id: null, dry_run: true },
+    }
+  }
 
   const payload: Record<string, unknown> = {
     from: formatFromHeader(fromName, fromEmail),

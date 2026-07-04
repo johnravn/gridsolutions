@@ -13,6 +13,7 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { InfoCircle, Plus, Search } from 'iconoir-react'
 import { customersIndexQuery } from '../api/queries'
@@ -32,6 +33,7 @@ export default function CustomerTable({
   showPartner: boolean
 }) {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
@@ -104,15 +106,17 @@ export default function CustomerTable({
             </TextField.Slot>
           </TextField.Root>
 
-          <Button
-            variant="solid"
-            onClick={() => setAddOpen(true)}
-            style={isMobile ? { width: '100%' } : undefined}
-            size={isMobile ? '3' : '2'}
-          >
-            <Plus width={18} height={18} />
-            Add customer
-          </Button>
+          {canWrite && (
+            <Button
+              variant="solid"
+              onClick={() => setAddOpen(true)}
+              style={isMobile ? { width: '100%' } : undefined}
+              size={isMobile ? '3' : '2'}
+            >
+              <Plus width={18} height={18} />
+              Add customer
+            </Button>
+          )}
 
           <AddCustomerDialog
             open={addOpen}
@@ -173,7 +177,7 @@ export default function CustomerTable({
             >
               <Flex gap="1" align="center">
                 Type
-                <Tooltip content="Customer: normal customer, Partner: supplier & customer">
+                <Tooltip content="Customer: normal customer. Partner: can be used as a job subcontractor or external vehicle owner.">
                   <InfoCircle width="1em" height="1em" />
                 </Tooltip>
               </Flex>
