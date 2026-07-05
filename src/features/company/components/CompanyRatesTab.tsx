@@ -37,6 +37,7 @@ type CompanyRates = {
   vehicle_distance_increment: number | null
   customer_discount_percent: number | null
   partner_discount_percent: number | null
+  subcontractor_markup_percent: number | null
   rental_factor_config: RentalFactorConfig | null
   fixed_rate_start_day: number | null
   fixed_rate_per_day: number | null
@@ -54,7 +55,7 @@ export default function CompanyRatesTab() {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -83,6 +84,8 @@ export default function CompanyRatesTab() {
         vehicle_distance_increment: rawData.vehicle_distance_increment ?? 150,
         customer_discount_percent: rawData.customer_discount_percent ?? null,
         partner_discount_percent: rawData.partner_discount_percent ?? null,
+        subcontractor_markup_percent:
+          rawData.subcontractor_markup_percent ?? null,
         rental_factor_config: rentalFactorConfig,
         fixed_rate_start_day: rawData.fixed_rate_start_day ?? null,
         fixed_rate_per_day: rawData.fixed_rate_per_day ?? null,
@@ -143,6 +146,11 @@ export default function CompanyRatesTab() {
           }}
         />
 
+        <SubcontractorMarkupCard
+          companyId={companyId}
+          initialMarkupPercent={expansion?.subcontractor_markup_percent ?? null}
+        />
+
         <RentalFactorsCard
           companyId={companyId}
           initialConfig={{
@@ -178,7 +186,7 @@ function CollapsibleCard({
   const setIsExpanded = onExpandedChange || setInternalExpanded
 
   return (
-    <Card size="3">
+    <Card size="3" className="company-rates-card">
       <Box
         p="4"
         style={{
@@ -195,7 +203,7 @@ function CollapsibleCard({
               <NavArrowRight width={18} height={18} />
             )}
             <Box style={{ flex: 1 }}>
-              <Heading size="3" mb="1">
+              <Heading size="3" mb={isExpanded ? '0' : '1'}>
                 {title}
               </Heading>
               {!isExpanded && (
@@ -208,8 +216,16 @@ function CollapsibleCard({
         </Flex>
       </Box>
 
-      {isExpanded && (
+      <Box
+        className={
+          isExpanded
+            ? 'company-rates-card__body company-rates-card__body--expanded'
+            : 'company-rates-card__body'
+        }
+        aria-hidden={!isExpanded}
+      >
         <Box
+          className="company-rates-card__body-inner"
           p="4"
           pt="0"
           onClick={(e) => e.stopPropagation()}
@@ -217,7 +233,7 @@ function CollapsibleCard({
         >
           {children}
         </Box>
-      )}
+      </Box>
     </Card>
   )
 }
@@ -1197,6 +1213,133 @@ function DiscountsCard({
             disabled={saveMutation.isPending}
           >
             {saveMutation.isPending ? 'Saving...' : 'Save Discounts'}
+          </Button>
+        </Flex>
+      </Flex>
+    </CollapsibleCard>
+  )
+}
+
+function SubcontractorMarkupCard({
+  companyId,
+  initialMarkupPercent,
+}: {
+  companyId: string
+  initialMarkupPercent: number | null
+}) {
+  const qc = useQueryClient()
+  const { success, error: toastError } = useToast()
+  const [markupPercent, setMarkupPercent] = React.useState(initialMarkupPercent)
+  const [isExpanded, setIsExpanded] = React.useState(false)
+
+  React.useEffect(() => {
+    setMarkupPercent(initialMarkupPercent)
+  }, [initialMarkupPercent])
+
+  const formatPercent = (value: number | null) => {
+    if (value === null) return 'Not set'
+    return `${value}%`
+  }
+
+  const summary = (
+    <Flex align="center" gap="2">
+      <Text size="1" color="gray">
+        Standard markup:
+      </Text>
+      <Text size="3" weight="bold">
+        {formatPercent(markupPercent)}
+      </Text>
+    </Flex>
+  )
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const { data: current } = await supabase
+        .from('company_expansions')
+        .select('*')
+        .eq('company_id', companyId)
+        .maybeSingle()
+
+      const { error } = await supabase.from('company_expansions').upsert(
+        {
+          company_id: companyId,
+          subcontractor_markup_percent: markupPercent,
+          accounting_software: current?.accounting_software ?? 'none',
+          accounting_api_key_encrypted:
+            current?.accounting_api_key_encrypted ?? null,
+          accounting_organization_id:
+            (current as any)?.accounting_organization_id ?? null,
+          accounting_api_read_only: current?.accounting_api_read_only ?? true,
+          latest_feed_open_to_freelancers:
+            current?.latest_feed_open_to_freelancers ?? false,
+        },
+        { onConflict: 'company_id' },
+      )
+
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'expansion'],
+      })
+      success(
+        'Subcontractor markup updated',
+        'The standard markup has been saved.',
+      )
+      setIsExpanded(false)
+    },
+    onError: (error: any) => {
+      toastError(
+        'Failed to update subcontractor markup',
+        error?.message ?? 'Please try again.',
+      )
+    },
+  })
+
+  return (
+    <CollapsibleCard
+      title="Subcontractor Markup"
+      summary={summary}
+      expanded={isExpanded}
+      onExpandedChange={setIsExpanded}
+    >
+      <Flex direction="column" gap="4">
+        <Box style={{ maxWidth: 200 }}>
+          <Text
+            as="label"
+            size="2"
+            color="gray"
+            style={{ display: 'block', marginBottom: 6 }}
+          >
+            Markup (%)
+          </Text>
+          <TextField.Root
+            type="number"
+            min="0"
+            max="1000"
+            step="0.01"
+            placeholder="e.g., 15"
+            value={markupPercent !== null ? String(markupPercent) : ''}
+            onChange={(e) =>
+              setMarkupPercent(
+                e.target.value === ''
+                  ? null
+                  : Math.max(0, Number(e.target.value) || 0),
+              )
+            }
+          />
+        </Box>
+        <Text size="1" color="gray">
+          Default markup applied on top of subcontractor and custom pricing
+          basises in pretty offers when enabled per basis.
+        </Text>
+        <Flex justify="end">
+          <Button
+            variant="solid"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? 'Saving...' : 'Save markup'}
           </Button>
         </Flex>
       </Flex>

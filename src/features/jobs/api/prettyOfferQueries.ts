@@ -4,12 +4,19 @@ import { supabase } from '@shared/api/supabase'
 import {
   applyComputedCostsToModules,
   calculatePrettyOfferTotals,
+  lineItemSourceFromOfferBasis,
+  rebuildTechnicalSplitsForCopy,
   resolveSplitAmountsForSave,
+  resolveSubcontractorMarkupPercent,
   validatePricingBases,
 } from '../utils/prettyOfferCalculations'
 import { createOffer, offerDetailQuery } from './offerQueries'
-import { createEmptyOfferBasis } from './offerBasisQueries'
+import {
+  createEmptyOfferBasis,
+  offerBasisDetailQuery,
+} from './offerBasisQueries'
 import { jobSubcontractorQuotesQuery } from './subcontractorQueries'
+import type { TechnicalLineItemSource } from '../utils/prettyOfferCalculations'
 import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
   JobSubcontractorQuote,
@@ -25,6 +32,91 @@ import type {
 
 function isTempId(id: string): boolean {
   return id.startsWith('temp-')
+}
+
+function resolveCopiedSourceOfferBasisId(
+  basis: PrettyOfferPricingBasis,
+  options?: {
+    sourceOfferBasisId?: string
+    newOfferBasisId?: string
+  },
+): string | null {
+  const sourceOfferBasisId = basis.source_offer_basis_id
+  if (
+    options?.sourceOfferBasisId &&
+    options?.newOfferBasisId &&
+    sourceOfferBasisId === options.sourceOfferBasisId
+  ) {
+    return options.newOfferBasisId
+  }
+  if (sourceOfferBasisId) return sourceOfferBasisId
+  if (basis.basis_type === 'technical' && options?.newOfferBasisId) {
+    return options.newOfferBasisId
+  }
+  return null
+}
+
+async function loadPrettyOfferPricingContext(detail: PrettyOfferDetail) {
+  const technicalOfferIds = [
+    ...new Set(
+      (detail.pricing_bases ?? [])
+        .map((b) => b.source_technical_offer_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
+
+  const offerBasisIds = [
+    ...new Set(
+      [
+        detail.offer_basis_id,
+        ...(detail.pricing_bases ?? []).map((b) => b.source_offer_basis_id),
+      ].filter((id): id is string => !!id),
+    ),
+  ]
+
+  const technicalOffersById = new Map<string, OfferDetail>()
+  for (const techId of technicalOfferIds) {
+    const techOffer = await (
+      offerDetailQuery(techId).queryFn as () => Promise<OfferDetail | null>
+    )()
+    if (techOffer) technicalOffersById.set(techId, techOffer)
+  }
+
+  const offerBasesById = new Map<string, OfferBasisDetail>()
+  for (const basisId of offerBasisIds) {
+    const basis = await (
+      offerBasisDetailQuery(basisId)
+        .queryFn as () => Promise<OfferBasisDetail | null>
+    )()
+    if (basis) offerBasesById.set(basisId, basis)
+  }
+
+  const jobQuotesById = detail.job_id
+    ? await loadJobQuotesForBases(detail.job_id, detail.pricing_bases ?? [])
+    : new Map()
+
+  const { data: expansion } = await supabase
+    .from('company_expansions')
+    .select('subcontractor_markup_percent')
+    .eq('company_id', detail.company_id)
+    .maybeSingle()
+
+  const linkedBasis = detail.offer_basis_id
+    ? offerBasesById.get(detail.offer_basis_id)
+    : undefined
+
+  return {
+    offerBasesById,
+    technicalOffersById,
+    jobQuotesById,
+    technicalContext: {
+      daysOfUse: linkedBasis?.days_of_use ?? detail.days_of_use ?? 1,
+    },
+    subcontractorMarkupPercent: resolveSubcontractorMarkupPercent(
+      detail.pretty_subcontractor_markup_percent,
+      expansion?.subcontractor_markup_percent,
+    ),
+  }
 }
 
 export function jobPrettyOffersQuery(jobId: string) {
@@ -76,6 +168,24 @@ async function fetchPrettyOfferModules(
 
   const moduleIds = moduleRows.map((m) => m.id)
 
+  const { data: timelineItems, error: timelineError } = await supabase
+    .from('pretty_offer_module_timeline_items')
+    .select('*')
+    .in('module_id', moduleIds)
+    .order('sort_order', { ascending: true })
+
+  if (timelineError) throw timelineError
+
+  const timelineItemsByModule = new Map<
+    string,
+    NonNullable<PrettyOfferModule['timeline_items']>
+  >()
+  for (const item of timelineItems || []) {
+    const list = timelineItemsByModule.get(item.module_id) ?? []
+    list.push(item)
+    timelineItemsByModule.set(item.module_id, list)
+  }
+
   const { data: blocks, error: blocksError } = await supabase
     .from('pretty_offer_module_blocks')
     .select('*')
@@ -115,6 +225,8 @@ async function fetchPrettyOfferModules(
 
   return moduleRows.map((module) => ({
     ...module,
+    module_type: module.module_type ?? 'standard',
+    timeline_items: timelineItemsByModule.get(module.id) ?? [],
     content_blocks: blocksByModule.get(module.id) ?? [],
   }))
 }
@@ -324,6 +436,7 @@ export async function createEmptyDraftPrettyOffer({
     sort_order: 0,
     source_offer_basis_id: basisId,
     source_technical_offer_id: null,
+    apply_subcontractor_markup: true,
   })
 
   return offerId
@@ -334,9 +447,9 @@ type SavePrettyOfferPayload = {
   jobId: string
   title: string
   prettyIntroText?: string | null
+  prettySubcontractorMarkupPercent?: number | null
   showPricePerLine: boolean
-  prettyUseCustomerAccent: boolean
-  prettyUseCustomerBackground: boolean
+  prettyUseCustomerBrandColors: boolean
   modules: Array<PrettyOfferModule>
   pricingBases: Array<PrettyOfferPricingBasis>
   technicalOffersById?: Map<string, OfferDetail>
@@ -345,6 +458,7 @@ type SavePrettyOfferPayload = {
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
   vehicleDailyRate?: number | null
+  companySubcontractorMarkupPercent?: number | null
 }
 
 async function loadJobQuotesForBases(
@@ -382,9 +496,9 @@ export async function savePrettyOffer(
     jobId,
     title,
     prettyIntroText,
+    prettySubcontractorMarkupPercent,
     showPricePerLine,
-    prettyUseCustomerAccent,
-    prettyUseCustomerBackground,
+    prettyUseCustomerBrandColors,
     modules,
     pricingBases,
     technicalOffersById,
@@ -393,7 +507,13 @@ export async function savePrettyOffer(
     vehicleDistanceRate,
     vehicleDistanceIncrement,
     vehicleDailyRate,
+    companySubcontractorMarkupPercent,
   } = payload
+
+  const subcontractorMarkupPercent = resolveSubcontractorMarkupPercent(
+    prettySubcontractorMarkupPercent,
+    companySubcontractorMarkupPercent,
+  )
 
   const { data: existingOffer, error: offerFetchError } = await supabase
     .from('job_offers')
@@ -446,6 +566,7 @@ export async function savePrettyOffer(
     offerBasesById,
     jobQuotesById,
     technicalContext,
+    subcontractorMarkupPercent,
   })
 
   const totals = calculatePrettyOfferTotals(modulesWithCost, vatPercent)
@@ -455,12 +576,13 @@ export async function savePrettyOffer(
     .update({
       title,
       pretty_intro_text: prettyIntroText?.trim() || null,
+      pretty_subcontractor_markup_percent: prettySubcontractorMarkupPercent,
       days_of_use: daysOfUse,
       vat_percent: vatPercent,
       discount_percent: Number(basisRow.discount_percent),
       show_price_per_line: showPricePerLine,
-      pretty_use_customer_accent: prettyUseCustomerAccent,
-      pretty_use_customer_background: prettyUseCustomerBackground,
+      pretty_use_customer_accent: prettyUseCustomerBrandColors,
+      pretty_use_customer_background: prettyUseCustomerBrandColors,
       equipment_subtotal: 0,
       crew_subtotal: 0,
       transport_subtotal: totals.totalBeforeDiscount,
@@ -500,6 +622,7 @@ export async function savePrettyOffer(
         .from('pretty_offer_modules')
         .insert({
           offer_id: offerId,
+          module_type: module.module_type ?? 'standard',
           title: module.title,
           subtitle: null,
           tagline: module.tagline?.trim() || null,
@@ -511,11 +634,8 @@ export async function savePrettyOffer(
           hero_media_url: module.hero_media_url?.trim() || null,
           hero_media_caption: module.hero_media_caption?.trim() || null,
           sort_order: module.sort_order,
-          display_price: module.show_price
-            ? (module.display_price ??
-              (module.computed_cost > 0 ? module.computed_cost : null))
-            : module.display_price,
-          show_price: module.show_price,
+          display_price: module.computed_cost > 0 ? module.computed_cost : null,
+          show_price: true,
           computed_cost: module.computed_cost,
         })
         .select('id')
@@ -527,6 +647,7 @@ export async function savePrettyOffer(
       const { error } = await supabase
         .from('pretty_offer_modules')
         .update({
+          module_type: module.module_type ?? 'standard',
           title: module.title,
           subtitle: null,
           tagline: module.tagline?.trim() || null,
@@ -538,11 +659,8 @@ export async function savePrettyOffer(
           hero_media_url: module.hero_media_url?.trim() || null,
           hero_media_caption: module.hero_media_caption?.trim() || null,
           sort_order: module.sort_order,
-          display_price: module.show_price
-            ? (module.display_price ??
-              (module.computed_cost > 0 ? module.computed_cost : null))
-            : module.display_price,
-          show_price: module.show_price,
+          display_price: module.computed_cost > 0 ? module.computed_cost : null,
+          show_price: true,
           computed_cost: module.computed_cost,
         })
         .eq('id', module.id)
@@ -665,6 +783,57 @@ export async function savePrettyOffer(
         }
       }
     }
+
+    const timelineItems = module.timeline_items ?? []
+    const keepTimelineItemIds = timelineItems
+      .map((item) => item.id)
+      .filter((id) => !isTempId(id))
+
+    const { data: existingTimelineItems } = await supabase
+      .from('pretty_offer_module_timeline_items')
+      .select('id')
+      .eq('module_id', moduleId)
+
+    const timelineItemsToDelete = (existingTimelineItems || [])
+      .map((r) => r.id)
+      .filter((id) => !keepTimelineItemIds.includes(id))
+
+    if (timelineItemsToDelete.length > 0) {
+      await supabase
+        .from('pretty_offer_module_timeline_items')
+        .delete()
+        .in('id', timelineItemsToDelete)
+    }
+
+    for (const item of timelineItems) {
+      if (isTempId(item.id)) {
+        const { error } = await supabase
+          .from('pretty_offer_module_timeline_items')
+          .insert({
+            module_id: moduleId,
+            label: item.label,
+            summary: item.summary,
+            detail: item.detail,
+            sort_order: item.sort_order,
+            start_at: item.start_at ?? null,
+            end_at: item.end_at ?? null,
+          })
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('pretty_offer_module_timeline_items')
+          .update({
+            label: item.label,
+            summary: item.summary,
+            detail: item.detail,
+            sort_order: item.sort_order,
+            start_at: item.start_at ?? null,
+            end_at: item.end_at ?? null,
+          })
+          .eq('id', item.id)
+        if (error) throw error
+      }
+    }
   }
 
   const keepBasisIds = resolvedBases
@@ -701,6 +870,7 @@ export async function savePrettyOffer(
           source_technical_offer_id: basis.source_technical_offer_id,
           source_offer_basis_id: basis.source_offer_basis_id,
           job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
+          apply_subcontractor_markup: basis.apply_subcontractor_markup ?? true,
         })
         .select('id')
         .single()
@@ -716,6 +886,7 @@ export async function savePrettyOffer(
           source_technical_offer_id: basis.source_technical_offer_id,
           source_offer_basis_id: basis.source_offer_basis_id,
           job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
+          apply_subcontractor_markup: basis.apply_subcontractor_markup ?? true,
         })
         .eq('id', basis.id)
       if (error) throw error
@@ -777,36 +948,45 @@ export async function savePrettyOffer(
   }
 }
 
+function resolveLineItemSourceForPricingBasis(
+  basis: PrettyOfferPricingBasis,
+  context: Awaited<ReturnType<typeof loadPrettyOfferPricingContext>>,
+): TechnicalLineItemSource | null {
+  if (basis.source_offer_basis_id) {
+    const offerBasis = context.offerBasesById.get(basis.source_offer_basis_id)
+    if (!offerBasis) return null
+    return lineItemSourceFromOfferBasis(offerBasis)
+  }
+
+  const technicalOfferId = basis.source_technical_offer_id
+  if (!technicalOfferId) return null
+
+  const technicalOffer = context.technicalOffersById.get(technicalOfferId)
+  if (!technicalOffer) return null
+
+  return {
+    groups: technicalOffer.groups,
+    crew_items: technicalOffer.crew_items,
+    transport_items: technicalOffer.transport_items,
+    transport_groups: technicalOffer.transport_groups,
+    days_of_use: technicalOffer.days_of_use,
+    discount_percent: technicalOffer.discount_percent,
+    vat_percent: technicalOffer.vat_percent,
+  }
+}
+
 export async function recalculatePrettyOfferTotals(
   offerId: string,
 ): Promise<void> {
   const detail = await fetchPrettyOfferDetail(offerId)
   if (!detail) return
 
-  const technicalOfferIds = [
-    ...new Set(
-      (detail.pricing_bases ?? [])
-        .map((b) => b.source_technical_offer_id)
-        .filter((id): id is string => !!id),
-    ),
-  ]
-
-  const technicalOffersById = new Map<string, OfferDetail>()
-  for (const techId of technicalOfferIds) {
-    const techOffer = await (
-      offerDetailQuery(techId).queryFn as () => Promise<OfferDetail | null>
-    )()
-    if (techOffer) technicalOffersById.set(techId, techOffer)
-  }
-
-  const jobQuotesById = detail.job_id
-    ? await loadJobQuotesForBases(detail.job_id, detail.pricing_bases ?? [])
-    : new Map()
+  const pricingContext = await loadPrettyOfferPricingContext(detail)
 
   const modules = applyComputedCostsToModules(
     detail.modules ?? [],
     detail.pricing_bases ?? [],
-    { technicalOffersById, jobQuotesById },
+    pricingContext,
   )
 
   const totals = calculatePrettyOfferTotals(modules, detail.vat_percent)
@@ -834,19 +1014,33 @@ export async function recalculatePrettyOfferTotals(
 export async function copyPrettyOfferChildren(
   sourceOfferId: string,
   newOfferId: string,
+  options?: {
+    sourceOfferBasisId?: string
+    newOfferBasisId?: string
+  },
 ): Promise<void> {
   const detail = await fetchPrettyOfferDetail(sourceOfferId)
   if (!detail?.modules?.length && !detail?.pricing_bases?.length) return
 
   const moduleIdMap = new Map<string, string>()
+  const newModules: Array<{ id: string; title: string }> = []
 
   for (const module of detail.modules ?? []) {
     const { data: inserted, error } = await supabase
       .from('pretty_offer_modules')
       .insert({
         offer_id: newOfferId,
+        module_type: module.module_type ?? 'standard',
         title: module.title,
-        subtitle: null,
+        subtitle: module.subtitle ?? null,
+        tagline: module.tagline?.trim() || null,
+        story_heading_1: module.story_heading_1?.trim() || null,
+        story_body_1: module.story_body_1?.trim() || null,
+        story_heading_2: module.story_heading_2?.trim() || null,
+        story_body_2: module.story_body_2?.trim() || null,
+        hero_media_type: module.hero_media_type ?? null,
+        hero_media_url: module.hero_media_url?.trim() || null,
+        hero_media_caption: module.hero_media_caption?.trim() || null,
         sort_order: module.sort_order,
         display_price: module.display_price,
         show_price: module.show_price,
@@ -857,6 +1051,19 @@ export async function copyPrettyOfferChildren(
 
     if (error) throw error
     moduleIdMap.set(module.id, inserted.id)
+    newModules.push({ id: inserted.id, title: module.title })
+
+    for (const item of module.timeline_items ?? []) {
+      await supabase.from('pretty_offer_module_timeline_items').insert({
+        module_id: inserted.id,
+        label: item.label,
+        summary: item.summary,
+        detail: item.detail,
+        sort_order: item.sort_order,
+        start_at: item.start_at ?? null,
+        end_at: item.end_at ?? null,
+      })
+    }
 
     for (const block of module.content_blocks ?? []) {
       const { data: insertedBlock, error: blockError } = await supabase
@@ -890,7 +1097,53 @@ export async function copyPrettyOfferChildren(
     }
   }
 
+  const mappedBases = (detail.pricing_bases ?? []).map((basis) => ({
+    ...basis,
+    source_offer_basis_id: resolveCopiedSourceOfferBasisId(basis, options),
+  }))
+
+  const pricingContext = await loadPrettyOfferPricingContext({
+    ...detail,
+    offer_basis_id: options?.newOfferBasisId ?? detail.offer_basis_id,
+    pricing_bases: mappedBases,
+  })
+
+  const mappedBasesWithSplits = mappedBases.map((basis) => {
+    if (basis.basis_type !== 'technical' || newModules.length === 0) {
+      return basis
+    }
+
+    const lineItemSource = resolveLineItemSourceForPricingBasis(
+      basis,
+      pricingContext,
+    )
+    if (!lineItemSource) return basis
+
+    return {
+      ...basis,
+      splits: rebuildTechnicalSplitsForCopy({
+        lineItemSource,
+        modules: newModules,
+      }),
+    }
+  })
+
+  const resolvedBases = resolveSplitAmountsForSave(mappedBasesWithSplits, {
+    offerBasesById: pricingContext.offerBasesById,
+    technicalOffersById: pricingContext.technicalOffersById,
+    technicalContext: pricingContext.technicalContext,
+  })
+
+  const resolvedBasesById = new Map(
+    resolvedBases.map((basis) => [basis.id, basis]),
+  )
+
   for (const basis of detail.pricing_bases ?? []) {
+    const mappedSourceOfferBasisId = resolveCopiedSourceOfferBasisId(
+      basis,
+      options,
+    )
+
     const { data: insertedBasis, error } = await supabase
       .from('pretty_offer_pricing_bases')
       .insert({
@@ -899,25 +1152,43 @@ export async function copyPrettyOfferChildren(
         title: basis.title,
         sort_order: basis.sort_order,
         source_technical_offer_id: basis.source_technical_offer_id,
+        source_offer_basis_id: mappedSourceOfferBasisId,
         job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
+        apply_subcontractor_markup: basis.apply_subcontractor_markup ?? true,
       })
       .select('id')
       .single()
 
     if (error) throw error
 
-    for (const split of basis.splits ?? []) {
-      const newModuleId = moduleIdMap.get(split.module_id)
-      if (!newModuleId) continue
-      await supabase.from('pretty_offer_pricing_basis_splits').insert({
-        basis_id: insertedBasis.id,
-        module_id: newModuleId,
-        title: split.title,
-        amount: split.amount,
-        sort_order: split.sort_order,
-        category_type: split.category_type,
-        category_key: split.category_key,
-      })
+    const resolvedBasis = resolvedBasesById.get(basis.id)
+    const splitsToCopy = resolvedBasis?.splits ?? basis.splits ?? []
+
+    for (const split of splitsToCopy) {
+      const newModuleId =
+        basis.basis_type === 'technical'
+          ? split.module_id
+          : (moduleIdMap.get(split.module_id) ?? null)
+
+      if (!newModuleId) {
+        throw new Error(
+          `Failed to copy pricing split "${split.title}": module mapping missing.`,
+        )
+      }
+
+      const { error: splitError } = await supabase
+        .from('pretty_offer_pricing_basis_splits')
+        .insert({
+          basis_id: insertedBasis.id,
+          module_id: newModuleId,
+          title: split.title,
+          amount: split.amount,
+          sort_order: split.sort_order,
+          category_type: split.category_type,
+          category_key: split.category_key,
+        })
+
+      if (splitError) throw splitError
     }
   }
 

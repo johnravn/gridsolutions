@@ -1,15 +1,22 @@
+import { createColumnLayoutItems } from './columnLayoutStorage'
 import type {
   PrettyCategoryType,
   PrettyModuleBlockType,
+  PrettyModuleType,
   PrettyOfferModule,
   PrettyOfferModuleBlock,
   PrettyOfferModuleBlockItem,
+  PrettyOfferModuleTimelineItem,
   PrettyOfferPricingBasis,
   PrettyOfferPricingBasisSplit,
   PrettyPricingBasisType,
 } from '../../../types'
 
 export type LocalBlockItem = PrettyOfferModuleBlockItem & {
+  id: string
+}
+
+export type LocalTimelineItem = PrettyOfferModuleTimelineItem & {
   id: string
 }
 
@@ -20,9 +27,11 @@ export type LocalContentBlock = Omit<PrettyOfferModuleBlock, 'items'> & {
 
 export type LocalPrettyModule = Omit<
   PrettyOfferModule,
-  'content_blocks' | 'media' | 'blocks'
+  'content_blocks' | 'media' | 'blocks' | 'timeline_items'
 > & {
+  module_type: PrettyModuleType
   content_blocks: Array<LocalContentBlock>
+  timeline_items: Array<LocalTimelineItem>
 }
 
 export type LocalPricingBasisSplit = PrettyOfferPricingBasisSplit & {
@@ -44,6 +53,7 @@ export function createEmptyModule(sortOrder: number): LocalPrettyModule {
   return {
     id: createTempId('module'),
     offer_id: '',
+    module_type: 'standard',
     title: '',
     subtitle: null,
     tagline: null,
@@ -59,6 +69,17 @@ export function createEmptyModule(sortOrder: number): LocalPrettyModule {
     show_price: false,
     computed_cost: 0,
     content_blocks: [],
+    timeline_items: [],
+  }
+}
+
+export function createEmptyTimelineModule(sortOrder: number): LocalPrettyModule {
+  return {
+    ...createEmptyModule(sortOrder),
+    module_type: 'timeline',
+    title: 'Program timeline',
+    hero_media_type: null,
+    hero_media_url: null,
   }
 }
 
@@ -98,8 +119,13 @@ export function createEmptyContentBlock(
     base.items = [createEmptyBlockItem(id, 0)]
   }
 
-  if (blockType === 'gallery') {
+  if (blockType === 'gallery' || blockType === 'file_upload') {
     base.items = [createEmptyBlockItem(id, 0)]
+  }
+
+  if (blockType === 'column_layout') {
+    base.caption = '2'
+    base.items = createColumnLayoutItems(id, 2)
   }
 
   return base
@@ -123,6 +149,7 @@ export function createEmptyPricingBasis(
     source_technical_offer_id: null,
     source_offer_basis_id: null,
     job_subcontractor_quote_id: null,
+    apply_subcontractor_markup: true,
     splits: [],
   }
 }
@@ -164,17 +191,45 @@ export const BLOCK_TYPE_LABELS: Record<PrettyModuleBlockType, string> = {
   gallery: 'Image gallery',
   video: 'Video',
   link: 'Link',
+  column_layout: 'Column layout',
+  file_upload: 'File upload',
+}
+
+export const MODULE_TYPE_LABELS: Record<PrettyModuleType, string> = {
+  standard: 'Standard',
   timeline: 'Program timeline',
 }
+
+export const COLUMN_LAYOUT_BLOCK_TYPES = new Set<PrettyModuleBlockType>([
+  'column_layout',
+])
+
+export const NESTED_ADDABLE_BLOCK_TYPES: Array<PrettyModuleBlockType> = [
+  'subtitle',
+  'description',
+  'simple_list',
+  'interactive_list',
+  'gallery',
+  'video',
+  'link',
+  'file_upload',
+]
+
+export const TOP_LEVEL_ADDABLE_BLOCK_TYPES: Array<PrettyModuleBlockType> = [
+  ...NESTED_ADDABLE_BLOCK_TYPES,
+  'column_layout',
+]
 
 export const LIST_BLOCK_TYPES = new Set<PrettyModuleBlockType>([
   'simple_list',
   'interactive_list',
 ])
 
-export const TIMELINE_BLOCK_TYPES = new Set<PrettyModuleBlockType>(['timeline'])
-
 export const GALLERY_BLOCK_TYPES = new Set<PrettyModuleBlockType>(['gallery'])
+
+export const FILE_UPLOAD_BLOCK_TYPES = new Set<PrettyModuleBlockType>([
+  'file_upload',
+])
 
 export const VIDEO_BLOCK_TYPES = new Set<PrettyModuleBlockType>(['video'])
 

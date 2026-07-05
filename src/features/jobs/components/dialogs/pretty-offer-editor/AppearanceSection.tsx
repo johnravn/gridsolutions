@@ -1,20 +1,15 @@
 import { Box, Checkbox, Flex, Text } from '@radix-ui/themes'
 
 type Props = {
-  useCustomerAccent: boolean
-  useCustomerBackground: boolean
+  useCustomerBrandColors: boolean
   hasCustomerColor: boolean
   customerName?: string | null
   readOnly: boolean
-  onChange: (updates: {
-    pretty_use_customer_accent?: boolean
-    pretty_use_customer_background?: boolean
-  }) => void
+  onChange: (useCustomerBrandColors: boolean) => void
 }
 
 export function AppearanceSection({
-  useCustomerAccent,
-  useCustomerBackground,
+  useCustomerBrandColors,
   hasCustomerColor,
   customerName,
   readOnly,
@@ -40,34 +35,16 @@ export function AppearanceSection({
             : 'This job has no customer. Assign a customer and brand color to use customer theming.'}
         </Text>
       ) : (
-        <Flex direction="column" gap="2">
-          <Text as="label" size="2">
-            <Flex gap="2" align="center">
-              <Checkbox
-                checked={useCustomerAccent}
-                disabled={readOnly}
-                onCheckedChange={(checked) =>
-                  onChange({ pretty_use_customer_accent: checked === true })
-                }
-              />
-              Use customer accent color
-            </Flex>
-          </Text>
-          <Text as="label" size="2">
-            <Flex gap="2" align="center">
-              <Checkbox
-                checked={useCustomerBackground}
-                disabled={readOnly}
-                onCheckedChange={(checked) =>
-                  onChange({
-                    pretty_use_customer_background: checked === true,
-                  })
-                }
-              />
-              Use customer color for background tints
-            </Flex>
-          </Text>
-        </Flex>
+        <Text as="label" size="2">
+          <Flex gap="2" align="center">
+            <Checkbox
+              checked={useCustomerBrandColors}
+              disabled={readOnly}
+              onCheckedChange={(checked) => onChange(checked === true)}
+            />
+            Use customer brand colors
+          </Flex>
+        </Text>
       )}
     </Box>
   )

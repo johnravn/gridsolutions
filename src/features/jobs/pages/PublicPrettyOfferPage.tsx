@@ -1,9 +1,10 @@
-import type { ReactNode } from 'react'
-import { Box, Theme } from '@radix-ui/themes'
+import { Box } from '@radix-ui/themes'
 import { motion } from 'framer-motion'
 import { PrettyOfferHero } from '../components/pretty-offer/PrettyOfferHero'
 import { PrettyOfferModuleSlide } from '../components/pretty-offer/PrettyOfferModuleSlide'
 import { PrettyOfferFooter } from '../components/pretty-offer/PrettyOfferFooter'
+import { PrettyOfferStatusBanner } from '../components/pretty-offer/PrettyOfferStatusNotice'
+import { hasPrettyOfferStatusNotice } from '../utils/prettyOfferStatusNotice'
 import '../components/pretty-offer/prettyOfferDeckStyles.css'
 import { usePublicOfferResponse } from '../hooks/usePublicOfferResponse'
 import {
@@ -12,22 +13,6 @@ import {
 } from '../utils/prettyOfferTheme'
 import { buildPublicPrettyModule } from '../utils/prettyOfferCalculations'
 import type { OfferDetail } from '../types'
-import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
-
-function ThemeOptionalWrapper({
-  enabled,
-  accent,
-  children,
-}: {
-  enabled: boolean
-  accent: RadixAccentColor | null
-  children: ReactNode
-}) {
-  if (enabled && accent) {
-    return <Theme accentColor={accent}>{children}</Theme>
-  }
-  return <>{children}</>
-}
 
 type Props = {
   offer: OfferDetail
@@ -40,9 +25,7 @@ export default function PublicPrettyOfferPage({ offer, accessToken }: Props) {
   const response = usePublicOfferResponse(accessToken, offer)
 
   const canAccept = offer.status === 'sent'
-  const isAccepted = offer.status === 'accepted'
-  const isRejected = offer.status === 'rejected'
-  const isSuperseded = offer.status === 'superseded'
+  const showStatusNotice = hasPrettyOfferStatusNotice(offer)
 
   const showPricePerLine = offer.show_price_per_line !== false
 
@@ -54,46 +37,44 @@ export default function PublicPrettyOfferPage({ offer, accessToken }: Props) {
 
   return (
     <Box
-      className="pretty-deck-root pretty-deck-page"
+      className={[
+        'pretty-deck-root pretty-deck-page',
+        prettyTheme.useCustomerBrandColors
+          ? 'pretty-deck-root--customer-brand'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={{
         position: 'relative',
         zIndex: 1,
         ...themeStyle,
       }}
     >
-      <ThemeOptionalWrapper
-        enabled={Boolean(
-          prettyTheme.useCustomerAccent && prettyTheme.radixAccent,
-        )}
-        accent={prettyTheme.radixAccent}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.5 }}
       >
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-        >
-          <PrettyOfferHero offer={offer} />
-          {modules.map((module, index) => (
-            <PrettyOfferModuleSlide
-              key={module.id}
-              index={index}
-              module={module}
-            />
-          ))}
-          {hasModules && (
-            <PrettyOfferFooter
-              offer={offer}
-              modules={modules}
-              showPricePerLine={showPricePerLine}
-              canAccept={canAccept}
-              isAccepted={isAccepted}
-              isRejected={isRejected}
-              isSuperseded={isSuperseded}
-              response={response}
-            />
-          )}
-        </motion.div>
-      </ThemeOptionalWrapper>
+        {showStatusNotice && <PrettyOfferStatusBanner offer={offer} />}
+        <PrettyOfferHero offer={offer} />
+        {modules.map((module, index) => (
+          <PrettyOfferModuleSlide
+            key={module.id}
+            index={index}
+            module={module}
+          />
+        ))}
+        {hasModules && (
+          <PrettyOfferFooter
+            offer={offer}
+            modules={modules}
+            showPricePerLine={showPricePerLine}
+            canAccept={canAccept}
+            response={response}
+          />
+        )}
+      </motion.div>
     </Box>
   )
 }

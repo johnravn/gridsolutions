@@ -20,6 +20,10 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
+import {
   archiveRecurringJob,
   deleteRecurringJob,
   recurringJobDetailQuery,
@@ -30,6 +34,8 @@ import RecurringJobsTab from './tabs/recurring/RecurringJobsTab'
 import RecurringCrewTab from './tabs/recurring/RecurringCrewTab'
 import RecurringBookingsTab from './tabs/recurring/RecurringBookingsTab'
 import type { DeleteRecurringJobMode } from '../api/recurringJobQueries'
+
+const RECURRING_JOB_TABS = ['overview', 'jobs', 'crew', 'bookings'] as const
 
 export default function RecurringJobInspector({
   id,
@@ -51,6 +57,15 @@ export default function RecurringJobInspector({
   const [archiveOpen, setArchiveOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState('overview')
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: RECURRING_JOB_TABS,
+    activeTab,
+    onTabChange: setActiveTab,
+    enabled: !!id,
+  })
 
   const { data, isLoading } = useQuery({
     ...recurringJobDetailQuery({ recurringJobId: id ?? '__none__' }),
@@ -109,7 +124,7 @@ export default function RecurringJobInspector({
   )
 
   return (
-    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
+    <Box {...scopeProps} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Box
         mb="3"
         style={{

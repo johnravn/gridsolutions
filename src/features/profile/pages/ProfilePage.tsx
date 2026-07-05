@@ -17,6 +17,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
+import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import ProfilePageSkeleton from '@shared/ui/components/ProfilePageSkeleton'
 import { DatePicker } from '@shared/ui/components/pickers'
@@ -70,12 +74,23 @@ type AddressForm = {
   country: string
 }
 
+const PROFILE_TABS = ['general', 'notifications', 'personalization'] as const
+
 export default function ProfilePage() {
   const qc = useQueryClient()
   const { info, success, error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = React.useState(false)
   const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
+  const [activeTab, setActiveTab] = React.useState<string>('general')
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: PROFILE_TABS,
+    activeTab,
+    onTabChange: setActiveTab,
+  })
 
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
     typeof window !== 'undefined'
@@ -397,6 +412,7 @@ export default function ProfilePage() {
 
   return (
     <section
+      {...scopeProps}
       style={{
         height: isLarge ? '100%' : undefined,
         minHeight: 0,
@@ -404,6 +420,8 @@ export default function ProfilePage() {
     >
       <Tabs.Root
         defaultValue="general"
+        value={activeTab}
+        onValueChange={setActiveTab}
         style={{
           display: 'flex',
           flexDirection: 'column',

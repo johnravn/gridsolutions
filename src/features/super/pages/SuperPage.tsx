@@ -19,6 +19,8 @@ import { Plus, TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
 } from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
@@ -32,6 +34,8 @@ import SuperEmailTab from '../components/SuperEmailTab'
 import SuperMonitorTab from '../components/SuperMonitorTab'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
+
+const SUPER_TABS = ['monitor', 'companies', 'users', 'email'] as const
 
 export default function SuperPage() {
   const { success, error: toastError } = useToast()
@@ -54,6 +58,19 @@ export default function SuperPage() {
 
   // Track active tab to clear selection when switching
   const [activeTab, setActiveTab] = React.useState<string>('monitor')
+
+  const handleTabChange = React.useCallback((tab: string) => {
+    setActiveTab(tab)
+    setSelectedId(null)
+  }, [])
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: SUPER_TABS,
+    activeTab,
+    onTabChange: handleTabChange,
+  })
 
   // match JobsPage behavior for responsive layout
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -518,6 +535,7 @@ export default function SuperPage() {
 
   return (
     <section
+      {...scopeProps}
       style={{
         height: isLarge ? '100%' : undefined,
         minHeight: 0,
@@ -526,10 +544,7 @@ export default function SuperPage() {
       <Tabs.Root
         defaultValue="monitor"
         value={activeTab}
-        onValueChange={(tab) => {
-          setActiveTab(tab)
-          setSelectedId(null) // Clear selection when switching tabs
-        }}
+        onValueChange={handleTabChange}
         style={{
           display: 'flex',
           flexDirection: 'column',

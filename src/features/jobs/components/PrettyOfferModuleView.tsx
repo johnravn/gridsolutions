@@ -21,13 +21,9 @@ function EmptyState() {
 
 type Props = {
   module: PublicPrettyOfferModule
-  useCustomerBackground?: boolean
 }
 
-function PrettyOfferModuleView({
-  module,
-  useCustomerBackground = false,
-}: Props) {
+function PrettyOfferModuleView({ module }: Props) {
   const sortedBlocks = [...(module.blocks ?? [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   )
@@ -37,9 +33,7 @@ function PrettyOfferModuleView({
       mb="6"
       p="5"
       style={{
-        background: useCustomerBackground
-          ? 'var(--accent-a2)'
-          : 'var(--color-panel-solid)',
+        background: 'var(--color-panel-solid)',
         borderRadius: 16,
         border: '1px solid var(--gray-a4)',
         boxShadow: '0 8px 24px var(--gray-a3)',

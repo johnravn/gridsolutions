@@ -13,11 +13,11 @@ import {
 import { Download } from 'iconoir-react'
 import { prettyPhone } from '@shared/phone/phone'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
-import {
-  formatPublicOfferCurrency,
-  formatPublicOfferDate,
-} from '../../hooks/usePublicOfferResponse'
+import { formatPublicOfferCurrency } from '../../hooks/usePublicOfferResponse'
 import { resolveModuleCustomerPrice } from '../../utils/prettyOfferCalculations'
+import { hasPrettyOfferStatusNotice } from '../../utils/prettyOfferStatusNotice'
+import { PrettyOfferResourceSummary } from './PrettyOfferResourceSummary'
+import { PrettyOfferStatusNotice } from './PrettyOfferStatusNotice'
 import type { OfferDetail, PublicPrettyOfferModule } from '../../types'
 import type { usePublicOfferResponse } from '../../hooks/usePublicOfferResponse'
 
@@ -27,11 +27,9 @@ type Props = {
   offer: OfferDetail
   modules: Array<PublicPrettyOfferModule>
   showPricePerLine: boolean
-  canAccept: boolean
-  isAccepted: boolean
-  isRejected: boolean
-  isSuperseded: boolean
-  response: ResponseState
+  preview?: boolean
+  canAccept?: boolean
+  response?: ResponseState | null
 }
 
 function PricingRow({
@@ -83,11 +81,8 @@ function PricingRow({
 function PrettyOfferResponseSection({
   offer,
   canAccept,
-  isAccepted,
-  isRejected,
-  isSuperseded,
   response,
-}: Omit<Props, 'modules'>) {
+}: Pick<Props, 'offer' | 'canAccept' | 'response'>) {
   const {
     acceptanceForm,
     setAcceptanceForm,
@@ -110,42 +105,50 @@ function PrettyOfferResponseSection({
     setShowRevisionForm,
   } = response
 
-  if (!canAccept) return null
+  const isAccepted = offer.status === 'accepted'
+  const isRejected = offer.status === 'rejected'
+  const showStatusNotice = hasPrettyOfferStatusNotice(offer)
+
+  if (!canAccept && !showStatusNotice) return null
 
   return (
     <Box mt="5" ref={response.responseSectionRef}>
-      <Heading size="5" mb="3">
-        Ready to move forward?
-      </Heading>
-      <Flex gap="2" wrap="wrap">
-        <Button
-          size="3"
-          variant={showRejectForm ? 'solid' : 'soft'}
-          color="red"
-          onClick={() => toggleResponseAction('reject')}
-          disabled={responseActionsDisabled}
-        >
-          Reject
-        </Button>
-        <Button
-          size="3"
-          variant={showRevisionForm ? 'solid' : 'soft'}
-          onClick={() => toggleResponseAction('revision')}
-          disabled={responseActionsDisabled}
-        >
-          Request changes
-        </Button>
-        <Button
-          size="3"
-          variant={showAcceptForm ? 'solid' : 'soft'}
-          onClick={() => toggleResponseAction('accept')}
-          disabled={responseActionsDisabled}
-        >
-          Accept offer
-        </Button>
-      </Flex>
+      {canAccept && (
+        <>
+          <Heading size="5" mb="3">
+            Ready to move forward?
+          </Heading>
+          <Flex gap="2" wrap="wrap">
+            <Button
+              size="3"
+              variant={showRejectForm ? 'solid' : 'soft'}
+              color="red"
+              onClick={() => toggleResponseAction('reject')}
+              disabled={responseActionsDisabled}
+            >
+              Reject
+            </Button>
+            <Button
+              size="3"
+              variant={showRevisionForm ? 'solid' : 'soft'}
+              onClick={() => toggleResponseAction('revision')}
+              disabled={responseActionsDisabled}
+            >
+              Request changes
+            </Button>
+            <Button
+              size="3"
+              variant={showAcceptForm ? 'solid' : 'soft'}
+              onClick={() => toggleResponseAction('accept')}
+              disabled={responseActionsDisabled}
+            >
+              Accept offer
+            </Button>
+          </Flex>
+        </>
+      )}
 
-      {!isAccepted && showAcceptForm && (
+      {canAccept && !isAccepted && showAcceptForm && (
         <Box mt="4" pt="4" style={{ borderTop: '1px solid var(--accent-a4)' }}>
           <Flex direction="column" gap="3">
             <Flex gap="3" wrap="wrap">
@@ -232,7 +235,7 @@ function PrettyOfferResponseSection({
         </Box>
       )}
 
-      {!isAccepted && showRejectForm && (
+      {canAccept && !isAccepted && showRejectForm && (
         <Box mt="4" pt="4" style={{ borderTop: '1px solid var(--accent-a4)' }}>
           <Flex direction="column" gap="3">
             <Flex gap="3" wrap="wrap">
@@ -301,7 +304,7 @@ function PrettyOfferResponseSection({
         </Box>
       )}
 
-      {!isAccepted && !isRejected && showRevisionForm && (
+      {canAccept && !isAccepted && !isRejected && showRevisionForm && (
         <Box mt="4" pt="4" style={{ borderTop: '1px solid var(--accent-a4)' }}>
           <Flex direction="column" gap="3">
             <Flex gap="3" wrap="wrap">
@@ -370,55 +373,17 @@ function PrettyOfferResponseSection({
         </Box>
       )}
 
-      {isAccepted && offer.accepted_at && (
-        <Box
-          mt="4"
-          p="3"
-          style={{ background: 'var(--green-a3)', borderRadius: 12 }}
-        >
-          <Text size="3" weight="medium" color="green">
-            Offer accepted {formatPublicOfferDate(offer.accepted_at)}
-          </Text>
-        </Box>
-      )}
-
-      {isRejected && offer.rejected_at && (
-        <Box
-          mt="4"
-          p="3"
-          style={{ background: 'var(--red-a3)', borderRadius: 12 }}
-        >
-          <Text size="3" weight="medium" color="red">
-            Offer rejected {formatPublicOfferDate(offer.rejected_at)}
-          </Text>
-        </Box>
-      )}
-
-      {isSuperseded && (
-        <Box
-          mt="4"
-          p="3"
-          style={{ background: 'var(--orange-a3)', borderRadius: 12 }}
-        >
-          <Text size="2" color="gray">
-            A newer version of this offer has been sent.
-          </Text>
-        </Box>
-      )}
+      <PrettyOfferStatusNotice offer={offer} variant="card" />
     </Box>
   )
 }
 
-export function PrettyOfferFooter({
-  offer,
-  modules,
-  showPricePerLine,
-  canAccept,
-  isAccepted,
-  isRejected,
-  isSuperseded,
-  response,
-}: Props) {
+export function PrettyOfferFooter(props: Props) {
+  const { offer, modules, showPricePerLine } = props
+  const preview = props.preview === true
+  const canAccept = preview ? false : props.canAccept
+  const response = preview ? null : props.response
+
   const pricedModules = modules
     .map((module) => ({
       module,
@@ -436,12 +401,26 @@ export function PrettyOfferFooter({
 
   return (
     <Box className="pretty-deck-footer-wrap">
+      <PrettyOfferResourceSummary modules={modules} />
       <Box className="pretty-deck-footer">
         <Box className="pretty-deck-footer__shape" aria-hidden />
         <Box className="pretty-deck-footer__content">
-          <Heading size="6" mb="4">
-            Investment
-          </Heading>
+          <Flex justify="between" align="start" gap="3" wrap="wrap" mb="4">
+            <Heading size="6">Investment</Heading>
+            {!preview && response && (
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => void response.handleDownloadPDF()}
+                disabled={response.downloadingPDF}
+              >
+                <Download width={16} height={16} />
+                {response.downloadingPDF
+                  ? 'Downloading…'
+                  : 'Download offer as PDF'}
+              </Button>
+            )}
+          </Flex>
 
           <Box mb="4">
             {showPricePerLine && pricedModules.length > 0 && (
@@ -541,39 +520,31 @@ export function PrettyOfferFooter({
             </Flex>
           </Flex>
 
-          <Flex gap="3" wrap="wrap" mt="4">
-            {response.hasTerms && (
-              <Button
-                size="2"
-                variant="ghost"
-                onClick={() => response.setShowTermsDialog(true)}
-              >
-                Terms & conditions
-              </Button>
-            )}
-            <Button
-              size="2"
-              variant="soft"
-              onClick={() => void response.handleDownloadPDF()}
-              disabled={response.downloadingPDF}
-            >
-              <Download width={16} height={16} />
-              {response.downloadingPDF ? 'Downloading…' : 'Download PDF'}
-            </Button>
-          </Flex>
+          {!preview && response && (
+            <>
+              {response.hasTerms && (
+                <Flex gap="3" wrap="wrap" mt="4">
+                  <Button
+                    size="2"
+                    variant="ghost"
+                    onClick={() => response.setShowTermsDialog(true)}
+                  >
+                    Terms & conditions
+                  </Button>
+                </Flex>
+              )}
 
-          <PrettyOfferResponseSection
-            offer={offer}
-            canAccept={canAccept}
-            isAccepted={isAccepted}
-            isRejected={isRejected}
-            isSuperseded={isSuperseded}
-            response={response}
-          />
+              <PrettyOfferResponseSection
+                offer={offer}
+                canAccept={canAccept}
+                response={response}
+              />
+            </>
+          )}
         </Box>
       </Box>
 
-      {response.hasTerms && (
+      {!preview && response?.hasTerms && (
         <Dialog.Root
           open={response.showTermsDialog}
           onOpenChange={response.setShowTermsDialog}

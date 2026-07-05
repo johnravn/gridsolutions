@@ -24,6 +24,10 @@ import {
   makeWordPresentable,
 } from '@shared/lib/generalFunctions'
 import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
+import {
   createActivityComment,
   deleteActivityComment,
   latestInspectorQuery,
@@ -108,6 +112,15 @@ export default function LatestInspector({
   const [activeTab, setActiveTab] = React.useState<'details' | 'comments'>(
     'details',
   )
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: ['details', 'comments'],
+    activeTab,
+    onTabChange: (tab) => setActiveTab(tab as 'details' | 'comments'),
+    enabled: Boolean(companyId && activityId),
+  })
 
   // Get current user ID for comment deletion (always call this hook)
   const { data: authUser } = useQuery({
@@ -255,10 +268,10 @@ export default function LatestInspector({
     const comments: Array<any> = []
 
     return (
-      <Box>
+      <Box {...scopeProps}>
         <Tabs.Root
           value={activeTab}
-          onValueChange={(v) => setActiveTab(v as any)}
+          onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
         >
           <Tabs.List>
             <Tabs.Trigger value="details">Details</Tabs.Trigger>
@@ -510,10 +523,10 @@ export default function LatestInspector({
   })
 
   return (
-    <Box>
+    <Box {...scopeProps}>
       <Tabs.Root
         value={activeTab}
-        onValueChange={(v) => setActiveTab(v as any)}
+        onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
       >
         <Tabs.List>
           <Tabs.Trigger value="details">Details</Tabs.Trigger>

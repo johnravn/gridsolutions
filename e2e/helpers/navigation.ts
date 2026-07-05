@@ -176,15 +176,29 @@ export async function createDraftJob(page: Page, title?: string) {
 
   const dialog = page.getByRole('dialog')
   await expect(dialog.getByText('New job')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Auto-fill' }).click()
 
   const jobTitle = title ?? `E2E Job ${Date.now()}`
-  await dialog.getByRole('textbox').first().fill(jobTitle)
-  await dialog.getByRole('button', { name: 'Create' }).click()
+  const createButton = dialog.getByRole('button', { name: 'Create' })
 
-  await expect(page.getByRole('heading', { name: jobTitle })).toBeVisible({
-    timeout: 20_000,
-  })
+  await dialog.getByRole('button', { name: 'Auto-fill' }).click()
+  // Create stays disabled until Auto-fill has populated the required date range.
+  await expect(createButton).toBeEnabled({ timeout: 10_000 })
+
+  await dialog.getByPlaceholder('Enter job title').fill(jobTitle)
+  await expect(createButton).toBeEnabled()
+
+  await createButton.click()
+  await expect(dialog).toBeHidden({ timeout: 20_000 })
+
+  await expect(async () => {
+    const heading = page.getByRole('heading', { name: jobTitle })
+    if (await heading.isVisible().catch(() => false)) return
+
+    const row = page.getByText(jobTitle, { exact: true }).first()
+    await expect(row).toBeVisible({ timeout: 5_000 })
+    await row.click()
+    await expect(heading).toBeVisible({ timeout: 10_000 })
+  }).toPass({ timeout: 20_000 })
 
   return jobTitle
 }

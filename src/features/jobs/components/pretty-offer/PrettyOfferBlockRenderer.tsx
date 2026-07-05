@@ -12,7 +12,9 @@ import {
 } from '../../utils/prettyOfferMediaUpload'
 import { InteractiveListBlock } from './InteractiveListBlock'
 import { GalleryBlock } from './GalleryBlock'
+import { FileUploadBlock } from './FileUploadBlock'
 import { TimelineBlock } from './TimelineBlock'
+import { ColumnLayoutBlock } from './ColumnLayoutBlock'
 import type { PrettyOfferModuleBlock } from '../../types'
 
 function getVideoEmbedUrl(url: string): string | null {
@@ -235,6 +237,12 @@ export function PrettyOfferBlockRenderer({
       break
     case 'timeline':
       content = <TimelineBlock items={block.items ?? []} />
+      break
+    case 'column_layout':
+      content = <ColumnLayoutBlock block={block} startIndex={index} />
+      break
+    case 'file_upload':
+      content = <FileUploadBlock block={block} />
       break
     case 'video':
     case 'link':

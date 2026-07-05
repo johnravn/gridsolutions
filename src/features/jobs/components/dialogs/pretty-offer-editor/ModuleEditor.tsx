@@ -1,18 +1,24 @@
+import * as React from 'react'
 import {
   Box,
-  Checkbox,
   Flex,
   Heading,
   Separator,
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { calculateSplitAmount } from '../../../utils/prettyOfferCalculations'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
+import {
+  calculateModuleCostFromSplits,
+  calculateModuleMarkupFromSplits,
+  calculateSplitAmountBeforeMarkup,
+} from '../../../utils/prettyOfferCalculations'
 import { ContentBlocksSection } from './ContentBlocksSection'
 import {
   ModuleHeroMediaEditor,
   ModuleStoryFields,
 } from './ModuleHeroMediaEditor'
+import type { PrettyOfferPricingOptions } from '../../../utils/prettyOfferCalculations'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
 
 type Props = {
@@ -21,6 +27,8 @@ type Props = {
   companyId: string
   offerId: string
   pricingBases: Array<LocalPricingBasis>
+  splitCalculationOptions: PrettyOfferPricingOptions
+  titleSuggestions?: Array<string>
   readOnly: boolean
   fieldErrors?: Record<string, string>
   onChange: (module: LocalPrettyModule) => void
@@ -40,25 +48,58 @@ export function ModuleEditor({
   companyId,
   offerId,
   pricingBases,
+  splitCalculationOptions,
+  titleSuggestions = [],
   readOnly,
   fieldErrors = {},
   onChange,
 }: Props) {
+  const [titleFieldHovered, setTitleFieldHovered] = React.useState(false)
+
   const update = (patch: Partial<LocalPrettyModule>) => {
     onChange({ ...module, ...patch })
   }
 
-  const connectedSplits = pricingBases.flatMap((basis) =>
-    (basis.splits ?? [])
-      .filter((split) => split.module_id === module.id)
-      .map((split) => ({
-        basisTitle: basis.title || basis.basis_type,
-        splitTitle: split.title,
-        amount: calculateSplitAmount(split, basis),
-      })),
+  const connectedSplits = React.useMemo(
+    () =>
+      pricingBases.flatMap((basis) =>
+        (basis.splits ?? [])
+          .filter((split) => split.module_id === module.id)
+          .map((split) => ({
+            id: split.id,
+            basisTitle: basis.title || basis.basis_type,
+            splitTitle: split.title,
+            amount: calculateSplitAmountBeforeMarkup(
+              split,
+              basis,
+              splitCalculationOptions,
+            ),
+          })),
+      ),
+    [module.id, pricingBases, splitCalculationOptions],
   )
 
-  const connectedTotal = connectedSplits.reduce((sum, s) => sum + s.amount, 0)
+  const moduleMarkupAmount = React.useMemo(
+    () =>
+      calculateModuleMarkupFromSplits(
+        module.id,
+        pricingBases,
+        splitCalculationOptions,
+      ),
+    [module.id, pricingBases, splitCalculationOptions],
+  )
+
+  const moduleTotal = React.useMemo(
+    () =>
+      calculateModuleCostFromSplits(
+        module.id,
+        pricingBases,
+        splitCalculationOptions,
+      ),
+    [module.id, pricingBases, splitCalculationOptions],
+  )
+
+  const markupPercent = splitCalculationOptions.subcontractorMarkupPercent ?? 0
 
   return (
     <Box>
@@ -67,7 +108,10 @@ export function ModuleEditor({
           Module story
         </Heading>
 
-        <Box>
+        <Box
+          onMouseEnter={() => setTitleFieldHovered(true)}
+          onMouseLeave={() => setTitleFieldHovered(false)}
+        >
           <Text size="2" weight="medium" mb="1" as="div">
             Title <Text color="red">*</Text>
           </Text>
@@ -82,6 +126,17 @@ export function ModuleEditor({
             onChange={(e) => update({ title: e.target.value })}
             placeholder="e.g. Audio"
           />
+          {!readOnly && titleSuggestions.length > 0 && (
+            <AnimatedQuickSuggestions
+              suggestions={titleSuggestions}
+              open={titleFieldHovered}
+              staticOpen={!module.title.trim()}
+              showLabel
+              label="Title suggestions:"
+              onSelect={(suggestion) => update({ title: suggestion })}
+              onAfterSelect={() => setTitleFieldHovered(false)}
+            />
+          )}
         </Box>
 
         <ModuleStoryFields
@@ -100,73 +155,6 @@ export function ModuleEditor({
           onChange={update}
         />
 
-        <Flex gap="3" align="end" wrap="wrap">
-          <Flex align="center" gap="2" style={{ minWidth: 160 }}>
-            <Checkbox
-              checked={module.show_price}
-              disabled={readOnly}
-              onCheckedChange={(checked) =>
-                update({ show_price: checked === true })
-              }
-            />
-            <Text size="2">Show price to customer</Text>
-          </Flex>
-
-          {module.show_price && (
-            <Box style={{ flex: 1, minWidth: 140 }}>
-              <Text size="2" weight="medium" mb="1" as="div">
-                Customer price (footer)
-              </Text>
-              <TextField.Root
-                type="number"
-                value={module.display_price ?? ''}
-                disabled={readOnly}
-                onChange={(e) =>
-                  update({
-                    display_price: e.target.value
-                      ? Number(e.target.value)
-                      : null,
-                  })
-                }
-                placeholder="Optional"
-              />
-            </Box>
-          )}
-        </Flex>
-
-        <Box>
-          <Text size="2" weight="medium" mb="2" as="div">
-            Connected pricing splits
-          </Text>
-          {connectedSplits.length === 0 ? (
-            <Text size="2" color="gray">
-              No pricing splits connected. Assign splits on the Pricing basis
-              tab.
-            </Text>
-          ) : (
-            <Flex direction="column" gap="1">
-              {connectedSplits.map((split, index) => (
-                <Flex key={index} justify="between">
-                  <Text size="2" color="gray">
-                    {split.basisTitle} — {split.splitTitle}
-                  </Text>
-                  <Text size="2">{formatMoney(split.amount)}</Text>
-                </Flex>
-              ))}
-              <Flex justify="between" mt="1">
-                <Text size="2" weight="medium">
-                  Internal cost total
-                </Text>
-                <Text size="2" weight="medium">
-                  {formatMoney(connectedTotal)}
-                </Text>
-              </Flex>
-            </Flex>
-          )}
-        </Box>
-
-        <Separator size="4" />
-
         <ContentBlocksSection
           moduleId={module.id}
           jobId={_jobId}
@@ -176,6 +164,64 @@ export function ModuleEditor({
           readOnly={readOnly}
           onChange={(content_blocks) => update({ content_blocks })}
         />
+
+        <Separator size="4" />
+
+        <Box>
+          <Heading size="4" mb="1">
+            Module cost
+          </Heading>
+          <Text size="1" color="gray" mb="3" as="div">
+            Internal breakdown from connected pricing splits. Whether the
+            customer sees module prices is controlled by the offer setting
+            above.
+          </Text>
+
+          {connectedSplits.length === 0 ? (
+            <Text size="2" color="gray">
+              No pricing splits connected. Assign splits on the Pricing basis
+              tab.
+            </Text>
+          ) : (
+            <Flex direction="column" gap="1" mb="3">
+              {connectedSplits.map((split) => (
+                <Flex key={split.id} justify="between" gap="3">
+                  <Text size="2" color="gray">
+                    {split.basisTitle} — {split.splitTitle}
+                  </Text>
+                  <Text size="2">{formatMoney(split.amount)}</Text>
+                </Flex>
+              ))}
+              {moduleMarkupAmount > 0 && (
+                <Flex justify="between" gap="3">
+                  <Text size="2" color="gray">
+                    Subcontractor markup
+                    {markupPercent > 0 ? ` (${markupPercent}%)` : ''}
+                  </Text>
+                  <Text size="2">{formatMoney(moduleMarkupAmount)}</Text>
+                </Flex>
+              )}
+            </Flex>
+          )}
+
+          <Box
+            p="3"
+            style={{
+              borderRadius: 8,
+              background: 'var(--gray-a2)',
+              border: '1px solid var(--gray-a4)',
+            }}
+          >
+            <Flex justify="between" align="center" gap="2">
+              <Text size="2" weight="medium">
+                Module total
+              </Text>
+              <Text size="3" weight="bold">
+                {formatMoney(moduleTotal)}
+              </Text>
+            </Flex>
+          </Box>
+        </Box>
       </Flex>
     </Box>
   )

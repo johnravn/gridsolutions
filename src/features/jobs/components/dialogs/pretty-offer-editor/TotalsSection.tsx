@@ -1,9 +1,11 @@
 import { Box, Flex, Separator, Text } from '@radix-ui/themes'
 import {
   applyComputedCostsToModules,
+  basisMarkupAmount,
   basisSubtotal,
   calculatePrettyOfferTotals,
   calculateSplitAmount,
+  calculateSplitAmountBeforeMarkup,
 } from '../../../utils/prettyOfferCalculations'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
 import type {
@@ -25,6 +27,7 @@ type Props = {
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
   vehicleDailyRate?: number | null
+  subcontractorMarkupPercent?: number
 }
 
 function formatMoney(value: number) {
@@ -47,6 +50,7 @@ export function TotalsSection({
   vehicleDistanceRate,
   vehicleDistanceIncrement,
   vehicleDailyRate,
+  subcontractorMarkupPercent = 0,
 }: Props) {
   const technicalContext = {
     rentalFactorConfig,
@@ -56,12 +60,19 @@ export function TotalsSection({
     daysOfUse,
   }
 
-  const modulesWithCost = applyComputedCostsToModules(modules, pricingBases, {
+  const pricingOptions = {
     technicalOffersById,
     offerBasesById,
     jobQuotesById,
     technicalContext,
-  })
+    subcontractorMarkupPercent,
+  }
+
+  const modulesWithCost = applyComputedCostsToModules(
+    modules,
+    pricingBases,
+    pricingOptions,
+  )
 
   const totals = calculatePrettyOfferTotals(modulesWithCost, vatPercent)
   const customerDisplayTotal = modulesWithCost.reduce((sum, module) => {
@@ -83,52 +94,63 @@ export function TotalsSection({
             By pricing basis
           </Text>
           <Flex direction="column" gap="3">
-            {pricingBases.map((basis) => (
-              <Box key={basis.id}>
-                <Flex justify="between" mb="1">
-                  <Text size="2" weight="medium">
-                    {basis.title || basis.basis_type}
-                  </Text>
-                  <Text size="2">
-                    {formatMoney(
-                      basisSubtotal(basis, {
-                        technicalOffersById,
-                        offerBasesById,
-                        jobQuotesById,
-                        technicalContext,
-                      }),
-                    )}
-                  </Text>
-                </Flex>
-                {(basis.splits ?? []).map((split) => {
-                  const module = modulesWithCost.find(
-                    (m) => m.id === split.module_id,
-                  )
-                  return (
+            {pricingBases.map((basis) => {
+              const markupAmount = basisMarkupAmount(basis, pricingOptions)
+              const splitAmount = (split: (typeof basis.splits)[number]) =>
+                markupAmount > 0
+                  ? calculateSplitAmountBeforeMarkup(
+                      split,
+                      basis,
+                      pricingOptions,
+                    )
+                  : calculateSplitAmount(split, basis, pricingOptions)
+              return (
+                <Box key={basis.id}>
+                  <Flex justify="between" mb="1">
+                    <Text size="2" weight="medium">
+                      {basis.title || basis.basis_type}
+                    </Text>
+                    <Text size="2">
+                      {formatMoney(basisSubtotal(basis, pricingOptions))}
+                    </Text>
+                  </Flex>
+                  {(basis.splits ?? []).map((split) => {
+                    const module = modulesWithCost.find(
+                      (m) => m.id === split.module_id,
+                    )
+                    return (
+                      <Flex
+                        key={split.id}
+                        justify="between"
+                        pl="3"
+                        style={{ opacity: 0.9 }}
+                      >
+                        <Text size="1" color="gray">
+                          {split.title} → {module?.title || 'Module'}
+                        </Text>
+                        <Text size="1">
+                          {formatMoney(splitAmount(split))}
+                        </Text>
+                      </Flex>
+                    )
+                  })}
+                  {markupAmount > 0 && (
                     <Flex
-                      key={split.id}
                       justify="between"
                       pl="3"
                       style={{ opacity: 0.9 }}
                     >
                       <Text size="1" color="gray">
-                        {split.title} → {module?.title || 'Module'}
+                        Subcontractor markup ({subcontractorMarkupPercent}%)
                       </Text>
                       <Text size="1">
-                        {formatMoney(
-                          calculateSplitAmount(split, basis, {
-                            technicalOffersById,
-                            offerBasesById,
-                            jobQuotesById,
-                            technicalContext,
-                          }),
-                        )}
+                        {formatMoney(markupAmount)}
                       </Text>
                     </Flex>
-                  )
-                })}
-              </Box>
-            ))}
+                  )}
+                </Box>
+              )
+            })}
           </Flex>
           <Separator size="4" my="3" />
         </Box>

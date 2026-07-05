@@ -22,6 +22,15 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
+import {
+  buildJobInspectorKeyboardSteps,
+  getJobInspectorKeyboardStep,
+  parseJobInspectorKeyboardStep,
+} from '../utils/jobInspectorKeyboardTabs'
 import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
@@ -78,6 +87,7 @@ export default function JobInspector({
   const [activeTab, setActiveTab] = React.useState<string>(
     initialTab || 'overview',
   )
+  const [bookingsSubTab, setBookingsSubTab] = React.useState<string>('crew')
   const filesTabRef = React.useRef<FilesTabHandle>(null)
 
   const blockedFreelancerTabs = React.useMemo(
@@ -133,6 +143,60 @@ export default function JobInspector({
     ]
     return list.filter((t) => isTabAllowed(t.value))
   }, [isTabAllowed])
+
+  const handleTabChange = React.useCallback(
+    (newTab: string) => {
+      if (!isTabAllowed(newTab)) {
+        setActiveTab('overview')
+        return
+      }
+      if (activeTab === 'files' && newTab !== 'files' && filesTabRef.current) {
+        filesTabRef.current.checkUnsavedChanges(() => {
+          setActiveTab(newTab)
+        })
+      } else {
+        setActiveTab(newTab)
+      }
+    },
+    [activeTab, isTabAllowed],
+  )
+
+  const keyboardTabSteps = React.useMemo(
+    () => buildJobInspectorKeyboardSteps(tabOptions.map((tab) => tab.value)),
+    [tabOptions],
+  )
+
+  const currentKeyboardTab = React.useMemo(
+    () => getJobInspectorKeyboardStep(activeTab, bookingsSubTab),
+    [activeTab, bookingsSubTab],
+  )
+
+  const handleKeyboardTabChange = React.useCallback(
+    (step: string) => {
+      const { tab, bookingsSubTab: nextBookingsSubTab } =
+        parseJobInspectorKeyboardStep(step)
+
+      if (tab === 'bookings' && nextBookingsSubTab) {
+        if (activeTab !== 'bookings') {
+          handleTabChange('bookings')
+        }
+        setBookingsSubTab(nextBookingsSubTab)
+        return
+      }
+
+      handleTabChange(tab)
+    },
+    [activeTab, handleTabChange],
+  )
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: keyboardTabSteps,
+    activeTab: currentKeyboardTab,
+    onTabChange: handleKeyboardTabChange,
+    enabled: !!id,
+  })
 
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
@@ -225,7 +289,7 @@ export default function JobInspector({
   const job = data
 
   return (
-    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
+    <Box {...scopeProps} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Box
         mb="3"
         style={{
@@ -390,24 +454,7 @@ export default function JobInspector({
       <Tabs.Root
         defaultValue="overview"
         value={activeTab}
-        onValueChange={(newTab) => {
-          if (!isTabAllowed(newTab)) {
-            setActiveTab('overview')
-            return
-          }
-          // If switching away from files tab, check for unsaved changes
-          if (
-            activeTab === 'files' &&
-            newTab !== 'files' &&
-            filesTabRef.current
-          ) {
-            filesTabRef.current.checkUnsavedChanges(() => {
-              setActiveTab(newTab)
-            })
-          } else {
-            setActiveTab(newTab)
-          }
-        }}
+        onValueChange={handleTabChange}
       >
         {isMobile ? (
           <Flex direction="column" gap="2" mb="2">
@@ -450,10 +497,10 @@ export default function JobInspector({
                         filesTabRef.current
                       ) {
                         filesTabRef.current.checkUnsavedChanges(() => {
-                          setActiveTab(opt.value)
+                          handleTabChange(opt.value)
                         })
                       } else {
-                        setActiveTab(opt.value)
+                        handleTabChange(opt.value)
                       }
                     }}
                     style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
@@ -504,7 +551,11 @@ export default function JobInspector({
         </Tabs.Content>
         {!isFreelancer && (
           <Tabs.Content value="bookings" mt={'10px'}>
-            <BookingsTab jobId={job.id} />
+            <BookingsTab
+              jobId={job.id}
+              activeSubTab={bookingsSubTab}
+              onSubTabChange={setBookingsSubTab}
+            />
           </Tabs.Content>
         )}
         {!isFreelancer && (

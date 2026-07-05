@@ -7,11 +7,12 @@ import {
   Heading,
   IconButton,
   Separator,
+  Text,
   Tooltip,
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { CalendarXmark, TransitionLeft } from 'iconoir-react'
+import { CalendarXmark, Sparks, TransitionLeft } from 'iconoir-react'
 import { DatePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -20,6 +21,7 @@ import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import {
   getModShortcutLabel,
+  getTabNavShortcutLabels,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
@@ -31,6 +33,23 @@ import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
 import { jobsIndexQuery } from '../api/queries'
 import type { JobsPageSelection } from '../types'
+
+function JobInspectorTabShortcutTip() {
+  const tabNavShortcutLabels = getTabNavShortcutLabels()
+
+  return (
+    <Tooltip
+      content={`Switch tabs: ${tabNavShortcutLabels.prev} and ${tabNavShortcutLabels.next}`}
+    >
+      <Flex align="center" gap="1" style={{ flexShrink: 0, cursor: 'default' }}>
+        <Sparks width={14} height={14} />
+        <Text size="1" color="gray">
+          Pro tip
+        </Text>
+      </Flex>
+    </Tooltip>
+  )
+}
 
 export default function JobsPage() {
   const { companyId } = useCompany()
@@ -334,9 +353,15 @@ export default function JobsPage() {
                 maxWidth: '100%',
               }}
             >
-              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
-                Inspector
-              </Heading>
+              <Flex
+                align="center"
+                justify="between"
+                mb="3"
+                style={{ flexShrink: 0 }}
+              >
+                <Heading size="5">Inspector</Heading>
+                {isLarge && selection && <JobInspectorTabShortcutTip />}
+              </Flex>
               <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
               <Box
                 style={{
@@ -597,9 +622,10 @@ export default function JobsPage() {
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
           }}
         >
-          <Heading size="5" mb="3">
-            Inspector
-          </Heading>
+          <Flex align="center" justify="between" mb="3">
+            <Heading size="5">Inspector</Heading>
+            {isLarge && selection && <JobInspectorTabShortcutTip />}
+          </Flex>
           <Separator size="4" mb="3" />
           <Box
             style={{

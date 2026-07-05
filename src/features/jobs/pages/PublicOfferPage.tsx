@@ -15,7 +15,6 @@ import {
   Text,
   TextArea,
   TextField,
-  Theme,
 } from '@radix-ui/themes'
 import { useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
@@ -35,7 +34,7 @@ import {
   requestOfferRevision,
 } from '../api/offerQueries'
 import {
-  buildCustomAccentCss,
+  buildDeckGradientCss,
   resolvePrettyOfferTheme,
 } from '../utils/prettyOfferTheme'
 import { formatOfferNumberDisplay } from '../utils/offerNumber'
@@ -635,12 +634,9 @@ export default function PublicOfferPage() {
 
   const prettyTheme =
     offer.offer_type === 'pretty' ? resolvePrettyOfferTheme(offer) : null
-  const prettyThemeStyle =
-    prettyTheme &&
-    (prettyTheme.useCustomerAccent || prettyTheme.useCustomerBackground) &&
-    prettyTheme.customHex
-      ? buildCustomAccentCss(prettyTheme.customHex)
-      : undefined
+  const prettyThemeStyle = prettyTheme
+    ? buildDeckGradientCss(prettyTheme)
+    : undefined
   const responseActionsDisabled =
     acceptMutation.isPending ||
     rejectMutation.isPending ||
@@ -654,7 +650,14 @@ export default function PublicOfferPage() {
 
   return (
     <Box
-      className="public-offer-page"
+      className={[
+        'public-offer-page',
+        prettyTheme?.useCustomerBrandColors
+          ? 'pretty-deck-root pretty-deck-root--customer-brand'
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       p={{ initial: '4', sm: '1' }}
       style={{
         maxWidth: 900,
@@ -664,14 +667,8 @@ export default function PublicOfferPage() {
         ...(prettyThemeStyle ?? {}),
       }}
     >
-      <ThemeOptionalWrapper
-        enabled={Boolean(
-          prettyTheme?.useCustomerAccent && prettyTheme.radixAccent,
-        )}
-        accent={prettyTheme?.radixAccent ?? null}
-      >
-        <AnimatedBackground {...SUBTLE_ANIMATED_BACKGROUND} />
-        <motion.div
+      <AnimatedBackground {...SUBTLE_ANIMATED_BACKGROUND} />
+      <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -2174,7 +2171,6 @@ export default function PublicOfferPage() {
             </Box>
           </Card>
         </motion.div>
-      </ThemeOptionalWrapper>
 
       {/* Terms and Conditions Dialog */}
       {hasTerms && (
@@ -2272,19 +2268,4 @@ export default function PublicOfferPage() {
       )}
     </Box>
   )
-}
-
-function ThemeOptionalWrapper({
-  enabled,
-  accent,
-  children,
-}: {
-  enabled: boolean
-  accent: import('@shared/theme/accentColorTypes').RadixAccentColor | null
-  children: React.ReactNode
-}) {
-  if (enabled && accent) {
-    return <Theme accentColor={accent}>{children}</Theme>
-  }
-  return <>{children}</>
 }

@@ -25,17 +25,29 @@ import {
   offerBasisDetailQuery,
   saveOfferBasis,
 } from '../../api/offerBasisQueries'
-import { calculateRentalFactor } from '../../utils/offerCalculations'
+import {
+  calculateOfferTotals,
+  calculateRentalFactor,
+} from '../../utils/offerCalculations'
 import { useOfferEditorAutosave } from '../../hooks/useOfferEditorAutosave'
-import { lineItemsFromBasisDetail } from './technical-offer-editor/basisLineItems'
+import {
+  lineItemsFromBasisDetail,
+  lineItemsFromLocalEditorState,
+} from './technical-offer-editor/basisLineItems'
 import { CrewSection } from './technical-offer-editor/CrewSection'
 import { EquipmentSection } from './technical-offer-editor/EquipmentSection'
+import { TotalsSection } from './technical-offer-editor/TotalsSection'
 import { TransportSection } from './technical-offer-editor/TransportSection'
 import {
   OFFER_EDITOR_DIALOG_CLASS,
   offerEditorDialogContentStyle,
 } from './offerEditorDialogStyles'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
+import type {
+  OfferCrewItem,
+  OfferEquipmentItem,
+  OfferTransportItem,
+} from '../../types'
 import type {
   LocalCrewItem,
   LocalEquipmentGroup,
@@ -288,6 +300,54 @@ export default function OfferBasisEditor({
     () => calculateRentalFactor(daysOfUse, rentalFactorConfig),
     [daysOfUse, rentalFactorConfig],
   )
+
+  const totals = React.useMemo(() => {
+    const {
+      equipmentItems,
+      crewItems: crewLineItems,
+      transportItems,
+    } = lineItemsFromLocalEditorState(
+      equipmentGroups,
+      crewItems,
+      transportGroups,
+    )
+
+    const baseTotals = calculateOfferTotals(
+      equipmentItems as Array<OfferEquipmentItem>,
+      crewLineItems as Array<OfferCrewItem>,
+      transportItems as Array<OfferTransportItem>,
+      daysOfUse,
+      discountPercent,
+      vatPercent,
+      rentalFactorConfig,
+      companyExpansion?.vehicle_distance_rate,
+      companyExpansion?.vehicle_distance_increment,
+      companyExpansion?.vehicle_daily_rate,
+    )
+
+    const round2 = (n: number) => Math.round(n * 100) / 100
+    return {
+      ...baseTotals,
+      equipmentSubtotal: round2(baseTotals.equipmentSubtotal),
+      crewSubtotal: round2(baseTotals.crewSubtotal),
+      transportSubtotal: round2(baseTotals.transportSubtotal),
+      totalBeforeDiscount: round2(baseTotals.totalBeforeDiscount),
+      totalAfterDiscount: round2(baseTotals.totalAfterDiscount),
+      totalWithVAT: round2(baseTotals.totalWithVAT),
+      discountAmount: round2(baseTotals.discountAmount),
+    }
+  }, [
+    equipmentGroups,
+    crewItems,
+    transportGroups,
+    daysOfUse,
+    discountPercent,
+    vatPercent,
+    rentalFactorConfig,
+    companyExpansion?.vehicle_daily_rate,
+    companyExpansion?.vehicle_distance_rate,
+    companyExpansion?.vehicle_distance_increment,
+  ])
 
   const { data: existingBasis, isLoading: isLoadingBasis } = useQuery({
     ...(persistedBasisId
@@ -762,6 +822,7 @@ export default function OfferBasisEditor({
                   <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>
                   <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
                   <Tabs.Trigger value="transport">Transport</Tabs.Trigger>
+                  <Tabs.Trigger value="totals">Totals</Tabs.Trigger>
                 </Tabs.List>
 
                 <Box
@@ -818,6 +879,10 @@ export default function OfferBasisEditor({
                         companyExpansion?.vehicle_distance_increment ?? 150
                       }
                     />
+                  </Tabs.Content>
+
+                  <Tabs.Content value="totals">
+                    <TotalsSection totals={totals} />
                   </Tabs.Content>
                 </Box>
               </Tabs.Root>

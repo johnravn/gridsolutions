@@ -1,6 +1,6 @@
 import * as React from 'react'
-import { Box, Flex, Text } from '@radix-ui/themes'
-import { Quote } from 'iconoir-react'
+import { Box, Flex, Quote, Text } from '@radix-ui/themes'
+import { Quote as QuoteIcon } from 'iconoir-react'
 import { DAILY_QUOTES } from '../data/quotes'
 import { pickQuoteForDate } from '../utils/dailyInspiration'
 import { DashboardCard } from './DashboardCard'
@@ -18,7 +18,7 @@ export function QuoteSection() {
   return (
     <DashboardCard
       title="Today's quote"
-      icon={<Quote width={18} height={18} />}
+      icon={<QuoteIcon width={18} height={18} />}
       notFullHeight
     >
       {!quote ? (
@@ -33,7 +33,7 @@ export function QuoteSection() {
             Quote of the day
           </Text>
           <Text size="3" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-            “{quote.quote}”
+            <Quote>{quote.quote}</Quote>
           </Text>
           <Text size="1" color="gray">
             — {quote.author}

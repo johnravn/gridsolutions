@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Tabs } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -9,18 +8,19 @@ import EquipmentTab from './EquipmentTab'
 import CrewTab from './CrewTab'
 import TransportTab from './TransportTab'
 
+export const BOOKINGS_SUB_TABS = ['crew', 'equipment', 'transport'] as const
+
 export default function BookingsTab({
   jobId,
-  initialSubTab,
+  activeSubTab,
+  onSubTabChange,
 }: {
   jobId: string
-  initialSubTab?: string
+  activeSubTab: string
+  onSubTabChange: (subTab: string) => void
 }) {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
-  const [activeSubTab, setActiveSubTab] = React.useState<string>(
-    initialSubTab || 'crew',
-  )
 
   const { data: job } = useQuery({
     ...jobDetailQuery({ jobId }),
@@ -30,12 +30,12 @@ export default function BookingsTab({
   const showConflictsBanner = companyRole !== 'freelancer'
 
   return (
-    <Tabs.Root value={activeSubTab} onValueChange={setActiveSubTab}>
+    <Tabs.Root value={activeSubTab} onValueChange={onSubTabChange}>
       {showConflictsBanner && (
         <JobBookingConflictsBanner
           jobId={jobId}
           isProjectLead={isProjectLead}
-          onNavigateSubTab={setActiveSubTab}
+          onNavigateSubTab={onSubTabChange}
         />
       )}
 

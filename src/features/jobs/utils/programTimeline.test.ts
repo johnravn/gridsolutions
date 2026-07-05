@@ -55,15 +55,15 @@ describe('programTimeline', () => {
     ])
   })
 
-  it('maps program periods to immutable timeline block items', () => {
+  it('maps program periods to immutable timeline module items', () => {
     const items = mapProgramPeriodsToTimelineItems(
-      'block-1',
+      'module-1',
       periods,
       () => 'item-1',
     )
     expect(items).toHaveLength(1)
     expect(items[0]).toMatchObject({
-      block_id: 'block-1',
+      module_id: 'module-1',
       label: 'Load In',
       summary: 'Day 1',
       start_at: '2026-07-01T09:00:00.000Z',

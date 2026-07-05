@@ -25,6 +25,17 @@
   );
 }
 
+/* Radix Themes defaults interactive cursors to `default`; use pointer for clickables. */
+.radix-themes {
+  --cursor-button: pointer;
+  --cursor-checkbox: pointer;
+  --cursor-menu-item: pointer;
+  --cursor-radio: pointer;
+  --cursor-switch: pointer;
+  --cursor-slider-thumb: grab;
+  --cursor-slider-thumb-active: grabbing;
+}
+
 body {
   @apply m-0;
   font-family:
@@ -34,13 +45,18 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-button,
+button:not(:disabled),
 a,
-[role='button'],
+[role='button']:not([aria-disabled='true']),
 .rt-IconButton,
 .rt-Button,
 .rt-Link {
   -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
 }
 
 .app-main-scroll {
@@ -247,6 +263,66 @@ code {
   }
 }
 
+/* Company rates tab: subtle card hover + transform reveal on expand */
+.company-rates-card {
+  transform-origin: center center;
+}
+@media (hover: hover) and (pointer: fine) {
+  @media (prefers-reduced-motion: no-preference) {
+    .company-rates-card {
+      transition: transform var(--motion-duration-reveal)
+        var(--motion-ease-reveal-out);
+    }
+
+    .company-rates-card:hover {
+      transform: scale(var(--motion-scale-hover));
+    }
+  }
+}
+
+.company-rates-card__body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-duration-reveal)
+    var(--motion-ease-reveal-out);
+}
+
+.company-rates-card__body--expanded {
+  grid-template-rows: 1fr;
+}
+
+.company-rates-card__body-inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(var(--motion-offset-reveal-y));
+  transition:
+    opacity var(--motion-duration-reveal) var(--motion-ease-reveal-in),
+    transform var(--motion-duration-reveal) var(--motion-ease-reveal-in);
+  pointer-events: none;
+}
+
+.company-rates-card__body--expanded .company-rates-card__body-inner {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity var(--motion-duration-reveal) var(--motion-ease-reveal-out),
+    transform var(--motion-duration-reveal) var(--motion-ease-reveal-out);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .company-rates-card__body {
+    transition: none;
+  }
+
+  .company-rates-card__body-inner {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .dev-badge {
   max-width: 120px;
   overflow: hidden;
@@ -303,17 +379,20 @@ code {
   .pretty-offer-basis-tab__delete {
     opacity: 1;
     pointer-events: auto;
+    width: var(--space-5);
+    min-width: var(--space-5);
   }
 }
 
 /* Pretty offer editor: pricing basis tabs */
 .pretty-offer-basis-tab {
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
   border: 1px solid var(--gray-a5);
   border-radius: var(--radius-3);
   background: var(--gray-a2);
   overflow: hidden;
+  max-width: 100%;
   transition:
     border-color 0.15s ease,
     background-color 0.15s ease,
@@ -337,10 +416,11 @@ code {
 }
 
 .pretty-offer-basis-tab__main {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-2);
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-1) 0 var(--space-1) var(--space-2);
   border: none;
   background: transparent;
   color: inherit;
@@ -354,6 +434,25 @@ code {
   outline-offset: -2px;
 }
 
+.pretty-offer-basis-tab__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pretty-offer-basis-tab__trailing {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+}
+
+.pretty-offer-basis-tab__warning {
+  flex-shrink: 0;
+  color: var(--orange-9);
+}
+
 .pretty-offer-basis-tab__amount {
   display: inline-flex;
   align-items: center;
@@ -365,6 +464,7 @@ code {
   font-weight: 500;
   line-height: 1.4;
   white-space: nowrap;
+  transition: transform 0.15s ease;
 }
 
 .pretty-offer-basis-tab--selected .pretty-offer-basis-tab__amount {
@@ -374,17 +474,84 @@ code {
 }
 
 .pretty-offer-basis-tab__delete {
-  align-self: center;
-  margin-right: var(--space-1);
+  flex-shrink: 0;
+  width: 0;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
   opacity: 0;
-  transition: opacity 0.15s ease;
+  overflow: hidden;
+  transition:
+    width 0.15s ease,
+    min-width 0.15s ease,
+    opacity 0.15s ease;
   pointer-events: none;
 }
 
 .pretty-offer-basis-tab:hover .pretty-offer-basis-tab__delete,
 .pretty-offer-basis-tab:focus-within .pretty-offer-basis-tab__delete {
+  width: var(--space-5);
+  min-width: var(--space-5);
   opacity: 1;
   pointer-events: auto;
+}
+
+.pretty-offer-metadata-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  margin: 0;
+  padding: var(--space-1) var(--space-1);
+  border: none;
+  border-radius: var(--radius-2);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pretty-offer-metadata-collapsed:hover {
+  background: var(--gray-a2);
+}
+
+.pretty-offer-metadata-collapsed:focus-visible {
+  outline: 2px solid var(--focus-8);
+  outline-offset: 2px;
+}
+
+.pretty-offer-metadata-collapsed__title {
+  flex: 1;
+  min-width: 0;
+}
+
+.pretty-offer-metadata-collapsed__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  color: var(--gray-11);
+}
+
+.pretty-offer-markup-display__surface {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--gray-a4);
+  border-radius: var(--radius-3);
+  background: var(--gray-a2);
+  min-height: 56px;
+}
+
+.pretty-offer-markup-display__edit {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  flex-shrink: 0;
+}
+
+.pretty-offer-markup-display:hover .pretty-offer-markup-display__edit,
+.pretty-offer-markup-display:focus-within .pretty-offer-markup-display__edit,
+.pretty-offer-markup-display--editing .pretty-offer-markup-display__edit {
+  opacity: 1;
 }
 
 /* Pretty offer editor: split row delete fades in on hover */

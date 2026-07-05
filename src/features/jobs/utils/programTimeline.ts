@@ -1,9 +1,6 @@
-import type { PrettyOfferModuleBlockItem, TimePeriodLite } from '../types'
+import type { PrettyOfferModuleTimelineItem, TimePeriodLite } from '../types'
 
-export type TimelineBlockItem = PrettyOfferModuleBlockItem & {
-  start_at: string | null
-  end_at: string | null
-}
+export type TimelineModuleItem = PrettyOfferModuleTimelineItem
 
 export function filterProgramPeriods(
   periods: Array<TimePeriodLite>,
@@ -77,14 +74,14 @@ export function formatProgramDuration(startAt: string, endAt: string): string {
 }
 
 export function mapProgramPeriodsToTimelineItems(
-  blockId: string,
+  moduleId: string,
   periods: Array<TimePeriodLite>,
   createItemId: () => string,
-): Array<TimelineBlockItem> {
+): Array<TimelineModuleItem> {
   return sortProgramPeriods(filterProgramPeriods(periods)).map(
     (period, index) => ({
       id: createItemId(),
-      block_id: blockId,
+      module_id: moduleId,
       label: period.title?.trim() || '(untitled)',
       summary: period.program_group?.trim() || null,
       detail: null,

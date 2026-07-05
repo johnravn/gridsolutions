@@ -101,4 +101,35 @@ describe('SearchableSelect', () => {
     expect(input).toHaveValue('Al')
     expect(await screen.findByText('Alpha')).toBeInTheDocument()
   })
+
+  it('highlights options with arrow keys and selects with Enter', async () => {
+    const onValueChange = vi.fn()
+
+    renderWithProviders(
+      <SearchableSelect
+        options={options}
+        value=""
+        onValueChange={onValueChange}
+        placeholder="Pick one"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(
+      document.querySelector('[data-searchable-select-option-index="0"]'),
+    ).toHaveStyle({ backgroundColor: 'var(--gray-a3)' })
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    const bravoOption = document.querySelector(
+      '[data-searchable-select-option-index="1"]',
+    )
+    expect(bravoOption).toHaveStyle({ backgroundColor: 'var(--gray-a3)' })
+
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onValueChange).toHaveBeenCalledWith('b')
+  })
 })

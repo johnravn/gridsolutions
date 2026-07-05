@@ -126,6 +126,9 @@ export function SearchableSelect({
 }: Props) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
+  const [highlightedIndex, setHighlightedIndex] = React.useState<number | null>(
+    null,
+  )
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
   const selectingRef = React.useRef(false)
@@ -156,6 +159,26 @@ export function SearchableSelect({
       setInputValue('')
     }
   }, [value, selectedOption?.label, open])
+
+  React.useEffect(() => {
+    setHighlightedIndex(null)
+  }, [filteredOptions])
+
+  React.useEffect(() => {
+    if (!open) {
+      setHighlightedIndex(null)
+    }
+  }, [open])
+
+  React.useEffect(() => {
+    if (highlightedIndex === null || !listRef.current) return
+    const optionEl = listRef.current.querySelector(
+      `[data-searchable-select-option-index="${highlightedIndex}"]`,
+    )
+    if (typeof optionEl?.scrollIntoView === 'function') {
+      optionEl.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex])
 
   const handleFocus = () => {
     setOpenState(true, setOpen, onOpenChange)
@@ -199,6 +222,34 @@ export function SearchableSelect({
     if (e.key === 'Escape') {
       setOpenState(false, setOpen, onOpenChange)
       inputRef.current?.blur()
+      return
+    }
+
+    if (loading || filteredOptions.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpenState(true, setOpen, onOpenChange)
+      setHighlightedIndex((prev) => {
+        if (prev === null) return 0
+        return Math.min(prev + 1, filteredOptions.length - 1)
+      })
+      return
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setOpenState(true, setOpen, onOpenChange)
+      setHighlightedIndex((prev) => {
+        if (prev === null) return filteredOptions.length - 1
+        return Math.max(prev - 1, 0)
+      })
+      return
+    }
+
+    if (e.key === 'Enter' && highlightedIndex !== null) {
+      e.preventDefault()
+      handleSelect(filteredOptions[highlightedIndex])
     }
   }
 
@@ -239,10 +290,11 @@ export function SearchableSelect({
               </Text>
             </Box>
           ) : (
-            filteredOptions.map((option) => (
+            filteredOptions.map((option, index) => (
               <Box
                 key={option.value || '__empty__'}
                 data-searchable-select-option
+                data-searchable-select-option-index={index}
                 onPointerDown={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
@@ -254,13 +306,12 @@ export function SearchableSelect({
                 style={{
                   cursor: 'pointer',
                   borderRadius: 'var(--radius-2)',
+                  backgroundColor:
+                    index === highlightedIndex
+                      ? 'var(--gray-a3)'
+                      : 'transparent',
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = 'transparent'
-                }}
+                onMouseEnter={() => setHighlightedIndex(index)}
               >
                 <Text as="div" size="2" truncate>
                   {option.label}

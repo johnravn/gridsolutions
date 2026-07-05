@@ -240,67 +240,74 @@ export default function SuperMonitorTab() {
   }
 
   return (
-    <Flex direction="column" gap="4" style={{ overflow: 'auto' }}>
+    <Flex
+      direction="column"
+      gap="4"
+      pb="4"
+      style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+    >
       <Card size="3">
-        <Flex align="center" justify="between" gap="3" wrap="wrap" mb="2">
-          <Heading size="5">System monitor</Heading>
-          <Text size="1" color="gray">
-            {isFetching ? 'Refreshing…' : 'Auto-refreshes every 60s'}
+        <Flex direction="column" gap="4">
+          <Flex align="center" justify="between" gap="3" wrap="wrap">
+            <Heading size="5">System monitor</Heading>
+            <Text size="1" color="gray">
+              {isFetching ? 'Refreshing…' : 'Auto-refreshes every 60s'}
+            </Text>
+          </Flex>
+          <Text size="2" color="gray">
+            Scheduled job health, Conta sync status, email pipeline backlog, and
+            platform snapshot. Superuser only.
           </Text>
-        </Flex>
-        <Text size="2" color="gray" mb="4">
-          Scheduled job health, Conta sync status, email pipeline backlog, and
-          platform snapshot. Superuser only.
-        </Text>
 
-        {data?.platformCounts ? (
-          <Grid columns={{ initial: '2', sm: '4' }} gap="3" mb="4">
-            <Box>
-              <Text size="1" color="gray">
-                Companies
-              </Text>
-              <Text size="4" weight="bold" as="div">
-                {data.platformCounts.companies}
-              </Text>
-            </Box>
-            <Box>
-              <Text size="1" color="gray">
-                Users
-              </Text>
-              <Text size="4" weight="bold" as="div">
-                {data.platformCounts.users}
-              </Text>
-            </Box>
-            <Box>
-              <Text size="1" color="gray">
-                In-progress jobs
-              </Text>
-              <Text size="4" weight="bold" as="div">
-                {data.platformCounts.inProgressJobs}
-              </Text>
-            </Box>
-            <Box>
-              <Text size="1" color="gray">
-                Pending emails
-              </Text>
-              <Flex align="center" gap="2">
-                <Text size="4" weight="bold" as="span">
-                  {pendingCount}
+          {data?.platformCounts ? (
+            <Grid columns={{ initial: '2', sm: '4' }} gap="3">
+              <Box>
+                <Text size="1" color="gray">
+                  Companies
                 </Text>
-                {backlogWarning ? (
-                  <Badge color="amber" variant="soft" size="1">
-                    Backlog
-                  </Badge>
+                <Text size="4" weight="bold" as="div">
+                  {data.platformCounts.companies}
+                </Text>
+              </Box>
+              <Box>
+                <Text size="1" color="gray">
+                  Users
+                </Text>
+                <Text size="4" weight="bold" as="div">
+                  {data.platformCounts.users}
+                </Text>
+              </Box>
+              <Box>
+                <Text size="1" color="gray">
+                  In-progress jobs
+                </Text>
+                <Text size="4" weight="bold" as="div">
+                  {data.platformCounts.inProgressJobs}
+                </Text>
+              </Box>
+              <Box>
+                <Text size="1" color="gray">
+                  Pending emails
+                </Text>
+                <Flex align="center" gap="2">
+                  <Text size="4" weight="bold" as="span">
+                    {pendingCount}
+                  </Text>
+                  {backlogWarning ? (
+                    <Badge color="amber" variant="soft" size="1">
+                      Backlog
+                    </Badge>
+                  ) : null}
+                </Flex>
+                {oldestAge != null && pendingCount > 0 ? (
+                  <Text size="1" color="gray" as="div">
+                    Oldest pending: {oldestAge}m ago
+                  </Text>
                 ) : null}
-              </Flex>
-              {oldestAge != null && pendingCount > 0 ? (
-                <Text size="1" color="gray" as="div">
-                  Oldest pending: {oldestAge}m ago
-                </Text>
-              ) : null}
-            </Box>
-          </Grid>
-        ) : null}
+              </Box>
+            </Grid>
+          ) : null}
+        </Flex>
       </Card>
 
       <Box>

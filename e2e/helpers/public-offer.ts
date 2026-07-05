@@ -4,9 +4,9 @@ export async function openPublicOfferAction(
   page: Page,
   action: 'Accept Offer' | 'Reject Offer' | 'Revise Offer',
 ) {
-  const actionsButton = page.getByRole('button', { name: 'Offer actions' })
-  await actionsButton.scrollIntoViewIfNeeded()
-  await expect(actionsButton).toBeVisible({ timeout: 15_000 })
-  await actionsButton.click()
-  await page.getByRole('menuitem', { name: action }).click()
+  const buttonName = action === 'Revise Offer' ? 'Request Revision' : action
+  const actionButton = page.getByRole('button', { name: buttonName })
+  await actionButton.scrollIntoViewIfNeeded()
+  await expect(actionButton).toBeVisible({ timeout: 15_000 })
+  await actionButton.click()
 }

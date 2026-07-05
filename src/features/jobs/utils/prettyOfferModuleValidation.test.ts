@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPublicPrettyModule,
+  getPrettyOfferModuleCompletionStats,
   isPrettyModuleStoryComplete,
   resolveModuleCustomerPrice,
   validatePrettyOfferModules,
@@ -16,6 +17,43 @@ const completeModule = {
   display_price: null,
   computed_cost: 12500,
 }
+
+describe('getPrettyOfferModuleCompletionStats', () => {
+  it('reports remaining required fields across modules', () => {
+    expect(getPrettyOfferModuleCompletionStats([])).toEqual({
+      moduleCount: 0,
+      totalRequired: 0,
+      remaining: 0,
+      completed: 0,
+      isComplete: false,
+    })
+
+    expect(getPrettyOfferModuleCompletionStats([completeModule])).toEqual({
+      moduleCount: 1,
+      totalRequired: 4,
+      remaining: 0,
+      completed: 4,
+      isComplete: true,
+    })
+
+    const stats = getPrettyOfferModuleCompletionStats([
+      completeModule,
+      {
+        ...completeModule,
+        id: 'mod-2',
+        story_body_1: null,
+        hero_media_url: null,
+      },
+    ])
+    expect(stats).toEqual({
+      moduleCount: 2,
+      totalRequired: 8,
+      remaining: 2,
+      completed: 6,
+      isComplete: false,
+    })
+  })
+})
 
 describe('validatePrettyOfferModules', () => {
   it('returns no issues for a complete module', () => {
@@ -36,15 +74,59 @@ describe('validatePrettyOfferModules', () => {
     ])
     expect(issues.some((i) => i.field === 'hero_media_url')).toBe(true)
   })
+
+  it('validates timeline modules require imported items', () => {
+    expect(
+      validatePrettyOfferModules([
+        {
+          id: 'timeline-1',
+          module_type: 'timeline',
+          title: 'Program timeline',
+          timeline_items: [],
+        },
+      ]),
+    ).toEqual([
+      expect.objectContaining({ field: 'timeline_items' }),
+    ])
+    expect(
+      isPrettyModuleStoryComplete({
+        id: 'timeline-1',
+        module_type: 'timeline',
+        title: 'Program timeline',
+        timeline_items: [
+          {
+            id: 'item-1',
+            module_id: 'timeline-1',
+            label: 'Load in',
+            summary: null,
+            detail: null,
+            start_at: '2026-07-01T09:00:00.000Z',
+            end_at: '2026-07-01T11:00:00.000Z',
+            sort_order: 0,
+          },
+        ],
+      }),
+    ).toBe(true)
+  })
 })
 
 describe('resolveModuleCustomerPrice', () => {
-  it('uses display_price when set', () => {
+  it('uses computed_cost from pricing splits when available', () => {
     expect(
       resolveModuleCustomerPrice({
         show_price: true,
         display_price: 9000,
         computed_cost: 12500,
+      }),
+    ).toBe(12500)
+  })
+
+  it('falls back to display_price when computed_cost is missing', () => {
+    expect(
+      resolveModuleCustomerPrice({
+        show_price: true,
+        display_price: 9000,
+        computed_cost: 0,
       }),
     ).toBe(9000)
   })

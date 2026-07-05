@@ -2,12 +2,15 @@ import { supabase } from '@shared/api/supabase'
 
 export const PRETTY_OFFER_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 export const PRETTY_OFFER_VIDEO_MAX_BYTES = 25 * 1024 * 1024
+export const PRETTY_OFFER_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 const VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm'])
 
-export type PrettyOfferMediaKind = 'image' | 'video'
+const DOCUMENT_MIME_TYPES = new Set(['application/pdf'])
+
+export type PrettyOfferMediaKind = 'image' | 'video' | 'document'
 
 export function validatePrettyOfferMediaFile(
   file: File,
@@ -19,6 +22,16 @@ export function validatePrettyOfferMediaFile(
     }
     if (file.size > PRETTY_OFFER_IMAGE_MAX_BYTES) {
       return 'Images must be 5 MB or smaller.'
+    }
+    return null
+  }
+
+  if (kind === 'document') {
+    if (!DOCUMENT_MIME_TYPES.has(file.type)) {
+      return 'Documents must be PDF.'
+    }
+    if (file.size > PRETTY_OFFER_DOCUMENT_MAX_BYTES) {
+      return 'Documents must be 25 MB or smaller.'
     }
     return null
   }
@@ -50,10 +63,11 @@ function getPrettyOfferMediaExtension(
   file: File,
   kind: PrettyOfferMediaKind,
 ): string {
-  return (
-    file.name.split('.').pop()?.toLowerCase() ||
-    (kind === 'image' ? 'jpg' : 'mp4')
-  )
+  const fromName = file.name.split('.').pop()?.toLowerCase()
+  if (fromName) return fromName
+  if (kind === 'image') return 'jpg'
+  if (kind === 'document') return 'pdf'
+  return 'mp4'
 }
 
 export function buildCompanyPrettyOfferLibraryPath({

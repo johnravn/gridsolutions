@@ -1,14 +1,13 @@
 import { test, expect } from './fixtures'
 import { clickJobTab, createDraftJob, openJobsPage } from './helpers/navigation'
+import {
+  expectOfferBasisSaved,
+  offerBasisEditor,
+  returnToOffersTabAfterBasisSave,
+} from './helpers/offers'
 import { openPublicOfferAction } from './helpers/public-offer'
 
 const CUSTOM_LINE_LABEL = 'E2E test microphone'
-
-function offerBasisEditor(page: import('@playwright/test').Page) {
-  return page.getByRole('dialog').filter({
-    has: page.getByRole('heading', { name: /Offer basis/i }),
-  })
-}
 
 function technicalOfferEditor(page: import('@playwright/test').Page) {
   return page.getByRole('dialog').filter({
@@ -20,6 +19,7 @@ function technicalOfferEditor(page: import('@playwright/test').Page) {
 
 async function createTechnicalOfferWithCustomEquipment(
   page: import('@playwright/test').Page,
+  jobTitle: string,
 ) {
   await clickJobTab(page, 'Offers')
   await expect(page.getByRole('heading', { name: 'Offers' })).toBeVisible({
@@ -51,11 +51,8 @@ async function createTechnicalOfferWithCustomEquipment(
   await basisEditor.locator('input[type="number"]').last().fill('1000')
 
   await basisEditor.getByRole('button', { name: 'Save' }).click()
-  await expect(page.getByText(/Offer basis (updated|created)/)).toBeVisible({
-    timeout: 15_000,
-  })
-  await basisEditor.getByRole('button', { name: 'Close' }).click()
-  await expect(basisEditor).toBeHidden({ timeout: 10_000 })
+  await expectOfferBasisSaved(page)
+  await returnToOffersTabAfterBasisSave(page, jobTitle)
 
   await page
     .getByRole('button', { name: 'Create technical offer' })
@@ -73,27 +70,22 @@ async function createTechnicalOfferWithCustomEquipment(
     timeout: 15_000,
   })
 
-  await editor.getByRole('button', { name: 'Close' }).click()
-  await expect(editor).toBeHidden({ timeout: 10_000 })
-}
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
+  await editor.getByRole('button', { name: 'Lock & send' }).click()
+  await page.getByRole('button', { name: "I'll send the link myself" }).click()
 
-async function lockDraftOfferFromOffersTab(
-  page: import('@playwright/test').Page,
-) {
-  await expect(page.getByRole('heading', { name: 'Offers' })).toBeVisible()
+  await expect(
+    page
+      .getByText('Link copied', { exact: true })
+      .or(page.getByText('Offer locked', { exact: true })),
+  ).toBeVisible({ timeout: 30_000 })
 
-  await page.getByRole('button', { name: 'Offer actions' }).first().click()
-  await page.getByRole('menuitem', { name: 'Lock & send' }).click()
-
-  const linkDialog = page.getByRole('dialog', { name: 'Offer Link Ready' })
-  await expect(linkDialog).toBeVisible({ timeout: 30_000 })
-
-  const offerUrl = await linkDialog.locator('input').inputValue()
+  const offerUrl = await page.evaluate(async () => {
+    return await navigator.clipboard.readText()
+  })
   expect(offerUrl).toMatch(/\/offer\//)
 
-  await linkDialog.getByRole('button', { name: 'Close' }).click()
-  await expect(linkDialog).toBeHidden()
-
+  await returnToOffersTabAfterBasisSave(page, jobTitle)
   return offerUrl
 }
 
@@ -106,9 +98,7 @@ async function acceptOfferOnPublicPage(
     timeout: 15_000,
   })
 
-  await expect(
-    page.getByRole('button', { name: 'Offer actions' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Accept Offer' })).toBeVisible()
 
   await openPublicOfferAction(page, 'Accept Offer')
   await page.getByPlaceholder('First name').fill('E2E')
@@ -129,8 +119,10 @@ test.describe('Offers lifecycle', () => {
     test.setTimeout(180_000)
 
     const jobTitle = await createDraftJob(page)
-    await createTechnicalOfferWithCustomEquipment(page)
-    const offerUrl = await lockDraftOfferFromOffersTab(page)
+    const offerUrl = await createTechnicalOfferWithCustomEquipment(
+      page,
+      jobTitle,
+    )
 
     const publicPage = await context.newPage()
     await acceptOfferOnPublicPage(publicPage, offerUrl)

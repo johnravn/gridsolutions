@@ -680,6 +680,27 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         yPos += 5
       }
 
+      if (module.module_type === 'timeline') {
+        for (const item of [...(module.timeline_items ?? [])].sort(
+          (a, b) => a.sort_order - b.sort_order,
+        )) {
+          const group = item.summary ? ` [${item.summary}]` : ''
+          const timeRange =
+            item.start_at && item.end_at
+              ? ` (${formatDateTime(item.start_at)} – ${formatDateTime(item.end_at)})`
+              : ''
+          const lines = doc.splitTextToSize(
+            `• ${item.label}${group}${timeRange}`,
+            contentWidth,
+          )
+          lines.forEach((line: string) => {
+            ensureSpace(6)
+            doc.text(line, margin, yPos)
+            yPos += lineHeight
+          })
+        }
+        yPos += 2
+      } else {
       const blocks = [...(module.blocks ?? module.content_blocks ?? [])].sort(
         (a, b) => a.sort_order - b.sort_order,
       )
@@ -762,29 +783,6 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
           continue
         }
 
-        if (block.block_type === 'timeline') {
-          for (const item of [...(block.items ?? [])].sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )) {
-            const group = item.summary ? ` [${item.summary}]` : ''
-            const timeRange =
-              item.start_at && item.end_at
-                ? ` (${formatDateTime(item.start_at)} – ${formatDateTime(item.end_at)})`
-                : ''
-            const lines = doc.splitTextToSize(
-              `• ${item.label}${group}${timeRange}`,
-              contentWidth,
-            )
-            lines.forEach((line: string) => {
-              ensureSpace(6)
-              doc.text(line, margin, yPos)
-              yPos += lineHeight
-            })
-          }
-          yPos += 2
-          continue
-        }
-
         if (block.block_type === 'gallery') {
           const images = [...(block.items ?? [])]
             .filter((item) => item.url)
@@ -825,6 +823,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
           })
           yPos += 2
         }
+      }
       }
 
       if (module.show_price && module.display_price != null) {

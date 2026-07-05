@@ -1,6 +1,6 @@
 import { Box, Grid, Text } from '@radix-ui/themes'
-import LazyImage from '@shared/ui/components/LazyImage'
 import { resolvePrettyOfferMediaUrl } from '../../utils/prettyOfferMediaUpload'
+import { PrettyOfferClickableImage } from './PrettyOfferClickableImage'
 import type { PrettyOfferModuleBlock } from '../../types'
 
 type Props = {
@@ -26,12 +26,15 @@ export function GalleryBlock({ block }: Props) {
           {items.map((item) => {
             const src = resolvePrettyOfferMediaUrl(item.url)
             if (!src) return null
+            const alt =
+              item.summary || block.text_content || 'Gallery image'
             return (
               <Box key={item.id}>
-                <LazyImage
+                <PrettyOfferClickableImage
                   src={src}
-                  alt={item.summary || block.text_content || 'Gallery image'}
-                  style={{
+                  alt={alt}
+                  caption={item.summary}
+                  thumbnailStyle={{
                     width: '100%',
                     maxHeight: 280,
                     objectFit: 'cover',

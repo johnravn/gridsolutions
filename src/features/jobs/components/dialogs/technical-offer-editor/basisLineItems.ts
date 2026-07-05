@@ -153,3 +153,39 @@ export function lineItemsFromBasisDetail(
 
   return { equipmentGroups, crewItems, transportGroups }
 }
+
+export function lineItemsFromLocalEditorState(
+  equipmentGroups: Array<LocalEquipmentGroup>,
+  crewItems: Array<LocalCrewItem>,
+  transportGroups: Array<LocalTransportGroup>,
+) {
+  const equipmentItems = equipmentGroups.flatMap((group) =>
+    group.items.map((item) => ({
+      unit_price: item.unit_price,
+      quantity: item.quantity,
+    })),
+  )
+
+  const mappedCrewItems = crewItems.map((item) => ({
+    start_date: item.start_date,
+    end_date: item.end_date,
+    daily_rate: item.daily_rate,
+    crew_count: item.crew_count,
+  }))
+
+  const transportItems = transportGroups.flatMap((group) =>
+    group.items.map((item) => ({
+      start_date: item.start_date,
+      end_date: item.end_date,
+      daily_rate: item.daily_rate,
+      distance_km: item.distance_km,
+      distance_rate: item.distance_rate,
+    })),
+  )
+
+  return {
+    equipmentItems,
+    crewItems: mappedCrewItems,
+    transportItems,
+  }
+}

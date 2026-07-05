@@ -385,6 +385,7 @@ export type CompanyExpansion = {
   vehicle_distance_increment: number | null
   customer_discount_percent: number | null
   partner_discount_percent: number | null
+  subcontractor_markup_percent: number | null
   rental_factor_config: RentalFactorConfig | string | null // JSON string or object
   fixed_rate_start_day: number | null
   fixed_rate_per_day: number | null
@@ -403,7 +404,7 @@ export function companyExpansionQuery({ companyId }: { companyId: string }) {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
+          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
         )
         .eq('company_id', companyId)
         .maybeSingle()

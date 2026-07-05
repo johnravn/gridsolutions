@@ -46,7 +46,7 @@ test.describe('Public offer', () => {
     await page
       .getByPlaceholder('Please explain why you are rejecting this offer...')
       .fill('Price too high for our budget')
-    await page.locator('button:enabled', { hasText: 'Reject Offer' }).click()
+    await page.getByRole('button', { name: 'Reject Offer' }).last().click()
 
     await expect(page.getByText('Offer Rejected').first()).toBeVisible({
       timeout: 15_000,

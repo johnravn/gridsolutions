@@ -437,6 +437,7 @@ export type JobOffer = {
   pretty_use_customer_accent?: boolean
   pretty_use_customer_background?: boolean
   pretty_intro_text?: string | null
+  pretty_subcontractor_markup_percent?: number | null
 }
 
 export type PrettyModuleHeroMediaType = 'image' | 'video'
@@ -596,6 +597,8 @@ export type PrettyCategoryType =
   | 'transport_group'
 export type PrettyModuleMediaType = 'image' | 'video' | 'link'
 
+export type PrettyModuleType = 'standard' | 'timeline'
+
 export type PrettyModuleBlockType =
   | 'subtitle'
   | 'description'
@@ -604,7 +607,19 @@ export type PrettyModuleBlockType =
   | 'gallery'
   | 'video'
   | 'link'
-  | 'timeline'
+  | 'column_layout'
+  | 'file_upload'
+
+export type PrettyOfferModuleTimelineItem = {
+  id: UUID
+  module_id: UUID
+  sort_order: number
+  label: string
+  summary: string | null
+  detail: string | null
+  start_at?: string | null
+  end_at?: string | null
+}
 
 export type PrettyOfferModuleBlockItem = {
   id: UUID
@@ -674,12 +689,14 @@ export type PrettyOfferPricingBasis = {
   source_technical_offer_id: UUID | null
   source_offer_basis_id: UUID | null
   job_subcontractor_quote_id: UUID | null
+  apply_subcontractor_markup?: boolean
   splits?: Array<PrettyOfferPricingBasisSplit>
 }
 
 export type PrettyOfferModule = {
   id: UUID
   offer_id: UUID
+  module_type?: PrettyModuleType
   title: string
   subtitle: string | null
   tagline?: string | null
@@ -694,6 +711,7 @@ export type PrettyOfferModule = {
   display_price: number | null
   show_price: boolean
   computed_cost: number
+  timeline_items?: Array<PrettyOfferModuleTimelineItem>
   content_blocks?: Array<PrettyOfferModuleBlock>
   /** Customer-facing blocks from public_offer_get */
   blocks?: Array<PrettyOfferModuleBlock>
@@ -704,6 +722,7 @@ export type PrettyOfferModule = {
 /** Customer-visible module shape returned by public_offer_get */
 export type PublicPrettyOfferModule = {
   id: UUID
+  module_type?: PrettyModuleType
   title: string
   tagline?: string | null
   story_heading_1?: string | null
@@ -717,6 +736,7 @@ export type PublicPrettyOfferModule = {
   display_price: number | null
   computed_cost?: number
   show_price: boolean
+  timeline_items?: Array<PrettyOfferModuleTimelineItem>
   blocks: Array<PrettyOfferModuleBlock>
 }
 

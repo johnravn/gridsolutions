@@ -12,13 +12,14 @@ import {
   Checkbox,
   Dialog,
   Flex,
+  IconButton,
   Separator,
   Tabs,
   Text,
   TextArea,
   TextField,
 } from '@radix-ui/themes'
-import { Download, Eye, Lock } from 'iconoir-react'
+import { Download, Eye, Lock, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
@@ -38,13 +39,19 @@ import {
   offerBasisDetailQuery,
 } from '../../api/offerBasisQueries'
 import { canEditOffer, canLockOffer } from '../../utils/offerValidation'
-import { validatePrettyOfferModules } from '../../utils/prettyOfferCalculations'
+import {
+  getPrettyOfferModuleCompletionStats,
+  resolveSubcontractorMarkupPercent,
+  validatePrettyOfferModules,
+} from '../../utils/prettyOfferCalculations'
 import { useOfferEditorAutosave } from '../../hooks/useOfferEditorAutosave'
 import { ModulesSection } from './pretty-offer-editor/ModulesSection'
 import { PreviewSection } from './pretty-offer-editor/PreviewSection'
 import { AppearanceSection } from './pretty-offer-editor/AppearanceSection'
 import { PricingBasisSection } from './pretty-offer-editor/PricingBasisSection'
 import { TotalsSection } from './pretty-offer-editor/TotalsSection'
+import { PrettyOfferCompletionIndicator } from './pretty-offer-editor/PrettyOfferCompletionIndicator'
+import { SubcontractorMarkupField } from './pretty-offer-editor/SubcontractorMarkupField'
 import {
   OFFER_EDITOR_DIALOG_CLASS,
   offerEditorDialogContentStyle,
@@ -75,10 +82,12 @@ function toLocalModules(
 ): Array<LocalPrettyModule> {
   return (modules ?? []).map((module) => ({
     ...module,
+    module_type: module.module_type ?? 'standard',
     content_blocks: (module.content_blocks ?? []).map((block) => ({
       ...block,
       items: block.items ?? [],
     })),
+    timeline_items: module.timeline_items ?? [],
   }))
 }
 
@@ -87,6 +96,7 @@ function toLocalPricingBases(
 ): Array<LocalPricingBasis> {
   return (bases ?? []).map((basis) => ({
     ...basis,
+    apply_subcontractor_markup: basis.apply_subcontractor_markup ?? true,
     splits: (basis.splits ?? []).map((split) => ({ ...split })),
   }))
 }
@@ -94,18 +104,18 @@ function toLocalPricingBases(
 function serializePrettyOfferEditorState(state: {
   title: string
   prettyIntroText: string
+  prettySubcontractorMarkupPercent: number | null
   showPricePerLine: boolean
-  prettyUseCustomerAccent: boolean
-  prettyUseCustomerBackground: boolean
+  prettyUseCustomerBrandColors: boolean
   modules: Array<LocalPrettyModule>
   pricingBases: Array<LocalPricingBasis>
 }) {
   return JSON.stringify({
     title: state.title.trim(),
     prettyIntroText: state.prettyIntroText.trim(),
+    prettySubcontractorMarkupPercent: state.prettySubcontractorMarkupPercent,
     showPricePerLine: state.showPricePerLine,
-    prettyUseCustomerAccent: state.prettyUseCustomerAccent,
-    prettyUseCustomerBackground: state.prettyUseCustomerBackground,
+    prettyUseCustomerBrandColors: state.prettyUseCustomerBrandColors,
     modules: state.modules,
     pricingBases: state.pricingBases,
   })
@@ -127,6 +137,10 @@ export default function PrettyOfferEditor({
   )
   const [title, setTitle] = React.useState('')
   const [prettyIntroText, setPrettyIntroText] = React.useState('')
+  const [
+    prettySubcontractorMarkupPercent,
+    setPrettySubcontractorMarkupPercent,
+  ] = React.useState<number | null>(null)
   const [showPricePerLine, setShowPricePerLine] = React.useState(false)
   const [modules, setModules] = React.useState<Array<LocalPrettyModule>>([])
   const [pricingBases, setPricingBases] = React.useState<
@@ -136,11 +150,10 @@ export default function PrettyOfferEditor({
     null,
   )
   const [activeTab, setActiveTab] = React.useState('modules')
-  const [prettyUseCustomerAccent, setPrettyUseCustomerAccent] =
-    React.useState(false)
-  const [prettyUseCustomerBackground, setPrettyUseCustomerBackground] =
+  const [prettyUseCustomerBrandColors, setPrettyUseCustomerBrandColors] =
     React.useState(false)
   const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const [offerMetadataExpanded, setOfferMetadataExpanded] = React.useState(true)
   const [baselineSerialized, setBaselineSerialized] = React.useState<
     string | null
   >(null)
@@ -148,9 +161,9 @@ export default function PrettyOfferEditor({
   const editorFormRef = React.useRef({
     title: '',
     prettyIntroText: '',
+    prettySubcontractorMarkupPercent: null as number | null,
     showPricePerLine: false,
-    prettyUseCustomerAccent: false,
-    prettyUseCustomerBackground: false,
+    prettyUseCustomerBrandColors: false,
     modules: [] as Array<LocalPrettyModule>,
     pricingBases: [] as Array<LocalPricingBasis>,
   })
@@ -158,9 +171,9 @@ export default function PrettyOfferEditor({
   editorFormRef.current = {
     title,
     prettyIntroText,
+    prettySubcontractorMarkupPercent,
     showPricePerLine,
-    prettyUseCustomerAccent,
-    prettyUseCustomerBackground,
+    prettyUseCustomerBrandColors,
     modules,
     pricingBases,
   }
@@ -173,6 +186,7 @@ export default function PrettyOfferEditor({
     if (!open) {
       setBaselineSerialized(null)
       setCloseGuardOpen(false)
+      setOfferMetadataExpanded(true)
       initializedOfferIdRef.current = null
     }
   }, [open])
@@ -191,8 +205,7 @@ export default function PrettyOfferEditor({
   const basisPricing = React.useMemo(
     () => ({
       daysOfUse: linkedBasisDetail?.days_of_use ?? 1,
-      vatPercent:
-        linkedBasisDetail?.vat_percent === 0 ? (0 as const) : (25 as const),
+      vatPercent: linkedBasisDetail?.vat_percent ?? 25,
     }),
     [linkedBasisDetail],
   )
@@ -286,23 +299,27 @@ export default function PrettyOfferEditor({
 
     const localModules = toLocalModules(offer.modules)
     const localPricingBases = toLocalPricingBases(offer.pricing_bases)
-    const useCustomerAccent = offer.pretty_use_customer_accent ?? false
-    const useCustomerBackground = offer.pretty_use_customer_background ?? false
+    const useCustomerBrandColors = Boolean(
+      offer.pretty_use_customer_accent || offer.pretty_use_customer_background,
+    )
 
     setTitle(offer.title)
     setPrettyIntroText(offer.pretty_intro_text ?? '')
+    setPrettySubcontractorMarkupPercent(
+      offer.pretty_subcontractor_markup_percent ?? null,
+    )
     setShowPricePerLine(offer.show_price_per_line)
-    setPrettyUseCustomerAccent(useCustomerAccent)
-    setPrettyUseCustomerBackground(useCustomerBackground)
+    setPrettyUseCustomerBrandColors(useCustomerBrandColors)
     setModules(localModules)
     setPricingBases(localPricingBases)
     setBaselineSerialized(
       serializePrettyOfferEditorState({
         title: offer.title,
         prettyIntroText: offer.pretty_intro_text ?? '',
+        prettySubcontractorMarkupPercent:
+          offer.pretty_subcontractor_markup_percent ?? null,
         showPricePerLine: offer.show_price_per_line,
-        prettyUseCustomerAccent: useCustomerAccent,
-        prettyUseCustomerBackground: useCustomerBackground,
+        prettyUseCustomerBrandColors: useCustomerBrandColors,
         modules: localModules,
         pricingBases: localPricingBases,
       }),
@@ -315,6 +332,10 @@ export default function PrettyOfferEditor({
     () => validatePrettyOfferModules(modules),
     [modules],
   )
+  const moduleCompletionStats = React.useMemo(
+    () => getPrettyOfferModuleCompletionStats(modules),
+    [modules],
+  )
   const modulesReadyToLock = moduleValidationIssues.length === 0
 
   const expansionContext = {
@@ -325,6 +346,32 @@ export default function PrettyOfferEditor({
       companyExpansion?.vehicle_distance_increment ?? null,
     vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
   }
+
+  const subcontractorMarkupPercent = resolveSubcontractorMarkupPercent(
+    prettySubcontractorMarkupPercent,
+    companyExpansion?.subcontractor_markup_percent,
+  )
+
+  const splitCalculationOptions = React.useMemo(
+    () => ({
+      technicalOffersById,
+      offerBasesById,
+      jobQuotesById,
+      technicalContext: {
+        ...expansionContext,
+        daysOfUse: basisPricing.daysOfUse,
+      },
+      subcontractorMarkupPercent,
+    }),
+    [
+      technicalOffersById,
+      offerBasesById,
+      jobQuotesById,
+      expansionContext,
+      basisPricing.daysOfUse,
+      subcontractorMarkupPercent,
+    ],
+  )
 
   const createMutation = useMutation({
     mutationFn: () =>
@@ -368,14 +415,16 @@ export default function PrettyOfferEditor({
       jobId,
       title,
       prettyIntroText,
+      prettySubcontractorMarkupPercent,
       showPricePerLine,
-      prettyUseCustomerAccent,
-      prettyUseCustomerBackground,
+      prettyUseCustomerBrandColors,
       modules,
       pricingBases,
       technicalOffersById: offersById,
       offerBasesById,
       ...expansionContext,
+      companySubcontractorMarkupPercent:
+        companyExpansion?.subcontractor_markup_percent ?? null,
     })
   }
 
@@ -387,9 +436,10 @@ export default function PrettyOfferEditor({
       serializePrettyOfferEditorState({
         title: current.title,
         prettyIntroText: current.prettyIntroText,
+        prettySubcontractorMarkupPercent:
+          current.prettySubcontractorMarkupPercent,
         showPricePerLine: current.showPricePerLine,
-        prettyUseCustomerAccent: current.prettyUseCustomerAccent,
-        prettyUseCustomerBackground: current.prettyUseCustomerBackground,
+        prettyUseCustomerBrandColors: current.prettyUseCustomerBrandColors,
         modules: current.modules,
         pricingBases: current.pricingBases,
       }) !== baselineSerialized
@@ -401,8 +451,7 @@ export default function PrettyOfferEditor({
     title,
     prettyIntroText,
     showPricePerLine,
-    prettyUseCustomerAccent,
-    prettyUseCustomerBackground,
+    prettyUseCustomerBrandColors,
     modules,
     pricingBases,
   ])
@@ -427,9 +476,10 @@ export default function PrettyOfferEditor({
         serializePrettyOfferEditorState({
           title: current.title,
           prettyIntroText: current.prettyIntroText,
+          prettySubcontractorMarkupPercent:
+            current.prettySubcontractorMarkupPercent,
           showPricePerLine: current.showPricePerLine,
-          prettyUseCustomerAccent: current.prettyUseCustomerAccent,
-          prettyUseCustomerBackground: current.prettyUseCustomerBackground,
+          prettyUseCustomerBrandColors: current.prettyUseCustomerBrandColors,
           modules: current.modules,
           pricingBases: current.pricingBases,
         }),
@@ -468,6 +518,9 @@ export default function PrettyOfferEditor({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['pretty-offer-detail', activeOfferId] })
       qc.invalidateQueries({ queryKey: ['job-pretty-offers', jobId] })
+      qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
+      qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      onSaved?.(activeOfferId!)
       success('Offer locked', 'The offer is ready to send.')
     },
     onError: (err: Error) => {
@@ -517,14 +570,17 @@ export default function PrettyOfferEditor({
           gap="3"
           style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
         >
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Dialog.Title style={{ margin: 0 }}>
+          <Flex align="center" gap="3" wrap="wrap">
+            <Dialog.Title style={{ margin: 0, flexShrink: 0 }}>
               <Flex align="center" gap="2" as="span" display="inline-flex">
                 Pretty Offer
                 <PrettyOfferBetaBadge />
               </Flex>
             </Dialog.Title>
-            <Flex gap="2" wrap="wrap">
+            {!readOnly && !isLoading && !createMutation.isPending && (
+              <PrettyOfferCompletionIndicator stats={moduleCompletionStats} />
+            )}
+            <Flex gap="2" wrap="wrap" style={{ marginLeft: 'auto' }}>
               {offer && (
                 <Button
                   size="2"
@@ -572,42 +628,97 @@ export default function PrettyOfferEditor({
               gap="3"
               style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
             >
-              <Flex gap="3" wrap="wrap" align="end">
-                <Box style={{ flex: 2, minWidth: 220 }}>
-                  <Text size="2" weight="medium" mb="1" as="div">
-                    Title
-                  </Text>
-                  <TextField.Root
-                    value={title}
-                    disabled={readOnly}
-                    onChange={(e) => setTitle(e.target.value)}
-                  />
-                </Box>
-                <Flex align="center" gap="2" style={{ minHeight: 32 }}>
-                  <Checkbox
-                    checked={showPricePerLine}
-                    onCheckedChange={(checked) =>
-                      setShowPricePerLine(checked === true)
-                    }
-                    disabled={readOnly}
-                  />
-                  <Text size="2" as="label" style={{ cursor: 'pointer' }}>
-                    Show price per module to customer
-                  </Text>
-                </Flex>
-              </Flex>
+              <Box style={{ flexShrink: 0 }}>
+                {offerMetadataExpanded ? (
+                  <Flex direction="column" gap="3">
+                    <Flex gap="3" wrap="wrap" align="end">
+                      <Box style={{ flex: '2 1 220px', minWidth: 0 }}>
+                        <Text size="2" weight="medium" mb="1" as="div">
+                          Title
+                        </Text>
+                        <TextField.Root
+                          value={title}
+                          disabled={readOnly}
+                          onChange={(e) => setTitle(e.target.value)}
+                        />
+                      </Box>
 
-              <Box>
-                <Text size="2" weight="medium" mb="1" as="div">
-                  Intro text
-                </Text>
-                <TextArea
-                  value={prettyIntroText}
-                  disabled={readOnly}
-                  rows={2}
-                  placeholder="Opening pitch shown under the title on the public offer"
-                  onChange={(e) => setPrettyIntroText(e.target.value)}
-                />
+                      <Flex
+                        align="center"
+                        gap="2"
+                        style={{ flexShrink: 0, minHeight: 32 }}
+                      >
+                        <Checkbox
+                          checked={showPricePerLine}
+                          onCheckedChange={(checked) =>
+                            setShowPricePerLine(checked === true)
+                          }
+                          disabled={readOnly}
+                        />
+                        <Text size="2" as="label" style={{ cursor: 'pointer' }}>
+                          Show price per module to customer
+                        </Text>
+                        <IconButton
+                          size="2"
+                          variant="ghost"
+                          color="gray"
+                          style={{ flexShrink: 0 }}
+                          aria-label="Collapse offer metadata"
+                          aria-expanded
+                          onClick={() => setOfferMetadataExpanded(false)}
+                        >
+                          <NavArrowDown width={18} height={18} />
+                        </IconButton>
+                      </Flex>
+                    </Flex>
+
+                    <Flex gap="3" align="start" wrap="wrap">
+                      <Box style={{ flex: '2 1 280px', minWidth: 0 }}>
+                        <Text size="2" weight="medium" mb="1" as="div">
+                          Intro text
+                        </Text>
+                        <TextArea
+                          value={prettyIntroText}
+                          disabled={readOnly}
+                          rows={2}
+                          placeholder="Opening pitch shown under the title on the public offer"
+                          onChange={(e) => setPrettyIntroText(e.target.value)}
+                        />
+                      </Box>
+                      <SubcontractorMarkupField
+                        companyMarkupPercent={
+                          companyExpansion?.subcontractor_markup_percent
+                        }
+                        offerMarkupPercent={prettySubcontractorMarkupPercent}
+                        readOnly={readOnly}
+                        onChange={setPrettySubcontractorMarkupPercent}
+                      />
+                    </Flex>
+                  </Flex>
+                ) : (
+                  <button
+                    type="button"
+                    className="pretty-offer-metadata-collapsed"
+                    aria-expanded={false}
+                    aria-label={`Expand offer metadata: ${title.trim() || 'Untitled offer'}`}
+                    onClick={() => setOfferMetadataExpanded(true)}
+                  >
+                    <Text
+                      size="2"
+                      weight="medium"
+                      truncate
+                      className="pretty-offer-metadata-collapsed__title"
+                    >
+                      {title.trim() || 'Untitled offer'}
+                    </Text>
+                    <span
+                      className="pretty-offer-metadata-collapsed__icon"
+                      aria-hidden
+                    >
+                      <NavArrowRight width={18} height={18} />
+                    </span>
+                  </button>
+                )}
               </Box>
 
               <Separator size="4" />
@@ -637,10 +748,21 @@ export default function PrettyOfferEditor({
                   style={{
                     flex: 1,
                     minHeight: 0,
-                    overflowY: 'auto',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
                   }}
                 >
-                  <Tabs.Content value="modules">
+                  <Tabs.Content
+                    value="modules"
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      overflow: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
                     <ModulesSection
                       jobId={jobId}
                       companyId={companyId}
@@ -648,13 +770,17 @@ export default function PrettyOfferEditor({
                       modules={modules}
                       pricingBases={pricingBases}
                       offerBasisDetail={linkedBasisDetail}
+                      splitCalculationOptions={splitCalculationOptions}
                       selectedModuleId={selectedModuleId}
                       readOnly={readOnly}
                       onModulesChange={setModules}
                       onSelectModule={setSelectedModuleId}
                     />
                   </Tabs.Content>
-                  <Tabs.Content value="pricing">
+                  <Tabs.Content
+                    value="pricing"
+                    style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+                  >
                     <PricingBasisSection
                       jobId={jobId}
                       daysOfUse={basisPricing.daysOfUse}
@@ -663,11 +789,15 @@ export default function PrettyOfferEditor({
                       offerBases={offerBases}
                       linkedOfferBasisId={linkedBasisId}
                       offerBasesById={offerBasesById}
+                      subcontractorMarkupPercent={subcontractorMarkupPercent}
                       readOnly={readOnly}
                       onPricingBasesChange={setPricingBases}
                     />
                   </Tabs.Content>
-                  <Tabs.Content value="totals">
+                  <Tabs.Content
+                    value="totals"
+                    style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+                  >
                     <TotalsSection
                       modules={modules}
                       pricingBases={pricingBases}
@@ -676,33 +806,23 @@ export default function PrettyOfferEditor({
                       jobQuotesById={jobQuotesById}
                       vatPercent={basisPricing.vatPercent}
                       daysOfUse={basisPricing.daysOfUse}
+                      subcontractorMarkupPercent={subcontractorMarkupPercent}
                       {...expansionContext}
                     />
                   </Tabs.Content>
-                  <Tabs.Content value="preview">
+                  <Tabs.Content
+                    value="preview"
+                    style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
+                  >
                     <AppearanceSection
-                      useCustomerAccent={prettyUseCustomerAccent}
-                      useCustomerBackground={prettyUseCustomerBackground}
+                      useCustomerBrandColors={prettyUseCustomerBrandColors}
                       hasCustomerColor={Boolean(
                         offer?.customer?.accent_color_custom ||
                           offer?.customer?.accent_color,
                       )}
                       customerName={offer?.customer?.name}
                       readOnly={readOnly}
-                      onChange={(updates) => {
-                        if (updates.pretty_use_customer_accent !== undefined) {
-                          setPrettyUseCustomerAccent(
-                            updates.pretty_use_customer_accent,
-                          )
-                        }
-                        if (
-                          updates.pretty_use_customer_background !== undefined
-                        ) {
-                          setPrettyUseCustomerBackground(
-                            updates.pretty_use_customer_background,
-                          )
-                        }
-                      }}
+                      onChange={setPrettyUseCustomerBrandColors}
                     />
                     <PreviewSection
                       modules={modules}
@@ -711,6 +831,9 @@ export default function PrettyOfferEditor({
                       offerBasesById={offerBasesById}
                       jobQuotesById={jobQuotesById}
                       daysOfUse={basisPricing.daysOfUse}
+                      vatPercent={basisPricing.vatPercent}
+                      discountPercent={linkedBasisDetail?.discount_percent ?? 0}
+                      subcontractorMarkupPercent={subcontractorMarkupPercent}
                       {...expansionContext}
                       offer={
                         offer
@@ -721,8 +844,7 @@ export default function PrettyOfferEditor({
                             }
                           : null
                       }
-                      prettyUseCustomerAccent={prettyUseCustomerAccent}
-                      prettyUseCustomerBackground={prettyUseCustomerBackground}
+                      prettyUseCustomerBrandColors={prettyUseCustomerBrandColors}
                       showPricePerLine={showPricePerLine}
                     />
                   </Tabs.Content>

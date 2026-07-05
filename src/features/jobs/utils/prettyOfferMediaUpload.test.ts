@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  PRETTY_OFFER_DOCUMENT_MAX_BYTES,
   PRETTY_OFFER_IMAGE_MAX_BYTES,
   PRETTY_OFFER_VIDEO_MAX_BYTES,
   buildCompanyPrettyOfferLibraryPath,
@@ -68,6 +69,22 @@ describe('validatePrettyOfferMediaFile', () => {
     const file = new File(['x'], 'clip.mp4', { type: 'video/mp4' })
     Object.defineProperty(file, 'size', { value: PRETTY_OFFER_VIDEO_MAX_BYTES })
     expect(validatePrettyOfferMediaFile(file, 'video')).toBeNull()
+  })
+
+  it('rejects unsupported document types', () => {
+    const file = new File(['x'], 'notes.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    Object.defineProperty(file, 'size', { value: 1024 })
+    expect(validatePrettyOfferMediaFile(file, 'document')).toMatch(/PDF/)
+  })
+
+  it('accepts valid pdf files', () => {
+    const file = new File(['x'], 'spec.pdf', { type: 'application/pdf' })
+    Object.defineProperty(file, 'size', {
+      value: PRETTY_OFFER_DOCUMENT_MAX_BYTES,
+    })
+    expect(validatePrettyOfferMediaFile(file, 'document')).toBeNull()
   })
 })
 

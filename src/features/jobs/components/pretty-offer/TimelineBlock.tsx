@@ -49,12 +49,7 @@ export function TimelineBlock({ items }: Props) {
               gap="2"
               mb="2"
               py="2"
-              style={{
-                borderBottom: '2px solid var(--accent-9)',
-                borderLeft: '4px solid var(--accent-9)',
-                paddingLeft: 12,
-                borderRadius: '0 0 0 4px',
-              }}
+              className="pretty-deck-timeline__group-header"
             >
               <Heading size="3">{groupName}</Heading>
             </Flex>

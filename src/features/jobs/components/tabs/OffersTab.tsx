@@ -21,6 +21,7 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import {
+  CheckCircle,
   Copy,
   Download,
   Edit,
@@ -34,6 +35,7 @@ import {
   Refresh,
   Sparks,
   Trash,
+  WarningTriangle,
   Wrench,
 } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -111,6 +113,22 @@ function getOfferStatusLabel(offer: JobOffer) {
 
 function getOfferTypeLabel(type: OfferType) {
   return type === 'technical' ? 'Technical' : 'Pretty'
+}
+
+function getLatestOfferOnBasis(
+  offers: Array<JobOffer>,
+): JobOffer | null {
+  if (offers.length === 0) return null
+  return (
+    [...offers].sort((a, b) => {
+      if (a.version_number !== b.version_number) {
+        return b.version_number - a.version_number
+      }
+      return (
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )
+    })[0] ?? null
+  )
 }
 
 type GroupItemRow = {
@@ -2012,9 +2030,10 @@ export default function OffersTab({
     const isOlderBasis =
       maxLockedBasisVersion > 0 && basisVersion < maxLockedBasisVersion
     const isExpanded = !isOlderBasis || expandedOlderBasisIds.has(basis.id)
-    const collapsedSummary = hasOffers
-      ? `${basis.offers.length} offer${basis.offers.length === 1 ? '' : 's'}`
-      : 'No offers yet'
+    const latestOffer = getLatestOfferOnBasis(basis.offers)
+    const latestOfferSubVersion = latestOffer
+      ? (offerSubVersionById.get(latestOffer.id) ?? 1)
+      : null
     const toggleOlderBasis = () => toggleOlderBasisExpanded(basis.id)
     const stopHeaderToggle: React.MouseEventHandler = (event) => {
       event.stopPropagation()
@@ -2047,7 +2066,7 @@ export default function OffersTab({
           <Flex direction="column" gap="2">
             <Flex
               justify="between"
-              align="start"
+              align={!isExpanded ? 'center' : 'start'}
               gap="2"
               wrap="wrap"
               className={
@@ -2080,47 +2099,146 @@ export default function OffersTab({
                   <Heading size="3">
                     {formatBasisVersionLabel(basisVersion)}
                   </Heading>
-                  {isBasisLocked ? (
-                    <Badge variant="soft" color="orange">
-                      <Flex align="center" gap="1">
-                        <Lock width={12} height={12} />
-                        Locked
-                      </Flex>
-                    </Badge>
-                  ) : (
-                    <Badge variant="soft" color="gray">
-                      Unlocked
-                    </Badge>
-                  )}
-                  <Badge
-                    variant="soft"
-                    color={syncStatus.color}
-                    title={syncStatus.title}
-                  >
-                    {syncStatus.label}
-                  </Badge>
-                  {showSyncInfo && isExpanded && (
-                    <Tooltip content={buildDiffTooltip(basis.id)}>
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        aria-label="Show booking differences"
-                        onClick={stopHeaderToggle}
+                  {isExpanded ? (
+                    <>
+                      {isBasisLocked ? (
+                        <Badge variant="soft" color="orange">
+                          <Flex align="center" gap="1">
+                            <Lock width={12} height={12} />
+                            Locked
+                          </Flex>
+                        </Badge>
+                      ) : (
+                        <Badge variant="soft" color="gray">
+                          Unlocked
+                        </Badge>
+                      )}
+                      <Badge
+                        variant="soft"
+                        color={syncStatus.color}
+                        title={syncStatus.title}
                       >
-                        <InfoCircle width={14} height={14} />
-                      </IconButton>
-                    </Tooltip>
+                        {syncStatus.label}
+                      </Badge>
+                      {showSyncInfo && (
+                        <Tooltip content={buildDiffTooltip(basis.id)}>
+                          <IconButton
+                            size="1"
+                            variant="ghost"
+                            aria-label="Show booking differences"
+                            onClick={stopHeaderToggle}
+                          >
+                            <InfoCircle width={14} height={14} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      {isBasisLocked && (
+                        <Tooltip content="Locked">
+                          <Box
+                            aria-label="Locked"
+                            style={{
+                              display: 'flex',
+                              flexShrink: 0,
+                              color: 'var(--orange-9)',
+                            }}
+                          >
+                            <Lock width={14} height={14} />
+                          </Box>
+                        </Tooltip>
+                      )}
+                      <Tooltip
+                        content={
+                          syncStatus.label === 'Not synced'
+                            ? buildDiffTooltip(basis.id)
+                            : syncStatus.title
+                        }
+                      >
+                        <Box
+                          aria-label={syncStatus.label}
+                          style={{
+                            display: 'flex',
+                            flexShrink: 0,
+                            color:
+                              syncStatus.label === 'Synced'
+                                ? 'var(--green-9)'
+                                : syncStatus.label === 'Not synced'
+                                  ? 'var(--gray-9)'
+                                  : 'var(--gray-9)',
+                          }}
+                        >
+                          {syncStatus.label === 'Synced' ? (
+                            <CheckCircle width={14} height={14} />
+                          ) : syncStatus.label === 'Not synced' ? (
+                            <WarningTriangle width={14} height={14} />
+                          ) : (
+                            <Refresh width={14} height={14} />
+                          )}
+                        </Box>
+                      </Tooltip>
+                    </>
                   )}
                 </Flex>
                 <Text size="1" color="gray">
                   Created {formatDate(basis.created_at)}
                 </Text>
-                {!isExpanded && (
-                  <Text size="1" color="gray">
-                    {collapsedSummary}
-                  </Text>
-                )}
               </Flex>
+
+              {!isExpanded && (
+                <Flex
+                  align="center"
+                  gap="2"
+                  wrap="wrap"
+                  justify="end"
+                  style={{ flexShrink: 0 }}
+                >
+                  {latestOffer ? (
+                    <>
+                      <Text size="1" color="gray">
+                        Latest offer
+                      </Text>
+                      <Badge
+                        variant="soft"
+                        size="1"
+                        color={
+                          latestOffer.offer_type === 'pretty'
+                            ? 'purple'
+                            : 'blue'
+                        }
+                      >
+                        {getOfferTypeLabel(latestOffer.offer_type)}
+                      </Badge>
+                      <Badge
+                        variant="soft"
+                        size="1"
+                        radius="full"
+                        color={getOfferStatusBadgeColor(latestOffer)}
+                      >
+                        {getOfferStatusLabel(latestOffer)}
+                      </Badge>
+                      {latestOfferSubVersion != null && (
+                        <Text size="1" color="gray">
+                          {formatOfferVersionOnBasis(
+                            basisVersion,
+                            latestOfferSubVersion,
+                          )}
+                        </Text>
+                      )}
+                      {basis.offers.length > 1 && (
+                        <Text size="1" color="gray">
+                          · {basis.offers.length} offers
+                        </Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text size="1" color="gray">
+                      No offers yet
+                    </Text>
+                  )}
+                </Flex>
+              )}
 
               {isExpanded && !isReadOnly && (
                 <Flex

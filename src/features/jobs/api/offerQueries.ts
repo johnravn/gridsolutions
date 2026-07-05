@@ -858,16 +858,23 @@ export async function duplicateOffer(offerId: string): Promise<string> {
   })
 
   if (offer.offer_type === 'pretty') {
-    if (offer.source_technical_offer_id) {
-      await supabase
-        .from('job_offers')
-        .update({
-          source_technical_offer_id: offer.source_technical_offer_id,
-        })
-        .eq('id', newOfferId)
-    }
+    await supabase
+      .from('job_offers')
+      .update({
+        source_technical_offer_id: offer.source_technical_offer_id ?? null,
+        pretty_intro_text: offer.pretty_intro_text ?? null,
+        pretty_subcontractor_markup_percent:
+          offer.pretty_subcontractor_markup_percent ?? null,
+        pretty_use_customer_accent: offer.pretty_use_customer_accent ?? false,
+        pretty_use_customer_background:
+          offer.pretty_use_customer_background ?? false,
+      })
+      .eq('id', newOfferId)
 
-    await copyPrettyOfferChildren(offerId, newOfferId)
+    await copyPrettyOfferChildren(offerId, newOfferId, {
+      sourceOfferBasisId: offer.offer_basis_id as string,
+      newOfferBasisId: basisId,
+    })
 
     if (offer.pretty_sections && offer.pretty_sections.length > 0) {
       const sectionsToInsert = offer.pretty_sections.map(

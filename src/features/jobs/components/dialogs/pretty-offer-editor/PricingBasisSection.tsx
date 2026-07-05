@@ -4,6 +4,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   IconButton,
   Select,
@@ -19,6 +20,7 @@ import {
   Plus,
   Spark,
   Trash,
+  WarningTriangle,
 } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -30,6 +32,8 @@ import {
   basisSubtotal,
   buildLineItemCategoryOptions,
   calculateSplitAmount,
+  getBasisAllocationStatus,
+  getPricingEligibleModules,
   lineItemSourceFromOfferBasis,
   resolveModuleIdForCategoryKey,
   validatePricingBases,
@@ -70,6 +74,7 @@ type Props = {
   offerBases: Array<OfferBasis>
   linkedOfferBasisId: string | null
   offerBasesById: Map<string, OfferBasisDetail>
+  subcontractorMarkupPercent: number
   readOnly: boolean
   onPricingBasesChange: (bases: Array<LocalPricingBasis>) => void
 }
@@ -82,6 +87,7 @@ export function PricingBasisSection({
   offerBases,
   linkedOfferBasisId,
   offerBasesById,
+  subcontractorMarkupPercent,
   readOnly,
   onPricingBasesChange,
 }: Props) {
@@ -101,6 +107,10 @@ export function PricingBasisSection({
 
   const sortedBases = [...pricingBases].sort(
     (a, b) => a.sort_order - b.sort_order,
+  )
+  const pricingModules = React.useMemo(
+    () => getPricingEligibleModules(modules),
+    [modules],
   )
   const selectedBasis =
     sortedBases.find((b) => b.id === selectedBasisId) ?? sortedBases[0] ?? null
@@ -149,6 +159,25 @@ export function PricingBasisSection({
     [jobQuotes],
   )
 
+  const allocationOptions = React.useMemo(
+    () => ({
+      offerBasesById,
+      jobQuotesById,
+      technicalContext,
+      subcontractorMarkupPercent,
+    }),
+    [
+      offerBasesById,
+      jobQuotesById,
+      technicalContext,
+      subcontractorMarkupPercent,
+    ],
+  )
+
+  const selectedAllocation = selectedBasis
+    ? getBasisAllocationStatus(selectedBasis, allocationOptions)
+    : null
+
   const coveredSubcontractorIds = React.useMemo(
     () => subcontractorIdsWithBasis(sortedBases, jobQuotes, jobSubcontractors),
     [sortedBases, jobQuotes, jobSubcontractors],
@@ -170,15 +199,6 @@ export function PricingBasisSection({
     () => quotesForSubcontractor(jobQuotes, selectedSubcontractorId),
     [jobQuotes, selectedSubcontractorId],
   )
-
-  const selectedQuote = selectedBasis?.job_subcontractor_quote_id
-    ? jobQuotesById.get(selectedBasis.job_subcontractor_quote_id)
-    : null
-
-  const splitTotal =
-    selectedBasis?.splits.reduce((sum, split) => sum + split.amount, 0) ?? 0
-  const quoteTotal = selectedQuote?.total_amount ?? 0
-  const remainingQuoteAmount = quoteTotal - splitTotal
 
   const setBases = (next: Array<LocalPricingBasis>) => {
     onPricingBasesChange(
@@ -236,7 +256,7 @@ export function PricingBasisSection({
   }
 
   const addSplit = (basis: LocalPricingBasis) => {
-    const defaultModuleId = modules[0]?.id ?? ''
+    const defaultModuleId = pricingModules[0]?.id ?? ''
     if (!defaultModuleId) return
     updateBasis({
       ...basis,
@@ -248,11 +268,11 @@ export function PricingBasisSection({
   }
 
   const autoSplitFromBasis = (basis: LocalPricingBasis) => {
-    if (!linkedOfferBasis || modules.length === 0) return
+    if (!linkedOfferBasis || pricingModules.length === 0) return
     const options = buildLineItemCategoryOptions(
       lineItemSourceFromOfferBasis(linkedOfferBasis),
     )
-    const defaultModuleId = modules[0].id
+    const defaultModuleId = pricingModules[0].id
     const existingKeys = new Set(
       basis.splits.map((s) => `${s.category_type}:${s.category_key}`),
     )
@@ -329,6 +349,12 @@ export function PricingBasisSection({
         <Flex gap="2" wrap="wrap">
           {sortedBases.map((basis) => {
             const isSelected = selectedBasis?.id === basis.id
+            const allocation = getBasisAllocationStatus(
+              basis,
+              allocationOptions,
+            )
+            const showAllocationWarning =
+              allocation != null && !allocation.isFullyAllocated
             return (
               <Box
                 key={basis.id}
@@ -339,34 +365,56 @@ export function PricingBasisSection({
                   className="pretty-offer-basis-tab__main"
                   onClick={() => setSelectedBasisId(basis.id)}
                 >
-                  <Text size="2" weight={isSelected ? 'medium' : 'regular'}>
+                  <Text
+                    size="2"
+                    weight={isSelected ? 'medium' : 'regular'}
+                    className="pretty-offer-basis-tab__title"
+                  >
                     {basis.title || BASIS_TYPE_LABELS[basis.basis_type]}
                   </Text>
-                  <span className="pretty-offer-basis-tab__amount">
-                    {formatMoney(
-                      basisSubtotal(basis, {
-                        offerBasesById,
-                        jobQuotesById,
-                        technicalContext,
-                      }),
-                    )}
-                  </span>
                 </button>
-                {!readOnly && (
-                  <IconButton
-                    size="2"
-                    variant="ghost"
-                    color="red"
-                    className="pretty-offer-basis-tab__delete"
-                    aria-label={`Remove ${basis.title || BASIS_TYPE_LABELS[basis.basis_type]}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      setBasisPendingDelete(basis)
-                    }}
-                  >
-                    <Trash width={DELETE_ICON_SIZE} height={DELETE_ICON_SIZE} />
-                  </IconButton>
-                )}
+                <Flex
+                  align="center"
+                  className="pretty-offer-basis-tab__trailing"
+                >
+                  {showAllocationWarning && (
+                    <Tooltip
+                      content={
+                        allocation.remaining > 0
+                          ? `${formatMoney(allocation.remaining)} not assigned to a split.`
+                          : `${formatMoney(Math.abs(allocation.remaining))} over-allocated across splits.`
+                      }
+                    >
+                      <WarningTriangle
+                        width={14}
+                        height={14}
+                        className="pretty-offer-basis-tab__warning"
+                        aria-label="Not all costs are assigned to splits"
+                      />
+                    </Tooltip>
+                  )}
+                  <span className="pretty-offer-basis-tab__amount">
+                    {formatMoney(basisSubtotal(basis, allocationOptions))}
+                  </span>
+                  {!readOnly && (
+                    <IconButton
+                      size="2"
+                      variant="ghost"
+                      color="red"
+                      className="pretty-offer-basis-tab__delete"
+                      aria-label={`Remove ${basis.title || BASIS_TYPE_LABELS[basis.basis_type]}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setBasisPendingDelete(basis)
+                      }}
+                    >
+                      <Trash
+                        width={DELETE_ICON_SIZE}
+                        height={DELETE_ICON_SIZE}
+                      />
+                    </IconButton>
+                  )}
+                </Flex>
               </Box>
             )
           })}
@@ -388,14 +436,76 @@ export function PricingBasisSection({
           </Flex>
 
           <Flex direction="column" gap="3">
-            <TextField.Root
-              value={selectedBasis.title}
-              disabled={readOnly}
-              placeholder="Basis title"
-              onChange={(e) =>
-                updateBasis({ ...selectedBasis, title: e.target.value })
-              }
-            />
+            <Flex align="center" gap="3" wrap="wrap">
+              <Box style={{ flex: '1 1 180px', minWidth: 180 }}>
+                <TextField.Root
+                  value={selectedBasis.title}
+                  disabled={readOnly}
+                  placeholder="Basis title"
+                  onChange={(e) =>
+                    updateBasis({ ...selectedBasis, title: e.target.value })
+                  }
+                />
+              </Box>
+
+              <Flex align="center" gap="2" style={{ flex: '0 0 auto' }}>
+                <Checkbox
+                  checked={selectedBasis.apply_subcontractor_markup ?? true}
+                  disabled={readOnly}
+                  onCheckedChange={(checked) =>
+                    updateBasis({
+                      ...selectedBasis,
+                      apply_subcontractor_markup: checked === true,
+                    })
+                  }
+                />
+                <Text
+                  size="2"
+                  as="label"
+                  style={{ cursor: readOnly ? 'default' : 'pointer' }}
+                >
+                  Apply subcontractor markup
+                  {subcontractorMarkupPercent > 0
+                    ? ` (${subcontractorMarkupPercent}%)`
+                    : ''}
+                </Text>
+              </Flex>
+
+              {selectedBasis.basis_type === 'subcontractor' && (
+                <Box style={{ flex: '1 1 220px', minWidth: 220 }}>
+                  <Select.Root
+                    value={selectedBasis.job_subcontractor_quote_id ?? 'none'}
+                    disabled={readOnly}
+                    onValueChange={(v) => {
+                      const quote =
+                        v === 'none'
+                          ? null
+                          : jobQuotes.find((entry) => entry.id === v)
+                      updateBasis({
+                        ...selectedBasis,
+                        job_subcontractor_quote_id: v === 'none' ? null : v,
+                        source_job_subcontractor_id:
+                          quote?.job_subcontractor_id ??
+                          selectedSubcontractorId ??
+                          selectedBasis.source_job_subcontractor_id ??
+                          null,
+                      })
+                    }}
+                  >
+                    <Select.Trigger placeholder="Select quote version" />
+                    <Select.Content style={{ zIndex: 10000 }}>
+                      <Select.Item value="none">None</Select.Item>
+                      {quotesForSelectedBasis.map((quote) => (
+                        <Select.Item key={quote.id} value={quote.id}>
+                          v{quote.version_number} (
+                          {formatMoney(quote.total_amount)})
+                        </Select.Item>
+                      ))}
+                    </Select.Content>
+                  </Select.Root>
+                </Box>
+              )}
+            </Flex>
 
             {selectedBasis.basis_type === 'technical' && (
               <Flex justify="between" align="center" gap="3" wrap="wrap">
@@ -409,14 +519,14 @@ export function PricingBasisSection({
                       : 'No linked offer basis'}
                   </Text>
                 </Box>
-                {!readOnly && linkedOfferBasis && modules.length > 0 && (
+                {!readOnly && linkedOfferBasis && pricingModules.length > 0 && (
                   <Button
                     size="2"
                     variant="soft"
                     onClick={() => autoSplitFromBasis(selectedBasis)}
                   >
                     <Spark width={14} height={14} />
-                    Auto-split by categories
+                    Get splits from categories
                   </Button>
                 )}
               </Flex>
@@ -424,41 +534,8 @@ export function PricingBasisSection({
 
             {selectedBasis.basis_type === 'subcontractor' && (
               <Box>
-                <Text size="2" weight="medium" mb="1" as="div">
-                  Subcontractor quote
-                </Text>
-                <Select.Root
-                  value={selectedBasis.job_subcontractor_quote_id ?? 'none'}
-                  disabled={readOnly}
-                  onValueChange={(v) => {
-                    const quote =
-                      v === 'none'
-                        ? null
-                        : jobQuotes.find((entry) => entry.id === v)
-                    updateBasis({
-                      ...selectedBasis,
-                      job_subcontractor_quote_id: v === 'none' ? null : v,
-                      source_job_subcontractor_id:
-                        quote?.job_subcontractor_id ??
-                        selectedSubcontractorId ??
-                        selectedBasis.source_job_subcontractor_id ??
-                        null,
-                    })
-                  }}
-                >
-                  <Select.Trigger placeholder="Select quote version" />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Item value="none">None</Select.Item>
-                    {quotesForSelectedBasis.map((quote) => (
-                      <Select.Item key={quote.id} value={quote.id}>
-                        v{quote.version_number} (
-                        {formatMoney(quote.total_amount)})
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
                 {selectedSubcontractorId && (
-                  <Text size="1" color="gray" mt="1" as="div">
+                  <Text size="1" color="gray" as="div">
                     {jobSubcontractors.find(
                       (s) => s.id === selectedSubcontractorId,
                     )?.customer.name ?? 'Subcontractor'}
@@ -514,26 +591,35 @@ export function PricingBasisSection({
                     </Tooltip>
                   )}
                 </Flex>
-                {!readOnly && modules.length > 0 && (
-                  <Button size="1" onClick={() => addSplit(selectedBasis)}>
-                    <Plus width={14} height={14} />
-                    Add split
-                  </Button>
-                )}
+                {!readOnly &&
+                  pricingModules.length > 0 &&
+                  selectedBasis.basis_type !== 'technical' && (
+                    <Button size="1" onClick={() => addSplit(selectedBasis)}>
+                      <Plus width={14} height={14} />
+                      Add split
+                    </Button>
+                  )}
               </Flex>
               <Text size="1" color="gray" mb="3" as="div">
                 {selectedBasis.basis_type === 'subcontractor'
                   ? 'Split the subcontractor quote across modules. Each amount is the share of the quote assigned to that module.'
-                  : 'Connect cost lines to modules so each module total is calculated correctly.'}
+                  : 'Connect cost lines to modules so each module total is calculated correctly. Amounts are excl. VAT and use stored offer basis line prices.'}
               </Text>
 
-              {modules.length === 0 && (
+              {pricingModules.length === 0 && (
                 <Text size="2" color="gray">
-                  Add modules first, then connect pricing splits to them.
+                  Add a standard module first, then connect pricing splits to it.
+                  Timeline modules cannot receive cost splits.
                 </Text>
               )}
 
-              {selectedBasis.splits.length > 0 && (
+              {pricingModules.length > 0 && selectedBasis.splits.length === 0 && (
+                <Text size="2" color="gray">
+                  No splits yet for this basis.
+                </Text>
+              )}
+
+              {pricingModules.length > 0 && selectedBasis.splits.length > 0 && (
                 <Flex direction="column" gap="0">
                   {selectedBasis.splits.map((split, index) => (
                     <React.Fragment key={split.id}>
@@ -627,7 +713,7 @@ export function PricingBasisSection({
                             >
                               <Select.Trigger placeholder="Select module" />
                               <Select.Content style={{ zIndex: 10000 }}>
-                                {modules.map((module) => (
+                                {pricingModules.map((module) => (
                                   <Select.Item
                                     key={module.id}
                                     value={module.id}
@@ -647,7 +733,9 @@ export function PricingBasisSection({
                           </Box>
                           <Box className="pretty-offer-split-row__field pretty-offer-split-row__field--cost">
                             <Text size="1" color="gray" as="div">
-                              Cost
+                              {selectedBasis.basis_type === 'technical'
+                                ? 'Cost (excl. VAT)'
+                                : 'Cost'}
                             </Text>
                             <Text size="2" weight="medium">
                               {formatMoney(
@@ -655,6 +743,7 @@ export function PricingBasisSection({
                                   offerBasesById,
                                   jobQuotesById,
                                   technicalContext,
+                                  subcontractorMarkupPercent,
                                 }),
                               )}
                             </Text>
@@ -691,53 +780,77 @@ export function PricingBasisSection({
                 </Flex>
               )}
 
-              {selectedBasis.basis_type === 'subcontractor' &&
-                selectedBasis.job_subcontractor_quote_id && (
-                  <Box
-                    mt="3"
-                    p="2"
-                    style={{
-                      borderRadius: 8,
-                      background:
-                        Math.abs(remainingQuoteAmount) < 0.01
-                          ? 'var(--green-a3)'
-                          : 'var(--gray-a2)',
-                    }}
-                  >
-                    <Flex direction="column" gap="1">
-                      <Flex justify="between" wrap="wrap" gap="2">
-                        <Text size="2">
-                          Assigned:{' '}
-                          <Text weight="medium" as="span">
-                            {formatMoney(splitTotal)}
-                          </Text>
+              {selectedAllocation && (
+                <Box
+                  mt="3"
+                  p="2"
+                  style={{
+                    borderRadius: 8,
+                    background: selectedAllocation.isFullyAllocated
+                      ? 'var(--green-a3)'
+                      : 'var(--gray-a2)',
+                  }}
+                >
+                  <Flex direction="column" gap="1">
+                    <Flex justify="between" wrap="wrap" gap="2">
+                      <Text size="2">
+                        Assigned
+                        {selectedAllocation.amountsExcludeVat
+                          ? ' (excl. VAT)'
+                          : ''}
+                        :{' '}
+                        <Text weight="medium" as="span">
+                          {formatMoney(selectedAllocation.assignedTotal)}
                         </Text>
-                        <Text size="2">
-                          Quote total:{' '}
-                          <Text weight="medium" as="span">
-                            {formatMoney(quoteTotal)}
-                          </Text>
+                      </Text>
+                      <Text size="2">
+                        {selectedAllocation.sourceTotalLabel}:{' '}
+                        <Text weight="medium" as="span">
+                          {formatMoney(selectedAllocation.sourceTotal)}
                         </Text>
-                      </Flex>
-                      <Text
-                        size="2"
-                        color={
-                          Math.abs(remainingQuoteAmount) < 0.01
-                            ? 'green'
-                            : remainingQuoteAmount > 0
-                              ? 'orange'
-                              : 'red'
-                        }
-                      >
-                        {Math.abs(remainingQuoteAmount) < 0.01
-                          ? 'Fully allocated — splits match the quote total.'
-                          : remainingQuoteAmount > 0
-                            ? `${formatMoney(remainingQuoteAmount)} remaining to allocate across splits.`
-                            : `${formatMoney(Math.abs(remainingQuoteAmount))} over the quote total — reduce split amounts.`}
                       </Text>
                     </Flex>
-                  </Box>
-                )}
+                    {selectedAllocation.amountsExcludeVat &&
+                      selectedAllocation.vatPercent > 0 && (
+                        <Flex justify="between" wrap="wrap" gap="2">
+                          <Text size="1" color="gray">
+                            Assigned incl. VAT ({selectedAllocation.vatPercent}
+                            %):{' '}
+                            {formatMoney(
+                              selectedAllocation.assignedTotalWithVat,
+                            )}
+                          </Text>
+                          <Text size="1" color="gray">
+                            Basis incl. VAT:{' '}
+                            {formatMoney(selectedAllocation.sourceTotalWithVat)}
+                          </Text>
+                        </Flex>
+                      )}
+                    {selectedAllocation.discountPercent > 0 && (
+                      <Text size="1" color="gray">
+                        Equipment discount ({selectedAllocation.discountPercent}
+                        %) is applied proportionally to equipment splits.
+                      </Text>
+                    )}
+                    <Text
+                      size="2"
+                      color={
+                        selectedAllocation.isFullyAllocated
+                          ? 'green'
+                          : selectedAllocation.remaining > 0
+                            ? 'orange'
+                            : 'red'
+                      }
+                    >
+                      {selectedAllocation.isFullyAllocated
+                        ? 'Fully allocated — all costs are assigned to splits.'
+                        : selectedAllocation.remaining > 0
+                          ? `${formatMoney(selectedAllocation.remaining)} not assigned to a split.`
+                          : `${formatMoney(Math.abs(selectedAllocation.remaining))} over the ${selectedAllocation.sourceTotalLabel.toLowerCase()} — reduce split amounts.`}
+                    </Text>
+                  </Flex>
+                </Box>
+              )}
             </Box>
           </Flex>
         </Box>

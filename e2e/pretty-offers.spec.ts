@@ -1,5 +1,10 @@
 import { expect, test } from './fixtures'
 import { createDraftJob, clickJobTab } from './helpers/navigation'
+import {
+  expectOfferBasisSaved,
+  offerBasisEditor,
+  returnToOffersTabAfterBasisSave,
+} from './helpers/offers'
 
 test.describe('Pretty offers', () => {
   test('offers tab supports pretty offer flow', async ({
@@ -17,20 +22,18 @@ test.describe('Pretty offers', () => {
   test('pretty offer editor shows module story fields', async ({
     authedPage: page,
   }) => {
-    await createDraftJob(page)
+    const jobTitle = await createDraftJob(page)
     await clickJobTab(page, 'Offers')
 
     await page.getByRole('button', { name: 'New basis' }).click()
 
-    const basisDialog = page.getByRole('dialog')
-    await expect(basisDialog.getByText('Offer basis')).toBeVisible({
+    const basisDialog = offerBasisEditor(page)
+    await expect(basisDialog).toBeVisible({
       timeout: 15_000,
     })
     await basisDialog.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByText(/Offer basis (updated|created)/)).toBeVisible({
-      timeout: 15_000,
-    })
-    await basisDialog.getByRole('button', { name: 'Close' }).click()
+    await expectOfferBasisSaved(page)
+    await returnToOffersTabAfterBasisSave(page, jobTitle)
 
     await page
       .getByRole('button', { name: 'Create pretty offer' })
@@ -41,8 +44,12 @@ test.describe('Pretty offers', () => {
     await expect(dialog).toBeVisible({ timeout: 15_000 })
 
     await dialog.getByRole('button', { name: 'Add' }).click()
-    await expect(dialog.getByText('Story block 1')).toBeVisible()
-    await expect(dialog.getByText('Hero media')).toBeVisible()
-    await expect(dialog.getByPlaceholder('Paragraph text')).toBeVisible()
+
+    const paragraph = dialog.getByPlaceholder('Paragraph text')
+    await paragraph.scrollIntoViewIfNeeded()
+    await expect(paragraph).toBeVisible({ timeout: 15_000 })
+    await expect(
+      dialog.getByText('Story block 1', { exact: false }),
+    ).toBeAttached()
   })
 })

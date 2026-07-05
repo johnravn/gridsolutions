@@ -7,6 +7,7 @@ import {
   HeroMediaDisplay,
   PrettyOfferBlockRenderer,
 } from './PrettyOfferBlockRenderer'
+import { TimelineBlock } from './TimelineBlock'
 import './prettyOfferDeckStyles.css'
 import type { PublicPrettyOfferModule } from '../../types'
 
@@ -44,10 +45,14 @@ function StoryPairBlock({
           size="1"
           weight="bold"
           mb="1"
+          className={
+            variant === 'accent'
+              ? 'pretty-deck-story-heading--accent'
+              : undefined
+          }
           style={{
             textTransform: 'uppercase',
             letterSpacing: '0.08em',
-            color: variant === 'accent' ? 'var(--accent-11)' : undefined,
           }}
           color={variant === 'accent' ? undefined : 'gray'}
           as="div"
@@ -73,11 +78,36 @@ type Props = {
 }
 
 export function PrettyOfferModuleSlide({ module, index }: Props) {
+  const customerPrice = resolveModuleCustomerPrice(module)
+
+  if (module.module_type === 'timeline') {
+    return (
+      <Box className="pretty-deck-slide pretty-deck-slide--accent" mb="0">
+        <Box className="pretty-deck-slide__inner">
+          {module.title && (
+            <Heading size="6" mb="4">
+              {module.title}
+            </Heading>
+          )}
+          <TimelineBlock items={module.timeline_items ?? []} />
+          {customerPrice != null && (
+            <Flex justify="end" mt="4">
+              <Box className="pretty-deck-price-pill">
+                <Text size="3" weight="bold">
+                  {formatMoney(customerPrice)}
+                </Text>
+              </Box>
+            </Flex>
+          )}
+        </Box>
+      </Box>
+    )
+  }
+
   const sortedBlocks = [...(module.blocks ?? [])].sort(
     (a, b) => a.sort_order - b.sort_order,
   )
   const storyPairs = getModuleStoryPairs(module)
-  const customerPrice = resolveModuleCustomerPrice(module)
   const reversed = index % 2 === 1
   const variant = index % 2 === 0 ? 'accent' : 'neutral'
 
@@ -143,7 +173,7 @@ export function PrettyOfferModuleSlide({ module, index }: Props) {
                 size="4"
                 weight="medium"
                 mb="3"
-                style={{ color: 'var(--accent-11)' }}
+                className="pretty-deck-slide__tagline"
                 as="div"
               >
                 {module.tagline}
