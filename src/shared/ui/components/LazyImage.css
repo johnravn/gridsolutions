@@ -1,0 +1,45 @@
+.lazy-image {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  background-color: var(--gray-a3);
+}
+
+.lazy-image__placeholder {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(20px);
+  transform: scale(1.08);
+  transition: opacity 400ms ease;
+  pointer-events: none;
+}
+
+.lazy-image__placeholder--hidden {
+  opacity: 0;
+}
+
+.lazy-image__full {
+  display: block;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition:
+    opacity 450ms ease,
+    filter 450ms ease,
+    transform 450ms ease;
+}
+
+.lazy-image__full--blur-loading {
+  opacity: 1;
+  filter: blur(20px);
+  transform: scale(1.05);
+}
+
+.lazy-image__full--loaded {
+  opacity: 1;
+  filter: none;
+  transform: none;
+}

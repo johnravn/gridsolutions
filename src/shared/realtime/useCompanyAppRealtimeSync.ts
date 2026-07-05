@@ -75,6 +75,11 @@ function realtimeRecordToJobListPatch(
   return Object.keys(patch).length > 0 ? patch : null
 }
 
+type JobsIndexInfiniteCache = {
+  pages: Array<{ rows: Array<JobListRow>; count: number; page: number }>
+  pageParams: Array<number>
+}
+
 /** Merge jobs realtime payloads into cached Jobs page lists so badges update immediately. */
 function patchJobsListCachesFromRealtime(
   qc: QueryClient,
@@ -103,6 +108,24 @@ function patchJobsListCachesFromRealtime(
         }
       },
     )
+    qc.setQueriesData<JobsIndexInfiniteCache>(
+      { queryKey: ['company', companyId, 'jobs-index-infinite'], exact: false },
+      (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => {
+            const rows = page.rows.filter((r) => r.id !== jobId)
+            if (rows.length === page.rows.length) return page
+            return {
+              ...page,
+              rows,
+              count: Math.max(0, page.count - 1),
+            }
+          }),
+        }
+      },
+    )
     return
   }
 
@@ -125,6 +148,19 @@ function patchJobsListCachesFromRealtime(
       return {
         ...old,
         rows: patchJobsListRows(old.rows, jobId, patch),
+      }
+    },
+  )
+  qc.setQueriesData<JobsIndexInfiniteCache>(
+    { queryKey: ['company', companyId, 'jobs-index-infinite'], exact: false },
+    (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          rows: patchJobsListRows(page.rows, jobId, patch),
+        })),
       }
     },
   )

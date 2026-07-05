@@ -7,7 +7,6 @@ import {
   Flex,
   Grid,
   Separator,
-  Spinner,
   Text,
 } from '@radix-ui/themes'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -16,6 +15,7 @@ import { fmtVAT } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import { Edit, MessageText } from 'iconoir-react'
 import MapEmbed from '@shared/maps/MapEmbed'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { companyDetailQuery } from '../api/queries'
 import EditCompanyDialog from './dialogs/EditCompanyDialog'
 import EditWelcomeMatterDialog from './dialogs/EditWelcomeMatterDialog'
@@ -35,13 +35,7 @@ export default function CompanyInspector() {
     enabled: !!companyId,
   })
 
-  if (isLoading)
-    return (
-      <Flex align="center" gap="1">
-        <Text>Thinking</Text>
-        <Spinner size="2" />
-      </Flex>
-    )
+  if (isLoading) return <InspectorSkeleton />
   if (isError)
     return (
       <Text color="red">

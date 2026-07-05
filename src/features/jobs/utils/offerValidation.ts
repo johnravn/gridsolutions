@@ -1,4 +1,5 @@
 // src/features/jobs/utils/offerValidation.ts
+import { isOfferBasisLocked } from '../api/offerBasisQueries'
 import type { JobOffer, OfferDetail } from '../types'
 
 export type ValidationResult = {
@@ -70,9 +71,12 @@ export function canAcceptOffer(offer: JobOffer): boolean {
   return offer.status === 'sent'
 }
 
-export function canDuplicateOffer(offer: JobOffer): boolean {
-  // Can duplicate any offer regardless of status
+export function canDuplicateOffer(_offer: JobOffer): boolean {
   return true
+}
+
+export async function canEditOfferBasis(basisId: string): Promise<boolean> {
+  return !(await isOfferBasisLocked(basisId))
 }
 
 export function canCreatePrettyOffer(offer: JobOffer): boolean {

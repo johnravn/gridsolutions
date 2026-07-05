@@ -20,11 +20,14 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
+import { customersIndexQuery } from '../api/queries'
 
 export default function CustomerPage() {
   const { companyId } = useCompany()
@@ -197,7 +200,20 @@ export default function CustomerPage() {
 
   useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
-  if (!companyId) return <div>No company selected.</div>
+  const { isLoading: customersIndexLoading } = useQuery({
+    ...customersIndexQuery({
+      companyId: companyId ?? '__none__',
+      search: '',
+      showRegular: true,
+      showPartner: true,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(customersIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="2fr 3fr" />
+  }
 
   if (!isLarge) {
     return (

@@ -172,6 +172,7 @@ export default function AppShell() {
   }
 
   const title = getPageTitle(currentPath)
+  const isPublicOffer = currentPath.startsWith('/offer/')
   const isPublic =
     currentPath === '/login' ||
     currentPath === '/signup' ||
@@ -179,7 +180,7 @@ export default function AppShell() {
     currentPath === '/contact' ||
     currentPath === '/' ||
     currentPath === '/demo' ||
-    currentPath.startsWith('/offer/')
+    isPublicOffer
   const showNoCompanyMessage =
     !isPublic && !companyLoading && !!authUser?.id && companies.length === 0
 
@@ -225,74 +226,74 @@ export default function AppShell() {
           direction="column"
           style={{ height: isPublic ? 'auto' : '100%', minHeight: 0 }}
         >
-          {/* Top bar */}
-          <Flex
-            align="center"
-            justify="between"
-            px="4"
-            py="3"
-            style={{
-              flexShrink: 0,
-              paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
-              ...(!isPublic && isMobile && open
-                ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
-                : {}),
-            }}
-          >
-            {!isPublic && isMobile && (
-              <IconButton
-                size="2"
-                variant="ghost"
-                aria-label={(open ? 'Close' : 'Open') + ' menu'}
-                onClick={() => setOpen((o) => !o)}
-              >
-                <Menu />
-              </IconButton>
-            )}
-            {!isPublic && (
-              <Text size="8" weight="light">
-                {title}
-              </Text>
-            )}
-            {!isPublic && !isMobile && (
-              <Flex align="center" gap="3">
-                <Link to="/profile" style={{ textDecoration: 'none' }}>
-                  <Flex
-                    align="center"
-                    gap="2"
-                    // make it feel like a button without Radix Button hover styles
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Go to profile"
-                    style={{ cursor: 'pointer' }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.currentTarget.click()
-                        e.preventDefault()
-                      }
-                    }}
-                  >
-                    <Avatar
-                      size="2"
-                      radius="full"
-                      src={avatarUrl ?? undefined}
-                      fallback={getInitials(displayName || '?')}
-                      style={{ border: '1px solid var(--gray-5)' }}
-                    />
-                    <Text size="2" style={{ maxWidth: 200 }} truncate>
-                      {displayName}
-                    </Text>
-                  </Flex>
-                </Link>
+          {/* Top bar — hidden on public offer pages (full-bleed deck layout) */}
+          {!isPublicOffer && (
+            <Flex
+              align="center"
+              justify="between"
+              px="4"
+              py="3"
+              style={{
+                flexShrink: 0,
+                paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
+                ...(!isPublic && isMobile && open
+                  ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
+                  : {}),
+              }}
+            >
+              {!isPublic && isMobile && (
+                <IconButton
+                  size="2"
+                  variant="ghost"
+                  aria-label={(open ? 'Close' : 'Open') + ' menu'}
+                  onClick={() => setOpen((o) => !o)}
+                >
+                  <Menu />
+                </IconButton>
+              )}
+              {!isPublic && (
+                <Text size="8" weight="light">
+                  {title}
+                </Text>
+              )}
+              {!isPublic && !isMobile && (
+                <Flex align="center" gap="3">
+                  <Link to="/profile" style={{ textDecoration: 'none' }}>
+                    <Flex
+                      align="center"
+                      gap="2"
+                      // make it feel like a button without Radix Button hover styles
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Go to profile"
+                      style={{ cursor: 'pointer' }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.currentTarget.click()
+                          e.preventDefault()
+                        }
+                      }}
+                    >
+                      <Avatar
+                        size="2"
+                        radius="full"
+                        src={avatarUrl ?? undefined}
+                        fallback={getInitials(displayName || '?')}
+                        style={{ border: '1px solid var(--gray-5)' }}
+                      />
+                      <Text size="2" style={{ maxWidth: 200 }} truncate>
+                        {displayName}
+                      </Text>
+                    </Flex>
+                  </Link>
 
-                <Button variant="soft" onClick={handleLogout}>
-                  Logout
-                </Button>
-              </Flex>
-            )}
-          </Flex>
-
-          {/* Content area should be the ONLY scroller */}
+                  <Button variant="soft" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </Flex>
+              )}
+            </Flex>
+          )}
           <Box
             p={isPublic ? undefined : '4'}
             className={isPublic ? undefined : 'app-main-scroll'}

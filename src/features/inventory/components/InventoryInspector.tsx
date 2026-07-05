@@ -16,6 +16,7 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { supabase } from '@shared/api/supabase'
 import { Edit, Trash } from 'iconoir-react'
 import { toEventInputs } from '@features/calendar/components/domain'
@@ -128,13 +129,7 @@ export default function InventoryInspector({ id }: { id: string | null }) {
 
   if (!enabled) return <Text color="gray">Preparing…</Text>
 
-  if (isLoading)
-    return (
-      <Flex align="center" gap="1">
-        <Text>Thinking</Text>
-        <Spinner size="2" />
-      </Flex>
-    )
+  if (isLoading) return <InspectorSkeleton />
 
   // We treat "not found" as a valid (null) result in the query; real errors render here.
   if (isError) {

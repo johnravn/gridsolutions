@@ -1,4 +1,5 @@
 import { Box, Grid, Text } from '@radix-ui/themes'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { resolvePrettyOfferMediaUrl } from '../../utils/prettyOfferMediaUpload'
 import type { PrettyOfferModuleBlock } from '../../types'
 
@@ -27,10 +28,9 @@ export function GalleryBlock({ block }: Props) {
             if (!src) return null
             return (
               <Box key={item.id}>
-                <img
+                <LazyImage
                   src={src}
                   alt={item.summary || block.text_content || 'Gallery image'}
-                  loading="lazy"
                   style={{
                     width: '100%',
                     maxHeight: 280,

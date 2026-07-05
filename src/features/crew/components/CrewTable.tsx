@@ -1,27 +1,31 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Badge,
-  Box,
-  Button,
-  Flex,
-  Spinner,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import { Badge, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { ArrowDown, ArrowUp, Plus, Search, Trash } from 'iconoir-react'
-import { fuzzySearch } from '@shared/lib/generalFunctions'
+import { Plus, Search, Trash } from 'iconoir-react'
+import {
+  VirtualIndexTable,
+  useClientTableFilter,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
+import {
+  buildCrewIndexRows,
+  compareCrewIndexRows,
+} from '../lib/buildCrewIndexRows'
 import {
   crewIndexQuery,
   deleteInvite,
   pendingInvitesQuery,
 } from '../api/queries'
 import AddFreelancerDialog from './dialogs/AddFreelancerDialog'
+import type {
+  CrewIndexTableRow,
+  CrewSortColumn,
+} from '../lib/buildCrewIndexRows'
+import type { IndexColumn } from '@shared/ui/index-table'
 
 type Props = {
   selectedUserId: string | null
@@ -32,19 +36,13 @@ type Props = {
   internalNotesByUserId?: Record<string, string>
 }
 
-type Row = {
-  kind: 'employee' | 'freelancer' | 'invite' | 'owner'
-  id: string
-  title: string
-  subtitle?: string
-  role?: 'owner' | 'employee' | 'freelancer' | 'super_user'
-  email: string
-}
-
-type SortColumn = 'name' | 'email' | 'status'
-type SortDirection = 'asc' | 'desc'
-
 const GRID_COLUMNS = 'minmax(180px, 2fr) minmax(120px, 1fr) 100px'
+
+const SEARCH_FIELDS = [
+  (r: CrewIndexTableRow) => r.title,
+  (r: CrewIndexTableRow) => r.subtitle,
+  (r: CrewIndexTableRow) => r.email,
+]
 
 export default function CrewTable({
   selectedUserId,
@@ -59,13 +57,13 @@ export default function CrewTable({
   const qc = useQueryClient()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
-  const [sortColumn, setSortColumn] = React.useState<SortColumn | null>(null)
-  const [sortDirection, setSortDirection] = React.useState<SortDirection>('asc')
+  const [sortColumn, setSortColumn] = React.useState<CrewSortColumn | null>(
+    null,
+  )
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(
+    'asc',
+  )
   const { success } = useToast()
-
-  const containerRef = React.useRef<HTMLDivElement>(null)
-  const controlsRef = React.useRef<HTMLDivElement>(null)
-  const scrollRef = React.useRef<HTMLDivElement>(null)
 
   const { data: employees = [], isLoading: empLoading } = useQuery({
     ...crewIndexQuery({ companyId: companyId!, kind: 'employee' }),
@@ -87,128 +85,46 @@ export default function CrewTable({
     enabled: !!companyId && showMyPending,
   })
 
-  const rows = React.useMemo(() => {
-    const L: Array<Row> = []
-
-    if (showEmployees) {
-      employees.forEach((u) =>
-        L.push({
-          kind: 'employee',
-          id: u.user_id,
-          title: u.display_name ?? u.email,
-          subtitle: `${u.email} · employee`,
-          email: u.email,
-        }),
-      )
-    }
-
-    if (showFreelancers) {
-      freelancers.forEach((u) =>
-        L.push({
-          kind: 'freelancer',
-          id: u.user_id,
-          title: u.display_name ?? u.email,
-          subtitle: `${u.email} · freelancer`,
-          email: u.email,
-        }),
-      )
-    }
-
-    owners.forEach((u) =>
-      L.push({
-        kind: 'owner',
-        id: u.user_id,
-        title: u.display_name ?? u.email,
-        subtitle: `${u.email} · owner`,
-        email: u.email,
+  const baseRows = React.useMemo(
+    () =>
+      buildCrewIndexRows({
+        employees,
+        freelancers,
+        owners,
+        invites: myInvites,
+        showEmployees,
+        showFreelancers,
+        showMyPending,
+        ownersFirst: false,
       }),
-    )
+    [
+      employees,
+      freelancers,
+      owners,
+      myInvites,
+      showEmployees,
+      showFreelancers,
+      showMyPending,
+    ],
+  )
 
-    if (showMyPending) {
-      myInvites.forEach((i) =>
-        L.push({
-          kind: 'invite',
-          id: `invite:${i.id}`,
-          title: i.email,
-          subtitle: `${i.role} · expires ${new Date(i.expires_at).toLocaleDateString()}`,
-          role: i.role as Row['role'],
-          email: i.email,
-        }),
-      )
-    }
+  const filtered = useClientTableFilter(baseRows, search, SEARCH_FIELDS)
 
-    const filtered = search.trim()
-      ? fuzzySearch(
-          L,
-          search,
-          [(r) => r.title, (r) => r.subtitle ?? '', (r) => r.email],
-          0.3,
-        )
-      : L
+  const rows = React.useMemo(
+    () =>
+      [...filtered].sort((a, b) =>
+        compareCrewIndexRows(a, b, sortColumn, sortDirection),
+      ),
+    [filtered, sortColumn, sortDirection],
+  )
 
-    const sorted = filtered.slice()
-    if (sortColumn) {
-      sorted.sort((a, b) => {
-        let comparison = 0
-
-        if (sortColumn === 'name') {
-          comparison = a.title.localeCompare(b.title)
-        } else if (sortColumn === 'email') {
-          comparison = a.email.localeCompare(b.email)
-        } else {
-          const priority: Record<(typeof filtered)[number]['kind'], number> = {
-            invite: 0,
-            owner: 1,
-            employee: 2,
-            freelancer: 3,
-          }
-          comparison = priority[a.kind] - priority[b.kind]
-          if (comparison === 0) {
-            comparison = a.title.localeCompare(b.title)
-          }
-        }
-
-        return sortDirection === 'asc' ? comparison : -comparison
-      })
-    } else {
-      const priority: Record<(typeof filtered)[number]['kind'], number> = {
-        invite: 0,
-        owner: 1,
-        employee: 2,
-        freelancer: 3,
-      }
-      sorted.sort((a, b) => {
-        const kindComparison = priority[a.kind] - priority[b.kind]
-        return kindComparison !== 0
-          ? kindComparison
-          : a.title.localeCompare(b.title)
-      })
-    }
-
-    return sorted
-  }, [
-    employees,
-    freelancers,
-    owners,
-    myInvites,
-    showEmployees,
-    showFreelancers,
-    showMyPending,
-    search,
-    sortColumn,
-    sortDirection,
-  ])
-
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 52,
-    overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0,
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows,
+    getRowId: (r) => r.id,
+    estimateRowSize: 52,
   })
 
-  const handleSort = (column: SortColumn) => {
+  const handleSort = (column: CrewSortColumn) => {
     if (sortColumn === column) {
       setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -231,18 +147,94 @@ export default function CrewTable({
 
   const isLoading = empLoading || frLoading || invLoading || owLoading
 
+  const columns: Array<IndexColumn<CrewSortColumn>> = [
+    { id: 'name', header: 'Name / Email', sortable: true, sortKey: 'name' },
+    { id: 'status', header: 'Status', sortable: true, sortKey: 'status' },
+  ]
+
   return (
-    <Box
-      ref={containerRef}
-      style={{
-        height: '100%',
-        minHeight: 0,
-        minWidth: 0,
-        display: 'flex',
-        flexDirection: 'column',
+    <VirtualIndexTable
+      rows={rows}
+      columns={columns}
+      gridTemplateColumns={GRID_COLUMNS}
+      getRowId={(r) => r.id}
+      renderCell={(r, colId) => {
+        if (colId === 'name') {
+          const internalNote =
+            r.kind !== 'invite' ? internalNotesByUserId?.[r.id] : undefined
+          return (
+            <>
+              <Text size="2" weight="medium">
+                {r.title}
+              </Text>
+              {r.subtitle && (
+                <Text as="div" size="1" color="gray">
+                  {r.subtitle}
+                </Text>
+              )}
+              {internalNote && (
+                <Text as="div" size="1" color="gray">
+                  <Text weight="medium">Internal:</Text> {internalNote}
+                </Text>
+              )}
+            </>
+          )
+        }
+        if (colId === 'status') {
+          return r.kind === 'invite' ? (
+            <Badge variant="soft" color="amber">
+              Pending invite
+            </Badge>
+          ) : (
+            <Badge
+              variant="soft"
+              color={
+                r.kind === 'owner'
+                  ? 'purple'
+                  : r.kind === 'employee'
+                    ? 'blue'
+                    : 'green'
+              }
+            >
+              {r.kind}
+            </Badge>
+          )
+        }
+        return null
       }}
-    >
-      <div ref={controlsRef} style={{ minWidth: 0 }}>
+      selectedId={selectedUserId}
+      onSelect={onSelect}
+      isRowSelectable={(r) => r.kind !== 'invite'}
+      sortBy={sortColumn ?? undefined}
+      sortDir={sortDirection}
+      onSort={handleSort}
+      sortableColumns={['name', 'status']}
+      sortIndicator="arrow"
+      scrollRef={scrollRef}
+      rowVirtualizer={rowVirtualizer}
+      isLoading={isLoading}
+      emptyMessage="No results"
+      footerCount={{
+        shown: rows.length,
+        label: (n) => `${n} crew member${n !== 1 ? 's' : ''}`,
+      }}
+      renderRowActions={(r) =>
+        r.kind === 'invite' ? (
+          <Button
+            variant="soft"
+            color="red"
+            size="1"
+            onClick={(e) => {
+              e.stopPropagation()
+              delInvite.mutate(r.id.replace('invite:', ''))
+            }}
+            disabled={delInvite.isPending}
+          >
+            <Trash width={14} height={14} />
+          </Button>
+        ) : null
+      }
+      toolbar={
         <Flex
           gap="2"
           align="center"
@@ -294,223 +286,7 @@ export default function CrewTable({
             }}
           />
         </Flex>
-      </div>
-
-      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          marginTop: 16,
-        }}
-      >
-        <div
-          style={{
-            minWidth: 'max-content',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-          }}
-        >
-          {/* Table header */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: GRID_COLUMNS,
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-3)',
-              backgroundColor: 'var(--gray-a2)',
-              borderRadius: 'var(--radius-2)',
-              flexShrink: 0,
-            }}
-          >
-            <div
-              onClick={() => handleSort('name')}
-              style={{
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-              }}
-            >
-              <Flex align="center" gap="1">
-                <Text>Name / Email</Text>
-                {sortColumn === 'name' &&
-                  (sortDirection === 'asc' ? (
-                    <ArrowUp width={12} height={12} />
-                  ) : (
-                    <ArrowDown width={12} height={12} />
-                  ))}
-              </Flex>
-            </div>
-            <div
-              onClick={() => handleSort('status')}
-              style={{
-                cursor: 'pointer',
-                userSelect: 'none',
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-              }}
-            >
-              <Flex align="center" gap="1">
-                <Text>Status</Text>
-                {sortColumn === 'status' &&
-                  (sortDirection === 'asc' ? (
-                    <ArrowUp width={12} height={12} />
-                  ) : (
-                    <ArrowDown width={12} height={12} />
-                  ))}
-              </Flex>
-            </div>
-            <div
-              style={{
-                fontSize: 'var(--font-size-1)',
-                fontWeight: 600,
-                textAlign: 'right',
-              }}
-            />
-          </div>
-
-          {/* Virtualized list body */}
-          <div
-            ref={scrollRef}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflow: 'auto',
-              marginTop: 8,
-            }}
-          >
-            {rows.length === 0 ? (
-              <Flex align="center" justify="center" py="6">
-                <Text size="2" color="gray">
-                  No results
-                </Text>
-              </Flex>
-            ) : (
-              <div
-                style={{
-                  height: `${rowVirtualizer.getTotalSize()}px`,
-                  width: '100%',
-                  position: 'relative',
-                }}
-              >
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const r = rows[virtualRow.index]
-
-                  const active = r.kind !== 'invite' && r.id === selectedUserId
-                  const internalNote =
-                    r.kind !== 'invite'
-                      ? internalNotesByUserId?.[r.id]
-                      : undefined
-
-                  return (
-                    <div
-                      key={r.id}
-                      data-index={virtualRow.index}
-                      onClick={() => r.kind !== 'invite' && onSelect(r.id)}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        display: 'grid',
-                        gridTemplateColumns: GRID_COLUMNS,
-                        gap: 'var(--space-2)',
-                        alignItems: 'center',
-                        padding: '0 var(--space-3)',
-                        cursor: r.kind !== 'invite' ? 'pointer' : 'default',
-                        backgroundColor: active
-                          ? 'var(--accent-a3)'
-                          : 'transparent',
-                        borderRadius: 'var(--radius-2)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!active) {
-                          e.currentTarget.style.backgroundColor =
-                            'var(--gray-a2)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!active) {
-                          e.currentTarget.style.backgroundColor = 'transparent'
-                        }
-                      }}
-                    >
-                      <div>
-                        <Text size="2" weight="medium">
-                          {r.title}
-                        </Text>
-                        {r.subtitle && (
-                          <Text as="div" size="1" color="gray">
-                            {r.subtitle}
-                          </Text>
-                        )}
-                        {internalNote && (
-                          <Text as="div" size="1" color="gray">
-                            <Text weight="medium">Internal:</Text>{' '}
-                            {internalNote}
-                          </Text>
-                        )}
-                      </div>
-                      <div style={{ verticalAlign: 'middle' }}>
-                        {r.kind === 'invite' ? (
-                          <Badge variant="soft" color="amber">
-                            Pending invite
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="soft"
-                            color={
-                              r.kind === 'owner'
-                                ? 'purple'
-                                : r.kind === 'employee'
-                                  ? 'blue'
-                                  : 'green'
-                            }
-                          >
-                            {r.kind}
-                          </Badge>
-                        )}
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        {r.kind === 'invite' && (
-                          <Button
-                            variant="soft"
-                            color="red"
-                            size="1"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              const id = r.id.replace('invite:', '')
-                              delInvite.mutate(id)
-                            }}
-                            disabled={delInvite.isPending}
-                          >
-                            <Trash width={14} height={14} />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {rows.length > 0 && (
-        <Flex align="center" mt="2">
-          <Text size="2" color="gray">
-            {rows.length} crew member{rows.length !== 1 ? 's' : ''}
-          </Text>
-        </Flex>
-      )}
-    </Box>
+      }
+    />
   )
 }

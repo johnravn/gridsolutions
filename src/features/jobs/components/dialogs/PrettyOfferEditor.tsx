@@ -9,18 +9,18 @@ import {
 import {
   Box,
   Button,
+  Checkbox,
   Dialog,
   Flex,
-  Select,
   Separator,
   Tabs,
   Text,
+  TextArea,
   TextField,
 } from '@radix-ui/themes'
 import { Download, Eye, Lock } from 'iconoir-react'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import {
   exportOfferPDF,
@@ -30,18 +30,31 @@ import {
 import {
   createEmptyDraftPrettyOffer,
   jobSubcontractorQuotesQuery,
-  jobTechnicalOffersQuery,
   prettyOfferDetailQuery,
   savePrettyOffer,
 } from '../../api/prettyOfferQueries'
+import {
+  jobOfferBasesQuery,
+  offerBasisDetailQuery,
+} from '../../api/offerBasisQueries'
 import { canEditOffer, canLockOffer } from '../../utils/offerValidation'
+import { validatePrettyOfferModules } from '../../utils/prettyOfferCalculations'
+import { useOfferEditorAutosave } from '../../hooks/useOfferEditorAutosave'
 import { ModulesSection } from './pretty-offer-editor/ModulesSection'
 import { PreviewSection } from './pretty-offer-editor/PreviewSection'
 import { AppearanceSection } from './pretty-offer-editor/AppearanceSection'
 import { PricingBasisSection } from './pretty-offer-editor/PricingBasisSection'
 import { TotalsSection } from './pretty-offer-editor/TotalsSection'
+import {
+  OFFER_EDITOR_DIALOG_CLASS,
+  offerEditorDialogContentStyle,
+} from './offerEditorDialogStyles'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
-import type { OfferDetail, PrettyOfferDetail } from '../../types'
+import type {
+  OfferBasisDetail,
+  OfferDetail,
+  PrettyOfferDetail,
+} from '../../types'
 import type {
   LocalPrettyModule,
   LocalPricingBasis,
@@ -53,6 +66,7 @@ type Props = {
   jobId: string
   companyId: string
   offerId?: string | null
+  offerBasisId?: string
   onSaved?: (offerId: string) => void
 }
 
@@ -77,12 +91,33 @@ function toLocalPricingBases(
   }))
 }
 
+function serializePrettyOfferEditorState(state: {
+  title: string
+  prettyIntroText: string
+  showPricePerLine: boolean
+  prettyUseCustomerAccent: boolean
+  prettyUseCustomerBackground: boolean
+  modules: Array<LocalPrettyModule>
+  pricingBases: Array<LocalPricingBasis>
+}) {
+  return JSON.stringify({
+    title: state.title.trim(),
+    prettyIntroText: state.prettyIntroText.trim(),
+    showPricePerLine: state.showPricePerLine,
+    prettyUseCustomerAccent: state.prettyUseCustomerAccent,
+    prettyUseCustomerBackground: state.prettyUseCustomerBackground,
+    modules: state.modules,
+    pricingBases: state.pricingBases,
+  })
+}
+
 export default function PrettyOfferEditor({
   open,
   onOpenChange,
   jobId,
   companyId,
   offerId,
+  offerBasisId,
   onSaved,
 }: Props) {
   const qc = useQueryClient()
@@ -91,8 +126,8 @@ export default function PrettyOfferEditor({
     offerId ?? null,
   )
   const [title, setTitle] = React.useState('')
-  const [daysOfUse, setDaysOfUse] = React.useState(1)
-  const [vatPercent, setVatPercent] = React.useState<0 | 25>(25)
+  const [prettyIntroText, setPrettyIntroText] = React.useState('')
+  const [showPricePerLine, setShowPricePerLine] = React.useState(false)
   const [modules, setModules] = React.useState<Array<LocalPrettyModule>>([])
   const [pricingBases, setPricingBases] = React.useState<
     Array<LocalPricingBasis>
@@ -105,25 +140,107 @@ export default function PrettyOfferEditor({
     React.useState(false)
   const [prettyUseCustomerBackground, setPrettyUseCustomerBackground] =
     React.useState(false)
+  const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const [baselineSerialized, setBaselineSerialized] = React.useState<
+    string | null
+  >(null)
+  const initializedOfferIdRef = React.useRef<string | null>(null)
+  const editorFormRef = React.useRef({
+    title: '',
+    prettyIntroText: '',
+    showPricePerLine: false,
+    prettyUseCustomerAccent: false,
+    prettyUseCustomerBackground: false,
+    modules: [] as Array<LocalPrettyModule>,
+    pricingBases: [] as Array<LocalPricingBasis>,
+  })
+
+  editorFormRef.current = {
+    title,
+    prettyIntroText,
+    showPricePerLine,
+    prettyUseCustomerAccent,
+    prettyUseCustomerBackground,
+    modules,
+    pricingBases,
+  }
 
   React.useEffect(() => {
     if (offerId) setActiveOfferId(offerId)
   }, [offerId])
+
+  React.useEffect(() => {
+    if (!open) {
+      setBaselineSerialized(null)
+      setCloseGuardOpen(false)
+      initializedOfferIdRef.current = null
+    }
+  }, [open])
 
   const { data: offer, isLoading } = useQuery({
     ...prettyOfferDetailQuery(activeOfferId ?? ''),
     enabled: open && !!activeOfferId,
   })
 
-  const { data: technicalOffers = [] } = useQuery({
-    ...jobTechnicalOffersQuery(jobId),
+  const linkedBasisId = offer?.offer_basis_id ?? offerBasisId ?? null
+  const { data: linkedBasisDetail } = useQuery({
+    ...offerBasisDetailQuery(linkedBasisId ?? ''),
+    enabled: open && !!linkedBasisId,
+  })
+
+  const basisPricing = React.useMemo(
+    () => ({
+      daysOfUse: linkedBasisDetail?.days_of_use ?? 1,
+      vatPercent:
+        linkedBasisDetail?.vat_percent === 0 ? (0 as const) : (25 as const),
+    }),
+    [linkedBasisDetail],
+  )
+
+  const { data: offerBasesRows = [] } = useQuery({
+    ...jobOfferBasesQuery(jobId),
     enabled: open,
   })
+
+  const offerBases = React.useMemo(
+    () => offerBasesRows.map(({ offers: _o, ...basis }) => basis),
+    [offerBasesRows],
+  )
 
   const { data: jobQuotes = [] } = useQuery({
     ...jobSubcontractorQuotesQuery({ jobId }),
     enabled: open,
   })
+
+  const offerBasisIds = React.useMemo(
+    () => [
+      ...new Set(
+        pricingBases
+          .map((b) => b.source_offer_basis_id)
+          .filter((id): id is string => !!id),
+      ),
+    ],
+    [pricingBases],
+  )
+
+  const offerBasisResults = useQueries({
+    queries: offerBasisIds.map((id) => ({
+      ...offerBasisDetailQuery(id),
+      enabled: open && !!id,
+    })),
+  })
+
+  const offerBasesById = React.useMemo(() => {
+    const map = new Map<string, OfferBasisDetail>()
+    offerBasisIds.forEach((id, index) => {
+      const data = offerBasisResults[index]?.data
+      if (data) map.set(id, data)
+    })
+    if (linkedBasisId && linkedBasisDetail) {
+      map.set(linkedBasisId, linkedBasisDetail)
+    }
+    return map
+  }, [offerBasisIds, offerBasisResults, linkedBasisId, linkedBasisDetail])
 
   const technicalOfferIds = React.useMemo(
     () => [
@@ -163,20 +280,42 @@ export default function PrettyOfferEditor({
   })
 
   React.useEffect(() => {
-    if (!offer) return
+    if (!open || !offer || !activeOfferId) return
+    if (initializedOfferIdRef.current === activeOfferId) return
+    initializedOfferIdRef.current = activeOfferId
+
+    const localModules = toLocalModules(offer.modules)
+    const localPricingBases = toLocalPricingBases(offer.pricing_bases)
+    const useCustomerAccent = offer.pretty_use_customer_accent ?? false
+    const useCustomerBackground = offer.pretty_use_customer_background ?? false
+
     setTitle(offer.title)
-    setDaysOfUse(offer.days_of_use)
-    setVatPercent(offer.vat_percent === 0 ? 0 : 25)
-    setPrettyUseCustomerAccent(offer.pretty_use_customer_accent ?? false)
-    setPrettyUseCustomerBackground(
-      offer.pretty_use_customer_background ?? false,
+    setPrettyIntroText(offer.pretty_intro_text ?? '')
+    setShowPricePerLine(offer.show_price_per_line)
+    setPrettyUseCustomerAccent(useCustomerAccent)
+    setPrettyUseCustomerBackground(useCustomerBackground)
+    setModules(localModules)
+    setPricingBases(localPricingBases)
+    setBaselineSerialized(
+      serializePrettyOfferEditorState({
+        title: offer.title,
+        prettyIntroText: offer.pretty_intro_text ?? '',
+        showPricePerLine: offer.show_price_per_line,
+        prettyUseCustomerAccent: useCustomerAccent,
+        prettyUseCustomerBackground: useCustomerBackground,
+        modules: localModules,
+        pricingBases: localPricingBases,
+      }),
     )
-    setModules(toLocalModules(offer.modules))
-    setPricingBases(toLocalPricingBases(offer.pricing_bases))
-  }, [offer])
+  }, [open, offer, activeOfferId])
 
   const readOnly = offer ? !canEditOffer(offer) : false
   const canLock = offer ? canLockOffer(offer) : false
+  const moduleValidationIssues = React.useMemo(
+    () => validatePrettyOfferModules(modules),
+    [modules],
+  )
+  const modulesReadyToLock = moduleValidationIssues.length === 0
 
   const expansionContext = {
     rentalFactorConfig: (companyExpansion?.rental_factor_config ??
@@ -188,11 +327,13 @@ export default function PrettyOfferEditor({
   }
 
   const createMutation = useMutation({
-    mutationFn: () => createEmptyDraftPrettyOffer({ jobId, companyId }),
+    mutationFn: () =>
+      createEmptyDraftPrettyOffer({ jobId, companyId, offerBasisId }),
     onSuccess: (newOfferId) => {
       setActiveOfferId(newOfferId)
       onSaved?.(newOfferId)
       qc.invalidateQueries({ queryKey: ['job-pretty-offers', jobId] })
+      qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
     },
     onError: (err: Error) => {
       toastError('Failed to create offer', err.message)
@@ -226,33 +367,101 @@ export default function PrettyOfferEditor({
       offerId: activeOfferId,
       jobId,
       title,
-      daysOfUse,
-      vatPercent,
+      prettyIntroText,
+      showPricePerLine,
       prettyUseCustomerAccent,
       prettyUseCustomerBackground,
       modules,
       pricingBases,
       technicalOffersById: offersById,
+      offerBasesById,
       ...expansionContext,
     })
   }
 
+  const hasUnsavedChanges = React.useCallback(() => {
+    if (!open || readOnly) return false
+    if (baselineSerialized === null) return false
+    const current = editorFormRef.current
+    return (
+      serializePrettyOfferEditorState({
+        title: current.title,
+        prettyIntroText: current.prettyIntroText,
+        showPricePerLine: current.showPricePerLine,
+        prettyUseCustomerAccent: current.prettyUseCustomerAccent,
+        prettyUseCustomerBackground: current.prettyUseCustomerBackground,
+        modules: current.modules,
+        pricingBases: current.pricingBases,
+      }) !== baselineSerialized
+    )
+  }, [
+    open,
+    readOnly,
+    baselineSerialized,
+    title,
+    prettyIntroText,
+    showPricePerLine,
+    prettyUseCustomerAccent,
+    prettyUseCustomerBackground,
+    modules,
+    pricingBases,
+  ])
+
   const saveMutation = useMutation({
-    mutationFn: persistOffer,
-    onSuccess: () => {
+    mutationFn: async (payload?: {
+      closeAfterSave?: boolean
+      autosave?: boolean
+    }) => {
+      await persistOffer()
+      return {
+        closeAfterSave: payload?.closeAfterSave === true,
+        autosave: payload?.autosave === true,
+      }
+    },
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['pretty-offer-detail', activeOfferId] })
       qc.invalidateQueries({ queryKey: ['job-pretty-offers', jobId] })
-      success('Saved', 'Pretty offer saved.')
+      qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
+      const current = editorFormRef.current
+      setBaselineSerialized(
+        serializePrettyOfferEditorState({
+          title: current.title,
+          prettyIntroText: current.prettyIntroText,
+          showPricePerLine: current.showPricePerLine,
+          prettyUseCustomerAccent: current.prettyUseCustomerAccent,
+          prettyUseCustomerBackground: current.prettyUseCustomerBackground,
+          modules: current.modules,
+          pricingBases: current.pricingBases,
+        }),
+      )
+      if (!result.autosave) {
+        success('Saved', 'Pretty offer saved.')
+      }
       onSaved?.(activeOfferId!)
+      if (result.closeAfterSave) {
+        onOpenChange(false)
+      }
     },
     onError: (err: Error) => {
       toastError('Save failed', err.message)
     },
   })
 
+  useOfferEditorAutosave({
+    enabled: open && !readOnly && !isLoading && !!activeOfferId,
+    hasUnsavedChanges,
+    isSaving: saveMutation.isPending,
+    canSave: () => !!activeOfferId,
+    save: () => saveMutation.mutate({ autosave: true }),
+  })
+
   const lockMutation = useMutation({
     mutationFn: async () => {
       if (!activeOfferId || !offer) throw new Error('No offer')
+      const issues = validatePrettyOfferModules(modules)
+      if (issues.length > 0) {
+        throw new Error(issues[0].message)
+      }
       await persistOffer()
       await lockOffer(activeOfferId)
     },
@@ -272,36 +481,36 @@ export default function PrettyOfferEditor({
     onError: (err: Error) => toastError('Export failed', err.message),
   })
 
-  const handleSendEmail = async () => {
-    if (!offer?.customer_contact?.email || !activeOfferId) {
-      toastError('Missing email', 'Customer contact email is required.')
+  const handleOfferDialogOpenChange = (next: boolean) => {
+    if (next) return
+    if (!readOnly && hasUnsavedChanges()) {
+      setCloseGuardOpen(true)
       return
     }
+    onOpenChange(false)
+  }
+
+  const saveFromCloseGuardAndExit = async () => {
     try {
-      await sendOfferByEmail({
-        offerId: activeOfferId,
-        toEmail: offer.customer_contact.email,
-      })
-      success('Email sent', 'Offer email sent to customer.')
-    } catch (err) {
-      toastError(
-        'Email failed',
-        err instanceof Error ? err.message : 'Please try again.',
-      )
+      await saveMutation.mutateAsync({ closeAfterSave: true })
+      setCloseGuardOpen(false)
+    } catch {
+      // mutation shows error
     }
   }
 
+  const discardFromCloseGuard = () => {
+    setCloseGuardOpen(false)
+    onOpenChange(false)
+  }
+
   return (
-    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+    <Dialog.Root open={open} onOpenChange={handleOfferDialogOpenChange}>
       <Dialog.Content
-        maxWidth="1100px"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          height: '85vh',
-          maxHeight: '85vh',
-          overflow: 'hidden',
-        }}
+        align="center"
+        maxWidth="1280px"
+        className={OFFER_EDITOR_DIALOG_CLASS}
+        style={offerEditorDialogContentStyle}
       >
         <Flex
           direction="column"
@@ -326,20 +535,16 @@ export default function PrettyOfferEditor({
                   PDF
                 </Button>
               )}
-              {offer?.customer_contact?.email && !readOnly && (
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => void handleSendEmail()}
-                >
-                  Send email
-                </Button>
-              )}
               {canLock && (
                 <Button
                   size="2"
                   onClick={() => lockMutation.mutate()}
-                  disabled={lockMutation.isPending}
+                  disabled={lockMutation.isPending || !modulesReadyToLock}
+                  title={
+                    modulesReadyToLock
+                      ? undefined
+                      : 'Complete all module story fields before locking'
+                  }
                 >
                   <Lock width={16} height={16} />
                   Lock & send
@@ -348,7 +553,7 @@ export default function PrettyOfferEditor({
               {!readOnly && (
                 <Button
                   size="2"
-                  onClick={() => saveMutation.mutate()}
+                  onClick={() => saveMutation.mutate({})}
                   disabled={saveMutation.isPending || !activeOfferId}
                 >
                   Save
@@ -367,7 +572,7 @@ export default function PrettyOfferEditor({
               gap="3"
               style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
             >
-              <Flex gap="3" wrap="wrap">
+              <Flex gap="3" wrap="wrap" align="end">
                 <Box style={{ flex: 2, minWidth: 220 }}>
                   <Text size="2" weight="medium" mb="1" as="div">
                     Title
@@ -378,36 +583,32 @@ export default function PrettyOfferEditor({
                     onChange={(e) => setTitle(e.target.value)}
                   />
                 </Box>
-                <Box style={{ width: 120 }}>
-                  <Text size="2" weight="medium" mb="1" as="div">
-                    Days
-                  </Text>
-                  <TextField.Root
-                    type="number"
-                    value={daysOfUse}
-                    disabled={readOnly}
-                    onChange={(e) =>
-                      setDaysOfUse(Math.max(1, Number(e.target.value) || 1))
+                <Flex align="center" gap="2" style={{ minHeight: 32 }}>
+                  <Checkbox
+                    checked={showPricePerLine}
+                    onCheckedChange={(checked) =>
+                      setShowPricePerLine(checked === true)
                     }
-                  />
-                </Box>
-                <Box style={{ width: 120 }}>
-                  <Text size="2" weight="medium" mb="1" as="div">
-                    VAT
-                  </Text>
-                  <Select.Root
-                    value={String(vatPercent)}
                     disabled={readOnly}
-                    onValueChange={(v) => setVatPercent(v === '0' ? 0 : 25)}
-                  >
-                    <Select.Trigger />
-                    <Select.Content style={{ zIndex: 10000 }}>
-                      <Select.Item value="25">25%</Select.Item>
-                      <Select.Item value="0">0%</Select.Item>
-                    </Select.Content>
-                  </Select.Root>
-                </Box>
+                  />
+                  <Text size="2" as="label" style={{ cursor: 'pointer' }}>
+                    Show price per module to customer
+                  </Text>
+                </Flex>
               </Flex>
+
+              <Box>
+                <Text size="2" weight="medium" mb="1" as="div">
+                  Intro text
+                </Text>
+                <TextArea
+                  value={prettyIntroText}
+                  disabled={readOnly}
+                  rows={2}
+                  placeholder="Opening pitch shown under the title on the public offer"
+                  onChange={(e) => setPrettyIntroText(e.target.value)}
+                />
+              </Box>
 
               <Separator size="4" />
 
@@ -446,6 +647,7 @@ export default function PrettyOfferEditor({
                       offerId={activeOfferId ?? ''}
                       modules={modules}
                       pricingBases={pricingBases}
+                      offerBasisDetail={linkedBasisDetail}
                       selectedModuleId={selectedModuleId}
                       readOnly={readOnly}
                       onModulesChange={setModules}
@@ -455,9 +657,12 @@ export default function PrettyOfferEditor({
                   <Tabs.Content value="pricing">
                     <PricingBasisSection
                       jobId={jobId}
+                      daysOfUse={basisPricing.daysOfUse}
                       modules={modules}
                       pricingBases={pricingBases}
-                      technicalOffers={technicalOffers}
+                      offerBases={offerBases}
+                      linkedOfferBasisId={linkedBasisId}
+                      offerBasesById={offerBasesById}
                       readOnly={readOnly}
                       onPricingBasesChange={setPricingBases}
                     />
@@ -467,8 +672,10 @@ export default function PrettyOfferEditor({
                       modules={modules}
                       pricingBases={pricingBases}
                       technicalOffersById={technicalOffersById}
+                      offerBasesById={offerBasesById}
                       jobQuotesById={jobQuotesById}
-                      vatPercent={vatPercent}
+                      vatPercent={basisPricing.vatPercent}
+                      daysOfUse={basisPricing.daysOfUse}
                       {...expansionContext}
                     />
                   </Tabs.Content>
@@ -499,9 +706,24 @@ export default function PrettyOfferEditor({
                     />
                     <PreviewSection
                       modules={modules}
-                      offer={offer ?? null}
+                      pricingBases={pricingBases}
+                      technicalOffersById={technicalOffersById}
+                      offerBasesById={offerBasesById}
+                      jobQuotesById={jobQuotesById}
+                      daysOfUse={basisPricing.daysOfUse}
+                      {...expansionContext}
+                      offer={
+                        offer
+                          ? {
+                              ...offer,
+                              title,
+                              pretty_intro_text: prettyIntroText,
+                            }
+                          : null
+                      }
                       prettyUseCustomerAccent={prettyUseCustomerAccent}
                       prettyUseCustomerBackground={prettyUseCustomerBackground}
+                      showPricePerLine={showPricePerLine}
                     />
                   </Tabs.Content>
                 </Box>
@@ -510,6 +732,36 @@ export default function PrettyOfferEditor({
           )}
         </Flex>
       </Dialog.Content>
+
+      <Dialog.Root open={closeGuardOpen} onOpenChange={setCloseGuardOpen}>
+        <Dialog.Content maxWidth="480px" style={{ zIndex: 101 }}>
+          <Dialog.Title>Unsaved changes</Dialog.Title>
+          <Separator my="3" />
+          <Text size="2">
+            You have unsaved changes. Save them before closing, discard them, or
+            keep editing.
+          </Text>
+          <Flex gap="2" mt="4" justify="end" wrap="wrap">
+            <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>
+              Keep editing
+            </Button>
+            <Button
+              variant="soft"
+              color="red"
+              onClick={discardFromCloseGuard}
+              disabled={saveMutation.isPending}
+            >
+              Discard
+            </Button>
+            <Button
+              onClick={() => void saveFromCloseGuardAndExit()}
+              disabled={saveMutation.isPending || !activeOfferId}
+            >
+              {saveMutation.isPending ? 'Saving…' : 'Save & close'}
+            </Button>
+          </Flex>
+        </Dialog.Content>
+      </Dialog.Root>
     </Dialog.Root>
   )
 }

@@ -7,10 +7,13 @@ export function AnimatedBackground({
   intensity = 1.0,
   shapeType = 'circles',
   speed = 1.0,
+  boostLightContrast = true,
 }: {
   intensity?: number
   shapeType?: ShapeType
   speed?: number
+  /** When false, shape colors stay subtle after theme class hydration. */
+  boostLightContrast?: boolean
 }) {
   // Clamp intensity between 0 and 1
   const clampedIntensity = Math.max(0, Math.min(1, intensity))
@@ -216,7 +219,9 @@ export function AnimatedBackground({
           ${shapeType === 'rectangles' ? 'border-radius: 15px;' : ''}
         }
         
-        /* Increase contrast for light mode */
+        ${
+          boostLightContrast
+            ? `/* Increase contrast for light mode */
         .light .bg-shape-1,
         .light .bg-shape-3,
         .light .bg-shape-5 {
@@ -226,6 +231,8 @@ export function AnimatedBackground({
         .light .bg-shape-2,
         .light .bg-shape-4 {
           background: var(--accent-a6);
+        }`
+            : ''
         }
       `}</style>
       <div className="bg-shape bg-shape-1" />

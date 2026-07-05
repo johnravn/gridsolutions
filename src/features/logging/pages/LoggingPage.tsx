@@ -24,6 +24,7 @@ import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import {
   getModShortcutLabel,
@@ -922,7 +923,7 @@ export default function LoggingPage() {
     }
   }, [isResizing])
 
-  if (!companyId) return <div>No company selected.</div>
+  if (!companyId) return <PageSkeleton columns="1fr" showInspector={false} />
 
   // On small screens, use Grid layout (stack)
   if (!isLarge) {

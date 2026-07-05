@@ -7,6 +7,7 @@ import {
   Button,
   Flex,
   IconButton,
+  Skeleton,
   Spinner,
   Table,
   Text,
@@ -85,7 +86,7 @@ export default function JobsTable({
   // Track if we've calculated initial width to prevent recalculating on every search/filter
   const hasCalculatedInitialWidth = React.useRef(false)
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     ...jobsIndexPageQuery({
       companyId: companyId ?? '__none__',
       page,
@@ -462,7 +463,15 @@ export default function JobsTable({
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {allData.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <Table.Row key={i}>
+                  <Table.Cell colSpan={6}>
+                    <Skeleton style={{ height: 44 }} />
+                  </Table.Cell>
+                </Table.Row>
+              ))
+            ) : allData.length === 0 ? (
               <Table.Row>
                 <Table.Cell colSpan={6}>No jobs found</Table.Cell>
               </Table.Row>

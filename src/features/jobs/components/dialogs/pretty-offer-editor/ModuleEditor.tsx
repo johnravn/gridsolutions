@@ -2,12 +2,17 @@ import {
   Box,
   Checkbox,
   Flex,
+  Heading,
   Separator,
   Text,
   TextField,
 } from '@radix-ui/themes'
 import { calculateSplitAmount } from '../../../utils/prettyOfferCalculations'
 import { ContentBlocksSection } from './ContentBlocksSection'
+import {
+  ModuleHeroMediaEditor,
+  ModuleStoryFields,
+} from './ModuleHeroMediaEditor'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
 
 type Props = {
@@ -17,6 +22,7 @@ type Props = {
   offerId: string
   pricingBases: Array<LocalPricingBasis>
   readOnly: boolean
+  fieldErrors?: Record<string, string>
   onChange: (module: LocalPrettyModule) => void
 }
 
@@ -30,11 +36,12 @@ function formatMoney(value: number) {
 
 export function ModuleEditor({
   module,
-  jobId,
+  jobId: _jobId,
   companyId,
   offerId,
   pricingBases,
   readOnly,
+  fieldErrors = {},
   onChange,
 }: Props) {
   const update = (patch: Partial<LocalPrettyModule>) => {
@@ -56,10 +63,19 @@ export function ModuleEditor({
   return (
     <Box>
       <Flex direction="column" gap="3">
+        <Heading size="4" mb="1">
+          Module story
+        </Heading>
+
         <Box>
           <Text size="2" weight="medium" mb="1" as="div">
-            Title
+            Title <Text color="red">*</Text>
           </Text>
+          {fieldErrors.title && (
+            <Text size="1" color="red" mb="1" as="div">
+              {fieldErrors.title}
+            </Text>
+          )}
           <TextField.Root
             value={module.title}
             disabled={readOnly}
@@ -67,6 +83,22 @@ export function ModuleEditor({
             placeholder="e.g. Audio"
           />
         </Box>
+
+        <ModuleStoryFields
+          module={module}
+          readOnly={readOnly}
+          fieldErrors={fieldErrors}
+          onChange={update}
+        />
+
+        <ModuleHeroMediaEditor
+          module={module}
+          companyId={companyId}
+          offerId={offerId}
+          readOnly={readOnly}
+          fieldErrors={fieldErrors}
+          onChange={update}
+        />
 
         <Flex gap="3" align="end" wrap="wrap">
           <Flex align="center" gap="2" style={{ minWidth: 160 }}>
@@ -137,7 +169,7 @@ export function ModuleEditor({
 
         <ContentBlocksSection
           moduleId={module.id}
-          jobId={jobId}
+          jobId={_jobId}
           companyId={companyId}
           offerId={offerId}
           blocks={module.content_blocks}

@@ -47,8 +47,35 @@ export function formatFromHeader(displayName: string, email: string): string {
   return `${displayName} <${email}>`
 }
 
+/** Domains used by seeds, demos, and tests — never deliver real mail to these. */
+const NON_DELIVERABLE_EMAIL_SUFFIXES = [
+  '@test.grid.local',
+  '@example.com',
+  '@grid.local',
+  '@demo.internal',
+] as const
+
+/**
+ * True for seeded / fixture addresses that must not receive Resend mail
+ * (e.g. owner@test.grid.local, user@example.com, demo+uuid@demo.internal).
+ * Real inboxes such as john.ravndal@gmail.com are not blocked.
+ */
+export function isNonDeliverableTestEmail(email: string): boolean {
+  const normalized = email.trim().toLowerCase()
+  if (!normalized || !normalized.includes('@')) return true
+  return NON_DELIVERABLE_EMAIL_SUFFIXES.some((suffix) =>
+    normalized.endsWith(suffix),
+  )
+}
+
 export type ResendSendResult =
-  | { ok: true; messageId: string | null; raw: unknown; dryRun?: boolean }
+  | {
+      ok: true
+      messageId: string | null
+      raw: unknown
+      dryRun?: boolean
+      skippedTestRecipient?: boolean
+    }
   | { ok: false; status: number; bodyText: string }
 
 /**
@@ -66,6 +93,26 @@ export async function sendResendHtmlEmail(params: {
 }): Promise<ResendSendResult> {
   const fromEmail = getDefaultFromEmail()
   const fromName = params.fromDisplayName ?? getDefaultFromName()
+
+  const deliverableTo = params.to.filter(
+    (addr) => !isNonDeliverableTestEmail(addr),
+  )
+  if (deliverableTo.length === 0) {
+    console.log(
+      '[resend] skipped send to test/non-deliverable recipients',
+      JSON.stringify({
+        from: formatFromHeader(fromName, fromEmail),
+        to: params.to,
+        subject: params.subject,
+      }),
+    )
+    return {
+      ok: true,
+      messageId: null,
+      skippedTestRecipient: true,
+      raw: { id: null, skipped: 'test_recipient' },
+    }
+  }
 
   if (isResendDryRun()) {
     console.log(
@@ -86,7 +133,7 @@ export async function sendResendHtmlEmail(params: {
 
   const payload: Record<string, unknown> = {
     from: formatFromHeader(fromName, fromEmail),
-    to: params.to,
+    to: deliverableTo,
     subject: params.subject,
     html: params.html,
   }

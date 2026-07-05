@@ -6,12 +6,14 @@
 @source not "../**/*.stories.{ts,tsx}";
 
 :root {
-  --motion-duration-reveal: 200ms;
+  --motion-duration-reveal: 120ms;
   --motion-ease-reveal: ease;
   --motion-ease-reveal-out: ease-out;
   --motion-ease-reveal-in: ease-in;
   --motion-offset-reveal-x: -6px;
   --motion-offset-reveal-y: -4px;
+  --motion-offset-nudge-x: 4px;
+  --motion-scale-hover: 1.006;
   --app-safe-top: env(safe-area-inset-top, 0px);
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-safe-left: env(safe-area-inset-left, 0px);
@@ -94,6 +96,14 @@ code {
   -webkit-backdrop-filter: blur(16px) saturate(180%);
 }
 
+/* Public offer: keep Radix translucent panel tokens (skip auth-page frosted-glass hack) */
+.public-offer-page [data-radix-theme] [data-radix-card],
+.public-offer-page [data-radix-theme] [class*='rt-Card'] {
+  background: var(--color-panel-translucent) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* Ensure toasts appear above dialogs */
 /* Target Radix UI Toast elements */
 [data-radix-toast-viewport] {
@@ -145,6 +155,17 @@ code {
   z-index: 101 !important;
 }
 
+/* Large offer editors: sizing only (Radix Dialog align="center" handles vertical centering) */
+.rt-DialogScrollPadding:has(.offer-editor-dialog) {
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-4);
+}
+
+.offer-editor-dialog {
+  width: min(1280px, calc(100vw - 2rem));
+  max-width: min(1280px, calc(100vw - 2rem));
+}
+
 /* Ensure AlertDialog is also below toasts */
 [data-radix-alert-dialog-overlay],
 [class*='rt-AlertDialogOverlay'] {
@@ -182,6 +203,50 @@ code {
 }
 
 /* Dev badges: constrained width, horizontal scroll loop when text overflows */
+/* Sidebar nav: subtle hover nudge (fine pointer only; no effect on touch) */
+@media (hover: hover) and (pointer: fine) {
+  @media (prefers-reduced-motion: no-preference) {
+    .sidebar-nav-item {
+      transition: transform var(--motion-duration-reveal)
+        var(--motion-ease-reveal-out);
+    }
+
+    .sidebar-nav-item:hover {
+      transform: translateX(var(--motion-offset-nudge-x));
+    }
+  }
+}
+
+/* Index table rows: selection + hover via CSS (replaces imperative mouse handlers) */
+.index-table-row {
+  background-color: transparent;
+  transition:
+    background-color var(--motion-duration-reveal) var(--motion-ease-reveal-out),
+    transform var(--motion-duration-reveal) var(--motion-ease-reveal-out);
+  transform-origin: center center;
+}
+.index-table-row--selected {
+  background-color: var(--accent-a3);
+}
+.index-table-row--muted {
+  background-color: var(--gray-a2);
+}
+.index-table-row--unread:not(.index-table-row--selected) {
+  background-color: var(--blue-a2);
+  box-shadow: inset 3px 0 0 0 var(--blue-9);
+}
+@media (hover: hover) and (pointer: fine) {
+  @media (prefers-reduced-motion: no-preference) {
+    .index-table-row:hover {
+      transform: scale(var(--motion-scale-hover));
+    }
+  }
+
+  .index-table-row:not(.index-table-row--selected):hover {
+    background-color: var(--gray-a2);
+  }
+}
+
 .dev-badge {
   max-width: 120px;
   overflow: hidden;
@@ -209,5 +274,246 @@ code {
   }
   .dev-badge-marquee span:last-child {
     display: none;
+  }
+}
+
+/* Offers tab: basis card actions fade in on hover (always visible on touch / small screens). */
+.offer-basis-card__actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.offer-basis-card:hover .offer-basis-card__actions,
+.offer-basis-card:focus-within .offer-basis-card__actions,
+.offer-basis-card__actions:has([data-state='open']),
+.offer-basis-card:has(.offer-basis-card__actions [data-state='open'])
+  .offer-basis-card__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none), (max-width: 640px) {
+  .offer-basis-card__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .pretty-offer-split-row__delete,
+  .pretty-offer-basis-tab__delete {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* Pretty offer editor: pricing basis tabs */
+.pretty-offer-basis-tab {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--gray-a5);
+  border-radius: var(--radius-3);
+  background: var(--gray-a2);
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pretty-offer-basis-tab:hover {
+  border-color: var(--gray-a7);
+  background: var(--gray-a3);
+}
+
+.pretty-offer-basis-tab--selected {
+  border-color: var(--accent-8);
+  background: var(--accent-a2);
+  box-shadow: inset 0 0 0 1px var(--accent-a5);
+}
+
+.pretty-offer-basis-tab--selected:hover {
+  border-color: var(--accent-9);
+  background: var(--accent-a3);
+}
+
+.pretty-offer-basis-tab__main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.pretty-offer-basis-tab__main:focus-visible {
+  outline: 2px solid var(--focus-8);
+  outline-offset: -2px;
+}
+
+.pretty-offer-basis-tab__amount {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: var(--radius-2);
+  background: var(--gray-a4);
+  color: var(--gray-12);
+  font-size: var(--font-size-1);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.pretty-offer-basis-tab--selected .pretty-offer-basis-tab__amount {
+  background: var(--color-surface);
+  color: var(--gray-12);
+  box-shadow: inset 0 0 0 1px var(--gray-a5);
+}
+
+.pretty-offer-basis-tab__delete {
+  align-self: center;
+  margin-right: var(--space-1);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.pretty-offer-basis-tab:hover .pretty-offer-basis-tab__delete,
+.pretty-offer-basis-tab:focus-within .pretty-offer-basis-tab__delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Pretty offer editor: split row delete fades in on hover */
+.pretty-offer-split-row__delete {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.pretty-offer-split-row:hover .pretty-offer-split-row__delete,
+.pretty-offer-split-row:focus-within .pretty-offer-split-row__delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.pretty-offer-split-flow__connector {
+  display: flex;
+  justify-content: center;
+  padding: 2px 0;
+  color: var(--gray-a8);
+}
+
+.pretty-offer-split-row {
+  border: 1px solid var(--gray-a4);
+  border-radius: var(--radius-3);
+  background: var(--color-surface);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pretty-offer-split-row:hover {
+  border-color: var(--gray-a6);
+  box-shadow: 0 1px 3px var(--gray-a3);
+}
+
+.pretty-offer-split-row__fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+}
+
+.pretty-offer-split-row__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.pretty-offer-split-row__field--grow {
+  flex: 2 1 140px;
+}
+
+.pretty-offer-split-row__field--amount {
+  flex: 0 0 120px;
+}
+
+.pretty-offer-split-row__field--module {
+  flex: 2 1 160px;
+}
+
+.pretty-offer-split-row__field--cost {
+  flex: 0 0 88px;
+  justify-content: center;
+}
+
+.pretty-offer-split-row__arrow {
+  flex: 0 0 auto;
+  color: var(--gray-a8);
+  display: flex;
+  align-items: center;
+  padding-top: 18px;
+}
+
+.pretty-offer-split-row__delete-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  padding-top: 18px;
+}
+
+.pretty-offer-split-row__fields .rt-TextFieldRoot,
+.pretty-offer-split-row__fields .rt-SelectTrigger {
+  width: 100%;
+}
+
+.offer-basis-card--collapsed {
+  cursor: pointer;
+}
+
+.offer-basis-card--collapsed:hover {
+  background-color: var(--gray-a2);
+}
+
+.offer-basis-card__header-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+
+.offer-basis-card__header-toggle:hover {
+  background-color: var(--gray-a2);
+  border-radius: var(--radius-2);
+  margin: calc(-1 * var(--space-1));
+  padding: var(--space-1);
+}
+
+.offer-basis-card__offer-row-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.offer-basis-card__offer-row:hover .offer-basis-card__offer-row-actions,
+.offer-basis-card__offer-row:focus-within .offer-basis-card__offer-row-actions,
+.offer-basis-card__offer-row-actions:has([data-state='open']),
+.offer-basis-card__offer-row:has(
+    .offer-basis-card__offer-row-actions [data-state='open']
+  )
+  .offer-basis-card__offer-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none), (max-width: 640px) {
+  .offer-basis-card__offer-row-actions {
+    opacity: 1;
+    pointer-events: auto;
   }
 }

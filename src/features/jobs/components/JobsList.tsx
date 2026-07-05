@@ -23,6 +23,11 @@ import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
+import { IndexTableBodySkeleton } from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { supabase } from '@shared/api/supabase'
 import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
 import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
@@ -92,6 +97,7 @@ export default function JobsList({
 
   const {
     data: allData = [],
+    isLoading,
     isFetching,
     refetch,
   } = useQuery({
@@ -104,6 +110,7 @@ export default function JobsList({
       userId,
       companyRole,
       showOnlyArchived,
+      maxRows: 150,
     }),
     enabled: !!companyId,
   })
@@ -212,8 +219,13 @@ export default function JobsList({
     estimateSize: () => (compact ? 88 : 64),
     overscan: 10,
     getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0,
+    enabled: rows.length > 0 || isFetching,
   })
+
+  React.useLayoutEffect(() => {
+    if (rows.length === 0 || isLoading) return
+    rowVirtualizer.measure()
+  }, [rows.length, isLoading, rowVirtualizer])
 
   const handleSort = (column: SortBy) => {
     if (sortBy === column) {
@@ -244,7 +256,7 @@ export default function JobsList({
           placeholder="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          size={compact ? '4' : '3'}
+          size={compact ? '3' : '2'}
           style={
             compact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 140 }
           }
@@ -492,7 +504,11 @@ export default function JobsList({
                 ))}
               </Box>
             )}
-            {rows.length === 0 && searchRecurringHits.length === 0 ? (
+            {isLoading ? (
+              <Box p="3">
+                <IndexTableBodySkeleton rowCount={8} />
+              </Box>
+            ) : rows.length === 0 && searchRecurringHits.length === 0 ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
                   {allData.length === 0
@@ -541,14 +557,23 @@ export default function JobsList({
                     <div
                       key={job.id}
                       data-index={virtualRow.index}
+                      className={[
+                        INDEX_TABLE_ROW_CLASS,
+                        isSelected
+                          ? INDEX_TABLE_ROW_SELECTED_CLASS
+                          : compact
+                            ? 'index-table-row--muted'
+                            : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
                       onClick={() => onSelectJob(job.id)}
                       style={{
                         position: 'absolute',
-                        top: 0,
+                        top: `${virtualRow.start}px`,
                         left: 0,
                         width: '100%',
                         height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
                         display: compact ? 'block' : 'grid',
                         gridTemplateColumns: compact ? undefined : GRID_COLUMNS,
                         gap: compact ? undefined : 'var(--space-2)',
@@ -557,28 +582,10 @@ export default function JobsList({
                           ? 'var(--space-3)'
                           : '0 var(--space-3)',
                         cursor: 'pointer',
-                        backgroundColor: isSelected
-                          ? 'var(--accent-a3)'
-                          : compact
-                            ? 'var(--gray-a2)'
-                            : 'transparent',
                         borderRadius: compact
                           ? 'var(--radius-3)'
                           : 'var(--radius-2)',
                         marginBottom: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor =
-                            'var(--gray-a2)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor = compact
-                            ? 'var(--gray-a2)'
-                            : 'transparent'
-                        }
                       }}
                     >
                       {compact ? (

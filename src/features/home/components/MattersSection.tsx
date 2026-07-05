@@ -1,16 +1,9 @@
 import * as React from 'react'
-import {
-  Avatar,
-  Badge,
-  Box,
-  Button,
-  Flex,
-  Spinner,
-  Text,
-} from '@radix-ui/themes'
+import { Avatar, Badge, Box, Button, Flex, Text } from '@radix-ui/themes'
 import { Message } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { formatDistanceToNow } from 'date-fns'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import type { HomeMatter, MatterType } from '../types'
 
@@ -79,9 +72,7 @@ export function MattersSection({
       notFullHeight
     >
       {loading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={3} compact />
       ) : matters.length === 0 ? (
         <Box py="4">
           <Text size="2" color="gray" align="center">

@@ -2,11 +2,13 @@ import { calculateOfferTotals } from './offerCalculations'
 import type { RentalFactorConfig } from './offerCalculations'
 import type {
   JobSubcontractorQuote,
+  OfferBasisDetail,
   OfferDetail,
   PrettyCategoryType,
   PrettyOfferModule,
   PrettyOfferPricingBasis,
   PrettyOfferPricingBasisSplit,
+  PublicPrettyOfferModule,
 } from '../types'
 
 export function normalizeCategoryKey(key: string): string {
@@ -18,6 +20,122 @@ export type TechnicalCostContext = {
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
   vehicleDailyRate?: number | null
+  daysOfUse?: number
+}
+
+export type TechnicalLineItemSource = Pick<
+  OfferDetail,
+  | 'groups'
+  | 'crew_items'
+  | 'transport_items'
+  | 'transport_groups'
+  | 'days_of_use'
+  | 'discount_percent'
+  | 'vat_percent'
+>
+
+export function lineItemSourceFromOfferBasis(
+  basis: Pick<
+    OfferBasisDetail,
+    | 'groups'
+    | 'crew_items'
+    | 'transport_items'
+    | 'transport_groups'
+    | 'days_of_use'
+  >,
+): TechnicalLineItemSource {
+  return {
+    groups: basis.groups,
+    crew_items: basis.crew_items,
+    transport_items: basis.transport_items,
+    transport_groups: basis.transport_groups,
+    days_of_use: basis.days_of_use,
+    discount_percent: 0,
+    vat_percent: 25,
+  }
+}
+
+/** Unique module titles derived from equipment groups, crew roles, and transport groups. */
+export function buildModuleTitlesFromLineItemSource(
+  source: TechnicalLineItemSource,
+): Array<string> {
+  const seen = new Set<string>()
+  const titles: Array<string> = []
+
+  const addTitle = (name: string) => {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const key = normalizeCategoryKey(trimmed)
+    if (seen.has(key)) return
+    seen.add(key)
+    titles.push(trimmed)
+  }
+
+  for (const group of [...(source.groups ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  )) {
+    addTitle(group.group_name)
+  }
+
+  for (const item of [...(source.crew_items ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  )) {
+    addTitle(item.role_title)
+  }
+
+  for (const group of [...(source.transport_groups ?? [])].sort(
+    (a, b) => a.sort_order - b.sort_order,
+  )) {
+    addTitle(group.group_name)
+  }
+
+  if (
+    (source.transport_groups ?? []).length === 0 &&
+    (source.transport_items ?? []).length > 0
+  ) {
+    addTitle('Transport')
+  }
+
+  return titles
+}
+
+export function filterNewModuleTitles(
+  titles: Array<string>,
+  existingModules: Array<Pick<PrettyOfferModule, 'title'>>,
+): Array<string> {
+  const existingKeys = new Set(
+    existingModules.map((module) => normalizeCategoryKey(module.title)),
+  )
+  return titles.filter(
+    (title) => !existingKeys.has(normalizeCategoryKey(title)),
+  )
+}
+
+function resolveTechnicalLineItemSource(
+  basis: PrettyOfferPricingBasis,
+  options: {
+    technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
+    technicalContext?: TechnicalCostContext
+  },
+): TechnicalLineItemSource | null {
+  if (basis.source_offer_basis_id) {
+    const offerBasis = options.offerBasesById?.get(basis.source_offer_basis_id)
+    if (!offerBasis) return null
+    return {
+      groups: offerBasis.groups,
+      crew_items: offerBasis.crew_items,
+      transport_items: offerBasis.transport_items,
+      transport_groups: offerBasis.transport_groups,
+      days_of_use: options.technicalContext?.daysOfUse ?? 1,
+      discount_percent: 0,
+      vat_percent: 25,
+    }
+  }
+
+  const technicalOfferId = basis.source_technical_offer_id
+  if (!technicalOfferId) return null
+  return options.technicalOffersById?.get(technicalOfferId) ?? null
 }
 
 export type TechnicalCategoryOption = {
@@ -26,12 +144,12 @@ export type TechnicalCategoryOption = {
   label: string
 }
 
-export function buildTechnicalCategoryOptions(
-  technicalOffer: OfferDetail,
+export function buildLineItemCategoryOptions(
+  source: TechnicalLineItemSource,
 ): Array<TechnicalCategoryOption> {
   const options: Array<TechnicalCategoryOption> = []
 
-  for (const group of technicalOffer.groups ?? []) {
+  for (const group of source.groups ?? []) {
     if (!group.group_name.trim()) continue
     options.push({
       category_type: 'equipment_group',
@@ -40,20 +158,20 @@ export function buildTechnicalCategoryOptions(
     })
   }
 
-  const crewCategories = new Set<string>()
-  for (const item of technicalOffer.crew_items ?? []) {
-    if (!item.role_category?.trim()) continue
-    crewCategories.add(item.role_category)
+  const crewRoles = new Set<string>()
+  for (const item of source.crew_items ?? []) {
+    if (!item.role_title.trim()) continue
+    crewRoles.add(item.role_title.trim())
   }
-  for (const category of crewCategories) {
+  for (const role of [...crewRoles].sort((a, b) => a.localeCompare(b))) {
     options.push({
       category_type: 'crew_category',
-      category_key: category,
-      label: `Crew: ${category}`,
+      category_key: role,
+      label: `Crew: ${role}`,
     })
   }
 
-  for (const group of technicalOffer.transport_groups ?? []) {
+  for (const group of source.transport_groups ?? []) {
     if (!group.group_name.trim()) continue
     options.push({
       category_type: 'transport_group',
@@ -65,9 +183,23 @@ export function buildTechnicalCategoryOptions(
   return options
 }
 
+/** @deprecated Use buildLineItemCategoryOptions */
+export const buildTechnicalCategoryOptions = buildLineItemCategoryOptions
+
+export function resolveModuleIdForCategoryKey(
+  categoryKey: string,
+  modules: Array<Pick<PrettyOfferModule, 'id' | 'title'>>,
+): string | null {
+  const normalized = normalizeCategoryKey(categoryKey)
+  return (
+    modules.find((module) => normalizeCategoryKey(module.title) === normalized)
+      ?.id ?? null
+  )
+}
+
 function equipmentGroupSubtotal(
   groupName: string,
-  technicalOffer: OfferDetail,
+  technicalOffer: TechnicalLineItemSource,
   rentalFactor: number,
 ): number {
   const normalized = normalizeCategoryKey(groupName)
@@ -84,19 +216,21 @@ function equipmentGroupSubtotal(
 
 function crewCategorySubtotal(
   categoryKey: string,
-  technicalOffer: OfferDetail,
+  technicalOffer: TechnicalLineItemSource,
 ): number {
   const normalized = normalizeCategoryKey(categoryKey)
   return (technicalOffer.crew_items ?? [])
     .filter(
-      (item) => normalizeCategoryKey(item.role_category ?? '') === normalized,
+      (item) =>
+        normalizeCategoryKey(item.role_title) === normalized ||
+        normalizeCategoryKey(item.role_category ?? '') === normalized,
     )
     .reduce((sum, item) => sum + item.total_price, 0)
 }
 
 function transportGroupSubtotal(
   groupName: string,
-  technicalOffer: OfferDetail,
+  technicalOffer: TechnicalLineItemSource,
 ): number {
   const normalized = normalizeCategoryKey(groupName)
   const group = (technicalOffer.transport_groups ?? []).find(
@@ -111,7 +245,7 @@ export function calculateTechnicalSplitAmount(
     PrettyOfferPricingBasisSplit,
     'category_type' | 'category_key' | 'amount'
   >,
-  technicalOffer: OfferDetail,
+  technicalOffer: TechnicalLineItemSource,
   technicalContext?: TechnicalCostContext,
 ): number {
   if (!split.category_type || !split.category_key) return split.amount
@@ -163,18 +297,17 @@ export function calculateSplitAmount(
   basis: PrettyOfferPricingBasis,
   options: {
     technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
     jobQuotesById?: Map<string, JobSubcontractorQuote>
     technicalContext?: TechnicalCostContext
   } = {},
 ): number {
   if (basis.basis_type === 'technical') {
-    const technicalOfferId = basis.source_technical_offer_id
-    if (!technicalOfferId) return 0
-    const technicalOffer = options.technicalOffersById?.get(technicalOfferId)
-    if (!technicalOffer) return split.amount
+    const source = resolveTechnicalLineItemSource(basis, options)
+    if (!source) return 0
     return calculateTechnicalSplitAmount(
       split,
-      technicalOffer,
+      source,
       options.technicalContext,
     )
   }
@@ -187,6 +320,7 @@ export function calculateModuleCostFromSplits(
   pricingBases: Array<PrettyOfferPricingBasis>,
   options: {
     technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
     jobQuotesById?: Map<string, JobSubcontractorQuote>
     technicalContext?: TechnicalCostContext
   } = {},
@@ -206,6 +340,7 @@ export function applyComputedCostsToModules(
   pricingBases: Array<PrettyOfferPricingBasis>,
   options: {
     technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
     jobQuotesById?: Map<string, JobSubcontractorQuote>
     technicalContext?: TechnicalCostContext
   } = {},
@@ -224,6 +359,7 @@ export function resolveSplitAmountsForSave(
   pricingBases: Array<PrettyOfferPricingBasis>,
   options: {
     technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
     technicalContext?: TechnicalCostContext
   } = {},
 ): Array<PrettyOfferPricingBasis> {
@@ -231,15 +367,13 @@ export function resolveSplitAmountsForSave(
     ...basis,
     splits: (basis.splits ?? []).map((split) => {
       if (basis.basis_type !== 'technical') return split
-      const technicalOfferId = basis.source_technical_offer_id
-      if (!technicalOfferId) return split
-      const technicalOffer = options.technicalOffersById?.get(technicalOfferId)
-      if (!technicalOffer) return split
+      const source = resolveTechnicalLineItemSource(basis, options)
+      if (!source) return split
       return {
         ...split,
         amount: calculateTechnicalSplitAmount(
           split,
-          technicalOffer,
+          source,
           options.technicalContext,
         ),
       }
@@ -281,10 +415,14 @@ export function validatePricingBases(
       }
     }
 
-    if (basis.basis_type === 'technical' && !basis.source_technical_offer_id) {
+    if (
+      basis.basis_type === 'technical' &&
+      !basis.source_offer_basis_id &&
+      !basis.source_technical_offer_id
+    ) {
       issues.push({
         basisId: basis.id,
-        message: `Technical basis "${basis.title || 'Untitled'}" must link to a technical offer.`,
+        message: `Technical basis "${basis.title || 'Untitled'}" must link to an offer basis or technical offer.`,
       })
     }
 
@@ -368,15 +506,15 @@ export function suggestTechnicalSplitsForModule(
   }
 
   for (const item of technicalOffer.crew_items ?? []) {
-    const cat = item.role_category
-    if (cat && normalizeCategoryKey(cat) === normalizedTitle) {
+    const roleKey = item.role_title || item.role_category
+    if (roleKey && normalizeCategoryKey(roleKey) === normalizedTitle) {
       suggestions.push({
         module_id: moduleId,
-        title: `Crew: ${cat}`,
+        title: `Crew: ${roleKey}`,
         amount: 0,
         sort_order: sortOrder++,
         category_type: 'crew_category',
-        category_key: cat,
+        category_key: roleKey,
       })
     }
   }
@@ -407,6 +545,7 @@ export function basisSubtotal(
   basis: PrettyOfferPricingBasis,
   options: {
     technicalOffersById?: Map<string, OfferDetail>
+    offerBasesById?: Map<string, OfferBasisDetail>
     jobQuotesById?: Map<string, JobSubcontractorQuote>
     technicalContext?: TechnicalCostContext
   } = {},
@@ -415,4 +554,160 @@ export function basisSubtotal(
     (sum, split) => sum + calculateSplitAmount(split, basis, options),
     0,
   )
+}
+
+export function resolveModuleCustomerPrice(module: {
+  show_price: boolean
+  display_price: number | null
+  computed_cost?: number | null
+}): number | null {
+  if (!module.show_price) return null
+  const display =
+    module.display_price != null ? Number(module.display_price) : null
+  if (display != null && Number.isFinite(display)) return display
+  const computed =
+    module.computed_cost != null ? Number(module.computed_cost) : null
+  if (computed != null && Number.isFinite(computed) && computed > 0) {
+    return computed
+  }
+  return null
+}
+
+/** Map a module for the customer-facing pretty offer deck. */
+export function buildPublicPrettyModule(
+  module: {
+    id: string
+    title: string
+    tagline?: string | null
+    story_heading_1?: string | null
+    story_body_1?: string | null
+    story_heading_2?: string | null
+    story_body_2?: string | null
+    hero_media_type?: PrettyOfferModule['hero_media_type']
+    hero_media_url?: string | null
+    hero_media_caption?: string | null
+    sort_order: number
+    display_price: number | null
+    show_price: boolean
+    computed_cost?: number | null
+    blocks?: PublicPrettyOfferModule['blocks']
+    content_blocks?: PublicPrettyOfferModule['blocks']
+  },
+  showPricePerLine: boolean,
+): PublicPrettyOfferModule {
+  const computedCost =
+    module.computed_cost != null ? Number(module.computed_cost) : 0
+  const manualDisplay =
+    module.display_price != null ? Number(module.display_price) : null
+  const resolvedDisplay =
+    manualDisplay != null && Number.isFinite(manualDisplay)
+      ? manualDisplay
+      : computedCost > 0
+        ? computedCost
+        : null
+  const hasCustomerPrice = resolvedDisplay != null && resolvedDisplay > 0
+
+  return {
+    id: module.id,
+    title: module.title,
+    tagline: module.tagline,
+    story_heading_1: module.story_heading_1,
+    story_body_1: module.story_body_1,
+    story_heading_2: module.story_heading_2,
+    story_body_2: module.story_body_2,
+    hero_media_type: module.hero_media_type,
+    hero_media_url: module.hero_media_url,
+    hero_media_caption: module.hero_media_caption,
+    sort_order: module.sort_order,
+    display_price: resolvedDisplay,
+    computed_cost: computedCost,
+    show_price: showPricePerLine && hasCustomerPrice,
+    blocks: module.blocks ?? module.content_blocks ?? [],
+  }
+}
+
+export function getModuleStoryPairs(
+  module: Pick<
+    PrettyOfferModule,
+    'story_heading_1' | 'story_body_1' | 'story_heading_2' | 'story_body_2'
+  >,
+): Array<{ heading: string | null; body: string }> {
+  const pairs: Array<{ heading: string | null; body: string }> = []
+  if (module.story_body_1?.trim()) {
+    pairs.push({
+      heading: module.story_heading_1?.trim() || null,
+      body: module.story_body_1.trim(),
+    })
+  }
+  if (module.story_body_2?.trim()) {
+    pairs.push({
+      heading: module.story_heading_2?.trim() || null,
+      body: module.story_body_2.trim(),
+    })
+  }
+  return pairs
+}
+
+export type PrettyOfferModuleValidationIssue = {
+  moduleId: string
+  field?: string
+  message: string
+}
+
+export function isPrettyModuleStoryComplete(
+  module: Pick<
+    PrettyOfferModule,
+    'id' | 'title' | 'story_body_1' | 'hero_media_type' | 'hero_media_url'
+  >,
+): boolean {
+  return validatePrettyOfferModules([module]).length === 0
+}
+
+export function validatePrettyOfferModules(
+  modules: Array<
+    Pick<
+      PrettyOfferModule,
+      'id' | 'title' | 'story_body_1' | 'hero_media_type' | 'hero_media_url'
+    >
+  >,
+): Array<PrettyOfferModuleValidationIssue> {
+  const issues: Array<PrettyOfferModuleValidationIssue> = []
+
+  for (const module of modules) {
+    const label = module.title.trim() || 'Untitled module'
+
+    if (!module.title.trim()) {
+      issues.push({
+        moduleId: module.id,
+        field: 'title',
+        message: `Module "${label}" needs a title.`,
+      })
+    }
+
+    if (!module.story_body_1?.trim()) {
+      issues.push({
+        moduleId: module.id,
+        field: 'story_body_1',
+        message: `Module "${label}" needs at least one story paragraph.`,
+      })
+    }
+
+    if (!module.hero_media_type) {
+      issues.push({
+        moduleId: module.id,
+        field: 'hero_media_type',
+        message: `Module "${label}" needs hero media (image or video).`,
+      })
+    }
+
+    if (!module.hero_media_url?.trim()) {
+      issues.push({
+        moduleId: module.id,
+        field: 'hero_media_url',
+        message: `Module "${label}" needs hero media uploaded or linked.`,
+      })
+    }
+  }
+
+  return issues
 }

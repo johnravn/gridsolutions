@@ -90,4 +90,46 @@ describeIntegration('job subcontractors RLS', () => {
     expect(selectErr).toBeNull()
     expect(rows?.some((r) => r.id === inserted?.id)).toBe(true)
   })
+
+  it('allows owner to set contact_id on a job subcontractor', async () => {
+    if (!jobId || !partnerCustomerId) return
+
+    const service = createServiceClient()
+    const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
+
+    const { data: contact, error: contactErr } = await service
+      .from('contacts')
+      .insert({
+        company_id: TEST_COMPANY_ID,
+        customer_id: partnerCustomerId,
+        name: 'Integration Subcontractor Contact',
+        email: 'sub-contact@test.grid.local',
+      })
+      .select('id')
+      .single()
+    if (contactErr) throw contactErr
+
+    const { data: jobSub, error: subErr } = await client
+      .from('job_subcontractors')
+      .upsert(
+        {
+          job_id: jobId,
+          customer_id: partnerCustomerId,
+        },
+        { onConflict: 'job_id,customer_id' },
+      )
+      .select('id')
+      .single()
+    expect(subErr).toBeNull()
+
+    const { data: updated, error: updateErr } = await client
+      .from('job_subcontractors')
+      .update({ contact_id: contact.id })
+      .eq('id', jobSub!.id)
+      .select('id, contact_id')
+      .single()
+
+    expect(updateErr).toBeNull()
+    expect(updated?.contact_id).toBe(contact.id)
+  })
 })

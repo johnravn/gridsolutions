@@ -14,8 +14,10 @@ import { useLocation } from '@tanstack/react-router'
 import { CalendarXmark, TransitionLeft } from 'iconoir-react'
 import { DatePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -27,10 +29,12 @@ import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
+import { jobsIndexQuery } from '../api/queries'
 import type { JobsPageSelection } from '../types'
 
 export default function JobsPage() {
   const { companyId } = useCompany()
+  const { userId, companyRole } = useAuthz()
   const location = useLocation()
   const search = location.search as Record<string, unknown>
   const jobId = (search.jobId as string | undefined) || undefined
@@ -205,7 +209,23 @@ export default function JobsPage() {
 
   useMobileDetailBack(!isLarge, selection != null, clearSelection)
 
-  if (!companyId) return <PageSkeleton columns="2fr 3fr" />
+  const { isLoading: jobsIndexLoading } = useQuery({
+    ...jobsIndexQuery({
+      companyId: companyId ?? '__none__',
+      search: '',
+      selectedDate: '',
+      sortBy: 'start_at',
+      sortDir: 'asc',
+      userId,
+      companyRole,
+      showOnlyArchived: false,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(jobsIndexLoading)
+
+  if (!companyId || showInitialSkeleton)
+    return <PageSkeleton columns="2fr 3fr" />
 
   if (!isLarge) {
     return (

@@ -38,6 +38,9 @@ test.describe('Jobs', () => {
     await expect(
       page.getByRole('heading', { name: 'Subcontractors' }),
     ).toBeVisible({ timeout: 15_000 })
+    await expect(
+      page.getByRole('heading', { name: 'Subrental equipment' }),
+    ).toBeVisible({ timeout: 15_000 })
 
     await expect(page.getByRole('heading', { name: title })).toBeVisible()
   })

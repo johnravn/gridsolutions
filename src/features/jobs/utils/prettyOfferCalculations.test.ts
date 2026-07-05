@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyComputedCostsToModules,
+  buildModuleTitlesFromLineItemSource,
   calculatePrettyOfferTotals,
   calculateSplitAmount,
   calculateTechnicalSplitAmount,
+  filterNewModuleTitles,
   suggestTechnicalSplitsForModule,
   validatePricingBases,
 } from './prettyOfferCalculations'
@@ -170,10 +172,46 @@ describe('prettyOfferCalculations', () => {
     expect(issues[0]?.message).toContain('must sum to quote total')
   })
 
+  it('builds module titles from line item categories', () => {
+    const titles = buildModuleTitlesFromLineItemSource({
+      groups: [
+        { group_name: 'Lights', sort_order: 1 },
+        { group_name: 'Audio', sort_order: 0 },
+      ],
+      crew_items: [
+        { role_title: 'FOH Engineer', sort_order: 1 },
+        { role_title: 'Stage Manager', sort_order: 0 },
+      ],
+      transport_groups: [{ group_name: 'Transport', sort_order: 0 }],
+      transport_items: [],
+      days_of_use: 1,
+      discount_percent: 0,
+      vat_percent: 25,
+    } as any)
+
+    expect(titles).toEqual([
+      'Audio',
+      'Lights',
+      'Stage Manager',
+      'FOH Engineer',
+      'Transport',
+    ])
+  })
+
+  it('skips module titles that already exist', () => {
+    const titles = filterNewModuleTitles(
+      ['Audio', 'Lights'],
+      [{ title: 'audio' }],
+    )
+    expect(titles).toEqual(['Lights'])
+  })
+
   it('suggests technical splits from module title', () => {
     const technicalOffer = {
       groups: [{ id: 'g1', group_name: 'Audio' }],
-      crew_items: [{ id: 'c1', role_category: 'audio' }],
+      crew_items: [
+        { id: 'c1', role_title: 'Audio Engineer', role_category: 'audio' },
+      ],
       transport_groups: [],
     } as unknown as OfferDetail
 
@@ -186,8 +224,17 @@ describe('prettyOfferCalculations', () => {
       true,
     )
     expect(suggestions.some((s) => s.category_type === 'crew_category')).toBe(
-      true,
+      false,
     )
+
+    const crewSuggestions = suggestTechnicalSplitsForModule(
+      'Audio Engineer',
+      technicalOffer,
+      'm1',
+    )
+    expect(
+      crewSuggestions.some((s) => s.category_type === 'crew_category'),
+    ).toBe(true)
   })
 
   it('calculates pretty offer totals with VAT', () => {

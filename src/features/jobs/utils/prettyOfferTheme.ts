@@ -74,3 +74,16 @@ export function getPrettyOfferThemeStyle(
   if (theme.customHex) return buildCustomAccentCss(theme.customHex)
   return undefined
 }
+
+export function buildDeckGradientCss(
+  theme: PrettyOfferTheme,
+): Record<string, string> {
+  const base = theme.customHex ? buildCustomAccentCss(theme.customHex) : {}
+  return {
+    ...base,
+    '--pretty-deck-hero-gradient':
+      'linear-gradient(135deg, var(--accent-a3) 0%, var(--gray-a2) 45%, var(--accent-a2) 100%)',
+    '--pretty-deck-slide-alt-bg': 'var(--accent-a2)',
+    '--pretty-deck-slide-bg': 'var(--color-panel-solid)',
+  }
+}

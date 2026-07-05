@@ -57,7 +57,7 @@ describe('calculateOfferTotals', () => {
   const crew: Array<OfferCrewItem> = [
     {
       id: 'c1',
-      offer_id: 'o1',
+      offer_basis_id: 'b1',
       role_title: 'Technician',
       crew_count: 1,
       start_date: '2026-06-01',
@@ -71,7 +71,7 @@ describe('calculateOfferTotals', () => {
   const transport: Array<OfferTransportItem> = [
     {
       id: 't1',
-      offer_id: 'o1',
+      offer_basis_id: 'b1',
       vehicle_name: 'Van',
       vehicle_id: null,
       vehicle_category: 'van_medium',

@@ -1,21 +1,15 @@
 import * as React from 'react'
-import {
-  Avatar,
-  Badge,
-  Box,
-  Button,
-  Card,
-  Flex,
-  Spinner,
-  Text,
-} from '@radix-ui/themes'
-import { Calendar, Community, Package, Truck } from 'iconoir-react'
+import { Avatar, Badge, Box, Button, Card, Flex, Text } from '@radix-ui/themes'
+import { Calendar } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { addWeeks, endOfWeek, format, startOfWeek } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { getJobStatusColor } from '@features/jobs/utils/statusColors'
+import { JobBookingRecap } from '@features/jobs/components/JobBookingRecap'
+import { EMPTY_JOB_BOOKING_SUMMARY } from '@features/jobs/utils/bookingSummary'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
@@ -35,13 +29,7 @@ function getDisplayStatus(
   return status
 }
 
-const EMPTY_BOOKING: WeekJobBookingSummary = {
-  hasEquipment: false,
-  hasVehicles: false,
-  equipmentByCategory: [],
-  vehicleNames: [],
-  crewLabels: [],
-}
+const EMPTY_BOOKING = EMPTY_JOB_BOOKING_SUMMARY
 
 function weekRangeLabel(weekOffset: CompanyJobsWeekOffset): string {
   const base = addWeeks(new Date(), weekOffset)
@@ -54,84 +42,6 @@ function weekRangeLabel(weekOffset: CompanyJobsWeekOffset): string {
     return `${format(ws, 'd.', { locale: nb })}–${format(we, 'd. MMM yyyy', { locale: nb })}`
   }
   return `${format(ws, 'd. MMM', { locale: nb })} – ${format(we, 'd. MMM yyyy', { locale: nb })}`
-}
-
-function WeekJobBookingRecap({
-  summary,
-  loading,
-}: {
-  summary: WeekJobBookingSummary
-  loading: boolean
-}) {
-  if (loading) {
-    return (
-      <Flex align="center" gap="2" py="1">
-        <Spinner size="1" />
-        <Text size="1" color="gray">
-          Loading bookings…
-        </Text>
-      </Flex>
-    )
-  }
-
-  const hasAny =
-    summary.hasEquipment || summary.hasVehicles || summary.crewLabels.length > 0
-
-  if (!hasAny) {
-    return (
-      <Text size="1" color="gray">
-        No equipment, vehicles, or extra crew booked yet
-      </Text>
-    )
-  }
-
-  return (
-    <Flex direction="column" gap="2" mt="1">
-      {(summary.hasEquipment || summary.hasVehicles) && (
-        <Flex gap="3" wrap="wrap" align="center">
-          {summary.hasEquipment && (
-            <Flex align="center" gap="1" style={{ minWidth: 0 }}>
-              <Box style={{ flexShrink: 0, color: 'var(--accent-11)' }}>
-                <Package width={16} height={16} />
-              </Box>
-              <Text size="1" color="gray" style={{ minWidth: 0 }}>
-                {summary.equipmentByCategory
-                  .filter((r) => r.quantity > 0)
-                  .map((r) => `${r.quantity}× ${r.categoryName}`)
-                  .join(' · ')}
-              </Text>
-            </Flex>
-          )}
-          {summary.hasVehicles && (
-            <Flex align="center" gap="1" style={{ minWidth: 0 }}>
-              <Box style={{ flexShrink: 0, color: 'var(--accent-11)' }}>
-                <Truck width={16} height={16} />
-              </Box>
-              <Text size="1" color="gray" style={{ minWidth: 0 }}>
-                {summary.vehicleNames.join(' · ')}
-              </Text>
-            </Flex>
-          )}
-        </Flex>
-      )}
-      {summary.crewLabels.length > 0 && (
-        <Flex align="start" gap="1" style={{ minWidth: 0 }}>
-          <Box
-            style={{
-              flexShrink: 0,
-              color: 'var(--accent-11)',
-              marginTop: 2,
-            }}
-          >
-            <Community width={16} height={16} />
-          </Box>
-          <Text size="1" color="gray" style={{ minWidth: 0 }}>
-            Crew: {summary.crewLabels.join(', ')}
-          </Text>
-        </Flex>
-      )}
-    </Flex>
-  )
 }
 
 export function CompanyJobsWeekSection({
@@ -216,9 +126,7 @@ export function CompanyJobsWeekSection({
       headerAction={weekToggle}
     >
       {loading ? (
-        <Flex align="center" justify="center" py="6" style={{ flex: 1 }}>
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={5} />
       ) : jobs.length === 0 ? (
         <Flex align="center" justify="center" py="4" style={{ flex: 1 }}>
           <Text size="2" color="gray" align="center">
@@ -327,7 +235,7 @@ export function CompanyJobsWeekSection({
                         style={{ flexShrink: 0 }}
                       />
                     </Flex>
-                    <WeekJobBookingRecap
+                    <JobBookingRecap
                       summary={summary}
                       loading={bookingsDetailLoading}
                     />

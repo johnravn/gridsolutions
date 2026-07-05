@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import ProfilePageSkeleton from '@shared/ui/components/ProfilePageSkeleton'
 import { DatePicker } from '@shared/ui/components/pickers'
 import { Camera, Lock } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
@@ -382,11 +383,7 @@ export default function ProfilePage() {
     .join(', ')
 
   if (isLoading) {
-    return (
-      <Box p="4">
-        <Text>Loading…</Text>
-      </Box>
-    )
+    return <ProfilePageSkeleton />
   }
   if (isError || !data) {
     return (

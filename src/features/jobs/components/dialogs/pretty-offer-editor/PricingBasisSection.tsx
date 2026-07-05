@@ -1,5 +1,6 @@
 import * as React from 'react'
 import {
+  AlertDialog,
   Badge,
   Box,
   Button,
@@ -8,8 +9,17 @@ import {
   Select,
   Text,
   TextField,
+  Tooltip,
 } from '@radix-ui/themes'
-import { Download, Plus, Spark, Trash } from 'iconoir-react'
+import {
+  ArrowDown,
+  Download,
+  InfoCircle,
+  NavArrowRight,
+  Plus,
+  Spark,
+  Trash,
+} from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
 import {
   getJobSubcontractorQuotePdfUrl,
@@ -18,19 +28,31 @@ import {
 } from '../../../api/subcontractorQueries'
 import {
   basisSubtotal,
-  buildTechnicalCategoryOptions,
+  buildLineItemCategoryOptions,
   calculateSplitAmount,
+  lineItemSourceFromOfferBasis,
+  resolveModuleIdForCategoryKey,
   validatePricingBases,
 } from '../../../utils/prettyOfferCalculations'
-import { offerDetailQuery } from '../../../api/offerQueries'
+import { SplitAmountField } from './SplitAmountField'
 import {
   BASIS_TYPE_LABELS,
   createEmptyPricingBasis,
   createEmptySplit,
   createTempId,
 } from './types'
+import {
+  DELETE_ICON_SIZE,
+  SPLITS_INFO_TOOLTIP,
+  getLatestQuoteBySubcontractorId,
+  quotesForSubcontractor,
+  resolveSubcontractorIdForBasis,
+  splitTitleLabel,
+  splitTitlePlaceholder,
+  subcontractorIdsWithBasis,
+} from './pricingBasisHelpers'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
-import type { JobOffer, OfferDetail } from '../../../types'
+import type { OfferBasis, OfferBasisDetail } from '../../../types'
 
 function formatMoney(value: number) {
   return value.toLocaleString('nb-NO', {
@@ -42,24 +64,32 @@ function formatMoney(value: number) {
 
 type Props = {
   jobId: string
+  daysOfUse: number
   modules: Array<LocalPrettyModule>
   pricingBases: Array<LocalPricingBasis>
-  technicalOffers: Array<JobOffer>
+  offerBases: Array<OfferBasis>
+  linkedOfferBasisId: string | null
+  offerBasesById: Map<string, OfferBasisDetail>
   readOnly: boolean
   onPricingBasesChange: (bases: Array<LocalPricingBasis>) => void
 }
 
 export function PricingBasisSection({
   jobId,
+  daysOfUse,
   modules,
   pricingBases,
-  technicalOffers,
+  offerBases,
+  linkedOfferBasisId,
+  offerBasesById,
   readOnly,
   onPricingBasesChange,
 }: Props) {
   const [selectedBasisId, setSelectedBasisId] = React.useState<string | null>(
     pricingBases[0]?.id ?? null,
   )
+  const [basisPendingDelete, setBasisPendingDelete] =
+    React.useState<LocalPricingBasis | null>(null)
 
   const { data: jobSubcontractors = [] } = useQuery({
     ...jobSubcontractorsQuery({ jobId }),
@@ -81,24 +111,74 @@ export function PricingBasisSection({
     }
   }, [selectedBasisId, sortedBases])
 
-  const technicalOfferId = selectedBasis?.source_technical_offer_id
-  const { data: selectedTechnicalOffer } = useQuery({
-    ...offerDetailQuery(technicalOfferId ?? ''),
-    enabled: !!technicalOfferId,
-  })
+  React.useEffect(() => {
+    if (!linkedOfferBasisId || readOnly) return
+    const needsSync = pricingBases.some(
+      (basis) =>
+        basis.basis_type === 'technical' &&
+        basis.source_offer_basis_id !== linkedOfferBasisId,
+    )
+    if (!needsSync) return
+    onPricingBasesChange(
+      pricingBases.map((basis) =>
+        basis.basis_type === 'technical'
+          ? {
+              ...basis,
+              source_offer_basis_id: linkedOfferBasisId,
+              source_technical_offer_id: null,
+            }
+          : basis,
+      ),
+    )
+  }, [linkedOfferBasisId, readOnly, pricingBases, onPricingBasesChange])
 
-  const technicalOffersById = React.useMemo(() => {
-    const map = new Map<string, OfferDetail>()
-    if (selectedTechnicalOffer && technicalOfferId) {
-      map.set(technicalOfferId, selectedTechnicalOffer)
-    }
-    return map
-  }, [selectedTechnicalOffer, technicalOfferId])
+  const linkedOfferBasis = React.useMemo(() => {
+    if (!linkedOfferBasisId) return null
+    return offerBasesById.get(linkedOfferBasisId) ?? null
+  }, [linkedOfferBasisId, offerBasesById])
+
+  const linkedOfferBasisTitle =
+    linkedOfferBasis?.title ??
+    offerBases.find((basis) => basis.id === linkedOfferBasisId)?.title ??
+    'Offer basis'
+
+  const technicalContext = React.useMemo(() => ({ daysOfUse }), [daysOfUse])
 
   const jobQuotesById = React.useMemo(
     () => new Map(jobQuotes.map((q) => [q.id, q])),
     [jobQuotes],
   )
+
+  const coveredSubcontractorIds = React.useMemo(
+    () => subcontractorIdsWithBasis(sortedBases, jobQuotes, jobSubcontractors),
+    [sortedBases, jobQuotes, jobSubcontractors],
+  )
+
+  const missingSubcontractorCount = jobSubcontractors.filter(
+    (sub) => !coveredSubcontractorIds.has(sub.id),
+  ).length
+
+  const selectedSubcontractorId = selectedBasis
+    ? resolveSubcontractorIdForBasis(
+        selectedBasis,
+        jobQuotes,
+        jobSubcontractors,
+      )
+    : null
+
+  const quotesForSelectedBasis = React.useMemo(
+    () => quotesForSubcontractor(jobQuotes, selectedSubcontractorId),
+    [jobQuotes, selectedSubcontractorId],
+  )
+
+  const selectedQuote = selectedBasis?.job_subcontractor_quote_id
+    ? jobQuotesById.get(selectedBasis.job_subcontractor_quote_id)
+    : null
+
+  const splitTotal =
+    selectedBasis?.splits.reduce((sum, split) => sum + split.amount, 0) ?? 0
+  const quoteTotal = selectedQuote?.total_amount ?? 0
+  const remainingQuoteAmount = quoteTotal - splitTotal
 
   const setBases = (next: Array<LocalPricingBasis>) => {
     onPricingBasesChange(
@@ -111,12 +191,40 @@ export function PricingBasisSection({
   }
 
   const addBasis = (type: LocalPricingBasis['basis_type']) => {
-    const next = [
-      ...sortedBases,
-      createEmptyPricingBasis(sortedBases.length, type),
-    ]
+    const basis = createEmptyPricingBasis(sortedBases.length, type)
+    if (type === 'technical' && linkedOfferBasisId) {
+      const linkedBasis = offerBases.find((b) => b.id === linkedOfferBasisId)
+      basis.source_offer_basis_id = linkedOfferBasisId
+      if (linkedBasis?.title) {
+        basis.title = linkedBasis.title
+      }
+    }
+    const next = [...sortedBases, basis]
     setBases(next)
     setSelectedBasisId(next[next.length - 1].id)
+  }
+
+  const addMissingSubcontractorBases = () => {
+    const latestBySub = getLatestQuoteBySubcontractorId(jobQuotes)
+    const next = [...sortedBases]
+    let addedId: string | null = null
+
+    for (const sub of jobSubcontractors) {
+      if (coveredSubcontractorIds.has(sub.id)) continue
+      const quote = latestBySub.get(sub.id)
+      const basis = createEmptyPricingBasis(next.length, 'subcontractor')
+      basis.title = sub.customer.name
+      basis.source_job_subcontractor_id = sub.id
+      if (quote) {
+        basis.job_subcontractor_quote_id = quote.id
+      }
+      next.push(basis)
+      addedId ??= basis.id
+    }
+
+    if (next.length === sortedBases.length) return
+    setBases(next)
+    if (addedId) setSelectedBasisId(addedId)
   }
 
   const removeBasis = (basisId: string) => {
@@ -139,9 +247,11 @@ export function PricingBasisSection({
     })
   }
 
-  const autoSplitTechnical = (basis: LocalPricingBasis) => {
-    if (!selectedTechnicalOffer || modules.length === 0) return
-    const options = buildTechnicalCategoryOptions(selectedTechnicalOffer)
+  const autoSplitFromBasis = (basis: LocalPricingBasis) => {
+    if (!linkedOfferBasis || modules.length === 0) return
+    const options = buildLineItemCategoryOptions(
+      lineItemSourceFromOfferBasis(linkedOfferBasis),
+    )
     const defaultModuleId = modules[0].id
     const existingKeys = new Set(
       basis.splits.map((s) => `${s.category_type}:${s.category_key}`),
@@ -153,7 +263,9 @@ export function PricingBasisSection({
       .map((opt, index) => ({
         id: createTempId('split'),
         basis_id: basis.id,
-        module_id: defaultModuleId,
+        module_id:
+          resolveModuleIdForCategoryKey(opt.category_key, modules) ??
+          defaultModuleId,
         title: opt.label,
         amount: 0,
         sort_order: basis.splits.length + index,
@@ -169,6 +281,12 @@ export function PricingBasisSection({
     jobQuotesById,
   )
 
+  const showAmountField = selectedBasis?.basis_type !== 'technical'
+  const splitsHeading =
+    selectedBasis?.basis_type === 'subcontractor'
+      ? 'Quote allocation'
+      : 'Module allocations'
+
   return (
     <Flex direction="column" gap="3">
       <Flex justify="between" align="center" wrap="wrap" gap="2">
@@ -183,15 +301,21 @@ export function PricingBasisSection({
               onClick={() => addBasis('technical')}
             >
               <Plus width={14} height={14} />
-              Technical
+              Offer basis
             </Button>
             <Button
               size="1"
               variant="soft"
-              onClick={() => addBasis('subcontractor')}
+              disabled={missingSubcontractorCount === 0}
+              onClick={addMissingSubcontractorBases}
             >
               <Plus width={14} height={14} />
-              Subcontractor
+              Subcontractors
+              {missingSubcontractorCount > 0 && (
+                <Badge size="1" ml="1">
+                  {missingSubcontractorCount}
+                </Badge>
+              )}
             </Button>
             <Button size="1" variant="soft" onClick={() => addBasis('custom')}>
               <Plus width={14} height={14} />
@@ -203,21 +327,49 @@ export function PricingBasisSection({
 
       {sortedBases.length > 0 && (
         <Flex gap="2" wrap="wrap">
-          {sortedBases.map((basis) => (
-            <Button
-              key={basis.id}
-              size="1"
-              variant={selectedBasis?.id === basis.id ? 'solid' : 'soft'}
-              onClick={() => setSelectedBasisId(basis.id)}
-            >
-              {basis.title || BASIS_TYPE_LABELS[basis.basis_type]}
-              <Badge size="1" ml="2">
-                {formatMoney(
-                  basisSubtotal(basis, { technicalOffersById, jobQuotesById }),
+          {sortedBases.map((basis) => {
+            const isSelected = selectedBasis?.id === basis.id
+            return (
+              <Box
+                key={basis.id}
+                className={`pretty-offer-basis-tab${isSelected ? ' pretty-offer-basis-tab--selected' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="pretty-offer-basis-tab__main"
+                  onClick={() => setSelectedBasisId(basis.id)}
+                >
+                  <Text size="2" weight={isSelected ? 'medium' : 'regular'}>
+                    {basis.title || BASIS_TYPE_LABELS[basis.basis_type]}
+                  </Text>
+                  <span className="pretty-offer-basis-tab__amount">
+                    {formatMoney(
+                      basisSubtotal(basis, {
+                        offerBasesById,
+                        jobQuotesById,
+                        technicalContext,
+                      }),
+                    )}
+                  </span>
+                </button>
+                {!readOnly && (
+                  <IconButton
+                    size="2"
+                    variant="ghost"
+                    color="red"
+                    className="pretty-offer-basis-tab__delete"
+                    aria-label={`Remove ${basis.title || BASIS_TYPE_LABELS[basis.basis_type]}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      setBasisPendingDelete(basis)
+                    }}
+                  >
+                    <Trash width={DELETE_ICON_SIZE} height={DELETE_ICON_SIZE} />
+                  </IconButton>
                 )}
-              </Badge>
-            </Button>
-          ))}
+              </Box>
+            )
+          })}
         </Flex>
       )}
 
@@ -226,23 +378,13 @@ export function PricingBasisSection({
           p="3"
           style={{ border: '1px solid var(--gray-a5)', borderRadius: 8 }}
         >
-          <Flex justify="between" align="center" mb="3">
-            <Flex align="center" gap="2">
-              <Badge>{BASIS_TYPE_LABELS[selectedBasis.basis_type]}</Badge>
-              <Text size="2" weight="medium">
-                Basis details
-              </Text>
-            </Flex>
-            {!readOnly && (
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="red"
-                onClick={() => removeBasis(selectedBasis.id)}
-              >
-                <Trash width={14} height={14} />
-              </IconButton>
-            )}
+          <Flex align="center" gap="2" mb="3">
+            <Badge color="gray">
+              {BASIS_TYPE_LABELS[selectedBasis.basis_type]}
+            </Badge>
+            <Text size="2" weight="medium">
+              Basis details
+            </Text>
           </Flex>
 
           <Flex direction="column" gap="3">
@@ -256,77 +398,72 @@ export function PricingBasisSection({
             />
 
             {selectedBasis.basis_type === 'technical' && (
-              <Box>
-                <Text size="2" weight="medium" mb="1" as="div">
-                  Source technical offer
-                </Text>
-                <Select.Root
-                  value={selectedBasis.source_technical_offer_id ?? 'none'}
-                  disabled={readOnly}
-                  onValueChange={(v) =>
-                    updateBasis({
-                      ...selectedBasis,
-                      source_technical_offer_id: v === 'none' ? null : v,
-                      splits: [],
-                    })
-                  }
-                >
-                  <Select.Trigger placeholder="Select technical offer" />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Item value="none">None</Select.Item>
-                    {technicalOffers.map((offer) => (
-                      <Select.Item key={offer.id} value={offer.id}>
-                        v{offer.version_number} — {offer.title}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-                {!readOnly && selectedTechnicalOffer && (
+              <Flex justify="between" align="center" gap="3" wrap="wrap">
+                <Box style={{ minWidth: 0 }}>
+                  <Text size="1" color="gray" mb="1" as="div">
+                    Source offer basis
+                  </Text>
+                  <Text size="2" weight="medium">
+                    {linkedOfferBasisId
+                      ? linkedOfferBasisTitle
+                      : 'No linked offer basis'}
+                  </Text>
+                </Box>
+                {!readOnly && linkedOfferBasis && modules.length > 0 && (
                   <Button
-                    size="1"
+                    size="2"
                     variant="soft"
-                    mt="2"
-                    onClick={() => autoSplitTechnical(selectedBasis)}
+                    onClick={() => autoSplitFromBasis(selectedBasis)}
                   >
                     <Spark width={14} height={14} />
                     Auto-split by categories
                   </Button>
                 )}
-              </Box>
+              </Flex>
             )}
 
             {selectedBasis.basis_type === 'subcontractor' && (
               <Box>
                 <Text size="2" weight="medium" mb="1" as="div">
-                  Subcontractor quote version
+                  Subcontractor quote
                 </Text>
                 <Select.Root
                   value={selectedBasis.job_subcontractor_quote_id ?? 'none'}
                   disabled={readOnly}
-                  onValueChange={(v) =>
+                  onValueChange={(v) => {
+                    const quote =
+                      v === 'none'
+                        ? null
+                        : jobQuotes.find((entry) => entry.id === v)
                     updateBasis({
                       ...selectedBasis,
                       job_subcontractor_quote_id: v === 'none' ? null : v,
+                      source_job_subcontractor_id:
+                        quote?.job_subcontractor_id ??
+                        selectedSubcontractorId ??
+                        selectedBasis.source_job_subcontractor_id ??
+                        null,
                     })
-                  }
+                  }}
                 >
                   <Select.Trigger placeholder="Select quote version" />
                   <Select.Content style={{ zIndex: 10000 }}>
                     <Select.Item value="none">None</Select.Item>
-                    {jobQuotes.map((quote) => {
-                      const sub = jobSubcontractors.find(
-                        (s) => s.id === quote.job_subcontractor_id,
-                      )
-                      return (
-                        <Select.Item key={quote.id} value={quote.id}>
-                          {sub?.customer.name ?? 'Subcontractor'} — v
-                          {quote.version_number} (
-                          {formatMoney(quote.total_amount)})
-                        </Select.Item>
-                      )
-                    })}
+                    {quotesForSelectedBasis.map((quote) => (
+                      <Select.Item key={quote.id} value={quote.id}>
+                        v{quote.version_number} (
+                        {formatMoney(quote.total_amount)})
+                      </Select.Item>
+                    ))}
                   </Select.Content>
                 </Select.Root>
+                {selectedSubcontractorId && (
+                  <Text size="1" color="gray" mt="1" as="div">
+                    {jobSubcontractors.find(
+                      (s) => s.id === selectedSubcontractorId,
+                    )?.customer.name ?? 'Subcontractor'}
+                  </Text>
+                )}
                 {selectedBasis.job_subcontractor_quote_id && (
                   <Flex gap="2" align="center" mt="2" wrap="wrap">
                     {(() => {
@@ -357,158 +494,251 @@ export function PricingBasisSection({
               </Box>
             )}
 
-            <Flex justify="between" align="center">
-              <Text size="2" weight="medium">
-                Splits
-              </Text>
-              {!readOnly && modules.length > 0 && (
-                <Button size="1" onClick={() => addSplit(selectedBasis)}>
-                  <Plus width={14} height={14} />
-                  Add split
-                </Button>
-              )}
-            </Flex>
-
-            {modules.length === 0 && (
-              <Text size="2" color="gray">
-                Add modules first, then connect pricing splits to them.
-              </Text>
-            )}
-
-            {selectedBasis.splits.map((split) => (
-              <Box
-                key={split.id}
-                p="2"
-                style={{
-                  border: '1px solid var(--gray-a4)',
-                  borderRadius: 6,
-                }}
-              >
-                <Flex gap="2" wrap="wrap" align="end">
-                  <Box style={{ flex: 2, minWidth: 140 }}>
-                    <Text size="1" color="gray" mb="1" as="div">
-                      Title
-                    </Text>
-                    <TextField.Root
-                      size="1"
-                      value={split.title}
-                      disabled={
-                        readOnly || selectedBasis.basis_type === 'technical'
-                      }
-                      onChange={(e) =>
-                        updateBasis({
-                          ...selectedBasis,
-                          splits: selectedBasis.splits.map((s) =>
-                            s.id === split.id
-                              ? { ...s, title: e.target.value }
-                              : s,
-                          ),
-                        })
-                      }
-                    />
-                  </Box>
-                  {selectedBasis.basis_type !== 'technical' && (
-                    <Box style={{ width: 120 }}>
-                      <Text size="1" color="gray" mb="1" as="div">
-                        Amount
-                      </Text>
-                      <TextField.Root
+            <Box>
+              <Flex justify="between" align="center" gap="2" mb="1">
+                <Flex align="center" gap="1">
+                  <Text size="2" weight="medium">
+                    {splitsHeading}
+                  </Text>
+                  {selectedBasis.basis_type === 'subcontractor' && (
+                    <Tooltip content={SPLITS_INFO_TOOLTIP}>
+                      <IconButton
                         size="1"
-                        type="number"
-                        value={split.amount}
-                        disabled={readOnly}
-                        onChange={(e) =>
-                          updateBasis({
-                            ...selectedBasis,
-                            splits: selectedBasis.splits.map((s) =>
-                              s.id === split.id
-                                ? {
-                                    ...s,
-                                    amount: Number(e.target.value) || 0,
-                                  }
-                                : s,
-                            ),
-                          })
-                        }
-                      />
-                    </Box>
-                  )}
-                  <Box style={{ flex: 2, minWidth: 140 }}>
-                    <Text size="1" color="gray" mb="1" as="div">
-                      Module
-                    </Text>
-                    <Select.Root
-                      value={split.module_id}
-                      disabled={readOnly}
-                      onValueChange={(moduleId) =>
-                        updateBasis({
-                          ...selectedBasis,
-                          splits: selectedBasis.splits.map((s) =>
-                            s.id === split.id
-                              ? { ...s, module_id: moduleId }
-                              : s,
-                          ),
-                        })
-                      }
-                    >
-                      <Select.Trigger />
-                      <Select.Content style={{ zIndex: 10000 }}>
-                        {modules.map((module) => (
-                          <Select.Item key={module.id} value={module.id}>
-                            {module.title || 'Untitled module'}
-                          </Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Root>
-                  </Box>
-                  <Box style={{ width: 100 }}>
-                    <Text size="1" color="gray" mb="1" as="div">
-                      Cost
-                    </Text>
-                    <Text size="2">
-                      {formatMoney(
-                        calculateSplitAmount(split, selectedBasis, {
-                          technicalOffersById,
-                          jobQuotesById,
-                        }),
-                      )}
-                    </Text>
-                  </Box>
-                  {!readOnly && (
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      color="red"
-                      onClick={() =>
-                        updateBasis({
-                          ...selectedBasis,
-                          splits: selectedBasis.splits.filter(
-                            (s) => s.id !== split.id,
-                          ),
-                        })
-                      }
-                    >
-                      <Trash width={14} height={14} />
-                    </IconButton>
+                        variant="ghost"
+                        color="gray"
+                        aria-label="How quote splits work"
+                        style={{ cursor: 'help' }}
+                      >
+                        <InfoCircle width={14} height={14} />
+                      </IconButton>
+                    </Tooltip>
                   )}
                 </Flex>
-              </Box>
-            ))}
+                {!readOnly && modules.length > 0 && (
+                  <Button size="1" onClick={() => addSplit(selectedBasis)}>
+                    <Plus width={14} height={14} />
+                    Add split
+                  </Button>
+                )}
+              </Flex>
+              <Text size="1" color="gray" mb="3" as="div">
+                {selectedBasis.basis_type === 'subcontractor'
+                  ? 'Split the subcontractor quote across modules. Each amount is the share of the quote assigned to that module.'
+                  : 'Connect cost lines to modules so each module total is calculated correctly.'}
+              </Text>
 
-            {selectedBasis.basis_type === 'subcontractor' &&
-              selectedBasis.job_subcontractor_quote_id && (
-                <Text size="1" color="gray">
-                  Split total:{' '}
-                  {formatMoney(
-                    selectedBasis.splits.reduce((sum, s) => sum + s.amount, 0),
-                  )}{' '}
-                  / Quote total:{' '}
-                  {formatMoney(
-                    jobQuotesById.get(selectedBasis.job_subcontractor_quote_id)
-                      ?.total_amount ?? 0,
-                  )}
+              {modules.length === 0 && (
+                <Text size="2" color="gray">
+                  Add modules first, then connect pricing splits to them.
                 </Text>
               )}
+
+              {selectedBasis.splits.length > 0 && (
+                <Flex direction="column" gap="0">
+                  {selectedBasis.splits.map((split, index) => (
+                    <React.Fragment key={split.id}>
+                      {index > 0 && (
+                        <Box className="pretty-offer-split-flow__connector">
+                          <ArrowDown width={14} height={14} />
+                        </Box>
+                      )}
+                      <Box className="pretty-offer-split-row">
+                        <Box className="pretty-offer-split-row__fields">
+                          <Box className="pretty-offer-split-row__field pretty-offer-split-row__field--grow">
+                            <Text size="1" color="gray" as="div">
+                              {splitTitleLabel(selectedBasis.basis_type)}
+                            </Text>
+                            <TextField.Root
+                              size="2"
+                              value={split.title}
+                              disabled={
+                                readOnly ||
+                                selectedBasis.basis_type === 'technical'
+                              }
+                              placeholder={splitTitlePlaceholder(
+                                selectedBasis.basis_type,
+                              )}
+                              onChange={(e) =>
+                                updateBasis({
+                                  ...selectedBasis,
+                                  splits: selectedBasis.splits.map((s) =>
+                                    s.id === split.id
+                                      ? { ...s, title: e.target.value }
+                                      : s,
+                                  ),
+                                })
+                              }
+                            />
+                          </Box>
+
+                          {showAmountField && (
+                            <>
+                              <Box
+                                className="pretty-offer-split-row__arrow"
+                                aria-hidden
+                              >
+                                <NavArrowRight width={14} height={14} />
+                              </Box>
+                              <Box className="pretty-offer-split-row__field pretty-offer-split-row__field--amount">
+                                <Text size="1" color="gray" as="div">
+                                  Amount
+                                </Text>
+                                <SplitAmountField
+                                  value={split.amount}
+                                  disabled={readOnly}
+                                  onChange={(amount) =>
+                                    updateBasis({
+                                      ...selectedBasis,
+                                      splits: selectedBasis.splits.map((s) =>
+                                        s.id === split.id
+                                          ? { ...s, amount }
+                                          : s,
+                                      ),
+                                    })
+                                  }
+                                />
+                              </Box>
+                            </>
+                          )}
+
+                          <Box
+                            className="pretty-offer-split-row__arrow"
+                            aria-hidden
+                          >
+                            <NavArrowRight width={14} height={14} />
+                          </Box>
+                          <Box className="pretty-offer-split-row__field pretty-offer-split-row__field--module">
+                            <Text size="1" color="gray" as="div">
+                              Module
+                            </Text>
+                            <Select.Root
+                              value={split.module_id}
+                              disabled={readOnly}
+                              onValueChange={(moduleId) =>
+                                updateBasis({
+                                  ...selectedBasis,
+                                  splits: selectedBasis.splits.map((s) =>
+                                    s.id === split.id
+                                      ? { ...s, module_id: moduleId }
+                                      : s,
+                                  ),
+                                })
+                              }
+                            >
+                              <Select.Trigger placeholder="Select module" />
+                              <Select.Content style={{ zIndex: 10000 }}>
+                                {modules.map((module) => (
+                                  <Select.Item
+                                    key={module.id}
+                                    value={module.id}
+                                  >
+                                    {module.title || 'Untitled module'}
+                                  </Select.Item>
+                                ))}
+                              </Select.Content>
+                            </Select.Root>
+                          </Box>
+
+                          <Box
+                            className="pretty-offer-split-row__arrow"
+                            aria-hidden
+                          >
+                            <NavArrowRight width={14} height={14} />
+                          </Box>
+                          <Box className="pretty-offer-split-row__field pretty-offer-split-row__field--cost">
+                            <Text size="1" color="gray" as="div">
+                              Cost
+                            </Text>
+                            <Text size="2" weight="medium">
+                              {formatMoney(
+                                calculateSplitAmount(split, selectedBasis, {
+                                  offerBasesById,
+                                  jobQuotesById,
+                                  technicalContext,
+                                }),
+                              )}
+                            </Text>
+                          </Box>
+
+                          {!readOnly && (
+                            <Box className="pretty-offer-split-row__delete-wrap">
+                              <IconButton
+                                size="2"
+                                variant="ghost"
+                                color="red"
+                                className="pretty-offer-split-row__delete"
+                                aria-label="Remove split"
+                                onClick={() =>
+                                  updateBasis({
+                                    ...selectedBasis,
+                                    splits: selectedBasis.splits.filter(
+                                      (s) => s.id !== split.id,
+                                    ),
+                                  })
+                                }
+                              >
+                                <Trash
+                                  width={DELETE_ICON_SIZE}
+                                  height={DELETE_ICON_SIZE}
+                                />
+                              </IconButton>
+                            </Box>
+                          )}
+                        </Box>
+                      </Box>
+                    </React.Fragment>
+                  ))}
+                </Flex>
+              )}
+
+              {selectedBasis.basis_type === 'subcontractor' &&
+                selectedBasis.job_subcontractor_quote_id && (
+                  <Box
+                    mt="3"
+                    p="2"
+                    style={{
+                      borderRadius: 8,
+                      background:
+                        Math.abs(remainingQuoteAmount) < 0.01
+                          ? 'var(--green-a3)'
+                          : 'var(--gray-a2)',
+                    }}
+                  >
+                    <Flex direction="column" gap="1">
+                      <Flex justify="between" wrap="wrap" gap="2">
+                        <Text size="2">
+                          Assigned:{' '}
+                          <Text weight="medium" as="span">
+                            {formatMoney(splitTotal)}
+                          </Text>
+                        </Text>
+                        <Text size="2">
+                          Quote total:{' '}
+                          <Text weight="medium" as="span">
+                            {formatMoney(quoteTotal)}
+                          </Text>
+                        </Text>
+                      </Flex>
+                      <Text
+                        size="2"
+                        color={
+                          Math.abs(remainingQuoteAmount) < 0.01
+                            ? 'green'
+                            : remainingQuoteAmount > 0
+                              ? 'orange'
+                              : 'red'
+                        }
+                      >
+                        {Math.abs(remainingQuoteAmount) < 0.01
+                          ? 'Fully allocated — splits match the quote total.'
+                          : remainingQuoteAmount > 0
+                            ? `${formatMoney(remainingQuoteAmount)} remaining to allocate across splits.`
+                            : `${formatMoney(Math.abs(remainingQuoteAmount))} over the quote total — reduce split amounts.`}
+                      </Text>
+                    </Flex>
+                  </Box>
+                )}
+            </Box>
           </Flex>
         </Box>
       ) : (
@@ -532,6 +762,42 @@ export function PricingBasisSection({
           ))}
         </Box>
       )}
+
+      <AlertDialog.Root
+        open={basisPendingDelete != null}
+        onOpenChange={(open) => {
+          if (!open) setBasisPendingDelete(null)
+        }}
+      >
+        <AlertDialog.Content maxWidth="440px" style={{ zIndex: 10001 }}>
+          <AlertDialog.Title>Remove pricing basis?</AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            {basisPendingDelete
+              ? `Remove "${basisPendingDelete.title || BASIS_TYPE_LABELS[basisPendingDelete.basis_type]}" and all of its splits? This cannot be undone until you save the offer.`
+              : 'Remove this pricing basis and all of its splits?'}
+          </AlertDialog.Description>
+          <Flex gap="3" mt="4" justify="end">
+            <AlertDialog.Cancel>
+              <Button variant="soft" color="gray">
+                Cancel
+              </Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                onClick={() => {
+                  if (basisPendingDelete) {
+                    removeBasis(basisPendingDelete.id)
+                  }
+                  setBasisPendingDelete(null)
+                }}
+              >
+                Remove
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
     </Flex>
   )
 }

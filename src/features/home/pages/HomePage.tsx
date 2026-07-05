@@ -1,7 +1,8 @@
 // src/features/home/pages/HomePage.tsx
 import * as React from 'react'
-import { Box, Text } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
+import HomePageSkeleton from '@shared/ui/components/HomePageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { addDays, format, startOfMinute } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -174,12 +175,16 @@ export default function HomePage() {
   })
   const homeLayout = homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
 
-  if (!companyId) {
-    return (
-      <Box p="4">
-        <Text>Please select a company</Text>
-      </Box>
-    )
+  const isHomeDataLoading =
+    mattersLoading ||
+    conflictsLoading ||
+    (canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading) ||
+    (homeLayout.showUpcomingJobs && upcomingJobsLoading)
+
+  const showInitialSkeleton = useInitialPageLoad(isHomeDataLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <HomePageSkeleton />
   }
 
   if (!isLarge) {

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Dialog, Flex, Select, Text, TextArea } from '@radix-ui/themes'
+import { Button, Dialog, Flex, Select, Text } from '@radix-ui/themes'
 import { partnerCustomersQuery } from '@features/inventory/api/partners'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
@@ -24,7 +24,6 @@ export default function AddJobSubcontractorDialog({
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [customerId, setCustomerId] = React.useState('')
-  const [notes, setNotes] = React.useState('')
 
   const { data: partners = [] } = useQuery({
     ...partnerCustomersQuery({ companyId }),
@@ -38,7 +37,6 @@ export default function AddJobSubcontractorDialog({
   React.useEffect(() => {
     if (!open) {
       setCustomerId('')
-      setNotes('')
     }
   }, [open])
 
@@ -48,7 +46,6 @@ export default function AddJobSubcontractorDialog({
       await addJobSubcontractor({
         jobId,
         customerId,
-        notes: notes.trim() || null,
       })
     },
     onSuccess: async () => {
@@ -86,13 +83,6 @@ export default function AddJobSubcontractorDialog({
               )}
             </Select.Content>
           </Select.Root>
-
-          <TextArea
-            placeholder="Notes (optional)"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-          />
 
           <Flex gap="2" justify="end">
             <Dialog.Close>

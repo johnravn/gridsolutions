@@ -4,10 +4,16 @@
  * Usage: node scripts/copy-remote-data.js
  */
 
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
+import {
+  buildOfferBasisBackfillSql,
+  buildOfferBasisSchemaFinalizeSql,
+  buildOfferBasisSchemaPrepSql,
+  remoteDumpUsesLegacyOfferSchema,
+} from './offer-basis-remote-copy.mjs'
 import {
   buildSubrentalBackfillSql,
   transformRemoteDataDump,
@@ -34,6 +40,37 @@ function checkLocalRunning() {
     return false
   }
 }
+
+function runPsql(psqlPath, sql) {
+  execFileSync(
+    psqlPath,
+    [
+      '-h',
+      '127.0.0.1',
+      '-p',
+      '54322',
+      '-U',
+      'postgres',
+      '-d',
+      'postgres',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      sql,
+    ],
+    {
+      stdio: 'inherit',
+      env: { ...process.env, PGPASSWORD: 'postgres' },
+    },
+  )
+}
+
+/** After remote → local copy: do not retry historical notification emails (cron + triggers). */
+const SUPPRESS_COPIED_NOTIFICATION_EMAILS_SQL = `
+UPDATE public.notifications
+SET email_sent_at = COALESCE(email_sent_at, now())
+WHERE email_sent_at IS NULL;
+`
 
 async function copyData() {
   log('📥 Copying data from remote to local database...', 'blue')
@@ -87,6 +124,14 @@ async function copyData() {
   } else {
     log('   ℹ️  No ownership → item_kind transform needed', 'cyan')
   }
+
+  const needsOfferBasisBackfill = remoteDumpUsesLegacyOfferSchema(rawDump)
+  if (needsOfferBasisBackfill) {
+    log(
+      '   ℹ️  Remote dump uses legacy offer_id columns — will backfill offer_bases after import',
+      'cyan',
+    )
+  }
   console.log('')
 
   // Step 2: Restore to local
@@ -117,14 +162,65 @@ async function copyData() {
     writeFileSync(backfillFile, backfillSql, 'utf8')
   }
 
+  const offerPrepFile = join(tmpdir(), `offer_basis_prep_${Date.now()}.sql`)
+  const offerBackfillFile = join(
+    tmpdir(),
+    `offer_basis_backfill_${Date.now()}.sql`,
+  )
+  const offerFinalizeFile = join(
+    tmpdir(),
+    `offer_basis_finalize_${Date.now()}.sql`,
+  )
+  if (needsOfferBasisBackfill) {
+    writeFileSync(offerPrepFile, buildOfferBasisSchemaPrepSql(), 'utf8')
+    writeFileSync(offerBackfillFile, buildOfferBasisBackfillSql(), 'utf8')
+    writeFileSync(offerFinalizeFile, buildOfferBasisSchemaFinalizeSql(), 'utf8')
+  }
+
   try {
+    if (needsOfferBasisBackfill) {
+      log('2️⃣a Preparing local schema for legacy offer import...', 'cyan')
+      execSync(
+        `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${offerPrepFile}"`,
+        { stdio: 'inherit' },
+      )
+    }
+
     execSync(
       `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -f "${tempFile}"`,
       { stdio: 'inherit' },
     )
 
+    if (needsOfferBasisBackfill) {
+      log('2️⃣b Backfilling offer_bases from imported offers...', 'cyan')
+      execSync(
+        `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${offerBackfillFile}"`,
+        { stdio: 'inherit' },
+      )
+      log('2️⃣d Restoring offer_basis constraints...', 'cyan')
+      execSync(
+        `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${offerFinalizeFile}"`,
+        { stdio: 'inherit' },
+      )
+      log('   ✅ Offer bases backfilled from legacy remote offers', 'green')
+    }
+
+    log(
+      '2️⃣c Suppressing pending notification emails from copied data...',
+      'cyan',
+    )
+    try {
+      runPsql(psqlPath, SUPPRESS_COPIED_NOTIFICATION_EMAILS_SQL)
+      log(
+        '   ✅ Marked copied notifications as email-processed (avoids cron retries to seed/test inboxes)',
+        'green',
+      )
+    } catch {
+      log('   ⚠️  Could not suppress copied notification emails', 'yellow')
+    }
+
     if (backfillSql) {
-      log('2️⃣b Backfilling reservation subcontractor links...', 'cyan')
+      log('2️⃣e Backfilling reservation subcontractor links...', 'cyan')
       execSync(
         `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -f "${backfillFile}"`,
         { stdio: 'inherit' },
@@ -134,12 +230,18 @@ async function copyData() {
     log('❌ Failed to restore data to local database.', 'red')
     if (existsSync(tempFile)) unlinkSync(tempFile)
     if (existsSync(backfillFile)) unlinkSync(backfillFile)
+    if (existsSync(offerPrepFile)) unlinkSync(offerPrepFile)
+    if (existsSync(offerBackfillFile)) unlinkSync(offerBackfillFile)
+    if (existsSync(offerFinalizeFile)) unlinkSync(offerFinalizeFile)
     process.exit(1)
   }
 
   // Cleanup
   if (existsSync(tempFile)) unlinkSync(tempFile)
   if (existsSync(backfillFile)) unlinkSync(backfillFile)
+  if (existsSync(offerPrepFile)) unlinkSync(offerPrepFile)
+  if (existsSync(offerBackfillFile)) unlinkSync(offerBackfillFile)
+  if (existsSync(offerFinalizeFile)) unlinkSync(offerFinalizeFile)
 
   log('✅ Data copied successfully!', 'green')
   console.log('')

@@ -473,6 +473,44 @@ export type Database = {
           },
         ]
       }
+      company_pretty_offer_default_images: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          sort_order: number
+          storage_path: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'company_pretty_offer_default_images_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       company_user_internal_notes: {
         Row: {
           company_id: string
@@ -1498,8 +1536,10 @@ export type Database = {
           id: string
           job_id: string
           locked: boolean
+          offer_basis_id: string
           offer_type: Database['public']['Enums']['offer_type']
           offernr: number | null
+          pretty_intro_text: string | null
           pretty_use_customer_accent: boolean
           pretty_use_customer_background: boolean
           rejected_at: string | null
@@ -1547,8 +1587,10 @@ export type Database = {
           id?: string
           job_id: string
           locked?: boolean
+          offer_basis_id: string
           offer_type: Database['public']['Enums']['offer_type']
           offernr?: number | null
+          pretty_intro_text?: string | null
           pretty_use_customer_accent?: boolean
           pretty_use_customer_background?: boolean
           rejected_at?: string | null
@@ -1596,8 +1638,10 @@ export type Database = {
           id?: string
           job_id?: string
           locked?: boolean
+          offer_basis_id?: string
           offer_type?: Database['public']['Enums']['offer_type']
           offernr?: number | null
+          pretty_intro_text?: string | null
           pretty_use_customer_accent?: boolean
           pretty_use_customer_background?: boolean
           rejected_at?: string | null
@@ -1679,6 +1723,13 @@ export type Database = {
             columns: ['job_id']
             isOneToOne: false
             referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'job_offers_offer_basis_id_fkey'
+            columns: ['offer_basis_id']
+            isOneToOne: false
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
           {
@@ -1849,6 +1900,7 @@ export type Database = {
       }
       job_subcontractors: {
         Row: {
+          contact_id: string | null
           created_at: string
           customer_id: string
           id: string
@@ -1856,6 +1908,7 @@ export type Database = {
           notes: string | null
         }
         Insert: {
+          contact_id?: string | null
           created_at?: string
           customer_id: string
           id?: string
@@ -1863,6 +1916,7 @@ export type Database = {
           notes?: string | null
         }
         Update: {
+          contact_id?: string | null
           created_at?: string
           customer_id?: string
           id?: string
@@ -1870,6 +1924,13 @@ export type Database = {
           notes?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: 'job_subcontractors_contact_id_fkey'
+            columns: ['contact_id']
+            isOneToOne: false
+            referencedRelation: 'contacts'
+            referencedColumns: ['id']
+          },
           {
             foreignKeyName: 'job_subcontractors_customer_id_fkey'
             columns: ['customer_id']
@@ -2450,6 +2511,74 @@ export type Database = {
           },
         ]
       }
+      offer_bases: {
+        Row: {
+          bookings_synced_at: string | null
+          company_id: string
+          created_at: string
+          days_of_use: number
+          discount_percent: number
+          id: string
+          job_id: string
+          title: string
+          updated_at: string
+          vat_percent: number
+        }
+        Insert: {
+          bookings_synced_at?: string | null
+          company_id: string
+          created_at?: string
+          days_of_use?: number
+          discount_percent?: number
+          id?: string
+          job_id: string
+          title?: string
+          updated_at?: string
+          vat_percent?: number
+        }
+        Update: {
+          bookings_synced_at?: string | null
+          company_id?: string
+          created_at?: string
+          days_of_use?: number
+          discount_percent?: number
+          id?: string
+          job_id?: string
+          title?: string
+          updated_at?: string
+          vat_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'fk_offer_bases_company'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'fk_offer_bases_job'
+            columns: ['job_id']
+            isOneToOne: false
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'offer_bases_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'offer_bases_job_id_fkey'
+            columns: ['job_id']
+            isOneToOne: false
+            referencedRelation: 'jobs'
+            referencedColumns: ['id']
+          },
+        ]
+      }
       offer_crew_items: {
         Row: {
           billing_type: string | null
@@ -2459,7 +2588,7 @@ export type Database = {
           hourly_rate: number | null
           hours_per_day: number | null
           id: string
-          offer_id: string
+          offer_basis_id: string
           role_category: string | null
           role_title: string
           sort_order: number
@@ -2474,7 +2603,7 @@ export type Database = {
           hourly_rate?: number | null
           hours_per_day?: number | null
           id?: string
-          offer_id: string
+          offer_basis_id: string
           role_category?: string | null
           role_title: string
           sort_order?: number
@@ -2489,7 +2618,7 @@ export type Database = {
           hourly_rate?: number | null
           hours_per_day?: number | null
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           role_category?: string | null
           role_title?: string
           sort_order?: number
@@ -2498,17 +2627,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_crew_items_offer'
-            columns: ['offer_id']
+            foreignKeyName: 'offer_crew_items_offer_basis_id_fkey'
+            columns: ['offer_basis_id']
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'offer_crew_items_offer_id_fkey'
-            columns: ['offer_id']
-            isOneToOne: false
-            referencedRelation: 'job_offers'
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
         ]
@@ -2518,36 +2640,29 @@ export type Database = {
           created_at: string
           group_name: string
           id: string
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
         }
         Insert: {
           created_at?: string
           group_name: string
           id?: string
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
         }
         Update: {
           created_at?: string
           group_name?: string
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_equipment_groups_offer'
-            columns: ['offer_id']
+            foreignKeyName: 'offer_equipment_groups_offer_basis_id_fkey'
+            columns: ['offer_basis_id']
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
-          },
-          {
-            foreignKeyName: 'offer_equipment_groups_offer_id_fkey'
-            columns: ['offer_id']
-            isOneToOne: false
-            referencedRelation: 'job_offers'
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
         ]
@@ -2718,29 +2833,29 @@ export type Database = {
           created_at: string
           group_name: string
           id: string
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
         }
         Insert: {
           created_at?: string
           group_name: string
           id?: string
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
         }
         Update: {
           created_at?: string
           group_name?: string
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: 'offer_transport_groups_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: 'offer_transport_groups_offer_basis_id_fkey'
+            columns: ['offer_basis_id']
             isOneToOne: false
-            referencedRelation: 'job_offers'
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
         ]
@@ -2755,7 +2870,7 @@ export type Database = {
           end_date: string
           id: string
           is_internal: boolean
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
           start_date: string
           total_price: number
@@ -2775,7 +2890,7 @@ export type Database = {
           end_date: string
           id?: string
           is_internal?: boolean
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
           start_date: string
           total_price?: number
@@ -2795,7 +2910,7 @@ export type Database = {
           end_date?: string
           id?: string
           is_internal?: boolean
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
           start_date?: string
           total_price?: number
@@ -2807,13 +2922,6 @@ export type Database = {
           vehicle_name?: string
         }
         Relationships: [
-          {
-            foreignKeyName: 'fk_offer_transport_items_offer'
-            columns: ['offer_id']
-            isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
-          },
           {
             foreignKeyName: 'fk_offer_transport_items_transport_group'
             columns: ['transport_group_id']
@@ -2850,10 +2958,10 @@ export type Database = {
             referencedColumns: ['id']
           },
           {
-            foreignKeyName: 'offer_transport_items_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: 'offer_transport_items_offer_basis_id_fkey'
+            columns: ['offer_basis_id']
             isOneToOne: false
-            referencedRelation: 'job_offers'
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
           {
@@ -3052,11 +3160,21 @@ export type Database = {
           computed_cost: number
           created_at: string
           display_price: number | null
+          hero_media_caption: string | null
+          hero_media_type:
+            | Database['public']['Enums']['pretty_module_media_type']
+            | null
+          hero_media_url: string | null
           id: string
           offer_id: string
           show_price: boolean
           sort_order: number
+          story_body_1: string | null
+          story_body_2: string | null
+          story_heading_1: string | null
+          story_heading_2: string | null
           subtitle: string | null
+          tagline: string | null
           title: string
           updated_at: string
         }
@@ -3064,11 +3182,21 @@ export type Database = {
           computed_cost?: number
           created_at?: string
           display_price?: number | null
+          hero_media_caption?: string | null
+          hero_media_type?:
+            | Database['public']['Enums']['pretty_module_media_type']
+            | null
+          hero_media_url?: string | null
           id?: string
           offer_id: string
           show_price?: boolean
           sort_order?: number
+          story_body_1?: string | null
+          story_body_2?: string | null
+          story_heading_1?: string | null
+          story_heading_2?: string | null
           subtitle?: string | null
+          tagline?: string | null
           title?: string
           updated_at?: string
         }
@@ -3076,11 +3204,21 @@ export type Database = {
           computed_cost?: number
           created_at?: string
           display_price?: number | null
+          hero_media_caption?: string | null
+          hero_media_type?:
+            | Database['public']['Enums']['pretty_module_media_type']
+            | null
+          hero_media_url?: string | null
           id?: string
           offer_id?: string
           show_price?: boolean
           sort_order?: number
+          story_body_1?: string | null
+          story_body_2?: string | null
+          story_heading_1?: string | null
+          story_heading_2?: string | null
           subtitle?: string | null
+          tagline?: string | null
           title?: string
           updated_at?: string
         }
@@ -3102,6 +3240,7 @@ export type Database = {
           job_subcontractor_quote_id: string | null
           offer_id: string
           sort_order: number
+          source_offer_basis_id: string | null
           source_technical_offer_id: string | null
           title: string
         }
@@ -3112,6 +3251,7 @@ export type Database = {
           job_subcontractor_quote_id?: string | null
           offer_id: string
           sort_order?: number
+          source_offer_basis_id?: string | null
           source_technical_offer_id?: string | null
           title?: string
         }
@@ -3122,6 +3262,7 @@ export type Database = {
           job_subcontractor_quote_id?: string | null
           offer_id?: string
           sort_order?: number
+          source_offer_basis_id?: string | null
           source_technical_offer_id?: string | null
           title?: string
         }
@@ -3138,6 +3279,13 @@ export type Database = {
             columns: ['offer_id']
             isOneToOne: false
             referencedRelation: 'job_offers'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'pretty_offer_pricing_bases_source_offer_basis_id_fkey'
+            columns: ['source_offer_basis_id']
+            isOneToOne: false
+            referencedRelation: 'offer_bases'
             referencedColumns: ['id']
           },
           {
@@ -4615,6 +4763,10 @@ export type Database = {
         Args: { p_company_id: string }
         Returns: boolean
       }
+      demo_company_blocks_offer_basis_mutation: {
+        Args: { p_basis_id: string }
+        Returns: boolean
+      }
       demo_company_blocks_offer_group_mutation: {
         Args: { p_group_id: string }
         Returns: boolean
@@ -4627,6 +4779,7 @@ export type Database = {
         Args: { p_time_period_id: string }
         Returns: boolean
       }
+      dispatch_notification_emails_cron: { Args: never; Returns: undefined }
       encrypt_api_key: {
         Args: { p_api_key: string; p_company_id: string }
         Returns: string
@@ -4743,6 +4896,10 @@ export type Database = {
       }
       mark_job_offer_bookings_synced: {
         Args: { p_offer_id: string }
+        Returns: undefined
+      }
+      mark_offer_basis_bookings_synced: {
+        Args: { p_offer_basis_id: string }
         Returns: undefined
       }
       notification_insert_allowed_for_actor: {

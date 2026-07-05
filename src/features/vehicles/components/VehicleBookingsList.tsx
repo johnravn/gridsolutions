@@ -1,17 +1,17 @@
 // src/features/vehicles/components/VehicleBookingsList.tsx
 import * as React from 'react'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Badge,
   Box,
   Flex,
   IconButton,
   SegmentedControl,
-  Spinner,
   Text,
 } from '@radix-ui/themes'
 import { Calendar, Clock, Edit, Trash } from 'iconoir-react'
+import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
 import type { EventInput } from '@fullcalendar/core'
+import type { IndexColumn } from '@shared/ui/index-table'
 
 const TIME_ZONE = 'Europe/Oslo'
 
@@ -42,6 +42,13 @@ type BookingEvent = EventInput & {
 const GRID_COLUMNS =
   'minmax(0, 2fr) minmax(180px, 1.5fr) minmax(90px, auto) minmax(80px, auto)'
 
+const COLUMNS: Array<IndexColumn> = [
+  { id: 'title', header: 'Title' },
+  { id: 'date', header: 'Date' },
+  { id: 'type', header: 'Type' },
+  { id: 'actions', header: 'Actions' },
+]
+
 type Props = {
   events: Array<BookingEvent>
   pastEvents: Array<BookingEvent>
@@ -63,238 +70,144 @@ export default function VehicleBookingsList({
   isLoading = false,
   isLoadingPast = false,
 }: Props) {
-  const scrollRef = React.useRef<HTMLDivElement>(null)
   const displayEvents = listMode === 'past' ? pastEvents : events
   const displayLoading = listMode === 'past' ? isLoadingPast : isLoading
 
-  const rowVirtualizer = useVirtualizer({
-    count: displayEvents.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 52,
-    overscan: 10,
-    getItemKey: (index) =>
-      (displayEvents[index]?.id as string) ?? `list-${index}`,
-    enabled: displayEvents.length > 0,
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows: displayEvents,
+    getRowId: (ev) => (ev.id as string) ?? '',
+    estimateRowSize: 52,
   })
-
-  const renderBookingRow = (ev: BookingEvent) => {
-    const id = ev.id as string
-    const xp = ev.extendedProps
-    const jobId = xp?.ref?.jobId
-    const displayTitle = xp?.jobTitle || (ev.title as string) || 'Booking'
-    const isPersonal = !jobId
-    return (
-      <div
-        key={id}
-        style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          alignItems: 'center',
-          padding: '0 var(--space-3)',
-          height: 52,
-          borderRadius: 'var(--radius-2)',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = 'transparent'
-        }}
-      >
-        <Text size="2" weight="medium" truncate>
-          {displayTitle}
-        </Text>
-        <Text size="2" color="gray">
-          {formatRange(ev.start as string, ev.end as string | null | undefined)}
-        </Text>
-        <Box>
-          {isPersonal ? (
-            <Badge variant="soft" color="blue">
-              Personal
-            </Badge>
-          ) : (
-            <Badge variant="soft" color="indigo">
-              Job
-            </Badge>
-          )}
-        </Box>
-        <Flex gap="1" shrink="0">
-          {isPersonal ? (
-            <>
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="gray"
-                title="Edit"
-                onClick={() => onEdit(id, ev)}
-              >
-                <Edit />
-              </IconButton>
-              <IconButton
-                size="1"
-                variant="ghost"
-                color="red"
-                title="Delete"
-                onClick={() => onDelete(id)}
-              >
-                <Trash />
-              </IconButton>
-            </>
-          ) : (
-            <Text size="1" color="gray">
-              —
-            </Text>
-          )}
-        </Flex>
-      </div>
-    )
-  }
 
   return (
     <Box>
-      {/* Upcoming / Earlier segmented control */}
-      <Flex gap="4" align="center" mb="3">
-        <SegmentedControl.Root
-          value={listMode}
-          onValueChange={(mode) => {
-            if (mode === 'future' || mode === 'past') onListModeChange(mode)
-          }}
-          size="2"
-          style={{ gap: 'var(--space-2)', minWidth: 360 }}
-        >
-          <SegmentedControl.Item value="future">
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <Calendar />
-              Upcoming
-            </span>
-          </SegmentedControl.Item>
-          <SegmentedControl.Item value="past">
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 'var(--space-2)',
-              }}
-            >
-              <Clock />
-              Earlier
-            </span>
-          </SegmentedControl.Item>
-        </SegmentedControl.Root>
-      </Flex>
+      <VirtualIndexTable
+        rows={displayEvents}
+        columns={COLUMNS}
+        gridTemplateColumns={GRID_COLUMNS}
+        getRowId={(ev) => ev.id as string}
+        selectable={false}
+        renderCell={(ev, colId) => {
+          const id = ev.id as string
+          const xp = ev.extendedProps
+          const jobId = xp?.ref?.jobId
+          const displayTitle = xp?.jobTitle || (ev.title as string) || 'Booking'
+          const isPersonal = !jobId
 
-      {/* Table header */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: GRID_COLUMNS,
-          gap: 'var(--space-2)',
-          padding: 'var(--space-2) var(--space-3)',
-          backgroundColor: 'var(--gray-a2)',
-          borderRadius: 'var(--radius-2)',
-          marginBottom: 8,
-          flexShrink: 0,
+          switch (colId) {
+            case 'title':
+              return (
+                <Text size="2" weight="medium" truncate>
+                  {displayTitle}
+                </Text>
+              )
+            case 'date':
+              return (
+                <Text size="2" color="gray">
+                  {formatRange(
+                    ev.start as string,
+                    ev.end as string | null | undefined,
+                  )}
+                </Text>
+              )
+            case 'type':
+              return isPersonal ? (
+                <Badge variant="soft" color="blue">
+                  Personal
+                </Badge>
+              ) : (
+                <Badge variant="soft" color="indigo">
+                  Job
+                </Badge>
+              )
+            case 'actions':
+              return isPersonal ? (
+                <Flex gap="1" shrink="0">
+                  <IconButton
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    title="Edit"
+                    onClick={() => onEdit(id, ev)}
+                  >
+                    <Edit />
+                  </IconButton>
+                  <IconButton
+                    size="1"
+                    variant="ghost"
+                    color="red"
+                    title="Delete"
+                    onClick={() => onDelete(id)}
+                  >
+                    <Trash />
+                  </IconButton>
+                </Flex>
+              ) : (
+                <Text size="1" color="gray">
+                  —
+                </Text>
+              )
+            default:
+              return null
+          }
         }}
-      >
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Title
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Date
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Type
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--font-size-1)',
-            fontWeight: 600,
-          }}
-        >
-          Actions
-        </div>
-      </div>
-
-      {/* Single virtualized list - shows Upcoming or Earlier based on mode */}
-      <div
-        ref={scrollRef}
-        style={{
-          minHeight: 200,
-          maxHeight: 400,
-          overflow: 'auto',
-        }}
-      >
-        {displayLoading ? (
-          <Flex align="center" justify="center" py="6">
-            <Spinner size="2" />
+        scrollRef={scrollRef}
+        rowVirtualizer={rowVirtualizer}
+        isLoading={displayLoading}
+        emptyMessage={
+          listMode === 'future'
+            ? 'No upcoming bookings. Book this vehicle or open the calendar.'
+            : 'No earlier bookings.'
+        }
+        footerCount={
+          displayEvents.length > 0 && !displayLoading
+            ? {
+                shown: displayEvents.length,
+                label: (n) =>
+                  `${n} ${listMode === 'future' ? 'upcoming' : 'earlier'} booking${n !== 1 ? 's' : ''}`,
+              }
+            : false
+        }
+        horizontalScroll={false}
+        scrollBodyStyle={{ minHeight: 200, maxHeight: 400 }}
+        toolbar={
+          <Flex gap="4" align="center" mb="3">
+            <SegmentedControl.Root
+              value={listMode}
+              onValueChange={(mode) => {
+                if (mode === 'future' || mode === 'past') onListModeChange(mode)
+              }}
+              size="2"
+              style={{ gap: 'var(--space-2)', minWidth: 360 }}
+            >
+              <SegmentedControl.Item value="future">
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                  }}
+                >
+                  <Calendar />
+                  Upcoming
+                </span>
+              </SegmentedControl.Item>
+              <SegmentedControl.Item value="past">
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 'var(--space-2)',
+                  }}
+                >
+                  <Clock />
+                  Earlier
+                </span>
+              </SegmentedControl.Item>
+            </SegmentedControl.Root>
           </Flex>
-        ) : displayEvents.length === 0 ? (
-          <Flex align="center" justify="center" py="6">
-            <Text size="2" color="gray">
-              {listMode === 'future'
-                ? 'No upcoming bookings. Book this vehicle or open the calendar.'
-                : 'No earlier bookings.'}
-            </Text>
-          </Flex>
-        ) : (
-          <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {rowVirtualizer.getVirtualItems().map((virtualRow) => (
-              <div
-                key={displayEvents[virtualRow.index]?.id}
-                data-index={virtualRow.index}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-              >
-                {renderBookingRow(displayEvents[virtualRow.index])}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {displayEvents.length > 0 && !displayLoading && (
-        <Flex align="center" mt="2">
-          <Text size="2" color="gray">
-            {displayEvents.length}{' '}
-            {listMode === 'future' ? 'upcoming' : 'earlier'} booking
-            {displayEvents.length !== 1 ? 's' : ''}
-          </Text>
-        </Flex>
-      )}
+        }
+      />
     </Box>
   )
 }

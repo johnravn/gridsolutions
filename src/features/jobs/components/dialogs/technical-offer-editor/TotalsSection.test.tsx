@@ -26,7 +26,7 @@ const equipment: Array<OfferEquipmentItem> = [
 const crew: Array<OfferCrewItem> = [
   {
     id: 'c1',
-    offer_id: 'o1',
+    offer_basis_id: 'b1',
     role_title: 'Technician',
     crew_count: 1,
     start_date: '2026-06-01',

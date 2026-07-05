@@ -7,12 +7,14 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { Plus, Trash, Upload } from 'iconoir-react'
+import { MediaImage, Plus, Trash, Upload } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import LazyImage from '@shared/ui/components/LazyImage'
 import {
   resolvePrettyOfferMediaUrl,
   uploadPrettyOfferMedia,
 } from '../../../utils/prettyOfferMediaUpload'
+import { PrettyOfferImageLibraryPicker } from './PrettyOfferImageLibraryPicker'
 import { createEmptyBlockItem } from './types'
 import type { LocalBlockItem, LocalContentBlock } from './types'
 
@@ -34,6 +36,7 @@ export function GalleryBlockEditor({
   const { error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = React.useState(false)
+  const [libraryOpen, setLibraryOpen] = React.useState(false)
 
   const updateItem = (itemId: string, updates: Partial<LocalBlockItem>) => {
     onChange({
@@ -127,6 +130,32 @@ export function GalleryBlockEditor({
             <Plus width={14} height={14} />
             Add image URL
           </Button>
+          <Button
+            size="1"
+            variant="outline"
+            disabled={uploading}
+            onClick={() => setLibraryOpen(true)}
+          >
+            <MediaImage width={14} height={14} />
+            Add from library
+          </Button>
+          <PrettyOfferImageLibraryPicker
+            open={libraryOpen}
+            onOpenChange={setLibraryOpen}
+            companyId={companyId}
+            offerId={offerId}
+            onSelect={(path) => {
+              onChange({
+                items: [
+                  ...block.items,
+                  {
+                    ...createEmptyBlockItem(block.id, block.items.length),
+                    url: path,
+                  },
+                ],
+              })
+            }}
+          />
         </Flex>
       )}
 
@@ -140,7 +169,7 @@ export function GalleryBlockEditor({
           >
             <Flex gap="2" align="start">
               {previewUrl && (
-                <img
+                <LazyImage
                   src={previewUrl}
                   alt=""
                   style={{

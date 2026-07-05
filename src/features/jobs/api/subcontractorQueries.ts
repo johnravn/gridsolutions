@@ -1,10 +1,19 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 
+export type JobSubcontractorContact = {
+  id: string
+  name: string
+  email: string | null
+  phone: string | null
+  title: string | null
+}
+
 export type JobSubcontractorRow = {
   id: string
   job_id: string
   customer_id: string
+  contact_id: string | null
   notes: string | null
   created_at: string
   customer: {
@@ -13,6 +22,7 @@ export type JobSubcontractorRow = {
     email: string | null
     phone: string | null
   }
+  contact: JobSubcontractorContact | null
 }
 
 export type SubrentalBookingRow = {
@@ -47,9 +57,11 @@ export const jobSubcontractorsQuery = ({ jobId }: { jobId: string }) =>
           id,
           job_id,
           customer_id,
+          contact_id,
           notes,
           created_at,
-          customer:customer_id ( id, name, email, phone )
+          customer:customer_id ( id, name, email, phone ),
+          contact:contact_id ( id, name, email, phone, title )
         `,
         )
         .eq('job_id', jobId)
@@ -58,6 +70,7 @@ export const jobSubcontractorsQuery = ({ jobId }: { jobId: string }) =>
       return (data ?? []).map((row) => ({
         ...row,
         customer: Array.isArray(row.customer) ? row.customer[0] : row.customer,
+        contact: Array.isArray(row.contact) ? row.contact[0] : row.contact,
       })) as Array<JobSubcontractorRow>
     },
     enabled: !!jobId,
@@ -184,6 +197,46 @@ export async function updateJobSubcontractorNotes({
   if (error) throw error
 }
 
+export async function updateJobSubcontractorContact({
+  id,
+  contactId,
+}: {
+  id: string
+  contactId: string | null
+}) {
+  const { error } = await supabase
+    .from('job_subcontractors')
+    .update({ contact_id: contactId || null })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export const partnerContactsKey = (companyId: string, customerId: string) =>
+  ['company', companyId, 'customer', customerId, 'contacts'] as const
+
+export const partnerContactsQuery = ({
+  companyId,
+  customerId,
+}: {
+  companyId: string
+  customerId: string
+}) =>
+  queryOptions({
+    queryKey: partnerContactsKey(companyId, customerId),
+    queryFn: async (): Promise<Array<JobSubcontractorContact>> => {
+      const { data, error } = await supabase
+        .from('contacts')
+        .select('id, name, email, phone, title')
+        .eq('company_id', companyId)
+        .eq('customer_id', customerId)
+        .order('name', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as Array<JobSubcontractorContact>
+    },
+    enabled: !!companyId && !!customerId,
+    staleTime: 60_000,
+  })
+
 export async function assignSubrentalBookingSubcontractor({
   reservedItemId,
   subcontractorId,
@@ -195,6 +248,21 @@ export async function assignSubrentalBookingSubcontractor({
     .from('reserved_items')
     .update({ subcontractor_id: subcontractorId })
     .eq('id', reservedItemId)
+  if (error) throw error
+}
+
+export async function assignSubrentalBookingsToSubcontractor({
+  reservedItemIds,
+  subcontractorId,
+}: {
+  reservedItemIds: Array<string>
+  subcontractorId: string | null
+}) {
+  if (reservedItemIds.length === 0) return
+  const { error } = await supabase
+    .from('reserved_items')
+    .update({ subcontractor_id: subcontractorId })
+    .in('id', reservedItemIds)
   if (error) throw error
 }
 
@@ -295,6 +363,45 @@ export async function createJobSubcontractorQuote({
 
   if (error) throw error
   return data.id
+}
+
+export async function updateJobSubcontractorQuote({
+  id,
+  totalAmount,
+  note,
+  pdfPath,
+  pdfFilename,
+  mimeType,
+  sizeBytes,
+}: {
+  id: string
+  totalAmount: number
+  note?: string | null
+  pdfPath?: string | null
+  pdfFilename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+}) {
+  const { error } = await supabase
+    .from('job_subcontractor_quotes')
+    .update({
+      total_amount: totalAmount,
+      note: note ?? null,
+      pdf_path: pdfPath ?? null,
+      pdf_filename: pdfFilename ?? null,
+      mime_type: mimeType ?? null,
+      size_bytes: sizeBytes ?? null,
+    })
+    .eq('id', id)
+  if (error) throw error
+}
+
+export async function deleteJobSubcontractorQuote(id: string) {
+  const { error } = await supabase
+    .from('job_subcontractor_quotes')
+    .delete()
+    .eq('id', id)
+  if (error) throw error
 }
 
 export async function uploadJobSubcontractorQuotePdf({

@@ -302,6 +302,8 @@ E2E_TEST_EMAIL=you@example.com E2E_TEST_PASSWORD=secret npm run db:seed-test-use
 
 Sent offers include one equipment line (“Test microphone”) so the public offer page has content to assert on.
 
+The **Offers** tab is basis-centric: create an **offer basis** (equipment/crew/transport line items), then create **technical** or **pretty** presentation offers on top. Booking sync is tied to the basis, not individual offers.
+
 A seeded inventory item (`Test Seeded Item`) supports employee vs freelancer permission integration tests.
 
 **Conflict booking fixture** on **Conflict Seed Job** (`14141414-…`): `Test Seeded Item` is reserved for `2026-07-01T08:00:00Z` – `2026-07-01T18:00:00Z` (quantity 1). Use for overlap / force-book integration and E2E tests. Separate from E2E Test Job so `job_copy` tests stay isolated.

@@ -18,6 +18,7 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { getInitials } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import {
   archiveRecurringJob,
   deleteRecurringJob,
@@ -88,7 +89,7 @@ export default function RecurringJobInspector({
   if (!id) {
     return <Text color="gray">Select a recurring job to see details.</Text>
   }
-  if (isLoading || !data) return <Text>Loading…</Text>
+  if (isLoading || !data) return <InspectorSkeleton />
 
   const customerName =
     data.customer?.name ??

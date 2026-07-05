@@ -17,6 +17,7 @@ import {
 } from '@radix-ui/themes'
 import { Car } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
@@ -693,7 +694,7 @@ function VehicleCard({
         }}
       >
         {imageUrl ? (
-          <img
+          <LazyImage
             src={imageUrl}
             alt={v.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}

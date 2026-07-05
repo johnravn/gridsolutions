@@ -1,9 +1,32 @@
 import * as React from 'react'
-import { Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
-import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { Badge, Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
+import { Plus, Spark, Trash, WarningTriangle } from 'iconoir-react'
+import {
+  buildModuleTitlesFromLineItemSource,
+  filterNewModuleTitles,
+  isPrettyModuleStoryComplete,
+  lineItemSourceFromOfferBasis,
+  validatePrettyOfferModules,
+} from '../../../utils/prettyOfferCalculations'
+import { SortableContentBlock } from './sortable'
 import { ModuleEditor } from './ModuleEditor'
 import { createEmptyModule } from './types'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
+import type { OfferBasisDetail } from '../../../types'
 
 type Props = {
   jobId: string
@@ -11,6 +34,7 @@ type Props = {
   offerId: string
   modules: Array<LocalPrettyModule>
   pricingBases: Array<LocalPricingBasis>
+  offerBasisDetail: OfferBasisDetail | null | undefined
   selectedModuleId: string | null
   readOnly: boolean
   onModulesChange: (modules: Array<LocalPrettyModule>) => void
@@ -23,11 +47,23 @@ export function ModulesSection({
   offerId,
   modules,
   pricingBases,
+  offerBasisDetail,
   selectedModuleId,
   readOnly,
   onModulesChange,
   onSelectModule,
 }: Props) {
+  const [hoveredModuleId, setHoveredModuleId] = React.useState<string | null>(
+    null,
+  )
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+
   const sorted = [...modules].sort((a, b) => a.sort_order - b.sort_order)
   const selected =
     sorted.find((m) => m.id === selectedModuleId) ?? sorted[0] ?? null
@@ -50,109 +86,166 @@ export function ModulesSection({
     onSelectModule(next[next.length - 1].id)
   }
 
+  const categoryTitles = React.useMemo(() => {
+    if (!offerBasisDetail) return []
+    return buildModuleTitlesFromLineItemSource(
+      lineItemSourceFromOfferBasis(offerBasisDetail),
+    )
+  }, [offerBasisDetail])
+
+  const newCategoryTitles = React.useMemo(
+    () => filterNewModuleTitles(categoryTitles, sorted),
+    [categoryTitles, sorted],
+  )
+
+  const addModulesFromBasis = () => {
+    if (newCategoryTitles.length === 0) return
+    const next = [...sorted]
+    for (const title of newCategoryTitles) {
+      const module = createEmptyModule(next.length)
+      module.title = title
+      next.push(module)
+    }
+    setModules(next)
+    onSelectModule(next[sorted.length]?.id ?? null)
+  }
+
   const removeModule = (moduleId: string) => {
     const next = sorted.filter((m) => m.id !== moduleId)
     setModules(next)
     onSelectModule(next[0]?.id ?? null)
   }
 
-  const moveModule = (moduleId: string, direction: -1 | 1) => {
-    const index = sorted.findIndex((m) => m.id === moduleId)
-    const target = index + direction
-    if (index < 0 || target < 0 || target >= sorted.length) return
-    const next = [...sorted]
-    const [item] = next.splice(index, 1)
-    next.splice(target, 0, item)
-    setModules(next)
-  }
-
   const updateModule = (module: LocalPrettyModule) => {
     setModules(sorted.map((m) => (m.id === module.id ? module : m)))
   }
 
+  const selectedFieldErrors = React.useMemo(() => {
+    if (!selected) return {}
+    const issues = validatePrettyOfferModules([selected])
+    return Object.fromEntries(
+      issues.map((issue) => [issue.field ?? 'general', issue.message]),
+    )
+  }, [selected])
+
   return (
     <Flex gap="4" style={{ height: '100%', minHeight: 0 }}>
       <Box
-        style={{ width: 260, flexShrink: 0, minHeight: 0, overflowY: 'auto' }}
+        style={{ width: 300, flexShrink: 0, minHeight: 0, overflowY: 'auto' }}
       >
         <Flex justify="between" align="center" mb="2">
           <Text size="2" weight="bold">
             Modules
           </Text>
           {!readOnly && (
-            <Button size="1" onClick={addModule}>
-              <Plus width={14} height={14} />
-              Add
-            </Button>
-          )}
-        </Flex>
-        <Flex direction="column" gap="1">
-          {sorted.map((module, index) => (
-            <Flex
-              key={module.id}
-              align="start"
-              gap="1"
-              p="2"
-              style={{
-                borderRadius: 8,
-                cursor: 'pointer',
-                background:
-                  selected?.id === module.id
-                    ? 'var(--accent-a3)'
-                    : 'var(--gray-a2)',
-              }}
-              onClick={() => onSelectModule(module.id)}
-            >
-              <Flex direction="column" gap="1" style={{ flex: 1, minWidth: 0 }}>
-                <Text size="2" weight="medium" truncate>
-                  {module.title || 'Untitled module'}
-                </Text>
-              </Flex>
-              {!readOnly && (
-                <Flex gap="0">
-                  <IconButton
-                    size="1"
-                    variant="ghost"
-                    disabled={index === 0}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      moveModule(module.id, -1)
-                    }}
-                  >
-                    <NavArrowUp width={14} height={14} />
-                  </IconButton>
-                  <IconButton
-                    size="1"
-                    variant="ghost"
-                    disabled={index === sorted.length - 1}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      moveModule(module.id, 1)
-                    }}
-                  >
-                    <NavArrowDown width={14} height={14} />
-                  </IconButton>
-                  <IconButton
-                    size="1"
-                    variant="ghost"
-                    color="red"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeModule(module.id)
-                    }}
-                  >
-                    <Trash width={14} height={14} />
-                  </IconButton>
-                </Flex>
+            <Flex gap="1">
+              {offerBasisDetail && categoryTitles.length > 0 && (
+                <Button
+                  size="1"
+                  variant="soft"
+                  disabled={newCategoryTitles.length === 0}
+                  onClick={addModulesFromBasis}
+                >
+                  <Spark width={14} height={14} />
+                  From basis
+                </Button>
               )}
+              <Button size="1" onClick={addModule}>
+                <Plus width={14} height={14} />
+                Add
+              </Button>
             </Flex>
-          ))}
-          {sorted.length === 0 && (
-            <Text size="2" color="gray">
-              Add modules like Audio, Lights, or Rigging.
-            </Text>
           )}
         </Flex>
+        {sorted.length === 0 ? (
+          <Text size="2" color="gray">
+            Add modules like Audio, Lights, or Rigging.
+          </Text>
+        ) : (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={({ active, over }) => {
+              if (!over || active.id === over.id) return
+              const oldIndex = sorted.findIndex((m) => m.id === active.id)
+              const newIndex = sorted.findIndex((m) => m.id === over.id)
+              if (oldIndex < 0 || newIndex < 0) return
+              setModules(arrayMove(sorted, oldIndex, newIndex))
+            }}
+          >
+            <SortableContext
+              items={sorted.map((m) => m.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <Flex direction="column" gap="2">
+                {sorted.map((module) => (
+                  <SortableContentBlock
+                    key={module.id}
+                    id={module.id}
+                    disabled={readOnly}
+                  >
+                    {({ handle }) => (
+                      <Flex
+                        align="center"
+                        gap="2"
+                        p="3"
+                        style={{
+                          borderRadius: 8,
+                          cursor: 'pointer',
+                          minHeight: 52,
+                          background:
+                            selected?.id === module.id
+                              ? 'var(--accent-a3)'
+                              : 'var(--gray-a2)',
+                        }}
+                        onClick={() => onSelectModule(module.id)}
+                        onMouseEnter={() => setHoveredModuleId(module.id)}
+                        onMouseLeave={() => setHoveredModuleId(null)}
+                      >
+                        {handle}
+                        <Text
+                          size="3"
+                          weight="medium"
+                          truncate
+                          style={{ flex: 1, minWidth: 0 }}
+                        >
+                          {module.title || 'Untitled module'}
+                        </Text>
+                        {!isPrettyModuleStoryComplete(module) && (
+                          <Badge color="orange" variant="soft" size="1">
+                            <WarningTriangle width={12} height={12} />
+                            Incomplete
+                          </Badge>
+                        )}
+                        {!readOnly && (
+                          <IconButton
+                            size="2"
+                            variant="ghost"
+                            color="red"
+                            aria-label="Delete module"
+                            style={{
+                              flexShrink: 0,
+                              opacity: hoveredModuleId === module.id ? 1 : 0,
+                              pointerEvents:
+                                hoveredModuleId === module.id ? 'auto' : 'none',
+                              transition: 'opacity 0.15s ease',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              removeModule(module.id)
+                            }}
+                          >
+                            <Trash width={16} height={16} />
+                          </IconButton>
+                        )}
+                      </Flex>
+                    )}
+                  </SortableContentBlock>
+                ))}
+              </Flex>
+            </SortableContext>
+          </DndContext>
+        )}
       </Box>
 
       <Box style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
@@ -164,6 +257,7 @@ export function ModulesSection({
             offerId={offerId}
             pricingBases={pricingBases}
             readOnly={readOnly}
+            fieldErrors={selectedFieldErrors}
             onChange={updateModule}
           />
         ) : (

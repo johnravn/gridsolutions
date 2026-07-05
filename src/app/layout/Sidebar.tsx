@@ -567,6 +567,7 @@ function NavItem({
       <Link
         to={to}
         onClick={handleClick}
+        className="sidebar-nav-item"
         style={{
           justifyContent: open ? 'flex-start' : 'center',
           gap: 10,

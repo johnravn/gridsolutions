@@ -3,6 +3,7 @@ import * as React from 'react'
 import { Box, Tabs } from '@radix-ui/themes'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import CompanyOverviewTab from '../components/CompanyOverviewTab'
 import CompanyUsersTab from '../components/CompanyUsersTab'
 import CompanyExpansionsTab from '../components/CompanyExpansionsTab'
@@ -54,7 +55,7 @@ export default function CompanyPage() {
     }
   }, [])
 
-  if (!companyId) return <div>No company selected.</div>
+  if (!companyId) return <PageSkeleton columns="1fr" showInspector={false} />
 
   return (
     <section

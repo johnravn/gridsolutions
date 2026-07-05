@@ -6,15 +6,21 @@ import {
   calculateSplitAmount,
 } from '../../../utils/prettyOfferCalculations'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
-import type { JobSubcontractorQuote, OfferDetail } from '../../../types'
+import type {
+  JobSubcontractorQuote,
+  OfferBasisDetail,
+  OfferDetail,
+} from '../../../types'
 import type { RentalFactorConfig } from '../../../utils/offerCalculations'
 
 type Props = {
   modules: Array<LocalPrettyModule>
   pricingBases: Array<LocalPricingBasis>
   technicalOffersById: Map<string, OfferDetail>
+  offerBasesById: Map<string, OfferBasisDetail>
   jobQuotesById: Map<string, JobSubcontractorQuote>
   vatPercent: number
+  daysOfUse: number
   rentalFactorConfig?: RentalFactorConfig | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
@@ -33,8 +39,10 @@ export function TotalsSection({
   modules,
   pricingBases,
   technicalOffersById,
+  offerBasesById,
   jobQuotesById,
   vatPercent,
+  daysOfUse,
   rentalFactorConfig,
   vehicleDistanceRate,
   vehicleDistanceIncrement,
@@ -45,10 +53,12 @@ export function TotalsSection({
     vehicleDistanceRate,
     vehicleDistanceIncrement,
     vehicleDailyRate,
+    daysOfUse,
   }
 
   const modulesWithCost = applyComputedCostsToModules(modules, pricingBases, {
     technicalOffersById,
+    offerBasesById,
     jobQuotesById,
     technicalContext,
   })
@@ -83,6 +93,7 @@ export function TotalsSection({
                     {formatMoney(
                       basisSubtotal(basis, {
                         technicalOffersById,
+                        offerBasesById,
                         jobQuotesById,
                         technicalContext,
                       }),
@@ -107,6 +118,7 @@ export function TotalsSection({
                         {formatMoney(
                           calculateSplitAmount(split, basis, {
                             technicalOffersById,
+                            offerBasesById,
                             jobQuotesById,
                             technicalContext,
                           }),

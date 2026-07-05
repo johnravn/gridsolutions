@@ -23,7 +23,7 @@ export function jobsIndexQuery({
   includeArchived = false,
   showOnlyArchived = false,
   onlyCrewForUserId = null,
-  maxRows = 500,
+  maxRows = 150,
 }: {
   companyId: string
   search: string
@@ -90,9 +90,11 @@ export function jobsIndexQuery({
         q = q.lte('start_at', to).or(`end_at.is.null,end_at.gte.${from}`)
       }
 
-      // Note: We don't filter server-side when searching because we need to search
-      // customer name (joined relation) which PostgREST doesn't support.
-      // All filtering is done client-side to support title, customer, and date search.
+      // Narrow server-side on title when possible; customer name still filtered client-side.
+      if (search.trim()) {
+        const safe = escapePgLike(search.trim())
+        q = q.ilike('title', `%${safe}%`)
+      }
 
       // Sorting
       if (sortBy === 'customer_name') {
@@ -407,6 +409,87 @@ export function jobsIndexPageQuery({
       const { data, error, count } = await q.range(from, to)
       if (error) throw error
       return { rows: data as unknown as Array<JobListRow>, count: count ?? 0 }
+    },
+    staleTime: 10_000,
+  }
+}
+
+const JOBS_INDEX_INFINITE_PAGE_SIZE = 50
+
+export function jobsIndexInfiniteQuery({
+  companyId,
+  sortBy = 'start_at',
+  sortDir = 'desc',
+  showOnlyArchived = false,
+  pageSize = JOBS_INDEX_INFINITE_PAGE_SIZE,
+}: {
+  companyId: string
+  sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
+  sortDir?: 'asc' | 'desc'
+  showOnlyArchived?: boolean
+  pageSize?: number
+}) {
+  return {
+    queryKey: [
+      'company',
+      companyId,
+      'jobs-index-infinite',
+      sortBy,
+      sortDir,
+      showOnlyArchived,
+      pageSize,
+    ] as const,
+    initialPageParam: 1,
+    queryFn: async ({
+      pageParam,
+    }: {
+      pageParam: number
+    }): Promise<{ rows: Array<JobListRow>; count: number; page: number }> => {
+      const page = pageParam
+      const from = Math.max(0, (page - 1) * pageSize)
+      const to = Math.max(from, from + pageSize - 1)
+
+      let q = supabase
+        .from('jobs')
+        .select(
+          `
+          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
+          customer:customer_id ( id, name ),
+          customer_user:customer_user_id ( user_id, display_name, email ),
+          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
+          recurring_job:recurring_job_id ( id, title )
+        `,
+          { count: 'estimated' },
+        )
+        .eq('company_id', companyId)
+
+      if (showOnlyArchived) {
+        q = q.eq('archived', true)
+      } else {
+        q = q.eq('archived', false)
+      }
+
+      if (sortBy === 'customer_name') {
+        q = q.order('start_at', { ascending: sortDir === 'asc' })
+      } else {
+        q = q.order(sortBy, { ascending: sortDir === 'asc' })
+      }
+
+      const { data, error, count } = await q.range(from, to)
+      if (error) throw error
+      return {
+        rows: data as unknown as Array<JobListRow>,
+        count: count ?? 0,
+        page,
+      }
+    },
+    getNextPageParam: (
+      lastPage: { rows: Array<JobListRow>; count: number; page: number },
+      allPages: Array<{ rows: Array<JobListRow>; count: number; page: number }>,
+    ) => {
+      const loaded = allPages.reduce((n, p) => n + p.rows.length, 0)
+      if (loaded >= lastPage.count) return undefined
+      return lastPage.page + 1
     },
     staleTime: 10_000,
   }

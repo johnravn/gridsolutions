@@ -19,6 +19,7 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
@@ -26,6 +27,7 @@ import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
 import MattersFilter from '../components/MattersFilter'
+import { mattersIndexQueryAll } from '../api/queries'
 import type { MatterType } from '../types'
 
 export default function MattersPage() {
@@ -186,7 +188,13 @@ export default function MattersPage() {
 
   useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
-  if (!companyId) return <PageSkeleton columns="2fr 3fr" />
+  const { isLoading: mattersIndexLoading } = useQuery({
+    ...mattersIndexQueryAll(),
+  })
+  const showInitialSkeleton = useInitialPageLoad(mattersIndexLoading)
+
+  if (!companyId || showInitialSkeleton)
+    return <PageSkeleton columns="2fr 3fr" />
 
   if (!isLarge) {
     return (

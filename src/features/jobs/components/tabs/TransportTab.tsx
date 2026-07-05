@@ -14,6 +14,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { Car, NavArrowDown, NavArrowRight, Trash, Truck } from 'iconoir-react'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -467,7 +468,7 @@ function VehicleBookingCard({
           }}
         >
           {imageUrl ? (
-            <img
+            <LazyImage
               src={imageUrl}
               alt={vehicleName}
               style={{

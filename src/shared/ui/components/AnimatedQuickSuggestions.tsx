@@ -10,6 +10,9 @@ import {
 } from '@shared/lib/motion'
 
 const LARGE_SCREEN_QUERY = '(min-width: 769px)'
+const REVEAL_CONTAINER_DELAY_MS = 30
+const REVEAL_CHIP_BASE_DELAY_MS = 45
+const REVEAL_CHIP_STAGGER_MS = 22
 
 export type AnimatedQuickSuggestionsProps = {
   suggestions: ReadonlyArray<string>
@@ -77,7 +80,7 @@ function AnimatedQuickSuggestionsView({
               transition: visible
                 ? motionRevealTransition(['opacity'], {
                     ease: motionEaseRevealOut,
-                    delay: `${80 + index * 40}ms`,
+                    delay: `${REVEAL_CHIP_BASE_DELAY_MS + index * REVEAL_CHIP_STAGGER_MS}ms`,
                   })
                 : motionFadeTransition(motionEaseRevealIn),
             }
@@ -132,7 +135,7 @@ function AnimatedQuickSuggestionsView({
             transition: open
               ? motionRevealTransition(['opacity', 'transform'], {
                   ease: motionEaseRevealOut,
-                  delay: '60ms',
+                  delay: `${REVEAL_CONTAINER_DELAY_MS}ms`,
                 })
               : motionRevealTransition(['opacity', 'transform'], {
                   ease: motionEaseRevealIn,

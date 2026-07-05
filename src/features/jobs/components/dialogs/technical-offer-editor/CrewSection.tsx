@@ -71,7 +71,7 @@ export function CrewSection({
   const [roleCategoryDrafts, setRoleCategoryDrafts] = React.useState<
     Record<string, string>
   >({})
-  const [focusedSuggestion, setFocusedSuggestion] = React.useState<{
+  const [hoveredSuggestion, setHoveredSuggestion] = React.useState<{
     itemId: string
     field: 'role_title' | 'role_category'
   } | null>(null)
@@ -390,7 +390,23 @@ export function CrewSection({
                                     <Flex direction="column" gap="3">
                                       <Flex gap="3" wrap="wrap">
                                         {/* Role Title */}
-                                        <Box style={{ flex: '1 1 260px' }}>
+                                        <Box
+                                          style={{ flex: '1 1 260px' }}
+                                          onMouseEnter={() =>
+                                            setHoveredSuggestion({
+                                              itemId: item.id,
+                                              field: 'role_title',
+                                            })
+                                          }
+                                          onMouseLeave={() =>
+                                            setHoveredSuggestion((prev) =>
+                                              prev?.itemId === item.id &&
+                                              prev.field === 'role_title'
+                                                ? null
+                                                : prev,
+                                            )
+                                          }
+                                        >
                                           <Text size="2" color="gray" mb="1">
                                             Role Title
                                           </Text>
@@ -404,32 +420,17 @@ export function CrewSection({
                                             placeholder="e.g., Technician"
                                             readOnly={readOnly}
                                             onClick={(e) => e.stopPropagation()}
-                                            onFocus={(e) => {
-                                              e.stopPropagation()
-                                              setFocusedSuggestion({
-                                                itemId: item.id,
-                                                field: 'role_title',
-                                              })
-                                            }}
-                                            onBlur={() =>
-                                              setFocusedSuggestion((prev) =>
-                                                prev?.itemId === item.id &&
-                                                prev.field === 'role_title'
-                                                  ? null
-                                                  : prev,
-                                              )
-                                            }
                                           />
                                           {!readOnly && (
                                             <AnimatedQuickSuggestions
                                               suggestions={roleSuggestions}
                                               open={
-                                                focusedSuggestion?.itemId ===
+                                                hoveredSuggestion?.itemId ===
                                                   item.id &&
-                                                focusedSuggestion.field ===
+                                                hoveredSuggestion.field ===
                                                   'role_title'
                                               }
-                                              staticOpen={!item.role_title}
+                                              staticOpen
                                               showLabel
                                               stopPropagation
                                               onSelect={(suggestion) =>
@@ -438,14 +439,30 @@ export function CrewSection({
                                                 })
                                               }
                                               onAfterSelect={() =>
-                                                setFocusedSuggestion(null)
+                                                setHoveredSuggestion(null)
                                               }
                                             />
                                           )}
                                         </Box>
 
                                         {/* Role Category */}
-                                        <Box style={{ flex: '1 1 220px' }}>
+                                        <Box
+                                          style={{ flex: '1 1 220px' }}
+                                          onMouseEnter={() =>
+                                            setHoveredSuggestion({
+                                              itemId: item.id,
+                                              field: 'role_category',
+                                            })
+                                          }
+                                          onMouseLeave={() =>
+                                            setHoveredSuggestion((prev) =>
+                                              prev?.itemId === item.id &&
+                                              prev.field === 'role_category'
+                                                ? null
+                                                : prev,
+                                            )
+                                          }
+                                        >
                                           <Text size="2" color="gray" mb="1">
                                             Role Category
                                           </Text>
@@ -461,12 +478,6 @@ export function CrewSection({
                                             }}
                                             onBlur={() => {
                                               commitRoleCategory(item.id)
-                                              setFocusedSuggestion((prev) =>
-                                                prev?.itemId === item.id &&
-                                                prev.field === 'role_category'
-                                                  ? null
-                                                  : prev,
-                                              )
                                             }}
                                             onKeyDown={(e) => {
                                               if (e.key === 'Enter') {
@@ -476,21 +487,14 @@ export function CrewSection({
                                             }}
                                             readOnly={readOnly}
                                             onClick={(e) => e.stopPropagation()}
-                                            onFocus={(e) => {
-                                              e.stopPropagation()
-                                              setFocusedSuggestion({
-                                                itemId: item.id,
-                                                field: 'role_category',
-                                              })
-                                            }}
                                           />
                                           {!readOnly && (
                                             <AnimatedQuickSuggestions
                                               suggestions={categorySuggestions}
                                               open={
-                                                focusedSuggestion?.itemId ===
+                                                hoveredSuggestion?.itemId ===
                                                   item.id &&
-                                                focusedSuggestion.field ===
+                                                hoveredSuggestion.field ===
                                                   'role_category'
                                               }
                                               staticOpen
@@ -503,7 +507,7 @@ export function CrewSection({
                                                 })
                                               }
                                               onAfterSelect={() =>
-                                                setFocusedSuggestion(null)
+                                                setHoveredSuggestion(null)
                                               }
                                             />
                                           )}

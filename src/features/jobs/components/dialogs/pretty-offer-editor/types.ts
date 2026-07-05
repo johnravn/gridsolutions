@@ -32,6 +32,8 @@ export type LocalPricingBasisSplit = PrettyOfferPricingBasisSplit & {
 export type LocalPricingBasis = Omit<PrettyOfferPricingBasis, 'splits'> & {
   id: string
   splits: Array<LocalPricingBasisSplit>
+  /** Editor-only: which job subcontractor this basis represents */
+  source_job_subcontractor_id?: string | null
 }
 
 export function createTempId(prefix: string): string {
@@ -44,6 +46,14 @@ export function createEmptyModule(sortOrder: number): LocalPrettyModule {
     offer_id: '',
     title: '',
     subtitle: null,
+    tagline: null,
+    story_heading_1: null,
+    story_body_1: null,
+    story_heading_2: null,
+    story_body_2: null,
+    hero_media_type: 'image',
+    hero_media_url: null,
+    hero_media_caption: null,
     sort_order: sortOrder,
     display_price: null,
     show_price: false,
@@ -100,7 +110,7 @@ export function createEmptyPricingBasis(
   basisType: PrettyPricingBasisType,
 ): LocalPricingBasis {
   const titles: Record<PrettyPricingBasisType, string> = {
-    technical: 'Technical offer',
+    technical: 'Offer basis',
     subcontractor: 'Subcontractor quote',
     custom: 'Custom basis',
   }
@@ -111,6 +121,7 @@ export function createEmptyPricingBasis(
     title: titles[basisType],
     sort_order: sortOrder,
     source_technical_offer_id: null,
+    source_offer_basis_id: null,
     job_subcontractor_quote_id: null,
     splits: [],
   }
@@ -134,14 +145,14 @@ export function createEmptySplit(
 }
 
 export const BASIS_TYPE_LABELS: Record<PrettyPricingBasisType, string> = {
-  technical: 'Internal technical offer',
+  technical: 'Offer basis',
   subcontractor: 'Subcontractor basis',
   custom: 'Custom',
 }
 
 export const CATEGORY_TYPE_LABELS: Record<PrettyCategoryType, string> = {
   equipment_group: 'Equipment group',
-  crew_category: 'Crew category',
+  crew_category: 'Crew role',
   transport_group: 'Transport group',
 }
 

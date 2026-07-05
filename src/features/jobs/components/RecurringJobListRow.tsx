@@ -2,6 +2,10 @@ import { Avatar, Badge, Box, Flex, Text, Tooltip } from '@radix-ui/themes'
 import { Repeat } from 'iconoir-react'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import type { RecurringJobListRow } from '../types'
 
 type Props = {
@@ -32,33 +36,24 @@ export default function RecurringJobListRow({
         .data.publicUrl
     : null
 
-  const defaultBackground = isSelected
-    ? 'var(--accent-a3)'
-    : compact
-      ? 'var(--gray-a2)'
-      : 'transparent'
-
   return (
     <div
+      className={[
+        INDEX_TABLE_ROW_CLASS,
+        isSelected
+          ? INDEX_TABLE_ROW_SELECTED_CLASS
+          : compact
+            ? 'index-table-row--muted'
+            : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onClick={onClick}
       style={{
         cursor: 'pointer',
         padding: compact ? 'var(--space-3)' : 'var(--space-2) var(--space-3)',
         borderRadius: compact ? 'var(--radius-3)' : 'var(--radius-2)',
-        backgroundColor: defaultBackground,
         marginBottom: compact ? 'var(--space-2)' : 'var(--space-1)',
-      }}
-      onMouseEnter={(e) => {
-        if (!isSelected) {
-          e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (!isSelected) {
-          e.currentTarget.style.backgroundColor = compact
-            ? 'var(--gray-a2)'
-            : 'transparent'
-        }
       }}
     >
       {compact ? (

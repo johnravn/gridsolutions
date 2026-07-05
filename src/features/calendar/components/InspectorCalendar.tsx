@@ -156,6 +156,7 @@ export default function InspectorCalendar({
             locale={nbLocale}
             events={events}
             height="auto"
+            stickyHeaderDates={false}
             eventContent={renderListEvent}
             // Removed validRange to allow viewing past reservations
             listDayFormat={{ weekday: 'short', day: '2-digit', month: 'short' }}

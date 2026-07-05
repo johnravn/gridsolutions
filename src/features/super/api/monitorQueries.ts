@@ -70,7 +70,7 @@ export const MONITOR_JOB_DEFINITIONS: Array<{
   {
     jobKey: 'notification_email_dispatch',
     name: 'Notification email dispatch',
-    schedule: 'Every minute (pg_cron)',
+    schedule: 'Every 5 minutes (pg_cron)',
     description:
       'Processes pending notification emails via send-notification-email.',
   },

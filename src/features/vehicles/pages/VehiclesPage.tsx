@@ -10,7 +10,10 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useQuery } from '@tanstack/react-query'
 import { TransitionLeft } from 'iconoir-react'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -18,6 +21,7 @@ import {
 import VehiclesView from '../components/VehiclesView'
 import VehicleInspector from '../components/VehicleInspector'
 import VehiclesFilter from '../components/VehiclesFilter'
+import { vehiclesIndexQuery } from '../api/queries'
 
 export default function VehiclesPage() {
   const { companyId } = useCompany()
@@ -118,7 +122,19 @@ export default function VehiclesPage() {
     }
   }, [isResizing])
 
-  if (!companyId) return <div>No company selected.</div>
+  const { isLoading: vehiclesIndexLoading } = useQuery({
+    ...vehiclesIndexQuery({
+      companyId: companyId ?? '__none__',
+      includeExternal: true,
+      search: '',
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(vehiclesIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="1fr 1fr" />
+  }
 
   // On small screens, use Grid layout (stack)
   if (!isLarge) {

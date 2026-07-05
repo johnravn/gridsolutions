@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Full-page loading skeleton matching the list + inspector layout. Responsive: stacks on small screens.',
+          'Full-page loading skeleton matching the list + inspector layout. Uses the same 1024px breakpoint as index pages (side-by-side on large screens, stacked on mobile).',
       },
     },
     layout: 'fullscreen',

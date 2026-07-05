@@ -106,4 +106,74 @@ describeIntegration('job subcontractor quotes RLS', () => {
     expect(selectErr).toBeNull()
     expect(rows?.some((r) => r.id === inserted?.id)).toBe(true)
   })
+
+  it('allows owner to update a job subcontractor quote', async () => {
+    if (!jobId || !jobSubcontractorId) return
+
+    const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
+
+    const { data: inserted, error: insertErr } = await client
+      .from('job_subcontractor_quotes')
+      .insert({
+        job_id: jobId,
+        job_subcontractor_id: jobSubcontractorId,
+        version_number: 2,
+        total_amount: 9000,
+        note: 'Before edit',
+      })
+      .select('id')
+      .single()
+
+    expect(insertErr).toBeNull()
+
+    const { data: updated, error: updateErr } = await client
+      .from('job_subcontractor_quotes')
+      .update({
+        total_amount: 15000,
+        note: 'After edit',
+      })
+      .eq('id', inserted!.id)
+      .select('total_amount, note, version_number')
+      .single()
+
+    expect(updateErr).toBeNull()
+    expect(Number(updated?.total_amount)).toBe(15000)
+    expect(updated?.note).toBe('After edit')
+    expect(updated?.version_number).toBe(2)
+  })
+
+  it('allows owner to delete a job subcontractor quote', async () => {
+    if (!jobId || !jobSubcontractorId) return
+
+    const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
+
+    const { data: inserted, error: insertErr } = await client
+      .from('job_subcontractor_quotes')
+      .insert({
+        job_id: jobId,
+        job_subcontractor_id: jobSubcontractorId,
+        version_number: 3,
+        total_amount: 5000,
+      })
+      .select('id')
+      .single()
+
+    expect(insertErr).toBeNull()
+
+    const { error: deleteErr } = await client
+      .from('job_subcontractor_quotes')
+      .delete()
+      .eq('id', inserted!.id)
+
+    expect(deleteErr).toBeNull()
+
+    const { data: row, error: selectErr } = await client
+      .from('job_subcontractor_quotes')
+      .select('id')
+      .eq('id', inserted!.id)
+      .maybeSingle()
+
+    expect(selectErr).toBeNull()
+    expect(row).toBeNull()
+  })
 })

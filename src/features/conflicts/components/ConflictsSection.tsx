@@ -1,10 +1,11 @@
 import * as React from 'react'
-import { Box, Flex, Link, Select, Spinner, Text } from '@radix-ui/themes'
+import { Box, Flex, Link, Select, Text } from '@radix-ui/themes'
 import { Link as RouterLink } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { DashboardCard } from '@features/home/components/DashboardCard'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import {
   splitCrewConflicts,
   splitEquipmentConflicts,
@@ -101,9 +102,7 @@ export function ConflictsSection({
       }
     >
       {loading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={3} compact />
       ) : unresolvedCount === 0 && forcedCount === 0 ? (
         <Text size="2" color="gray">
           No conflicts in this period

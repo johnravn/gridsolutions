@@ -14,6 +14,7 @@ import {
 import { Calendar, List, ShareAndroid } from 'iconoir-react'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import CalendarPageSkeleton from '@shared/ui/components/CalendarPageSkeleton'
 import { useAuthz } from '@shared/auth/useAuthz'
 import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro'
 import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeToCalendarDialog'
@@ -67,7 +68,7 @@ export default function CalendarPage() {
   }, [isFreelancer])
 
   // Fetch all calendar events for the company (all categories)
-  const { data: calendarRecords = [] } = useQuery({
+  const { data: calendarRecords = [], isLoading: calendarLoading } = useQuery({
     ...companyCalendarQuery({
       companyId: companyId ?? '',
       categories: undefined, // Fetch all categories
@@ -132,6 +133,7 @@ export default function CalendarPage() {
       search: debouncedSearchInput,
       userId,
       companyRole,
+      maxRows: 100,
     }),
     enabled: shouldFetchSuggestions && category === 'jobDuration',
   })
@@ -261,6 +263,10 @@ export default function CalendarPage() {
       })),
     [suggestions],
   )
+
+  if (!companyId || calendarLoading) {
+    return <CalendarPageSkeleton />
+  }
 
   return (
     <Card>

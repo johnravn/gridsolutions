@@ -73,9 +73,7 @@ function surfaceInputOutline(active: boolean): React.CSSProperties {
   return active ? SURFACE_INPUT_FOCUS_OUTLINE : { outline: 'none' }
 }
 
-function useSurfaceInputActiveState(
-  props: React.HTMLAttributes<HTMLElement>,
-) {
+function useSurfaceInputActiveState(props: React.HTMLAttributes<HTMLElement>) {
   const [focusVisible, setFocusVisible] = React.useState(false)
   const [pressed, setPressed] = React.useState(false)
   const [hovered, setHovered] = React.useState(false)

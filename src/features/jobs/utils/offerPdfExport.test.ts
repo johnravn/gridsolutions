@@ -45,7 +45,7 @@ describe('exportOfferAsPDF', () => {
       crew_items: [
         {
           id: 'c1',
-          offer_id: base.id,
+          offer_basis_id: 'b1',
           role_title: 'FOH Engineer',
           role_category: 'audio',
           crew_count: 1,
@@ -59,7 +59,7 @@ describe('exportOfferAsPDF', () => {
       transport_items: [
         {
           id: 't1',
-          offer_id: base.id,
+          offer_basis_id: 'b1',
           vehicle_category: 'van_medium',
           quantity: 1,
           start_date: '2026-01-01T08:00:00.000Z',

@@ -1,7 +1,7 @@
 // src/shared/ui/components/SearchableSelect.tsx
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { Box, Spinner, Text, TextField } from '@radix-ui/themes'
+import { Box, Spinner, Text, TextField, Theme } from '@radix-ui/themes'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 
 export type SearchableSelectOption = {
@@ -95,6 +95,10 @@ function useFixedDropdownPosition(
   return position
 }
 
+function portalAppearance(): 'light' | 'dark' {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
 function setOpenState(
   open: boolean,
   setOpen: React.Dispatch<React.SetStateAction<boolean>>,
@@ -133,7 +137,7 @@ export function SearchableSelect({
     [options, value],
   )
 
-  const displayValue = selectedOption?.label ?? inputValue
+  const displayValue = open ? inputValue : (selectedOption?.label ?? inputValue)
 
   const filteredOptions = React.useMemo(() => {
     if (!filterLocally || !inputValue.trim()) return options
@@ -181,7 +185,6 @@ export function SearchableSelect({
     setInputValue(v)
     setOpenState(true, setOpen, onOpenChange)
     onInputChange?.(v)
-    if (value) onValueChange('')
   }
 
   const handleSelect = (option: SearchableSelectOption) => {
@@ -201,75 +204,77 @@ export function SearchableSelect({
 
   const dropdownEl =
     open && fixedPosition ? (
-      <Box
-        ref={listRef}
-        data-searchable-select-dropdown
-        onPointerDownCapture={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
-        style={{
-          position: 'fixed',
-          top: fixedPosition.top,
-          left: fixedPosition.left,
-          width: Math.min(fixedPosition.width, dropdownMaxWidth),
-          zIndex: 2147483647,
-          pointerEvents: 'auto',
-          backgroundColor: 'var(--color-background)',
-          border: '1px solid var(--gray-a6)',
-          borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          maxHeight: dropdownMaxHeight,
-          overflowY: 'auto',
-        }}
-      >
-        {loading ? (
-          <Box px="3" py="2">
-            <Text size="2" color="gray">
-              Searching…
-            </Text>
-          </Box>
-        ) : filteredOptions.length === 0 ? (
-          <Box px="3" py="2">
-            <Text size="2" color="gray">
-              {emptyMessage}
-            </Text>
-          </Box>
-        ) : (
-          filteredOptions.map((option) => (
-            <Box
-              key={option.value || '__empty__'}
-              data-searchable-select-option
-              onPointerDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                selectingRef.current = true
-                handleSelect(option)
-              }}
-              style={{
-                padding: '6px 10px',
-                cursor: 'pointer',
-                borderBottom: '1px solid var(--gray-a4)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <Text size="2">{option.label}</Text>
-              {option.description && (
-                <Text
-                  size="1"
-                  color="gray"
-                  style={{ display: 'block', marginTop: 2 }}
-                >
-                  {option.description}
-                </Text>
-              )}
+      <Theme appearance={portalAppearance()} hasBackground={false}>
+        <Box
+          ref={listRef}
+          data-searchable-select-dropdown
+          onPointerDownCapture={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          style={{
+            position: 'fixed',
+            top: fixedPosition.top,
+            left: fixedPosition.left,
+            width: Math.min(fixedPosition.width, dropdownMaxWidth),
+            zIndex: 2147483647,
+            pointerEvents: 'auto',
+            backgroundColor: 'var(--color-panel-solid)',
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 'var(--radius-3)',
+            boxShadow: 'var(--shadow-4)',
+            maxHeight: dropdownMaxHeight,
+            overflowY: 'auto',
+            fontFamily: 'inherit',
+          }}
+        >
+          {loading ? (
+            <Box px="2" py="1">
+              <Text size="2" color="gray">
+                Searching…
+              </Text>
             </Box>
-          ))
-        )}
-      </Box>
+          ) : filteredOptions.length === 0 ? (
+            <Box px="2" py="1">
+              <Text size="2" color="gray">
+                {emptyMessage}
+              </Text>
+            </Box>
+          ) : (
+            filteredOptions.map((option) => (
+              <Box
+                key={option.value || '__empty__'}
+                data-searchable-select-option
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  selectingRef.current = true
+                  handleSelect(option)
+                }}
+                px="2"
+                py="1"
+                style={{
+                  cursor: 'pointer',
+                  borderRadius: 'var(--radius-2)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = 'transparent'
+                }}
+              >
+                <Text as="div" size="2" truncate>
+                  {option.label}
+                </Text>
+                {option.description && (
+                  <Text as="div" size="1" color="gray" truncate>
+                    {option.description}
+                  </Text>
+                )}
+              </Box>
+            ))
+          )}
+        </Box>
+      </Theme>
     ) : null
 
   return (

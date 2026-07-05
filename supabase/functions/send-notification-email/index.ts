@@ -14,6 +14,7 @@ import {
   emailFunctionCorsHeaders,
   escapeHtml,
   getResendApiKey,
+  isNonDeliverableTestEmail,
   sendResendHtmlEmail,
 } from '../_shared/email/resend.ts'
 
@@ -115,6 +116,23 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
         },
       })
+    }
+
+    if (isNonDeliverableTestEmail(toEmail)) {
+      await supabase
+        .from('notifications')
+        .update({ email_sent_at: new Date().toISOString() })
+        .eq('id', notificationId)
+      return new Response(
+        JSON.stringify({ ok: true, skipped: 'test_recipient' }),
+        {
+          status: 200,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
     }
 
     const { data: prefs } = await supabase

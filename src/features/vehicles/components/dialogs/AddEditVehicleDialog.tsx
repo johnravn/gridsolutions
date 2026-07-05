@@ -11,6 +11,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { Camera, Sparks } from 'iconoir-react'
@@ -489,7 +490,7 @@ export default function AddEditVehicleDialog({
               }}
             >
               {imageUrl ? (
-                <img
+                <LazyImage
                   src={imageUrl}
                   alt="Vehicle"
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}

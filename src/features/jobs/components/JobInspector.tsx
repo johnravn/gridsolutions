@@ -20,6 +20,7 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
@@ -32,8 +33,6 @@ import CalendarTab from './tabs/CalendarTab'
 import ProgramTab from './tabs/ProgramTab'
 import FilesTab from './tabs/FilesTab'
 import OffersTab from './tabs/OffersTab'
-import PrettyOffersTab from './tabs/PrettyOffersTab'
-import { PrettyOfferBetaBadge } from './PrettyOfferBetaBadge'
 import InvoiceTab from './tabs/InvoiceTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
@@ -87,7 +86,6 @@ export default function JobInspector({
         'bookings',
         'subcontractors',
         'offers',
-        'pretty-offers',
         'invoice',
         'money',
         'todo',
@@ -124,10 +122,9 @@ export default function JobInspector({
       { value: 'program', label: 'Program' },
       { value: 'calendar', label: 'Calendar' },
       { value: 'bookings', label: 'Bookings' },
+      { value: 'offers', label: 'Offers' },
       { value: 'subcontractors', label: 'Subcontractors' },
       { value: 'packing', label: 'Packing' },
-      { value: 'offers', label: 'Offers' },
-      { value: 'pretty-offers', label: 'Pretty Offers' },
       { value: 'invoice', label: 'Invoice' },
       { value: 'money', label: 'Money' },
       { value: 'todo', label: 'To Do' },
@@ -223,7 +220,7 @@ export default function JobInspector({
 
   // now you can early return safely since hooks above already ran
   if (!id) return <Text color="gray">Select a job to see details.</Text>
-  if (isLoading || !data) return <Text>Loading…</Text>
+  if (isLoading || !data) return <InspectorSkeleton />
 
   const job = data
 
@@ -429,15 +426,8 @@ export default function JobInspector({
                     justifyContent: 'space-between',
                   }}
                 >
-                  {activeTab === 'pretty-offers' ? (
-                    <Flex align="center" gap="2">
-                      Pretty Offers
-                      <PrettyOfferBetaBadge />
-                    </Flex>
-                  ) : (
-                    (tabOptions.find((o) => o.value === activeTab)?.label ??
-                    'Overview')
-                  )}
+                  {tabOptions.find((o) => o.value === activeTab)?.label ??
+                    'Overview'}
                   <NavArrowDown width={18} height={18} />
                 </Button>
               </DropdownMenu.Trigger>
@@ -468,14 +458,7 @@ export default function JobInspector({
                     }}
                     style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
                   >
-                    {opt.value === 'pretty-offers' ? (
-                      <Flex align="center" gap="2">
-                        {opt.label}
-                        <PrettyOfferBetaBadge />
-                      </Flex>
-                    ) : (
-                      opt.label
-                    )}
+                    {opt.label}
                   </DropdownMenu.Item>
                 ))}
               </DropdownMenu.Content>
@@ -491,20 +474,12 @@ export default function JobInspector({
               <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
             )}
             {!isFreelancer && (
-              <Tabs.Trigger value="subcontractors">Subcontractors</Tabs.Trigger>
-            )}
-            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
-            {!isFreelancer && (
               <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
             )}
             {!isFreelancer && (
-              <Tabs.Trigger value="pretty-offers">
-                <Flex align="center" gap="1">
-                  Pretty Offers
-                  <PrettyOfferBetaBadge />
-                </Flex>
-              </Tabs.Trigger>
+              <Tabs.Trigger value="subcontractors">Subcontractors</Tabs.Trigger>
             )}
+            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
@@ -533,14 +508,6 @@ export default function JobInspector({
           </Tabs.Content>
         )}
         {!isFreelancer && (
-          <Tabs.Content value="subcontractors" mt={'10px'}>
-            <SubcontractorsTab jobId={job.id} />
-          </Tabs.Content>
-        )}
-        <Tabs.Content value="packing" mt={'10px'}>
-          <PackingTab jobId={job.id} />
-        </Tabs.Content>
-        {!isFreelancer && (
           <Tabs.Content value="offers" mt={'10px'}>
             <OffersTab
               jobId={job.id}
@@ -550,14 +517,13 @@ export default function JobInspector({
           </Tabs.Content>
         )}
         {!isFreelancer && (
-          <Tabs.Content value="pretty-offers" mt={'10px'}>
-            <PrettyOffersTab
-              jobId={job.id}
-              companyId={job.company_id}
-              isActive={activeTab === 'pretty-offers'}
-            />
+          <Tabs.Content value="subcontractors" mt={'10px'}>
+            <SubcontractorsTab jobId={job.id} />
           </Tabs.Content>
         )}
+        <Tabs.Content value="packing" mt={'10px'}>
+          <PackingTab jobId={job.id} />
+        </Tabs.Content>
         {!isFreelancer && (
           <Tabs.Content value="invoice" mt={'10px'}>
             <InvoiceTab jobId={job.id} job={job} />

@@ -617,136 +617,55 @@ type JobInfo = {
 
 async function fetchJobInfo(
   supabase: ReturnType<typeof createClient<Database>>,
-  companyId: string,
+  _companyId: string,
   jobIds: Array<string>,
 ): Promise<Map<string, JobInfo>> {
   const out = new Map<string, JobInfo>()
   if (jobIds.length === 0) return out
 
-  const { data: jobs } = await supabase
+  const { data: jobs, error } = await supabase
     .from('jobs')
     .select(
-      'id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status, recurring_job_id',
+      `
+      id, title, jobnr, status, archived, recurring_job_id,
+      project_lead:project_lead_user_id ( user_id, display_name ),
+      customer:customer_id ( name ),
+      address:job_address_id ( address_line, city, zip_code, country ),
+      recurring_job:recurring_job_id ( title )
+    `,
     )
     .in('id', jobIds)
+    .eq('archived', false)
 
-  if (!jobs || jobs.length === 0) return out
+  if (error || !jobs || jobs.length === 0) return out
 
-  const recurringJobIds = Array.from(
-    new Set(
-      jobs
-        .map((j: { recurring_job_id: string | null }) => j.recurring_job_id)
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-  const { data: recurringJobs } =
-    recurringJobIds.length > 0
-      ? await supabase
-          .from('recurring_jobs')
-          .select('id, title')
-          .in('id', recurringJobIds)
-      : { data: [] as Array<{ id: string; title: string }> }
-  const recurringJobTitles = new Map<string, string>()
-  ;(recurringJobs || []).forEach((rj: { id: string; title: string }) => {
-    recurringJobTitles.set(rj.id, rj.title || '')
-  })
-
-  const leadUserIds = Array.from(
-    new Set(
-      jobs
-        .map(
-          (j: { project_lead_user_id: string | null }) =>
-            j.project_lead_user_id,
-        )
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-  const customerIds = Array.from(
-    new Set(
-      jobs
-        .map((j: { customer_id: string | null }) => j.customer_id)
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-  const addressIds = Array.from(
-    new Set(
-      jobs
-        .map((j: { job_address_id: string | null }) => j.job_address_id)
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-
-  const [profilesRes, customersRes, addressesRes] = await Promise.all([
-    leadUserIds.length > 0
-      ? supabase
-          .from('profiles')
-          .select('user_id, display_name')
-          .in('user_id', leadUserIds)
-      : Promise.resolve({ data: [] }),
-    customerIds.length > 0
-      ? supabase.from('customers').select('id, name').in('id', customerIds)
-      : Promise.resolve({ data: [] }),
-    addressIds.length > 0
-      ? supabase
-          .from('addresses')
-          .select('id, address_line, city, zip_code, country')
-          .in('id', addressIds)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const leadNames = new Map<string, string>()
-  ;(profilesRes.data || []).forEach(
-    (p: { user_id: string; display_name: string | null }) => {
-      leadNames.set(p.user_id, p.display_name || '')
-    },
-  )
-  const customerNames = new Map<string, string>()
-  ;(customersRes.data || []).forEach((c: { id: string; name: string }) => {
-    customerNames.set(c.id, c.name)
-  })
-  const addressMap = new Map<string, string>()
-  ;(addressesRes.data || []).forEach(
-    (a: {
-      id: string
+  type JobRow = {
+    id: string
+    title: string
+    jobnr: number | null
+    status: string
+    recurring_job_id: string | null
+    project_lead: { display_name: string | null } | null
+    customer: { name: string } | null
+    address: {
       address_line: string
       city: string
       zip_code: string
       country: string
-    }) => {
-      addressMap.set(a.id, formatLocation(a))
-    },
-  )
-
-  jobs.forEach(
-    (j: {
-      id: string
-      title: string
-      project_lead_user_id: string | null
-      customer_id: string | null
-      job_address_id: string | null
-      jobnr: number | null
-      status: string
-      recurring_job_id: string | null
-    }) => {
-      out.set(j.id, {
-        title: j.title || 'Job',
-        projectLeadName: j.project_lead_user_id
-          ? (leadNames.get(j.project_lead_user_id) ?? '')
-          : '',
-        customerName: j.customer_id
-          ? (customerNames.get(j.customer_id) ?? '')
-          : '',
-        location: j.job_address_id
-          ? (addressMap.get(j.job_address_id) ?? '')
-          : '',
-        jobnr: j.jobnr ?? null,
-        status: j.status || '',
-        recurringJobTitle: j.recurring_job_id
-          ? (recurringJobTitles.get(j.recurring_job_id) ?? null)
-          : null,
-      })
-    },
-  )
+    } | null
+    recurring_job: { title: string } | null
+  }
+  ;(jobs as unknown as Array<JobRow>).forEach((j) => {
+    out.set(j.id, {
+      title: j.title || 'Job',
+      projectLeadName: j.project_lead?.display_name ?? '',
+      customerName: j.customer?.name ?? '',
+      location: j.address ? formatLocation(j.address) : '',
+      jobnr: j.jobnr ?? null,
+      status: j.status || '',
+      recurringJobTitle: j.recurring_job?.title ?? null,
+    })
+  })
   return out
 }
 

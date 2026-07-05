@@ -4,6 +4,12 @@ import { openPublicOfferAction } from './helpers/public-offer'
 
 const CUSTOM_LINE_LABEL = 'E2E test microphone'
 
+function offerBasisEditor(page: import('@playwright/test').Page) {
+  return page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: /Offer basis/i }),
+  })
+}
+
 function technicalOfferEditor(page: import('@playwright/test').Page) {
   return page.getByRole('dialog').filter({
     has: page.getByRole('heading', {
@@ -20,47 +26,52 @@ async function createTechnicalOfferWithCustomEquipment(
     timeout: 15_000,
   })
 
-  await page.getByRole('button', { name: 'New Offer' }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Create New Offer' }),
-  ).toBeVisible()
+  await page.getByRole('button', { name: 'New basis' }).click()
 
-  await page.getByRole('button', { name: 'Create Technical Offer' }).click()
+  const basisEditor = offerBasisEditor(page)
+  await expect(basisEditor).toBeVisible({ timeout: 20_000 })
+  await basisEditor.getByRole('tab', { name: 'Equipment' }).click()
+  await basisEditor.getByRole('button', { name: 'Add Group' }).click()
+  await expect(
+    basisEditor.getByPlaceholder('Enter group name').last(),
+  ).toBeVisible({ timeout: 15_000 })
+  await basisEditor
+    .getByPlaceholder('Enter group name')
+    .last()
+    .fill('E2E Equipment')
+  await expect(
+    basisEditor.getByRole('button', { name: 'Add custom line' }),
+  ).toBeVisible({ timeout: 10_000 })
+  await basisEditor.getByRole('button', { name: 'Add custom line' }).click()
+
+  const description = basisEditor
+    .getByPlaceholder('Description (e.g. one-off fee)')
+    .last()
+  await description.fill(CUSTOM_LINE_LABEL)
+  await basisEditor.locator('input[type="number"]').last().fill('1000')
+
+  await basisEditor.getByRole('button', { name: 'Save' }).click()
+  await expect(page.getByText(/Offer basis (updated|created)/)).toBeVisible({
+    timeout: 15_000,
+  })
+  await basisEditor.getByRole('button', { name: 'Close' }).click()
+  await expect(basisEditor).toBeHidden({ timeout: 10_000 })
+
+  await page
+    .getByRole('button', { name: 'Create technical offer' })
+    .first()
+    .click()
 
   const editor = technicalOfferEditor(page)
   await expect(editor).toBeVisible({ timeout: 20_000 })
   await expect(
-    editor.getByRole('heading', { name: 'Edit Technical Offer' }),
+    editor.getByRole('heading', { name: /Technical Offer/i }),
   ).toBeVisible({ timeout: 20_000 })
-  await expect(page.getByText('Offer created', { exact: true })).toBeVisible({
-    timeout: 15_000,
-  })
-  await expect(editor.getByRole('button', { name: 'Sync' })).toBeEnabled({
-    timeout: 15_000,
-  })
-
-  await editor.getByRole('tab', { name: 'Equipment' }).click()
-  await editor.getByRole('button', { name: 'Add Group' }).click()
-  await expect(editor.getByPlaceholder('Enter group name').last()).toBeVisible({
-    timeout: 15_000,
-  })
-  await editor.getByPlaceholder('Enter group name').last().fill('E2E Equipment')
-  await expect(
-    editor.getByRole('button', { name: 'Add custom line' }),
-  ).toBeVisible({ timeout: 10_000 })
-  await editor.getByRole('button', { name: 'Add custom line' }).click()
-
-  const description = editor
-    .getByPlaceholder('Description (e.g. one-off fee)')
-    .last()
-  await description.fill(CUSTOM_LINE_LABEL)
-  await editor.locator('input[type="number"]').last().fill('1000')
 
   await editor.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Offer updated', { exact: true })).toBeVisible({
     timeout: 15_000,
   })
-  await expect(description).toHaveValue(CUSTOM_LINE_LABEL)
 
   await editor.getByRole('button', { name: 'Close' }).click()
   await expect(editor).toBeHidden({ timeout: 10_000 })

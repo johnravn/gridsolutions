@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Badge, Card, Flex, Text } from '@radix-ui/themes'
 import { Car } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { vehicleOwnerBadge } from '../lib/ownership'
 import type { VehicleIndexRow } from '../api/queries'
 
@@ -89,7 +90,7 @@ function VehicleCard({
         }}
       >
         {imageUrl ? (
-          <img
+          <LazyImage
             src={imageUrl}
             alt={v.name}
             style={{ width: '100%', height: '100%', objectFit: 'cover' }}

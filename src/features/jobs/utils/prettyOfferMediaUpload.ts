@@ -46,6 +46,28 @@ export function resolvePrettyOfferMediaUrl(
   return data.publicUrl
 }
 
+function getPrettyOfferMediaExtension(
+  file: File,
+  kind: PrettyOfferMediaKind,
+): string {
+  return (
+    file.name.split('.').pop()?.toLowerCase() ||
+    (kind === 'image' ? 'jpg' : 'mp4')
+  )
+}
+
+export function buildCompanyPrettyOfferLibraryPath({
+  companyId,
+  imageId,
+  ext,
+}: {
+  companyId: string
+  imageId: string
+  ext: string
+}): string {
+  return `${companyId}/library/${imageId}.${ext}`
+}
+
 export async function uploadPrettyOfferMedia({
   companyId,
   offerId,
@@ -60,9 +82,7 @@ export async function uploadPrettyOfferMedia({
   const validationError = validatePrettyOfferMediaFile(file, kind)
   if (validationError) throw new Error(validationError)
 
-  const ext =
-    file.name.split('.').pop()?.toLowerCase() ||
-    (kind === 'image' ? 'jpg' : 'mp4')
+  const ext = getPrettyOfferMediaExtension(file, kind)
   const timestamp = Date.now()
   const filename = `${timestamp}-${crypto.randomUUID().slice(0, 8)}.${ext}`
   const path = `${companyId}/${offerId}/${filename}`
@@ -77,4 +97,60 @@ export async function uploadPrettyOfferMedia({
 
   if (uploadError) throw uploadError
   return path
+}
+
+export async function uploadCompanyPrettyOfferLibraryImage({
+  companyId,
+  imageId,
+  file,
+}: {
+  companyId: string
+  imageId: string
+  file: File
+}): Promise<string> {
+  const validationError = validatePrettyOfferMediaFile(file, 'image')
+  if (validationError) throw new Error(validationError)
+
+  const ext = getPrettyOfferMediaExtension(file, 'image')
+  const path = buildCompanyPrettyOfferLibraryPath({ companyId, imageId, ext })
+
+  const { error: uploadError } = await supabase.storage
+    .from('pretty_offer_media')
+    .upload(path, file, {
+      upsert: false,
+      cacheControl: '3600',
+      contentType: file.type,
+    })
+
+  if (uploadError) throw uploadError
+  return path
+}
+
+export async function deletePrettyOfferMediaPath(path: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from('pretty_offer_media')
+    .remove([path])
+  if (error) throw error
+}
+
+export async function copyPrettyOfferLibraryImageToOffer({
+  companyId,
+  offerId,
+  libraryPath,
+}: {
+  companyId: string
+  offerId: string
+  libraryPath: string
+}): Promise<string> {
+  const ext = libraryPath.split('.').pop()?.toLowerCase() || 'jpg'
+  const timestamp = Date.now()
+  const filename = `${timestamp}-${crypto.randomUUID().slice(0, 8)}.${ext}`
+  const destinationPath = `${companyId}/${offerId}/${filename}`
+
+  const { error: copyError } = await supabase.storage
+    .from('pretty_offer_media')
+    .copy(libraryPath, destinationPath)
+
+  if (copyError) throw copyError
+  return destinationPath
 }

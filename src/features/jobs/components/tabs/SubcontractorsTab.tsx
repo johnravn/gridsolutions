@@ -1,197 +1,37 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Badge,
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  Heading,
-  Select,
-  Table,
-  Text,
-  TextArea,
-  TextField,
-} from '@radix-ui/themes'
-import { Download, Plus, Trash } from 'iconoir-react'
+import { Box, Callout, Flex, Heading, Switch, Text } from '@radix-ui/themes'
+import { InfoCircle, Plus } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import AddJobSubcontractorDialog from '../dialogs/AddJobSubcontractorDialog'
 import {
   assignSubrentalBookingSubcontractor,
-  createJobSubcontractorQuote,
-  getJobSubcontractorQuotePdfUrl,
-  jobSubcontractorQuotesKey,
+  assignSubrentalBookingsToSubcontractor,
   jobSubcontractorQuotesQuery,
   jobSubcontractorsKey,
   jobSubcontractorsQuery,
   jobSubrentalBookingsKey,
   jobSubrentalBookingsQuery,
   removeJobSubcontractor,
-  updateJobSubcontractorNotes,
-  uploadJobSubcontractorQuotePdf,
 } from '../../api/subcontractorQueries'
-import type { JobSubcontractorRow } from '../../api/subcontractorQueries'
+import AddQuoteDialog from './subcontractors/AddQuoteDialog'
+import SubcontractorCard from './subcontractors/SubcontractorCard'
+import SubrentalItemsList, {
+  allSubrentalItemsUnassigned,
+  countUnassignedSubrentalItems,
+  subrentalItemsForSubcontractor,
+} from './subcontractors/SubrentalItemsList'
+import type {
+  JobSubcontractorQuoteRow,
+  JobSubcontractorRow,
+} from '../../api/subcontractorQueries'
 
-function formatMoney(value: number) {
-  return value.toLocaleString('nb-NO', {
-    style: 'currency',
-    currency: 'NOK',
-    maximumFractionDigits: 0,
-  })
-}
-
-function AddQuoteDialog({
-  open,
-  onOpenChange,
-  jobId,
-  companyId,
-  subcontractor,
-}: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  jobId: string
-  companyId: string
+type QuoteDialogState = {
   subcontractor: JobSubcontractorRow
-}) {
-  const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
-  const fileInputRef = React.useRef<HTMLInputElement>(null)
-  const [totalAmount, setTotalAmount] = React.useState(0)
-  const [note, setNote] = React.useState('')
-  const [pdfMeta, setPdfMeta] = React.useState<{
-    path: string
-    filename: string
-    mimeType: string
-    sizeBytes: number
-  } | null>(null)
-  const [uploading, setUploading] = React.useState(false)
-
-  const reset = () => {
-    setTotalAmount(0)
-    setNote('')
-    setPdfMeta(null)
-  }
-
-  const createMutation = useMutation({
-    mutationFn: async () => {
-      await createJobSubcontractorQuote({
-        jobId,
-        jobSubcontractorId: subcontractor.id,
-        totalAmount,
-        note: note.trim() || null,
-        pdfPath: pdfMeta?.path ?? null,
-        pdfFilename: pdfMeta?.filename ?? null,
-        mimeType: pdfMeta?.mimeType ?? null,
-        sizeBytes: pdfMeta?.sizeBytes ?? null,
-      })
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: jobSubcontractorQuotesKey(jobId),
-      })
-      success('Quote added', 'Subcontractor quote version saved.')
-      reset()
-      onOpenChange(false)
-    },
-    onError: (e: Error) => {
-      toastError('Could not save quote', e.message)
-    },
-  })
-
-  const handleUpload = async (file: File) => {
-    setUploading(true)
-    try {
-      const uploaded = await uploadJobSubcontractorQuotePdf({
-        companyId,
-        jobId,
-        jobSubcontractorId: subcontractor.id,
-        file,
-      })
-      setPdfMeta(uploaded)
-    } catch (e) {
-      toastError(
-        'Upload failed',
-        e instanceof Error ? e.message : 'Could not upload PDF',
-      )
-    } finally {
-      setUploading(false)
-      if (fileInputRef.current) fileInputRef.current.value = ''
-    }
-  }
-
-  return (
-    <Dialog.Root
-      open={open}
-      onOpenChange={(next) => {
-        if (!next) reset()
-        onOpenChange(next)
-      }}
-    >
-      <Dialog.Content maxWidth="480px">
-        <Dialog.Title>Add quote — {subcontractor.customer.name}</Dialog.Title>
-        <Flex direction="column" gap="3" mt="3">
-          <Box>
-            <Text size="2" weight="medium" mb="1" as="div">
-              Total amount
-            </Text>
-            <TextField.Root
-              type="number"
-              value={totalAmount}
-              onChange={(e) => setTotalAmount(Number(e.target.value) || 0)}
-            />
-          </Box>
-          <Box>
-            <Text size="2" weight="medium" mb="1" as="div">
-              Note
-            </Text>
-            <TextArea
-              value={note}
-              rows={2}
-              placeholder="Optional note"
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </Box>
-          <Flex gap="2" align="center" wrap="wrap">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf"
-              style={{ display: 'none' }}
-              onChange={(e) => {
-                const file = e.target.files?.[0]
-                if (file) void handleUpload(file)
-              }}
-            />
-            <Button
-              size="1"
-              variant="soft"
-              disabled={uploading}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              {pdfMeta ? 'Replace PDF' : 'Upload PDF'}
-            </Button>
-            {pdfMeta && <Text size="2">{pdfMeta.filename}</Text>}
-          </Flex>
-          <Flex justify="end" gap="2" mt="2">
-            <Dialog.Close>
-              <Button variant="soft" color="gray">
-                Cancel
-              </Button>
-            </Dialog.Close>
-            <Button
-              onClick={() => createMutation.mutate()}
-              disabled={createMutation.isPending || totalAmount <= 0}
-            >
-              Save quote version
-            </Button>
-          </Flex>
-        </Flex>
-      </Dialog.Content>
-    </Dialog.Root>
-  )
-}
+  quote?: JobSubcontractorQuoteRow
+} | null
 
 export default function SubcontractorsTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
@@ -199,8 +39,15 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [addOpen, setAddOpen] = React.useState(false)
-  const [quoteDialogSub, setQuoteDialogSub] =
-    React.useState<JobSubcontractorRow | null>(null)
+  const [quoteDialog, setQuoteDialog] = React.useState<QuoteDialogState>(null)
+  const [selectedItemIds, setSelectedItemIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
+  const [selectionEnabled, setSelectionEnabled] = React.useState(false)
+  const userToggledSelectionRef = React.useRef(false)
+  const [expandedCardIds, setExpandedCardIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
 
   const { data: subcontractors = [], isLoading: subsLoading } = useQuery({
     ...jobSubcontractorsQuery({ jobId }),
@@ -216,6 +63,61 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
     },
   )
 
+  const quotesBySubcontractor = React.useMemo(() => {
+    const map = new Map<string, typeof jobQuotes>()
+    for (const quote of jobQuotes) {
+      const list = map.get(quote.job_subcontractor_id) ?? []
+      list.push(quote)
+      map.set(quote.job_subcontractor_id, list)
+    }
+    for (const [, list] of map) {
+      list.sort((a, b) => b.version_number - a.version_number)
+    }
+    return map
+  }, [jobQuotes])
+
+  const unassignedCount = countUnassignedSubrentalItems(subrentalBookings)
+  const jobPartnerIds = subcontractors.map((s) => s.customer_id)
+
+  React.useEffect(() => {
+    if (bookingsLoading) return
+
+    if (subrentalBookings.length === 0 || unassignedCount === 0) {
+      setSelectionEnabled(false)
+      setSelectedItemIds(new Set())
+      userToggledSelectionRef.current = false
+      return
+    }
+
+    if (
+      !userToggledSelectionRef.current &&
+      allSubrentalItemsUnassigned(subrentalBookings)
+    ) {
+      setSelectionEnabled(true)
+    }
+  }, [bookingsLoading, subrentalBookings, unassignedCount])
+
+  React.useEffect(() => {
+    setSelectedItemIds((prev) => {
+      if (prev.size === 0) return prev
+      const unassignedIds = new Set(
+        subrentalBookings
+          .filter((row) => !row.subcontractor_id)
+          .map((row) => row.id),
+      )
+      const next = new Set([...prev].filter((id) => unassignedIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [subrentalBookings])
+
+  const setBulkSelectionEnabled = (enabled: boolean) => {
+    userToggledSelectionRef.current = true
+    setSelectionEnabled(enabled)
+    if (!enabled) setSelectedItemIds(new Set())
+  }
+
+  const assignmentMode = selectionEnabled && selectedItemIds.size > 0
+
   const removeMutation = useMutation({
     mutationFn: removeJobSubcontractor,
     onSuccess: async () => {
@@ -227,7 +129,7 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
     },
   })
 
-  const assignMutation = useMutation({
+  const assignSingleMutation = useMutation({
     mutationFn: assignSubrentalBookingSubcontractor,
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
@@ -238,295 +140,188 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
     },
   })
 
-  const notesMutation = useMutation({
-    mutationFn: updateJobSubcontractorNotes,
+  const assignBatchMutation = useMutation({
+    mutationFn: assignSubrentalBookingsToSubcontractor,
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
+      await qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
+      setSelectedItemIds(new Set())
+      success('Assigned', 'Selected items assigned to subcontractor')
     },
     onError: (e: Error) => {
-      toastError('Could not save notes', e.message)
+      toastError('Could not assign subcontractor', e.message)
     },
   })
 
-  const jobPartnerIds = subcontractors.map((s) => s.customer_id)
+  const toggleItemSelection = (id: string) => {
+    const row = subrentalBookings.find((item) => item.id === id)
+    if (!row || row.subcontractor_id) return
+    setSelectedItemIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
-  const quotesBySubcontractor = React.useMemo(() => {
-    const map = new Map<string, typeof jobQuotes>()
-    for (const quote of jobQuotes) {
-      const list = map.get(quote.job_subcontractor_id) ?? []
-      list.push(quote)
-      map.set(quote.job_subcontractor_id, list)
-    }
-    return map
-  }, [jobQuotes])
+  const toggleCardExpanded = (id: string, expanded: boolean) => {
+    if (assignmentMode) return
+    setExpandedCardIds((prev) => {
+      const next = new Set(prev)
+      if (expanded) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const isAssigning =
+    assignSingleMutation.isPending || assignBatchMutation.isPending
 
   return (
     <Box>
-      <Flex align="center" justify="between" mb="3">
-        <Heading size="3">Subcontractors</Heading>
-        {companyId && !isReadOnly && (
-          <Button size="2" onClick={() => setAddOpen(true)}>
-            <Plus /> Add subcontractor
-          </Button>
-        )}
-      </Flex>
+      <Heading size="3" mb="3">
+        Subcontractors
+      </Heading>
 
-      {subsLoading ? (
-        <Text size="2" color="gray">
-          Loading subcontractors…
-        </Text>
-      ) : subcontractors.length === 0 ? (
-        <Text size="2" color="gray" mb="4">
-          No subcontractors on this job yet. Add partner customers who will
-          supply subrental equipment.
-        </Text>
-      ) : (
-        <Table.Root variant="surface" mb="5">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Partner</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Contact</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Notes</Table.ColumnHeaderCell>
-              {!isReadOnly && <Table.ColumnHeaderCell width="60px" />}
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {subcontractors.map((sub) => (
-              <Table.Row key={sub.id}>
-                <Table.Cell>
-                  <Text weight="medium">{sub.customer.name}</Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Text size="2" color="gray">
-                    {[sub.customer.email, sub.customer.phone]
-                      .filter(Boolean)
-                      .join(' · ') || '—'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  {isReadOnly ? (
-                    <Text size="2">{sub.notes || '—'}</Text>
-                  ) : (
-                    <TextArea
-                      defaultValue={sub.notes ?? ''}
-                      placeholder="Notes"
-                      rows={2}
-                      onBlur={(e) => {
-                        const next = e.target.value.trim() || null
-                        if (next !== (sub.notes ?? null)) {
-                          notesMutation.mutate({ id: sub.id, notes: next })
-                        }
-                      }}
-                    />
-                  )}
-                </Table.Cell>
-                {!isReadOnly && (
-                  <Table.Cell>
-                    <Button
-                      size="1"
-                      variant="soft"
-                      color="red"
-                      onClick={() => removeMutation.mutate(sub.id)}
-                    >
-                      <Trash />
-                    </Button>
-                  </Table.Cell>
-                )}
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+      {unassignedCount > 0 && (
+        <Callout.Root color="orange" mb="3" size="1">
+          <Callout.Icon>
+            <InfoCircle />
+          </Callout.Icon>
+          <Callout.Text>
+            {unassignedCount} subrental item
+            {unassignedCount !== 1 ? 's are' : ' is'} not assigned to a
+            subcontractor.
+          </Callout.Text>
+        </Callout.Root>
       )}
 
-      <Flex align="center" justify="between" mb="2">
-        <Heading size="3">Quote versions</Heading>
-      </Flex>
-      <Text size="2" color="gray" mb="3">
-        Upload subcontractor offer PDFs and totals here. Pretty offers reference
-        a specific quote version when building pricing basises.
-      </Text>
-
-      {quotesLoading ? (
-        <Text size="2" color="gray" mb="5">
-          Loading quote versions…
+      {subsLoading || quotesLoading ? (
+        <Text size="2" color="gray" mb="4">
+          Loading subcontractors…
         </Text>
-      ) : subcontractors.length === 0 ? null : (
-        <Flex direction="column" gap="3" mb="5">
-          {subcontractors.map((sub) => {
-            const quotes = quotesBySubcontractor.get(sub.id) ?? []
-            return (
-              <Box
+      ) : (
+        <Flex direction="column" gap="2" mb="5">
+          {subcontractors.map((sub) =>
+            companyId ? (
+              <SubcontractorCard
                 key={sub.id}
-                p="3"
-                style={{ border: '1px solid var(--gray-a5)', borderRadius: 8 }}
-              >
-                <Flex
-                  justify="between"
-                  align="center"
-                  mb="2"
-                  wrap="wrap"
-                  gap="2"
-                >
-                  <Text size="2" weight="medium">
-                    {sub.customer.name}
-                  </Text>
-                  {!isReadOnly && companyId && (
-                    <Button
-                      size="1"
-                      variant="soft"
-                      onClick={() => setQuoteDialogSub(sub)}
-                    >
-                      <Plus width={14} height={14} />
-                      Add quote version
-                    </Button>
-                  )}
-                </Flex>
-                {quotes.length === 0 ? (
-                  <Text size="2" color="gray">
-                    No quote versions yet.
-                  </Text>
-                ) : (
-                  <Table.Root variant="ghost" size="1">
-                    <Table.Header>
-                      <Table.Row>
-                        <Table.ColumnHeaderCell>Version</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>PDF</Table.ColumnHeaderCell>
-                      </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                      {quotes.map((quote) => (
-                        <Table.Row key={quote.id}>
-                          <Table.Cell>
-                            <Badge size="1">v{quote.version_number}</Badge>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {formatMoney(quote.total_amount)}
-                          </Table.Cell>
-                          <Table.Cell>
-                            <Text size="1" color="gray">
-                              {quote.note || '—'}
-                            </Text>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {quote.pdf_path ? (
-                              <Button
-                                size="1"
-                                variant="ghost"
-                                onClick={() =>
-                                  void getJobSubcontractorQuotePdfUrl(
-                                    quote.pdf_path!,
-                                  ).then((url) => window.open(url, '_blank'))
-                                }
-                              >
-                                <Download width={14} height={14} />
-                                View
-                              </Button>
-                            ) : (
-                              <Text size="1" color="gray">
-                                —
-                              </Text>
-                            )}
-                          </Table.Cell>
-                        </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Root>
+                jobId={jobId}
+                companyId={companyId}
+                subcontractor={sub}
+                quotes={quotesBySubcontractor.get(sub.id) ?? []}
+                assignedItems={subrentalItemsForSubcontractor(
+                  subrentalBookings,
+                  sub.customer_id,
                 )}
-              </Box>
-            )
-          })}
+                expanded={!assignmentMode && expandedCardIds.has(sub.id)}
+                onExpandedChange={(expanded) =>
+                  toggleCardExpanded(sub.id, expanded)
+                }
+                assignmentMode={assignmentMode}
+                selectedItemCount={selectedItemIds.size}
+                onAssignSelected={() =>
+                  assignBatchMutation.mutate({
+                    reservedItemIds: [...selectedItemIds],
+                    subcontractorId: sub.customer_id,
+                  })
+                }
+                isReadOnly={isReadOnly}
+                isAssigning={isAssigning}
+                onRemove={() => removeMutation.mutate(sub.id)}
+                onAddQuote={() => setQuoteDialog({ subcontractor: sub })}
+                onEditQuote={(quote) =>
+                  setQuoteDialog({ subcontractor: sub, quote })
+                }
+              />
+            ) : null,
+          )}
+
+          {companyId && !isReadOnly && (
+            <Box
+              p={subcontractors.length === 0 ? '4' : '2'}
+              style={{
+                border: '2px dashed var(--gray-a6)',
+                borderRadius: 8,
+                textAlign: 'center',
+                cursor: 'pointer',
+                transition: 'all 100ms',
+              }}
+              onClick={() => setAddOpen(true)}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--gray-a8)'
+                e.currentTarget.style.background = 'var(--gray-a2)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--gray-a6)'
+                e.currentTarget.style.background = 'transparent'
+              }}
+            >
+              <Flex
+                direction="column"
+                align="center"
+                gap="2"
+                justify="center"
+                style={
+                  subcontractors.length > 0
+                    ? { flexDirection: 'row' }
+                    : undefined
+                }
+              >
+                <Plus
+                  width={subcontractors.length === 0 ? 24 : 16}
+                  height={subcontractors.length === 0 ? 24 : 16}
+                />
+                <Text size="2" color="gray">
+                  Add subcontractor
+                </Text>
+              </Flex>
+            </Box>
+          )}
+
+          {subcontractors.length === 0 && isReadOnly && (
+            <Text size="2" color="gray">
+              No subcontractors on this job yet.
+            </Text>
+          )}
         </Flex>
       )}
 
       <Heading size="3" mb="2">
         Subrental equipment
       </Heading>
+      {!isReadOnly && unassignedCount > 0 && (
+        <Flex as="label" align="center" gap="2" mb="2">
+          <Switch
+            checked={selectionEnabled}
+            onCheckedChange={setBulkSelectionEnabled}
+          />
+          <Text size="2">Select items to assign in bulk</Text>
+        </Flex>
+      )}
       <Text size="2" color="gray" mb="3">
-        Assign subrental catalog lines from equipment bookings to a
-        subcontractor on this job.
+        {selectionEnabled
+          ? 'Check unassigned items below, then assign using the buttons on subcontractor cards above. Assigned items stay non-selectable.'
+          : 'Use the menu on each row to assign one at a time, or turn on bulk selection above.'}
       </Text>
 
       {bookingsLoading ? (
         <Text size="2" color="gray">
           Loading subrental equipment…
         </Text>
-      ) : subrentalBookings.length === 0 ? (
-        <Text size="2" color="gray">
-          No subrental equipment booked on this job yet.
-        </Text>
       ) : (
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Period</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Subcontractor</Table.ColumnHeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {subrentalBookings.map((row) => (
-              <Table.Row key={row.id}>
-                <Table.Cell>
-                  <Text weight="medium">{row.item_name}</Text>
-                </Table.Cell>
-                <Table.Cell>{row.quantity}</Table.Cell>
-                <Table.Cell>
-                  <Text size="2" color="gray">
-                    {row.period_title ?? 'Equipment period'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Badge variant="soft" size="1">
-                    {row.external_status ?? 'planned'}
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  {isReadOnly ? (
-                    <Text size="2">
-                      {row.subcontractor_name ?? 'Unassigned'}
-                    </Text>
-                  ) : (
-                    <Select.Root
-                      value={row.subcontractor_id ?? '__none__'}
-                      onValueChange={(v) =>
-                        assignMutation.mutate({
-                          reservedItemId: row.id,
-                          subcontractorId: v === '__none__' ? null : v,
-                        })
-                      }
-                      disabled={
-                        jobPartnerIds.length === 0 || assignMutation.isPending
-                      }
-                    >
-                      <Select.Trigger
-                        placeholder={
-                          jobPartnerIds.length === 0
-                            ? 'Add subcontractor first'
-                            : 'Assign…'
-                        }
-                      />
-                      <Select.Content style={{ zIndex: 10000 }}>
-                        <Select.Item value="__none__">Unassigned</Select.Item>
-                        {subcontractors.map((sub) => (
-                          <Select.Item
-                            key={sub.customer_id}
-                            value={sub.customer_id}
-                          >
-                            {sub.customer.name}
-                          </Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Root>
-                  )}
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+        <SubrentalItemsList
+          items={subrentalBookings}
+          subcontractors={subcontractors}
+          selectedItemIds={selectedItemIds}
+          selectionEnabled={selectionEnabled}
+          onToggleItem={toggleItemSelection}
+          onClearSelection={() => setSelectedItemIds(new Set())}
+          onAssignSingle={(reservedItemId, subcontractorId) =>
+            assignSingleMutation.mutate({ reservedItemId, subcontractorId })
+          }
+          isReadOnly={isReadOnly}
+          isAssigning={isAssigning}
+        />
       )}
 
       {companyId && (
@@ -539,15 +334,16 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
         />
       )}
 
-      {companyId && quoteDialogSub && (
+      {companyId && quoteDialog && (
         <AddQuoteDialog
-          open={!!quoteDialogSub}
+          open
           onOpenChange={(open) => {
-            if (!open) setQuoteDialogSub(null)
+            if (!open) setQuoteDialog(null)
           }}
           jobId={jobId}
           companyId={companyId}
-          subcontractor={quoteDialogSub}
+          subcontractor={quoteDialog.subcontractor}
+          quote={quoteDialog.quote}
         />
       )}
     </Box>

@@ -21,6 +21,7 @@ const baseOffer: JobOffer = {
   total_after_discount: 1600,
   total_with_vat: 2000,
   based_on_offer_id: null,
+  offer_basis_id: '00000000-0000-4000-8000-000000000099',
   locked: false,
   created_at: '2026-01-01T00:00:00.000Z',
   updated_at: '2026-01-01T00:00:00.000Z',
@@ -53,7 +54,7 @@ export function makeOfferDetail(
     groups: [
       {
         id: '00000000-0000-4000-8000-000000000010',
-        offer_id: baseOffer.id,
+        offer_basis_id: baseOffer.offer_basis_id,
         group_name: 'Equipment',
         sort_order: 0,
         created_at: '2026-01-01T00:00:00.000Z',

@@ -35,6 +35,7 @@ export function useUpcomingJobs({
       sortDir: 'asc',
       userId: userId ?? null,
       companyRole: companyRole ?? null,
+      maxRows: 30,
     }),
     enabled: !!companyId,
   })

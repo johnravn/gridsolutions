@@ -81,4 +81,24 @@ describe('SearchableSelect', () => {
     fireEvent.change(input, { target: { value: 'zzzzz' } })
     expect(await screen.findByText('Nothing found')).toBeInTheDocument()
   })
+
+  it('allows typing to filter when a placeholder option is selected', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={[{ value: '__none__', label: 'No contact' }, ...options]}
+        value="__none__"
+        onValueChange={vi.fn()}
+        placeholder="Search contact…"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    expect(input).toHaveValue('No contact')
+
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'Al' } })
+    expect(input).toHaveValue('Al')
+    expect(await screen.findByText('Alpha')).toBeInTheDocument()
+  })
 })

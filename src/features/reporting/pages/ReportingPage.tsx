@@ -23,6 +23,9 @@ import {
   YAxis,
 } from 'recharts'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
+import ReportTableSkeleton from '@shared/ui/components/ReportTableSkeleton'
 import {
   reportCustomerProfitabilityQuery,
   reportJobProfitabilityQuery,
@@ -143,11 +146,7 @@ export default function ReportingPage() {
   }, [segment, jobRows, customerRows, lowMarginRows])
 
   if (!companyId) {
-    return (
-      <Box p="4">
-        <Text color="gray">Select a company to view reports.</Text>
-      </Box>
-    )
+    return <PageSkeleton columns="1fr" showInspector={false} />
   }
 
   return (
@@ -191,41 +190,55 @@ export default function ReportingPage() {
 
         {segment === 'jobs' && (
           <>
-            {chartData.length > 0 && (
+            {jobsLoading ? (
               <Card size="3">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                    />
-                    <YAxis
-                      tickFormatter={(v) =>
-                        v >= 1000 ? `${v / 1000}k` : String(v)
-                      }
-                    />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Legend />
-                    <Bar dataKey="income" fill="var(--green-9)" name="Income" />
-                    <Bar
-                      dataKey="expenses"
-                      fill="var(--red-9)"
-                      name="Expenses"
-                    />
-                    <Bar dataKey="profit" fill="var(--blue-9)" name="Profit" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ChartSkeleton />
               </Card>
+            ) : (
+              chartData.length > 0 && (
+                <Card size="3">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis
+                        tickFormatter={(v) =>
+                          v >= 1000 ? `${v / 1000}k` : String(v)
+                        }
+                      />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend />
+                      <Bar
+                        dataKey="income"
+                        fill="var(--green-9)"
+                        name="Income"
+                      />
+                      <Bar
+                        dataKey="expenses"
+                        fill="var(--red-9)"
+                        name="Expenses"
+                      />
+                      <Bar
+                        dataKey="profit"
+                        fill="var(--blue-9)"
+                        name="Profit"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              )
             )}
             <Card size="3">
               {jobsLoading ? (
-                <Text color="gray">Loading…</Text>
+                <ReportTableSkeleton columnCount={9} />
               ) : jobRows.length === 0 ? (
                 <Text color="gray">No jobs in this period.</Text>
               ) : (
@@ -297,41 +310,55 @@ export default function ReportingPage() {
 
         {segment === 'customers' && (
           <>
-            {chartData.length > 0 && (
+            {customersLoading ? (
               <Card size="3">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                    />
-                    <YAxis
-                      tickFormatter={(v) =>
-                        v >= 1000 ? `${v / 1000}k` : String(v)
-                      }
-                    />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Legend />
-                    <Bar dataKey="income" fill="var(--green-9)" name="Income" />
-                    <Bar
-                      dataKey="expenses"
-                      fill="var(--red-9)"
-                      name="Expenses"
-                    />
-                    <Bar dataKey="profit" fill="var(--blue-9)" name="Profit" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ChartSkeleton />
               </Card>
+            ) : (
+              chartData.length > 0 && (
+                <Card size="3">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis
+                        tickFormatter={(v) =>
+                          v >= 1000 ? `${v / 1000}k` : String(v)
+                        }
+                      />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend />
+                      <Bar
+                        dataKey="income"
+                        fill="var(--green-9)"
+                        name="Income"
+                      />
+                      <Bar
+                        dataKey="expenses"
+                        fill="var(--red-9)"
+                        name="Expenses"
+                      />
+                      <Bar
+                        dataKey="profit"
+                        fill="var(--blue-9)"
+                        name="Profit"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              )
             )}
             <Card size="3">
               {customersLoading ? (
-                <Text color="gray">Loading…</Text>
+                <ReportTableSkeleton columnCount={6} />
               ) : customerRows.length === 0 ? (
                 <Text color="gray">No customer data in this period.</Text>
               ) : (
@@ -383,7 +410,7 @@ export default function ReportingPage() {
         {segment === 'utilization' && (
           <Card size="3">
             {utilizationLoading ? (
-              <Text color="gray">Loading…</Text>
+              <ReportTableSkeleton columnCount={2} rowCount={6} />
             ) : utilizationRows.length === 0 ? (
               <Text color="gray">No crew bookings in this period.</Text>
             ) : (
@@ -422,41 +449,55 @@ export default function ReportingPage() {
               Jobs sorted by margin (lowest first). Review unprofitable or
               low-margin jobs.
             </Text>
-            {chartData.length > 0 && (
+            {jobsLoading ? (
               <Card size="3">
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis
-                      dataKey="name"
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                    />
-                    <YAxis
-                      tickFormatter={(v) =>
-                        v >= 1000 ? `${v / 1000}k` : String(v)
-                      }
-                    />
-                    <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                    <Legend />
-                    <Bar dataKey="income" fill="var(--green-9)" name="Income" />
-                    <Bar
-                      dataKey="expenses"
-                      fill="var(--red-9)"
-                      name="Expenses"
-                    />
-                    <Bar dataKey="profit" fill="var(--blue-9)" name="Profit" />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ChartSkeleton />
               </Card>
+            ) : (
+              chartData.length > 0 && (
+                <Card size="3">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                      />
+                      <YAxis
+                        tickFormatter={(v) =>
+                          v >= 1000 ? `${v / 1000}k` : String(v)
+                        }
+                      />
+                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
+                      <Legend />
+                      <Bar
+                        dataKey="income"
+                        fill="var(--green-9)"
+                        name="Income"
+                      />
+                      <Bar
+                        dataKey="expenses"
+                        fill="var(--red-9)"
+                        name="Expenses"
+                      />
+                      <Bar
+                        dataKey="profit"
+                        fill="var(--blue-9)"
+                        name="Profit"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Card>
+              )
             )}
             <Card size="3">
               {jobsLoading ? (
-                <Text color="gray">Loading…</Text>
+                <ReportTableSkeleton columnCount={8} />
               ) : lowMarginRows.length === 0 ? (
                 <Text color="gray">
                   No jobs with margin data in this period.

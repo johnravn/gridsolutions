@@ -12,17 +12,20 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useQuery } from '@tanstack/react-query'
 import { TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import LatestFeed from '../components/LatestFeed'
 import LatestInspector from '../components/LatestInspector'
+import { latestFeedQuery } from '../api/queries'
 import ActivityFilter from '../components/ActivityFilter'
 import type { ActivityType } from '../types'
 
@@ -148,7 +151,17 @@ export default function LatestPage() {
 
   useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
-  if (!companyId) return <PageSkeleton columns="2fr 3fr" />
+  const { isLoading: latestFeedLoading } = useQuery({
+    ...latestFeedQuery({
+      companyId: companyId ?? '',
+      limit: 100,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(latestFeedLoading)
+
+  if (!companyId || showInitialSkeleton)
+    return <PageSkeleton columns="2fr 3fr" />
 
   if (!isLarge) {
     return (

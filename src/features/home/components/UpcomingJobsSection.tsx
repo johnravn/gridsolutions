@@ -16,6 +16,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
@@ -149,9 +150,7 @@ export function UpcomingJobsSection({
       }
     >
       {loading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={4} />
       ) : jobs.length === 0 ? (
         <Box py="4">
           <Text size="2" color="gray" align="center">

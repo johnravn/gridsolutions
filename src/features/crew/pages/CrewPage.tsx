@@ -21,11 +21,17 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
-import { crewInternalNotesQuery } from '../api/queries'
+import {
+  crewIndexQuery,
+  crewInternalNotesQuery,
+  pendingInvitesQuery,
+} from '../api/queries'
 
 export default function CrewPage() {
   const { companyId } = useCompany()
@@ -171,7 +177,28 @@ export default function CrewPage() {
 
   useMobileDetailBack(!isLarge, selectedUserId != null, clearSelection)
 
-  if (!companyId) return <div>No company selected.</div>
+  const { isLoading: empLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'employee' }),
+    enabled: !!companyId && showEmployees,
+  })
+  const { isLoading: frLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'freelancer' }),
+    enabled: !!companyId && showFreelancers,
+  })
+  const { isLoading: owLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'owner' }),
+    enabled: !!companyId,
+  })
+  const { isLoading: invLoading } = useQuery({
+    ...pendingInvitesQuery({ companyId: companyId! }),
+    enabled: !!companyId && showMyPending,
+  })
+  const crewIndexLoading = empLoading || frLoading || owLoading || invLoading
+  const showInitialSkeleton = useInitialPageLoad(crewIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="2fr 3fr" />
+  }
 
   if (!isLarge) {
     return (

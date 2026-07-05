@@ -1,6 +1,7 @@
-import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
+import { Box, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { Quote } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 
 export function BibleVerseSection() {
@@ -39,9 +40,7 @@ export function BibleVerseSection() {
       notFullHeight
     >
       {isLoading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={2} compact />
       ) : error ? (
         <Box py="4">
           <Text size="2" color="gray" align="center">

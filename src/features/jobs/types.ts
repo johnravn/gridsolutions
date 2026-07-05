@@ -433,13 +433,40 @@ export type JobOffer = {
   copied_from_job_id?: UUID | null
   copied_from_offer_id?: UUID | null
   source_technical_offer_id?: UUID | null
+  offer_basis_id: UUID
   pretty_use_customer_accent?: boolean
   pretty_use_customer_background?: boolean
+  pretty_intro_text?: string | null
+}
+
+export type PrettyModuleHeroMediaType = 'image' | 'video'
+
+export type OfferBasis = {
+  id: UUID
+  job_id: UUID
+  company_id: UUID
+  title: string
+  days_of_use: number
+  discount_percent: number
+  vat_percent: number
+  bookings_synced_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type OfferBasisDetail = OfferBasis & {
+  groups: Array<OfferEquipmentGroup & { items: Array<OfferEquipmentItem> }>
+  crew_items: Array<OfferCrewItem>
+  transport_groups: Array<
+    OfferTransportGroup & { items: Array<OfferTransportItem> }
+  >
+  transport_items: Array<OfferTransportItem>
+  offers?: Array<JobOffer>
 }
 
 export type OfferEquipmentGroup = {
   id: UUID
-  offer_id: UUID
+  offer_basis_id: UUID
   group_name: string
   sort_order: number
   created_at: string
@@ -494,7 +521,7 @@ export type GroupContentEntry =
 
 export type OfferCrewItem = {
   id: UUID
-  offer_id: UUID
+  offer_basis_id: UUID
   role_title: string
   role_category?: string | null
   crew_count: number
@@ -510,7 +537,7 @@ export type OfferCrewItem = {
 
 export type OfferTransportItem = {
   id: UUID
-  offer_id: UUID
+  offer_basis_id: UUID
   transport_group_id?: UUID
   vehicle_name: string
   vehicle_id: UUID | null
@@ -546,7 +573,7 @@ export type OfferTransportItem = {
 
 export type OfferTransportGroup = {
   id: UUID
-  offer_id: UUID
+  offer_basis_id: UUID
   group_name: string
   sort_order: number
   created_at: string
@@ -645,6 +672,7 @@ export type PrettyOfferPricingBasis = {
   title: string
   sort_order: number
   source_technical_offer_id: UUID | null
+  source_offer_basis_id: UUID | null
   job_subcontractor_quote_id: UUID | null
   splits?: Array<PrettyOfferPricingBasisSplit>
 }
@@ -654,6 +682,14 @@ export type PrettyOfferModule = {
   offer_id: UUID
   title: string
   subtitle: string | null
+  tagline?: string | null
+  story_heading_1?: string | null
+  story_body_1?: string | null
+  story_heading_2?: string | null
+  story_body_2?: string | null
+  hero_media_type?: PrettyModuleHeroMediaType | null
+  hero_media_url?: string | null
+  hero_media_caption?: string | null
   sort_order: number
   display_price: number | null
   show_price: boolean
@@ -669,8 +705,17 @@ export type PrettyOfferModule = {
 export type PublicPrettyOfferModule = {
   id: UUID
   title: string
+  tagline?: string | null
+  story_heading_1?: string | null
+  story_body_1?: string | null
+  story_heading_2?: string | null
+  story_body_2?: string | null
+  hero_media_type?: PrettyModuleHeroMediaType | null
+  hero_media_url?: string | null
+  hero_media_caption?: string | null
   sort_order: number
   display_price: number | null
+  computed_cost?: number
   show_price: boolean
   blocks: Array<PrettyOfferModuleBlock>
 }

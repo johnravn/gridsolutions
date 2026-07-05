@@ -2,6 +2,7 @@
 import jsPDF from 'jspdf'
 import { calculateRentalFactor } from './offerCalculations'
 import { formatOfferNumberDisplay } from './offerNumber'
+import { normalizeTransportGroups } from './transportGroups'
 import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
 
@@ -601,21 +602,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     ]
     drawTableHeader(transportColumns)
 
-    const transportGroups =
-      offer.transport_groups && offer.transport_groups.length > 0
-        ? [...offer.transport_groups].sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )
-        : [
-            {
-              id: 'transport',
-              group_name: 'Transport',
-              sort_order: 0,
-              items: [...(offer.transport_items || [])].sort(
-                (a, b) => a.sort_order - b.sort_order,
-              ),
-            },
-          ]
+    const transportGroups = normalizeTransportGroups(offer)
 
     for (const group of transportGroups) {
       ensureSpace(10, () => drawTableHeader(transportColumns, true))

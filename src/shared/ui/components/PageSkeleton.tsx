@@ -40,12 +40,12 @@ export default function PageSkeleton({
     }
   }, [])
 
-  const gridColumns = isLarge ? columns : '1fr'
+  const gridColumns = isLarge && showInspector ? columns : '1fr'
 
   return (
     <section style={{ height: isLarge ? '100%' : undefined, minHeight: 0 }}>
       <Grid
-        columns={{ initial: '1fr', lg: gridColumns as any }}
+        columns={gridColumns as '1fr'}
         gap="4"
         align="stretch"
         style={{

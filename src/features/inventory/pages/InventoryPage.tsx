@@ -14,6 +14,7 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { Filter, TransitionLeft } from 'iconoir-react'
 import {
@@ -21,11 +22,14 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import InventoryTable from '../components/InventoryTable'
 import InventoryInspector from '../components/InventoryInspector'
+import { inventoryIndexQuery } from '../api/queries'
+import { INVENTORY_INDEX_DEFAULTS } from '../inventoryIndexDefaults'
 
 export default function InventoryPage() {
   const { companyId } = useCompany()
@@ -163,7 +167,18 @@ export default function InventoryPage() {
 
   useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
-  if (!companyId) return <PageSkeleton columns="2fr 1fr" />
+  const { isLoading: inventoryIndexLoading } = useQuery({
+    ...inventoryIndexQuery({
+      companyId: companyId ?? '__none__',
+      ...INVENTORY_INDEX_DEFAULTS,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(inventoryIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="2fr 1fr" />
+  }
 
   if (!isLarge) {
     return (

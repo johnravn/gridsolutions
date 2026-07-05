@@ -8,10 +8,12 @@ import {
   validatePricingBases,
 } from '../utils/prettyOfferCalculations'
 import { createOffer, offerDetailQuery } from './offerQueries'
+import { createEmptyOfferBasis } from './offerBasisQueries'
 import { jobSubcontractorQuotesQuery } from './subcontractorQueries'
 import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
   JobSubcontractorQuote,
+  OfferBasisDetail,
   OfferDetail,
   PrettyOfferDetail,
   PrettyOfferModule,
@@ -265,9 +267,11 @@ export async function fetchPrettyOfferDetail(
 export async function createEmptyDraftPrettyOffer({
   jobId,
   companyId,
+  offerBasisId,
 }: {
   jobId: string
   companyId: string
+  offerBasisId?: string
 }): Promise<string> {
   const { data: job, error: jobError } = await supabase
     .from('jobs')
@@ -278,38 +282,65 @@ export async function createEmptyDraftPrettyOffer({
   if (jobError) throw jobError
 
   let daysOfUse = 1
-  if (job.start_at && job.end_at) {
-    const start = new Date(job.start_at)
-    const end = new Date(job.end_at)
-    daysOfUse = Math.max(
-      1,
-      Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)),
-    )
-  }
+  let discountPercent = 0
+  let vatPercent: 0 | 25 = 25
 
-  return createOffer({
+  const basisId =
+    offerBasisId ??
+    (await createEmptyOfferBasis({
+      jobId,
+      companyId,
+      title: job.title ? `${job.title} — Basis` : 'Offer basis',
+    }))
+
+  const { data: basisRow, error: basisError } = await supabase
+    .from('offer_bases')
+    .select('days_of_use, discount_percent, vat_percent')
+    .eq('id', basisId)
+    .single()
+
+  if (basisError) throw basisError
+
+  daysOfUse = basisRow.days_of_use
+  discountPercent = Number(basisRow.discount_percent)
+  vatPercent = basisRow.vat_percent === 0 ? 0 : 25
+
+  const offerId = await createOffer({
     jobId,
     companyId,
+    offerBasisId: basisId,
     offerType: 'pretty',
     title: job.title ? `${job.title} — Proposal` : 'Proposal',
     daysOfUse,
-    discountPercent: 0,
-    vatPercent: 25,
+    discountPercent,
+    vatPercent,
     showPricePerLine: false,
   })
+
+  await supabase.from('pretty_offer_pricing_bases').insert({
+    offer_id: offerId,
+    basis_type: 'technical',
+    title: 'Offer basis',
+    sort_order: 0,
+    source_offer_basis_id: basisId,
+    source_technical_offer_id: null,
+  })
+
+  return offerId
 }
 
 type SavePrettyOfferPayload = {
   offerId: string
   jobId: string
   title: string
-  daysOfUse: number
-  vatPercent: number
+  prettyIntroText?: string | null
+  showPricePerLine: boolean
   prettyUseCustomerAccent: boolean
   prettyUseCustomerBackground: boolean
   modules: Array<PrettyOfferModule>
   pricingBases: Array<PrettyOfferPricingBasis>
   technicalOffersById?: Map<string, OfferDetail>
+  offerBasesById?: Map<string, OfferBasisDetail>
   rentalFactorConfig?: RentalFactorConfig | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number | null
@@ -350,13 +381,14 @@ export async function savePrettyOffer(
     offerId,
     jobId,
     title,
-    daysOfUse,
-    vatPercent,
+    prettyIntroText,
+    showPricePerLine,
     prettyUseCustomerAccent,
     prettyUseCustomerBackground,
     modules,
     pricingBases,
     technicalOffersById,
+    offerBasesById,
     rentalFactorConfig,
     vehicleDistanceRate,
     vehicleDistanceIncrement,
@@ -365,7 +397,7 @@ export async function savePrettyOffer(
 
   const { data: existingOffer, error: offerFetchError } = await supabase
     .from('job_offers')
-    .select('locked')
+    .select('locked, offer_basis_id')
     .eq('id', offerId)
     .single()
 
@@ -373,6 +405,17 @@ export async function savePrettyOffer(
   if (existingOffer?.locked) {
     throw new Error('This offer is locked and cannot be edited.')
   }
+
+  const { data: basisRow, error: basisError } = await supabase
+    .from('offer_bases')
+    .select('days_of_use, discount_percent, vat_percent')
+    .eq('id', existingOffer.offer_basis_id)
+    .single()
+
+  if (basisError) throw basisError
+
+  const daysOfUse = basisRow.days_of_use
+  const vatPercent = basisRow.vat_percent === 0 ? 0 : 25
 
   const jobQuotesById = await loadJobQuotesForBases(jobId, pricingBases)
   const validationIssues = validatePricingBases(
@@ -389,15 +432,18 @@ export async function savePrettyOffer(
     vehicleDistanceRate,
     vehicleDistanceIncrement,
     vehicleDailyRate,
+    daysOfUse,
   }
 
   const resolvedBases = resolveSplitAmountsForSave(pricingBases, {
     technicalOffersById,
+    offerBasesById,
     technicalContext,
   })
 
   const modulesWithCost = applyComputedCostsToModules(modules, resolvedBases, {
     technicalOffersById,
+    offerBasesById,
     jobQuotesById,
     technicalContext,
   })
@@ -408,8 +454,11 @@ export async function savePrettyOffer(
     .from('job_offers')
     .update({
       title,
+      pretty_intro_text: prettyIntroText?.trim() || null,
       days_of_use: daysOfUse,
       vat_percent: vatPercent,
+      discount_percent: Number(basisRow.discount_percent),
+      show_price_per_line: showPricePerLine,
       pretty_use_customer_accent: prettyUseCustomerAccent,
       pretty_use_customer_background: prettyUseCustomerBackground,
       equipment_subtotal: 0,
@@ -453,8 +502,19 @@ export async function savePrettyOffer(
           offer_id: offerId,
           title: module.title,
           subtitle: null,
+          tagline: module.tagline?.trim() || null,
+          story_heading_1: module.story_heading_1?.trim() || null,
+          story_body_1: module.story_body_1?.trim() || null,
+          story_heading_2: module.story_heading_2?.trim() || null,
+          story_body_2: module.story_body_2?.trim() || null,
+          hero_media_type: module.hero_media_type ?? null,
+          hero_media_url: module.hero_media_url?.trim() || null,
+          hero_media_caption: module.hero_media_caption?.trim() || null,
           sort_order: module.sort_order,
-          display_price: module.display_price,
+          display_price: module.show_price
+            ? (module.display_price ??
+              (module.computed_cost > 0 ? module.computed_cost : null))
+            : module.display_price,
           show_price: module.show_price,
           computed_cost: module.computed_cost,
         })
@@ -469,8 +529,19 @@ export async function savePrettyOffer(
         .update({
           title: module.title,
           subtitle: null,
+          tagline: module.tagline?.trim() || null,
+          story_heading_1: module.story_heading_1?.trim() || null,
+          story_body_1: module.story_body_1?.trim() || null,
+          story_heading_2: module.story_heading_2?.trim() || null,
+          story_body_2: module.story_body_2?.trim() || null,
+          hero_media_type: module.hero_media_type ?? null,
+          hero_media_url: module.hero_media_url?.trim() || null,
+          hero_media_caption: module.hero_media_caption?.trim() || null,
           sort_order: module.sort_order,
-          display_price: module.display_price,
+          display_price: module.show_price
+            ? (module.display_price ??
+              (module.computed_cost > 0 ? module.computed_cost : null))
+            : module.display_price,
           show_price: module.show_price,
           computed_cost: module.computed_cost,
         })
@@ -628,6 +699,7 @@ export async function savePrettyOffer(
           title: basis.title,
           sort_order: basis.sort_order,
           source_technical_offer_id: basis.source_technical_offer_id,
+          source_offer_basis_id: basis.source_offer_basis_id,
           job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
         })
         .select('id')
@@ -642,6 +714,7 @@ export async function savePrettyOffer(
           title: basis.title,
           sort_order: basis.sort_order,
           source_technical_offer_id: basis.source_technical_offer_id,
+          source_offer_basis_id: basis.source_offer_basis_id,
           job_subcontractor_quote_id: basis.job_subcontractor_quote_id,
         })
         .eq('id', basis.id)

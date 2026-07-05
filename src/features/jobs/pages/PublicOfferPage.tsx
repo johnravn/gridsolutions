@@ -8,7 +8,6 @@ import {
   Card,
   Checkbox,
   Dialog,
-  DropdownMenu,
   Flex,
   Heading,
   Separator,
@@ -20,8 +19,10 @@ import {
 } from '@radix-ui/themes'
 import { useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
-import { Download, MoreHoriz, NavArrowDown, NavArrowRight } from 'iconoir-react'
+import { Download, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
+import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { prettyPhone } from '@shared/phone/phone'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
@@ -33,13 +34,14 @@ import {
   rejectOffer,
   requestOfferRevision,
 } from '../api/offerQueries'
-import PrettyOfferModuleView from '../components/PrettyOfferModuleView'
 import {
   buildCustomAccentCss,
   resolvePrettyOfferTheme,
 } from '../utils/prettyOfferTheme'
 import { formatOfferNumberDisplay } from '../utils/offerNumber'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
+import { normalizeTransportGroups } from '../utils/transportGroups'
+import PublicPrettyOfferPage from './PublicPrettyOfferPage'
 import type {
   GroupContentEntry,
   OfferAcceptance,
@@ -48,231 +50,16 @@ import type {
   OfferRevisionRequest,
 } from '../types'
 
-// Animated Background Component (default settings)
-type ShapeType = 'circles' | 'triangles' | 'rectangles'
+const SUBTLE_ANIMATED_BACKGROUND = {
+  intensity: 0.1,
+  shapeType: 'circles' as const,
+  speed: 0.5,
+  boostLightContrast: false,
+}
 
-function AnimatedBackground({
-  intensity = 1.0,
-  shapeType = 'circles',
-  speed = 1.0,
-}: {
-  intensity?: number
-  shapeType?: ShapeType
-  speed?: number
-}) {
-  const clampedIntensity = Math.max(0, Math.min(1, intensity))
-  const speedMultiplier = Math.max(0.1, Math.min(3.0, speed))
-  const baseDurations = [120, 150, 180, 100, 200]
-  const durations = baseDurations.map((d) => d / speedMultiplier)
-  const baseRotationDurations = [300, 420, 360, 380, 400]
-  const rotationDurations = baseRotationDurations.map(
-    (d) => d / speedMultiplier,
-  )
-  const initialRotations = [15, 30, 45, 60, 75]
-  const rotationAmounts = durations.map((slideDur, idx) =>
-    Math.round((slideDur / rotationDurations[idx]) * 360),
-  )
-
-  return (
-    <Box
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-      }}
-    >
-      <style>{`
-        @keyframes slideSlow {
-          0% {
-            transform: translateX(-100%);
-          }
-          100% {
-            transform: translateX(calc(100vw + 100%));
-          }
-        }
-        
-        @keyframes slideSlowReverse {
-          0% {
-            transform: translateX(calc(100vw + 100%));
-          }
-          100% {
-            transform: translateX(-100%);
-          }
-        }
-        
-        @keyframes slideSlowWithRotate1 {
-          0% {
-            transform: translateX(-100%) rotate(${initialRotations[0]}deg);
-          }
-          100% {
-            transform: translateX(calc(100vw + 100%)) rotate(${initialRotations[0] + rotationAmounts[0]}deg);
-          }
-        }
-        
-        @keyframes slideSlowReverseWithRotate2 {
-          0% {
-            transform: translateX(calc(100vw + 100%)) rotate(${initialRotations[1]}deg);
-          }
-          100% {
-            transform: translateX(-100%) rotate(${initialRotations[1] - rotationAmounts[1]}deg);
-          }
-        }
-        
-        @keyframes slideSlowWithRotate3 {
-          0% {
-            transform: translateX(-100%) rotate(${initialRotations[2]}deg);
-          }
-          100% {
-            transform: translateX(calc(100vw + 100%)) rotate(${initialRotations[2] + rotationAmounts[2]}deg);
-          }
-        }
-        
-        @keyframes slideSlowReverseWithRotate4 {
-          0% {
-            transform: translateX(calc(100vw + 100%)) rotate(${initialRotations[3]}deg);
-          }
-          100% {
-            transform: translateX(-100%) rotate(${initialRotations[3] - rotationAmounts[3]}deg);
-          }
-        }
-        
-        @keyframes slideSlowWithRotate5 {
-          0% {
-            transform: translateX(-100%) rotate(${initialRotations[4]}deg);
-          }
-          100% {
-            transform: translateX(calc(100vw + 100%)) rotate(${initialRotations[4] + rotationAmounts[4]}deg);
-          }
-        }
-        
-        @keyframes rotateSlow {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-        
-        @keyframes rotateSlowReverse {
-          0% {
-            transform: rotate(360deg);
-          }
-          100% {
-            transform: rotate(0deg);
-          }
-        }
-        
-        .bg-shape {
-          position: absolute;
-          opacity: ${clampedIntensity};
-          mix-blend-mode: normal;
-        }
-        
-        .bg-shape-1 {
-          width: 800px;
-          height: 800px;
-          background: var(--accent-a3);
-          top: -200px;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `slideSlowWithRotate1 ${durations[0]}s linear infinite`
-              : `slideSlow ${durations[0]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 10px;' : ''}
-        }
-        
-        .bg-shape-2 {
-          width: 600px;
-          height: 600px;
-          background: var(--accent-a2);
-          top: 20%;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `slideSlowReverseWithRotate2 ${durations[1]}s linear infinite`
-              : `slideSlowReverse ${durations[1]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 20px;' : ''}
-        }
-        
-        .bg-shape-3 {
-          width: 1000px;
-          height: 1000px;
-          background: var(--accent-a3);
-          bottom: -300px;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `slideSlowWithRotate3 ${durations[2]}s linear infinite`
-              : `slideSlow ${durations[2]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 50%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 10px;' : ''}
-        }
-        
-        .bg-shape-4 {
-          width: 400px;
-          height: 400px;
-          background: var(--accent-a2);
-          top: 50%;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `slideSlowReverseWithRotate4 ${durations[3]}s linear infinite`
-              : `slideSlowReverse ${durations[3]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 40px;' : ''}
-        }
-        
-        .bg-shape-5 {
-          width: 700px;
-          height: 700px;
-          background: var(--accent-a3);
-          top: 10%;
-          left: 0;
-          animation: ${
-            shapeType === 'triangles' || shapeType === 'rectangles'
-              ? `slideSlowWithRotate5 ${durations[4]}s linear infinite`
-              : `slideSlow ${durations[4]}s linear infinite`
-          };
-          ${shapeType === 'circles' ? 'border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%;' : ''}
-          ${shapeType === 'triangles' ? 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);' : ''}
-          ${shapeType === 'rectangles' ? 'border-radius: 15px;' : ''}
-        }
-        
-        /* Increase contrast for light mode */
-        .light .bg-shape-1,
-        .light .bg-shape-3,
-        .light .bg-shape-5 {
-          background: var(--accent-a7);
-        }
-        
-        .light .bg-shape-2,
-        .light .bg-shape-4 {
-          background: var(--accent-a6);
-        }
-      `}</style>
-      <div className="bg-shape bg-shape-1" />
-      <div className="bg-shape bg-shape-2" />
-      <div className="bg-shape bg-shape-3" />
-      <div className="bg-shape bg-shape-4" />
-      <div className="bg-shape bg-shape-5" />
-    </Box>
-  )
+function readDocumentTheme(): 'light' | 'dark' {
+  if (typeof document === 'undefined') return 'light'
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
 function EquipmentItemRows({
@@ -517,7 +304,7 @@ export default function PublicOfferPage() {
   const qc = useQueryClient()
 
   // Check if HTML element has dark class (for theme detection)
-  const [theme, setTheme] = React.useState<'light' | 'dark'>('light')
+  const [theme, setTheme] = React.useState<'light' | 'dark'>(readDocumentTheme)
   React.useEffect(() => {
     const checkTheme = () => {
       const htmlEl = document.documentElement
@@ -554,6 +341,7 @@ export default function PublicOfferPage() {
   const [showAcceptForm, setShowAcceptForm] = React.useState(false)
   const [showRejectForm, setShowRejectForm] = React.useState(false)
   const [showRevisionForm, setShowRevisionForm] = React.useState(false)
+  const responseSectionRef = React.useRef<HTMLDivElement>(null)
   const [showTermsDialog, setShowTermsDialog] = React.useState(false)
   const [expandedItemGroupKeys, setExpandedItemGroupKeys] = React.useState<
     Set<string>
@@ -654,6 +442,19 @@ export default function PublicOfferPage() {
     [offer?.company_terms],
   )
 
+  React.useEffect(() => {
+    if (!showAcceptForm && !showRejectForm && !showRevisionForm) return
+    const frame = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        responseSectionRef.current?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'end',
+        })
+      })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [showAcceptForm, showRejectForm, showRevisionForm])
+
   const handleDownloadPDF = async () => {
     if (!offer) return
     setDownloadingPDF(true)
@@ -745,6 +546,7 @@ export default function PublicOfferPage() {
   if (isLoading) {
     return (
       <Box
+        className="public-offer-page"
         p="8"
         style={{
           maxWidth: 900,
@@ -753,7 +555,7 @@ export default function PublicOfferPage() {
           zIndex: 1,
         }}
       >
-        <AnimatedBackground intensity={1.0} shapeType="circles" speed={1.0} />
+        <AnimatedBackground {...SUBTLE_ANIMATED_BACKGROUND} />
         <Card>
           <Box p="6">
             <Flex direction="column" gap="3" align="center">
@@ -820,6 +622,12 @@ export default function PublicOfferPage() {
     )
   }
 
+  if (offer.offer_type === 'pretty' && (offer.modules?.length ?? 0) > 0) {
+    return (
+      <PublicPrettyOfferPage offer={offer} accessToken={accessToken ?? ''} />
+    )
+  }
+
   const canAccept = offer.status === 'sent'
   const isAccepted = offer.status === 'accepted'
   const isRejected = offer.status === 'rejected'
@@ -833,16 +641,20 @@ export default function PublicOfferPage() {
     prettyTheme.customHex
       ? buildCustomAccentCss(prettyTheme.customHex)
       : undefined
-  const actionsDisabled =
-    showAcceptForm ||
-    showRejectForm ||
-    showRevisionForm ||
+  const responseActionsDisabled =
     acceptMutation.isPending ||
     rejectMutation.isPending ||
     revisionMutation.isPending
 
+  const toggleResponseAction = (action: 'accept' | 'reject' | 'revision') => {
+    setShowAcceptForm((current) => (action === 'accept' ? !current : false))
+    setShowRejectForm((current) => (action === 'reject' ? !current : false))
+    setShowRevisionForm((current) => (action === 'revision' ? !current : false))
+  }
+
   return (
     <Box
+      className="public-offer-page"
       p={{ initial: '4', sm: '1' }}
       style={{
         maxWidth: 900,
@@ -858,7 +670,7 @@ export default function PublicOfferPage() {
         )}
         accent={prettyTheme?.radixAccent ?? null}
       >
-        <AnimatedBackground intensity={1.0} shapeType="circles" speed={1.0} />
+        <AnimatedBackground {...SUBTLE_ANIMATED_BACKGROUND} />
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
@@ -895,9 +707,13 @@ export default function PublicOfferPage() {
                   >
                     {offer.customer.logo_path ? (
                       <Box
-                        style={{ width: '100%', maxWidth: 200, maxHeight: 80 }}
+                        style={{
+                          width: '100%',
+                          maxWidth: 200,
+                          maxHeight: 80,
+                        }}
                       >
-                        <img
+                        <LazyImage
                           src={`${
                             supabase.storage
                               .from('logos')
@@ -906,6 +722,7 @@ export default function PublicOfferPage() {
                           }?v=${offer.customer.logo_path}`}
                           alt={offer.customer.name || 'Customer logo'}
                           key={`customer-logo-${offer.customer.id}-${offer.customer.logo_path}`}
+                          eager
                           style={{
                             maxWidth: '100%',
                             maxHeight: '100%',
@@ -980,32 +797,6 @@ export default function PublicOfferPage() {
 
               {/* Offer Content */}
               <Box mb="6">
-                {/* Pretty Offer Modules */}
-                {offer.offer_type === 'pretty' &&
-                  offer.modules &&
-                  offer.modules.length > 0 && (
-                    <Box mb="6">
-                      {[...offer.modules]
-                        .sort((a, b) => a.sort_order - b.sort_order)
-                        .map((module) => (
-                          <PrettyOfferModuleView
-                            key={module.id}
-                            useCustomerBackground={
-                              prettyTheme?.useCustomerBackground ?? false
-                            }
-                            module={{
-                              id: module.id,
-                              title: module.title,
-                              sort_order: module.sort_order,
-                              display_price: module.display_price,
-                              show_price: module.show_price,
-                              blocks: module.blocks ?? [],
-                            }}
-                          />
-                        ))}
-                    </Box>
-                  )}
-
                 {/* Legacy pretty offer sections */}
                 {offer.offer_type === 'pretty' &&
                   (!offer.modules || offer.modules.length === 0) &&
@@ -1027,7 +818,7 @@ export default function PublicOfferPage() {
                               >
                                 {section.image_url && (
                                   <Box mb="4">
-                                    <img
+                                    <LazyImage
                                       src={section.image_url}
                                       alt={section.title || 'Hero image'}
                                       style={{
@@ -1073,7 +864,7 @@ export default function PublicOfferPage() {
                                 )}
                                 {section.image_url && (
                                   <Box mt="4">
-                                    <img
+                                    <LazyImage
                                       src={section.image_url}
                                       alt={section.title || 'Problem image'}
                                       style={{
@@ -1104,7 +895,7 @@ export default function PublicOfferPage() {
                                 )}
                                 {section.image_url && (
                                   <Box mt="4">
-                                    <img
+                                    <LazyImage
                                       src={section.image_url}
                                       alt={section.title || 'Solution image'}
                                       style={{
@@ -1135,7 +926,7 @@ export default function PublicOfferPage() {
                                 )}
                                 {section.image_url && (
                                   <Box mt="4">
-                                    <img
+                                    <LazyImage
                                       src={section.image_url}
                                       alt={section.title || 'Benefits image'}
                                       style={{
@@ -1175,7 +966,7 @@ export default function PublicOfferPage() {
                                 )}
                                 {section.image_url && (
                                   <Box mt="4">
-                                    <img
+                                    <LazyImage
                                       src={section.image_url}
                                       alt={section.title || 'Testimonial image'}
                                       style={{
@@ -1427,22 +1218,7 @@ export default function PublicOfferPage() {
                           return map[category] || category
                         }
 
-                        const groups =
-                          offer.transport_groups &&
-                          offer.transport_groups.length > 0
-                            ? [...offer.transport_groups].sort(
-                                (a, b) => a.sort_order - b.sort_order,
-                              )
-                            : [
-                                {
-                                  id: 'transport',
-                                  group_name: 'Transport',
-                                  sort_order: 0,
-                                  items: [
-                                    ...(offer.transport_items || []),
-                                  ].sort((a, b) => a.sort_order - b.sort_order),
-                                },
-                              ]
+                        const groups = normalizeTransportGroups(offer)
 
                         const transportTotal = groups.reduce(
                           (sum, g) =>
@@ -1961,7 +1737,7 @@ export default function PublicOfferPage() {
                             marginBottom: '24px',
                           }}
                         >
-                          <img
+                          <LazyImage
                             src={`${
                               supabase.storage
                                 .from('logos')
@@ -1969,6 +1745,7 @@ export default function PublicOfferPage() {
                             }?v=${finalLogoPath}`}
                             alt={offer.company?.name || 'Company logo'}
                             key={`company-logo-${offer.company?.id}-${finalLogoPath}-${theme}`}
+                            eager
                             style={{
                               maxWidth: '100%',
                               maxHeight: '100%',
@@ -1978,393 +1755,421 @@ export default function PublicOfferPage() {
                         </Box>
                       ) : null
                     })()}
-
-                  {/* Action buttons - at the bottom */}
-                  {canAccept && (
-                    <Flex justify="end">
-                      <DropdownMenu.Root>
-                        <DropdownMenu.Trigger>
-                          <Button
-                            size="2"
-                            variant="soft"
-                            aria-label="Offer actions"
-                            disabled={actionsDisabled}
-                            style={{
-                              padding: 0,
-                              width: 'var(--base-button-height)',
-                              minWidth: 'var(--base-button-height)',
-                            }}
-                          >
-                            <MoreHoriz width={18} height={18} />
-                          </Button>
-                        </DropdownMenu.Trigger>
-                        <DropdownMenu.Content align="end">
-                          <DropdownMenu.Item
-                            color="red"
-                            onSelect={() => setShowRejectForm(true)}
-                            disabled={actionsDisabled}
-                          >
-                            Reject Offer
-                          </DropdownMenu.Item>
-                          <DropdownMenu.Item
-                            onSelect={() => setShowRevisionForm(true)}
-                            disabled={actionsDisabled}
-                          >
-                            Revise Offer
-                          </DropdownMenu.Item>
-                          <DropdownMenu.Item
-                            onSelect={() => setShowAcceptForm(true)}
-                            disabled={actionsDisabled}
-                          >
-                            Accept Offer
-                          </DropdownMenu.Item>
-                        </DropdownMenu.Content>
-                      </DropdownMenu.Root>
-                    </Flex>
-                  )}
                 </Flex>
               </Flex>
 
-              {/* Response Forms - appear under From/To section */}
-              {!isAccepted && showAcceptForm && (
-                <Card mb="6">
-                  <Box p="5">
-                    <Heading size="4" mb="4">
-                      Accept Offer
-                    </Heading>
-                    <Text size="2" color="gray" mb="4">
-                      Please provide your contact information to accept this
-                      offer.
-                    </Text>
-                    <Flex direction="column" gap="3">
-                      <Flex gap="3" wrap="wrap">
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            First Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="First name"
-                            value={acceptanceForm.first_name}
-                            onChange={(e) =>
-                              setAcceptanceForm((f) => ({
-                                ...f,
-                                first_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            Last Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="Last name"
-                            value={acceptanceForm.last_name}
-                            onChange={(e) =>
-                              setAcceptanceForm((f) => ({
-                                ...f,
-                                last_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
+              {canAccept && (
+                <Box ref={responseSectionRef}>
+                  <Card mb="6">
+                    <Box p="5">
+                      <Heading size="4" mb="3">
+                        Respond to this offer
+                      </Heading>
+                      <Flex gap="2" wrap="wrap">
+                        <Button
+                          size="2"
+                          variant={showRejectForm ? 'solid' : 'outline'}
+                          color="red"
+                          onClick={() => toggleResponseAction('reject')}
+                          disabled={responseActionsDisabled}
+                        >
+                          Reject Offer
+                        </Button>
+                        <Button
+                          size="2"
+                          variant={showRevisionForm ? 'solid' : 'outline'}
+                          onClick={() => toggleResponseAction('revision')}
+                          disabled={responseActionsDisabled}
+                        >
+                          Request Revision
+                        </Button>
+                        <Button
+                          size="2"
+                          variant={showAcceptForm ? 'solid' : 'outline'}
+                          onClick={() => toggleResponseAction('accept')}
+                          disabled={responseActionsDisabled}
+                        >
+                          Accept Offer
+                        </Button>
                       </Flex>
-                      <Box>
-                        <Text size="2" weight="medium" mb="1" as="label">
-                          Phone Number *
-                        </Text>
-                        <PhoneInputField
-                          value={acceptanceForm.phone}
-                          onChange={(val) =>
-                            setAcceptanceForm((f) => ({
-                              ...f,
-                              phone: val ?? '',
-                            }))
-                          }
-                          defaultCountry="NO"
-                          placeholder="Enter phone number"
-                        />
-                      </Box>
-                      {hasTerms && (
-                        <Box>
-                          <Flex align="start" gap="2">
-                            <Checkbox
-                              checked={acceptanceForm.terms_accepted}
-                              onCheckedChange={(checked) =>
-                                setAcceptanceForm((f) => ({
-                                  ...f,
-                                  terms_accepted: checked === true,
-                                }))
-                              }
-                              required
-                            />
-                            <Flex
-                              direction="column"
-                              gap="1"
-                              style={{ flex: 1 }}
-                            >
-                              <Text
-                                size="2"
-                                as="label"
-                                style={{ cursor: 'pointer', lineHeight: 1.5 }}
-                              >
-                                I have read and accept the{' '}
-                                <Button
-                                  size="1"
-                                  variant="ghost"
-                                  onClick={(e) => {
-                                    e.preventDefault()
-                                    setShowTermsDialog(true)
-                                  }}
-                                  style={{
-                                    textDecoration: 'underline',
-                                    padding: 0,
-                                    height: 'auto',
-                                    verticalAlign: 'baseline',
-                                    display: 'inline',
-                                    margin: 0,
-                                  }}
+
+                      {!isAccepted && showAcceptForm && (
+                        <Box
+                          mt="4"
+                          pt="4"
+                          style={{ borderTop: '1px solid var(--gray-a5)' }}
+                        >
+                          <Text size="2" color="gray" mb="4">
+                            Please provide your contact information to accept
+                            this offer.
+                          </Text>
+                          <Flex direction="column" gap="3">
+                            <Flex gap="3" wrap="wrap">
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
                                 >
-                                  terms and conditions
-                                </Button>
-                                {' *'}
+                                  First Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="First name"
+                                  value={acceptanceForm.first_name}
+                                  onChange={(e) =>
+                                    setAcceptanceForm((f) => ({
+                                      ...f,
+                                      first_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
+                                >
+                                  Last Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="Last name"
+                                  value={acceptanceForm.last_name}
+                                  onChange={(e) =>
+                                    setAcceptanceForm((f) => ({
+                                      ...f,
+                                      last_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                            </Flex>
+                            <Box>
+                              <Text size="2" weight="medium" mb="1" as="label">
+                                Phone Number *
                               </Text>
+                              <PhoneInputField
+                                value={acceptanceForm.phone}
+                                onChange={(val) =>
+                                  setAcceptanceForm((f) => ({
+                                    ...f,
+                                    phone: val ?? '',
+                                  }))
+                                }
+                                defaultCountry="NO"
+                                placeholder="Enter phone number"
+                              />
+                            </Box>
+                            {hasTerms && (
+                              <Box>
+                                <Flex align="start" gap="2">
+                                  <Checkbox
+                                    checked={acceptanceForm.terms_accepted}
+                                    onCheckedChange={(checked) =>
+                                      setAcceptanceForm((f) => ({
+                                        ...f,
+                                        terms_accepted: checked === true,
+                                      }))
+                                    }
+                                    required
+                                  />
+                                  <Flex
+                                    direction="column"
+                                    gap="1"
+                                    style={{ flex: 1 }}
+                                  >
+                                    <Text
+                                      size="2"
+                                      as="label"
+                                      style={{
+                                        cursor: 'pointer',
+                                        lineHeight: 1.5,
+                                      }}
+                                    >
+                                      I have read and accept the{' '}
+                                      <Button
+                                        size="1"
+                                        variant="ghost"
+                                        onClick={(e) => {
+                                          e.preventDefault()
+                                          setShowTermsDialog(true)
+                                        }}
+                                        style={{
+                                          textDecoration: 'underline',
+                                          padding: 0,
+                                          height: 'auto',
+                                          verticalAlign: 'baseline',
+                                          display: 'inline',
+                                          margin: 0,
+                                        }}
+                                      >
+                                        terms and conditions
+                                      </Button>
+                                      {' *'}
+                                    </Text>
+                                  </Flex>
+                                </Flex>
+                              </Box>
+                            )}
+                            <Flex gap="2" mt="2">
+                              <Button
+                                onClick={() => acceptMutation.mutate()}
+                                disabled={
+                                  !acceptanceForm.first_name ||
+                                  !acceptanceForm.last_name ||
+                                  !acceptanceForm.phone ||
+                                  (hasTerms &&
+                                    !acceptanceForm.terms_accepted) ||
+                                  acceptMutation.isPending
+                                }
+                              >
+                                {acceptMutation.isPending
+                                  ? 'Accepting...'
+                                  : 'Accept'}
+                              </Button>
+                              <Button
+                                variant="soft"
+                                onClick={() => setShowAcceptForm(false)}
+                                disabled={acceptMutation.isPending}
+                              >
+                                Cancel
+                              </Button>
                             </Flex>
                           </Flex>
                         </Box>
                       )}
-                      <Flex gap="2" mt="2">
-                        <Button
-                          onClick={() => acceptMutation.mutate()}
-                          disabled={
-                            !acceptanceForm.first_name ||
-                            !acceptanceForm.last_name ||
-                            !acceptanceForm.phone ||
-                            (hasTerms && !acceptanceForm.terms_accepted) ||
-                            acceptMutation.isPending
-                          }
-                        >
-                          {acceptMutation.isPending ? 'Accepting...' : 'Accept'}
-                        </Button>
-                        <Button
-                          variant="soft"
-                          onClick={() => setShowAcceptForm(false)}
-                          disabled={acceptMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </Flex>
-                    </Flex>
-                  </Box>
-                </Card>
-              )}
 
-              {!isAccepted && !isRejected && showRejectForm && (
-                <Card mb="6">
-                  <Box p="5">
-                    <Heading size="4" mb="4">
-                      Reject Offer
-                    </Heading>
-                    <Text size="2" color="gray" mb="4">
-                      Please provide your contact information and optionally a
-                      comment explaining why you are rejecting this offer.
-                    </Text>
-                    <Flex direction="column" gap="3">
-                      <Flex gap="3" wrap="wrap">
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            First Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="First name"
-                            value={rejectionForm.first_name}
-                            onChange={(e) =>
-                              setRejectionForm((f) => ({
-                                ...f,
-                                first_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            Last Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="Last name"
-                            value={rejectionForm.last_name}
-                            onChange={(e) =>
-                              setRejectionForm((f) => ({
-                                ...f,
-                                last_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
-                      </Flex>
-                      <Box>
-                        <Text size="2" weight="medium" mb="1" as="label">
-                          Phone Number *
-                        </Text>
-                        <PhoneInputField
-                          value={rejectionForm.phone}
-                          onChange={(val) =>
-                            setRejectionForm((f) => ({
-                              ...f,
-                              phone: val ?? '',
-                            }))
-                          }
-                          defaultCountry="NO"
-                          placeholder="Enter phone number"
-                        />
-                      </Box>
-                      <Box>
-                        <Text size="2" weight="medium" mb="1" as="label">
-                          Comment
-                        </Text>
-                        <TextArea
-                          placeholder="Please explain why you are rejecting this offer..."
-                          value={rejectionForm.comment}
-                          onChange={(e) =>
-                            setRejectionForm((f) => ({
-                              ...f,
-                              comment: e.target.value,
-                            }))
-                          }
-                          style={{ minHeight: 100 }}
-                          rows={4}
-                        />
-                      </Box>
-                      <Flex gap="2" mt="2">
-                        <Button
-                          onClick={() => rejectMutation.mutate()}
-                          disabled={
-                            !rejectionForm.first_name ||
-                            !rejectionForm.last_name ||
-                            !has8Digits(rejectionForm.phone) ||
-                            rejectMutation.isPending
-                          }
-                          color="red"
+                      {!isAccepted && !isRejected && showRejectForm && (
+                        <Box
+                          mt="4"
+                          pt="4"
+                          style={{ borderTop: '1px solid var(--gray-a5)' }}
                         >
-                          {rejectMutation.isPending
-                            ? 'Rejecting...'
-                            : 'Reject Offer'}
-                        </Button>
-                        <Button
-                          variant="soft"
-                          onClick={() => setShowRejectForm(false)}
-                          disabled={rejectMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </Flex>
-                    </Flex>
-                  </Box>
-                </Card>
-              )}
+                          <Text size="2" color="gray" mb="4">
+                            Please provide your contact information and
+                            optionally a comment explaining why you are
+                            rejecting this offer.
+                          </Text>
+                          <Flex direction="column" gap="3">
+                            <Flex gap="3" wrap="wrap">
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
+                                >
+                                  First Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="First name"
+                                  value={rejectionForm.first_name}
+                                  onChange={(e) =>
+                                    setRejectionForm((f) => ({
+                                      ...f,
+                                      first_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
+                                >
+                                  Last Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="Last name"
+                                  value={rejectionForm.last_name}
+                                  onChange={(e) =>
+                                    setRejectionForm((f) => ({
+                                      ...f,
+                                      last_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                            </Flex>
+                            <Box>
+                              <Text size="2" weight="medium" mb="1" as="label">
+                                Phone Number *
+                              </Text>
+                              <PhoneInputField
+                                value={rejectionForm.phone}
+                                onChange={(val) =>
+                                  setRejectionForm((f) => ({
+                                    ...f,
+                                    phone: val ?? '',
+                                  }))
+                                }
+                                defaultCountry="NO"
+                                placeholder="Enter phone number"
+                              />
+                            </Box>
+                            <Box>
+                              <Text size="2" weight="medium" mb="1" as="label">
+                                Comment
+                              </Text>
+                              <TextArea
+                                placeholder="Please explain why you are rejecting this offer..."
+                                value={rejectionForm.comment}
+                                onChange={(e) =>
+                                  setRejectionForm((f) => ({
+                                    ...f,
+                                    comment: e.target.value,
+                                  }))
+                                }
+                                style={{ minHeight: 100 }}
+                                rows={4}
+                              />
+                            </Box>
+                            <Flex gap="2" mt="2">
+                              <Button
+                                onClick={() => rejectMutation.mutate()}
+                                disabled={
+                                  !rejectionForm.first_name ||
+                                  !rejectionForm.last_name ||
+                                  !has8Digits(rejectionForm.phone) ||
+                                  rejectMutation.isPending
+                                }
+                                color="red"
+                              >
+                                {rejectMutation.isPending
+                                  ? 'Rejecting...'
+                                  : 'Reject Offer'}
+                              </Button>
+                              <Button
+                                variant="soft"
+                                onClick={() => setShowRejectForm(false)}
+                                disabled={rejectMutation.isPending}
+                              >
+                                Cancel
+                              </Button>
+                            </Flex>
+                          </Flex>
+                        </Box>
+                      )}
 
-              {!isAccepted && !isRejected && showRevisionForm && (
-                <Card mb="6">
-                  <Box p="5">
-                    <Heading size="4" mb="4">
-                      Request Revision
-                    </Heading>
-                    <Text size="2" color="gray" mb="4">
-                      Please provide your contact information and describe what
-                      changes you would like to see in the offer.
-                    </Text>
-                    <Flex direction="column" gap="3">
-                      <Flex gap="3" wrap="wrap">
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            First Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="First name"
-                            value={revisionForm.first_name}
-                            onChange={(e) =>
-                              setRevisionForm((f) => ({
-                                ...f,
-                                first_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
-                        <Box style={{ flex: 1, minWidth: 200 }}>
-                          <Text size="2" weight="medium" mb="1" as="label">
-                            Last Name *
-                          </Text>
-                          <TextField.Root
-                            placeholder="Last name"
-                            value={revisionForm.last_name}
-                            onChange={(e) =>
-                              setRevisionForm((f) => ({
-                                ...f,
-                                last_name: e.target.value,
-                              }))
-                            }
-                          />
-                        </Box>
-                      </Flex>
-                      <Box>
-                        <Text size="2" weight="medium" mb="1" as="label">
-                          Phone Number *
-                        </Text>
-                        <PhoneInputField
-                          value={revisionForm.phone}
-                          onChange={(val) =>
-                            setRevisionForm((f) => ({
-                              ...f,
-                              phone: val ?? '',
-                            }))
-                          }
-                          defaultCountry="NO"
-                          placeholder="Enter phone number"
-                        />
-                      </Box>
-                      <Box>
-                        <Text size="2" weight="medium" mb="1" as="label">
-                          What changes would you like? *
-                        </Text>
-                        <TextArea
-                          placeholder="Please describe what you would like changed in the offer..."
-                          value={revisionForm.comment}
-                          onChange={(e) =>
-                            setRevisionForm((f) => ({
-                              ...f,
-                              comment: e.target.value,
-                            }))
-                          }
-                          style={{ minHeight: 100 }}
-                          rows={4}
-                        />
-                      </Box>
-                      <Flex gap="2" mt="2">
-                        <Button
-                          onClick={() => revisionMutation.mutate()}
-                          disabled={
-                            !revisionForm.first_name ||
-                            !revisionForm.last_name ||
-                            !revisionForm.phone ||
-                            !revisionForm.comment.trim() ||
-                            revisionMutation.isPending
-                          }
+                      {!isAccepted && !isRejected && showRevisionForm && (
+                        <Box
+                          mt="4"
+                          pt="4"
+                          style={{ borderTop: '1px solid var(--gray-a5)' }}
                         >
-                          {revisionMutation.isPending
-                            ? 'Sending...'
-                            : 'Ask for a New Offer'}
-                        </Button>
-                        <Button
-                          variant="soft"
-                          onClick={() => setShowRevisionForm(false)}
-                          disabled={revisionMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </Flex>
-                    </Flex>
-                  </Box>
-                </Card>
+                          <Text size="2" color="gray" mb="4">
+                            Please provide your contact information and describe
+                            what changes you would like to see in the offer.
+                          </Text>
+                          <Flex direction="column" gap="3">
+                            <Flex gap="3" wrap="wrap">
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
+                                >
+                                  First Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="First name"
+                                  value={revisionForm.first_name}
+                                  onChange={(e) =>
+                                    setRevisionForm((f) => ({
+                                      ...f,
+                                      first_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                              <Box style={{ flex: 1, minWidth: 200 }}>
+                                <Text
+                                  size="2"
+                                  weight="medium"
+                                  mb="1"
+                                  as="label"
+                                >
+                                  Last Name *
+                                </Text>
+                                <TextField.Root
+                                  placeholder="Last name"
+                                  value={revisionForm.last_name}
+                                  onChange={(e) =>
+                                    setRevisionForm((f) => ({
+                                      ...f,
+                                      last_name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </Box>
+                            </Flex>
+                            <Box>
+                              <Text size="2" weight="medium" mb="1" as="label">
+                                Phone Number *
+                              </Text>
+                              <PhoneInputField
+                                value={revisionForm.phone}
+                                onChange={(val) =>
+                                  setRevisionForm((f) => ({
+                                    ...f,
+                                    phone: val ?? '',
+                                  }))
+                                }
+                                defaultCountry="NO"
+                                placeholder="Enter phone number"
+                              />
+                            </Box>
+                            <Box>
+                              <Text size="2" weight="medium" mb="1" as="label">
+                                What changes would you like? *
+                              </Text>
+                              <TextArea
+                                placeholder="Please describe what you would like changed in the offer..."
+                                value={revisionForm.comment}
+                                onChange={(e) =>
+                                  setRevisionForm((f) => ({
+                                    ...f,
+                                    comment: e.target.value,
+                                  }))
+                                }
+                                style={{ minHeight: 100 }}
+                                rows={4}
+                              />
+                            </Box>
+                            <Flex gap="2" mt="2">
+                              <Button
+                                onClick={() => revisionMutation.mutate()}
+                                disabled={
+                                  !revisionForm.first_name ||
+                                  !revisionForm.last_name ||
+                                  !revisionForm.phone ||
+                                  !revisionForm.comment.trim() ||
+                                  revisionMutation.isPending
+                                }
+                              >
+                                {revisionMutation.isPending
+                                  ? 'Sending...'
+                                  : 'Ask for a New Offer'}
+                              </Button>
+                              <Button
+                                variant="soft"
+                                onClick={() => setShowRevisionForm(false)}
+                                disabled={revisionMutation.isPending}
+                              >
+                                Cancel
+                              </Button>
+                            </Flex>
+                          </Flex>
+                        </Box>
+                      )}
+                    </Box>
+                  </Card>
+                </Box>
               )}
             </Box>
           </Card>

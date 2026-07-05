@@ -14,7 +14,16 @@ export const TEST_IDS = {
   revisionJobId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
   lockJobId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1',
   sentOfferId: '33333333-3333-4333-8333-333333333333',
+  sentOfferBasisId: '33333333-3333-4333-8333-333333333330',
   draftOfferId: '44444444-4444-4444-8444-444444444444',
+  draftOfferBasisId: '44444444-4444-4444-8444-444444444440',
+  acceptOfferId: '77777777-7777-4777-8777-777777777777',
+  acceptOfferBasisId: '77777777-7777-4777-8777-777777777772',
+  e2eAcceptOfferId: '88888888-8888-4888-8888-888888888888',
+  e2eAcceptOfferBasisId: '88888888-8888-4888-8888-888888888882',
+  rejectOfferBasisId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc0',
+  revisionOfferBasisId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd0',
+  lockDraftOfferBasisId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee0',
   rejectOfferId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc1',
   revisionOfferId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
   lockDraftOfferId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
@@ -159,8 +168,22 @@ async function seedJob({ id, title, jobnr, ownerId }) {
   if (error) throw error
 }
 
+async function seedOfferBasis({ id, jobId, title }) {
+  const { error } = await admin.from('offer_bases').upsert(
+    {
+      id,
+      job_id: jobId,
+      company_id: TEST_IDS.companyId,
+      title,
+    },
+    { onConflict: 'id' },
+  )
+  if (error) throw error
+}
+
 async function seedOffer({
   id,
+  basisId,
   jobId,
   accessToken,
   status,
@@ -168,16 +191,20 @@ async function seedOffer({
   sentAt,
   versionNumber,
 }) {
+  const title = `Test Offer (${status})`
+  await seedOfferBasis({ id: basisId, jobId, title: `${title} basis` })
+
   const { error } = await admin.from('job_offers').upsert(
     {
       id,
       job_id: jobId,
       company_id: TEST_IDS.companyId,
+      offer_basis_id: basisId,
       offer_type: 'technical',
       version_number: versionNumber,
       status,
       access_token: accessToken,
-      title: `Test Offer (${status})`,
+      title,
       days_of_use: 3,
       discount_percent: 0,
       vat_percent: 25,
@@ -212,13 +239,13 @@ async function seedTestItem() {
   if (error) throw error
 }
 
-async function seedEquipmentGroup(offerId, groupId, itemId) {
+async function seedEquipmentGroup(offerBasisId, groupId, itemId) {
   const { error: groupError } = await admin
     .from('offer_equipment_groups')
     .upsert(
       {
         id: groupId,
-        offer_id: offerId,
+        offer_basis_id: offerBasisId,
         group_name: 'Test Equipment',
         sort_order: 0,
       },
@@ -405,6 +432,7 @@ async function main() {
 
   await seedOffer({
     id: TEST_IDS.sentOfferId,
+    basisId: TEST_IDS.sentOfferBasisId,
     jobId: TEST_IDS.jobId,
     accessToken: TEST_OFFER_TOKENS.sent,
     status: 'sent',
@@ -413,13 +441,14 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    TEST_IDS.sentOfferId,
+    TEST_IDS.sentOfferBasisId,
     '55555555-5555-4555-8555-555555555555',
     '66666666-6666-4666-8666-666666666666',
   )
 
   await seedOffer({
     id: TEST_IDS.draftOfferId,
+    basisId: TEST_IDS.draftOfferBasisId,
     jobId: TEST_IDS.jobId,
     accessToken: TEST_OFFER_TOKENS.draft,
     status: 'draft',
@@ -429,7 +458,8 @@ async function main() {
   })
 
   await seedOffer({
-    id: '77777777-7777-4777-8777-777777777777',
+    id: TEST_IDS.acceptOfferId,
+    basisId: TEST_IDS.acceptOfferBasisId,
     jobId: TEST_IDS.acceptJobId,
     accessToken: TEST_OFFER_TOKENS.accept,
     status: 'sent',
@@ -438,13 +468,14 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    '77777777-7777-4777-8777-777777777777',
+    TEST_IDS.acceptOfferBasisId,
     '77777777-7777-4777-8777-777777777778',
     '77777777-7777-4777-8777-777777777779',
   )
 
   await seedOffer({
-    id: '88888888-8888-4888-8888-888888888888',
+    id: TEST_IDS.e2eAcceptOfferId,
+    basisId: TEST_IDS.e2eAcceptOfferBasisId,
     jobId: TEST_IDS.e2eJobId,
     accessToken: TEST_OFFER_TOKENS.e2eAccept,
     status: 'sent',
@@ -453,13 +484,14 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    '88888888-8888-4888-8888-888888888888',
+    TEST_IDS.e2eAcceptOfferBasisId,
     '88888888-8888-4888-8888-888888888889',
     '88888888-8888-4888-8888-888888888880',
   )
 
   await seedOffer({
     id: TEST_IDS.rejectOfferId,
+    basisId: TEST_IDS.rejectOfferBasisId,
     jobId: TEST_IDS.rejectJobId,
     accessToken: TEST_OFFER_TOKENS.reject,
     status: 'sent',
@@ -468,13 +500,14 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    TEST_IDS.rejectOfferId,
+    TEST_IDS.rejectOfferBasisId,
     'cccccccc-cccc-4ccc-8ccc-ccccccccccc2',
     'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
   )
 
   await seedOffer({
     id: TEST_IDS.revisionOfferId,
+    basisId: TEST_IDS.revisionOfferBasisId,
     jobId: TEST_IDS.revisionJobId,
     accessToken: TEST_OFFER_TOKENS.revision,
     status: 'sent',
@@ -483,13 +516,14 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    TEST_IDS.revisionOfferId,
+    TEST_IDS.revisionOfferBasisId,
     'dddddddd-dddd-4ddd-8ddd-ddddddddddd2',
     'dddddddd-dddd-4ddd-8ddd-ddddddddddd3',
   )
 
   await seedOffer({
     id: TEST_IDS.lockDraftOfferId,
+    basisId: TEST_IDS.lockDraftOfferBasisId,
     jobId: TEST_IDS.lockJobId,
     accessToken: TEST_OFFER_TOKENS.lockDraft,
     status: 'draft',
@@ -498,7 +532,7 @@ async function main() {
     versionNumber: 1,
   })
   await seedEquipmentGroup(
-    TEST_IDS.lockDraftOfferId,
+    TEST_IDS.lockDraftOfferBasisId,
     'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee2',
     'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee3',
   )

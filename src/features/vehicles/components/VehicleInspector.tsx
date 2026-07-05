@@ -16,6 +16,8 @@ import { Edit, Plus, Trash } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { toEventInputs } from '@features/calendar/components/domain'
 import InspectorCalendar from '@features/calendar/components/InspectorCalendar'
 import {
@@ -353,13 +355,7 @@ export default function VehicleInspector({ id }: { id: string | null }) {
   // ---- Early returns BEFORE any non-hook logic ----
   if (!id) return <Text color="gray">Select a vehicle.</Text>
   if (!enabled) return <Text color="gray">Preparing…</Text>
-  if (isLoading)
-    return (
-      <Flex align="center" gap="1">
-        <Text>Thinking</Text>
-        <Spinner size="2" />
-      </Flex>
-    )
+  if (isLoading) return <InspectorSkeleton />
   if (isError)
     return (
       <Text color="red">
@@ -429,11 +425,14 @@ export default function VehicleInspector({ id }: { id: string | null }) {
         }}
       >
         {imageUrl ? (
-          <img
+          <LazyImage
             src={imageUrl}
             alt={v.name}
+            eager
             style={{
               width: '100%',
+              minHeight: 160,
+              aspectRatio: '16 / 9',
               // maxHeight: 280,
               // maxWidth: 280,
               objectFit: 'cover',

@@ -24,7 +24,7 @@ This document is the **canonical reference** for how transactional email works i
 | `send-offer-email`                | Locked job offer; **From** = company name; hello + thank-you intro.                                                                  | Client via `sendOfferByEmail()`                                                                                                                                                                                                          |
 | `send-crew-position-invite-email` | Email-only crew slot; **From** = company; **Open invite in Grid** → `/matters?matterId=…` when a matching crew-invite matter exists. | Client via `sendCrewPositionInviteEmail()`                                                                                                                                                                                               |
 | `send-test-email`                 | Matter notifications **test** only; **From** = **Grid**; wordmark is **inline SVG** (no remote image).                               | Client via `sendMatterEmailTest()`                                                                                                                                                                                                       |
-| `dispatch-notification-emails`    | Batch: pending `notifications` with `email_sent_at` null                                                                             | `pg_cron` / server                                                                                                                                                                                                                       |
+| `dispatch-notification-emails`    | Batch: pending `notifications` with `email_sent_at` null                                                                             | `pg_cron` every **5 minutes** (skip when queue empty); insert trigger sends immediately                                                                                                                                                  |
 | `list-resend-emails`              | Super admin: list/retrieve sent emails from **Resend API** (source of truth)                                                         | Super Monitor tab via `supabase.functions.invoke`                                                                                                                                                                                        |
 
 **Matter-related notification email:** `send-notification-email` reads `public.notification_preferences` columns `email_matter_announcements`, `email_matter_updates`, and `email_matter_invites` (with fallback to the older `email_announcements`, `email_matter_replies`, and `email_crew_invites` when needed). Notification rows use `notification_type` values including `announcement`, `matter_update` (activity-driven matter emails), and `crew_invite`. Users edit the three toggles on **Profile → Matter notifications** (email today; PWA push planned).
@@ -46,15 +46,15 @@ Use **`@shared/email/supabaseEdgeEmail`** (or `@shared/email` if you add barrel 
 
 Set these in the **Supabase project** (Dashboard → Edge Functions → Secrets, or CLI secrets), not only in Vercel:
 
-| Variable                    | Required   | Notes                                                                                          |
-| --------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
-| `RESEND_API_KEY`            | Yes*       | Resend dashboard. *Optional when `RESEND_DRY_RUN=true` (local/staging).                        |
+| Variable                    | Required   | Notes                                                                                                                |
+| --------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| `RESEND_API_KEY`            | Yes\*      | Resend dashboard. \*Optional when `RESEND_DRY_RUN=true` (local/staging).                                             |
 | `RESEND_DRY_RUN`            | No         | Set to `true` on a Supabase project to exercise email flows **without** calling Resend. **Never set on production.** |
-| `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default |
-| `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                               |
-| `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                         |
-| `SUPABASE_URL`              | Yes        | Injected in hosted env                                                                         |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes        | Edge Functions use service role for DB                                                         |
+| `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default                       |
+| `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                                                     |
+| `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                                               |
+| `SUPABASE_URL`              | Yes        | Injected in hosted env                                                                                               |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes        | Edge Functions use service role for DB                                                                               |
 
 ## Development vs production
 
@@ -129,3 +129,4 @@ With **`verify_jwt = false`**, the Edge endpoint does not authenticate the calle
 2. **Offer email / invoke errors locally** — Confirm `send-offer-email` has `verify_jwt = false` in `config.toml` and redeploy / restart `supabase functions serve`.
 3. **Welcome email never fires from DB** — Vault + `pg_net`; use client `fireAndForgetWelcomeEmail` path to verify Resend works independently.
 4. **Notification email skipped** — Expected when `notification_preferences` disables that channel; function returns `{ ok: true, skipped: 'preferences' }` and sets `email_sent_at`.
+5. **Emails to `@test.grid.local` / `@example.com` / `@grid.local` / `@demo.internal`** — Suppressed in `_shared/email/resend.ts` (`isNonDeliverableTestEmail`). Notification rows are marked processed so cron stops retrying. After `npm run db:copy-data`, pending notifications from the remote dump are marked processed so they are not re-sent locally.

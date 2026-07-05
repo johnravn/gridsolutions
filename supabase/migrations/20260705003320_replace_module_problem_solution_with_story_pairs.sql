@@ -1,0 +1,328 @@
+-- Replace problem/solution with flexible story heading/body pairs on modules.
+
+ALTER TABLE public.pretty_offer_modules
+  ADD COLUMN IF NOT EXISTS story_heading_1 TEXT,
+  ADD COLUMN IF NOT EXISTS story_body_1 TEXT,
+  ADD COLUMN IF NOT EXISTS story_heading_2 TEXT,
+  ADD COLUMN IF NOT EXISTS story_body_2 TEXT;
+
+UPDATE public.pretty_offer_modules
+SET
+  story_heading_1 = COALESCE(story_heading_1, 'The challenge'),
+  story_body_1 = COALESCE(story_body_1, problem_text),
+  story_heading_2 = COALESCE(story_heading_2, 'Our approach'),
+  story_body_2 = COALESCE(story_body_2, solution_text)
+WHERE problem_text IS NOT NULL OR solution_text IS NOT NULL;
+
+ALTER TABLE public.pretty_offer_modules
+  DROP COLUMN IF EXISTS problem_text,
+  DROP COLUMN IF EXISTS solution_text;
+-- Extend public_offer_get to return new module story fields.
+CREATE OR REPLACE FUNCTION public.public_offer_get(p_access_token text)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_offer public.job_offers%ROWTYPE;
+  v_job RECORD;
+  v_job_address_text text := NULL;
+  v_company RECORD;
+  v_customer RECORD;
+  v_customer_contact RECORD;
+  v_project_lead RECORD;
+  v_expansion RECORD;
+  v_groups jsonb;
+  v_crew_items jsonb;
+  v_transport_groups jsonb;
+  v_transport_items jsonb;
+  v_pretty_sections jsonb;
+  v_pretty_modules jsonb;
+BEGIN
+  SELECT *
+  INTO v_offer
+  FROM public.job_offers
+  WHERE access_token = p_access_token
+    AND status <> 'draft'
+  LIMIT 1;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT
+    j.id,
+    j.title,
+    j.start_at,
+    j.end_at,
+    j.job_address_id,
+    j.customer_id,
+    j.customer_contact_id,
+    j.project_lead_user_id
+  INTO v_job
+  FROM public.jobs j
+  WHERE j.id = v_offer.job_id
+  LIMIT 1;
+
+  IF v_job.job_address_id IS NOT NULL THEN
+    SELECT trim(concat_ws(', ',
+      nullif(trim(a.address_line), ''),
+      nullif(trim(concat_ws(' ', nullif(trim(a.zip_code), ''), nullif(trim(a.city), ''))), ''),
+      nullif(trim(a.country), '')
+    ))
+    INTO v_job_address_text
+    FROM public.addresses a
+    WHERE a.id = v_job.job_address_id
+    LIMIT 1;
+  END IF;
+
+  IF v_job.customer_id IS NOT NULL THEN
+    SELECT
+      c.id,
+      c.name,
+      c.email,
+      c.phone,
+      c.address,
+      c.logo_path,
+      c.accent_color,
+      c.accent_color_custom
+    INTO v_customer
+    FROM public.customers c
+    WHERE c.id = v_job.customer_id
+    LIMIT 1;
+  END IF;
+
+  IF v_job.customer_contact_id IS NOT NULL THEN
+    SELECT ct.id, ct.name, ct.email, ct.phone
+    INTO v_customer_contact
+    FROM public.contacts ct
+    WHERE ct.id = v_job.customer_contact_id
+    LIMIT 1;
+  END IF;
+
+  IF v_job.project_lead_user_id IS NOT NULL THEN
+    SELECT p.user_id, p.display_name, p.email, p.phone
+    INTO v_project_lead
+    FROM public.profiles p
+    WHERE p.user_id = v_job.project_lead_user_id
+    LIMIT 1;
+  END IF;
+
+  SELECT
+    co.id,
+    co.name,
+    co.address,
+    co.logo_light_path,
+    co.logo_dark_path,
+    co.accent_color,
+    co.terms_and_conditions_type,
+    co.terms_and_conditions_text,
+    co.terms_and_conditions_pdf_path
+  INTO v_company
+  FROM public.companies co
+  WHERE co.id = v_offer.company_id
+  LIMIT 1;
+
+  SELECT
+    ce.vehicle_daily_rate,
+    ce.vehicle_distance_rate,
+    ce.vehicle_distance_increment
+  INTO v_expansion
+  FROM public.company_expansions ce
+  WHERE ce.company_id = v_offer.company_id
+  LIMIT 1;
+
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', og.id,
+        'offer_basis_id', og.offer_basis_id,
+        'group_name', og.group_name,
+        'sort_order', og.sort_order,
+        'created_at', og.created_at,
+        'items',
+          COALESCE((
+            SELECT jsonb_agg(
+              to_jsonb(oei) ||
+              jsonb_build_object(
+                'item',
+                  CASE
+                    WHEN oei.item_id IS NULL THEN NULL
+                    ELSE (
+                      SELECT jsonb_build_object(
+                        'id', i.id,
+                        'name', i.name,
+                        'item_kind', i.item_kind,
+                        'model', i.model,
+                        'brand',
+                          CASE
+                            WHEN b.id IS NULL THEN NULL
+                            ELSE jsonb_build_object('id', b.id, 'name', b.name)
+                          END
+                      )
+                      FROM public.items i
+                      LEFT JOIN public.item_brands b ON b.id = i.brand_id
+                      WHERE i.id = oei.item_id
+                      LIMIT 1
+                    )
+                  END,
+                'group',
+                  CASE
+                    WHEN oei.group_id IS NULL THEN NULL
+                    ELSE (
+                      SELECT jsonb_build_object(
+                        'id', g.id,
+                        'name', g.name,
+                        'item_kind', g.item_kind
+                      )
+                      FROM public.item_groups g
+                      WHERE g.id = oei.group_id
+                      LIMIT 1
+                    )
+                  END
+              )
+              ORDER BY oei.sort_order
+            )
+            FROM public.offer_equipment_items oei
+            WHERE oei.offer_group_id = og.id
+          ), '[]'::jsonb)
+      )
+      ORDER BY og.sort_order
+    ),
+    '[]'::jsonb
+  )
+  INTO v_groups
+  FROM public.offer_equipment_groups og
+  WHERE og.offer_basis_id = v_offer.offer_basis_id;
+
+  SELECT COALESCE(
+    jsonb_agg(to_jsonb(ci) ORDER BY ci.sort_order),
+    '[]'::jsonb
+  )
+  INTO v_crew_items
+  FROM public.offer_crew_items ci
+  WHERE ci.offer_basis_id = v_offer.offer_basis_id;
+
+  SELECT COALESCE(
+    jsonb_agg(to_jsonb(tg) ORDER BY tg.sort_order),
+    '[]'::jsonb
+  )
+  INTO v_transport_groups
+  FROM public.offer_transport_groups tg
+  WHERE tg.offer_basis_id = v_offer.offer_basis_id;
+
+  SELECT COALESCE(
+    jsonb_agg(to_jsonb(ti) ORDER BY ti.sort_order),
+    '[]'::jsonb
+  )
+  INTO v_transport_items
+  FROM public.offer_transport_items ti
+  JOIN public.offer_transport_groups tg ON tg.id = ti.transport_group_id
+  WHERE tg.offer_basis_id = v_offer.offer_basis_id;
+
+  SELECT COALESCE(
+    jsonb_agg(to_jsonb(ps) ORDER BY ps.sort_order),
+    '[]'::jsonb
+  )
+  INTO v_pretty_sections
+  FROM public.offer_pretty_sections ps
+  WHERE ps.offer_id = v_offer.id;
+
+  SELECT COALESCE(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', m.id,
+        'title', m.title,
+        'tagline', m.tagline,
+        'story_heading_1', m.story_heading_1,
+        'story_body_1', m.story_body_1,
+        'story_heading_2', m.story_heading_2,
+        'story_body_2', m.story_body_2,
+        
+        'hero_media_type', m.hero_media_type,
+        'hero_media_url', m.hero_media_url,
+        'hero_media_caption', m.hero_media_caption,
+        'sort_order', m.sort_order,
+        'display_price', m.display_price,
+        'computed_cost', m.computed_cost,
+        'show_price', m.show_price,
+        'blocks',
+          COALESCE((
+            SELECT jsonb_agg(
+              jsonb_build_object(
+                'id', b.id,
+                'module_id', b.module_id,
+                'block_type', b.block_type,
+                'sort_order', b.sort_order,
+                'text_content', b.text_content,
+                'url', b.url,
+                'link_title', b.link_title,
+                'caption', b.caption,
+                'items',
+                  COALESCE((
+                    SELECT jsonb_agg(to_jsonb(bi) ORDER BY bi.sort_order)
+                    FROM public.pretty_offer_module_block_items bi
+                    WHERE bi.block_id = b.id
+                  ), '[]'::jsonb)
+              )
+              ORDER BY b.sort_order
+            )
+            FROM public.pretty_offer_module_blocks b
+            WHERE b.module_id = m.id
+          ), '[]'::jsonb)
+      )
+      ORDER BY m.sort_order
+    ),
+    '[]'::jsonb
+  )
+  INTO v_pretty_modules
+  FROM public.pretty_offer_modules m
+  WHERE m.offer_id = v_offer.id;
+
+  RETURN
+    to_jsonb(v_offer) ||
+    jsonb_build_object(
+      'job_title', COALESCE(v_job.title, NULL),
+      'job_start_at', v_job.start_at,
+      'job_end_at', v_job.end_at,
+      'job_address', v_job_address_text,
+      'customer', CASE WHEN v_customer IS NULL THEN NULL ELSE to_jsonb(v_customer) END,
+      'customer_contact', CASE WHEN v_customer_contact IS NULL THEN NULL ELSE to_jsonb(v_customer_contact) END,
+      'project_lead', CASE WHEN v_project_lead IS NULL THEN NULL ELSE to_jsonb(v_project_lead) END,
+      'company', CASE
+        WHEN v_company IS NULL THEN NULL
+        ELSE jsonb_build_object(
+          'id', v_company.id,
+          'name', v_company.name,
+          'address', v_company.address,
+          'logo_light_path', v_company.logo_light_path,
+          'logo_dark_path', v_company.logo_dark_path,
+          'accent_color', v_company.accent_color
+        )
+      END,
+      'company_terms', CASE
+        WHEN v_company IS NULL THEN NULL
+        ELSE jsonb_build_object(
+          'type', v_company.terms_and_conditions_type,
+          'text', v_company.terms_and_conditions_text,
+          'pdf_path', v_company.terms_and_conditions_pdf_path
+        )
+      END,
+      'company_expansion', CASE
+        WHEN v_expansion IS NULL THEN NULL
+        ELSE jsonb_build_object(
+          'vehicle_daily_rate', v_expansion.vehicle_daily_rate,
+          'vehicle_distance_rate', v_expansion.vehicle_distance_rate,
+          'vehicle_distance_increment', v_expansion.vehicle_distance_increment
+        )
+      END,
+      'groups', v_groups,
+      'crew_items', v_crew_items,
+      'transport_groups', v_transport_groups,
+      'transport_items', v_transport_items,
+      'pretty_sections', v_pretty_sections,
+      'modules', v_pretty_modules
+    );
+END;
+$$;
