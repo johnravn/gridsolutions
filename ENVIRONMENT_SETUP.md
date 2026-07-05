@@ -100,7 +100,13 @@ Vercel Dashboard    # Production environment variables
 VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
 VITE_SUPABASE_ANON_KEY=your-production-anon-key
 SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
+SUPABASE_SERVICE_ROLE_KEY=your-production-service-role-key
+CRON_SECRET=generate-a-long-random-string
 ```
+
+`SUPABASE_SERVICE_ROLE_KEY` is required for serverless API routes (`/api/calendar/feed`, `/api/cron/sync-conta`). Without it, scheduled Conta sync will fail silently in production.
+
+`CRON_SECRET` protects manual cron triggers. Vercel's built-in cron uses the `vercel-cron` user agent; GitHub Actions (`.github/workflows/sync-conta.yml`) sends `Authorization: Bearer <CRON_SECRET>`.
 
 5. Also add them for **Preview** (for feature branch deployments):
    - Click "Add Another" or select "Preview" environment
@@ -114,6 +120,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 4. Copy:
    - **Project URL** → Use for `VITE_SUPABASE_URL`
    - **anon public** key → Use for `VITE_SUPABASE_ANON_KEY`
+   - **service_role** key → Use for `SUPABASE_SERVICE_ROLE_KEY` (server/cron only — never expose in client code)
    - **Project Reference ID** → Found in URL: `https://app.supabase.com/project/YOUR-PROJECT-REF`
 
 ## 🔄 Switching Between Local and Production

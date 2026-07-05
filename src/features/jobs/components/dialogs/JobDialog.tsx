@@ -15,16 +15,18 @@ import {
 } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { upsertTimePeriod } from '@features/jobs/api/queries'
-import {
-  addThreeHours,
-  makeWordPresentable,
-} from '@shared/lib/generalFunctions'
+import { recurringJobsIndexQuery } from '@features/jobs/api/recurringJobQueries'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
-import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
 import { Sparks } from 'iconoir-react'
 import type { JobDetail, JobStatus, UUID } from '../../types'
+import type { RecurringJobCreateDefaults } from '../../utils/recurringJobCreateDefaults'
 
 type Props = {
   open: boolean
@@ -32,6 +34,8 @@ type Props = {
   companyId: UUID
   mode?: 'create' | 'edit'
   initialData?: JobDetail
+  recurringJobId?: UUID | null
+  recurringJobDefaults?: RecurringJobCreateDefaults
   onSaved?: (id: UUID) => void
 }
 
@@ -41,6 +45,8 @@ export default function JobDialog({
   companyId,
   mode = 'create',
   initialData,
+  recurringJobId: recurringJobIdProp,
+  recurringJobDefaults,
   onSaved,
 }: Props) {
   const qc = useQueryClient()
@@ -57,7 +63,6 @@ export default function JobDialog({
   const [startAt, setStartAt] = React.useState(initialData?.start_at ?? '')
   const [endAt, setEndAt] = React.useState(initialData?.end_at ?? '')
   const [syncTimePeriods, setSyncTimePeriods] = React.useState(false)
-  const [autoSetEndTime, setAutoSetEndTime] = React.useState(true)
   const [createCrewBookingForProjectLead, setCreateCrewBookingForProjectLead] =
     React.useState(true)
   const [projectLead, setProjectLead] = React.useState<UUID | ''>(
@@ -75,21 +80,26 @@ export default function JobDialog({
   const [contactId, setContactId] = React.useState<UUID | ''>(
     initialData?.customer_contact_id ?? '',
   )
-  const jobDialogPortalRef = React.useRef<HTMLElement | null>(null)
+  const [recurringJobId, setRecurringJobId] = React.useState<UUID | ''>(
+    initialData?.recurring_job_id ?? recurringJobIdProp ?? '',
+  )
+  const applyingDefaultsRef = React.useRef(false)
   const resetCreateFields = React.useCallback(() => {
-    setTitle('')
-    setDescription('')
-    setStatus('planned')
-    setStartAt('')
-    setEndAt('')
-    setAutoSetEndTime(true)
-    setCreateCrewBookingForProjectLead(true)
-    setProjectLead('')
-    setIsCompanyCustomer(false)
-    setCustomerId('')
-    setCustomerUserId('')
-    setContactId('')
-  }, [])
+    const d = recurringJobDefaults
+    applyingDefaultsRef.current = true
+    setTitle(d?.title ?? '')
+    setDescription(d?.description ?? '')
+    setStatus(d?.status ?? 'planned')
+    setStartAt(d?.startAt ?? '')
+    setEndAt(d?.endAt ?? '')
+    setCreateCrewBookingForProjectLead(!d?.fromTemplate)
+    setProjectLead(d?.projectLeadUserId ?? '')
+    setIsCompanyCustomer(Boolean(d?.customerUserId))
+    setCustomerId(d?.customerId ?? '')
+    setCustomerUserId(d?.customerUserId ?? '')
+    setContactId(d?.customerContactId ?? '')
+    setRecurringJobId(recurringJobIdProp ?? '')
+  }, [recurringJobIdProp, recurringJobDefaults])
   const getDateMs = (value: string) => {
     const ms = new Date(value).getTime()
     return Number.isNaN(ms) ? null : ms
@@ -103,18 +113,19 @@ export default function JobDialog({
 
   React.useEffect(() => {
     if (!open || mode !== 'edit' || !initialData) return
+    applyingDefaultsRef.current = true
     setTitle(initialData.title)
     setDescription(initialData.description ?? '')
     setStatus(initialData.status)
     setStartAt(initialData.start_at ?? '')
     setEndAt(initialData.end_at ?? '')
     setSyncTimePeriods(false)
-    setAutoSetEndTime(false) // Don't auto-set when loading existing data
     setProjectLead(initialData.project_lead_user_id ?? '')
     setIsCompanyCustomer(Boolean(initialData.customer_user_id))
     setCustomerId(initialData.customer_id ?? '')
     setCustomerUserId(initialData.customer_user_id ?? '')
     setContactId(initialData.customer_contact_id ?? '')
+    setRecurringJobId(initialData.recurring_job_id ?? '')
   }, [open, mode, initialData])
 
   React.useEffect(() => {
@@ -122,16 +133,14 @@ export default function JobDialog({
     resetCreateFields()
   }, [open, mode, resetCreateFields])
 
-  // Auto-set end time when start time changes (only in create mode or when manually setting)
   React.useEffect(() => {
-    if (!startAt || mode === 'edit' || !autoSetEndTime) return
-    setEndAt(addThreeHours(startAt))
-  }, [startAt, mode, autoSetEndTime])
-
-  React.useEffect(() => {
-    setContactId('') // clear previous selection if customer changes
+    if (applyingDefaultsRef.current) {
+      applyingDefaultsRef.current = false
+      return
+    }
+    setContactId('')
     if (customerId) {
-      setCustomerUserId('') // clear user selection if customer is selected
+      setCustomerUserId('')
     }
   }, [customerId])
 
@@ -142,9 +151,10 @@ export default function JobDialog({
     }
   }, [customerUserId])
 
-  // Set current user as project lead when creating a new job
+  // Set current user as project lead when creating a new job (unless recurring defaults provide one)
   React.useEffect(() => {
     if (!open || mode !== 'create') return
+    if (recurringJobDefaults?.projectLeadUserId) return
 
     const setCurrentUserAsLead = async () => {
       const {
@@ -166,7 +176,7 @@ export default function JobDialog({
     }
 
     setCurrentUserAsLead()
-  }, [open, mode, companyId])
+  }, [open, mode, companyId, recurringJobDefaults?.projectLeadUserId])
 
   const { data: leads = [] } = useQuery({
     queryKey: ['company', companyId, 'project-leads'],
@@ -203,6 +213,11 @@ export default function JobDialog({
         role: string
       }>
     },
+  })
+
+  const { data: recurringJobs = [] } = useQuery({
+    ...recurringJobsIndexQuery({ companyId, includeArchived: false }),
+    enabled: open,
   })
 
   const { data: customers = [] } = useQuery({
@@ -296,7 +311,10 @@ export default function JobDialog({
   const upsert = useMutation({
     mutationFn: async () => {
       if (projectLead) {
-        const isValidLead = leads.some((l) => l.user_id === projectLead)
+        const unchangedLead =
+          mode === 'edit' && projectLead === initialData?.project_lead_user_id
+        const isValidLead =
+          unchangedLead || leads.some((l) => l.user_id === projectLead)
         if (!isValidLead) {
           showError(
             'Invalid project lead',
@@ -321,6 +339,7 @@ export default function JobDialog({
             customer_id: customerId || null,
             customer_user_id: customerUserId || null,
             customer_contact_id: contactId || null,
+            recurring_job_id: recurringJobId || recurringJobIdProp || null,
           })
           .select('id')
           .single()
@@ -391,6 +410,34 @@ export default function JobDialog({
           }
         }
 
+        // Create standard crew roles from recurring job template defaults
+        if (recurringJobDefaults?.crewRoles?.length && (startAt || endAt)) {
+          try {
+            const periodStart = startAt || new Date().toISOString()
+            const periodEnd =
+              endAt || new Date(Date.now() + 86400000).toISOString()
+
+            const { error: crewRolesError } = await supabase
+              .from('time_periods')
+              .insert(
+                recurringJobDefaults.crewRoles.map((role) => ({
+                  job_id: data.id,
+                  company_id: companyId,
+                  title: role.title,
+                  category: 'crew' as const,
+                  start_at: periodStart,
+                  end_at: periodEnd,
+                  needed_count: role.needed_count,
+                  role_category: role.role_category,
+                })),
+              )
+
+            if (crewRolesError) throw crewRolesError
+          } catch (e: any) {
+            console.error('Failed to create template crew roles', e)
+          }
+        }
+
         // Log activity for job creation
         try {
           await logActivity({
@@ -424,6 +471,7 @@ export default function JobDialog({
             customer_id: customerId || null,
             customer_user_id: customerUserId || null,
             customer_contact_id: contactId || null,
+            recurring_job_id: recurringJobId || null,
           })
           .eq('id', initialData.id)
         if (error) throw error
@@ -517,12 +565,17 @@ export default function JobDialog({
         return initialData.id
       }
     },
-    onSuccess: async (id) => {
+    onSuccess: (id) => {
       const action = mode === 'create' ? 'created' : 'updated'
-      // fire toast first so the user sees it even if the dialog closes quickly
       success(`Job ${action}`, `“${title.trim()}” was ${action} successfully.`)
 
-      await Promise.all([
+      if (mode === 'create') {
+        resetCreateFields()
+      }
+      onOpenChange(false)
+      onSaved?.(id)
+
+      void Promise.all([
         qc.invalidateQueries({ queryKey: ['jobs-index'], exact: false }),
         qc.invalidateQueries({ queryKey: ['jobs-detail', id], exact: false }),
         qc.invalidateQueries({
@@ -533,18 +586,13 @@ export default function JobDialog({
           queryKey: ['company', companyId, 'latest-feed'],
           exact: false,
         }),
-        // Force refetch of latest feed to ensure new activity appears immediately
         qc.refetchQueries({
           queryKey: ['company', companyId, 'latest-feed'],
           exact: false,
         }),
-      ])
-
-      if (mode === 'create') {
-        resetCreateFields()
-      }
-      onOpenChange(false)
-      onSaved?.(id)
+      ]).catch((err) => {
+        console.error('Failed to refresh job queries after save', err)
+      })
     },
     onError: (e: any) => {
       const errorMessage = String(e?.message ?? '')
@@ -638,7 +686,6 @@ export default function JobDialog({
     setStatus(randomStatus)
     setStartAt(startAtStr)
     setEndAt(endAtStr)
-    setAutoSetEndTime(false)
     setProjectLead(randomLead?.user_id ?? '')
     setIsCompanyCustomer(false)
     setCustomerId(randomCustomer?.id ?? '')
@@ -652,24 +699,8 @@ export default function JobDialog({
       <Dialog.Content
         maxWidth="820px"
         style={{ display: 'flex', flexDirection: 'column' }}
-        onPointerDownOutside={(e) => {
-          const ev = e as unknown as {
-            detail?: { originalEvent?: PointerEvent }
-          }
-          const el = (ev.detail?.originalEvent?.target ??
-            e.target) as HTMLElement
-          if (el.closest('[data-searchable-select-dropdown]')) {
-            e.preventDefault()
-          }
-        }}
-        onInteractOutside={(e) => {
-          const ev = e as unknown as { detail?: { originalEvent?: FocusEvent } }
-          const el = (ev.detail?.originalEvent?.target ??
-            e.target) as HTMLElement
-          if (el.closest('[data-searchable-select-dropdown]')) {
-            e.preventDefault()
-          }
-        }}
+        onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+        onInteractOutside={preventDialogCloseOnSearchableSelect}
       >
         <Flex align="center" justify="between">
           <Dialog.Title>
@@ -752,9 +783,28 @@ export default function JobDialog({
                   emptyMessage="No project leads found"
                   dropdownMaxWidth={280}
                   style={{ width: '100%', minWidth: 0 }}
-                  portalContainer={() => jobDialogPortalRef.current}
                 />
               </Field>
+
+              {(mode === 'edit' || !recurringJobIdProp) && (
+                <Field label="Recurring job">
+                  <SearchableSelect
+                    options={[
+                      { value: '', label: 'None' },
+                      ...recurringJobs.map((r) => ({
+                        value: r.id,
+                        label: r.title,
+                      })),
+                    ]}
+                    value={recurringJobId}
+                    onValueChange={(v) => setRecurringJobId(v)}
+                    placeholder="Link to recurring job…"
+                    emptyMessage="No recurring jobs found"
+                    dropdownMaxWidth={280}
+                    style={{ width: '100%', minWidth: 0 }}
+                  />
+                </Field>
+              )}
             </Flex>
 
             <Flex wrap={'wrap'} direction="column" gap="2">
@@ -782,12 +832,7 @@ export default function JobDialog({
                 />
                 <Text size="2">Customer is a member of the company</Text>
               </label>
-              <Box
-                ref={(el: HTMLElement | null) => {
-                  jobDialogPortalRef.current = el
-                }}
-                style={{ position: 'relative' }}
-              >
+              <Box>
                 <div
                   style={{
                     display: 'grid',
@@ -813,7 +858,6 @@ export default function JobDialog({
                       emptyMessage="No customers found"
                       dropdownMaxWidth={280}
                       style={{ width: '100%', minWidth: 0 }}
-                      portalContainer={() => jobDialogPortalRef.current}
                     />
                   </Field>
 
@@ -843,7 +887,6 @@ export default function JobDialog({
                       emptyMessage="No contacts found"
                       dropdownMaxWidth={280}
                       style={{ width: '100%', minWidth: 0 }}
-                      portalContainer={() => jobDialogPortalRef.current}
                     />
                   </Field>
                 </div>
@@ -861,7 +904,6 @@ export default function JobDialog({
                       emptyMessage="No company members found"
                       dropdownMaxWidth={280}
                       style={{ width: '100%', minWidth: 0 }}
-                      portalContainer={() => jobDialogPortalRef.current}
                     />
                   </Field>
                 )}
@@ -870,23 +912,17 @@ export default function JobDialog({
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <DateTimePicker
-              label="Start"
-              value={startAt}
-              onChange={(value) => {
-                setStartAt(value)
-                setAutoSetEndTime(true)
-              }}
-            />
-            <DateTimePicker
-              label="End"
-              value={endAt}
-              invalid={hasInvalidTimeRange}
-              onChange={(value) => {
-                setEndAt(value)
-                setAutoSetEndTime(false)
-              }}
-            />
+            <Field label="Time period">
+              <DateTimeRangePicker
+                startAt={startAt}
+                endAt={endAt}
+                onChange={({ startAt: s, endAt: e }) => {
+                  setStartAt(s)
+                  setEndAt(e)
+                }}
+                invalid={hasInvalidTimeRange}
+              />
+            </Field>
             {mode === 'create' && (
               <label
                 style={{

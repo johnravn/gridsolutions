@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Badge,
   Box,
@@ -21,7 +20,16 @@ import {
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import {
+  VirtualIndexTable,
+  applySortDir,
+  useClientSort,
+  useClientTableFilter,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
 import { mattersIndexQueryAll } from '../api/queries'
+import type { IndexColumn } from '@shared/ui/index-table'
 import type { Matter, MatterType } from '../types'
 
 const MONTH_SHORT = [
@@ -45,18 +53,122 @@ function formatMatterDate(dateInput: string | Date): string {
 }
 
 type SortBy = 'type' | 'title' | 'created' | 'response' | 'company'
-type SortDir = 'asc' | 'desc'
 
 const GRID_COLUMNS =
   'minmax(100px, 1fr) minmax(140px, 2fr) minmax(80px, 1fr) 44px minmax(100px, 1fr) 24px'
 
-const SORTABLE_COLUMNS: Array<{ id: SortBy; header: React.ReactNode }> = [
-  { id: 'type', header: 'Type' },
-  { id: 'title', header: 'Title' },
-  { id: 'created', header: 'Created' },
-  { id: 'response', header: <ChatBubbleQuestion width={14} height={14} /> },
-  { id: 'company', header: 'Company' },
+const COLUMNS: Array<IndexColumn<SortBy>> = [
+  { id: 'type', header: 'Type', sortable: true, sortKey: 'type' },
+  { id: 'title', header: 'Title', sortable: true, sortKey: 'title' },
+  { id: 'created', header: 'Created', sortable: true, sortKey: 'created' },
+  {
+    id: 'response',
+    header: <ChatBubbleQuestion width={14} height={14} />,
+    sortable: true,
+    sortKey: 'response',
+  },
+  { id: 'company', header: 'Company', sortable: true, sortKey: 'company' },
+  { id: 'unread', header: '' },
 ]
+
+const SEARCH_FIELDS = [
+  (m: Matter) => m.title,
+  (m: Matter) => m.content,
+  (m: Matter) => m.job?.title,
+  (m: Matter) => m.created_by?.display_name,
+  (m: Matter) => m.created_by?.email,
+  (m: Matter) => (m.created_as_company ? m.company?.name : null),
+]
+
+function compareMatters(
+  a: Matter,
+  b: Matter,
+  sortBy: SortBy,
+  sortDir: 'asc' | 'desc',
+) {
+  let comparison = 0
+  switch (sortBy) {
+    case 'type':
+      comparison = a.matter_type.localeCompare(b.matter_type)
+      break
+    case 'title':
+      comparison = a.title.localeCompare(b.title)
+      break
+    case 'created':
+      comparison =
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      break
+    case 'response': {
+      const aHasResponse =
+        a.matter_type === 'crew_invite' && a.my_response ? 1 : 0
+      const bHasResponse =
+        b.matter_type === 'crew_invite' && b.my_response ? 1 : 0
+      comparison = aHasResponse - bHasResponse
+      break
+    }
+    case 'company':
+      comparison = (a.company?.name || '').localeCompare(b.company?.name || '')
+      break
+  }
+  return applySortDir(comparison, sortDir)
+}
+
+function getResponseIcon(matter: Matter) {
+  if (matter.matter_type === 'crew_invite') {
+    if (matter.my_response) {
+      const responseLower = matter.my_response.response.toLowerCase()
+      if (responseLower === 'approved' || responseLower === 'accepted') {
+        return (
+          <Badge radius="full" color="green" size="2">
+            <Check width={14} height={14} />
+          </Badge>
+        )
+      }
+      if (responseLower === 'rejected' || responseLower === 'declined') {
+        return (
+          <Badge radius="full" color="red" size="2">
+            <Xmark width={14} height={14} />
+          </Badge>
+        )
+      }
+      return (
+        <Badge
+          radius="full"
+          color="blue"
+          size="2"
+          title={matter.my_response.response}
+        >
+          <QuestionMark width={14} height={14} />
+        </Badge>
+      )
+    }
+    return (
+      <Badge radius="full" color="gray" size="2" title="No response">
+        <QuestionMark width={14} height={14} />
+      </Badge>
+    )
+  }
+  return null
+}
+
+function getTypeBadge(type: Matter['matter_type']) {
+  const variants: Record<string, { color: string; label: string }> = {
+    crew_invite: { color: 'blue', label: 'Invite' },
+    vote: { color: 'purple', label: 'Vote' },
+    announcement: { color: 'gray', label: 'Announcement' },
+    chat: { color: 'green', label: 'Chat' },
+    update: { color: 'amber', label: 'Update' },
+  }
+  const v = variants[type] ?? variants.announcement
+  return (
+    <Badge
+      radius="full"
+      color={v.color as 'blue' | 'purple' | 'gray' | 'green' | 'amber'}
+    >
+      {v.label}
+    </Badge>
+  )
+}
 
 export default function MatterList({
   selectedId,
@@ -64,7 +176,7 @@ export default function MatterList({
   unreadFilter,
   companyFilter,
   typeFilter,
-  companies,
+  companies: _companies,
   onCreateMatter,
 }: {
   selectedId: string | null
@@ -76,16 +188,16 @@ export default function MatterList({
   onCreateMatter?: () => void
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const canCreateAnnouncement =
-    companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser
+    canWrite &&
+    (companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser)
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
-  const [sortBy, setSortBy] = React.useState<SortBy>('created')
-  const [sortDir, setSortDir] = React.useState<SortDir>('desc')
-
-  const containerRef = React.useRef<HTMLDivElement>(null)
-  const controlsRef = React.useRef<HTMLDivElement>(null)
-  const scrollRef = React.useRef<HTMLDivElement>(null)
+  const { sortBy, sortDir, handleSort } = useClientSort<SortBy>(
+    'created',
+    'desc',
+  )
 
   const {
     data: allMatters = [],
@@ -95,67 +207,28 @@ export default function MatterList({
     ...mattersIndexQueryAll(),
   })
 
-  const rows = React.useMemo(() => {
-    let filtered = allMatters
+  const filteredBySearch = useClientTableFilter(
+    allMatters,
+    search,
+    SEARCH_FIELDS,
+  )
 
-    if (search.trim()) {
-      const searchLower = search.trim().toLowerCase()
-      filtered = filtered.filter(
-        (m) =>
-          m.title.toLowerCase().includes(searchLower) ||
-          m.content?.toLowerCase().includes(searchLower) ||
-          m.job?.title.toLowerCase().includes(searchLower) ||
-          m.created_by?.display_name?.toLowerCase().includes(searchLower) ||
-          m.created_by?.email.toLowerCase().includes(searchLower) ||
-          (m.created_as_company &&
-            m.company?.name.toLowerCase().includes(searchLower)),
-      )
-    }
+  const rows = React.useMemo(() => {
+    let filtered = filteredBySearch
 
     if (typeFilter.length > 0) {
       filtered = filtered.filter((m) => typeFilter.includes(m.matter_type))
     }
-
     if (unreadFilter) {
       filtered = filtered.filter((m) => m.is_unread === true)
     }
-
     if (companyFilter.length > 0) {
       filtered = filtered.filter((m) => companyFilter.includes(m.company_id))
     }
 
-    return [...filtered].sort((a, b) => {
-      let comparison = 0
-      switch (sortBy) {
-        case 'type':
-          comparison = a.matter_type.localeCompare(b.matter_type)
-          break
-        case 'title':
-          comparison = a.title.localeCompare(b.title)
-          break
-        case 'created':
-          comparison =
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          break
-        case 'response': {
-          const aHasResponse =
-            a.matter_type === 'crew_invite' && a.my_response ? 1 : 0
-          const bHasResponse =
-            b.matter_type === 'crew_invite' && b.my_response ? 1 : 0
-          comparison = aHasResponse - bHasResponse
-          break
-        }
-        case 'company':
-          comparison = (a.company?.name || '').localeCompare(
-            b.company?.name || '',
-          )
-          break
-      }
-      return sortDir === 'asc' ? comparison : -comparison
-    })
+    return [...filtered].sort((a, b) => compareMatters(a, b, sortBy, sortDir))
   }, [
-    allMatters,
-    search,
+    filteredBySearch,
     typeFilter,
     unreadFilter,
     companyFilter,
@@ -163,380 +236,194 @@ export default function MatterList({
     sortDir,
   ])
 
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 52,
-    overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0,
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows,
+    getRowId: (m) => m.id,
+    estimateRowSize: 52,
   })
 
-  const handleSort = (column: SortBy) => {
-    if (sortBy === column) {
-      setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))
-    } else {
-      setSortBy(column)
-      setSortDir('asc')
-    }
-  }
-
-  const getResponseIcon = (matter: Matter) => {
-    if (matter.matter_type === 'crew_invite') {
-      if (matter.my_response) {
-        const responseLower = matter.my_response.response.toLowerCase()
-        if (responseLower === 'approved' || responseLower === 'accepted') {
-          return (
-            <Badge radius="full" color="green" size="2">
-              <Check width={14} height={14} />
-            </Badge>
-          )
-        }
-        if (responseLower === 'rejected' || responseLower === 'declined') {
-          return (
-            <Badge radius="full" color="red" size="2">
-              <Xmark width={14} height={14} />
-            </Badge>
-          )
-        }
-        return (
-          <Badge
-            radius="full"
-            color="blue"
-            size="2"
-            title={matter.my_response.response}
-          >
-            <QuestionMark width={14} height={14} />
-          </Badge>
-        )
-      }
-      return (
-        <Badge radius="full" color="gray" size="2" title="No response">
-          <QuestionMark width={14} height={14} />
-        </Badge>
-      )
-    }
-    return null
-  }
-
-  const getTypeBadge = (type: Matter['matter_type']) => {
-    const variants: Record<string, { color: string; label: string }> = {
-      crew_invite: { color: 'blue', label: 'Invite' },
-      vote: { color: 'purple', label: 'Vote' },
-      announcement: { color: 'gray', label: 'Announcement' },
-      chat: { color: 'green', label: 'Chat' },
-      update: { color: 'amber', label: 'Update' },
-    }
-    const v = variants[type] ?? variants.announcement
-    return (
-      <Badge
-        radius="full"
-        color={v.color as 'blue' | 'purple' | 'gray' | 'green' | 'amber'}
-      >
-        {v.label}
-      </Badge>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <Box p="4">
-        <Text color="gray">Loading matters...</Text>
-      </Box>
-    )
-  }
-
   return (
-    <div
-      ref={containerRef}
-      style={{
-        height: '100%',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      <Flex
-        ref={controlsRef}
-        gap="2"
-        align="center"
-        wrap="wrap"
-        mb="2"
-        direction={
-          isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'
-        }
-        justify={isMobile ? 'start' : 'between'}
-      >
-        <TextField.Root
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search matters…"
-          size="3"
-          style={{
-            flex:
-              isMobile && onCreateMatter && canCreateAnnouncement
-                ? undefined
-                : '1 1 260px',
-            width: '100%',
-          }}
-        >
-          <TextField.Slot side="left">
-            <Search />
-          </TextField.Slot>
-          <TextField.Slot side="right">
-            {isFetching && <Spinner size="2" />}
-          </TextField.Slot>
-        </TextField.Root>
-        {onCreateMatter && canCreateAnnouncement && (
-          <Tooltip content="Send a manual announcement to selected people (uncommon)">
-            <Button
-              type="button"
-              variant="ghost"
-              size="1"
-              color="gray"
-              onClick={onCreateMatter}
-              style={
-                isMobile
-                  ? { alignSelf: 'flex-end' }
-                  : { flexShrink: 0, alignSelf: 'center' }
-              }
-            >
-              <Plus width={14} height={14} />
-              New announcement
-            </Button>
-          </Tooltip>
-        )}
-      </Flex>
-
-      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            minWidth: 'max-content',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-          }}
-        >
-          {/* Table header */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: GRID_COLUMNS,
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-3)',
-              backgroundColor: 'var(--gray-a2)',
-              borderRadius: 'var(--radius-2)',
-              flexShrink: 0,
-            }}
-          >
-            {SORTABLE_COLUMNS.map((col) => {
-              const isActive = sortBy === col.id
-              const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
-              return (
-                <div
-                  key={col.id}
-                  onClick={() => handleSort(col.id)}
-                  style={{
-                    fontSize: 'var(--font-size-1)',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-1)',
-                  }}
-                  title="Click to sort"
-                >
-                  {col.header}
-                  {arrow}
-                </div>
-              )
-            })}
-            <div /> {/* Spacer for unread-dot column */}
-          </div>
-
-          {/* Virtualized list body */}
-          <div
-            ref={scrollRef}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflow: 'auto',
-              marginTop: 8,
-            }}
-          >
-            {rows.length === 0 ? (
-              <Flex align="center" justify="center" py="6">
-                <Text size="2" color="gray">
-                  {allMatters.length === 0
-                    ? 'No matters yet'
-                    : 'No matters match your filters'}
-                </Text>
+    <VirtualIndexTable
+      rows={rows}
+      columns={COLUMNS}
+      gridTemplateColumns={GRID_COLUMNS}
+      getRowId={(m) => m.id}
+      renderCell={(matter, colId) => {
+        const isSelected = matter.id === selectedId
+        switch (colId) {
+          case 'type':
+            return (
+              <Flex align="center" gap="2">
+                {getTypeBadge(matter.matter_type)}
               </Flex>
-            ) : (
-              <div
-                style={{
-                  height: `${rowVirtualizer.getTotalSize()}px`,
-                  width: '100%',
-                  position: 'relative',
-                }}
-              >
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const matter = rows[virtualRow.index]
-                  const isSelected = matter.id === selectedId
-
-                  return (
-                    <div
-                      key={matter.id}
-                      data-index={virtualRow.index}
-                      onClick={() => onSelect(matter.id)}
+            )
+          case 'title':
+            return (
+              <Box style={{ minWidth: 0 }}>
+                <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                  {matter.is_unread && (
+                    <Box
+                      aria-hidden
                       style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        display: 'grid',
-                        gridTemplateColumns: GRID_COLUMNS,
-                        gap: 'var(--space-2)',
-                        alignItems: 'center',
-                        padding: '0 var(--space-3)',
-                        cursor: 'pointer',
-                        backgroundColor: isSelected
-                          ? 'var(--accent-a3)'
-                          : matter.is_unread
-                            ? 'var(--blue-a2)'
-                            : 'transparent',
-                        borderRadius: 'var(--radius-2)',
-                        boxShadow:
-                          matter.is_unread && !isSelected
-                            ? 'inset 3px 0 0 0 var(--blue-9)'
-                            : undefined,
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: 'var(--blue-9)',
+                        flexShrink: 0,
                       }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor =
-                            'var(--gray-a2)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor =
-                            matter.is_unread ? 'var(--blue-a2)' : 'transparent'
-                        }
+                    />
+                  )}
+                  <Tooltip content={matter.title} delayDuration={300}>
+                    <Box
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        minWidth: 0,
+                        flex: 1,
                       }}
                     >
-                      <Flex align="center" gap="2">
-                        {getTypeBadge(matter.matter_type)}
-                      </Flex>
-
-                      <Box style={{ minWidth: 0 }}>
-                        <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                          {matter.is_unread && (
-                            <Box
-                              aria-hidden
-                              style={{
-                                width: 8,
-                                height: 8,
-                                borderRadius: '50%',
-                                backgroundColor: 'var(--blue-9)',
-                                flexShrink: 0,
-                              }}
-                            />
-                          )}
-                          <Tooltip content={matter.title} delayDuration={300}>
-                            <Box
-                              style={{
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                whiteSpace: 'nowrap',
-                                minWidth: 0,
-                                flex: 1,
-                              }}
-                            >
-                              <Text
-                                weight={
-                                  isSelected || matter.is_unread
-                                    ? 'bold'
-                                    : 'medium'
-                                }
-                                size="2"
-                                style={{
-                                  overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  whiteSpace: 'nowrap',
-                                }}
-                              >
-                                {matter.title}
-                              </Text>
-                            </Box>
-                          </Tooltip>
-                        </Flex>
-                        {matter.job && (
-                          <Text
-                            size="1"
-                            color="gray"
-                            style={{
-                              display: 'block',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            Job: {matter.job.title}
-                          </Text>
-                        )}
-                      </Box>
-
-                      <Text size="2" color="gray">
-                        {formatMatterDate(matter.created_at)}
+                      <Text
+                        weight={
+                          isSelected || matter.is_unread ? 'bold' : 'medium'
+                        }
+                        size="2"
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {matter.title}
                       </Text>
-
-                      <Box>
-                        {getResponseIcon(matter) || (
-                          <Text size="2" color="gray">
-                            —
-                          </Text>
-                        )}
-                      </Box>
-
-                      <Text size="2" color="gray">
-                        {matter.company?.name || '—'}
-                      </Text>
-
-                      <Flex align="center" justify="end">
-                        {matter.is_unread && (
-                          <Text size="1" color="blue" weight="medium">
-                            New
-                          </Text>
-                        )}
-                      </Flex>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {rows.length > 0 && (
-        <Flex align="center" mt="2">
-          <Text size="2" color="gray">
-            {rows.length} matter{rows.length !== 1 ? 's' : ''}
-          </Text>
+                    </Box>
+                  </Tooltip>
+                </Flex>
+                {matter.job && (
+                  <Text
+                    size="1"
+                    color="gray"
+                    style={{
+                      display: 'block',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Job: {matter.job.title}
+                  </Text>
+                )}
+              </Box>
+            )
+          case 'created':
+            return (
+              <Text size="2" color="gray">
+                {formatMatterDate(matter.created_at)}
+              </Text>
+            )
+          case 'response':
+            return (
+              getResponseIcon(matter) || (
+                <Text size="2" color="gray">
+                  —
+                </Text>
+              )
+            )
+          case 'company':
+            return (
+              <Text size="2" color="gray">
+                {matter.company?.name || '—'}
+              </Text>
+            )
+          case 'unread':
+            return (
+              <Flex align="center" justify="end">
+                {matter.is_unread && (
+                  <Text size="1" color="blue" weight="medium">
+                    New
+                  </Text>
+                )}
+              </Flex>
+            )
+          default:
+            return null
+        }
+      }}
+      selectedId={selectedId}
+      onSelect={(id) => onSelect(id)}
+      getRowClassName={(matter) =>
+        matter.is_unread ? 'index-table-row--unread' : undefined
+      }
+      sortBy={sortBy}
+      sortDir={sortDir}
+      onSort={handleSort}
+      sortableColumns={['type', 'title', 'created', 'response', 'company']}
+      scrollRef={scrollRef}
+      rowVirtualizer={rowVirtualizer}
+      isLoading={isLoading}
+      emptyMessage={
+        allMatters.length === 0
+          ? 'No matters yet'
+          : 'No matters match your filters'
+      }
+      footerCount={{
+        shown: rows.length,
+        label: (n) => `${n} matter${n !== 1 ? 's' : ''}`,
+      }}
+      toolbar={
+        <Flex
+          gap="2"
+          align="center"
+          wrap="wrap"
+          mb="2"
+          direction={
+            isMobile && onCreateMatter && canCreateAnnouncement
+              ? 'column'
+              : 'row'
+          }
+          justify={isMobile ? 'start' : 'between'}
+        >
+          <TextField.Root
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search matters…"
+            size="3"
+            style={{
+              flex:
+                isMobile && onCreateMatter && canCreateAnnouncement
+                  ? undefined
+                  : '1 1 260px',
+              width: '100%',
+            }}
+          >
+            <TextField.Slot side="left">
+              <Search />
+            </TextField.Slot>
+            <TextField.Slot side="right">
+              {isFetching && <Spinner size="2" />}
+            </TextField.Slot>
+          </TextField.Root>
+          {onCreateMatter && canCreateAnnouncement && (
+            <Tooltip content="Send a manual announcement to selected people (uncommon)">
+              <Button
+                type="button"
+                variant="ghost"
+                size="1"
+                color="gray"
+                onClick={onCreateMatter}
+                style={
+                  isMobile
+                    ? { alignSelf: 'flex-end' }
+                    : { flexShrink: 0, alignSelf: 'center' }
+                }
+              >
+                <Plus width={14} height={14} />
+                New announcement
+              </Button>
+            </Tooltip>
+          )}
         </Flex>
-      )}
-    </div>
+      }
+    />
   )
 }

@@ -1,0 +1,12 @@
+.picker-surface-trigger {
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
+}
+
+.picker-surface-trigger:active:not(:disabled) {
+  background-color: var(--color-surface);
+}
+
+.picker-surface-trigger:focus {
+  outline: none;
+}

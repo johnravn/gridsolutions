@@ -7,30 +7,59 @@ import {
   Heading,
   IconButton,
   Separator,
+  Text,
   Tooltip,
 } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { CalendarXmark, TransitionLeft } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { CalendarXmark, Sparks, TransitionLeft } from 'iconoir-react'
+import { DatePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import {
   getModShortcutLabel,
+  getTabNavShortcutLabels,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
+import RecurringJobInspector from '../components/RecurringJobInspector'
+import { jobsIndexQuery } from '../api/queries'
+import type { JobsPageSelection } from '../types'
+
+function JobInspectorTabShortcutTip() {
+  const tabNavShortcutLabels = getTabNavShortcutLabels()
+
+  return (
+    <Tooltip
+      content={`Switch tabs: ${tabNavShortcutLabels.prev} and ${tabNavShortcutLabels.next}`}
+    >
+      <Flex align="center" gap="1" style={{ flexShrink: 0, cursor: 'default' }}>
+        <Sparks width={14} height={14} />
+        <Text size="1" color="gray">
+          Pro tip
+        </Text>
+      </Flex>
+    </Tooltip>
+  )
+}
 
 export default function JobsPage() {
   const { companyId } = useCompany()
+  const { userId, companyRole } = useAuthz()
   const location = useLocation()
-  const search = location.search as { jobId?: string; tab?: string }
-  const jobId = search?.jobId
-  const tab = search?.tab
+  const search = location.search as Record<string, unknown>
+  const jobId = (search.jobId as string | undefined) || undefined
+  const recurringJobId =
+    (search.recurringJobId as string | undefined) || undefined
+  const tab = (search.tab as string | undefined) || undefined
 
   // Fetch company expansion for vehicle/transport rates
   const expansionQueryOptions = React.useMemo(() => {
@@ -46,19 +75,35 @@ export default function JobsPage() {
     enabled: !!companyId,
   })
 
-  const [selectedId, setSelectedId] = React.useState<string | null>(
-    jobId || null,
-  )
+  const [selection, setSelection] = React.useState<JobsPageSelection>(() => {
+    if (recurringJobId) return { kind: 'recurring_job', id: recurringJobId }
+    if (jobId) return { kind: 'job', id: jobId }
+    return null
+  })
   const [statusFilter, setStatusFilter] = React.useState(DEFAULT_STATUS_FILTER)
   const [showOnlyArchived, setShowOnlyArchived] = React.useState(false)
   const [selectedDate, setSelectedDate] = React.useState<string>('')
 
-  // Update selectedId when jobId from URL changes
+  // Update selection when URL search params change
   React.useEffect(() => {
-    if (jobId) {
-      setSelectedId(jobId)
+    if (recurringJobId) {
+      setSelection({ kind: 'recurring_job', id: recurringJobId })
+    } else if (jobId) {
+      setSelection({ kind: 'job', id: jobId })
     }
-  }, [jobId])
+  }, [jobId, recurringJobId])
+
+  const handleSelectJob = React.useCallback((id: string | null) => {
+    setSelection(id ? { kind: 'job', id } : null)
+  }, [])
+
+  const handleSelectRecurringJob = React.useCallback((id: string | null) => {
+    setSelection(id ? { kind: 'recurring_job', id } : null)
+  }, [])
+
+  const handleSelectJobFromRecurring = React.useCallback((id: string) => {
+    setSelection({ kind: 'job', id })
+  }, [])
 
   // match InventoryPage behavior
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -169,19 +214,38 @@ export default function JobsPage() {
 
   // On phone: when a job is selected, scroll to the inspector
   React.useEffect(() => {
-    if (!isLarge && selectedId != null && inspectorRef.current) {
+    if (!isLarge && selection != null && inspectorRef.current) {
       inspectorRef.current.scrollIntoView({
         behavior: 'smooth',
         block: 'start',
       })
     }
-  }, [isLarge, selectedId])
+  }, [isLarge, selection])
 
-  if (!companyId) return <PageSkeleton columns="2fr 3fr" />
+  const clearSelection = React.useCallback(() => {
+    setSelection(null)
+  }, [])
 
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
-  // On small screens, use Grid layout (stack): jobs card fills viewport, inspector below
+  useMobileDetailBack(!isLarge, selection != null, clearSelection)
+
+  const { isLoading: jobsIndexLoading } = useQuery({
+    ...jobsIndexQuery({
+      companyId: companyId ?? '__none__',
+      search: '',
+      selectedDate: '',
+      sortBy: 'start_at',
+      sortDir: 'asc',
+      userId,
+      companyRole,
+      showOnlyArchived: false,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(jobsIndexLoading)
+
+  if (!companyId || showInitialSkeleton)
+    return <PageSkeleton columns="2fr 3fr" />
+
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -192,7 +256,7 @@ export default function JobsPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -221,7 +285,7 @@ export default function JobsPage() {
                     </IconButton>
                   </Tooltip>
                 ) : (
-                  <DateTimePicker
+                  <DatePicker
                     value=""
                     onChange={(iso) => {
                       if (iso) {
@@ -231,7 +295,6 @@ export default function JobsPage() {
                         )
                       }
                     }}
-                    dateOnly
                     iconButton
                     iconButtonSize="2"
                   />
@@ -257,8 +320,9 @@ export default function JobsPage() {
               }}
             >
               <JobsList
-                selectedId={selectedId}
-                onSelect={setSelectedId}
+                selection={selection}
+                onSelectJob={handleSelectJob}
+                onSelectRecurringJob={handleSelectRecurringJob}
                 statusFilter={statusFilter}
                 showOnlyArchived={showOnlyArchived}
                 selectedDate={selectedDate}
@@ -274,7 +338,7 @@ export default function JobsPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -282,16 +346,22 @@ export default function JobsPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: isLarge ? '100%' : mobileCardHeight,
+                height: isLarge ? '100%' : MOBILE_CARD_HEIGHT,
                 maxHeight: isLarge ? '100%' : undefined,
                 overflow: isLarge ? 'hidden' : 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',
               }}
             >
-              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
-                Inspector
-              </Heading>
+              <Flex
+                align="center"
+                justify="between"
+                mb="3"
+                style={{ flexShrink: 0 }}
+              >
+                <Heading size="5">Inspector</Heading>
+                {isLarge && selection && <JobInspectorTabShortcutTip />}
+              </Flex>
               <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
               <Box
                 style={{
@@ -302,11 +372,20 @@ export default function JobsPage() {
                   maxWidth: '100%',
                 }}
               >
-                <JobInspector
-                  id={selectedId}
-                  onDeleted={() => setSelectedId(null)}
-                  initialTab={tab}
-                />
+                {selection?.kind === 'recurring_job' ? (
+                  <RecurringJobInspector
+                    id={selection.id}
+                    onSelectJob={handleSelectJobFromRecurring}
+                    onArchived={() => setSelection(null)}
+                    onDeleted={() => setSelection(null)}
+                  />
+                ) : (
+                  <JobInspector
+                    id={selection?.kind === 'job' ? selection.id : null}
+                    onDeleted={() => setSelection(null)}
+                    initialTab={tab}
+                  />
+                )}
               </Box>
             </Card>
           </div>
@@ -433,7 +512,7 @@ export default function JobsPage() {
                       </IconButton>
                     </Tooltip>
                   ) : (
-                    <DateTimePicker
+                    <DatePicker
                       value=""
                       onChange={(iso) => {
                         if (iso) {
@@ -443,7 +522,6 @@ export default function JobsPage() {
                           )
                         }
                       }}
-                      dateOnly
                       iconButton
                       iconButtonSize="2"
                     />
@@ -481,8 +559,9 @@ export default function JobsPage() {
                 }}
               >
                 <JobsList
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
+                  selection={selection}
+                  onSelectJob={handleSelectJob}
+                  onSelectRecurringJob={handleSelectRecurringJob}
                   statusFilter={statusFilter}
                   showOnlyArchived={showOnlyArchived}
                   selectedDate={selectedDate}
@@ -543,9 +622,10 @@ export default function JobsPage() {
             transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
           }}
         >
-          <Heading size="5" mb="3">
-            Inspector
-          </Heading>
+          <Flex align="center" justify="between" mb="3">
+            <Heading size="5">Inspector</Heading>
+            {isLarge && selection && <JobInspectorTabShortcutTip />}
+          </Flex>
           <Separator size="4" mb="3" />
           <Box
             style={{
@@ -554,11 +634,20 @@ export default function JobsPage() {
               overflowY: isLarge ? 'auto' : 'visible',
             }}
           >
-            <JobInspector
-              id={selectedId}
-              onDeleted={() => setSelectedId(null)}
-              initialTab={tab}
-            />
+            {selection?.kind === 'recurring_job' ? (
+              <RecurringJobInspector
+                id={selection.id}
+                onSelectJob={handleSelectJobFromRecurring}
+                onArchived={() => setSelection(null)}
+                onDeleted={() => setSelection(null)}
+              />
+            ) : (
+              <JobInspector
+                id={selection?.kind === 'job' ? selection.id : null}
+                onDeleted={() => setSelection(null)}
+                initialTab={tab}
+              />
+            )}
           </Box>
         </Card>
       </Flex>

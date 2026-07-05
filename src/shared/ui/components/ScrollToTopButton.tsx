@@ -63,8 +63,8 @@ export default function ScrollToTopButton({
         variant="soft"
         style={{
           position: 'fixed',
-          bottom: '24px',
-          right: '16px',
+          bottom: 'calc(24px + var(--app-safe-bottom))',
+          right: 'calc(16px + var(--app-safe-right))',
           width: '44px',
           height: '44px',
           borderRadius: '50%',

@@ -49,7 +49,7 @@ export type CalendarRecord = {
   jobTitle?: string | undefined
   // Crew user IDs on this time period (for "Crew" badge)
   crewUserIds?: Array<string>
-  // Crew status by user ID (accepted = confirmed, planned, requested, declined)
+  // Crew status by user ID (confirmed, planned, canceled)
   crewStatusByUserId?: Record<string, string>
   // Crew on any period for this job (for job duration events)
   jobCrewUserIds?: Array<string>
@@ -115,7 +115,10 @@ export function applyCalendarFilter(
         (Array.isArray(xp.ref?.itemIds) && xp.ref.itemIds.includes(itemId))
       : true
     const okVeh = vehicleId ? xp.ref?.vehicleId === vehicleId : true
-    const okUser = userId ? xp.ref?.userId === userId : true
+    const okUser = userId
+      ? xp.ref?.userId === userId ||
+        (Array.isArray(xp.crewUserIds) && xp.crewUserIds.includes(userId))
+      : true
     return okKind && okJob && okItem && okVeh && okUser
   })
 

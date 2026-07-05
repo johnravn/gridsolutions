@@ -5,6 +5,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useNavigate } from '@tanstack/react-router'
 import { groupInventoryActivities } from '@features/latest/utils/groupInventoryActivities'
 import { formatActivityDate } from '@features/latest/utils/formatActivityDate'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
   ScrollToBottomButton,
@@ -203,9 +204,7 @@ export function LatestSection({
       }
     >
       {loading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={4} />
       ) : groupedActivities.length === 0 ? (
         <Box py="4">
           <Text size="2" color="gray" align="center">

@@ -6,6 +6,7 @@ import {
   Badge,
   Box,
   Button,
+  DropdownMenu,
   Flex,
   Spinner,
   Text,
@@ -14,18 +15,29 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { Plus, Search } from 'iconoir-react'
+import { MoreHoriz, NavArrowRight, Plus, Search } from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
+import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
+import { IndexTableBodySkeleton } from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { supabase } from '@shared/api/supabase'
 import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
+import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { getJobStatusColor } from '../utils/statusColors'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
-import type { JobListRow, JobStatus } from '../types'
+import RecurringJobDialog from './dialogs/RecurringJobDialog'
+import RecurringJobListRow from './RecurringJobListRow'
+import type { JobListRow, JobStatus, JobsPageSelection } from '../types'
 
 function getDisplayStatus(
   status: JobStatus,
@@ -45,15 +57,17 @@ type MyJobRole = 'crew' | 'project_lead' | 'both' | null
 const GRID_COLUMNS = 'minmax(0, 1fr) minmax(90px, auto) auto'
 
 export default function JobsList({
-  selectedId,
-  onSelect,
+  selection,
+  onSelectJob,
+  onSelectRecurringJob,
   statusFilter,
   showOnlyArchived,
   selectedDate,
   compact = false,
 }: {
-  selectedId: string | null
-  onSelect: (id: string | null) => void
+  selection: JobsPageSelection
+  onSelectJob: (id: string | null) => void
+  onSelectRecurringJob: (id: string | null) => void
   statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
   selectedDate: string
@@ -63,16 +77,27 @@ export default function JobsList({
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { userId, companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
+  const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
   const [createOpen, setCreateOpen] = React.useState(false)
+  const [createRecurringOpen, setCreateRecurringOpen] = React.useState(false)
+  const [recurringJobsOpen, setRecurringJobsOpen] = React.useState(true)
+  const [recurringHeaderHovered, setRecurringHeaderHovered] =
+    React.useState(false)
+
+  const selectedJobId = selection?.kind === 'job' ? selection.id : null
+  const selectedRecurringJobId =
+    selection?.kind === 'recurring_job' ? selection.id : null
 
   const scrollRef = React.useRef<HTMLDivElement>(null)
 
   const {
     data: allData = [],
+    isLoading,
     isFetching,
     refetch,
   } = useQuery({
@@ -85,6 +110,7 @@ export default function JobsList({
       userId,
       companyRole,
       showOnlyArchived,
+      maxRows: 150,
     }),
     enabled: !!companyId,
   })
@@ -92,16 +118,44 @@ export default function JobsList({
   useAutoUpdateJobsListJobStatuses(allData, !!companyId)
 
   const selectedJobDetail = useQuery({
-    ...jobDetailQuery({ jobId: selectedId ?? '__none__' }),
-    enabled: !!companyId && !!selectedId,
+    ...jobDetailQuery({ jobId: selectedJobId ?? '__none__' }),
+    enabled: !!companyId && !!selectedJobId,
   })
 
+  const { data: pinnedRecurringJobs = [] } = useQuery({
+    ...recurringJobsIndexQuery({
+      companyId: companyId ?? '__none__',
+      projectLeadUserId: userId,
+      includeArchived: false,
+    }),
+    enabled: !!companyId && !!userId && companyRole !== 'freelancer',
+  })
+
+  const { data: searchableRecurringJobs = [] } = useQuery({
+    ...recurringJobsIndexQuery({
+      companyId: companyId ?? '__none__',
+      search: debouncedSearch,
+      includeArchived: false,
+    }),
+    enabled: !!companyId && debouncedSearch.trim().length > 0,
+  })
+
+  const pinnedIds = React.useMemo(
+    () => new Set(pinnedRecurringJobs.map((r) => r.id)),
+    [pinnedRecurringJobs],
+  )
+
+  const searchRecurringHits = React.useMemo(() => {
+    if (!debouncedSearch.trim()) return []
+    return searchableRecurringJobs.filter((r) => !pinnedIds.has(r.id))
+  }, [debouncedSearch, searchableRecurringJobs, pinnedIds])
+
   React.useEffect(() => {
-    if (!companyId || !selectedId) return
+    if (!companyId || !selectedJobId) return
     const detail = selectedJobDetail.data
     if (!detail) return
     const nextStatus = detail.status
-    const row = allData.find((r) => r.id === selectedId)
+    const row = allData.find((r) => r.id === selectedJobId)
     if (row?.status === nextStatus) return
 
     qc.setQueriesData<Array<JobListRow>>(
@@ -109,7 +163,7 @@ export default function JobsList({
       (old) => {
         if (!old) return old
         return old.map((r) =>
-          r.id === selectedId ? { ...r, status: nextStatus } : r,
+          r.id === selectedJobId ? { ...r, status: nextStatus } : r,
         )
       },
     )
@@ -120,7 +174,7 @@ export default function JobsList({
         return {
           ...old,
           rows: old.rows.map((r) =>
-            r.id === selectedId ? { ...r, status: nextStatus } : r,
+            r.id === selectedJobId ? { ...r, status: nextStatus } : r,
           ),
         }
       },
@@ -129,7 +183,7 @@ export default function JobsList({
     allData,
     companyId,
     qc,
-    selectedId,
+    selectedJobId,
     selectedJobDetail.data,
     selectedJobDetail.dataUpdatedAt,
   ])
@@ -156,14 +210,22 @@ export default function JobsList({
     return null
   }
 
+  const showRecurringHide =
+    recurringJobsOpen && (isSmallScreen || compact || recurringHeaderHovered)
+
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: () => (compact ? 88 : 64),
     overscan: 10,
     getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0,
+    enabled: rows.length > 0 || isFetching,
   })
+
+  React.useLayoutEffect(() => {
+    if (rows.length === 0 || isLoading) return
+    rowVirtualizer.measure()
+  }, [rows.length, isLoading, rowVirtualizer])
 
   const handleSort = (column: SortBy) => {
     if (sortBy === column) {
@@ -194,26 +256,60 @@ export default function JobsList({
           placeholder="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          size="3"
-          style={{ flex: '1 1 200px', minWidth: 140 }}
+          size={compact ? '3' : '2'}
+          style={
+            compact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 140 }
+          }
         >
           <TextField.Slot side="left">
-            <Search width={16} height={16} />
+            <Search width={compact ? 20 : 16} height={compact ? 20 : 16} />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {isFetching && <Spinner size="2" />}
+            {isFetching && <Spinner size={compact ? '3' : '2'} />}
           </TextField.Slot>
         </TextField.Root>
-        {companyRole !== 'freelancer' && (
-          <Button
-            variant="solid"
-            size={compact ? '3' : '2'}
-            onClick={() => setCreateOpen(true)}
+        {canWrite && (
+          <Flex
+            gap="2"
+            align="center"
             style={compact ? { width: '100%' } : undefined}
           >
-            <Plus width={18} height={18} />
-            New job
-          </Button>
+            <Button
+              variant="solid"
+              size={compact ? '3' : '2'}
+              onClick={() => setCreateOpen(true)}
+              style={compact ? { flex: 1 } : undefined}
+            >
+              <Plus width={compact ? 18 : 16} height={compact ? 18 : 16} />
+              New job
+            </Button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Button
+                  variant="soft"
+                  size={compact ? '3' : '2'}
+                  aria-label="More job actions"
+                  style={{
+                    padding: 0,
+                    width: 'var(--base-button-height)',
+                    minWidth: 'var(--base-button-height)',
+                  }}
+                >
+                  <MoreHoriz
+                    width={compact ? 18 : 16}
+                    height={compact ? 18 : 16}
+                  />
+                </Button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.Item
+                  onSelect={() => setCreateRecurringOpen(true)}
+                >
+                  New recurring job
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </Flex>
         )}
       </Flex>
 
@@ -223,10 +319,102 @@ export default function JobsList({
         companyId={companyId!}
         mode="create"
         onSaved={(id) => {
-          onSelect(id)
+          onSelectJob(id)
           refetch()
         }}
       />
+
+      <RecurringJobDialog
+        open={createRecurringOpen}
+        onOpenChange={setCreateRecurringOpen}
+        companyId={companyId!}
+        mode="create"
+        onSaved={(id) => {
+          onSelectRecurringJob(id)
+        }}
+      />
+
+      {pinnedRecurringJobs.length > 0 && (
+        <Box mb="2">
+          <Flex
+            align="center"
+            justify="between"
+            gap="2"
+            mb={recurringJobsOpen ? '1' : '0'}
+            onMouseEnter={() => setRecurringHeaderHovered(true)}
+            onMouseLeave={() => setRecurringHeaderHovered(false)}
+            onClick={
+              !recurringJobsOpen ? () => setRecurringJobsOpen(true) : undefined
+            }
+            onKeyDown={
+              !recurringJobsOpen
+                ? (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setRecurringJobsOpen(true)
+                    }
+                  }
+                : undefined
+            }
+            role={!recurringJobsOpen ? 'button' : undefined}
+            tabIndex={!recurringJobsOpen ? 0 : undefined}
+            aria-expanded={recurringJobsOpen}
+            style={{
+              minHeight: 24,
+              cursor: !recurringJobsOpen ? 'pointer' : undefined,
+              borderRadius: 'var(--radius-2)',
+              padding: '2px 4px',
+              margin: '-2px -4px',
+            }}
+          >
+            <Flex align="center" gap="1" style={{ minWidth: 0 }}>
+              {!recurringJobsOpen && (
+                <NavArrowRight width={14} height={14} color="var(--gray-11)" />
+              )}
+              <Text size="1" weight="medium" color="gray">
+                Your recurring jobs
+              </Text>
+              {!recurringJobsOpen && (
+                <Badge variant="soft" color="gray" size="1">
+                  {pinnedRecurringJobs.length}
+                </Badge>
+              )}
+            </Flex>
+            {recurringJobsOpen && (
+              <Button
+                size="1"
+                variant="ghost"
+                color="gray"
+                aria-label="Hide recurring jobs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setRecurringJobsOpen(false)
+                }}
+                style={{
+                  flexShrink: 0,
+                  opacity: showRecurringHide ? 1 : 0,
+                  pointerEvents: showRecurringHide ? 'auto' : 'none',
+                  transition: motionRevealTransition(['opacity'], {
+                    ease: motionEaseRevealOut,
+                  }),
+                }}
+              >
+                Hide
+              </Button>
+            )}
+          </Flex>
+          {recurringJobsOpen &&
+            pinnedRecurringJobs.map((row) => (
+              <RecurringJobListRow
+                key={row.id}
+                row={row}
+                compact={compact}
+                isSelected={selectedRecurringJobId === row.id}
+                onClick={() => onSelectRecurringJob(row.id)}
+              />
+            ))}
+        </Box>
+      )}
 
       {/* Table: header + body in horizontal scroll when !compact (so headers scroll with rows) */}
       <div
@@ -303,7 +491,24 @@ export default function JobsList({
               marginTop: 8,
             }}
           >
-            {rows.length === 0 ? (
+            {searchRecurringHits.length > 0 && (
+              <Box mb="2">
+                {searchRecurringHits.map((row) => (
+                  <RecurringJobListRow
+                    key={row.id}
+                    row={row}
+                    compact={compact}
+                    isSelected={selectedRecurringJobId === row.id}
+                    onClick={() => onSelectRecurringJob(row.id)}
+                  />
+                ))}
+              </Box>
+            )}
+            {isLoading ? (
+              <Box p="3">
+                <IndexTableBodySkeleton rowCount={8} />
+              </Box>
+            ) : rows.length === 0 && searchRecurringHits.length === 0 ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
                   {allData.length === 0
@@ -321,7 +526,7 @@ export default function JobsList({
               >
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                   const job = rows[virtualRow.index]
-                  const isSelected = job.id === selectedId
+                  const isSelected = job.id === selectedJobId
                   const displayStatus = getDisplayStatus(
                     job.status,
                     companyRole,
@@ -352,14 +557,23 @@ export default function JobsList({
                     <div
                       key={job.id}
                       data-index={virtualRow.index}
-                      onClick={() => onSelect(job.id)}
+                      className={[
+                        INDEX_TABLE_ROW_CLASS,
+                        isSelected
+                          ? INDEX_TABLE_ROW_SELECTED_CLASS
+                          : compact
+                            ? 'index-table-row--muted'
+                            : undefined,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      onClick={() => onSelectJob(job.id)}
                       style={{
                         position: 'absolute',
-                        top: 0,
+                        top: `${virtualRow.start}px`,
                         left: 0,
                         width: '100%',
                         height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
                         display: compact ? 'block' : 'grid',
                         gridTemplateColumns: compact ? undefined : GRID_COLUMNS,
                         gap: compact ? undefined : 'var(--space-2)',
@@ -368,28 +582,10 @@ export default function JobsList({
                           ? 'var(--space-3)'
                           : '0 var(--space-3)',
                         cursor: 'pointer',
-                        backgroundColor: isSelected
-                          ? 'var(--accent-a3)'
-                          : compact
-                            ? 'var(--gray-a2)'
-                            : 'transparent',
                         borderRadius: compact
                           ? 'var(--radius-3)'
                           : 'var(--radius-2)',
                         marginBottom: 0,
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor =
-                            'var(--gray-a2)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.backgroundColor = compact
-                            ? 'var(--gray-a2)'
-                            : 'transparent'
-                        }
                       }}
                     >
                       {compact ? (
@@ -410,6 +606,22 @@ export default function JobsList({
                               wrap="wrap"
                               style={{ minWidth: 0 }}
                             >
+                              {job.recurring_job && (
+                                <Tooltip
+                                  content="Recurring job"
+                                  delayDuration={300}
+                                >
+                                  <Box
+                                    style={{
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: '50%',
+                                      backgroundColor: 'var(--violet-9)',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
                               <Text
                                 weight={isSelected ? 'bold' : 'medium'}
                                 size="2"
@@ -494,6 +706,22 @@ export default function JobsList({
                               wrap="wrap"
                               style={{ minWidth: 0 }}
                             >
+                              {job.recurring_job && (
+                                <Tooltip
+                                  content="Recurring job"
+                                  delayDuration={300}
+                                >
+                                  <Box
+                                    style={{
+                                      width: 6,
+                                      height: 6,
+                                      borderRadius: '50%',
+                                      backgroundColor: 'var(--violet-9)',
+                                      flexShrink: 0,
+                                    }}
+                                  />
+                                </Tooltip>
+                              )}
                               <Tooltip content={job.title} delayDuration={300}>
                                 <Text
                                   weight={isSelected ? 'bold' : 'medium'}

@@ -28,6 +28,7 @@ import LatestPage from '@features/latest/pages/LatestPage'
 import PublicOfferPage from '@features/jobs/pages/PublicOfferPage'
 import LoggingPage from '@features/logging/pages/LoggingPage'
 import ReportingPage from '@features/reporting/pages/ReportingPage'
+import DemoPage from '@features/demo/pages/DemoPage'
 import AppShell from '../layout/AppShell'
 import RequireCap from './guards/RequireCap'
 import type { Capability } from '@shared/auth/permissions'
@@ -90,11 +91,24 @@ const legalRoute = createRoute({
   component: TermsPrivacyPage,
 })
 
+const contactRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/contact',
+  component: LandingPage,
+})
+
 // --- PUBLIC: Offer viewing route (no auth required) --------------------------
 const publicOfferRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/offer/$accessToken',
   component: PublicOfferPage,
+})
+
+// --- PUBLIC: Demo entry route -----------------------------------------------
+const demoRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/demo',
+  component: DemoPage,
 })
 
 // --- AUTH GUARD: Parent route that protects children -------------------------
@@ -152,6 +166,7 @@ const jobsRoute = createRoute({
   path: 'jobs',
   validateSearch: (search: Record<string, unknown>) => ({
     jobId: (search.jobId as string | undefined) || undefined,
+    recurringJobId: (search.recurringJobId as string | undefined) || undefined,
     tab: (search.tab as string | undefined) || undefined,
   }),
   component: guarded('visit:jobs', JobsPage),
@@ -236,7 +251,9 @@ const routeTree = rootRoute.addChildren([
   signupRoute,
   authCallbackRoute,
   legalRoute,
+  contactRoute,
   publicOfferRoute,
+  demoRoute,
   authedRoute.addChildren([
     // protected
     homeRoute,

@@ -1,6 +1,10 @@
 // src/features/calendar/api/queries.ts
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import {
+  buildFreelancerVisibleJobIds,
+  isFreelancerVisibleCrewBooking,
+} from './freelancerCalendarVisibility'
 import type { CalendarRecord } from '../components/domain'
 
 /** Fetch time periods for a specific vehicle (category = 'transport') */
@@ -556,8 +560,11 @@ export function companyCalendarQuery({
           const already = existing.find((x) => x.user_id === c.user_id)
           if (!already) {
             existing.push({ user_id: c.user_id, status: c.status })
-          } else if (c.status === 'accepted' && already.status !== 'accepted') {
-            already.status = 'accepted'
+          } else if (
+            c.status === 'confirmed' &&
+            already.status !== 'confirmed'
+          ) {
+            already.status = 'confirmed'
           }
         })
       })
@@ -591,6 +598,52 @@ export function companyCalendarQuery({
           status: c.status,
         })
       })
+
+      // Freelancer visibility: crew_invite matters for planned assignments
+      let invitedTimePeriodIds = new Set<string>()
+      let freelancerVisibleJobIds = new Set<string>()
+      if (companyRole === 'freelancer' && userId) {
+        const crewTimePeriodIds = data
+          .filter((tp) => tp.category === 'crew')
+          .map((tp) => tp.id)
+
+        if (crewTimePeriodIds.length > 0) {
+          const { data: inviteMatters, error: inviteError } = await supabase
+            .from('matters')
+            .select('time_period_id, matter_recipients!inner(user_id)')
+            .eq('matter_type', 'crew_invite')
+            .in('time_period_id', crewTimePeriodIds)
+            .eq('matter_recipients.user_id', userId)
+
+          if (inviteError) throw inviteError
+
+          invitedTimePeriodIds = new Set(
+            (
+              inviteMatters as unknown as Array<{
+                time_period_id: string | null
+              }>
+            )
+              .map((m) => m.time_period_id)
+              .filter((id): id is string => !!id),
+          )
+        }
+
+        const timePeriodJobById = new Map<string, string>()
+        data.forEach((tp) => {
+          if (tp.job_id) timePeriodJobById.set(tp.id, tp.job_id)
+        })
+
+        freelancerVisibleJobIds = buildFreelancerVisibleJobIds({
+          crewRows: (crewRes.data || []) as Array<{
+            time_period_id: string
+            user_id: string
+            status: string
+          }>,
+          timePeriodJobById,
+          invitedTimePeriodIds,
+          userId,
+        })
+      }
 
       return data
         .map((tp: any): CalendarRecord => {
@@ -670,20 +723,37 @@ export function companyCalendarQuery({
         .filter((record) => {
           // For freelancers, filter to only show events they're part of
           if (companyRole === 'freelancer' && userId) {
-            const crewForPeriod = crewMap.get(record.id)
-            if (!crewForPeriod) return false
-
-            // Find the specific user's crew assignment
-            const userCrewAssignment = crewForPeriod.find(
-              (c) => c.user_id === userId,
-            )
-            if (!userCrewAssignment) return false
-
-            // Only show events for crew assignments that are accepted (not planned/requested/declined)
-            if (userCrewAssignment.status !== 'accepted') return false
-
             // Exclude canceled jobs
             if (record.status === 'canceled') return false
+
+            // Never show equipment/transport on the calendar (even if RLS allows job access)
+            if (
+              record.category === 'equipment' ||
+              record.category === 'transport'
+            ) {
+              return false
+            }
+
+            // Crew shift: user must have a visible booking on this period
+            if (record.category === 'crew') {
+              const crewForPeriod = crewMap.get(record.id)
+              const userCrewAssignment = crewForPeriod?.find(
+                (c) => c.user_id === userId,
+              )
+              if (!userCrewAssignment) return false
+              return isFreelancerVisibleCrewBooking(
+                userCrewAssignment.status,
+                record.id,
+                invitedTimePeriodIds,
+              )
+            }
+
+            // Job duration: show when user is crew on the job
+            if (record.category === 'program' && record.ref?.jobId) {
+              return freelancerVisibleJobIds.has(record.ref.jobId)
+            }
+
+            return false
           }
 
           return true

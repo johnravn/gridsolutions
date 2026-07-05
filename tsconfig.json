@@ -2,9 +2,21 @@
   "include": [
     "**/*.ts",
     "**/*.tsx",
+    ".storybook/**/*.ts",
+    ".storybook/**/*.tsx",
     "eslint.config.js",
     "prettier.config.js",
     "vite.config.js"
+  ],
+  "exclude": [
+    "e2e/**",
+    "playwright.config.ts",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.stories.ts",
+    "**/*.stories.tsx",
+    "vitest.integration.config.ts",
+    "src/test/integration/**"
   ],
 
   "compilerOptions": {
@@ -31,7 +43,8 @@
     "paths": {
       "@app/*": ["app/*"],
       "@shared/*": ["shared/*"],
-      "@features/*": ["features/*"]
+      "@features/*": ["features/*"],
+      "@test/*": ["test/*"]
     }
   }
 }

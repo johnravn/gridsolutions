@@ -2,13 +2,9 @@ import { impliedBookedGroupCount } from '@features/jobs/utils/groupBookingQuanti
 import { supabase } from '@shared/api/supabase'
 import type { CompanyJobsWeekOffset } from './companyJobsWeekQuery'
 
-export type WeekJobBookingSummary = {
-  hasEquipment: boolean
-  hasVehicles: boolean
-  equipmentByCategory: Array<{ categoryName: string; quantity: number }>
-  vehicleNames: Array<string>
-  crewLabels: Array<string>
-}
+import type { JobBookingSummary } from '@features/jobs/utils/bookingSummary'
+
+export type WeekJobBookingSummary = JobBookingSummary
 
 function unwrapJoin<T>(v: unknown): T | null {
   if (v == null) return null
@@ -332,10 +328,7 @@ export function companyWeekJobsBookingsQuery({
               display_name?: string | null
               email?: string | null
             }>(row.user)
-            label =
-              u?.display_name?.trim() ||
-              u?.email?.trim() ||
-              null
+            label = u?.display_name?.trim() || u?.email?.trim() || null
           } else {
             const ph = row.placeholder_name
             if (ph?.trim()) label = ph.trim()

@@ -1,0 +1,36 @@
+name: Sync Conta customers
+
+# Daily backup for Vercel cron. Fails visibly in Actions if sync is broken.
+on:
+  schedule:
+    - cron: '15 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger production Conta sync
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          APP_URL: ${{ vars.PRODUCTION_URL || 'https://gridsolutions.app' }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::CRON_SECRET is not set in repository secrets."
+            exit 1
+          fi
+          response=$(curl -sS -w "\n%{http_code}" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "x-trigger-source: github_actions" \
+            "$APP_URL/api/cron/sync-conta")
+          body=$(echo "$response" | head -n -1)
+          code=$(echo "$response" | tail -n 1)
+          echo "$body"
+          if [ "$code" != "200" ]; then
+            echo "::error::Conta sync failed with HTTP $code"
+            exit 1
+          fi
+          echo "$body" | grep -q '"ok":true' || {
+            echo "::error::Conta sync response missing ok:true"
+            exit 1
+          }

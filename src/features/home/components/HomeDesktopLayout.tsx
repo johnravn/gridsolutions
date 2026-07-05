@@ -8,8 +8,10 @@ import { MattersSection } from './MattersSection'
 import { UpcomingJobsSection } from './UpcomingJobsSection'
 import type {
   CrewConflictRow,
+  EquipmentConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
+import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
 import type { JobListRow } from '@features/jobs/types'
 import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
 import type { CompanyJobsWeekOffset } from '../api/companyJobsWeekQuery'
@@ -46,7 +48,11 @@ type HomeDesktopLayoutProps = {
   getAvatarUrl: (avatarPath: string | null) => string | null
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
+  equipmentConflicts: Array<EquipmentConflictRow>
   conflictsLoading: boolean
+  conflictDaysFilter: ConflictDaysFilter
+  onConflictDaysFilterChange: (value: ConflictDaysFilter) => void
+  conflictRangeLabel: string
   homeLayout: HomeDashboardLayoutPreferences
 }
 
@@ -78,7 +84,11 @@ export function HomeDesktopLayout({
   getAvatarUrl,
   crewConflicts,
   vehicleConflicts,
+  equipmentConflicts,
   conflictsLoading,
+  conflictDaysFilter,
+  onConflictDaysFilterChange,
+  conflictRangeLabel,
   homeLayout,
 }: HomeDesktopLayoutProps) {
   return (
@@ -207,16 +217,19 @@ export function HomeDesktopLayout({
               />
             </Box>
           )}
-          {homeLayout.showConflicts &&
-            (crewConflicts.length > 0 || vehicleConflicts.length > 0) && (
-              <Box style={{ minHeight: 0 }}>
-                <ConflictsSection
-                  crewConflicts={crewConflicts}
-                  vehicleConflicts={vehicleConflicts}
-                  loading={conflictsLoading}
-                />
-              </Box>
-            )}
+          {homeLayout.showConflicts && (
+            <Box style={{ minHeight: 0 }}>
+              <ConflictsSection
+                crewConflicts={crewConflicts}
+                vehicleConflicts={vehicleConflicts}
+                equipmentConflicts={equipmentConflicts}
+                loading={conflictsLoading}
+                daysFilter={conflictDaysFilter}
+                onDaysFilterChange={onConflictDaysFilterChange}
+                rangeLabel={conflictRangeLabel}
+              />
+            </Box>
+          )}
           {homeLayout.showUpcomingJobs && (
             <Box style={{ flex: 2, minHeight: 0 }}>
               <UpcomingJobsSection

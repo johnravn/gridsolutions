@@ -16,6 +16,7 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { supabase } from '@shared/api/supabase'
 import { Edit, Trash } from 'iconoir-react'
 import { toEventInputs } from '@features/calendar/components/domain'
@@ -128,13 +129,7 @@ export default function InventoryInspector({ id }: { id: string | null }) {
 
   if (!enabled) return <Text color="gray">Preparing…</Text>
 
-  if (isLoading)
-    return (
-      <Flex align="center" gap="1">
-        <Text>Thinking</Text>
-        <Spinner size="2" />
-      </Flex>
-    )
+  if (isLoading) return <InspectorSkeleton />
 
   // We treat "not found" as a valid (null) result in the query; real errors render here.
   if (isError) {
@@ -180,8 +175,7 @@ export default function InventoryInspector({ id }: { id: string | null }) {
           nicknames: entry.nicknames ?? '',
           price: entry.current_price,
           total_quantity: entry.on_hand ?? 0,
-          internally_owned: entry.internally_owned,
-          external_owner_id: entry.external_owner_id,
+          item_kind: entry.item_kind,
         }
       : undefined
 
@@ -196,13 +190,14 @@ export default function InventoryInspector({ id }: { id: string | null }) {
           price: entry.current_price,
           parts: entry.parts.map((p) => ({
             item_id: p.item_id,
+            child_group_id: p.child_group_id,
             item_name: p.item_name,
             quantity: p.quantity,
             item_current_price: p.item_current_price,
+            part_type: p.part_type,
           })),
           price_history: entry.price_history,
-          internally_owned: entry.internally_owned,
-          external_owner_id: entry.external_owner_id,
+          item_kind: entry.item_kind,
         }
       : undefined
 
@@ -286,15 +281,15 @@ export default function InventoryInspector({ id }: { id: string | null }) {
             />
             <Field label="Brand" value={entry.brand_name ?? '—'} />
             <Field
-              label="Owner"
+              label="Type"
               value={
-                entry.internally_owned ? (
+                entry.item_kind === 'stock' ? (
                   <Badge size="1" variant="soft" color="indigo">
-                    Internal
+                    Stock
                   </Badge>
                 ) : (
                   <Badge size="1" variant="soft" color="amber">
-                    {entry.external_owner_name ?? 'External'}
+                    Subrental
                   </Badge>
                 )
               }
@@ -438,15 +433,15 @@ export default function InventoryInspector({ id }: { id: string | null }) {
               }
             />
             <Field
-              label="Owner"
+              label="Type"
               value={
-                entry.internally_owned ? (
+                entry.item_kind === 'stock' ? (
                   <Badge size="1" variant="soft" color="indigo">
-                    Internal
+                    Stock
                   </Badge>
                 ) : (
                   <Badge size="1" variant="soft" color="amber">
-                    {entry.external_owner_name ?? 'External'}
+                    Subrental
                   </Badge>
                 )
               }

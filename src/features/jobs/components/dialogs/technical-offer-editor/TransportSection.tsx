@@ -25,7 +25,8 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { formatVehicleCategory } from './utils'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
 import type { LocalTransportGroup, LocalTransportItem } from './types'
@@ -65,6 +66,9 @@ export function TransportSection({
   const [distanceRateDrafts, setDistanceRateDrafts] = React.useState<
     Record<string, string>
   >({})
+  const [focusedGroupNameId, setFocusedGroupNameId] = React.useState<
+    string | null
+  >(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -631,7 +635,7 @@ export function TransportSection({
                                           : '—'}
                                       </Text>
                                     ) : (
-                                      <DateTimePicker
+                                      <DatePicker
                                         value={item.start_date}
                                         onChange={(value) =>
                                           updateItem(group.id, item.id, {
@@ -653,7 +657,7 @@ export function TransportSection({
                                           : '—'}
                                       </Text>
                                     ) : (
-                                      <DateTimePicker
+                                      <DatePicker
                                         value={item.end_date}
                                         onChange={(value) =>
                                           updateItem(group.id, item.id, {
@@ -900,7 +904,7 @@ export function TransportSection({
                               {readOnly ? (
                                 <Text weight="medium">{group.group_name}</Text>
                               ) : (
-                                <Flex align="center" gap="2">
+                                <Box>
                                   <TextField.Root
                                     value={group.group_name}
                                     onChange={(e) =>
@@ -908,31 +912,30 @@ export function TransportSection({
                                         group_name: e.target.value,
                                       })
                                     }
+                                    onFocus={() =>
+                                      setFocusedGroupNameId(group.id)
+                                    }
+                                    onBlur={() =>
+                                      setFocusedGroupNameId((prev) =>
+                                        prev === group.id ? null : prev,
+                                      )
+                                    }
                                     style={{ width: 220 }}
                                   />
-                                  <Flex gap="1" wrap="wrap">
-                                    {transportGroupNameSuggestions.map((s) => (
-                                      <Button
-                                        key={s}
-                                        size="1"
-                                        variant="soft"
-                                        color="gray"
-                                        onClick={() =>
-                                          updateGroup(group.id, {
-                                            group_name: s,
-                                          })
-                                        }
-                                        disabled={
-                                          group.group_name
-                                            .trim()
-                                            .toLowerCase() === s.toLowerCase()
-                                        }
-                                      >
-                                        {s}
-                                      </Button>
-                                    ))}
-                                  </Flex>
-                                </Flex>
+                                  <AnimatedQuickSuggestions
+                                    suggestions={transportGroupNameSuggestions}
+                                    open={focusedGroupNameId === group.id}
+                                    staticOpen={!group.group_name.trim()}
+                                    onSelect={(suggestion) =>
+                                      updateGroup(group.id, {
+                                        group_name: suggestion,
+                                      })
+                                    }
+                                    onAfterSelect={() =>
+                                      setFocusedGroupNameId(null)
+                                    }
+                                  />
+                                </Box>
                               )}
                               {!readOnly && (
                                 <Button

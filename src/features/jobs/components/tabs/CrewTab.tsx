@@ -23,6 +23,7 @@ import {
 } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { sendCrewInvite, sendCrewInvites } from '../../../matters/api/queries'
 import { crewInternalNotesQuery } from '../../../crew/api/queries'
@@ -68,7 +69,7 @@ export default function CrewTab({
   companyId: string
 }) {
   const { companyRole, isGlobalSuperuser } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly } = useCompanyWriteAccess()
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [addRoleOpen, setAddRoleOpen] = React.useState(false)
   const [expandedRoles, setExpandedRoles] = React.useState<Set<string>>(
@@ -139,7 +140,7 @@ export default function CrewTab({
         .from('reserved_crew')
         .select(
           `
-          id, time_period_id, user_id, notes, placeholder_name, status,
+          id, time_period_id, user_id, notes, placeholder_name, status, forced,
           user:user_id ( user_id, display_name, email )
         `,
         )
@@ -863,6 +864,11 @@ export default function CrewTab({
                                       {!crew.user_id && (
                                         <Badge size="1" color="amber">
                                           Placeholder
+                                        </Badge>
+                                      )}
+                                      {crew.forced && (
+                                        <Badge size="1" color="amber">
+                                          Forced
                                         </Badge>
                                       )}
                                     </Flex>

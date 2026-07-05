@@ -7,10 +7,30 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "13.0.5"
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -282,6 +302,7 @@ export type Database = {
           employee_hourly_rate: number | null
           general_email: string | null
           id: string
+          is_demo: boolean
           job_number_counter: number | null
           logo_dark_path: string | null
           logo_light_path: string | null
@@ -308,6 +329,7 @@ export type Database = {
           employee_hourly_rate?: number | null
           general_email?: string | null
           id?: string
+          is_demo?: boolean
           job_number_counter?: number | null
           logo_dark_path?: string | null
           logo_light_path?: string | null
@@ -334,6 +356,7 @@ export type Database = {
           employee_hourly_rate?: number | null
           general_email?: string | null
           id?: string
+          is_demo?: boolean
           job_number_counter?: number | null
           logo_dark_path?: string | null
           logo_light_path?: string | null
@@ -383,6 +406,7 @@ export type Database = {
           latest_feed_open_to_freelancers: boolean
           partner_discount_percent: number | null
           rental_factor_config: Json | null
+          subcontractor_markup_percent: number | null
           updated_at: string
           vehicle_daily_rate: number | null
           vehicle_distance_increment: number | null
@@ -409,6 +433,7 @@ export type Database = {
           latest_feed_open_to_freelancers?: boolean
           partner_discount_percent?: number | null
           rental_factor_config?: Json | null
+          subcontractor_markup_percent?: number | null
           updated_at?: string
           vehicle_daily_rate?: number | null
           vehicle_distance_increment?: number | null
@@ -435,6 +460,7 @@ export type Database = {
           latest_feed_open_to_freelancers?: boolean
           partner_discount_percent?: number | null
           rental_factor_config?: Json | null
+          subcontractor_markup_percent?: number | null
           updated_at?: string
           vehicle_daily_rate?: number | null
           vehicle_distance_increment?: number | null
@@ -445,6 +471,44 @@ export type Database = {
             foreignKeyName: "company_expansions_company_id_fkey"
             columns: ["company_id"]
             isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_pretty_offer_default_images: {
+        Row: {
+          company_id: string
+          created_at: string
+          id: string
+          sort_order: number
+          storage_path: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          storage_path?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_pretty_offer_default_images_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
           },
@@ -627,6 +691,8 @@ export type Database = {
       }
       customers: {
         Row: {
+          accent_color: string | null
+          accent_color_custom: string | null
           address: string | null
           company_id: string
           conta_customer_id: number | null
@@ -650,6 +716,8 @@ export type Database = {
           vat_number: string | null
         }
         Insert: {
+          accent_color?: string | null
+          accent_color_custom?: string | null
           address?: string | null
           company_id: string
           conta_customer_id?: number | null
@@ -673,6 +741,8 @@ export type Database = {
           vat_number?: string | null
         }
         Update: {
+          accent_color?: string | null
+          accent_color_custom?: string | null
           address?: string | null
           company_id?: string
           conta_customer_id?: number | null
@@ -939,10 +1009,9 @@ export type Database = {
           company_id: string
           deleted: boolean
           description: string | null
-          external_owner_id: string | null
           group_type: Database["public"]["Enums"]["group_type"]
           id: string
-          internally_owned: boolean
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"]
           name: string
           unique: boolean
         }
@@ -952,10 +1021,9 @@ export type Database = {
           company_id: string
           deleted?: boolean
           description?: string | null
-          external_owner_id?: string | null
           group_type?: Database["public"]["Enums"]["group_type"]
           id?: string
-          internally_owned?: boolean
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           name: string
           unique?: boolean
         }
@@ -965,10 +1033,9 @@ export type Database = {
           company_id?: string
           deleted?: boolean
           description?: string | null
-          external_owner_id?: string | null
           group_type?: Database["public"]["Enums"]["group_type"]
           id?: string
-          internally_owned?: boolean
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           name?: string
           unique?: boolean
         }
@@ -985,13 +1052,6 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "item_groups_external_owner_id_fkey"
-            columns: ["external_owner_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
             referencedColumns: ["id"]
           },
         ]
@@ -1127,10 +1187,8 @@ export type Database = {
           category_id: string | null
           company_id: string
           deleted: boolean
-          external_owner_id: string | null
           id: string
-          internal_owner_company_id: string | null
-          internally_owned: boolean
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"]
           model: string | null
           name: string
           nicknames: string | null
@@ -1144,10 +1202,8 @@ export type Database = {
           category_id?: string | null
           company_id: string
           deleted?: boolean
-          external_owner_id?: string | null
           id?: string
-          internal_owner_company_id?: string | null
-          internally_owned?: boolean
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           model?: string | null
           name: string
           nicknames?: string | null
@@ -1161,10 +1217,8 @@ export type Database = {
           category_id?: string | null
           company_id?: string
           deleted?: boolean
-          external_owner_id?: string | null
           id?: string
-          internal_owner_company_id?: string | null
-          internally_owned?: boolean
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           model?: string | null
           name?: string
           nicknames?: string | null
@@ -1189,20 +1243,6 @@ export type Database = {
           {
             foreignKeyName: "items_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "items_external_owner_id_fkey"
-            columns: ["external_owner_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "items_internal_owner_company_id_fkey"
-            columns: ["internal_owner_company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
@@ -1499,8 +1539,13 @@ export type Database = {
           id: string
           job_id: string
           locked: boolean
+          offer_basis_id: string
           offer_type: Database["public"]["Enums"]["offer_type"]
           offernr: number | null
+          pretty_intro_text: string | null
+          pretty_subcontractor_markup_percent: number | null
+          pretty_use_customer_accent: boolean
+          pretty_use_customer_background: boolean
           rejected_at: string | null
           rejected_by_name: string | null
           rejected_by_phone: string | null
@@ -1513,6 +1558,7 @@ export type Database = {
           sent_via_email_at: string | null
           sent_via_email_to: string | null
           show_price_per_line: boolean
+          source_technical_offer_id: string | null
           status: Database["public"]["Enums"]["offer_status"]
           title: string
           total_after_discount: number
@@ -1545,8 +1591,13 @@ export type Database = {
           id?: string
           job_id: string
           locked?: boolean
+          offer_basis_id: string
           offer_type: Database["public"]["Enums"]["offer_type"]
           offernr?: number | null
+          pretty_intro_text?: string | null
+          pretty_subcontractor_markup_percent?: number | null
+          pretty_use_customer_accent?: boolean
+          pretty_use_customer_background?: boolean
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null
@@ -1559,6 +1610,7 @@ export type Database = {
           sent_via_email_at?: string | null
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
+          source_technical_offer_id?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
           title: string
           total_after_discount?: number
@@ -1591,8 +1643,13 @@ export type Database = {
           id?: string
           job_id?: string
           locked?: boolean
+          offer_basis_id?: string
           offer_type?: Database["public"]["Enums"]["offer_type"]
           offernr?: number | null
+          pretty_intro_text?: string | null
+          pretty_subcontractor_markup_percent?: number | null
+          pretty_use_customer_accent?: boolean
+          pretty_use_customer_background?: boolean
           rejected_at?: string | null
           rejected_by_name?: string | null
           rejected_by_phone?: string | null
@@ -1605,6 +1662,7 @@ export type Database = {
           sent_via_email_at?: string | null
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
+          source_technical_offer_id?: string | null
           status?: Database["public"]["Enums"]["offer_status"]
           title?: string
           total_after_discount?: number
@@ -1671,6 +1729,20 @@ export type Database = {
             columns: ["job_id"]
             isOneToOne: false
             referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offers_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
+            isOneToOne: false
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_offers_source_technical_offer_id_fkey"
+            columns: ["source_technical_offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
             referencedColumns: ["id"]
           },
         ]
@@ -1775,6 +1847,112 @@ export type Database = {
           },
         ]
       }
+      job_subcontractor_quotes: {
+        Row: {
+          created_at: string
+          id: string
+          job_id: string
+          job_subcontractor_id: string
+          mime_type: string | null
+          note: string | null
+          pdf_filename: string | null
+          pdf_path: string | null
+          size_bytes: number | null
+          total_amount: number
+          version_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          job_id: string
+          job_subcontractor_id: string
+          mime_type?: string | null
+          note?: string | null
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          total_amount?: number
+          version_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          job_id?: string
+          job_subcontractor_id?: string
+          mime_type?: string | null
+          note?: string | null
+          pdf_filename?: string | null
+          pdf_path?: string | null
+          size_bytes?: number | null
+          total_amount?: number
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_subcontractor_quotes_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_subcontractor_quotes_job_subcontractor_id_fkey"
+            columns: ["job_subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "job_subcontractors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_subcontractors: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          customer_id: string
+          id: string
+          job_id: string
+          notes: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          job_id: string
+          notes?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          job_id?: string
+          notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_subcontractors_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_subcontractors_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_subcontractors_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           archived: boolean
@@ -1790,6 +1968,7 @@ export type Database = {
           job_address_id: string | null
           jobnr: number | null
           project_lead_user_id: string | null
+          recurring_job_id: string | null
           start_at: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
@@ -1809,6 +1988,7 @@ export type Database = {
           job_address_id?: string | null
           jobnr?: number | null
           project_lead_user_id?: string | null
+          recurring_job_id?: string | null
           start_at?: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
@@ -1828,6 +2008,7 @@ export type Database = {
           job_address_id?: string | null
           jobnr?: number | null
           project_lead_user_id?: string | null
+          recurring_job_id?: string | null
           start_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title?: string
@@ -1875,6 +2056,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "jobs_recurring_job_id_fkey"
+            columns: ["recurring_job_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2329,6 +2517,74 @@ export type Database = {
           },
         ]
       }
+      offer_bases: {
+        Row: {
+          bookings_synced_at: string | null
+          company_id: string
+          created_at: string
+          days_of_use: number
+          discount_percent: number
+          id: string
+          job_id: string
+          title: string
+          updated_at: string
+          vat_percent: number
+        }
+        Insert: {
+          bookings_synced_at?: string | null
+          company_id: string
+          created_at?: string
+          days_of_use?: number
+          discount_percent?: number
+          id?: string
+          job_id: string
+          title?: string
+          updated_at?: string
+          vat_percent?: number
+        }
+        Update: {
+          bookings_synced_at?: string | null
+          company_id?: string
+          created_at?: string
+          days_of_use?: number
+          discount_percent?: number
+          id?: string
+          job_id?: string
+          title?: string
+          updated_at?: string
+          vat_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_offer_bases_company"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_offer_bases_job"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_bases_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "offer_bases_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       offer_crew_items: {
         Row: {
           billing_type: string | null
@@ -2338,7 +2594,7 @@ export type Database = {
           hourly_rate: number | null
           hours_per_day: number | null
           id: string
-          offer_id: string
+          offer_basis_id: string
           role_category: string | null
           role_title: string
           sort_order: number
@@ -2353,7 +2609,7 @@ export type Database = {
           hourly_rate?: number | null
           hours_per_day?: number | null
           id?: string
-          offer_id: string
+          offer_basis_id: string
           role_category?: string | null
           role_title: string
           sort_order?: number
@@ -2368,7 +2624,7 @@ export type Database = {
           hourly_rate?: number | null
           hours_per_day?: number | null
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           role_category?: string | null
           role_title?: string
           sort_order?: number
@@ -2377,17 +2633,10 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "fk_offer_crew_items_offer"
-            columns: ["offer_id"]
+            foreignKeyName: "offer_crew_items_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: "job_offers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "offer_crew_items_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: false
-            referencedRelation: "job_offers"
+            referencedRelation: "offer_bases"
             referencedColumns: ["id"]
           },
         ]
@@ -2397,36 +2646,29 @@ export type Database = {
           created_at: string
           group_name: string
           id: string
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
         }
         Insert: {
           created_at?: string
           group_name: string
           id?: string
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
         }
         Update: {
           created_at?: string
           group_name?: string
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: "fk_offer_equipment_groups_offer"
-            columns: ["offer_id"]
+            foreignKeyName: "offer_equipment_groups_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: "job_offers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "offer_equipment_groups_offer_id_fkey"
-            columns: ["offer_id"]
-            isOneToOne: false
-            referencedRelation: "job_offers"
+            referencedRelation: "offer_bases"
             referencedColumns: ["id"]
           },
         ]
@@ -2597,29 +2839,29 @@ export type Database = {
           created_at: string
           group_name: string
           id: string
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
         }
         Insert: {
           created_at?: string
           group_name: string
           id?: string
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
         }
         Update: {
           created_at?: string
           group_name?: string
           id?: string
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
         }
         Relationships: [
           {
-            foreignKeyName: "offer_transport_groups_offer_id_fkey"
-            columns: ["offer_id"]
+            foreignKeyName: "offer_transport_groups_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: "job_offers"
+            referencedRelation: "offer_bases"
             referencedColumns: ["id"]
           },
         ]
@@ -2634,7 +2876,7 @@ export type Database = {
           end_date: string
           id: string
           is_internal: boolean
-          offer_id: string
+          offer_basis_id: string
           sort_order: number
           start_date: string
           total_price: number
@@ -2654,7 +2896,7 @@ export type Database = {
           end_date: string
           id?: string
           is_internal?: boolean
-          offer_id: string
+          offer_basis_id: string
           sort_order?: number
           start_date: string
           total_price?: number
@@ -2674,7 +2916,7 @@ export type Database = {
           end_date?: string
           id?: string
           is_internal?: boolean
-          offer_id?: string
+          offer_basis_id?: string
           sort_order?: number
           start_date?: string
           total_price?: number
@@ -2686,13 +2928,6 @@ export type Database = {
           vehicle_name?: string
         }
         Relationships: [
-          {
-            foreignKeyName: "fk_offer_transport_items_offer"
-            columns: ["offer_id"]
-            isOneToOne: false
-            referencedRelation: "job_offers"
-            referencedColumns: ["id"]
-          },
           {
             foreignKeyName: "fk_offer_transport_items_transport_group"
             columns: ["transport_group_id"]
@@ -2729,10 +2964,10 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "offer_transport_items_offer_id_fkey"
-            columns: ["offer_id"]
+            foreignKeyName: "offer_transport_items_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: "job_offers"
+            referencedRelation: "offer_bases"
             referencedColumns: ["id"]
           },
           {
@@ -2799,6 +3034,372 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_module_block_items: {
+        Row: {
+          block_id: string
+          detail: string | null
+          end_at: string | null
+          id: string
+          label: string
+          sort_order: number
+          start_at: string | null
+          summary: string | null
+          url: string | null
+        }
+        Insert: {
+          block_id: string
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+          url?: string | null
+        }
+        Update: {
+          block_id?: string
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_module_block_items_block_id_fkey"
+            columns: ["block_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_module_blocks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_module_blocks: {
+        Row: {
+          block_type: Database["public"]["Enums"]["pretty_module_block_type"]
+          caption: string | null
+          id: string
+          link_title: string | null
+          module_id: string
+          sort_order: number
+          text_content: string | null
+          url: string | null
+        }
+        Insert: {
+          block_type: Database["public"]["Enums"]["pretty_module_block_type"]
+          caption?: string | null
+          id?: string
+          link_title?: string | null
+          module_id: string
+          sort_order?: number
+          text_content?: string | null
+          url?: string | null
+        }
+        Update: {
+          block_type?: Database["public"]["Enums"]["pretty_module_block_type"]
+          caption?: string | null
+          id?: string
+          link_title?: string | null
+          module_id?: string
+          sort_order?: number
+          text_content?: string | null
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_module_blocks_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_module_media: {
+        Row: {
+          caption: string | null
+          id: string
+          media_type: Database["public"]["Enums"]["pretty_module_media_type"]
+          module_id: string
+          sort_order: number
+          title: string | null
+          url: string
+        }
+        Insert: {
+          caption?: string | null
+          id?: string
+          media_type?: Database["public"]["Enums"]["pretty_module_media_type"]
+          module_id: string
+          sort_order?: number
+          title?: string | null
+          url: string
+        }
+        Update: {
+          caption?: string | null
+          id?: string
+          media_type?: Database["public"]["Enums"]["pretty_module_media_type"]
+          module_id?: string
+          sort_order?: number
+          title?: string | null
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_module_media_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_module_timeline_items: {
+        Row: {
+          detail: string | null
+          end_at: string | null
+          id: string
+          label: string
+          module_id: string
+          sort_order: number
+          start_at: string | null
+          summary: string | null
+        }
+        Insert: {
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          module_id: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+        }
+        Update: {
+          detail?: string | null
+          end_at?: string | null
+          id?: string
+          label?: string
+          module_id?: string
+          sort_order?: number
+          start_at?: string | null
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_module_timeline_items_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_modules: {
+        Row: {
+          computed_cost: number
+          created_at: string
+          display_price: number | null
+          hero_media_caption: string | null
+          hero_media_type:
+            | Database["public"]["Enums"]["pretty_module_media_type"]
+            | null
+          hero_media_url: string | null
+          id: string
+          module_type: Database["public"]["Enums"]["pretty_module_type"]
+          offer_id: string
+          show_price: boolean
+          sort_order: number
+          story_body_1: string | null
+          story_body_2: string | null
+          story_heading_1: string | null
+          story_heading_2: string | null
+          subtitle: string | null
+          tagline: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          computed_cost?: number
+          created_at?: string
+          display_price?: number | null
+          hero_media_caption?: string | null
+          hero_media_type?:
+            | Database["public"]["Enums"]["pretty_module_media_type"]
+            | null
+          hero_media_url?: string | null
+          id?: string
+          module_type?: Database["public"]["Enums"]["pretty_module_type"]
+          offer_id: string
+          show_price?: boolean
+          sort_order?: number
+          story_body_1?: string | null
+          story_body_2?: string | null
+          story_heading_1?: string | null
+          story_heading_2?: string | null
+          subtitle?: string | null
+          tagline?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          computed_cost?: number
+          created_at?: string
+          display_price?: number | null
+          hero_media_caption?: string | null
+          hero_media_type?:
+            | Database["public"]["Enums"]["pretty_module_media_type"]
+            | null
+          hero_media_url?: string | null
+          id?: string
+          module_type?: Database["public"]["Enums"]["pretty_module_type"]
+          offer_id?: string
+          show_price?: boolean
+          sort_order?: number
+          story_body_1?: string | null
+          story_body_2?: string | null
+          story_heading_1?: string | null
+          story_heading_2?: string | null
+          subtitle?: string | null
+          tagline?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_modules_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_pricing_bases: {
+        Row: {
+          apply_subcontractor_markup: boolean
+          basis_type: Database["public"]["Enums"]["pretty_pricing_basis_type"]
+          created_at: string
+          id: string
+          job_subcontractor_quote_id: string | null
+          offer_id: string
+          sort_order: number
+          source_offer_basis_id: string | null
+          source_technical_offer_id: string | null
+          title: string
+        }
+        Insert: {
+          apply_subcontractor_markup?: boolean
+          basis_type: Database["public"]["Enums"]["pretty_pricing_basis_type"]
+          created_at?: string
+          id?: string
+          job_subcontractor_quote_id?: string | null
+          offer_id: string
+          sort_order?: number
+          source_offer_basis_id?: string | null
+          source_technical_offer_id?: string | null
+          title?: string
+        }
+        Update: {
+          apply_subcontractor_markup?: boolean
+          basis_type?: Database["public"]["Enums"]["pretty_pricing_basis_type"]
+          created_at?: string
+          id?: string
+          job_subcontractor_quote_id?: string | null
+          offer_id?: string
+          sort_order?: number
+          source_offer_basis_id?: string | null
+          source_technical_offer_id?: string | null
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_pricing_bases_job_subcontractor_quote_id_fkey"
+            columns: ["job_subcontractor_quote_id"]
+            isOneToOne: false
+            referencedRelation: "job_subcontractor_quotes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pretty_offer_pricing_bases_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pretty_offer_pricing_bases_source_offer_basis_id_fkey"
+            columns: ["source_offer_basis_id"]
+            isOneToOne: false
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pretty_offer_pricing_bases_source_technical_offer_id_fkey"
+            columns: ["source_technical_offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pretty_offer_pricing_basis_splits: {
+        Row: {
+          amount: number
+          basis_id: string
+          category_key: string | null
+          category_type:
+            | Database["public"]["Enums"]["pretty_category_type"]
+            | null
+          id: string
+          module_id: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          amount?: number
+          basis_id: string
+          category_key?: string | null
+          category_type?:
+            | Database["public"]["Enums"]["pretty_category_type"]
+            | null
+          id?: string
+          module_id: string
+          sort_order?: number
+          title?: string
+        }
+        Update: {
+          amount?: number
+          basis_id?: string
+          category_key?: string | null
+          category_type?:
+            | Database["public"]["Enums"]["pretty_category_type"]
+            | null
+          id?: string
+          module_id?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pretty_offer_pricing_basis_splits_basis_id_fkey"
+            columns: ["basis_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_pricing_bases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pretty_offer_pricing_basis_splits_module_id_fkey"
+            columns: ["module_id"]
+            isOneToOne: false
+            referencedRelation: "pretty_offer_modules"
             referencedColumns: ["id"]
           },
         ]
@@ -2872,10 +3473,154 @@ export type Database = {
           },
         ]
       }
+      recurring_job_templates: {
+        Row: {
+          company_id: string
+          created_at: string
+          crew_roles: Json
+          description: string | null
+          duration_hours: number
+          id: string
+          name: string
+          recurring_job_id: string
+          sort_order: number
+          start_time: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          crew_roles?: Json
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          name: string
+          recurring_job_id: string
+          sort_order?: number
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          crew_roles?: Json
+          description?: string | null
+          duration_hours?: number
+          id?: string
+          name?: string
+          recurring_job_id?: string
+          sort_order?: number
+          start_time?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_job_templates_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_job_templates_recurring_job_id_fkey"
+            columns: ["recurring_job_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_jobs: {
+        Row: {
+          archived: boolean
+          company_id: string
+          created_at: string
+          customer_contact_id: string | null
+          customer_id: string | null
+          customer_user_id: string | null
+          description: string | null
+          id: string
+          project_lead_user_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          archived?: boolean
+          company_id: string
+          created_at?: string
+          customer_contact_id?: string | null
+          customer_id?: string | null
+          customer_user_id?: string | null
+          description?: string | null
+          id?: string
+          project_lead_user_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          archived?: boolean
+          company_id?: string
+          created_at?: string
+          customer_contact_id?: string | null
+          customer_id?: string | null
+          customer_user_id?: string | null
+          description?: string | null
+          id?: string
+          project_lead_user_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_jobs_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_jobs_customer_contact_id_fkey"
+            columns: ["customer_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_jobs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "recurring_jobs_customer_user_id_fkey"
+            columns: ["customer_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "recurring_jobs_project_lead_user_id_fkey"
+            columns: ["project_lead_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
+      }
       reserved_crew: {
         Row: {
           created_at: string
           during: unknown
+          forced: boolean
+          forced_at: string | null
+          forced_by_user_id: string | null
           id: string
           notes: string | null
           placeholder_email: string | null
@@ -2888,6 +3633,9 @@ export type Database = {
         Insert: {
           created_at?: string
           during?: unknown
+          forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           notes?: string | null
           placeholder_email?: string | null
@@ -2900,6 +3648,9 @@ export type Database = {
         Update: {
           created_at?: string
           during?: unknown
+          forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           notes?: string | null
           placeholder_email?: string | null
@@ -2910,6 +3661,13 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "reserved_crew_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "reserved_crew_time_period_id_fkey"
             columns: ["time_period_id"]
@@ -2941,6 +3699,8 @@ export type Database = {
             | Database["public"]["Enums"]["external_request_status"]
             | null
           forced: boolean
+          forced_at: string | null
+          forced_by_user_id: string | null
           id: string
           item_id: string
           quantity: number
@@ -2948,6 +3708,7 @@ export type Database = {
           source_kind: Database["public"]["Enums"]["reservation_source_kind"]
           start_at: string | null
           status: Database["public"]["Enums"]["booking_status"]
+          subcontractor_id: string | null
           time_period_id: string
         }
         Insert: {
@@ -2957,6 +3718,8 @@ export type Database = {
             | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           item_id: string
           quantity: number
@@ -2964,6 +3727,7 @@ export type Database = {
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
+          subcontractor_id?: string | null
           time_period_id: string
         }
         Update: {
@@ -2973,6 +3737,8 @@ export type Database = {
             | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           item_id?: string
           quantity?: number
@@ -2980,9 +3746,17 @@ export type Database = {
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
+          subcontractor_id?: string | null
           time_period_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "reserved_items_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "reserved_items_item_id_fkey"
             columns: ["item_id"]
@@ -3019,6 +3793,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "reserved_items_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "reserved_items_time_period_id_fkey"
             columns: ["time_period_id"]
             isOneToOne: false
@@ -3043,6 +3824,9 @@ export type Database = {
           external_status:
             | Database["public"]["Enums"]["external_request_status"]
             | null
+          forced: boolean
+          forced_at: string | null
+          forced_by_user_id: string | null
           id: string
           start_at: string | null
           status: Database["public"]["Enums"]["booking_status"]
@@ -3057,6 +3841,9 @@ export type Database = {
           external_status?:
             | Database["public"]["Enums"]["external_request_status"]
             | null
+          forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
@@ -3071,6 +3858,9 @@ export type Database = {
           external_status?:
             | Database["public"]["Enums"]["external_request_status"]
             | null
+          forced?: boolean
+          forced_at?: string | null
+          forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
           status?: Database["public"]["Enums"]["booking_status"]
@@ -3078,6 +3868,13 @@ export type Database = {
           vehicle_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "reserved_vehicles_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
           {
             foreignKeyName: "reserved_vehicles_time_period_id_fkey"
             columns: ["time_period_id"]
@@ -3121,6 +3918,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      scheduled_job_runs: {
+        Row: {
+          created_at: string
+          details: Json
+          error_message: string | null
+          finished_at: string | null
+          id: string
+          job_key: string
+          started_at: string
+          status: string
+          trigger_source: string | null
+        }
+        Insert: {
+          created_at?: string
+          details?: Json
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          job_key: string
+          started_at?: string
+          status: string
+          trigger_source?: string | null
+        }
+        Update: {
+          created_at?: string
+          details?: Json
+          error_message?: string | null
+          finished_at?: string | null
+          id?: string
+          job_key?: string
+          started_at?: string
+          status?: string
+          trigger_source?: string | null
+        }
+        Relationships: []
       }
       time_entries: {
         Row: {
@@ -3288,6 +4121,7 @@ export type Database = {
           internally_owned: boolean
           name: string
           notes: string | null
+          owner_user_id: string | null
           registration_no: string | null
           vehicle_category:
             | Database["public"]["Enums"]["vehicle_category"]
@@ -3305,6 +4139,7 @@ export type Database = {
           internally_owned?: boolean
           name: string
           notes?: string | null
+          owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
             | Database["public"]["Enums"]["vehicle_category"]
@@ -3322,6 +4157,7 @@ export type Database = {
           internally_owned?: boolean
           name?: string
           notes?: string | null
+          owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
             | Database["public"]["Enums"]["vehicle_category"]
@@ -3341,6 +4177,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3528,11 +4371,9 @@ export type Database = {
           currency: string | null
           current_price: number | null
           deleted: boolean | null
-          external_owner_id: string | null
-          external_owner_name: string | null
           id: string | null
-          internally_owned: boolean | null
           is_group: boolean | null
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"] | null
           model: string | null
           name: string | null
           nicknames: string | null
@@ -3579,15 +4420,43 @@ export type Database = {
           category_id: string | null
           company_id: string | null
           deleted: boolean | null
-          external_owner_id: string | null
           id: string | null
-          internal_owner_company_id: string | null
-          is_external: boolean | null
+          is_subrental: boolean | null
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"] | null
           model: string | null
           name: string | null
           notes: string | null
-          owner_name: string | null
           total_quantity: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          allow_individual_booking?: boolean | null
+          brand_id?: string | null
+          category_id?: string | null
+          company_id?: string | null
+          deleted?: boolean | null
+          id?: string | null
+          is_subrental?: never
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"] | null
+          model?: string | null
+          name?: string | null
+          notes?: string | null
+          total_quantity?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          allow_individual_booking?: boolean | null
+          brand_id?: string | null
+          category_id?: string | null
+          company_id?: string | null
+          deleted?: boolean | null
+          id?: string | null
+          is_subrental?: never
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"] | null
+          model?: string | null
+          name?: string | null
+          notes?: string | null
+          total_quantity?: number | null
         }
         Relationships: [
           {
@@ -3607,20 +4476,6 @@ export type Database = {
           {
             foreignKeyName: "items_company_id_fkey"
             columns: ["company_id"]
-            isOneToOne: false
-            referencedRelation: "companies"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "items_external_owner_id_fkey"
-            columns: ["external_owner_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "items_internal_owner_company_id_fkey"
-            columns: ["internal_owner_company_id"]
             isOneToOne: false
             referencedRelation: "companies"
             referencedColumns: ["id"]
@@ -3711,6 +4566,7 @@ export type Database = {
           notes: string | null
           owner_kind: string | null
           owner_name: string | null
+          owner_user_id: string | null
           registration_no: string | null
         }
         Relationships: [
@@ -3735,6 +4591,13 @@ export type Database = {
             referencedRelation: "customers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
         ]
       }
       vehicle_index: {
@@ -3750,6 +4613,8 @@ export type Database = {
           image_path: string | null
           internally_owned: boolean | null
           name: string | null
+          owner_user_id: string | null
+          owner_user_name: string | null
           reg_number: string | null
         }
         Relationships: [
@@ -3766,6 +4631,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "customers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3833,6 +4705,10 @@ export type Database = {
         }
         Returns: Json
       }
+      advance_demo_company_timeline: {
+        Args: { p_interval?: string }
+        Returns: Json
+      }
       auto_update_jobs_to_in_progress: { Args: never; Returns: undefined }
       can_freelancer_view_job: {
         Args: { p_company_id: string; p_job_id: string }
@@ -3842,6 +4718,7 @@ export type Database = {
         Args: { p_company_id: string; p_time_period_id: string }
         Returns: boolean
       }
+      can_view_matter: { Args: { p_matter_id: string }; Returns: boolean }
       check_circular_group_reference: {
         Args: { p_child_group_id: string; p_parent_group_id: string }
         Returns: boolean
@@ -3907,6 +4784,55 @@ export type Database = {
             Args: { p_company_id: string; p_encrypted_key: string }
             Returns: string
           }
+      demo_company_blocks_activity_mutation: {
+        Args: { p_activity_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_group_mutation: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_item_mutation: {
+        Args: { p_item_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_job_mutation: {
+        Args: { p_job_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_matter_mutation: {
+        Args: { p_matter_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_module_block_mutation: {
+        Args: { p_block_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_module_mutation: {
+        Args: { p_module_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_mutation: {
+        Args: { p_company_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_offer_basis_mutation: {
+        Args: { p_basis_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_offer_group_mutation: {
+        Args: { p_group_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_offer_mutation: {
+        Args: { p_offer_id: string }
+        Returns: boolean
+      }
+      demo_company_blocks_time_period_mutation: {
+        Args: { p_time_period_id: string }
+        Returns: boolean
+      }
+      dispatch_notification_emails_cron: { Args: never; Returns: undefined }
       encrypt_api_key: {
         Args: { p_api_key: string; p_company_id: string }
         Returns: string
@@ -3919,6 +4845,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
+      enter_demo: { Args: never; Returns: string }
       fuzzy_search_multi: {
         Args: {
           fields: string[]
@@ -3942,6 +4869,8 @@ export type Database = {
         Returns: {
           end_1: string
           end_2: string
+          forced_1: boolean
+          forced_2: boolean
           job_id_1: string
           job_id_2: string
           job_title_1: string
@@ -3954,11 +4883,27 @@ export type Database = {
           user_id: string
         }[]
       }
+      get_conflicts_equipment: {
+        Args: { p_company_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          capacity: number
+          end_at: string
+          has_forced: boolean
+          item_id: string
+          item_name: string
+          job_ids: string[]
+          job_titles: string[]
+          start_at: string
+          total_reserved: number
+        }[]
+      }
       get_conflicts_vehicle: {
         Args: { p_company_id: string; p_from?: string; p_to?: string }
         Returns: {
           end_1: string
           end_2: string
+          forced_1: boolean
+          forced_2: boolean
           job_id_1: string
           job_id_2: string
           job_title_1: string
@@ -3983,6 +4928,11 @@ export type Database = {
         Args: { p_group_id: string }
         Returns: Json
       }
+      get_job_booking_conflicts: {
+        Args: { p_from?: string; p_job_id: string; p_to?: string }
+        Returns: Json
+      }
+      get_system_monitor_snapshot: { Args: never; Returns: Json }
       is_superuser: { Args: { p_user_id: string }; Returns: boolean }
       item_available_qty: {
         Args: {
@@ -3999,6 +4949,10 @@ export type Database = {
       }
       mark_job_offer_bookings_synced: {
         Args: { p_offer_id: string }
+        Returns: undefined
+      }
+      mark_offer_basis_bookings_synced: {
+        Args: { p_offer_basis_id: string }
         Returns: undefined
       }
       notification_insert_allowed_for_actor: {
@@ -4135,6 +5089,7 @@ export type Database = {
         | "canceled"
       fuel: "electric" | "diesel" | "petrol"
       group_type: "group" | "bundle"
+      inventory_item_kind: "stock" | "subrental"
       item_kind: "bulk" | "unique"
       job_status:
         | "draft"
@@ -4174,6 +5129,25 @@ export type Database = {
         | "rejected"
         | "superseded"
       offer_type: "technical" | "pretty"
+      pretty_category_type:
+        | "equipment_group"
+        | "crew_category"
+        | "transport_group"
+      pretty_module_block_type:
+        | "subtitle"
+        | "description"
+        | "simple_list"
+        | "interactive_list"
+        | "image"
+        | "video"
+        | "link"
+        | "timeline"
+        | "gallery"
+        | "column_layout"
+        | "file_upload"
+      pretty_module_media_type: "image" | "video" | "link"
+      pretty_module_type: "standard" | "timeline"
+      pretty_pricing_basis_type: "technical" | "subcontractor" | "custom"
       pretty_section_type:
         | "hero"
         | "problem"
@@ -4326,6 +5300,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       activity_type: [
@@ -4355,6 +5332,7 @@ export const Constants = {
       ],
       fuel: ["electric", "diesel", "petrol"],
       group_type: ["group", "bundle"],
+      inventory_item_kind: ["stock", "subrental"],
       item_kind: ["bulk", "unique"],
       job_status: [
         "draft",
@@ -4398,6 +5376,27 @@ export const Constants = {
         "superseded",
       ],
       offer_type: ["technical", "pretty"],
+      pretty_category_type: [
+        "equipment_group",
+        "crew_category",
+        "transport_group",
+      ],
+      pretty_module_block_type: [
+        "subtitle",
+        "description",
+        "simple_list",
+        "interactive_list",
+        "image",
+        "video",
+        "link",
+        "timeline",
+        "gallery",
+        "column_layout",
+        "file_upload",
+      ],
+      pretty_module_media_type: ["image", "video", "link"],
+      pretty_module_type: ["standard", "timeline"],
+      pretty_pricing_basis_type: ["technical", "subcontractor", "custom"],
       pretty_section_type: [
         "hero",
         "problem",
@@ -4431,3 +5430,4 @@ export const Constants = {
     },
   },
 } as const
+

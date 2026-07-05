@@ -23,7 +23,11 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
+import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
+import OfflineBanner from '@shared/ui/components/OfflineBanner'
+import { DemoModeBadge } from '@features/demo/components/DemoModeBadge'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useAppResume } from '../hooks/useAppResume'
 import { NAV, Sidebar } from './Sidebar'
 
 const prefersReducedMotionQuery = '(prefers-reduced-motion: reduce)'
@@ -36,6 +40,8 @@ export default function AppShell() {
   const systemPrefersReducedMotion = useMediaQuery(prefersReducedMotionQuery)
   const navigate = useNavigate()
   const { companies, companyId, loading: companyLoading } = useCompany()
+  useStandaloneClassEffect()
+  useAppResume(companyId)
   const isLocal =
     import.meta.env.DEV ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
@@ -162,16 +168,19 @@ export default function AppShell() {
 
   async function handleLogout() {
     await supabase.auth.signOut()
-    navigate({ to: '/login' })
+    navigate({ to: '/' })
   }
 
   const title = getPageTitle(currentPath)
+  const isPublicOffer = currentPath.startsWith('/offer/')
   const isPublic =
     currentPath === '/login' ||
     currentPath === '/signup' ||
     currentPath === '/legal' ||
+    currentPath === '/contact' ||
     currentPath === '/' ||
-    currentPath.startsWith('/offer/')
+    currentPath === '/demo' ||
+    isPublicOffer
   const showNoCompanyMessage =
     !isPublic && !companyLoading && !!authUser?.id && companies.length === 0
 
@@ -217,80 +226,87 @@ export default function AppShell() {
           direction="column"
           style={{ height: isPublic ? 'auto' : '100%', minHeight: 0 }}
         >
-          {/* Top bar */}
-          <Flex
-            align="center"
-            justify="between"
-            px="4"
-            py="3"
-            style={
-              !isPublic && isMobile && open
-                ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
-                : undefined
-            }
-          >
-            {!isPublic && isMobile && (
-              <IconButton
-                size="2"
-                variant="ghost"
-                aria-label={(open ? 'Close' : 'Open') + ' menu'}
-                onClick={() => setOpen((o) => !o)}
-              >
-                <Menu />
-              </IconButton>
-            )}
-            {!isPublic && (
-              <Text size="8" weight="light">
-                {title}
-              </Text>
-            )}
-            {!isPublic && !isMobile && (
-              <Flex align="center" gap="3">
-                <Link to="/profile" style={{ textDecoration: 'none' }}>
-                  <Flex
-                    align="center"
-                    gap="2"
-                    // make it feel like a button without Radix Button hover styles
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Go to profile"
-                    style={{ cursor: 'pointer' }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.currentTarget.click()
-                        e.preventDefault()
-                      }
-                    }}
-                  >
-                    <Avatar
-                      size="2"
-                      radius="full"
-                      src={avatarUrl ?? undefined}
-                      fallback={getInitials(displayName || '?')}
-                      style={{ border: '1px solid var(--gray-5)' }}
-                    />
-                    <Text size="2" style={{ maxWidth: 200 }} truncate>
-                      {displayName}
-                    </Text>
-                  </Flex>
-                </Link>
+          {/* Top bar — hidden on public offer pages (full-bleed deck layout) */}
+          {!isPublicOffer && (
+            <Flex
+              align="center"
+              justify="between"
+              px="4"
+              py="3"
+              style={{
+                flexShrink: 0,
+                paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
+                ...(!isPublic && isMobile && open
+                  ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
+                  : {}),
+              }}
+            >
+              {!isPublic && isMobile && (
+                <IconButton
+                  size="2"
+                  variant="ghost"
+                  aria-label={(open ? 'Close' : 'Open') + ' menu'}
+                  onClick={() => setOpen((o) => !o)}
+                >
+                  <Menu />
+                </IconButton>
+              )}
+              {!isPublic && (
+                <Text size="8" weight="light">
+                  {title}
+                </Text>
+              )}
+              {!isPublic && !isMobile && (
+                <Flex align="center" gap="3">
+                  <Link to="/profile" style={{ textDecoration: 'none' }}>
+                    <Flex
+                      align="center"
+                      gap="2"
+                      // make it feel like a button without Radix Button hover styles
+                      role="button"
+                      tabIndex={0}
+                      aria-label="Go to profile"
+                      style={{ cursor: 'pointer' }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.currentTarget.click()
+                          e.preventDefault()
+                        }
+                      }}
+                    >
+                      <Avatar
+                        size="2"
+                        radius="full"
+                        src={avatarUrl ?? undefined}
+                        fallback={getInitials(displayName || '?')}
+                        style={{ border: '1px solid var(--gray-5)' }}
+                      />
+                      <Text size="2" style={{ maxWidth: 200 }} truncate>
+                        {displayName}
+                      </Text>
+                    </Flex>
+                  </Link>
 
-                <Button variant="soft" onClick={handleLogout}>
-                  Logout
-                </Button>
-              </Flex>
-            )}
-          </Flex>
-
-          {/* Content area should be the ONLY scroller */}
+                  <Button variant="soft" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </Flex>
+              )}
+            </Flex>
+          )}
           <Box
             p={isPublic ? undefined : '4'}
+            className={isPublic ? undefined : 'app-main-scroll'}
             style={{
               flex: 1, // <-- grow to fill
               minHeight: 0, // <-- allow scrolling area to shrink
               overflow: isPublic ? 'visible' : 'auto', // <-- scroll here
+              paddingBottom: isPublic
+                ? undefined
+                : 'calc(var(--space-4) + var(--app-safe-bottom))',
             }}
           >
+            {!isPublic && <OfflineBanner />}
             {/* <AnimatePresence mode="wait">
               <motion.div
                 key={currentPath}
@@ -312,7 +328,17 @@ export default function AppShell() {
                   You are not part of any company.
                 </Text>
                 <Text size="3" color="gray">
-                  If this is wrong, contact support.
+                  If this is wrong,{' '}
+                  <Link
+                    to="/contact"
+                    style={{
+                      color: 'var(--accent-11)',
+                      textDecoration: 'underline',
+                    }}
+                  >
+                    contact support
+                  </Link>
+                  .
                 </Text>
               </Flex>
             ) : (
@@ -323,11 +349,17 @@ export default function AppShell() {
           </Box>
         </Flex>
       </Box>
+      {!isPublic && <DemoModeBadge />}
       {isLocal && (
         <Flex
           direction="column"
           gap="2"
-          style={{ position: 'fixed', left: 12, bottom: 12, zIndex: 50 }}
+          style={{
+            position: 'fixed',
+            left: 12,
+            bottom: 'calc(12px + var(--app-safe-bottom))',
+            zIndex: 50,
+          }}
         >
           {isProductionContaInDev && (
             <Badge

@@ -81,6 +81,8 @@ export function useAuthz() {
         userId,
       }
     },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 
   // While authz is loading, `data` stays undefined — avoid returning a fresh `new Set()` every

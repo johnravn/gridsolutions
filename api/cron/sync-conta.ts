@@ -1,18 +1,21 @@
 /**
  * Cron: Sync Subb customers with Conta.
- * Triggered weekly by Vercel Cron. Requires CRON_SECRET in env.
- * GET /api/cron/sync-conta
- * Header: Authorization: Bearer <CRON_SECRET>
+ * Triggered daily by Vercel Cron (production). GET /api/cron/sync-conta
  */
 import { createClient } from '@supabase/supabase-js'
-import { syncCustomersWithConta } from '../../src/features/customers/api/contaCustomerSync'
+import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron'
+import type { ContaSyncTriggerSource } from '../../src/shared/conta/contaCustomerSyncCron'
 import type { Database } from '../../src/shared/types/database.types'
 
-const contaBaseUrl =
-  process.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
-const contaSandboxUrl =
-  process.env.VITE_CONTA_API_URL_SANDBOX ||
-  'https://api.gateway.conta-sandbox.no'
+function resolveTriggerSource(req: {
+  headers?: Record<string, string | Array<string> | undefined>
+}): ContaSyncTriggerSource {
+  const raw = req.headers?.['x-trigger-source']
+  const header = Array.isArray(raw) ? raw[0] : raw
+  if (header === 'github_actions') return 'github_actions'
+  if (req.headers?.['user-agent']?.includes('vercel-cron')) return 'vercel_cron'
+  return 'manual'
+}
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
@@ -37,7 +40,11 @@ export default async function handler(req: any, res: any) {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!supabaseUrl || !serviceRoleKey) {
-    res.status(500).json({ error: 'Missing Supabase config' })
+    res.status(500).json({
+      error: 'Missing Supabase config',
+      detail:
+        'Set SUPABASE_SERVICE_ROLE_KEY and VITE_SUPABASE_URL on Vercel (Production).',
+    })
     return
   }
 
@@ -45,62 +52,22 @@ export default async function handler(req: any, res: any) {
     auth: { persistSession: false },
   })
 
-  const { data: companies } = await supabase
-    .from('company_expansions')
-    .select(
-      'company_id, accounting_organization_id, accounting_api_environment',
-    )
-    .not('accounting_organization_id', 'is', null)
-    .eq('accounting_software', 'conta')
+  const triggerSource = resolveTriggerSource(req)
+  const outcome = await runContaCustomerSyncForAllCompanies(supabase, {
+    triggerSource,
+  })
 
-  const results: Array<{
-    companyId: string
-    updated: number
-    created: number
-    skipped: number
-    errors: Array<string>
-  }> = []
-
-  for (const row of companies ?? []) {
-    const orgId = row.accounting_organization_id
-    if (!orgId) continue
-
-    const { data: apiKey } = await supabase.rpc('get_conta_api_key_for_sync', {
-      p_company_id: row.company_id,
-    })
-    if (!apiKey) continue
-
-    const isSandbox = row.accounting_api_environment === 'sandbox'
-    const baseUrl = isSandbox ? contaSandboxUrl : contaBaseUrl
-
-    try {
-      const r = await syncCustomersWithConta(
-        row.company_id,
-        orgId,
-        { apiKey, baseUrl },
-        supabase,
-      )
-      results.push({
-        companyId: row.company_id,
-        updated: r.updated,
-        created: r.created,
-        skipped: r.skipped,
-        errors: r.errors,
-      })
-    } catch (e: any) {
-      results.push({
-        companyId: row.company_id,
-        updated: 0,
-        created: 0,
-        skipped: 0,
-        errors: [e?.message ?? 'Sync failed'],
-      })
-    }
+  if (outcome.error && outcome.results.length === 0) {
+    res.status(500).json({ error: outcome.error, runId: outcome.runId })
+    return
   }
 
   res.status(200).json({
-    ok: true,
-    companies: results.length,
-    results,
+    ok: outcome.ok,
+    runId: outcome.runId,
+    status: outcome.status,
+    companies: outcome.companies,
+    syncedAt: outcome.syncedAt,
+    results: outcome.results,
   })
 }

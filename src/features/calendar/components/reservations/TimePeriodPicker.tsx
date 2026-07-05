@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Flex, Select, TextField } from '@radix-ui/themes'
 import { Calendar, Edit, Plus } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
   jobTimePeriodsQuery,
@@ -156,13 +156,12 @@ export default function TimePeriodPicker({
                 setEditing({ ...editing, title: e.target.value })
               }
             />
-            <DateTimePicker
-              value={editing.start_at}
-              onChange={(iso) => setEditing({ ...editing, start_at: iso })}
-            />
-            <DateTimePicker
-              value={editing.end_at}
-              onChange={(iso) => setEditing({ ...editing, end_at: iso })}
+            <DateTimeRangePicker
+              startAt={editing.start_at}
+              endAt={editing.end_at}
+              onChange={({ startAt, endAt }) =>
+                setEditing({ ...editing, start_at: startAt, end_at: endAt })
+              }
             />
             <Flex gap="2" ml="auto">
               <Button size="1" variant="soft" onClick={() => setEditing(null)}>
@@ -341,21 +340,14 @@ export function FixedTimePeriodEditor({
           editData && (
             <Box p="2" style={{ background: 'var(--gray-2)', borderRadius: 8 }}>
               <Flex gap="2" wrap="wrap" align="center">
-                <DateTimePicker
-                  value={editData.start_at}
-                  onChange={(iso) =>
+                <DateTimeRangePicker
+                  startAt={editData.start_at}
+                  endAt={editData.end_at}
+                  onChange={({ startAt, endAt }) =>
                     setEditData({
                       ...editData,
-                      start_at: iso,
-                    })
-                  }
-                />
-                <DateTimePicker
-                  value={editData.end_at}
-                  onChange={(iso) =>
-                    setEditData({
-                      ...editData,
-                      end_at: iso,
+                      start_at: startAt,
+                      end_at: endAt,
                     })
                   }
                 />

@@ -16,11 +16,22 @@ import { Archive, Copy, Edit, NavArrowDown, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { copyJob, jobDetailQuery } from '../api/queries'
+import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
+import {
+  buildJobInspectorKeyboardSteps,
+  getJobInspectorKeyboardStep,
+  parseJobInspectorKeyboardStep,
+} from '../utils/jobInspectorKeyboardTabs'
+import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
 import OverviewTab from './tabs/OverviewTab'
@@ -37,6 +48,7 @@ import ToDoTab from './tabs/ToDoTab'
 import PackingTab from './tabs/PackingTab'
 import JobDialog from './dialogs/JobDialog'
 import CopyJobDialog from './dialogs/CopyJobDialog'
+import SubcontractorsTab from './tabs/SubcontractorsTab'
 import type { JobDetail, JobStatus } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
 
@@ -65,6 +77,7 @@ export default function JobInspector({
 }) {
   // ✅ hooks first
   const { companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const isFreelancer = companyRole === 'freelancer'
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = React.useState(false)
@@ -74,10 +87,19 @@ export default function JobInspector({
   const [activeTab, setActiveTab] = React.useState<string>(
     initialTab || 'overview',
   )
+  const [bookingsSubTab, setBookingsSubTab] = React.useState<string>('crew')
   const filesTabRef = React.useRef<FilesTabHandle>(null)
 
   const blockedFreelancerTabs = React.useMemo(
-    () => new Set(['bookings', 'offers', 'invoice', 'money', 'todo']),
+    () =>
+      new Set([
+        'bookings',
+        'subcontractors',
+        'offers',
+        'invoice',
+        'money',
+        'todo',
+      ]),
     [],
   )
 
@@ -110,8 +132,9 @@ export default function JobInspector({
       { value: 'program', label: 'Program' },
       { value: 'calendar', label: 'Calendar' },
       { value: 'bookings', label: 'Bookings' },
-      { value: 'packing', label: 'Packing' },
       { value: 'offers', label: 'Offers' },
+      { value: 'subcontractors', label: 'Subcontractors' },
+      { value: 'packing', label: 'Packing' },
       { value: 'invoice', label: 'Invoice' },
       { value: 'money', label: 'Money' },
       { value: 'todo', label: 'To Do' },
@@ -120,6 +143,60 @@ export default function JobInspector({
     ]
     return list.filter((t) => isTabAllowed(t.value))
   }, [isTabAllowed])
+
+  const handleTabChange = React.useCallback(
+    (newTab: string) => {
+      if (!isTabAllowed(newTab)) {
+        setActiveTab('overview')
+        return
+      }
+      if (activeTab === 'files' && newTab !== 'files' && filesTabRef.current) {
+        filesTabRef.current.checkUnsavedChanges(() => {
+          setActiveTab(newTab)
+        })
+      } else {
+        setActiveTab(newTab)
+      }
+    },
+    [activeTab, isTabAllowed],
+  )
+
+  const keyboardTabSteps = React.useMemo(
+    () => buildJobInspectorKeyboardSteps(tabOptions.map((tab) => tab.value)),
+    [tabOptions],
+  )
+
+  const currentKeyboardTab = React.useMemo(
+    () => getJobInspectorKeyboardStep(activeTab, bookingsSubTab),
+    [activeTab, bookingsSubTab],
+  )
+
+  const handleKeyboardTabChange = React.useCallback(
+    (step: string) => {
+      const { tab, bookingsSubTab: nextBookingsSubTab } =
+        parseJobInspectorKeyboardStep(step)
+
+      if (tab === 'bookings' && nextBookingsSubTab) {
+        if (activeTab !== 'bookings') {
+          handleTabChange('bookings')
+        }
+        setBookingsSubTab(nextBookingsSubTab)
+        return
+      }
+
+      handleTabChange(tab)
+    },
+    [activeTab, handleTabChange],
+  )
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: keyboardTabSteps,
+    activeTab: currentKeyboardTab,
+    onTabChange: handleKeyboardTabChange,
+    enabled: !!id,
+  })
 
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
@@ -133,30 +210,7 @@ export default function JobInspector({
   useAutoUpdateJobStatus(data)
 
   const deleteJob = useMutation({
-    mutationFn: async (jobId: string) => {
-      // Delete related data first (cascade should handle most, but being explicit)
-      // Delete invite matters referencing this job
-      const { error: mattersErr } = await supabase
-        .from('matters')
-        .delete()
-        .eq('job_id', jobId)
-        .eq('matter_type', 'crew_invite')
-      if (mattersErr) throw mattersErr
-
-      // Delete time_periods (which will cascade to reserved_items, reserved_crew, reserved_vehicles)
-      const { error: periodsErr } = await supabase
-        .from('time_periods')
-        .delete()
-        .eq('job_id', jobId)
-      if (periodsErr) throw periodsErr
-
-      // Delete the job
-      const { error: jobErr } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('id', jobId)
-      if (jobErr) throw jobErr
-    },
+    mutationFn: (jobId: string) => deleteJobById(jobId),
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: ['company'] })
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
@@ -214,7 +268,14 @@ export default function JobInspector({
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
       setCopyOpen(false)
       success('Job copied', 'A new job was created from this one.')
-      navigate({ to: '/jobs', search: { jobId: newJobId, tab: undefined } })
+      navigate({
+        to: '/jobs',
+        search: {
+          jobId: newJobId,
+          recurringJobId: undefined,
+          tab: undefined,
+        },
+      })
     },
     onError: (err: any) => {
       toastError('Failed to copy job', err?.message || 'Please try again.')
@@ -223,12 +284,12 @@ export default function JobInspector({
 
   // now you can early return safely since hooks above already ran
   if (!id) return <Text color="gray">Select a job to see details.</Text>
-  if (isLoading || !data) return <Text>Loading…</Text>
+  if (isLoading || !data) return <InspectorSkeleton />
 
   const job = data
 
   return (
-    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
+    <Box {...scopeProps} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Box
         mb="3"
         style={{
@@ -240,22 +301,57 @@ export default function JobInspector({
         }}
       >
         <Flex
-          align="center"
-          gap="3"
-          wrap="wrap"
+          direction="column"
+          gap="2"
           style={{ minWidth: 0, flex: '1 1 auto' }}
         >
-          <Heading
-            size="4"
-            style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+          <Flex
+            align="center"
+            gap="3"
+            wrap="wrap"
+            justify="between"
+            style={{ width: '100%' }}
           >
-            {job.title}
-          </Heading>
-          {job.jobnr && (
-            <Text size="3" color="gray" weight="medium">
-              #{String(job.jobnr).padStart(6, '0')}
-            </Text>
-          )}
+            <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0 }}>
+              <Heading
+                size="4"
+                style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {job.title}
+              </Heading>
+              {job.jobnr && (
+                <Text size="3" color="gray" weight="medium">
+                  #{String(job.jobnr).padStart(6, '0')}
+                </Text>
+              )}
+            </Flex>
+            {job.recurring_job && (
+              <Tooltip content="Open recurring job series">
+                <Badge
+                  size="1"
+                  variant="outline"
+                  color="violet"
+                  style={{
+                    width: 'fit-content',
+                    cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                  onClick={() =>
+                    navigate({
+                      to: '/jobs',
+                      search: {
+                        jobId: undefined,
+                        recurringJobId: job.recurring_job!.id,
+                        tab: undefined,
+                      },
+                    })
+                  }
+                >
+                  Recurring job
+                </Badge>
+              </Tooltip>
+            )}
+          </Flex>
         </Flex>
         <div
           style={{
@@ -277,11 +373,18 @@ export default function JobInspector({
               </Badge>
             )
           })()}
-          {companyRole !== 'freelancer' && (
+          {canWrite && (
             <>
-              <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-                <Edit width={16} height={16} />
-              </Button>
+              <Tooltip content="Edit job">
+                <Button
+                  size="2"
+                  variant="soft"
+                  aria-label="Edit job"
+                  onClick={() => setEditOpen(true)}
+                >
+                  <Edit width={16} height={16} />
+                </Button>
+              </Tooltip>
               <Tooltip content="Copy job">
                 <Button
                   size="2"
@@ -351,24 +454,7 @@ export default function JobInspector({
       <Tabs.Root
         defaultValue="overview"
         value={activeTab}
-        onValueChange={(newTab) => {
-          if (!isTabAllowed(newTab)) {
-            setActiveTab('overview')
-            return
-          }
-          // If switching away from files tab, check for unsaved changes
-          if (
-            activeTab === 'files' &&
-            newTab !== 'files' &&
-            filesTabRef.current
-          ) {
-            filesTabRef.current.checkUnsavedChanges(() => {
-              setActiveTab(newTab)
-            })
-          } else {
-            setActiveTab(newTab)
-          }
-        }}
+        onValueChange={handleTabChange}
       >
         {isMobile ? (
           <Flex direction="column" gap="2" mb="2">
@@ -411,10 +497,10 @@ export default function JobInspector({
                         filesTabRef.current
                       ) {
                         filesTabRef.current.checkUnsavedChanges(() => {
-                          setActiveTab(opt.value)
+                          handleTabChange(opt.value)
                         })
                       } else {
-                        setActiveTab(opt.value)
+                        handleTabChange(opt.value)
                       }
                     }}
                     style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
@@ -434,10 +520,13 @@ export default function JobInspector({
             {!isFreelancer && (
               <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
             )}
-            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
             {!isFreelancer && (
               <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
             )}
+            {!isFreelancer && (
+              <Tabs.Trigger value="subcontractors">Subcontractors</Tabs.Trigger>
+            )}
+            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
@@ -462,12 +551,13 @@ export default function JobInspector({
         </Tabs.Content>
         {!isFreelancer && (
           <Tabs.Content value="bookings" mt={'10px'}>
-            <BookingsTab jobId={job.id} />
+            <BookingsTab
+              jobId={job.id}
+              activeSubTab={bookingsSubTab}
+              onSubTabChange={setBookingsSubTab}
+            />
           </Tabs.Content>
         )}
-        <Tabs.Content value="packing" mt={'10px'}>
-          <PackingTab jobId={job.id} />
-        </Tabs.Content>
         {!isFreelancer && (
           <Tabs.Content value="offers" mt={'10px'}>
             <OffersTab
@@ -477,6 +567,14 @@ export default function JobInspector({
             />
           </Tabs.Content>
         )}
+        {!isFreelancer && (
+          <Tabs.Content value="subcontractors" mt={'10px'}>
+            <SubcontractorsTab jobId={job.id} />
+          </Tabs.Content>
+        )}
+        <Tabs.Content value="packing" mt={'10px'}>
+          <PackingTab jobId={job.id} />
+        </Tabs.Content>
         {!isFreelancer && (
           <Tabs.Content value="invoice" mt={'10px'}>
             <InvoiceTab jobId={job.id} job={job} />

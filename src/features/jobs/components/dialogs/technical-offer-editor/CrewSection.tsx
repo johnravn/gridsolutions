@@ -23,7 +23,8 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { calculateHoursPerDay } from './utils'
 import { SortableCrewCard } from './sortable'
 import type { LocalCrewItem } from './types'
@@ -70,6 +71,10 @@ export function CrewSection({
   const [roleCategoryDrafts, setRoleCategoryDrafts] = React.useState<
     Record<string, string>
   >({})
+  const [hoveredSuggestion, setHoveredSuggestion] = React.useState<{
+    itemId: string
+    field: 'role_title' | 'role_category'
+  } | null>(null)
 
   const roleSuggestions = [
     'Technician',
@@ -385,7 +390,23 @@ export function CrewSection({
                                     <Flex direction="column" gap="3">
                                       <Flex gap="3" wrap="wrap">
                                         {/* Role Title */}
-                                        <Box style={{ flex: '1 1 260px' }}>
+                                        <Box
+                                          style={{ flex: '1 1 260px' }}
+                                          onMouseEnter={() =>
+                                            setHoveredSuggestion({
+                                              itemId: item.id,
+                                              field: 'role_title',
+                                            })
+                                          }
+                                          onMouseLeave={() =>
+                                            setHoveredSuggestion((prev) =>
+                                              prev?.itemId === item.id &&
+                                              prev.field === 'role_title'
+                                                ? null
+                                                : prev,
+                                            )
+                                          }
+                                        >
                                           <Text size="2" color="gray" mb="1">
                                             Role Title
                                           </Text>
@@ -400,39 +421,48 @@ export function CrewSection({
                                             readOnly={readOnly}
                                             onClick={(e) => e.stopPropagation()}
                                           />
-                                          {!readOnly && !item.role_title && (
-                                            <Flex gap="2" wrap="wrap" mt="2">
-                                              <Text
-                                                size="1"
-                                                color="gray"
-                                                style={{ width: '100%' }}
-                                              >
-                                                Quick suggestions:
-                                              </Text>
-                                              {roleSuggestions.map(
-                                                (suggestion) => (
-                                                  <Button
-                                                    key={suggestion}
-                                                    size="1"
-                                                    variant="soft"
-                                                    color="gray"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      updateItem(item.id, {
-                                                        role_title: suggestion,
-                                                      })
-                                                    }}
-                                                  >
-                                                    {suggestion}
-                                                  </Button>
-                                                ),
-                                              )}
-                                            </Flex>
+                                          {!readOnly && (
+                                            <AnimatedQuickSuggestions
+                                              suggestions={roleSuggestions}
+                                              open={
+                                                hoveredSuggestion?.itemId ===
+                                                  item.id &&
+                                                hoveredSuggestion.field ===
+                                                  'role_title'
+                                              }
+                                              staticOpen
+                                              showLabel
+                                              stopPropagation
+                                              onSelect={(suggestion) =>
+                                                updateItem(item.id, {
+                                                  role_title: suggestion,
+                                                })
+                                              }
+                                              onAfterSelect={() =>
+                                                setHoveredSuggestion(null)
+                                              }
+                                            />
                                           )}
                                         </Box>
 
                                         {/* Role Category */}
-                                        <Box style={{ flex: '1 1 220px' }}>
+                                        <Box
+                                          style={{ flex: '1 1 220px' }}
+                                          onMouseEnter={() =>
+                                            setHoveredSuggestion({
+                                              itemId: item.id,
+                                              field: 'role_category',
+                                            })
+                                          }
+                                          onMouseLeave={() =>
+                                            setHoveredSuggestion((prev) =>
+                                              prev?.itemId === item.id &&
+                                              prev.field === 'role_category'
+                                                ? null
+                                                : prev,
+                                            )
+                                          }
+                                        >
                                           <Text size="2" color="gray" mb="1">
                                             Role Category
                                           </Text>
@@ -446,9 +476,9 @@ export function CrewSection({
                                                 [item.id]: nextValue,
                                               }))
                                             }}
-                                            onBlur={() =>
+                                            onBlur={() => {
                                               commitRoleCategory(item.id)
-                                            }
+                                            }}
                                             onKeyDown={(e) => {
                                               if (e.key === 'Enter') {
                                                 e.preventDefault()
@@ -459,34 +489,27 @@ export function CrewSection({
                                             onClick={(e) => e.stopPropagation()}
                                           />
                                           {!readOnly && (
-                                            <Flex gap="2" wrap="wrap" mt="2">
-                                              <Text
-                                                size="1"
-                                                color="gray"
-                                                style={{ width: '100%' }}
-                                              >
-                                                Quick suggestions:
-                                              </Text>
-                                              {categorySuggestions.map(
-                                                (suggestion) => (
-                                                  <Button
-                                                    key={suggestion}
-                                                    size="1"
-                                                    variant="soft"
-                                                    color="gray"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation()
-                                                      updateItem(item.id, {
-                                                        role_category:
-                                                          suggestion.toLowerCase(),
-                                                      })
-                                                    }}
-                                                  >
-                                                    {suggestion}
-                                                  </Button>
-                                                ),
-                                              )}
-                                            </Flex>
+                                            <AnimatedQuickSuggestions
+                                              suggestions={categorySuggestions}
+                                              open={
+                                                hoveredSuggestion?.itemId ===
+                                                  item.id &&
+                                                hoveredSuggestion.field ===
+                                                  'role_category'
+                                              }
+                                              staticOpen
+                                              showLabel
+                                              stopPropagation
+                                              onSelect={(suggestion) =>
+                                                updateItem(item.id, {
+                                                  role_category:
+                                                    suggestion.toLowerCase(),
+                                                })
+                                              }
+                                              onAfterSelect={() =>
+                                                setHoveredSuggestion(null)
+                                              }
+                                            />
                                           )}
                                         </Box>
                                       </Flex>
@@ -664,7 +687,7 @@ export function CrewSection({
                                                 e.stopPropagation()
                                               }
                                             >
-                                              <DateTimePicker
+                                              <DatePicker
                                                 value={item.start_date}
                                                 onChange={(value) =>
                                                   updateItem(item.id, {
@@ -694,7 +717,7 @@ export function CrewSection({
                                                 e.stopPropagation()
                                               }
                                             >
-                                              <DateTimePicker
+                                              <DatePicker
                                                 value={item.end_date}
                                                 onChange={(value) =>
                                                   updateItem(item.id, {

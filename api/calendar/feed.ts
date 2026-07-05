@@ -4,6 +4,12 @@
  * Uses premade subscription kinds; builds rich event titles (job title, project lead, customer, location).
  */
 import { createClient } from '@supabase/supabase-js'
+import {
+  buildICS,
+  parseTstzRange,
+  rangesOverlap,
+  withRecurringJobPrefix,
+} from './icsHelpers'
 import type { Database } from '../../src/shared/types/database.types'
 
 type SubscriptionKind =
@@ -17,111 +23,6 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
-}
-
-function icsEscape(str: string): string {
-  return str
-    .replace(/\\/g, '\\\\')
-    .replace(/;/g, '\\;')
-    .replace(/,/g, '\\,')
-    .replace(/\n/g, '\\n')
-}
-
-function foldLine(line: string): string {
-  const max = 75
-  if (line.length <= max) return line
-  const parts: Array<string> = []
-  let rest = line
-  while (rest.length > 0) {
-    parts.push(rest.slice(0, max))
-    rest = rest.slice(max)
-    if (rest.length > 0) rest = '\r\n ' + rest
-  }
-  return parts.join('\r\n ')
-}
-
-function formatICalDate(iso: string): string {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`
-}
-
-function parseTstzRange(
-  during: unknown,
-): { start: string; end: string } | null {
-  if (typeof during !== 'string') return null
-  const s = during.trim()
-  if (!s) return null
-
-  // Common Postgres range output: "[2026-05-11 10:00:00+00,2026-05-11 18:00:00+00)"
-  // Sometimes it can contain quotes depending on driver; strip them gently.
-  const m = s.match(/^[\[(]\s*"?([^,"]+)"?\s*,\s*"?([^)\]"]+)"?\s*[\])]\s*$/)
-  if (!m) return null
-
-  const startRaw = m[1].trim()
-  const endRaw = m[2].trim()
-  if (!startRaw || !endRaw) return null
-  if (
-    endRaw.toLowerCase() === 'infinity' ||
-    startRaw.toLowerCase() === '-infinity'
-  )
-    return null
-
-  const start = new Date(startRaw)
-  const end = new Date(endRaw)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null
-  return { start: start.toISOString(), end: end.toISOString() }
-}
-
-function rangesOverlap(
-  aStartIso: string,
-  aEndIso: string,
-  bStartIso: string,
-  bEndIso: string,
-): boolean {
-  const aStart = new Date(aStartIso).getTime()
-  const aEnd = new Date(aEndIso).getTime()
-  const bStart = new Date(bStartIso).getTime()
-  const bEnd = new Date(bEndIso).getTime()
-  if ([aStart, aEnd, bStart, bEnd].some((t) => Number.isNaN(t))) return false
-  // [start, end) overlap
-  return aStart < bEnd && bStart < aEnd
-}
-
-function buildICS(
-  events: Array<{
-    id: string
-    title: string
-    start: string
-    end: string
-    description?: string
-  }>,
-): string {
-  const lines: Array<string> = [
-    'BEGIN:VCALENDAR',
-    'VERSION:2.0',
-    'PRODID:-//Grid//Calendar Feed//EN',
-    'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
-  ]
-  for (const e of events) {
-    const summary = foldLine('SUMMARY:' + icsEscape(e.title))
-    const desc = e.description
-      ? foldLine('DESCRIPTION:' + icsEscape(e.description))
-      : null
-    lines.push(
-      'BEGIN:VEVENT',
-      'UID:' + e.id + '@grid-calendar',
-      'DTSTAMP:' + formatICalDate(new Date().toISOString()),
-      'DTSTART:' + formatICalDate(e.start),
-      'DTEND:' + formatICalDate(e.end),
-      summary,
-      ...(desc ? [desc] : []),
-      'END:VEVENT',
-    )
-  }
-  lines.push('END:VCALENDAR')
-  return lines.join('\r\n')
 }
 
 function formatLocation(
@@ -335,7 +236,10 @@ export default async function handler(req: any, res: any) {
             const vehicleLabel = vehicle
               ? `${vehicle.name}${vehicle.registration_no ? ` (${vehicle.registration_no})` : ''}`
               : 'Transport'
-            const title = `${vehicleLabel}: ${rest}`.trim() || 'Transport'
+            const title = withRecurringJobPrefix(
+              `${vehicleLabel}: ${rest}`.trim() || 'Transport',
+              info?.recurringJobTitle,
+            )
             const jobNo = info ? formatJobNumber(info.jobnr) : ''
             const descParts = [
               jobNo && `Job no: ${jobNo}`,
@@ -380,9 +284,10 @@ export default async function handler(req: any, res: any) {
             : ''
           const parts = [jobTitle, customer, projectLead].filter(Boolean)
           const rest = parts.join(' · ')
-          const title = vehicleLabel
-            ? `${vehicleLabel}: ${rest}`
-            : rest || 'Transport'
+          const title = withRecurringJobPrefix(
+            vehicleLabel ? `${vehicleLabel}: ${rest}` : rest || 'Transport',
+            info?.recurringJobTitle,
+          )
           const jobNo = info ? formatJobNumber(info.jobnr) : ''
           const descParts = [
             jobNo && `Job no: ${jobNo}`,
@@ -540,7 +445,10 @@ export default async function handler(req: any, res: any) {
 
         return {
           id: row.id, // unique per booking row (can be multiple crew on same period)
-          title: 'CREW: ' + (jobTitle || 'Event'),
+          title: withRecurringJobPrefix(
+            'CREW: ' + (jobTitle || 'Event'),
+            info?.recurringJobTitle,
+          ),
           start,
           end,
           description: descParts.length > 0 ? descParts.join('\n') : undefined,
@@ -625,7 +533,10 @@ export default async function handler(req: any, res: any) {
         const statusLabel = info ? formatJobStatus(info.status) : ''
 
         if (kind === 'all_jobs') {
-          const title = prefix + jobTitle
+          const title = withRecurringJobPrefix(
+            prefix + jobTitle,
+            info?.recurringJobTitle,
+          )
           const descLines: Array<string> = []
           if (jobNo) descLines.push(`Job no: ${jobNo}`)
           if (statusLabel) descLines.push(`Status: ${statusLabel}`)
@@ -645,7 +556,10 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        const title = prefix + jobTitle
+        const title = withRecurringJobPrefix(
+          prefix + jobTitle,
+          info?.recurringJobTitle,
+        )
         const descParts: Array<string> = []
         if (jobNo) descParts.push(`Job no: ${jobNo}`)
         if (info?.projectLeadName)
@@ -698,117 +612,60 @@ type JobInfo = {
   location: string
   jobnr: number | null
   status: string
+  recurringJobTitle: string | null
 }
 
 async function fetchJobInfo(
   supabase: ReturnType<typeof createClient<Database>>,
-  companyId: string,
+  _companyId: string,
   jobIds: Array<string>,
 ): Promise<Map<string, JobInfo>> {
   const out = new Map<string, JobInfo>()
   if (jobIds.length === 0) return out
 
-  const { data: jobs } = await supabase
+  const { data: jobs, error } = await supabase
     .from('jobs')
     .select(
-      'id, title, project_lead_user_id, customer_id, job_address_id, jobnr, status',
+      `
+      id, title, jobnr, status, archived, recurring_job_id,
+      project_lead:project_lead_user_id ( user_id, display_name ),
+      customer:customer_id ( name ),
+      address:job_address_id ( address_line, city, zip_code, country ),
+      recurring_job:recurring_job_id ( title )
+    `,
     )
     .in('id', jobIds)
+    .eq('archived', false)
 
-  if (!jobs || jobs.length === 0) return out
+  if (error || !jobs || jobs.length === 0) return out
 
-  const leadUserIds = Array.from(
-    new Set(
-      jobs
-        .map(
-          (j: { project_lead_user_id: string | null }) =>
-            j.project_lead_user_id,
-        )
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-  const customerIds = Array.from(
-    new Set(
-      jobs
-        .map((j: { customer_id: string | null }) => j.customer_id)
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-  const addressIds = Array.from(
-    new Set(
-      jobs
-        .map((j: { job_address_id: string | null }) => j.job_address_id)
-        .filter(Boolean),
-    ),
-  ) as Array<string>
-
-  const [profilesRes, customersRes, addressesRes] = await Promise.all([
-    leadUserIds.length > 0
-      ? supabase
-          .from('profiles')
-          .select('user_id, display_name')
-          .in('user_id', leadUserIds)
-      : Promise.resolve({ data: [] }),
-    customerIds.length > 0
-      ? supabase.from('customers').select('id, name').in('id', customerIds)
-      : Promise.resolve({ data: [] }),
-    addressIds.length > 0
-      ? supabase
-          .from('addresses')
-          .select('id, address_line, city, zip_code, country')
-          .in('id', addressIds)
-      : Promise.resolve({ data: [] }),
-  ])
-
-  const leadNames = new Map<string, string>()
-  ;(profilesRes.data || []).forEach(
-    (p: { user_id: string; display_name: string | null }) => {
-      leadNames.set(p.user_id, p.display_name || '')
-    },
-  )
-  const customerNames = new Map<string, string>()
-  ;(customersRes.data || []).forEach((c: { id: string; name: string }) => {
-    customerNames.set(c.id, c.name)
-  })
-  const addressMap = new Map<string, string>()
-  ;(addressesRes.data || []).forEach(
-    (a: {
-      id: string
+  type JobRow = {
+    id: string
+    title: string
+    jobnr: number | null
+    status: string
+    recurring_job_id: string | null
+    project_lead: { display_name: string | null } | null
+    customer: { name: string } | null
+    address: {
       address_line: string
       city: string
       zip_code: string
       country: string
-    }) => {
-      addressMap.set(a.id, formatLocation(a))
-    },
-  )
-
-  jobs.forEach(
-    (j: {
-      id: string
-      title: string
-      project_lead_user_id: string | null
-      customer_id: string | null
-      job_address_id: string | null
-      jobnr: number | null
-      status: string
-    }) => {
-      out.set(j.id, {
-        title: j.title || 'Job',
-        projectLeadName: j.project_lead_user_id
-          ? (leadNames.get(j.project_lead_user_id) ?? '')
-          : '',
-        customerName: j.customer_id
-          ? (customerNames.get(j.customer_id) ?? '')
-          : '',
-        location: j.job_address_id
-          ? (addressMap.get(j.job_address_id) ?? '')
-          : '',
-        jobnr: j.jobnr ?? null,
-        status: j.status || '',
-      })
-    },
-  )
+    } | null
+    recurring_job: { title: string } | null
+  }
+  ;(jobs as unknown as Array<JobRow>).forEach((j) => {
+    out.set(j.id, {
+      title: j.title || 'Job',
+      projectLeadName: j.project_lead?.display_name ?? '',
+      customerName: j.customer?.name ?? '',
+      location: j.address ? formatLocation(j.address) : '',
+      jobnr: j.jobnr ?? null,
+      status: j.status || '',
+      recurringJobTitle: j.recurring_job?.title ?? null,
+    })
+  })
   return out
 }
 

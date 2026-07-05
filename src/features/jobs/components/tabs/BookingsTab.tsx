@@ -1,24 +1,44 @@
-import * as React from 'react'
 import { Tabs } from '@radix-ui/themes'
+import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
+import { jobDetailQuery } from '@features/jobs/api/queries'
+import { JobBookingConflictsBanner } from '@features/conflicts/components/JobBookingConflictsBanner'
 import EquipmentTab from './EquipmentTab'
 import CrewTab from './CrewTab'
 import TransportTab from './TransportTab'
 
+export const BOOKINGS_SUB_TABS = ['crew', 'equipment', 'transport'] as const
+
 export default function BookingsTab({
   jobId,
-  initialSubTab,
+  activeSubTab,
+  onSubTabChange,
 }: {
   jobId: string
-  initialSubTab?: string
+  activeSubTab: string
+  onSubTabChange: (subTab: string) => void
 }) {
   const { companyId } = useCompany()
-  const [activeSubTab, setActiveSubTab] = React.useState<string>(
-    initialSubTab || 'crew',
-  )
+  const { userId, companyRole } = useAuthz()
+
+  const { data: job } = useQuery({
+    ...jobDetailQuery({ jobId }),
+  })
+
+  const isProjectLead = !!userId && job?.project_lead?.user_id === userId
+  const showConflictsBanner = companyRole !== 'freelancer'
 
   return (
-    <Tabs.Root value={activeSubTab} onValueChange={setActiveSubTab}>
+    <Tabs.Root value={activeSubTab} onValueChange={onSubTabChange}>
+      {showConflictsBanner && (
+        <JobBookingConflictsBanner
+          jobId={jobId}
+          isProjectLead={isProjectLead}
+          onNavigateSubTab={onSubTabChange}
+        />
+      )}
+
       <Tabs.List mb="3">
         <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
         <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>

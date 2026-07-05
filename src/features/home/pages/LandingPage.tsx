@@ -1,7 +1,7 @@
-import { useNavigate } from '@tanstack/react-router'
+import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { Box, Button, Container, Flex, Heading, Text } from '@radix-ui/themes'
 import { motion, useScroll, useTransform } from 'framer-motion'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Activity,
   ArrowRight,
@@ -13,7 +13,9 @@ import {
   CheckCircle,
   GoogleDocs,
   Group,
+  Mail,
   Message,
+  Phone,
   ReportColumns,
   Shield,
   Sparks,
@@ -21,11 +23,18 @@ import {
 } from 'iconoir-react'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
+import { CopyIconButton } from '@shared/lib/CopyIconButton'
+import { prettyPhone } from '@shared/phone/phone'
 import { useTheme } from '@app/hooks/useTheme'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import type { ReactNode } from 'react'
+
+const SUPPORT_PHONE_E164 = '+4795721220'
+const SUPPORT_EMAIL = 'john.ravndal@gmail.com'
 
 export default function LandingPage() {
   const navigate = useNavigate()
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
   const containerRef = useRef<HTMLDivElement>(null)
   const { scrollY } = useScroll()
   const { isDark } = useTheme()
@@ -47,10 +56,19 @@ export default function LandingPage() {
     el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
+  useEffect(() => {
+    if (pathname === '/contact') {
+      const el = document.getElementById('contact')
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [pathname])
+
   const [navHovered, setNavHovered] = useState<string | null>(null)
   const navItems: Array<{ label: string; id: string }> = [
     { label: 'Features', id: 'features' },
     { label: 'Why Grid', id: 'why' },
+    { label: 'Try Demo', id: '/demo' },
+    { label: 'Contact', id: 'contact' },
     { label: 'Get Started', id: 'get-started' },
     { label: 'Sign In', id: '/login' },
   ]
@@ -137,17 +155,9 @@ export default function LandingPage() {
                     style={{
                       color:
                         navHovered === item.id
-                          ? 'transparent'
+                          ? 'var(--accent-11)'
                           : 'var(--gray-11)',
-                      background:
-                        navHovered === item.id
-                          ? 'linear-gradient(135deg, var(--accent-9) 0%, var(--accent-11) 100%)'
-                          : 'none',
-                      WebkitBackgroundClip: 'text',
-                      WebkitTextFillColor:
-                        navHovered === item.id ? 'transparent' : undefined,
-                      backgroundClip: 'text',
-                      transition: 'color 0.2s ease, background 0.2s ease',
+                      transition: 'color 0.2s ease',
                     }}
                   >
                     {item.label}
@@ -264,6 +274,17 @@ export default function LandingPage() {
                   <Button
                     size={isMd ? '4' : '3'}
                     variant="solid"
+                    onClick={() => navigate({ to: '/demo' })}
+                    style={{ padding: '0.75rem 1.75rem' }}
+                  >
+                    Try Demo
+                    <Sparks
+                      style={{ marginLeft: 8, verticalAlign: 'middle' }}
+                    />
+                  </Button>
+                  <Button
+                    size={isMd ? '4' : '3'}
+                    variant="outline"
                     onClick={() => navigate({ to: '/signup' })}
                     style={{ padding: '0.75rem 1.75rem' }}
                   >
@@ -299,6 +320,65 @@ export default function LandingPage() {
               <HeroGraphicCards />
             </Flex>
           </Flex>
+        </Container>
+      </Box>
+
+      {/* Demo Section */}
+      <Box
+        id="try-demo"
+        style={{
+          position: 'relative',
+          padding: isMd ? '4rem 0' : '2rem 1rem',
+        }}
+      >
+        <Container size="4">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4 }}
+          >
+            <Box
+              style={{
+                padding: isMd ? '3rem' : '2rem 1.5rem',
+                background: 'var(--color-panel-translucent)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '20px',
+                border: '1px solid var(--accent-a5)',
+                textAlign: 'center',
+              }}
+            >
+              <Heading
+                size={isMd ? '7' : '6'}
+                style={{ marginBottom: '0.75rem', color: 'var(--gray-12)' }}
+              >
+                Try Grid without signing up
+              </Heading>
+              <Text
+                size={isMd ? '4' : '3'}
+                style={{
+                  color: 'var(--gray-11)',
+                  lineHeight: 1.7,
+                  maxWidth: 640,
+                  margin: '0 auto 1.5rem',
+                }}
+              >
+                Explore the full platform with sample data — jobs, inventory,
+                crew, calendar, and more. No account needed. Demo mode is
+                read-only, so you can click around freely without changing
+                anything.
+              </Text>
+              <Button
+                size={isMd ? '4' : '3'}
+                variant="solid"
+                onClick={() => navigate({ to: '/demo' })}
+                style={{ padding: '0.85rem 2.5rem' }}
+              >
+                Try Demo
+                <Sparks style={{ marginLeft: 8, verticalAlign: 'middle' }} />
+              </Button>
+            </Box>
+          </motion.div>
         </Container>
       </Box>
 
@@ -643,6 +723,89 @@ export default function LandingPage() {
         </Container>
       </Box>
 
+      {/* Contact Section */}
+      <Box
+        id="contact"
+        style={{
+          position: 'relative',
+          padding: isMd ? '6rem 0' : '3rem 1rem',
+          background: 'var(--gray-2)',
+          scrollMarginTop: '80px',
+        }}
+      >
+        <Container size="4">
+          <motion.div
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.4 }}
+          >
+            <Box
+              style={{
+                padding: isMd ? '3rem' : '2rem 1.5rem',
+                background: 'var(--color-panel-translucent)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: '20px',
+                border: '1px solid var(--gray-4)',
+                textAlign: 'center',
+              }}
+            >
+              <Heading
+                size={isMd ? '7' : '6'}
+                style={{ marginBottom: '0.75rem', color: 'var(--gray-12)' }}
+              >
+                Contact Support
+              </Heading>
+              <Text
+                size={isMd ? '4' : '3'}
+                style={{
+                  color: 'var(--gray-11)',
+                  lineHeight: 1.7,
+                  maxWidth: 520,
+                  margin: '0 auto 2rem',
+                }}
+              >
+                Need help getting access to your company? Reach out and we will
+                sort it out.
+              </Text>
+              <Flex
+                direction={{ initial: 'column', sm: 'row' }}
+                align="center"
+                justify="center"
+                gap="4"
+              >
+                <CopyableContactLink
+                  href={`tel:${SUPPORT_PHONE_E164}`}
+                  label={prettyPhone(SUPPORT_PHONE_E164)}
+                  copyText={SUPPORT_PHONE_E164}
+                  copyLabel="Copy phone number"
+                  icon={
+                    <Phone
+                      width={20}
+                      height={20}
+                      style={{ color: 'var(--accent-11)' }}
+                    />
+                  }
+                />
+                <CopyableContactLink
+                  href={`mailto:${SUPPORT_EMAIL}`}
+                  label={SUPPORT_EMAIL}
+                  copyText={SUPPORT_EMAIL}
+                  copyLabel="Copy email address"
+                  icon={
+                    <Mail
+                      width={20}
+                      height={20}
+                      style={{ color: 'var(--accent-11)' }}
+                    />
+                  }
+                />
+              </Flex>
+            </Box>
+          </motion.div>
+        </Container>
+      </Box>
+
       {/* Footer */}
       <Box
         style={{
@@ -709,6 +872,55 @@ export default function LandingPage() {
         </Container>
       </Box>
     </Box>
+  )
+}
+
+function CopyableContactLink({
+  href,
+  label,
+  copyText,
+  copyLabel,
+  icon,
+}: {
+  href: string
+  label: string
+  copyText: string
+  copyLabel: string
+  icon: ReactNode
+}) {
+  const [hovered, setHovered] = useState(false)
+
+  return (
+    <Flex
+      align="center"
+      gap="2"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {icon}
+      <a
+        href={href}
+        style={{
+          color: 'var(--gray-12)',
+          textDecoration: 'none',
+          cursor: 'pointer',
+        }}
+      >
+        <Text size="4" weight="medium">
+          {label}
+        </Text>
+      </a>
+      <Box
+        style={{
+          marginLeft: '0.25rem',
+          opacity: hovered ? 1 : 0,
+          transition: 'opacity 0.15s ease',
+          pointerEvents: hovered ? 'auto' : 'none',
+        }}
+      >
+        <CopyIconButton text={copyText} copyLabel={copyLabel} />
+      </Box>
+    </Flex>
   )
 }
 

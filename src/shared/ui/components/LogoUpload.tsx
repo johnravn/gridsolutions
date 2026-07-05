@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Box, Button, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { motionFadeTransition } from '@shared/lib/motion'
 import { Upload } from 'iconoir-react'
 
 const TARGET_ASPECT_RATIO = 2 / 1 // 2:1 ratio
@@ -226,7 +227,7 @@ export default function LogoUpload({
                 height: '100%',
                 objectFit: 'contain',
                 opacity: imageLoading ? 0 : 1,
-                transition: 'opacity 0.2s ease-in-out',
+                transition: motionFadeTransition(),
               }}
               onLoad={() => setImageLoading(false)}
               onError={() => setImageLoading(false)}

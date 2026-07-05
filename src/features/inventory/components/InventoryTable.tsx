@@ -10,26 +10,55 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { useVirtualizer } from '@tanstack/react-virtual'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Package, Packages, Search } from 'iconoir-react'
+import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
 import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
+import type { IndexColumn } from '@shared/ui/index-table'
 import type { InventoryIndexRow, SortBy, SortDir } from '../api/queries'
 
 const GRID_COLUMNS =
   'minmax(180px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) 80px 100px 100px'
+
+const SORTABLE_COLS: Array<SortBy> = [
+  'name',
+  'category_name',
+  'brand_name',
+  'on_hand',
+  'current_price',
+]
+
+const COLUMNS: Array<IndexColumn<SortBy>> = [
+  { id: 'name', header: 'Name', sortable: true, sortKey: 'name' },
+  {
+    id: 'category_name',
+    header: 'Category',
+    sortable: true,
+    sortKey: 'category_name',
+  },
+  { id: 'brand_name', header: 'Brand', sortable: true, sortKey: 'brand_name' },
+  { id: 'on_hand', header: 'On hand', sortable: true, sortKey: 'on_hand' },
+  {
+    id: 'current_price',
+    header: 'Price',
+    sortable: true,
+    sortKey: 'current_price',
+  },
+  { id: 'item_kind', header: 'Type', sortable: false, align: 'end' },
+]
 
 type Props = {
   selectedId: string | null
   onSelect: (id: string) => void
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
@@ -40,13 +69,14 @@ export default function InventoryTable({
   onSelect,
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
 }: Props) {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [categoryFilter, setCategoryFilter] = React.useState<string | null>(
@@ -60,9 +90,6 @@ export default function InventoryTable({
   const [addGroupDialog, setAddGroupDialog] = React.useState(false)
 
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const controlsRef = React.useRef<HTMLDivElement | null>(null)
-  const scrollRef = React.useRef<HTMLDivElement | null>(null)
 
   const PAGE_SIZE = 200
 
@@ -74,8 +101,8 @@ export default function InventoryTable({
       debouncedSearch,
       showActive,
       showInactive,
-      showInternal,
-      showExternal,
+      showStock,
+      showSubrental,
       showGroupOnlyItems,
       showGroups,
       showItems,
@@ -96,8 +123,8 @@ export default function InventoryTable({
         search: debouncedSearch,
         showActive,
         showInactive,
-        showInternal,
-        showExternal,
+        showStock,
+        showSubrental,
         showGroupOnlyItems,
         showGroups,
         showItems,
@@ -105,7 +132,12 @@ export default function InventoryTable({
         sortBy,
         sortDir,
       })
-      return await (queryFn as any)()
+      return await (
+        queryFn as () => Promise<{
+          rows: Array<InventoryIndexRow>
+          count: number
+        }>
+      )()
     },
     getNextPageParam: (lastPage, allPages) => {
       const loaded = allPages.reduce((acc, p) => acc + p.rows.length, 0)
@@ -127,30 +159,19 @@ export default function InventoryTable({
     ? (inventoryQuery.data.pages[0]?.count ?? 0)
     : 0
 
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length + (inventoryQuery.hasNextPage ? 1 : 0),
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 44,
-    overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? `loader-${index}`,
-    enabled: rows.length > 0 || inventoryQuery.isFetching,
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows,
+    getRowId: (r) => r.id,
+    estimateRowSize: 44,
+    isFetching: inventoryQuery.isFetching,
+    infinite: {
+      hasNextPage: inventoryQuery.hasNextPage,
+      isFetchingNextPage: inventoryQuery.isFetchingNextPage,
+      onLoadMore: () => {
+        void inventoryQuery.fetchNextPage()
+      },
+    },
   })
-
-  React.useEffect(() => {
-    const vItems = rowVirtualizer.getVirtualItems()
-    if (vItems.length === 0) return
-    const last = vItems[vItems.length - 1]
-    const isAtLoader = last.index >= rows.length - 1
-    if (!isAtLoader) return
-    if (inventoryQuery.isFetchingNextPage) return
-    if (!inventoryQuery.hasNextPage) return
-    void inventoryQuery.fetchNextPage()
-  }, [
-    inventoryQuery.hasNextPage,
-    inventoryQuery.isFetchingNextPage,
-    rows.length,
-    rowVirtualizer,
-  ])
 
   const { data: categories = [] } = useQuery({
     ...categoryNamesQuery({ companyId: companyId ?? '__none__' }),
@@ -167,16 +188,8 @@ export default function InventoryTable({
     [],
   )
 
-  const sortableCols: Array<SortBy> = [
-    'name',
-    'category_name',
-    'brand_name',
-    'on_hand',
-    'current_price',
-  ]
-
   const handleSort = (colId: SortBy) => {
-    if (!sortableCols.includes(colId)) return
+    if (!SORTABLE_COLS.includes(colId)) return
     if (sortBy === colId) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -222,14 +235,14 @@ export default function InventoryTable({
       case 'current_price':
         if (row.current_price == null) return ''
         return fmt.format(Number(row.current_price))
-      case 'owner':
-        return row.internally_owned ? (
+      case 'item_kind':
+        return row.item_kind === 'stock' ? (
           <Badge size="1" variant="soft" color="indigo">
-            Internal
+            Stock
           </Badge>
         ) : (
           <Badge size="1" variant="soft" color="amber">
-            {row.external_owner_name ?? 'External'}
+            Subrental
           </Badge>
         )
       default:
@@ -237,276 +250,113 @@ export default function InventoryTable({
     }
   }
 
-  const columns: Array<{ id: string; header: string; sortable: boolean }> = [
-    { id: 'name', header: 'Name', sortable: true },
-    { id: 'category_name', header: 'Category', sortable: true },
-    { id: 'brand_name', header: 'Brand', sortable: true },
-    { id: 'on_hand', header: 'On hand', sortable: true },
-    { id: 'current_price', header: 'Price', sortable: true },
-    { id: 'owner', header: 'Owner', sortable: false },
-  ]
-
   return (
-    <div
-      ref={containerRef}
-      style={{
-        height: '100%',
-        minHeight: 0,
-        minWidth: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-    >
-      {/* Search bar */}
-      <Flex
-        ref={controlsRef}
-        gap="2"
-        align="center"
-        wrap="wrap"
-        style={{ minWidth: 0 }}
-      >
-        <TextField.Root
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search items, groups…"
-          size="3"
-          style={{ flex: '1 1 min(260px, 100%)', minWidth: 0 }}
-        >
-          <TextField.Slot side="left">
-            <Search />
-          </TextField.Slot>
-          <TextField.Slot side="right">
-            {(inventoryQuery.isFetching ||
-              inventoryQuery.isFetchingNextPage) && <Spinner />}
-          </TextField.Slot>
-        </TextField.Root>
-
-        {!isSmallScreen && (
-          <Select.Root
-            value={categoryFilter ?? ''}
-            size="3"
-            onValueChange={(val) => setCategoryFilter(val === '' ? null : val)}
-          >
-            <Select.Trigger
-              placeholder="Filter category…"
-              style={{ minHeight: 'var(--space-7)' }}
-            />
-            <Select.Content>
-              <Select.Item value="all">All</Select.Item>
-              {categories.map((name) => (
-                <Select.Item key={name} value={name}>
-                  {name.toUpperCase()}
-                </Select.Item>
-              ))}
-            </Select.Content>
-          </Select.Root>
-        )}
-
-        <Flex
-          gap="2"
-          style={{
-            width: isSmallScreen ? '100%' : undefined,
-            flex: isSmallScreen ? '1 1 100%' : undefined,
-          }}
-        >
-          <Button
-            size={isSmallScreen ? '3' : '2'}
-            variant="outline"
-            onClick={() => setAddGroupDialog(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-          >
-            <Packages
-              width={isSmallScreen ? 20 : 16}
-              height={isSmallScreen ? 20 : 16}
-            />{' '}
-            Add group
-          </Button>
-          <Button
-            size={isSmallScreen ? '3' : '2'}
-            variant="solid"
-            onClick={() => setAddItemOpen(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-          >
-            <Package
-              width={isSmallScreen ? 20 : 16}
-              height={isSmallScreen ? 20 : 16}
-            />{' '}
-            Add item
-          </Button>
-        </Flex>
-      </Flex>
-
-      {/* Table: header + body in horizontal scroll so headers scroll with rows */}
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowX: 'auto',
-          overflowY: 'hidden',
-          marginTop: 16,
+    <>
+      <VirtualIndexTable
+        rows={rows}
+        columns={COLUMNS}
+        gridTemplateColumns={GRID_COLUMNS}
+        getRowId={(r) => r.id}
+        renderCell={renderCell}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={handleSort}
+        sortableColumns={SORTABLE_COLS}
+        scrollRef={scrollRef}
+        rowVirtualizer={rowVirtualizer}
+        isLoading={inventoryQuery.isLoading}
+        emptyMessage="No results"
+        footerCount={{
+          shown: totalCount,
+          label: (n) => `${n} item${n !== 1 ? 's' : ''}`,
         }}
-      >
-        <div
-          style={{
-            minWidth: 'max-content',
-            display: 'flex',
-            flexDirection: 'column',
-            height: '100%',
-          }}
-        >
-          {/* Table header */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: GRID_COLUMNS,
-              gap: 'var(--space-2)',
-              padding: 'var(--space-2) var(--space-3)',
-              backgroundColor: 'var(--gray-a2)',
-              borderRadius: 'var(--radius-2)',
-              flexShrink: 0,
-            }}
-          >
-            {columns.map((col) => {
-              const canSort =
-                col.sortable && sortableCols.includes(col.id as SortBy)
-              const isActive = sortBy === col.id
-              const arrow = isActive ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''
+        infinite={{
+          hasNextPage: inventoryQuery.hasNextPage,
+          isFetchingNextPage: inventoryQuery.isFetchingNextPage,
+          onLoadMore: () => {
+            void inventoryQuery.fetchNextPage()
+          },
+        }}
+        toolbar={
+          <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+            <TextField.Root
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search items, groups…"
+              size="3"
+              style={{ flex: '1 1 min(260px, 100%)', minWidth: 0 }}
+            >
+              <TextField.Slot side="left">
+                <Search />
+              </TextField.Slot>
+              <TextField.Slot side="right">
+                {(inventoryQuery.isFetching ||
+                  inventoryQuery.isFetchingNextPage) && <Spinner />}
+              </TextField.Slot>
+            </TextField.Root>
 
-              return (
-                <div
-                  key={col.id}
-                  onClick={() => canSort && handleSort(col.id as SortBy)}
-                  style={{
-                    cursor: canSort ? 'pointer' : undefined,
-                    userSelect: 'none',
-                    fontSize: 'var(--font-size-1)',
-                    fontWeight: 600,
-                  }}
-                  title={canSort ? 'Click to sort' : undefined}
-                >
-                  {col.header}
-                  {arrow}
-                </div>
-              )
-            })}
-          </div>
+            {!isSmallScreen && (
+              <Select.Root
+                value={categoryFilter ?? ''}
+                size="3"
+                onValueChange={(val) =>
+                  setCategoryFilter(val === '' ? null : val)
+                }
+              >
+                <Select.Trigger
+                  placeholder="Filter category…"
+                  style={{ minHeight: 'var(--space-7)' }}
+                />
+                <Select.Content>
+                  <Select.Item value="all">All</Select.Item>
+                  {categories.map((name) => (
+                    <Select.Item key={name} value={name}>
+                      {name.toUpperCase()}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+            )}
 
-          {/* Virtualized list body */}
-          <div
-            ref={scrollRef}
-            style={{
-              flex: 1,
-              minHeight: 0,
-              overflow: 'auto',
-              marginTop: 8,
-            }}
-          >
-            {inventoryQuery.isLoading ? (
-              <Flex align="center" justify="center" py="6">
-                <Spinner size="2" />
-              </Flex>
-            ) : rows.length === 0 ? (
-              <Flex align="center" justify="center" py="6">
-                <Text size="2" color="gray">
-                  No results
-                </Text>
-              </Flex>
-            ) : (
-              <div
+            {canWrite && (
+              <Flex
+                gap="2"
                 style={{
-                  height: `${rowVirtualizer.getTotalSize()}px`,
-                  width: '100%',
-                  position: 'relative',
+                  width: isSmallScreen ? '100%' : undefined,
+                  flex: isSmallScreen ? '1 1 100%' : undefined,
                 }}
               >
-                {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                  const row = rows[virtualRow.index]
-                  const isLoaderRow = virtualRow.index >= rows.length
-
-                  if (isLoaderRow) {
-                    return (
-                      <div
-                        key={`loader-${virtualRow.index}`}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: `${virtualRow.size}px`,
-                          transform: `translateY(${virtualRow.start}px)`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          padding: '0 var(--space-3)',
-                          color: 'var(--gray-10)',
-                        }}
-                      >
-                        {inventoryQuery.hasNextPage
-                          ? inventoryQuery.isFetchingNextPage
-                            ? 'Loading more…'
-                            : 'Scroll to load more…'
-                          : '—'}
-                      </div>
-                    )
-                  }
-
-                  const isActive = row.id === selectedId
-
-                  return (
-                    <div
-                      key={row.id}
-                      data-index={virtualRow.index}
-                      onClick={() => onSelect(row.id)}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                        display: 'grid',
-                        gridTemplateColumns: GRID_COLUMNS,
-                        gap: 'var(--space-2)',
-                        alignItems: 'center',
-                        padding: '0 var(--space-3)',
-                        cursor: 'pointer',
-                        backgroundColor: isActive
-                          ? 'var(--accent-a3)'
-                          : 'transparent',
-                        borderRadius: 'var(--radius-2)',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.backgroundColor =
-                            'var(--gray-a2)'
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.backgroundColor = 'transparent'
-                        }
-                      }}
-                    >
-                      {columns.map((col) => (
-                        <div key={col.id}>{renderCell(row, col.id)}</div>
-                      ))}
-                    </div>
-                  )
-                })}
-              </div>
+                <Button
+                  size={isSmallScreen ? '3' : '2'}
+                  variant="outline"
+                  onClick={() => setAddGroupDialog(true)}
+                  style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+                >
+                  <Packages
+                    width={isSmallScreen ? 20 : 16}
+                    height={isSmallScreen ? 20 : 16}
+                  />{' '}
+                  Add group
+                </Button>
+                <Button
+                  size={isSmallScreen ? '3' : '2'}
+                  variant="solid"
+                  onClick={() => setAddItemOpen(true)}
+                  style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+                >
+                  <Package
+                    width={isSmallScreen ? 20 : 16}
+                    height={isSmallScreen ? 20 : 16}
+                  />{' '}
+                  Add item
+                </Button>
+              </Flex>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Item count */}
-      {totalCount > 0 && (
-        <Flex align="center" mt="2">
-          <Text size="2" color="gray">
-            {totalCount} item{totalCount !== 1 ? 's' : ''}
-          </Text>
-        </Flex>
-      )}
+          </Flex>
+        }
+      />
 
       <AddItemDialog
         open={addItemOpen}
@@ -520,6 +370,6 @@ export default function InventoryTable({
         companyId={companyId ?? ''}
         showTrigger={false}
       />
-    </div>
+    </>
   )
 }

@@ -17,11 +17,13 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { prettyPhone } from '@shared/phone/phone'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { Edit } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { motionFadeTransition } from '@shared/lib/motion'
 import { logActivity } from '@features/latest/api/queries'
 import {
   getJobStatusColor,
@@ -75,7 +77,8 @@ function getDisplayStatus(
 
 const OverviewTab = ({ job }: { job: JobDetail }) => {
   const { companyRole } = useAuthz()
-  const isReadOnly = companyRole === 'freelancer'
+  const { isReadOnly: cannotWrite } = useCompanyWriteAccess()
+  const isFreelancer = companyRole === 'freelancer'
   const addr = job.address
     ? [
         job.address.address_line,
@@ -93,7 +96,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
   return (
     <Box style={{ maxWidth: '100%', minWidth: 0, overflow: 'hidden' }}>
       {/* Job Status Timeline - Hidden for freelancers */}
-      {!isReadOnly && (
+      {!isFreelancer && (
         <Card mb="4" style={{ background: 'var(--gray-a2)' }}>
           <Heading size="3" mb="3">
             Job Status
@@ -126,7 +129,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
             <Text size="2" color="gray" style={{ display: 'block' }}>
               Contact
             </Text>
-            {!isReadOnly && job.customer && job.customer_contact && (
+            {!cannotWrite && job.customer && job.customer_contact && (
               <IconButton
                 variant="ghost"
                 size="1"
@@ -165,7 +168,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
               </KV>
             </Grid>
           ) : (
-            !isReadOnly &&
+            !cannotWrite &&
             job.customer && (
               <Button
                 size="3"
@@ -197,7 +200,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
       <Box>
         <Flex align={'center'} gap={'2'} mt={'1'}>
           <Heading size="3">Location</Heading>
-          {!isReadOnly && job.address && (
+          {!cannotWrite && job.address && (
             <IconButton variant="ghost" onClick={() => setEditOpen(true)}>
               <Edit fontSize={'0.8rem'} />
             </IconButton>
@@ -242,7 +245,7 @@ const OverviewTab = ({ job }: { job: JobDetail }) => {
             )}
           </Grid>
         ) : (
-          !isReadOnly && (
+          !cannotWrite && (
             <Button size="3" variant="soft" onClick={() => setEditOpen(true)}>
               Add location
             </Button>
@@ -301,7 +304,7 @@ function MapWithSkeleton({ query, zoom }: { query: string; zoom?: number }) {
           position: 'absolute',
           inset: 0,
           opacity: isLoading ? 0 : 1,
-          transition: 'opacity 0.3s ease-in-out',
+          transition: motionFadeTransition(),
         }}
       >
         <iframe
@@ -350,6 +353,7 @@ function JobStatusTimeline({
   const qc = useQueryClient()
   const { success, error } = useToast()
   const { companyRole } = useAuthz()
+  const { isReadOnly: cannotWrite } = useCompanyWriteAccess()
   const displayStatus = getDisplayStatus(currentStatus, companyRole)
   const isCanceled = displayStatus === 'canceled'
   const [showArchivePrompt, setShowArchivePrompt] = React.useState(false)
@@ -441,18 +445,13 @@ function JobStatusTimeline({
   })
 
   const handleStatusClick = (status: JobStatus) => {
-    if (
-      companyRole === 'freelancer' ||
-      updateStatus.isPending ||
-      status === displayStatus
-    )
+    if (cannotWrite || updateStatus.isPending || status === displayStatus)
       return
     updateStatus.mutate(status)
   }
 
   const handleCanceledClick = () => {
-    if (companyRole === 'freelancer' || updateStatus.isPending || isCanceled)
-      return
+    if (cannotWrite || updateStatus.isPending || isCanceled) return
     updateStatus.mutate('canceled')
   }
 
@@ -490,9 +489,9 @@ function JobStatusTimeline({
             style={{
               flex: 1,
               position: 'relative',
-              cursor: companyRole === 'freelancer' ? 'default' : 'pointer',
+              cursor: cannotWrite ? 'default' : 'pointer',
               opacity: updateStatus.isPending ? 0.5 : 1,
-              pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
+              pointerEvents: cannotWrite ? 'none' : 'auto',
               minWidth: 0,
             }}
             onClick={() => handleStatusClick(status)}
@@ -609,9 +608,9 @@ function JobStatusTimeline({
                 direction="column"
                 align="center"
                 style={{
-                  cursor: companyRole === 'freelancer' ? 'default' : 'pointer',
+                  cursor: cannotWrite ? 'default' : 'pointer',
                   opacity: updateStatus.isPending ? 0.5 : 1,
-                  pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
+                  pointerEvents: cannotWrite ? 'none' : 'auto',
                   minWidth: '70px',
                 }}
                 onClick={handleCanceledClick}
@@ -690,11 +689,9 @@ function JobStatusTimeline({
                       style={{
                         flex: 1,
                         position: 'relative',
-                        cursor:
-                          companyRole === 'freelancer' ? 'default' : 'pointer',
+                        cursor: cannotWrite ? 'default' : 'pointer',
                         opacity: updateStatus.isPending ? 0.5 : 1,
-                        pointerEvents:
-                          companyRole === 'freelancer' ? 'none' : 'auto',
+                        pointerEvents: cannotWrite ? 'none' : 'auto',
                         minWidth: 0,
                       }}
                       onClick={() => handleStatusClick(status)}
@@ -806,9 +803,9 @@ function JobStatusTimeline({
               direction="column"
               align="center"
               style={{
-                cursor: companyRole === 'freelancer' ? 'default' : 'pointer',
+                cursor: cannotWrite ? 'default' : 'pointer',
                 opacity: updateStatus.isPending ? 0.5 : 1,
-                pointerEvents: companyRole === 'freelancer' ? 'none' : 'auto',
+                pointerEvents: cannotWrite ? 'none' : 'auto',
                 minWidth: '70px',
               }}
               onClick={handleCanceledClick}

@@ -14,11 +14,14 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import LazyImage from '@shared/ui/components/LazyImage'
 import { Car, NavArrowDown, NavArrowRight, Trash, Truck } from 'iconoir-react'
-import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompany } from '@shared/companies/CompanyProvider'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
+import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
 import type {
   BookingStatus,
@@ -44,8 +47,8 @@ export default function TransportTab({ jobId }: { jobId: string }) {
   )
   const { companyId } = useCompany()
   const { companyRole } = useAuthz()
+  const { isReadOnly } = useCompanyWriteAccess()
   const canBook = !!companyId && companyRole !== 'freelancer'
-  const isReadOnly = companyRole === 'freelancer'
 
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
@@ -81,10 +84,11 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         .from('reserved_vehicles')
         .select(
           `
-          id, time_period_id, vehicle_id, status, external_status, external_note,
+          id, time_period_id, vehicle_id, status, forced, external_status, external_note,
           vehicle:vehicle_id (
-            id, name, image_path, external_owner_id, deleted,
-            external_owner:external_owner_id ( id, name )
+            id, name, image_path, internally_owned, external_owner_id, owner_user_id, deleted,
+            external_owner:external_owner_id ( id, name ),
+            owner_user:profiles!vehicles_owner_user_id_fkey ( user_id, display_name, email )
           ),
           time_period:time_period_id ( id, title, notes, start_at, end_at )
         `,
@@ -265,11 +269,20 @@ export default function TransportTab({ jobId }: { jobId: string }) {
           {bookings.map((row) => {
             const vehicle = row.vehicle as any
             const vehicleObj = Array.isArray(vehicle) ? vehicle[0] : vehicle
-            const owner = Array.isArray(vehicleObj?.external_owner)
-              ? vehicleObj?.external_owner[0]
-              : vehicleObj?.external_owner
-            const ownerName = owner?.name
-            const isInternal = !vehicleObj?.external_owner_id
+            const ownerUser = Array.isArray(vehicleObj?.owner_user)
+              ? vehicleObj?.owner_user[0]
+              : vehicleObj?.owner_user
+            const ownerBadge = vehicleOwnerBadge({
+              internally_owned: !!vehicleObj?.internally_owned,
+              external_owner_id: vehicleObj?.external_owner_id ?? null,
+              owner_user_id: vehicleObj?.owner_user_id ?? null,
+              external_owner_name: Array.isArray(vehicleObj?.external_owner)
+                ? vehicleObj?.external_owner[0]?.name
+                : vehicleObj?.external_owner?.name,
+              owner_user_name:
+                ownerUser?.display_name ?? ownerUser?.email ?? null,
+            })
+            const isInternal = !!vehicleObj?.internally_owned
             const currentNote = row.external_note ?? ''
             const editedNote = editingNotes.get(row.id) ?? currentNote
             const noteChanged = editedNote !== currentNote
@@ -279,7 +292,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
                 key={row.id}
                 row={row}
                 vehicle={vehicleObj}
-                ownerName={ownerName}
+                ownerBadge={ownerBadge}
                 isInternal={isInternal}
                 editedNote={editedNote}
                 noteChanged={noteChanged}
@@ -385,7 +398,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
 function VehicleBookingCard({
   row,
   vehicle,
-  ownerName,
+  ownerBadge,
   isInternal,
   editedNote,
   noteChanged,
@@ -400,7 +413,7 @@ function VehicleBookingCard({
 }: {
   row: ReservedVehicleRow
   vehicle: any
-  ownerName?: string
+  ownerBadge: { label: string; color: 'indigo' | 'violet' | 'amber' }
   isInternal: boolean
   editedNote: string
   noteChanged: boolean
@@ -455,7 +468,7 @@ function VehicleBookingCard({
           }}
         >
           {imageUrl ? (
-            <img
+            <LazyImage
               src={imageUrl}
               alt={vehicleName}
               style={{
@@ -503,15 +516,13 @@ function VehicleBookingCard({
           </Flex>
 
           <Flex gap="2" wrap="wrap">
-            {ownerName && (
-              <Badge variant="soft" color="violet">
-                {ownerName}
-              </Badge>
-            )}
+            <Badge variant="soft" color={ownerBadge.color}>
+              {ownerBadge.label}
+            </Badge>
 
-            {isInternal && (
-              <Badge variant="soft" color="indigo">
-                Internal
+            {row.forced && (
+              <Badge variant="soft" color="amber">
+                Forced
               </Badge>
             )}
 

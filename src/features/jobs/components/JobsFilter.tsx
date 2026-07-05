@@ -11,9 +11,10 @@ import {
 } from '@radix-ui/themes'
 import { Filter } from 'iconoir-react'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { motionOffsetRevealX, motionRevealTransition } from '@shared/lib/motion'
 import type { JobStatus } from '../types'
 
-const ALL_STATUSES: Array<JobStatus> = [
+export const ALL_STATUSES: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',
@@ -213,7 +214,12 @@ export default function JobsFilter({
                   color: 'var(--gray-a10)',
                   flexShrink: 0,
                   opacity: hoveredStatus === status ? 1 : 0,
+                  transform:
+                    hoveredStatus === status
+                      ? 'translateX(0)'
+                      : `translateX(${motionOffsetRevealX})`,
                   pointerEvents: hoveredStatus === status ? 'auto' : 'none',
+                  transition: motionRevealTransition(['opacity', 'transform']),
                 }}
                 onClick={(e) => {
                   e.preventDefault()

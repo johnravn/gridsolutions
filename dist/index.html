@@ -2,54 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+    />
     <link
       rel="icon"
       type="image/svg+xml"
       href="/grid-icon-light.svg"
       id="favicon"
     />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#ffffff" id="theme-color" />
     <meta
       name="description"
-      content="Web site created using create-tsrouter-app"
+      content="Business management for production companies — jobs, crew, inventory, and scheduling."
     />
-    <link rel="apple-touch-icon" href="/grid-icon-light.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Grid" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
     <link rel="manifest" href="/manifest.json" />
-    <title>grid</title>
+    <title>Grid</title>
     <script>
-      // Update favicon based on theme
-      function updateFavicon() {
+      // Update favicon and theme-color based on theme
+      function updateThemeAssets() {
         const favicon = document.getElementById('favicon')
+        const themeColorMeta = document.getElementById('theme-color')
         if (!favicon) return
 
-        // Check the actual class on the html element (this is what ThemeToggle sets)
         const htmlElement = document.documentElement
         const isDark = htmlElement.classList.contains('dark')
 
-        // Update favicon based on the html class
         favicon.href = isDark ? '/grid-icon-dark.svg' : '/grid-icon-light.svg'
+
+        if (themeColorMeta) {
+          themeColorMeta.content = isDark ? '#000000' : '#ffffff'
+        }
       }
 
-      // Update on load
-      updateFavicon()
+      updateThemeAssets()
 
-      // Watch for changes to the html element's class list
-      const observer = new MutationObserver(updateFavicon)
+      const observer = new MutationObserver(updateThemeAssets)
       observer.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ['class'],
       })
 
-      // Also listen for localStorage changes (cross-tab sync)
-      window.addEventListener('storage', () => {
+      window.addEventListener('storage', (event) => {
         if (event.key === 'theme') {
-          updateFavicon()
+          updateThemeAssets()
         }
       })
     </script>
-    <script type="module" crossorigin src="/assets/index-CYmQI6iX.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-DjAGcWnf.css">
+    <script type="module" crossorigin src="/assets/index-DMZXPwA7.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-MVOq0kdb.css">
   </head>
   <body>
     <div id="root"></div>

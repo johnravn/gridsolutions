@@ -1,6 +1,7 @@
-import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
-import { Quote } from 'iconoir-react'
+import { Box, Flex, Quote, Text } from '@radix-ui/themes'
+import { Quote as QuoteIcon } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
+import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 
 export function BibleVerseSection() {
@@ -35,13 +36,11 @@ export function BibleVerseSection() {
   return (
     <DashboardCard
       title="Today's Bible verse"
-      icon={<Quote width={18} height={18} />}
+      icon={<QuoteIcon width={18} height={18} />}
       notFullHeight
     >
       {isLoading ? (
-        <Flex align="center" justify="center" py="4">
-          <Spinner size="2" />
-        </Flex>
+        <DashboardCardSkeleton rowCount={2} compact />
       ) : error ? (
         <Box py="4">
           <Text size="2" color="gray" align="center">
@@ -54,7 +53,7 @@ export function BibleVerseSection() {
             {citation || 'Verse of the Day'}
           </Text>
           <Text size="3" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-            {passage || 'No verse text available.'}
+            <Quote>{passage || 'No verse text available.'}</Quote>
           </Text>
           {version && (
             <Text size="1" color="gray">

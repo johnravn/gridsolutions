@@ -3,6 +3,11 @@ import * as React from 'react'
 import { Box, Tabs } from '@radix-ui/themes'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import {
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
+} from '@shared/lib/keyboardShortcuts'
 import CompanyOverviewTab from '../components/CompanyOverviewTab'
 import CompanyUsersTab from '../components/CompanyUsersTab'
 import CompanyExpansionsTab from '../components/CompanyExpansionsTab'
@@ -10,6 +15,16 @@ import CompanyPersonalizationTab from '../components/CompanyPersonalizationTab'
 import CompanySetupTab from '../components/CompanySetupTab'
 import CompanyRatesTab from '../components/CompanyRatesTab'
 import CompanyLoggingTab from '../components/CompanyLoggingTab'
+
+const COMPANY_TABS = [
+  'overview',
+  'users',
+  'logging',
+  'expansions',
+  'personalization',
+  'rates',
+  'setup',
+] as const
 
 export default function CompanyPage() {
   const { companyId } = useCompany()
@@ -30,11 +45,19 @@ export default function CompanyPage() {
     }
   }, [tabFromUrl])
 
-  // Update URL when tab changes
   const handleTabChange = (tab: string) => {
     setActiveTab(tab)
     navigate({ to: '/company', search: { tab } })
   }
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: COMPANY_TABS,
+    activeTab,
+    onTabChange: handleTabChange,
+    enabled: !!companyId,
+  })
 
   // match JobsPage behavior for responsive layout
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -54,10 +77,11 @@ export default function CompanyPage() {
     }
   }, [])
 
-  if (!companyId) return <div>No company selected.</div>
+  if (!companyId) return <PageSkeleton columns="1fr" showInspector={false} />
 
   return (
     <section
+      {...scopeProps}
       style={{
         height: isLarge ? '100%' : undefined,
         minHeight: 0,

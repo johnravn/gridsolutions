@@ -19,6 +19,7 @@ import { Edit, MessageText, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import CompanyLogoUpload from '@shared/ui/components/CompanyLogoUpload'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import CreateAnnouncementDialog from '@features/latest/components/CreateAnnouncementDialog'
 import { companyDetailQuery, updateCompany } from '../api/queries'
 import EditCompanyDialog from './dialogs/EditCompanyDialog'
@@ -74,11 +75,7 @@ export default function CompanyOverviewTab() {
   })
 
   if (isLoading) {
-    return (
-      <Box p="4">
-        <Text>Loading…</Text>
-      </Box>
-    )
+    return <InspectorSkeleton />
   }
   if (isError || !data) {
     return (

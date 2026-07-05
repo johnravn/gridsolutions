@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -36,6 +37,33 @@ export default defineConfig(({ mode }) => {
     plugins: [
       viteReact(),
       tailwindcss(),
+      VitePWA({
+        registerType: 'prompt',
+        includeAssets: [
+          'grid-icon-light.svg',
+          'grid-icon-dark.svg',
+          'icons/*.png',
+        ],
+        manifest: false,
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+              handler: 'NetworkOnly',
+            },
+            {
+              urlPattern: /\/api\/.*/i,
+              handler: 'NetworkOnly',
+            },
+          ],
+        },
+        devOptions: {
+          // generateSW fails in dev on Node 22+ (workbox source-phase imports)
+          enabled: false,
+        },
+      }),
       {
         name: 'youversion-dev-api',
         configureServer(server) {
@@ -118,6 +146,7 @@ export default defineConfig(({ mode }) => {
         '@app': path.resolve(__dirname, 'src/app'),
         '@shared': path.resolve(__dirname, 'src/shared'),
         '@features': path.resolve(__dirname, 'src/features'),
+        '@test': path.resolve(__dirname, 'src/test'),
       },
     },
     optimizeDeps: {
@@ -127,6 +156,39 @@ export default defineConfig(({ mode }) => {
     preview: {
       // Ensure preview server handles SPA routing correctly
       port: 3000,
+    },
+    test: {
+      // threads avoids orphaned fork workers when the parent is killed abruptly
+      // (IDE cancel, piped output, etc.) — see vitest-dev/vitest#8800
+      pool: 'threads',
+      environment: 'jsdom',
+      setupFiles: ['src/test/setup.ts'],
+      include: ['src/**/*.test.{ts,tsx}', 'api/**/*.test.ts'],
+      exclude: ['src/test/integration/**'],
+      coverage: {
+        provider: 'v8',
+        reporter: ['text', 'json', 'json-summary'],
+        include: [
+          'src/features/**/utils/**',
+          'src/features/conflicts/utils/**',
+          'src/features/conflicts/api/**',
+          'src/shared/auth/**',
+          'src/shared/lib/**',
+          'src/shared/phone/phone.ts',
+          'src/shared/conta/**',
+          'src/shared/ui/components/pickers/**',
+          'src/shared/ui/components/SearchableSelect.tsx',
+          'src/shared/ui/components/DateTimePicker.tsx',
+          'src/shared/ui/components/AnimatedQuickSuggestions.tsx',
+          'api/**',
+        ],
+        exclude: ['**/*.test.{ts,tsx}', '**/*.stories.{ts,tsx}', 'src/test/**'],
+        thresholds: {
+          lines: 50,
+          branches: 60,
+          functions: 50,
+        },
+      },
     },
   }
 })

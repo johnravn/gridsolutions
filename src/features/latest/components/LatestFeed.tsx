@@ -2,8 +2,9 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Avatar, Box, Flex, Spinner, Text } from '@radix-ui/themes'
+import { Avatar, Box, Flex, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { IndexTableBodySkeleton } from '@shared/ui/index-table'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { latestFeedQuery } from '../api/queries'
@@ -87,9 +88,9 @@ export default function LatestFeed({
 
   if (isLoading) {
     return (
-      <Flex align="center" justify="center" py="6">
-        <Spinner size="3" />
-      </Flex>
+      <Box p="3">
+        <IndexTableBodySkeleton rowCount={6} rowHeight={80} />
+      </Box>
     )
   }
 

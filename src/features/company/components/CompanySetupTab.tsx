@@ -25,6 +25,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import EditBrandsDialog from '@features/inventory/components/EditBrandsDialog'
 import { useAuthz } from '@shared/auth/useAuthz'
 import EditWelcomeMatterDialog from './dialogs/EditWelcomeMatterDialog'
+import CompanyPrettyOfferImagesSection from './CompanyPrettyOfferImagesSection'
 
 type ItemCategory = {
   id: string
@@ -985,6 +986,15 @@ export default function CompanySetupTab() {
               <Edit /> Manage Brands
             </Button>
           </Flex>
+
+          <Separator size="4" mb="6" />
+
+          <Heading size="4" mb="4">
+            Pretty offer images
+          </Heading>
+          <Box mb="6">
+            <CompanyPrettyOfferImagesSection />
+          </Box>
 
           <Separator size="4" mb="6" />
 

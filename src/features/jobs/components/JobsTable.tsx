@@ -7,6 +7,7 @@ import {
   Button,
   Flex,
   IconButton,
+  Skeleton,
   Spinner,
   Table,
   Text,
@@ -15,8 +16,9 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { DatePicker } from '@shared/ui/components/pickers'
 import {
   Archive,
   ArrowDown,
@@ -63,6 +65,7 @@ export default function JobsTable({
 }) {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
+  const { canWrite } = useCompanyWriteAccess()
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
   const [search, setSearch] = React.useState('')
@@ -83,7 +86,7 @@ export default function JobsTable({
   // Track if we've calculated initial width to prevent recalculating on every search/filter
   const hasCalculatedInitialWidth = React.useRef(false)
 
-  const { data, isFetching, refetch } = useQuery({
+  const { data, isLoading, isFetching, refetch } = useQuery({
     ...jobsIndexPageQuery({
       companyId: companyId ?? '__none__',
       page,
@@ -344,7 +347,7 @@ export default function JobsTable({
               </IconButton>
             </Tooltip>
           ) : (
-            <DateTimePicker
+            <DatePicker
               value=""
               onChange={(iso) => {
                 // Convert ISO to YYYY-MM-DD for the query (which expects date string)
@@ -354,13 +357,12 @@ export default function JobsTable({
                   setSelectedDate(dateStr)
                 }
               }}
-              dateOnly
               iconButton
               iconButtonSize="2"
             />
           )}
 
-          {companyRole !== 'freelancer' && (
+          {canWrite && (
             <Button
               size="2"
               variant="solid"
@@ -461,7 +463,15 @@ export default function JobsTable({
             </Table.Row>
           </Table.Header>
           <Table.Body>
-            {allData.length === 0 ? (
+            {isLoading ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <Table.Row key={i}>
+                  <Table.Cell colSpan={6}>
+                    <Skeleton style={{ height: 44 }} />
+                  </Table.Cell>
+                </Table.Row>
+              ))
+            ) : allData.length === 0 ? (
               <Table.Row>
                 <Table.Cell colSpan={6}>No jobs found</Table.Cell>
               </Table.Row>

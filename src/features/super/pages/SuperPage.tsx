@@ -15,10 +15,12 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { Plus, Sparks, TransitionLeft } from 'iconoir-react'
+import { Plus, TransitionLeft } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
+  useTabKeyboardScopeProps,
+  useTabKeyboardShortcuts,
 } from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
@@ -28,10 +30,12 @@ import CompanyInspector from '../components/CompanyInspector'
 import UsersTable from '../components/UsersTable'
 import UserDialog from '../components/UserDialog'
 import UserInspector from '../components/UserInspector'
-import { createDummyCompany } from '../api/queries'
 import SuperEmailTab from '../components/SuperEmailTab'
+import SuperMonitorTab from '../components/SuperMonitorTab'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
+
+const SUPER_TABS = ['monitor', 'companies', 'users', 'email'] as const
 
 export default function SuperPage() {
   const { success, error: toastError } = useToast()
@@ -53,7 +57,20 @@ export default function SuperPage() {
   )
 
   // Track active tab to clear selection when switching
-  const [activeTab, setActiveTab] = React.useState<string>('companies')
+  const [activeTab, setActiveTab] = React.useState<string>('monitor')
+
+  const handleTabChange = React.useCallback((tab: string) => {
+    setActiveTab(tab)
+    setSelectedId(null)
+  }, [])
+
+  const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
+  useTabKeyboardShortcuts({
+    scopeRef,
+    tabs: SUPER_TABS,
+    activeTab,
+    onTabChange: handleTabChange,
+  })
 
   // match JobsPage behavior for responsive layout
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -403,24 +420,6 @@ export default function SuperPage() {
     },
   })
 
-  const createDummyCompanyMutation = useMutation({
-    mutationFn: createDummyCompany,
-    onSuccess: async (result) => {
-      await qc.invalidateQueries({ queryKey: ['companies'] })
-      await qc.invalidateQueries({ queryKey: ['company'] })
-      success(
-        'Dummy company created!',
-        `Created "${result.companyName}" with ${result.itemsCreated} items, ${result.groupsCreated} groups, ${result.vehiclesCreated} vehicles, ${result.customersCreated} customers, and ${result.jobsCreated} jobs.`,
-      )
-    },
-    onError: (e: any) => {
-      toastError(
-        'Failed to create dummy company',
-        e?.message ?? 'Please try again.',
-      )
-    },
-  })
-
   const deleteUserMutation = useMutation({
     mutationFn: async (userId: string) => {
       // Delete related records first to avoid foreign key constraint violations
@@ -536,18 +535,16 @@ export default function SuperPage() {
 
   return (
     <section
+      {...scopeProps}
       style={{
         height: isLarge ? '100%' : undefined,
         minHeight: 0,
       }}
     >
       <Tabs.Root
-        defaultValue="companies"
+        defaultValue="monitor"
         value={activeTab}
-        onValueChange={(tab) => {
-          setActiveTab(tab)
-          setSelectedId(null) // Clear selection when switching tabs
-        }}
+        onValueChange={handleTabChange}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -556,6 +553,7 @@ export default function SuperPage() {
         }}
       >
         <Tabs.List>
+          <Tabs.Trigger value="monitor">Monitor</Tabs.Trigger>
           <Tabs.Trigger value="companies">Companies</Tabs.Trigger>
           <Tabs.Trigger value="users">Users</Tabs.Trigger>
           <Tabs.Trigger value="email">Email</Tabs.Trigger>
@@ -602,23 +600,10 @@ export default function SuperPage() {
                 >
                   <Flex align="center" justify="between" mb="3">
                     <Heading size="5">Companies</Heading>
-                    <Flex gap="2">
-                      <Button
-                        onClick={() => createDummyCompanyMutation.mutate()}
-                        disabled={createDummyCompanyMutation.isPending}
-                        variant="soft"
-                        color="purple"
-                      >
-                        <Sparks width={16} height={16} />
-                        {createDummyCompanyMutation.isPending
-                          ? 'Creating...'
-                          : 'Create Dummy'}
-                      </Button>
-                      <Button onClick={handleCreate}>
-                        <Plus width={16} height={16} />
-                        Create
-                      </Button>
-                    </Flex>
+                    <Button onClick={handleCreate}>
+                      <Plus width={16} height={16} />
+                      Create
+                    </Button>
                   </Flex>
                   <Separator size="4" mb="3" />
                   <Box
@@ -788,25 +773,10 @@ export default function SuperPage() {
                       <Flex align="center" justify="between" mb="3">
                         <Heading size="5">Companies</Heading>
                         <Flex align="center" gap="2">
-                          <Flex gap="2">
-                            <Button
-                              onClick={() =>
-                                createDummyCompanyMutation.mutate()
-                              }
-                              disabled={createDummyCompanyMutation.isPending}
-                              variant="soft"
-                              color="purple"
-                            >
-                              <Sparks width={16} height={16} />
-                              {createDummyCompanyMutation.isPending
-                                ? 'Creating...'
-                                : 'Create Dummy'}
-                            </Button>
-                            <Button onClick={handleCreate}>
-                              <Plus width={16} height={16} />
-                              Create
-                            </Button>
-                          </Flex>
+                          <Button onClick={handleCreate}>
+                            <Plus width={16} height={16} />
+                            Create
+                          </Button>
                           <Tooltip
                             content={`Collapse sidebar (${collapseShortcutLabel})`}
                           >
@@ -1292,6 +1262,18 @@ export default function SuperPage() {
             }}
           >
             <SuperEmailTab />
+          </Tabs.Content>
+
+          <Tabs.Content
+            value="monitor"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <SuperMonitorTab />
           </Tabs.Content>
         </Box>
       </Tabs.Root>

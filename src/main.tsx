@@ -12,6 +12,7 @@ import { AuthProvider } from '@app/providers/AuthProvider.tsx'
 import { CompanyProvider } from '@shared/companies/CompanyProvider.tsx'
 import { AppToastProvider } from '@shared/ui/toast/ToastProvider.tsx'
 import { ThemeWrapper } from '@shared/theme/ThemeWrapper.tsx'
+import { PwaUpdateHandler } from '@app/pwa/PwaUpdateHandler.tsx'
 import { IconContext } from 'react-icons/lib'
 import reportWebVitals from './reportWebVitals.ts'
 import 'react-phone-number-input/style.css'
@@ -33,6 +34,7 @@ if (rootElement && !rootElement.innerHTML) {
             <CompanyProvider>
               <ThemeWrapper>
                 <AppToastProvider>
+                  <PwaUpdateHandler />
                   <IconContext.Provider value={{ size: '1.5em' }}>
                     <RouterProvider router={router} />
                   </IconContext.Provider>

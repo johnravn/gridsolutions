@@ -21,9 +21,17 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
-import { crewInternalNotesQuery } from '../api/queries'
+import {
+  crewIndexQuery,
+  crewInternalNotesQuery,
+  pendingInvitesQuery,
+} from '../api/queries'
 
 export default function CrewPage() {
   const { companyId } = useCompany()
@@ -163,11 +171,35 @@ export default function CrewPage() {
     }
   }, [isLarge, selectedUserId])
 
-  if (!companyId) return <div>No company selected.</div>
+  const clearSelection = React.useCallback(() => {
+    setSelectedUserId(null)
+  }, [])
 
-  // On small screens, use Grid layout (stack): list fills viewport, inspector below
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
+  useMobileDetailBack(!isLarge, selectedUserId != null, clearSelection)
+
+  const { isLoading: empLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'employee' }),
+    enabled: !!companyId && showEmployees,
+  })
+  const { isLoading: frLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'freelancer' }),
+    enabled: !!companyId && showFreelancers,
+  })
+  const { isLoading: owLoading } = useQuery({
+    ...crewIndexQuery({ companyId: companyId!, kind: 'owner' }),
+    enabled: !!companyId,
+  })
+  const { isLoading: invLoading } = useQuery({
+    ...pendingInvitesQuery({ companyId: companyId! }),
+    enabled: !!companyId && showMyPending,
+  })
+  const crewIndexLoading = empLoading || frLoading || owLoading || invLoading
+  const showInitialSkeleton = useInitialPageLoad(crewIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="2fr 3fr" />
+  }
+
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -178,7 +210,7 @@ export default function CrewPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -231,7 +263,7 @@ export default function CrewPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -239,7 +271,7 @@ export default function CrewPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

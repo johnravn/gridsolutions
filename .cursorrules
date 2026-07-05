@@ -10,7 +10,7 @@ This project is primarily developed using AI agents. Follow these rules strictly
 
 1. **Create migration**: `npm run db:migrate descriptive_name`
 2. **Write SQL** in the generated migration file
-3. **Test locally**: `npm run db:reset:with-data` (never bare `db:reset` — it leaves an empty DB)
+3. **Test locally**: `npm run db:reset` (applies migrations and repopulates from remote — do not use `db:reset:schema-only` unless you need an empty DB)
 4. **Regenerate types from local** (while iterating): `npm run db:types`
 5. **Push to production**: `npm run db:push`
 6. **Regenerate types from remote** (after push succeeds): `npm run db:types:remote`
@@ -101,8 +101,8 @@ Before `git push` on a feature branch, verify the change passes:
 
 ```bash
 npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
+npm run test         # vitest unit tests
 npm run build:check  # vite build + tsc (catches type errors CI will reject)
-npm run test         # vitest run (only if you touched tested code)
 ```
 
 - `npm run build:check` is the single most important gate — Vercel runs the equivalent and will fail the preview build if `tsc` errors exist. Run it whenever you've touched non-trivial TypeScript.
@@ -118,7 +118,7 @@ npm run test         # vitest run (only if you touched tested code)
 1. **Create feature branch**: `git checkout -b feature/description`
 2. **Make changes**: Code, test locally
 3. **Create migration** (if needed): `npm run db:migrate descriptive_name`
-4. **Test locally**: `npm run db:reset:with-data && npm run dev` (never bare `db:reset` — it leaves an empty DB)
+4. **Test locally**: `npm run db:reset && npm run dev`
 5. **Push migration** (if backward-compatible): `npm run db:push` before merging
 6. **Commit and push**: `git push origin feature/description`
 7. **Create PR on GitHub**: Use the PR template

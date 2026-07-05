@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompanyAppRealtimeSync } from '@shared/realtime/useCompanyAppRealtimeSync'
 import { supabase } from '@shared/api/supabase'
 
-type Company = { id: string; name: string }
+type Company = { id: string; name: string; is_demo: boolean }
 type Ctx = {
   companies: Array<Company>
   companyId: string | null
@@ -110,7 +110,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         // Superusers can access all companies
         const { data, error } = await supabase
           .from('companies')
-          .select('id, name')
+          .select('id, name, is_demo')
           .order('name', { ascending: true })
         if (error) throw error
         return data as Array<Company>
@@ -118,7 +118,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
         // Regular users only see companies they're members of
         const { data, error } = await supabase
           .from('company_users')
-          .select('companies ( id, name )')
+          .select('companies ( id, name, is_demo )')
           .eq('user_id', userId!)
         if (error) throw error
         return (data as Array<any>).map((r) => r.companies).filter(Boolean)

@@ -26,6 +26,7 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { escapeForPostgrestOr } from './utils'
 import { ItemSearchField } from './ItemSearchField'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
@@ -77,8 +78,7 @@ export function EquipmentSection({
       is_group: boolean
       on_hand: number | null
       price: number | null
-      internally_owned: boolean
-      external_owner_name: string | null
+      item_kind: 'stock' | 'subrental'
       brand_name: string | null
       model: string | null
     }>
@@ -99,6 +99,9 @@ export function EquipmentSection({
   const [expandedGroupItems, setExpandedGroupItems] = React.useState<
     Set<string>
   >(new Set())
+  const [focusedGroupNameId, setFocusedGroupNameId] = React.useState<
+    string | null
+  >(null)
 
   const groupNameSuggestions = ['Audio', 'Lights', 'Rigging', 'AV', 'General']
 
@@ -137,8 +140,7 @@ export function EquipmentSection({
           is_group,
           on_hand,
           current_price,
-          internally_owned,
-          external_owner_name,
+          item_kind,
           brand_name,
           model
         `,
@@ -165,8 +167,7 @@ export function EquipmentSection({
             is_group: !!r.is_group,
             on_hand: r.on_hand != null ? Number(r.on_hand) : null,
             price: r.current_price ?? null,
-            internally_owned: !!r.internally_owned,
-            external_owner_name: r.external_owner_name ?? null,
+            item_kind: (r.item_kind ?? 'stock') as 'stock' | 'subrental',
             brand_name: r.brand_name ?? null,
             model: r.model ?? null,
           }
@@ -216,19 +217,13 @@ export function EquipmentSection({
       group_id: isGroup ? itemId || null : null,
       quantity: 1,
       unit_price: selectedItem.price ?? 0,
-      is_internal: selectedItem.internally_owned,
+      is_internal: selectedItem.item_kind === 'stock',
       sort_order: group.items.length,
       item: !isGroup
         ? {
             id: selectedItem.id,
             name: selectedItem.name,
-            externally_owned: !selectedItem.internally_owned,
-            external_owner_id: selectedItem.internally_owned
-              ? null
-              : selectedItem.external_owner_name
-                ? 'temp'
-                : null,
-            external_owner_name: selectedItem.external_owner_name,
+            item_kind: selectedItem.item_kind,
             brand: selectedItem.brand_name
               ? { id: 'temp', name: selectedItem.brand_name }
               : null,
@@ -239,9 +234,7 @@ export function EquipmentSection({
         ? {
             id: selectedItem.id,
             name: selectedItem.name,
-            externally_owned: !selectedItem.internally_owned,
-            external_owner_id: null,
-            external_owner_name: selectedItem.external_owner_name,
+            item_kind: selectedItem.item_kind,
           }
         : null,
     }
@@ -539,6 +532,15 @@ export function EquipmentSection({
                                     })
                                   }}
                                   onClick={(e) => e.stopPropagation()}
+                                  onFocus={(e) => {
+                                    e.stopPropagation()
+                                    setFocusedGroupNameId(group.id)
+                                  }}
+                                  onBlur={() =>
+                                    setFocusedGroupNameId((prev) =>
+                                      prev === group.id ? null : prev,
+                                    )
+                                  }
                                   placeholder="Enter group name"
                                   style={{ width: 200 }}
                                   readOnly={readOnly}
@@ -566,36 +568,28 @@ export function EquipmentSection({
                                 )}
                               </Flex>
                             </Flex>
+                            {!readOnly && (
+                              <AnimatedQuickSuggestions
+                                suggestions={groupNameSuggestions}
+                                open={focusedGroupNameId === group.id}
+                                staticOpen={!group.group_name}
+                                label="Group name suggestions:"
+                                showLabel
+                                stopPropagation
+                                onSelect={(suggestion) =>
+                                  updateGroup(group.id, {
+                                    group_name: suggestion,
+                                  })
+                                }
+                                onAfterSelect={() =>
+                                  setFocusedGroupNameId(null)
+                                }
+                              />
+                            )}
                           </Box>
 
                           {isExpanded && (
                             <Box p="3" style={{ background: 'var(--gray-a1)' }}>
-                              {/* Group name suggestions */}
-                              {!readOnly && !group.group_name && (
-                                <Box mb="3">
-                                  <Text size="1" color="gray" mb="1">
-                                    Group name suggestions:
-                                  </Text>
-                                  <Flex gap="2" wrap="wrap">
-                                    {groupNameSuggestions.map((suggestion) => (
-                                      <Button
-                                        key={suggestion}
-                                        size="1"
-                                        variant="soft"
-                                        color="gray"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          updateGroup(group.id, {
-                                            group_name: suggestion,
-                                          })
-                                        }}
-                                      >
-                                        {suggestion}
-                                      </Button>
-                                    ))}
-                                  </Flex>
-                                </Box>
-                              )}
                               {/* Search for items */}
                               {!readOnly && (
                                 <Flex
@@ -765,20 +759,16 @@ export function EquipmentSection({
                                                           Group
                                                         </Badge>
                                                       ) : null}
-                                                      {item.group
-                                                        ?.externally_owned ||
-                                                      item.item
-                                                        ?.externally_owned ? (
+                                                      {item.group?.item_kind ===
+                                                        'subrental' ||
+                                                      item.item?.item_kind ===
+                                                        'subrental' ? (
                                                         <Badge
                                                           size="1"
                                                           variant="soft"
                                                           color="amber"
                                                         >
-                                                          {item.group
-                                                            ?.external_owner_name ??
-                                                            item.item
-                                                              ?.external_owner_name ??
-                                                            'External'}
+                                                          Subrental
                                                         </Badge>
                                                       ) : (
                                                         <Badge
@@ -786,7 +776,7 @@ export function EquipmentSection({
                                                           variant="soft"
                                                           color="indigo"
                                                         >
-                                                          Internal
+                                                          Stock
                                                         </Badge>
                                                       )}
                                                     </Flex>

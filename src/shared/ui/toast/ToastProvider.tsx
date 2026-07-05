@@ -10,6 +10,7 @@ import {
   WarningTriangle,
   Xmark,
 } from 'iconoir-react'
+import { wasDemoBlockRecently } from '@features/demo/lib/demoModeState'
 
 type ToastKind = 'success' | 'error' | 'info'
 type ToastItem = {
@@ -262,6 +263,7 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
         undoLabel,
       }),
     error: (title, description, duration) => {
+      if (wasDemoBlockRecently()) return
       // Log error to console for debugging
       console.error('[Toast Error]', {
         title,
@@ -281,8 +283,8 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
       // Fixed viewport so toasts appear above dialogs, not inside them
       style={{
         position: 'fixed',
-        bottom: 16,
-        right: 16,
+        bottom: 'calc(16px + var(--app-safe-bottom))',
+        right: 'calc(16px + var(--app-safe-right))',
         display: 'flex',
         flexDirection: 'column',
         gap: 10,

@@ -24,6 +24,7 @@ import InspectorCalendar from '@features/calendar/components/InspectorCalendar'
 import { crewCalendarQuery } from '@features/calendar/api/queries'
 import ChangeRoleConfirmDialog from '@features/company/components/dialogs/ChangeRoleConfirmDialog'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { useAuthz } from '@shared/auth/useAuthz'
 import {
   crewDetailQuery,
@@ -194,13 +195,7 @@ export default function CrewInspector({
 
   if (!userId)
     return <Text color="gray">Select a crew member to view details.</Text>
-  if (isLoading)
-    return (
-      <Flex align="center" gap="1">
-        <Text>Thinking</Text>
-        <Spinner size="2" />
-      </Flex>
-    )
+  if (isLoading) return <InspectorSkeleton />
   if (isError)
     return (
       <Text color="red">

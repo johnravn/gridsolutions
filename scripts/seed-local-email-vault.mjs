@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Seeds vault secrets `project_url` + `anon_key` so pg_net (DB triggers + cron) can call Edge Functions.
- * Run automatically after `npm run db:reset` when Supabase is up.
+ * Run automatically after `npm run db:reset:schema-only` when Supabase is up.
  *
  * Requires: Docker Supabase running (`supabase start`), `psql` on PATH.
  */

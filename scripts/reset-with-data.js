@@ -4,8 +4,8 @@
  * This is a convenience script that combines db:reset + vault seed + db:copy-data (+ storage).
  * Usage: node scripts/reset-with-data.js  —  or: npm run db:reset:with-data
  *
- * `npm run db:reset` runs scripts/db-reset.mjs (SUPABASE_DB_ONLY + recovery if CLI dies with 502
- * after migrations; see supabase/cli#4535).
+ * `npm run db:reset:schema-only` runs scripts/db-reset.mjs (SUPABASE_DB_ONLY + recovery if CLI
+ * dies with 502 after migrations; see supabase/cli#4535). `npm run db:reset` is the full workflow.
  */
 
 import { execSync } from 'child_process'
@@ -58,8 +58,11 @@ async function resetWithData() {
       '   (Migrations, seed.sql, bucket sync, and db:seed-email-vault-local)',
       'cyan',
     )
-    // db:reset often fails with 502 while Docker restarts Kong/DB — retry with longer backoff.
-    await runWithRetry('npm run db:reset', { retries: 4, delayMs: 20000 })
+    // schema-only reset often fails with 502 while Docker restarts Kong/DB — retry with longer backoff.
+    await runWithRetry('npm run db:reset:schema-only', {
+      retries: 4,
+      delayMs: 20000,
+    })
     log('   ✅ Database reset complete', 'green')
     console.log('')
 

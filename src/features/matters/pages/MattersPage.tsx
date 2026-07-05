@@ -19,11 +19,15 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
 import MattersFilter from '../components/MattersFilter'
+import { mattersIndexQueryAll } from '../api/queries'
 import type { MatterType } from '../types'
 
 export default function MattersPage() {
@@ -178,10 +182,20 @@ export default function MattersPage() {
     }
   }, [isLarge, selectedId])
 
-  if (!companyId) return <PageSkeleton columns="2fr 3fr" />
+  const clearSelection = React.useCallback(() => {
+    setSelectedId(null)
+  }, [])
 
-  // Card height accounts for: top bar (~56px) + content padding (32px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
+  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+
+  const { isLoading: mattersIndexLoading } = useQuery({
+    ...mattersIndexQueryAll(),
+  })
+  const showInitialSkeleton = useInitialPageLoad(mattersIndexLoading)
+
+  if (!companyId || showInitialSkeleton)
+    return <PageSkeleton columns="2fr 3fr" />
+
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -192,7 +206,7 @@ export default function MattersPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -247,7 +261,7 @@ export default function MattersPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -255,7 +269,7 @@ export default function MattersPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',

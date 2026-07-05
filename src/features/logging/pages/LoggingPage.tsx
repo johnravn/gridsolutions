@@ -24,7 +24,8 @@ import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -369,32 +370,6 @@ export default function LoggingPage() {
     })
   }, [companyId, from, qc, to, userId])
 
-  const handleStartChange = React.useCallback(
-    (value: string) => {
-      setStartAt(value)
-      if (!value) return
-      if (!endAt) {
-        setEndAt(value)
-        return
-      }
-
-      const startDate = new Date(value)
-      const endDate = new Date(endAt)
-      endDate.setFullYear(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
-      )
-      const nextEndAt = endDate.toISOString()
-      if (new Date(nextEndAt).getTime() < startDate.getTime()) {
-        setEndAt(startDate.toISOString())
-      } else {
-        setEndAt(nextEndAt)
-      }
-    },
-    [endAt],
-  )
-
   const lastSelectedMonthRef = React.useRef(selectedMonth)
   React.useEffect(() => {
     if (lastSelectedMonthRef.current === selectedMonth) return
@@ -608,21 +583,21 @@ export default function LoggingPage() {
             disabled={entryMode === 'job'}
           />
         </label>
-        <DateTimePicker
-          label="Start"
-          value={startAt}
-          onChange={handleStartChange}
-          disabled={false}
-          locale="nb"
-        />
-        <DateTimePicker
-          label="End"
-          value={endAt}
-          onChange={(value) => setEndAt(value)}
-          disabled={false}
-          invalid={hasInvalidTimeRange}
-          locale="nb"
-        />
+        <Box style={{ gridColumn: '1 / -1' }}>
+          <Text as="div" size="2" mb="1" weight="medium">
+            Time period
+          </Text>
+          <DateTimeRangePicker
+            startAt={startAt}
+            endAt={endAt}
+            onChange={({ startAt: s, endAt: e }) => {
+              setStartAt(s)
+              setEndAt(e)
+            }}
+            invalid={hasInvalidTimeRange}
+            locale="nb"
+          />
+        </Box>
       </Box>
 
       <Box mt="4">
@@ -948,7 +923,7 @@ export default function LoggingPage() {
     }
   }, [isResizing])
 
-  if (!companyId) return <div>No company selected.</div>
+  if (!companyId) return <PageSkeleton columns="1fr" showInspector={false} />
 
   // On small screens, use Grid layout (stack)
   if (!isLarge) {

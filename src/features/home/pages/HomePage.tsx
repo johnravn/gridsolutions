@@ -1,8 +1,10 @@
 // src/features/home/pages/HomePage.tsx
 import * as React from 'react'
-import { Box, Text } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
-import { addDays, startOfMinute } from 'date-fns'
+import HomePageSkeleton from '@shared/ui/components/HomePageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
+import { addDays, format, startOfMinute } from 'date-fns'
+import { nb } from 'date-fns/locale'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
@@ -20,8 +22,10 @@ import { useUpcomingJobs } from '@features/home/hooks/useUpcomingJobs'
 import { useHomeResizeLayout } from '@features/home/hooks/useHomeResizeLayout'
 import {
   crewConflictsQuery,
+  equipmentConflictsQuery,
   vehicleConflictsQuery,
 } from '@features/conflicts/api/queries'
+import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
 import type { HomeMatter } from '@features/home/types'
 
 export default function HomePage() {
@@ -33,6 +37,8 @@ export default function HomePage() {
   )
   const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(true)
   const [jobsWeekOffset, setJobsWeekOffset] = React.useState<0 | 1>(0)
+  const [conflictDaysFilter, setConflictDaysFilter] =
+    React.useState<ConflictDaysFilter>('30')
 
   const canVisitJobs = caps.has('visit:jobs')
 
@@ -48,14 +54,16 @@ export default function HomePage() {
     showMyJobsOnly,
   })
 
-  const { data: jobsReadyToInvoice = [], isLoading: jobsReadyToInvoiceLoading } =
-    useQuery({
-      ...jobsReadyToInvoiceQuery({
-        companyId: companyId ?? '',
-        userId: userId ?? '',
-      }),
-      enabled: !!companyId && !!userId && canVisitJobs,
-    })
+  const {
+    data: jobsReadyToInvoice = [],
+    isLoading: jobsReadyToInvoiceLoading,
+  } = useQuery({
+    ...jobsReadyToInvoiceQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: !!companyId && !!userId && canVisitJobs,
+  })
 
   const { data: companyWeekJobs = [], isLoading: companyWeekJobsLoading } =
     useQuery({
@@ -77,18 +85,17 @@ export default function HomePage() {
     [companyWeekJobs],
   )
 
-  const { data: companyWeekBookingSummaries = {}, isLoading: companyWeekBookingsDetailLoading } =
-    useQuery({
-      ...companyWeekJobsBookingsQuery({
-        companyId: companyId ?? '',
-        weekOffset: jobsWeekOffset,
-        jobsMeta: jobsWeekBookingsMeta,
-      }),
-      enabled:
-        !!companyId &&
-        canVisitJobs &&
-        jobsWeekBookingsMeta.length > 0,
-    })
+  const {
+    data: companyWeekBookingSummaries = {},
+    isLoading: companyWeekBookingsDetailLoading,
+  } = useQuery({
+    ...companyWeekJobsBookingsQuery({
+      companyId: companyId ?? '',
+      weekOffset: jobsWeekOffset,
+      jobsMeta: jobsWeekBookingsMeta,
+    }),
+    enabled: !!companyId && canVisitJobs && jobsWeekBookingsMeta.length > 0,
+  })
 
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
     ...mattersIndexQueryAll(),
@@ -100,13 +107,15 @@ export default function HomePage() {
   }, [mattersData])
 
   // IMPORTANT: make range stable so queryKey doesn't change every render
-  const { conflictFrom, conflictTo } = React.useMemo(() => {
+  const { conflictFrom, conflictTo, conflictRangeLabel } = React.useMemo(() => {
     const now = startOfMinute(new Date())
+    const end = addDays(now, Number(conflictDaysFilter))
     return {
       conflictFrom: now.toISOString(),
-      conflictTo: addDays(now, 30).toISOString(),
+      conflictTo: end.toISOString(),
+      conflictRangeLabel: `${format(now, 'd. MMM', { locale: nb })} – ${format(end, 'd. MMM yyyy', { locale: nb })}`,
     }
-  }, [companyId])
+  }, [companyId, conflictDaysFilter])
 
   const { data: crewConflicts = [], isLoading: crewConflictsLoading } =
     useQuery({
@@ -132,7 +141,22 @@ export default function HomePage() {
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
     })
-  const conflictsLoading = crewConflictsLoading || vehicleConflictsLoading
+  const {
+    data: equipmentConflicts = [],
+    isLoading: equipmentConflictsLoading,
+  } = useQuery({
+    ...equipmentConflictsQuery({
+      companyId: companyId ?? '',
+      from: conflictFrom,
+      to: conflictTo,
+    }),
+    enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+  const conflictsLoading =
+    crewConflictsLoading || vehicleConflictsLoading || equipmentConflictsLoading
 
   const getInitials = getInitialsFromNameOrEmail
 
@@ -151,12 +175,16 @@ export default function HomePage() {
   })
   const homeLayout = homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
 
-  if (!companyId) {
-    return (
-      <Box p="4">
-        <Text>Please select a company</Text>
-      </Box>
-    )
+  const isHomeDataLoading =
+    mattersLoading ||
+    conflictsLoading ||
+    (canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading) ||
+    (homeLayout.showUpcomingJobs && upcomingJobsLoading)
+
+  const showInitialSkeleton = useInitialPageLoad(isHomeDataLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <HomePageSkeleton />
   }
 
   if (!isLarge) {
@@ -185,7 +213,11 @@ export default function HomePage() {
         getAvatarUrl={getAvatarUrl}
         crewConflicts={crewConflicts}
         vehicleConflicts={vehicleConflicts}
+        equipmentConflicts={equipmentConflicts}
         conflictsLoading={conflictsLoading}
+        conflictDaysFilter={conflictDaysFilter}
+        onConflictDaysFilterChange={setConflictDaysFilter}
+        conflictRangeLabel={conflictRangeLabel}
         homeLayout={homeLayout}
       />
     )
@@ -220,7 +252,11 @@ export default function HomePage() {
       getAvatarUrl={getAvatarUrl}
       crewConflicts={crewConflicts}
       vehicleConflicts={vehicleConflicts}
+      equipmentConflicts={equipmentConflicts}
       conflictsLoading={conflictsLoading}
+      conflictDaysFilter={conflictDaysFilter}
+      onConflictDaysFilterChange={setConflictDaysFilter}
+      conflictRangeLabel={conflictRangeLabel}
       homeLayout={homeLayout}
     />
   )

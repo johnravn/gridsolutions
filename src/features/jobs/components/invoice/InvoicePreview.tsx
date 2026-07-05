@@ -91,8 +91,6 @@ type InvoicePreviewProps =
       ) => void
       onAddLine?: () => void
       onRemoveLine?: (lineId: string) => void
-      /** Element (or getter) inside the dialog to portal ref dropdowns into. Required for dropdown to work inside Dialog. */
-      refFieldPortalContainer?: HTMLElement | null | (() => HTMLElement | null)
     }
 
 export default function InvoicePreview(props: InvoicePreviewProps) {
@@ -257,7 +255,6 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
     onLineChange,
     onAddLine,
     onRemoveLine,
-    refFieldPortalContainer,
   } = props
 
   const displayLines = editedLines ?? bookings.all
@@ -426,7 +423,6 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
               emptyMessage="No employees found"
               dropdownMaxWidth={280}
               style={{ minWidth: 220 }}
-              portalContainer={refFieldPortalContainer}
             />
           </Flex>
           <Flex direction="column" gap="1">
@@ -447,7 +443,6 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
               emptyMessage="No contacts found"
               dropdownMaxWidth={280}
               style={{ minWidth: 220 }}
-              portalContainer={refFieldPortalContainer}
             />
           </Flex>
         </Flex>

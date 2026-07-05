@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 /**
- * Runs `supabase db reset` with SUPABASE_DB_ONLY=true, then bucket sync + vault seed.
+ * Schema-only local reset: `supabase db reset` + bucket sync + vault seed (no remote data copy).
+ * Invoked via `npm run db:reset:schema-only`. For normal dev/migration testing use `npm run db:reset`
+ * (reset-with-data.js), which calls this script then copies auth, data, and storage from remote.
  *
  * The CLI often exits non-zero with "502" during "Restarting containers..." even though
  * migrations + seed.sql already finished (supabase/cli#4535). When that happens we verify

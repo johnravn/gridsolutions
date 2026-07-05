@@ -6,14 +6,18 @@
 
 import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
+import {
+  makeContaFetch,
+  syncCustomersWithContaCore,
+} from '@shared/conta/customerSyncCore'
+import type {
+  ContaClientOptions,
+  SyncResult,
+} from '@shared/conta/customerSyncCore'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@shared/types/database.types'
 
-/** Optional: pass for server-side/cron when no user session (uses apiKey + baseUrl) */
-export type ContaClientOptions = {
-  apiKey: string
-  baseUrl?: string
-}
+export type { ContaClientOptions, SyncResult }
 
 type ContaCustomerHit = {
   id?: number
@@ -74,39 +78,6 @@ function parseCustomerAddress(address: string) {
   return { addressLine1, addressPostcode, addressCity, addressCountry }
 }
 
-export type SyncResult = {
-  updated: number
-  created: number
-  skipped: number
-  errors: Array<string>
-}
-
-function makeContaFetch(opt: ContaClientOptions) {
-  const base = opt.baseUrl || 'https://api.gateway.conta.no'
-  return {
-    get: async (path: string) => {
-      const r = await fetch(`${base}${path}`, {
-        headers: { apiKey: opt.apiKey, Accept: 'application/json' },
-      })
-      if (!r.ok) throw new Error(`Conta ${r.status}: ${await r.text()}`)
-      return r.json()
-    },
-    post: async (path: string, data?: unknown) => {
-      const r = await fetch(`${base}${path}`, {
-        method: 'POST',
-        headers: {
-          apiKey: opt.apiKey,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: data ? JSON.stringify(data) : undefined,
-      })
-      if (!r.ok) throw new Error(`Conta ${r.status}: ${await r.text()}`)
-      return r.json()
-    },
-  }
-}
-
 /**
  * Sync customers for a company with Conta.
  * - Matches by orgNo (VAT)
@@ -121,160 +92,14 @@ export async function syncCustomersWithConta(
   contaOpt?: ContaClientOptions,
   supabaseClient?: SupabaseClient<Database>,
 ): Promise<SyncResult> {
-  const result: SyncResult = { updated: 0, created: 0, skipped: 0, errors: [] }
-  const conta = contaOpt ? makeContaFetch(contaOpt) : contaClient
   const db = supabaseClient ?? supabase
-
-  // 1. Fetch all Conta customers (paginate)
-  const contaCustomersByOrgNo = new Map<string, ContaCustomerHit>()
-  let page = 0
-  const hitsPerPage = 100
-  let hasMore = true
-  while (hasMore) {
-    const res = (await conta.get(
-      `/invoice/organizations/${organizationId}/customers?hits=${hitsPerPage}&page=${page}`,
-    )) as { hits?: Array<ContaCustomerHit>; totalHits?: number }
-    const hits = Array.isArray(res?.hits) ? res.hits : []
-    for (const h of hits) {
-      const orgNo = (h.orgNo || '').replace(/\D/g, '').trim()
-      if (orgNo && h.id) {
-        contaCustomersByOrgNo.set(orgNo, {
-          ...h,
-          name: h.name ?? h.customerName,
-        })
+  const conta = contaOpt
+    ? makeContaFetch(contaOpt)
+    : {
+        get: (path: string) => contaClient.get(path),
+        post: (path: string, data?: unknown) => contaClient.post(path, data),
       }
-    }
-    const total = res?.totalHits ?? 0
-    hasMore = (page + 1) * hitsPerPage < total
-    page++
-    if (hits.length === 0) break
-  }
-
-  // 2. Fetch Subb customers for this company
-  const { data: subbCustomers, error: subbErr } = await db
-    .from('customers')
-    .select('id, name, email, phone, address, vat_number, conta_customer_id')
-    .eq('company_id', companyId)
-    .or('deleted.is.null,deleted.eq.false')
-
-  if (subbErr) {
-    result.errors.push(subbErr.message)
-    return result
-  }
-
-  const now = new Date().toISOString()
-
-  for (const c of subbCustomers ?? []) {
-    const orgNo = (c.vat_number || '').replace(/\D/g, '').trim()
-    if (!orgNo) {
-      result.skipped++
-      continue
-    }
-
-    let contaHit = contaCustomersByOrgNo.get(orgNo) ?? null
-
-    // If we have conta_customer_id, try to fetch full customer from Conta
-    const contaId =
-      (c as { conta_customer_id?: number | null })?.conta_customer_id ?? null
-
-    if (contaId && !contaHit) {
-      try {
-        const full = (await conta.get(
-          `/invoice/organizations/${organizationId}/customers/${contaId}`,
-        )) as ContaCustomerHit
-        if (full?.id) contaHit = full
-      } catch {
-        // Customer may have been deleted in Conta; we'll skip or create
-      }
-    }
-
-    if (contaHit?.id) {
-      // Match found: update our DB with Conta read-only data
-      // Use stats from customer list hit (numberOfInvoices, sumTotalInvoiced, sumRemainingInvoices)
-      // Fall back to invoice count API if list doesn't include it
-      try {
-        let invoiceCount: number | null = contaHit.numberOfInvoices ?? null
-        if (invoiceCount == null) {
-          try {
-            const invRes = (await conta.get(
-              `/invoice/organizations/${organizationId}/invoices?customerId=${contaHit.id}&hits=1`,
-            )) as { totalHits?: number }
-            invoiceCount = invRes?.totalHits ?? null
-          } catch {
-            // Ignore invoice count fetch errors
-          }
-        }
-        const { error } = await db
-          .from('customers')
-          .update({
-            conta_customer_id: contaHit.id,
-            conta_days_until_payment_reminder:
-              contaHit.daysUntilPaymentReminder ?? null,
-            conta_days_until_estimate_overdue:
-              contaHit.daysUntilEstimateOverdue ?? null,
-            conta_invoice_delivery_method:
-              contaHit.invoiceDeliveryMethod ?? null,
-            conta_invoice_count: invoiceCount,
-            conta_total_invoiced:
-              contaHit.sumTotalInvoiced != null
-                ? contaHit.sumTotalInvoiced
-                : null,
-            conta_total_unpaid:
-              contaHit.sumRemainingInvoices != null
-                ? contaHit.sumRemainingInvoices
-                : null,
-            conta_last_synced_at: now,
-          })
-          .eq('id', c.id)
-          .eq('company_id', companyId)
-        if (error) result.errors.push(`${c.name}: ${error.message}`)
-        else result.updated++
-      } catch (e: any) {
-        result.errors.push(`${c.name}: ${e?.message ?? 'Update failed'}`)
-      }
-    } else {
-      // Not in Conta: create in Conta (only write)
-      const addr = parseCustomerAddress(c.address || '')
-      if (!addr.addressLine1 || !addr.addressPostcode || !addr.addressCity) {
-        result.skipped++
-        result.errors.push(`${c.name}: Missing address for Conta create`)
-        continue
-      }
-      try {
-        const created = (await conta.post(
-          `/invoice/organizations/${organizationId}/customers`,
-          {
-            name: c.name?.trim() || 'Customer',
-            customerType: 'ORGANIZATION',
-            orgNo: orgNo,
-            emailAddress: c.email?.trim() || undefined,
-            phoneNo: c.phone?.trim() || undefined,
-            customerAddressLine1: addr.addressLine1,
-            customerAddressPostcode: addr.addressPostcode,
-            customerAddressCity: addr.addressCity,
-            customerAddressCountry: addr.addressCountry || undefined,
-          },
-        )) as { id?: number }
-        const newId = created?.id
-        if (newId) {
-          const { error } = await db
-            .from('customers')
-            .update({
-              conta_customer_id: newId,
-              conta_last_synced_at: now,
-            })
-            .eq('id', c.id)
-            .eq('company_id', companyId)
-          if (error) result.errors.push(`${c.name}: ${error.message}`)
-          else result.created++
-        }
-      } catch (e: any) {
-        result.errors.push(`${c.name}: ${e?.message ?? 'Create failed'}`)
-      }
-    }
-  }
-
-  return result
+  return syncCustomersWithContaCore(companyId, organizationId, conta, db)
 }
 
 /**
@@ -330,8 +155,10 @@ export async function fetchAndSyncContaCustomer(
 
     if (error) return { ok: false, error: error.message }
     return { ok: true }
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Failed to fetch from Conta.' }
+  } catch (e: unknown) {
+    const message =
+      e instanceof Error ? e.message : 'Failed to fetch from Conta.'
+    return { ok: false, error: message }
   }
 }
 
@@ -403,8 +230,10 @@ export async function createCustomerInConta(
 
     if (error) return { ok: false, error: error.message }
     return { ok: true, contaCustomerId: newId }
-  } catch (e: any) {
-    return { ok: false, error: e?.message ?? 'Failed to create in Conta.' }
+  } catch (e: unknown) {
+    const message =
+      e instanceof Error ? e.message : 'Failed to create in Conta.'
+    return { ok: false, error: message }
   }
 }
 

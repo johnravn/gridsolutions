@@ -31,18 +31,14 @@ export type LocalEquipmentItem = {
   item?: {
     id: string
     name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
+    item_kind: 'stock' | 'subrental'
     brand?: { id: string; name: string } | null
     model?: string | null
   } | null
   group?: {
     id: string
     name: string
-    externally_owned?: boolean | null
-    external_owner_id?: UUID | null
-    external_owner_name?: string | null
+    item_kind: 'stock' | 'subrental'
   } | null
 }
 

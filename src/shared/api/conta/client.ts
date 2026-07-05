@@ -157,7 +157,9 @@ export function formatContaApiError(
     }
     if (Array.isArray(ed.errors) && ed.errors.length > 0) {
       const firstError = ed.errors[0] as Record<string, unknown> | undefined
-      const feMessages = firstError?.messages as Record<string, unknown> | undefined
+      const feMessages = firstError?.messages as
+        | Record<string, unknown>
+        | undefined
       const detail =
         (feMessages &&
           ((typeof feMessages.EN === 'string' && feMessages.EN) ||
@@ -218,7 +220,8 @@ export async function contaPostForResponse(
   }
   return contaRequest(endpoint, {
     method: 'POST',
-    body: data !== undefined && data !== null ? JSON.stringify(data) : undefined,
+    body:
+      data !== undefined && data !== null ? JSON.stringify(data) : undefined,
   })
 }
 

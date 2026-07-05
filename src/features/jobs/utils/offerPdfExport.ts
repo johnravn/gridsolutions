@@ -1,9 +1,10 @@
 // src/features/jobs/utils/offerPdfExport.ts
 import jsPDF from 'jspdf'
 import { calculateRentalFactor } from './offerCalculations'
+import { formatOfferNumberDisplay } from './offerNumber'
+import { normalizeTransportGroups } from './transportGroups'
 import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
-import { formatOfferNumberDisplay } from './offerNumber'
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('nb-NO', {
@@ -601,21 +602,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
     ]
     drawTableHeader(transportColumns)
 
-    const transportGroups =
-      offer.transport_groups && offer.transport_groups.length > 0
-        ? [...offer.transport_groups].sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )
-        : [
-            {
-              id: 'transport',
-              group_name: 'Transport',
-              sort_order: 0,
-              items: [...(offer.transport_items || [])].sort(
-                (a, b) => a.sort_order - b.sort_order,
-              ),
-            },
-          ]
+    const transportGroups = normalizeTransportGroups(offer)
 
     for (const group of transportGroups) {
       ensureSpace(10, () => drawTableHeader(transportColumns, true))
@@ -669,6 +656,182 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         )
       }
       yPos += 2
+    }
+  }
+
+  const prettyModules = (
+    offer as OfferDetail & { modules?: OfferDetail['modules'] }
+  ).modules
+
+  if (prettyModules && prettyModules.length > 0) {
+    yPos += 4
+    addSectionHeader('Proposal Modules')
+    doc.setFontSize(9)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(30)
+
+    for (const module of [...prettyModules].sort(
+      (a, b) => a.sort_order - b.sort_order,
+    )) {
+      ensureSpace(18)
+      if (module.title) {
+        doc.setFont('helvetica', 'bold')
+        doc.text(module.title, margin, yPos)
+        yPos += 5
+      }
+
+      if (module.module_type === 'timeline') {
+        for (const item of [...(module.timeline_items ?? [])].sort(
+          (a, b) => a.sort_order - b.sort_order,
+        )) {
+          const group = item.summary ? ` [${item.summary}]` : ''
+          const timeRange =
+            item.start_at && item.end_at
+              ? ` (${formatDateTime(item.start_at)} – ${formatDateTime(item.end_at)})`
+              : ''
+          const lines = doc.splitTextToSize(
+            `• ${item.label}${group}${timeRange}`,
+            contentWidth,
+          )
+          lines.forEach((line: string) => {
+            ensureSpace(6)
+            doc.text(line, margin, yPos)
+            yPos += lineHeight
+          })
+        }
+        yPos += 2
+      } else {
+      const blocks = [...(module.blocks ?? module.content_blocks ?? [])].sort(
+        (a, b) => a.sort_order - b.sort_order,
+      )
+
+      for (const block of blocks) {
+        ensureSpace(6)
+        doc.setFont('helvetica', 'normal')
+
+        if (block.block_type === 'subtitle' && block.text_content) {
+          doc.setFont('helvetica', 'bold')
+          const lines = doc.splitTextToSize(block.text_content, contentWidth)
+          lines.forEach((line: string) => {
+            ensureSpace(6)
+            doc.text(line, margin, yPos)
+            yPos += lineHeight
+          })
+          yPos += 2
+          continue
+        }
+
+        if (block.block_type === 'description' && block.text_content) {
+          const lines = doc.splitTextToSize(block.text_content, contentWidth)
+          lines.forEach((line: string) => {
+            ensureSpace(6)
+            doc.text(line, margin, yPos)
+            yPos += lineHeight
+          })
+          yPos += 2
+          continue
+        }
+
+        if (block.block_type === 'simple_list') {
+          if (block.text_content) {
+            doc.setFont('helvetica', 'bold')
+            const titleLines = doc.splitTextToSize(
+              block.text_content,
+              contentWidth,
+            )
+            titleLines.forEach((line: string) => {
+              ensureSpace(6)
+              doc.text(line, margin, yPos)
+              yPos += lineHeight
+            })
+            doc.setFont('helvetica', 'normal')
+            yPos += 2
+          }
+          for (const item of [...(block.items ?? [])].sort(
+            (a, b) => a.sort_order - b.sort_order,
+          )) {
+            const label = item.summary
+              ? `• ${item.label} — ${item.summary}`
+              : `• ${item.label}`
+            const lines = doc.splitTextToSize(label, contentWidth)
+            lines.forEach((line: string) => {
+              ensureSpace(6)
+              doc.text(line, margin, yPos)
+              yPos += lineHeight
+            })
+          }
+          yPos += 2
+          continue
+        }
+
+        if (block.block_type === 'interactive_list') {
+          for (const item of [...(block.items ?? [])].sort(
+            (a, b) => a.sort_order - b.sort_order,
+          )) {
+            const detail = item.detail ? `: ${item.detail}` : ''
+            const lines = doc.splitTextToSize(
+              `• ${item.label}${detail}`,
+              contentWidth,
+            )
+            lines.forEach((line: string) => {
+              ensureSpace(6)
+              doc.text(line, margin, yPos)
+              yPos += lineHeight
+            })
+          }
+          yPos += 2
+          continue
+        }
+
+        if (block.block_type === 'gallery') {
+          const images = [...(block.items ?? [])]
+            .filter((item) => item.url)
+            .sort((a, b) => a.sort_order - b.sort_order)
+          if (images.length > 0) {
+            doc.setFont('helvetica', 'italic')
+            for (const image of images) {
+              const caption = image.summary ? ` (${image.summary})` : ''
+              const mediaLines = doc.splitTextToSize(
+                `gallery image: ${image.url}${caption}`,
+                contentWidth,
+              )
+              mediaLines.forEach((line: string) => {
+                ensureSpace(6)
+                doc.text(line, margin, yPos)
+                yPos += lineHeight
+              })
+            }
+            yPos += 2
+          }
+          continue
+        }
+
+        if (
+          (block.block_type === 'video' || block.block_type === 'link') &&
+          block.url
+        ) {
+          doc.setFont('helvetica', 'italic')
+          const mediaLabel =
+            block.block_type === 'link'
+              ? `${block.link_title || 'Link'}: ${block.url}`
+              : `${block.block_type}: ${block.url}`
+          const mediaLines = doc.splitTextToSize(mediaLabel, contentWidth)
+          mediaLines.forEach((line: string) => {
+            ensureSpace(6)
+            doc.text(line, margin, yPos)
+            yPos += lineHeight
+          })
+          yPos += 2
+        }
+      }
+      }
+
+      if (module.show_price && module.display_price != null) {
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Price: ${formatCurrency(module.display_price)}`, margin, yPos)
+        yPos += 6
+      }
+      yPos += 4
     }
   }
 
@@ -774,7 +937,7 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   const safeTitle = offer.title.replace(/[^a-z0-9]/gi, '_')
   const numPart =
     offer.offernr != null
-      ? formatOfferNumberDisplay(offer.offernr)?.replace(/^#/, '') ?? ''
+      ? (formatOfferNumberDisplay(offer.offernr)?.replace(/^#/, '') ?? '')
       : ''
   const filename = numPart
     ? `${safeTitle}_${numPart}_v${offer.version_number}.pdf`

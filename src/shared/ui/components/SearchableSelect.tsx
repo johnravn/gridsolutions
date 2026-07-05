@@ -1,12 +1,19 @@
 // src/shared/ui/components/SearchableSelect.tsx
 import * as React from 'react'
 import { createPortal } from 'react-dom'
-import { Box, Text, TextField } from '@radix-ui/themes'
+import { Box, Spinner, Text, TextField, Theme } from '@radix-ui/themes'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 
 export type SearchableSelectOption = {
   value: string
   label: string
+  description?: string
+}
+
+type DropdownPosition = {
+  top: number
+  left: number
+  width: number
 }
 
 type Props = {
@@ -19,20 +26,35 @@ type Props = {
   'data-testid'?: string
   /** Restrict dropdown width; defaults to matching input. Use e.g. 260 for natural width. */
   dropdownMaxWidth?: number
+  dropdownMaxHeight?: number
   style?: React.CSSProperties
-  /** When inside a Dialog, pass the container element (or getter) to portal the dropdown into. Avoids inert/focus-trap issues. */
-  portalContainer?: HTMLElement | null | (() => HTMLElement | null)
+  /** When false, options are shown as-is (e.g. server pre-filtered). Default true. */
+  filterLocally?: boolean
+  onInputChange?: (value: string) => void
+  onOpenChange?: (open: boolean) => void
+  loading?: boolean
 }
 
-function useDropdownPosition(
+export const SEARCHABLE_SELECT_DROPDOWN_SELECTOR =
+  '[data-searchable-select-dropdown]'
+
+/** Use on Dialog.Content onPointerDownOutside / onInteractOutside. */
+export function preventDialogCloseOnSearchableSelect(e: {
+  preventDefault: () => void
+  target: EventTarget | null
+  detail?: { originalEvent?: Event }
+}) {
+  const el = (e.detail?.originalEvent?.target ?? e.target) as HTMLElement | null
+  if (el?.closest(SEARCHABLE_SELECT_DROPDOWN_SELECTOR)) {
+    e.preventDefault()
+  }
+}
+
+function useFixedDropdownPosition(
   inputRef: React.RefObject<HTMLInputElement | null>,
   open: boolean,
 ) {
-  const [position, setPosition] = React.useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
+  const [position, setPosition] = React.useState<DropdownPosition | null>(null)
 
   React.useLayoutEffect(() => {
     if (!open || !inputRef.current) {
@@ -52,17 +74,38 @@ function useDropdownPosition(
     }
 
     update()
+    const raf = requestAnimationFrame(update)
 
-    const scrollOrResize = () => update()
-    window.addEventListener('scroll', scrollOrResize, true)
-    window.addEventListener('resize', scrollOrResize)
+    const onLayoutChange = () => update()
+    window.addEventListener('scroll', onLayoutChange, true)
+    window.addEventListener('resize', onLayoutChange)
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', onLayoutChange)
+    vv?.addEventListener('scroll', onLayoutChange)
+
     return () => {
-      window.removeEventListener('scroll', scrollOrResize, true)
-      window.removeEventListener('resize', scrollOrResize)
+      cancelAnimationFrame(raf)
+      window.removeEventListener('scroll', onLayoutChange, true)
+      window.removeEventListener('resize', onLayoutChange)
+      vv?.removeEventListener('resize', onLayoutChange)
+      vv?.removeEventListener('scroll', onLayoutChange)
     }
   }, [open, inputRef])
 
   return position
+}
+
+function portalAppearance(): 'light' | 'dark' {
+  return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
+}
+
+function setOpenState(
+  open: boolean,
+  setOpen: React.Dispatch<React.SetStateAction<boolean>>,
+  onOpenChange?: (open: boolean) => void,
+) {
+  setOpen(open)
+  onOpenChange?.(open)
 }
 
 export function SearchableSelect({
@@ -74,27 +117,40 @@ export function SearchableSelect({
   emptyMessage = 'No results',
   'data-testid': dataTestId,
   dropdownMaxWidth = 320,
+  dropdownMaxHeight = 160,
   style,
-  portalContainer,
+  filterLocally = true,
+  onInputChange,
+  onOpenChange,
+  loading,
 }: Props) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
+  const [highlightedIndex, setHighlightedIndex] = React.useState<number | null>(
+    null,
+  )
   const inputRef = React.useRef<HTMLInputElement>(null)
   const listRef = React.useRef<HTMLDivElement>(null)
   const selectingRef = React.useRef(false)
-  const dropdownPosition = useDropdownPosition(inputRef, open)
+
+  const fixedPosition = useFixedDropdownPosition(inputRef, open)
 
   const selectedOption = React.useMemo(
     () => options.find((o) => o.value === value),
     [options, value],
   )
 
-  const displayValue = selectedOption?.label ?? inputValue
+  const displayValue = open ? inputValue : (selectedOption?.label ?? inputValue)
 
   const filteredOptions = React.useMemo(() => {
-    if (!inputValue.trim()) return options
-    return fuzzySearch(options, inputValue.trim(), [(o) => o.label], 0.25)
-  }, [options, inputValue])
+    if (!filterLocally || !inputValue.trim()) return options
+    return fuzzySearch(
+      options,
+      inputValue.trim(),
+      [(o) => o.label, (o) => o.description ?? ''],
+      0.25,
+    )
+  }, [options, inputValue, filterLocally])
 
   React.useEffect(() => {
     if (value && selectedOption) {
@@ -104,8 +160,28 @@ export function SearchableSelect({
     }
   }, [value, selectedOption?.label, open])
 
+  React.useEffect(() => {
+    setHighlightedIndex(null)
+  }, [filteredOptions])
+
+  React.useEffect(() => {
+    if (!open) {
+      setHighlightedIndex(null)
+    }
+  }, [open])
+
+  React.useEffect(() => {
+    if (highlightedIndex === null || !listRef.current) return
+    const optionEl = listRef.current.querySelector(
+      `[data-searchable-select-option-index="${highlightedIndex}"]`,
+    )
+    if (typeof optionEl?.scrollIntoView === 'function') {
+      optionEl.scrollIntoView({ block: 'nearest' })
+    }
+  }, [highlightedIndex])
+
   const handleFocus = () => {
-    setOpen(true)
+    setOpenState(true, setOpen, onOpenChange)
     if (value && selectedOption) {
       setInputValue(selectedOption.label)
       setTimeout(() => inputRef.current?.select(), 0)
@@ -118,7 +194,7 @@ export function SearchableSelect({
         selectingRef.current = false
         return
       }
-      setOpen(false)
+      setOpenState(false, setOpen, onOpenChange)
       if (value && selectedOption) {
         setInputValue(selectedOption.label)
       } else {
@@ -130,84 +206,126 @@ export function SearchableSelect({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value
     setInputValue(v)
-    setOpen(true)
-    if (value) onValueChange('')
+    setOpenState(true, setOpen, onOpenChange)
+    onInputChange?.(v)
   }
 
   const handleSelect = (option: SearchableSelectOption) => {
     selectingRef.current = true
     onValueChange(option.value)
     setInputValue(option.label)
-    setOpen(false)
+    setOpenState(false, setOpen, onOpenChange)
     inputRef.current?.blur()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape') {
-      setOpen(false)
+      setOpenState(false, setOpen, onOpenChange)
       inputRef.current?.blur()
+      return
+    }
+
+    if (loading || filteredOptions.length === 0) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setOpenState(true, setOpen, onOpenChange)
+      setHighlightedIndex((prev) => {
+        if (prev === null) return 0
+        return Math.min(prev + 1, filteredOptions.length - 1)
+      })
+      return
+    }
+
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setOpenState(true, setOpen, onOpenChange)
+      setHighlightedIndex((prev) => {
+        if (prev === null) return filteredOptions.length - 1
+        return Math.max(prev - 1, 0)
+      })
+      return
+    }
+
+    if (e.key === 'Enter' && highlightedIndex !== null) {
+      e.preventDefault()
+      handleSelect(filteredOptions[highlightedIndex])
     }
   }
 
-  const resolvedContainer =
-    typeof portalContainer === 'function' ? portalContainer() : portalContainer
-  const portalTarget = resolvedContainer ?? document.body
-
   const dropdownEl =
-    open && dropdownPosition ? (
-      <Box
-        ref={listRef}
-        data-searchable-select-dropdown
-        onPointerDownCapture={(e) => e.preventDefault()}
-        onMouseDown={(e) => e.preventDefault()}
-        style={{
-          position: 'fixed',
-          top: dropdownPosition.top,
-          left: dropdownPosition.left,
-          width: Math.min(dropdownPosition.width, dropdownMaxWidth),
-          zIndex: 2147483647,
-          backgroundColor: 'var(--color-background)',
-          border: '1px solid var(--gray-a6)',
-          borderRadius: 6,
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          maxHeight: 160,
-          overflowY: 'auto',
-        }}
-      >
-        {filteredOptions.length === 0 ? (
-          <Box px="3" py="2">
-            <Text size="2" color="gray">
-              {emptyMessage}
-            </Text>
-          </Box>
-        ) : (
-          filteredOptions.map((option) => (
-            <Box
-              key={option.value}
-              data-searchable-select-option
-              onPointerDown={(e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                selectingRef.current = true
-                handleSelect(option)
-              }}
-              style={{
-                padding: '6px 10px',
-                cursor: 'pointer',
-                borderBottom: '1px solid var(--gray-a4)',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <Text size="2">{option.label}</Text>
+    open && fixedPosition ? (
+      <Theme appearance={portalAppearance()} hasBackground={false}>
+        <Box
+          ref={listRef}
+          data-searchable-select-dropdown
+          onPointerDownCapture={(e) => e.preventDefault()}
+          onMouseDown={(e) => e.preventDefault()}
+          style={{
+            position: 'fixed',
+            top: fixedPosition.top,
+            left: fixedPosition.left,
+            width: Math.min(fixedPosition.width, dropdownMaxWidth),
+            zIndex: 2147483647,
+            pointerEvents: 'auto',
+            backgroundColor: 'var(--color-panel-solid)',
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 'var(--radius-3)',
+            boxShadow: 'var(--shadow-4)',
+            maxHeight: dropdownMaxHeight,
+            overflowY: 'auto',
+            fontFamily: 'inherit',
+          }}
+        >
+          {loading ? (
+            <Box px="2" py="1">
+              <Text size="2" color="gray">
+                Searching…
+              </Text>
             </Box>
-          ))
-        )}
-      </Box>
+          ) : filteredOptions.length === 0 ? (
+            <Box px="2" py="1">
+              <Text size="2" color="gray">
+                {emptyMessage}
+              </Text>
+            </Box>
+          ) : (
+            filteredOptions.map((option, index) => (
+              <Box
+                key={option.value || '__empty__'}
+                data-searchable-select-option
+                data-searchable-select-option-index={index}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  selectingRef.current = true
+                  handleSelect(option)
+                }}
+                px="2"
+                py="1"
+                style={{
+                  cursor: 'pointer',
+                  borderRadius: 'var(--radius-2)',
+                  backgroundColor:
+                    index === highlightedIndex
+                      ? 'var(--gray-a3)'
+                      : 'transparent',
+                }}
+                onMouseEnter={() => setHighlightedIndex(index)}
+              >
+                <Text as="div" size="2" truncate>
+                  {option.label}
+                </Text>
+                {option.description && (
+                  <Text as="div" size="1" color="gray" truncate>
+                    {option.description}
+                  </Text>
+                )}
+              </Box>
+            ))
+          )}
+        </Box>
+      </Theme>
     ) : null
 
   return (
@@ -229,8 +347,14 @@ export function SearchableSelect({
         disabled={disabled}
         placeholder={placeholder}
         data-testid={dataTestId}
-      />
-      {dropdownEl && createPortal(dropdownEl, portalTarget)}
+      >
+        {loading && (
+          <TextField.Slot side="right">
+            <Spinner size="1" />
+          </TextField.Slot>
+        )}
+      </TextField.Root>
+      {dropdownEl && createPortal(dropdownEl, document.body)}
     </Box>
   )
 }

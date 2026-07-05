@@ -14,6 +14,7 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useLocation } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { Filter, TransitionLeft } from 'iconoir-react'
 import {
@@ -21,9 +22,14 @@ import {
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
+import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
+import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import InventoryTable from '../components/InventoryTable'
 import InventoryInspector from '../components/InventoryInspector'
+import { inventoryIndexQuery } from '../api/queries'
+import { INVENTORY_INDEX_DEFAULTS } from '../inventoryIndexDefaults'
 
 export default function InventoryPage() {
   const { companyId } = useCompany()
@@ -43,8 +49,8 @@ export default function InventoryPage() {
   }, [inventoryId])
   const [showActive, setShowActive] = React.useState(true)
   const [showInactive, setShowInactive] = React.useState(false)
-  const [showInternal, setShowInternal] = React.useState(true)
-  const [showExternal, setShowExternal] = React.useState(true)
+  const [showStock, setShowStock] = React.useState(true)
+  const [showSubrental, setShowSubrental] = React.useState(true)
   const [showGroupOnlyItems, setShowGroupOnlyItems] = React.useState(false)
   const [showGroups, setShowGroups] = React.useState(true)
   const [showItems, setShowItems] = React.useState(true)
@@ -155,11 +161,25 @@ export default function InventoryPage() {
     }
   }, [isLarge, selectedId])
 
-  if (!companyId) return <PageSkeleton columns="2fr 1fr" />
+  const clearSelection = React.useCallback(() => {
+    setSelectedId(null)
+  }, [])
 
-  // On small screens, use Grid layout (stack): list fills viewport, inspector below
-  // Card height accounts for: top bar (~56px) + content padding top (16px) + content padding bottom (16px)
-  const mobileCardHeight = 'calc(100dvh - 88px)'
+  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+
+  const { isLoading: inventoryIndexLoading } = useQuery({
+    ...inventoryIndexQuery({
+      companyId: companyId ?? '__none__',
+      ...INVENTORY_INDEX_DEFAULTS,
+    }),
+    enabled: !!companyId,
+  })
+  const showInitialSkeleton = useInitialPageLoad(inventoryIndexLoading)
+
+  if (!companyId || showInitialSkeleton) {
+    return <PageSkeleton columns="2fr 1fr" />
+  }
+
   if (!isLarge) {
     return (
       <section ref={listRef} style={{ minHeight: 0 }}>
@@ -170,7 +190,7 @@ export default function InventoryPage() {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
               minHeight: 0,
               minWidth: 0,
             }}
@@ -201,8 +221,8 @@ export default function InventoryPage() {
                 onSelect={setSelectedId}
                 showActive={showActive}
                 showInactive={showInactive}
-                showInternal={showInternal}
-                showExternal={showExternal}
+                showStock={showStock}
+                showSubrental={showSubrental}
                 showGroupOnlyItems={showGroupOnlyItems}
                 showGroups={showGroups}
                 showItems={showItems}
@@ -217,7 +237,7 @@ export default function InventoryPage() {
               minHeight: 0,
               maxWidth: '100%',
               width: '100%',
-              height: mobileCardHeight,
+              height: MOBILE_CARD_HEIGHT,
             }}
           >
             <Card
@@ -225,7 +245,7 @@ export default function InventoryPage() {
               style={{
                 display: 'flex',
                 flexDirection: 'column',
-                height: mobileCardHeight,
+                height: MOBILE_CARD_HEIGHT,
                 overflow: 'hidden',
                 minHeight: 0,
                 maxWidth: '100%',
@@ -351,15 +371,15 @@ export default function InventoryPage() {
                   <InventoryFilter
                     showActive={showActive}
                     showInactive={showInactive}
-                    showInternal={showInternal}
-                    showExternal={showExternal}
+                    showStock={showStock}
+                    showSubrental={showSubrental}
                     showGroupOnlyItems={showGroupOnlyItems}
                     showGroups={showGroups}
                     showItems={showItems}
                     onShowActiveChange={setShowActive}
                     onShowInactiveChange={setShowInactive}
-                    onShowInternalChange={setShowInternal}
-                    onShowExternalChange={setShowExternal}
+                    onShowStockChange={setShowStock}
+                    onShowSubrentalChange={setShowSubrental}
                     onShowGroupOnlyItemsChange={setShowGroupOnlyItems}
                     onShowGroupsChange={setShowGroups}
                     onShowItemsChange={setShowItems}
@@ -393,8 +413,8 @@ export default function InventoryPage() {
                   onSelect={setSelectedId}
                   showActive={showActive}
                   showInactive={showInactive}
-                  showInternal={showInternal}
-                  showExternal={showExternal}
+                  showStock={showStock}
+                  showSubrental={showSubrental}
                   showGroupOnlyItems={showGroupOnlyItems}
                   showGroups={showGroups}
                   showItems={showItems}
@@ -477,30 +497,30 @@ export default function InventoryPage() {
 function InventoryFilter({
   showActive,
   showInactive,
-  showInternal,
-  showExternal,
+  showStock,
+  showSubrental,
   showGroupOnlyItems,
   showGroups,
   showItems,
   onShowActiveChange,
   onShowInactiveChange,
-  onShowInternalChange,
-  onShowExternalChange,
+  onShowStockChange,
+  onShowSubrentalChange,
   onShowGroupOnlyItemsChange,
   onShowGroupsChange,
   onShowItemsChange,
 }: {
   showActive: boolean
   showInactive: boolean
-  showInternal: boolean
-  showExternal: boolean
+  showStock: boolean
+  showSubrental: boolean
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
   onShowActiveChange: (v: boolean) => void
   onShowInactiveChange: (v: boolean) => void
-  onShowInternalChange: (v: boolean) => void
-  onShowExternalChange: (v: boolean) => void
+  onShowStockChange: (v: boolean) => void
+  onShowSubrentalChange: (v: boolean) => void
   onShowGroupOnlyItemsChange: (v: boolean) => void
   onShowGroupsChange: (v: boolean) => void
   onShowItemsChange: (v: boolean) => void
@@ -509,8 +529,8 @@ function InventoryFilter({
   const selectedCount = [
     showActive,
     showInactive,
-    showInternal,
-    showExternal,
+    showStock,
+    showSubrental,
     showGroupOnlyItems,
     showGroups,
     showItems,
@@ -577,33 +597,30 @@ function InventoryFilter({
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Separator />
-        <DropdownMenu.Label>Ownership</DropdownMenu.Label>
+        <DropdownMenu.Label>Kind</DropdownMenu.Label>
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()
-            onShowInternalChange(!showInternal)
+            onShowStockChange(!showStock)
           }}
         >
           <Flex align="center" gap="2">
-            <Checkbox
-              checked={showInternal}
-              onCheckedChange={onShowInternalChange}
-            />
-            <Text>Internal</Text>
+            <Checkbox checked={showStock} onCheckedChange={onShowStockChange} />
+            <Text>Stock</Text>
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()
-            onShowExternalChange(!showExternal)
+            onShowSubrentalChange(!showSubrental)
           }}
         >
           <Flex align="center" gap="2">
             <Checkbox
-              checked={showExternal}
-              onCheckedChange={onShowExternalChange}
+              checked={showSubrental}
+              onCheckedChange={onShowSubrentalChange}
             />
-            <Text>External</Text>
+            <Text>Subrental</Text>
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Separator />

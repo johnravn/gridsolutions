@@ -12,6 +12,12 @@ node_modules/
 
 # Build output
 dist/
+storybook-static/
+debug-storybook.log
+coverage/
+test-results/
+playwright-report/
+playwright/.cache/
 
 # OS files
 .DS_Store
@@ -22,3 +28,5 @@ yarn.lock
 
 # Edge function secrets
 functions/.env
+*storybook.log
+storybook-static
