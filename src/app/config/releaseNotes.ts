@@ -19,6 +19,21 @@ export const RELEASE_NOTES = {
   title: "What's new in Grid",
   highlights: [
     {
+      title: 'Redesigned home dashboard',
+      description:
+        'Attention band for conflicts, invoices, and matters; multi-week job spans; active recurring series; and a clearer week overview.',
+    },
+    {
+      title: 'Keyboard shortcuts',
+      description:
+        'Navigate, switch tabs, collapse panels, and create records from the keyboard. Customize bindings in Profile → Shortcuts.',
+    },
+    {
+      title: 'Unified list + inspector layout',
+      description:
+        'Jobs, customers, inventory, and other list pages share a consistent resizable split view with smoother mobile stacking.',
+    },
+    {
       title: 'Offer options block',
       description:
         'Add optional packages and add-ons to pretty offers. Customers choose on the public offer page and totals update live.',
@@ -29,13 +44,19 @@ export const RELEASE_NOTES = {
         'When applying an offer basis to a job, preview what will change and review equipment conflicts before confirming.',
     },
     {
-      title: 'Smarter home conflicts',
+      title: 'Smarter conflicts',
       description:
-        'Conflict alerts on the home dashboard focus on jobs where you are project lead.',
+        'Home conflict alerts focus on jobs where you are project lead, with clearer overlap duration and period context.',
     },
     {
-      title: 'Clearer conflict details',
-      description: 'Conflict cards show overlap duration and period context.',
+      title: 'Recurring job periods',
+      description:
+        'Set an active start and optional end date on recurring series so they only generate within that window.',
+    },
+    {
+      title: 'Polish throughout',
+      description:
+        'Animated tab indicators, improved date range pickers, denser UI chrome, and unsaved-change guards when closing offer editors.',
     },
   ],
 } as const satisfies {
