@@ -822,193 +822,200 @@ export default function CrewTab({
                         </Text>
                       )}
                       {roleCrew.length > 0 && (
-                        <Table.Root variant="surface" size="1">
-                          <Table.Header>
-                            <Table.Row>
-                              <Table.ColumnHeaderCell>
-                                Name
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell>
-                                Status
-                              </Table.ColumnHeaderCell>
-                              <Table.ColumnHeaderCell>
-                                Actions
-                              </Table.ColumnHeaderCell>
-                            </Table.Row>
-                          </Table.Header>
-                          <Table.Body>
-                            {roleCrew.map((crew) => {
-                              const crewName =
-                                crew.user?.display_name ??
-                                crew.user?.email ??
-                                crew.placeholder_name ??
-                                'Unknown'
-                              const internalNote = crew.user_id
-                                ? internalNotesByUserId[crew.user_id]
-                                : undefined
-                              return (
-                                <Table.Row key={crew.id}>
-                                  <Table.Cell>
-                                    <Flex align="center" gap="2" wrap="wrap">
-                                      <Box>
-                                        <Text>{crewName}</Text>
-                                        {internalNote && (
-                                          <Text as="div" size="1" color="gray">
-                                            <Text weight="medium">
-                                              Internal:
-                                            </Text>{' '}
-                                            {internalNote}
-                                          </Text>
-                                        )}
-                                      </Box>
-                                      {!crew.user_id && (
-                                        <Badge size="1" color="amber">
-                                          Placeholder
-                                        </Badge>
-                                      )}
-                                      {crew.forced && (
-                                        <Badge size="1" color="amber">
-                                          Forced
-                                        </Badge>
-                                      )}
-                                    </Flex>
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Flex align="center" gap="2" wrap="wrap">
-                                      {isReadOnly ? (
-                                        <Badge
-                                          radius="full"
-                                          highContrast
-                                          color={
-                                            crew.status === 'confirmed'
-                                              ? 'green'
-                                              : crew.status === 'canceled'
-                                                ? 'red'
-                                                : 'gray'
-                                          }
-                                        >
-                                          {crew.status}
-                                        </Badge>
-                                      ) : isSmallScreen ? (
-                                        <Select.Root
-                                          value={crew.status}
-                                          onValueChange={(v) =>
-                                            handleStatusChange(
-                                              crew.id,
-                                              crewName,
-                                              crew.status,
-                                              v as BookingStatus,
-                                            )
-                                          }
-                                        >
-                                          <Select.Trigger
-                                            style={{ minWidth: 100 }}
-                                          />
-                                          <Select.Content>
-                                            <Select.Item value="planned">
-                                              Planned
-                                            </Select.Item>
-                                            <Select.Item value="confirmed">
-                                              Confirmed
-                                            </Select.Item>
-                                            <Select.Item value="canceled">
-                                              Canceled
-                                            </Select.Item>
-                                          </Select.Content>
-                                        </Select.Root>
-                                      ) : (
-                                        <SegmentedControl.Root
-                                          size="1"
-                                          value={crew.status}
-                                          onValueChange={(v) =>
-                                            handleStatusChange(
-                                              crew.id,
-                                              crewName,
-                                              crew.status,
-                                              v as BookingStatus,
-                                            )
-                                          }
-                                        >
-                                          {(
-                                            [
-                                              'planned',
-                                              'confirmed',
-                                              'canceled',
-                                            ] as Array<BookingStatus>
-                                          ).map((s) => (
-                                            <SegmentedControl.Item
-                                              key={s}
-                                              value={s}
-                                              style={{
-                                                color:
-                                                  s === 'confirmed'
-                                                    ? 'var(--green-9)'
-                                                    : s === 'canceled'
-                                                      ? 'var(--red-9)'
-                                                      : undefined,
-                                              }}
+                        <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                          <Table.Root variant="surface" size="1">
+                            <Table.Header>
+                              <Table.Row>
+                                <Table.ColumnHeaderCell>
+                                  Name
+                                </Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>
+                                  Status
+                                </Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>
+                                  Actions
+                                </Table.ColumnHeaderCell>
+                              </Table.Row>
+                            </Table.Header>
+                            <Table.Body>
+                              {roleCrew.map((crew) => {
+                                const crewName =
+                                  crew.user?.display_name ??
+                                  crew.user?.email ??
+                                  crew.placeholder_name ??
+                                  'Unknown'
+                                const internalNote = crew.user_id
+                                  ? internalNotesByUserId[crew.user_id]
+                                  : undefined
+                                return (
+                                  <Table.Row key={crew.id}>
+                                    <Table.Cell>
+                                      <Flex align="center" gap="2" wrap="wrap">
+                                        <Box>
+                                          <Text>{crewName}</Text>
+                                          {internalNote && (
+                                            <Text
+                                              as="div"
+                                              size="1"
+                                              color="gray"
                                             >
-                                              {s}
-                                            </SegmentedControl.Item>
-                                          ))}
-                                        </SegmentedControl.Root>
-                                      )}
-                                      {crew.invited && (
-                                        <Badge size="1" color="blue">
-                                          Invited
-                                        </Badge>
-                                      )}
-                                    </Flex>
-                                  </Table.Cell>
-                                  <Table.Cell>
-                                    <Flex gap="2">
-                                      {!isReadOnly &&
-                                        crew.status === 'planned' &&
-                                        crew.user_id && (
+                                              <Text weight="medium">
+                                                Internal:
+                                              </Text>{' '}
+                                              {internalNote}
+                                            </Text>
+                                          )}
+                                        </Box>
+                                        {!crew.user_id && (
+                                          <Badge size="1" color="amber">
+                                            Placeholder
+                                          </Badge>
+                                        )}
+                                        {crew.forced && (
+                                          <Badge size="1" color="amber">
+                                            Forced
+                                          </Badge>
+                                        )}
+                                      </Flex>
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                      <Flex align="center" gap="2" wrap="wrap">
+                                        {isReadOnly ? (
+                                          <Badge
+                                            radius="full"
+                                            highContrast
+                                            color={
+                                              crew.status === 'confirmed'
+                                                ? 'green'
+                                                : crew.status === 'canceled'
+                                                  ? 'red'
+                                                  : 'gray'
+                                            }
+                                          >
+                                            {crew.status}
+                                          </Badge>
+                                        ) : isSmallScreen ? (
+                                          <Select.Root
+                                            value={crew.status}
+                                            onValueChange={(v) =>
+                                              handleStatusChange(
+                                                crew.id,
+                                                crewName,
+                                                crew.status,
+                                                v as BookingStatus,
+                                              )
+                                            }
+                                          >
+                                            <Select.Trigger
+                                              style={{ minWidth: 100 }}
+                                            />
+                                            <Select.Content>
+                                              <Select.Item value="planned">
+                                                Planned
+                                              </Select.Item>
+                                              <Select.Item value="confirmed">
+                                                Confirmed
+                                              </Select.Item>
+                                              <Select.Item value="canceled">
+                                                Canceled
+                                              </Select.Item>
+                                            </Select.Content>
+                                          </Select.Root>
+                                        ) : (
+                                          <SegmentedControl.Root
+                                            size="1"
+                                            value={crew.status}
+                                            onValueChange={(v) =>
+                                              handleStatusChange(
+                                                crew.id,
+                                                crewName,
+                                                crew.status,
+                                                v as BookingStatus,
+                                              )
+                                            }
+                                          >
+                                            {(
+                                              [
+                                                'planned',
+                                                'confirmed',
+                                                'canceled',
+                                              ] as Array<BookingStatus>
+                                            ).map((s) => (
+                                              <SegmentedControl.Item
+                                                key={s}
+                                                value={s}
+                                                style={{
+                                                  color:
+                                                    s === 'confirmed'
+                                                      ? 'var(--green-9)'
+                                                      : s === 'canceled'
+                                                        ? 'var(--red-9)'
+                                                        : undefined,
+                                                }}
+                                              >
+                                                {s}
+                                              </SegmentedControl.Item>
+                                            ))}
+                                          </SegmentedControl.Root>
+                                        )}
+                                        {crew.invited && (
+                                          <Badge size="1" color="blue">
+                                            Invited
+                                          </Badge>
+                                        )}
+                                      </Flex>
+                                    </Table.Cell>
+                                    <Table.Cell>
+                                      <Flex gap="2">
+                                        {!isReadOnly &&
+                                          crew.status === 'planned' &&
+                                          crew.user_id && (
+                                            <Button
+                                              size="1"
+                                              variant="soft"
+                                              onClick={(e) => {
+                                                e.stopPropagation()
+                                                setSendInviteDialog({
+                                                  userId:
+                                                    crew.user_id ?? undefined,
+                                                  timePeriodId: role.id,
+                                                  crewName: crewName,
+                                                  roleTitle:
+                                                    role.title || 'Role',
+                                                })
+                                              }}
+                                              disabled={sendInvite.isPending}
+                                            >
+                                              <Mail width={14} height={14} />{' '}
+                                              Send invite
+                                            </Button>
+                                          )}
+                                        {!isReadOnly && (
                                           <Button
                                             size="1"
                                             variant="soft"
+                                            color="red"
                                             onClick={(e) => {
                                               e.stopPropagation()
-                                              setSendInviteDialog({
-                                                userId:
-                                                  crew.user_id ?? undefined,
+                                              removeCrew.mutate({
+                                                crewId: crew.id,
                                                 timePeriodId: role.id,
-                                                crewName: crewName,
-                                                roleTitle: role.title || 'Role',
+                                                userId: crew.user_id,
                                               })
                                             }}
-                                            disabled={sendInvite.isPending}
+                                            disabled={removeCrew.isPending}
                                           >
-                                            <Mail width={14} height={14} /> Send
-                                            invite
+                                            <Trash width={14} height={14} />
                                           </Button>
                                         )}
-                                      {!isReadOnly && (
-                                        <Button
-                                          size="1"
-                                          variant="soft"
-                                          color="red"
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            removeCrew.mutate({
-                                              crewId: crew.id,
-                                              timePeriodId: role.id,
-                                              userId: crew.user_id,
-                                            })
-                                          }}
-                                          disabled={removeCrew.isPending}
-                                        >
-                                          <Trash width={14} height={14} />
-                                        </Button>
-                                      )}
-                                    </Flex>
-                                  </Table.Cell>
-                                </Table.Row>
-                              )
-                            })}
-                          </Table.Body>
-                        </Table.Root>
+                                      </Flex>
+                                    </Table.Cell>
+                                  </Table.Row>
+                                )
+                              })}
+                            </Table.Body>
+                          </Table.Root>
+                        </Box>
                       )}
                     </Box>
                   )}

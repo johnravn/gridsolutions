@@ -7,10 +7,11 @@ import {
   Card,
   Flex,
   HoverCard,
+  SegmentedControl,
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { Calendar, Eye, EyeClosed, User } from 'iconoir-react'
+import { Calendar, Eye, EyeClosed, RefreshDouble, User } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { addWeeks, endOfWeek, format, startOfWeek } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -26,6 +27,8 @@ import {
   weekSpanGridColumn,
 } from '../utils/weekJobSpan'
 import { DashboardCard } from './DashboardCard'
+import { HomeBottomSheet } from './HomeBottomSheet'
+import { HomeDisclosureRow } from './HomeDisclosureRow'
 import {
   HorizontalCardScroller,
   HorizontalScrollCard,
@@ -66,10 +69,29 @@ function weekRangeLabel(weekOffset: CompanyJobsWeekOffset): string {
   return `${format(ws, 'd. MMM', { locale: nb })} – ${format(we, 'd. MMM yyyy', { locale: nb })}`
 }
 
+/** Date range spanning next week through the week after. */
+function upcomingTwoWeeksRangeLabel(): string {
+  const nextStart = startOfWeek(addWeeks(new Date(), 1), { weekStartsOn: 1 })
+  const afterEnd = endOfWeek(addWeeks(new Date(), 2), { weekStartsOn: 1 })
+  if (
+    nextStart.getFullYear() === afterEnd.getFullYear() &&
+    nextStart.getMonth() === afterEnd.getMonth()
+  ) {
+    return `${format(nextStart, 'd.', { locale: nb })}–${format(afterEnd, 'd. MMM yyyy', { locale: nb })}`
+  }
+  return `${format(nextStart, 'd. MMM', { locale: nb })} – ${format(afterEnd, 'd. MMM yyyy', { locale: nb })}`
+}
+
+/** Mobile week segment: this week vs next two weeks combined. */
+type MobileWeekSegment = 0 | 1
+
 function weekColumnTitle(weekOffset: CompanyJobsWeekOffset): string {
-  if (weekOffset === 0) return 'This week'
-  if (weekOffset === 1) return 'Next week'
-  return 'In two weeks'
+  const titles: Record<CompanyJobsWeekOffset, string> = {
+    0: 'This week',
+    1: 'Next week',
+    2: 'In two weeks',
+  }
+  return titles[weekOffset]
 }
 
 function formatJobWhen(
@@ -873,10 +895,16 @@ type DesktopProps = {
 
 type MobileProps = {
   presentation: 'mobile'
-  jobs: Array<WeekJobWithRole>
+  jobsThisWeek: Array<WeekJobWithRole>
+  jobsNextWeek: Array<WeekJobWithRole>
+  jobsWeekAfter: Array<WeekJobWithRole>
   loading: boolean
-  weekOffset: 0 | 1
-  onWeekOffsetChange: (offset: 0 | 1) => void
+  weekSegment: MobileWeekSegment
+  onWeekSegmentChange: (segment: MobileWeekSegment) => void
+  showMyJobsOnly: boolean
+  onToggleMyJobsOnly: (value: boolean) => void
+  isFreelancer: boolean
+  activeRecurringJobs: Array<ActiveRecurringJob>
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
   bookingSummaries: Record<string, WeekJobBookingSummary>
@@ -885,7 +913,260 @@ type MobileProps = {
 
 export type CompanyJobsWeekSectionProps = DesktopProps | MobileProps
 
+function CompanyJobsWeekSectionMobile({
+  jobsThisWeek,
+  jobsNextWeek,
+  jobsWeekAfter,
+  loading,
+  weekSegment,
+  onWeekSegmentChange,
+  showMyJobsOnly,
+  onToggleMyJobsOnly,
+  isFreelancer,
+  activeRecurringJobs,
+  getInitials,
+  getAvatarUrl,
+  bookingSummaries,
+  bookingsDetailLoading,
+}: MobileProps) {
+  const navigate = useNavigate()
+  const { companyRole } = useAuthz()
+  const [jobsSheet, setJobsSheet] = React.useState<
+    'recurring' | 'spanning' | null
+  >(null)
+
+  const openJob = (jobId: string) => {
+    navigate({
+      to: '/jobs',
+      search: { jobId, recurringJobId: undefined, tab: undefined },
+    })
+  }
+
+  const openRecurringJob = (recurringJobId: string) => {
+    navigate({
+      to: '/jobs',
+      search: { jobId: undefined, recurringJobId, tab: undefined },
+    })
+  }
+
+  const { spanning, singleByWeek } = React.useMemo(
+    () => partitionJobsByWeekSpan([jobsThisWeek, jobsNextWeek, jobsWeekAfter]),
+    [jobsThisWeek, jobsNextWeek, jobsWeekAfter],
+  )
+
+  const weekJobs = React.useMemo(() => {
+    if (weekSegment === 0) return singleByWeek[0]
+    // Next week + in two weeks, deduped (single-week lists shouldn't overlap).
+    const byId = new Map<string, WeekJobWithRole>()
+    for (const job of singleByWeek[1]) byId.set(job.id, job)
+    for (const job of singleByWeek[2]) byId.set(job.id, job)
+    return Array.from(byId.values()).sort((a, b) => {
+      const aStart = a.start_at ?? ''
+      const bStart = b.start_at ?? ''
+      return aStart.localeCompare(bStart)
+    })
+  }, [weekSegment, singleByWeek])
+
+  const recurringCount = activeRecurringJobs.length
+  const spanningCount = spanning.length
+
+  const myJobsToggle = !isFreelancer ? (
+    <Button
+      size="2"
+      variant={showMyJobsOnly ? 'solid' : 'soft'}
+      highContrast={showMyJobsOnly}
+      onClick={() => onToggleMyJobsOnly(!showMyJobsOnly)}
+      aria-pressed={showMyJobsOnly}
+      aria-label={showMyJobsOnly ? 'Show all jobs' : "Show only jobs you're on"}
+    >
+      <User width={16} height={16} />
+      My jobs
+    </Button>
+  ) : undefined
+
+  const subtitle =
+    weekSegment === 0 ? weekRangeLabel(0) : upcomingTwoWeeksRangeLabel()
+  const emptyLabel =
+    weekSegment === 0
+      ? 'No jobs scheduled this week'
+      : 'No jobs scheduled in the next two weeks'
+
+  return (
+    <>
+      <DashboardCard
+        notFullHeight
+        title="Jobs"
+        icon={<Calendar width={18} height={18} />}
+        headerAction={myJobsToggle}
+        subtitle={subtitle}
+        variant="plain"
+      >
+        <Flex direction="column" gap="5">
+          <SegmentedControl.Root
+            size="3"
+            className="home-jobs-week-segments"
+            value={String(weekSegment)}
+            onValueChange={(value) => {
+              if (value === '0' || value === '1') {
+                onWeekSegmentChange(Number(value) as MobileWeekSegment)
+              }
+            }}
+            style={{ width: '100%' }}
+          >
+            <SegmentedControl.Item value="0">This week</SegmentedControl.Item>
+            <SegmentedControl.Item value="1">
+              Next 2 weeks
+            </SegmentedControl.Item>
+          </SegmentedControl.Root>
+
+          {loading ? (
+            <DashboardCardSkeleton rowCount={2} compact />
+          ) : weekJobs.length === 0 ? (
+            <Flex align="center" justify="center" py="5">
+              <Text size="2" color="gray" align="center">
+                {emptyLabel}
+              </Text>
+            </Flex>
+          ) : (
+            <HorizontalCardScroller>
+              {weekJobs.map((job) => (
+                <HorizontalScrollCard key={job.id} minWidth={280}>
+                  <WeekJobCard
+                    job={job}
+                    companyRole={companyRole}
+                    getInitials={getInitials}
+                    getAvatarUrl={getAvatarUrl}
+                    bookingSummaries={bookingSummaries}
+                    bookingsDetailLoading={bookingsDetailLoading}
+                    onOpen={() => openJob(job.id)}
+                    showDateRange={weekSegment === 1}
+                  />
+                </HorizontalScrollCard>
+              ))}
+            </HorizontalCardScroller>
+          )}
+
+          <Flex direction="column" gap="2">
+            <Card size="2" style={{ padding: 0, overflow: 'hidden' }}>
+              <HomeDisclosureRow
+                icon={<RefreshDouble width={18} height={18} />}
+                label="Recurring jobs"
+                count={recurringCount}
+                tone={recurringCount > 0 ? 'accent' : 'green'}
+                onClick={() => setJobsSheet('recurring')}
+              />
+            </Card>
+            <Card size="2" style={{ padding: 0, overflow: 'hidden' }}>
+              <HomeDisclosureRow
+                icon={<Calendar width={18} height={18} />}
+                label="Multi-week jobs"
+                count={spanningCount}
+                tone={spanningCount > 0 ? 'accent' : 'green'}
+                onClick={() => setJobsSheet('spanning')}
+              />
+            </Card>
+          </Flex>
+        </Flex>
+      </DashboardCard>
+
+      <HomeBottomSheet
+        open={jobsSheet === 'recurring'}
+        onOpenChange={(open) => setJobsSheet(open ? 'recurring' : null)}
+        title="Recurring jobs"
+      >
+        {activeRecurringJobs.length === 0 ? (
+          <Flex
+            direction="column"
+            align="center"
+            justify="center"
+            gap="3"
+            py="6"
+            style={{ textAlign: 'center' }}
+          >
+            <Text size="3" weight="medium">
+              No current recurring jobs
+            </Text>
+          </Flex>
+        ) : (
+          <HorizontalCardScroller>
+            {activeRecurringJobs.map((rj) => (
+              <HorizontalScrollCard key={rj.id} minWidth={260}>
+                <Card
+                  size="2"
+                  style={{ height: '100%', cursor: 'pointer' }}
+                  onClick={() => {
+                    setJobsSheet(null)
+                    openRecurringJob(rj.id)
+                  }}
+                >
+                  <Flex direction="column" gap="2">
+                    <Text size="3" weight="bold" as="div">
+                      {rj.title}
+                    </Text>
+                    <Text size="2" color="gray">
+                      {formatPeriodLabel(rj.period_start, rj.period_end)}
+                    </Text>
+                  </Flex>
+                </Card>
+              </HorizontalScrollCard>
+            ))}
+          </HorizontalCardScroller>
+        )}
+      </HomeBottomSheet>
+
+      <HomeBottomSheet
+        open={jobsSheet === 'spanning'}
+        onOpenChange={(open) => setJobsSheet(open ? 'spanning' : null)}
+        title="Multi-week jobs"
+      >
+        {spanning.length === 0 ? (
+          <Flex
+            direction="column"
+            align="center"
+            justify="center"
+            gap="3"
+            py="6"
+            style={{ textAlign: 'center' }}
+          >
+            <Text size="3" weight="medium">
+              No multi-week jobs in this window
+            </Text>
+          </Flex>
+        ) : (
+          <HorizontalCardScroller>
+            {spanning.map(({ job }) => (
+              <HorizontalScrollCard key={job.id} minWidth={280}>
+                <WeekJobCard
+                  job={job}
+                  companyRole={companyRole}
+                  getInitials={getInitials}
+                  getAvatarUrl={getAvatarUrl}
+                  bookingSummaries={bookingSummaries}
+                  bookingsDetailLoading={bookingsDetailLoading}
+                  onOpen={() => {
+                    setJobsSheet(null)
+                    openJob(job.id)
+                  }}
+                  showDateRange
+                />
+              </HorizontalScrollCard>
+            ))}
+          </HorizontalCardScroller>
+        )}
+      </HomeBottomSheet>
+    </>
+  )
+}
+
 export function CompanyJobsWeekSection(props: CompanyJobsWeekSectionProps) {
+  if (props.presentation === 'mobile') {
+    return <CompanyJobsWeekSectionMobile {...props} />
+  }
+
+  return <CompanyJobsWeekSectionDesktop {...props} />
+}
+
+function CompanyJobsWeekSectionDesktop(props: DesktopProps) {
   const navigate = useNavigate()
   const { companyRole } = useAuthz()
   useScrollButtonStyles()
@@ -902,67 +1183,6 @@ export function CompanyJobsWeekSection(props: CompanyJobsWeekSectionProps) {
       to: '/jobs',
       search: { jobId: undefined, recurringJobId, tab: undefined },
     })
-  }
-
-  if (props.presentation === 'mobile') {
-    const {
-      jobs,
-      loading,
-      weekOffset,
-      onWeekOffsetChange,
-      getInitials,
-      getAvatarUrl,
-      bookingSummaries,
-      bookingsDetailLoading,
-    } = props
-
-    const weekToggle = (
-      <Button
-        size="2"
-        variant="soft"
-        onClick={() => onWeekOffsetChange(weekOffset === 0 ? 1 : 0)}
-      >
-        {weekOffset === 0 ? 'Next week' : 'This week'}
-      </Button>
-    )
-
-    return (
-      <DashboardCard
-        notFullHeight
-        title="Jobs"
-        icon={<Calendar width={18} height={18} />}
-        headerAction={weekToggle}
-        variant="plain"
-      >
-        {loading ? (
-          <DashboardCardSkeleton rowCount={2} compact />
-        ) : jobs.length === 0 ? (
-          <Flex align="center" justify="center" py="4" style={{ flex: 1 }}>
-            <Text size="2" color="gray" align="center">
-              {weekOffset === 0
-                ? 'No jobs scheduled this week'
-                : 'No jobs scheduled next week'}
-            </Text>
-          </Flex>
-        ) : (
-          <HorizontalCardScroller>
-            {jobs.map((job) => (
-              <HorizontalScrollCard key={job.id} minWidth={280}>
-                <WeekJobCard
-                  job={job}
-                  companyRole={companyRole}
-                  getInitials={getInitials}
-                  getAvatarUrl={getAvatarUrl}
-                  bookingSummaries={bookingSummaries}
-                  bookingsDetailLoading={bookingsDetailLoading}
-                  onOpen={() => openJob(job.id)}
-                />
-              </HorizontalScrollCard>
-            ))}
-          </HorizontalCardScroller>
-        )}
-      </DashboardCard>
-    )
   }
 
   const {

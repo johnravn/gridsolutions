@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.12.0'
+export const APP_VERSION = '1.12.1'
 
 export type ReleaseHighlight = {
   title: string

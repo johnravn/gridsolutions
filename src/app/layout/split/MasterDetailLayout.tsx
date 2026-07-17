@@ -2,6 +2,7 @@ import { Outlet } from '@tanstack/react-router'
 import { Box } from '@radix-ui/themes'
 import { SplitLayoutProvider } from './SplitLayoutContext'
 import { SplitChrome } from './SplitChrome'
+import './splitLayout.css'
 
 /**
  * Pathless layout for master-detail pages.
@@ -11,8 +12,8 @@ export default function MasterDetailLayout() {
   return (
     <SplitLayoutProvider>
       <Box
+        className="split-layout-root"
         style={{
-          height: '100%',
           minHeight: 0,
           display: 'flex',
           flexDirection: 'column',

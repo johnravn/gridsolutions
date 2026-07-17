@@ -125,7 +125,7 @@ export default function LatestPage() {
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
-          visible={!isLarge}
+          visible={!isLarge && selectedId != null}
         />
       }
     />

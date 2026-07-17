@@ -81,9 +81,16 @@ export function WhatsNewPopover({
         side="bottom"
         align="end"
         sideOffset={8}
-        style={{ width: 'min(360px, calc(100vw - 32px))' }}
+        collisionPadding={12}
+        style={{
+          width: 'min(360px, calc(100vw - 32px))',
+          maxHeight: 'min(70dvh, 560px)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
       >
-        <Flex align="start" justify="between" gap="3" mb="2">
+        <Flex align="start" justify="between" gap="3" mb="2" style={{ flexShrink: 0 }}>
           <Box style={{ minWidth: 0 }}>
             <Text size="3" weight="bold" as="div">
               {RELEASE_NOTES.title}
@@ -104,22 +111,33 @@ export function WhatsNewPopover({
           </IconButton>
         </Flex>
 
-        <Separator size="4" mb="3" />
+        <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
 
-        <Flex direction="column" gap="3" mb="4">
-          {RELEASE_NOTES.highlights.map((highlight) => (
-            <Box key={highlight.title}>
-              <Text size="2" weight="medium" as="div">
-                {highlight.title}
-              </Text>
-              <Text size="2" color="gray" as="div">
-                {highlight.description}
-              </Text>
-            </Box>
-          ))}
-        </Flex>
+        <Box
+          mb="4"
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+          }}
+        >
+          <Flex direction="column" gap="3">
+            {RELEASE_NOTES.highlights.map((highlight) => (
+              <Box key={highlight.title}>
+                <Text size="2" weight="medium" as="div">
+                  {highlight.title}
+                </Text>
+                <Text size="2" color="gray" as="div">
+                  {highlight.description}
+                </Text>
+              </Box>
+            ))}
+          </Flex>
+        </Box>
 
-        <Flex justify="end">
+        <Flex justify="end" style={{ flexShrink: 0 }}>
           <Button
             size="2"
             onClick={() => setOpen(false)}

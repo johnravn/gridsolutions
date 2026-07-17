@@ -201,7 +201,7 @@ export default function MattersPage() {
           <ScrollToTopButton
             listRef={listRef}
             inspectorRef={inspectorRef}
-            visible={!isLarge}
+            visible={!isLarge && selectedId != null}
           />
         }
       />

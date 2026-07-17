@@ -10,6 +10,7 @@ export function QuoteSection({
 }: {
   presentation?: 'desktop' | 'mobile'
 }) {
+  const isMobile = presentation === 'mobile'
   const todayKey = React.useMemo(
     () => new Date().toISOString().slice(0, 10),
     [],
@@ -21,10 +22,10 @@ export function QuoteSection({
 
   return (
     <DashboardCard
-      title="Today's quote"
+      title={isMobile ? 'Quote of the day' : "Today's quote"}
       icon={<QuoteIcon width={18} height={18} />}
-      notFullHeight={presentation === 'mobile'}
-      variant={presentation === 'mobile' ? 'plain' : 'card'}
+      notFullHeight={isMobile}
+      variant={isMobile ? 'plain' : 'card'}
     >
       {!quote ? (
         <Box py="4">
@@ -34,9 +35,11 @@ export function QuoteSection({
         </Box>
       ) : (
         <Flex direction="column" gap="2" py="2">
-          <Text weight="bold" size="4">
-            Quote of the day
-          </Text>
+          {!isMobile && (
+            <Text weight="bold" size="4">
+              Quote of the day
+            </Text>
+          )}
           <Text size="3" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
             <Quote>{quote.quote}</Quote>
           </Text>

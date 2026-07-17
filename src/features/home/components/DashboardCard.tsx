@@ -94,7 +94,7 @@ export function DashboardCard({
         }
 
   const body = (
-    <Flex direction="column" gap={isPlain ? '4' : '3'} style={columnStyle}>
+    <Flex direction="column" gap={isPlain ? '5' : '3'} style={columnStyle}>
       <Flex
         align="start"
         justify="between"

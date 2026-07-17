@@ -731,7 +731,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           : 'Manual'
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex justify="between" align="center" mb="3">
         <Heading size="3">Money</Heading>
         {chartData.length > 0 && (
@@ -743,8 +743,13 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       </Flex>
 
       {/* Financial Summary Cards - from confirmed items only */}
-      <Flex gap="3" mb="4" wrap="wrap">
-        <Card style={{ flex: 1, minWidth: 200 }}>
+      <Flex
+        gap="3"
+        mb="4"
+        wrap="wrap"
+        style={{ minWidth: 0, maxWidth: '100%' }}
+      >
+        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
               Total Income
@@ -758,7 +763,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             </Text>
           </Flex>
         </Card>
-        <Card style={{ flex: 1, minWidth: 200 }}>
+        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
               Total Expenses
@@ -772,7 +777,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             </Text>
           </Flex>
         </Card>
-        <Card style={{ flex: 1, minWidth: 200 }}>
+        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
           <Flex direction="column" gap="2">
             <Text size="2" color="gray">
               Net Profit/Loss
@@ -845,64 +850,66 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           <Text size="2" color="gray" mb="3">
             Add items from real events. You can edit before adding.
           </Text>
-          <Table.Root variant="surface" size="1">
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell align="right">
-                  Amount
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ width: 80 }} />
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {visibleSuggestions.map((s) => (
-                <Table.Row key={s.id}>
-                  <Table.Cell>
-                    <Badge
-                      size="1"
-                      variant="soft"
-                      color={s.type === 'income' ? 'green' : 'red'}
-                    >
-                      {s.type === 'income' ? 'Income' : 'Expense'}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>{s.description}</Table.Cell>
-                  <Table.Cell>{formatDate(s.date)}</Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      color={getSourceBadgeColor(s.source)}
-                      variant="soft"
-                      size="1"
-                    >
-                      {getSourceLabel(s.source)}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <Text
-                      weight="medium"
-                      size="2"
-                      color={s.type === 'income' ? 'green' : 'red'}
-                    >
-                      {formatCurrency(s.amount)}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Button
-                      size="1"
-                      variant="soft"
-                      onClick={() => handleAddFromSuggestion(s)}
-                    >
-                      Add
-                    </Button>
-                  </Table.Cell>
+          <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <Table.Root variant="surface" size="1">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell align="right">
+                    Amount
+                  </Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: 80 }} />
                 </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
+              </Table.Header>
+              <Table.Body>
+                {visibleSuggestions.map((s) => (
+                  <Table.Row key={s.id}>
+                    <Table.Cell>
+                      <Badge
+                        size="1"
+                        variant="soft"
+                        color={s.type === 'income' ? 'green' : 'red'}
+                      >
+                        {s.type === 'income' ? 'Income' : 'Expense'}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell>{s.description}</Table.Cell>
+                    <Table.Cell>{formatDate(s.date)}</Table.Cell>
+                    <Table.Cell>
+                      <Badge
+                        color={getSourceBadgeColor(s.source)}
+                        variant="soft"
+                        size="1"
+                      >
+                        {getSourceLabel(s.source)}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell align="right">
+                      <Text
+                        weight="medium"
+                        size="2"
+                        color={s.type === 'income' ? 'green' : 'red'}
+                      >
+                        {formatCurrency(s.amount)}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => handleAddFromSuggestion(s)}
+                      >
+                        Add
+                      </Button>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </Box>
         </Card>
       )}
 
@@ -941,76 +948,78 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             No items yet. Add from suggestions or add item.
           </Text>
         ) : (
-          <Table.Root variant="surface">
-            <Table.Header>
-              <Table.Row>
-                <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell align="right">
-                  Amount
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ width: 90 }} />
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {visibleConfirmedItems.map((item) => (
-                <Table.Row key={item.id}>
-                  <Table.Cell>
-                    <Badge
-                      size="1"
-                      variant="soft"
-                      color={item.type === 'income' ? 'green' : 'red'}
-                    >
-                      {item.type === 'income' ? 'Income' : 'Expense'}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell>{item.description}</Table.Cell>
-                  <Table.Cell>{formatDate(item.date)}</Table.Cell>
-                  <Table.Cell>{item.reference || '—'}</Table.Cell>
-                  <Table.Cell>
-                    <Badge
-                      color={getSourceBadgeColor(item.source)}
-                      variant="soft"
-                    >
-                      {getSourceLabel(item.source)}
-                    </Badge>
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    <Text
-                      weight="medium"
-                      color={item.type === 'income' ? 'green' : 'red'}
-                    >
-                      {formatCurrency(item.amount)}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Flex gap="2">
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        color="gray"
-                        onClick={() => handleEditItem(item)}
-                      >
-                        <Edit width={14} height={14} />
-                      </IconButton>
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        color="red"
-                        onClick={() => deleteMutation.mutate(item.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash width={14} height={14} />
-                      </IconButton>
-                    </Flex>
-                  </Table.Cell>
+          <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <Table.Root variant="surface">
+              <Table.Header>
+                <Table.Row>
+                  <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell align="right">
+                    Amount
+                  </Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell style={{ width: 90 }} />
                 </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
+              </Table.Header>
+              <Table.Body>
+                {visibleConfirmedItems.map((item) => (
+                  <Table.Row key={item.id}>
+                    <Table.Cell>
+                      <Badge
+                        size="1"
+                        variant="soft"
+                        color={item.type === 'income' ? 'green' : 'red'}
+                      >
+                        {item.type === 'income' ? 'Income' : 'Expense'}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell>{item.description}</Table.Cell>
+                    <Table.Cell>{formatDate(item.date)}</Table.Cell>
+                    <Table.Cell>{item.reference || '—'}</Table.Cell>
+                    <Table.Cell>
+                      <Badge
+                        color={getSourceBadgeColor(item.source)}
+                        variant="soft"
+                      >
+                        {getSourceLabel(item.source)}
+                      </Badge>
+                    </Table.Cell>
+                    <Table.Cell align="right">
+                      <Text
+                        weight="medium"
+                        color={item.type === 'income' ? 'green' : 'red'}
+                      >
+                        {formatCurrency(item.amount)}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Flex gap="2">
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          color="gray"
+                          onClick={() => handleEditItem(item)}
+                        >
+                          <Edit width={14} height={14} />
+                        </IconButton>
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          color="red"
+                          onClick={() => deleteMutation.mutate(item.id)}
+                          disabled={deleteMutation.isPending}
+                        >
+                          <Trash width={14} height={14} />
+                        </IconButton>
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table.Body>
+            </Table.Root>
+          </Box>
         )}
       </Card>
 
@@ -1020,7 +1029,14 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           <Heading size="4" mb="3">
             Income vs Expenses
           </Heading>
-          <Box style={{ height: 400, width: '100%' }}>
+          <Box
+            style={{
+              height: 400,
+              width: '100%',
+              minWidth: 0,
+              overflowX: 'auto',
+            }}
+          >
             <IncomeExpensesChart
               data={chartData}
               height={400}

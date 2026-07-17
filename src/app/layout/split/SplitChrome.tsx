@@ -157,13 +157,7 @@ function LeftHeader({
   onCollapse: () => void
 }) {
   if (!slots.showLeftHeader) {
-    return (
-      <CollapseButton
-        onClick={onCollapse}
-        label={collapseLabel}
-        overlay
-      />
-    )
+    return <CollapseButton onClick={onCollapse} label={collapseLabel} overlay />
   }
 
   return (
@@ -240,7 +234,7 @@ export function SplitChrome() {
   const leftWidth = isMinimized ? '60px' : `${leftPanelWidth}%`
 
   return (
-    <section style={{ height: '100%', minHeight: 0 }}>
+    <section className="split-layout-chrome" style={{ minHeight: 0 }}>
       <Flex
         ref={containerRef}
         gap="2"
@@ -354,8 +348,9 @@ export function SplitChrome() {
             <Box
               style={{
                 flex: 1,
+                minWidth: 0,
                 minHeight: 0,
-                overflowY: 'auto',
+                overflow: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
                 ...slots.rightBodyStyle,
@@ -450,7 +445,14 @@ export function SplitMobileStack({
           <Separator size="4" mb="3" />
         </>
       )}
-      <Box style={{ minHeight: 0, overflowY: 'auto', ...rightBodyStyle }}>
+      <Box
+        style={{
+          minWidth: 0,
+          minHeight: 0,
+          overflow: 'auto',
+          ...rightBodyStyle,
+        }}
+      >
         {right}
       </Box>
     </Card>

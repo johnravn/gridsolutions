@@ -11,7 +11,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Floating button on small screens when the inspector is in view. Scrolls the list container back to top.',
+          'Floating glass FAB on small screens when a detail is open. Toggles between scroll-to-list and scroll-to-detail.',
       },
     },
     layout: 'fullscreen',
@@ -54,8 +54,8 @@ function ScrollDemo() {
           Inspector section
         </Text>
         <Text size="2" color="gray">
-          Scroll down until this section is visible — the floating button
-          appears (visible=true in this demo).
+          The floating button toggles: arrow down scrolls here, arrow up
+          scrolls back to the list.
         </Text>
       </Box>
       <ScrollToTopButton

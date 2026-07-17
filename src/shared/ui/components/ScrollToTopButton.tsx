@@ -1,19 +1,40 @@
 import * as React from 'react'
 import { IconButton, Tooltip } from '@radix-ui/themes'
-import { ArrowUp } from 'iconoir-react'
+import { ArrowDown, ArrowUp } from 'iconoir-react'
 
 type Props = {
-  /** Ref to the list section to scroll to when clicked */
+  /** Ref to the list section (scroll-up target) */
   listRef: React.RefObject<HTMLElement | null>
-  /** Ref to the inspector section - button shows when this is in view */
+  /** Ref to the inspector section (scroll-down target) */
   inspectorRef: React.RefObject<HTMLElement | null>
-  /** Only show on small screens */
+  /**
+   * Show the toggle when true — typically `!isLarge && selection != null`
+   * so it only appears once the inspector is populated.
+   */
   visible: boolean
 }
 
+function findScrollParent(start: HTMLElement | null): HTMLElement | null {
+  let el: HTMLElement | null = start
+  while (el?.parentElement) {
+    const p = el.parentElement
+    const overflowY = getComputedStyle(p).overflowY
+    if (
+      overflowY === 'auto' ||
+      overflowY === 'scroll' ||
+      overflowY === 'overlay'
+    ) {
+      return p
+    }
+    el = p
+  }
+  return null
+}
+
 /**
- * Floating button that appears on small screens when the user has scrolled
- * down to the inspector. Clicking it scrolls back to the list at the top.
+ * Floating glass FAB on small screens when a detail is open.
+ * Arrow up when the inspector is in view (scroll to list);
+ * arrow down when the list is in view (scroll to inspector).
  */
 export default function ScrollToTopButton({
   listRef,
@@ -23,7 +44,10 @@ export default function ScrollToTopButton({
   const [isInspectorInView, setIsInspectorInView] = React.useState(false)
 
   React.useEffect(() => {
-    if (!visible || !inspectorRef.current) return
+    if (!visible || !inspectorRef.current) {
+      setIsInspectorInView(false)
+      return
+    }
 
     const el = inspectorRef.current
     const observer = new IntersectionObserver(
@@ -34,48 +58,46 @@ export default function ScrollToTopButton({
     return () => observer.disconnect()
   }, [visible, inspectorRef])
 
-  const handleClick = React.useCallback(() => {
-    // Find the scroll container (AppShell content Box) and scroll it to top
-    let el: HTMLElement | null = listRef.current
-    while (el?.parentElement) {
-      const p = el.parentElement
-      const style = getComputedStyle(p)
-      const overflowY = style.overflowY
-      if (
-        overflowY === 'auto' ||
-        overflowY === 'scroll' ||
-        overflowY === 'overlay'
-      ) {
-        p.scrollTo({ top: 0, behavior: 'smooth' })
-        break
-      }
-      el = p
+  const scrollToList = React.useCallback(() => {
+    const scroller = findScrollParent(listRef.current)
+    if (scroller) {
+      scroller.scrollTo({ top: 0, behavior: 'smooth' })
+      return
     }
+    listRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [listRef])
 
-  const show = visible && isInspectorInView
-  if (!show) return null
+  const scrollToInspector = React.useCallback(() => {
+    inspectorRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    })
+  }, [inspectorRef])
+
+  const handleClick = React.useCallback(() => {
+    if (isInspectorInView) {
+      scrollToList()
+    } else {
+      scrollToInspector()
+    }
+  }, [isInspectorInView, scrollToList, scrollToInspector])
+
+  if (!visible) return null
+
+  const goingUp = isInspectorInView
+  const label = goingUp ? 'Scroll to list' : 'Scroll to detail'
+  const Icon = goingUp ? ArrowUp : ArrowDown
 
   return (
-    <Tooltip content="Scroll to top">
+    <Tooltip content={label}>
       <IconButton
         size="3"
-        variant="soft"
-        style={{
-          position: 'fixed',
-          bottom: 'calc(24px + var(--app-safe-bottom))',
-          right: 'calc(16px + var(--app-safe-right))',
-          width: '44px',
-          height: '44px',
-          borderRadius: '50%',
-          boxShadow: '0 2px 12px rgba(0, 0, 0, 0.15)',
-          zIndex: 50,
-          flexShrink: 0,
-        }}
+        variant="ghost"
+        className="app-scroll-fab"
         onClick={handleClick}
-        aria-label="Scroll to top"
+        aria-label={label}
       >
-        <ArrowUp width={20} height={20} />
+        <Icon width={22} height={22} strokeWidth={2} />
       </IconButton>
     </Tooltip>
   )

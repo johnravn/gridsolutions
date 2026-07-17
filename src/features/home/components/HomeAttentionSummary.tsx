@@ -3,27 +3,27 @@ import { Badge, Box, Card, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { LotOfCash, NavArrowRight, WarningTriangle } from 'iconoir-react'
-import { ConflictDaysSelect } from '@features/conflicts/components/ConflictsSection'
+import { LotOfCash, Message, WarningTriangle } from 'iconoir-react'
 import {
   ConflictScrollCard,
   buildConflictCards,
   countConflictItems,
 } from './conflictScrollCards'
 import { HomeBottomSheet } from './HomeBottomSheet'
+import { HomeDisclosureRow } from './HomeDisclosureRow'
 import {
   HorizontalCardScroller,
   HorizontalScrollCard,
 } from './HorizontalCardScroller'
-import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
+import { MattersScrollContent } from './MattersSection'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { HomeJobReadyToInvoice } from '../types'
+import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
 
-export type HomeAttentionSheet = 'conflicts' | 'invoice' | null
+export type HomeAttentionSheet = 'matters' | 'conflicts' | 'invoice' | null
 
 function formatJobWhen(startAt: string | null, endAt: string | null): string {
   if (startAt) {
@@ -35,111 +35,50 @@ function formatJobWhen(startAt: string | null, endAt: string | null): string {
   return '—'
 }
 
-/** iOS Settings-style disclosure row (min ~44pt tall). */
-function SummaryRow({
-  icon,
-  label,
-  count,
-  loading,
-  color,
-  showDivider,
-  onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  count: number
-  loading?: boolean
-  color: 'red' | 'orange'
-  showDivider?: boolean
-  onClick: () => void
-}) {
+function SheetClearState({ message }: { message: string }) {
   return (
-    <Box
-      role="button"
-      tabIndex={0}
-      onClick={onClick}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onClick()
-        }
-      }}
-      style={{
-        cursor: 'pointer',
-        minHeight: 52,
-        padding: '12px 16px',
-        borderBottom: showDivider ? '1px solid var(--gray-a4)' : undefined,
-      }}
+    <Flex
+      direction="column"
+      align="center"
+      justify="center"
+      gap="3"
+      py="6"
+      style={{ textAlign: 'center' }}
     >
-      <Flex align="center" gap="3" style={{ minHeight: 28 }}>
-        <Flex
-          align="center"
-          justify="center"
-          width="32px"
-          height="32px"
-          style={{
-            borderRadius: 8,
-            background: color === 'red' ? 'var(--red-a3)' : 'var(--orange-a3)',
-            color: color === 'red' ? 'var(--red-11)' : 'var(--orange-11)',
-            flexShrink: 0,
-          }}
-        >
-          {icon}
-        </Flex>
-        <Text size="3" weight="medium" style={{ flex: 1, minWidth: 0 }}>
-          {label}
-        </Text>
-        {loading ? (
-          <Spinner size="2" />
-        ) : (
-          <Text
-            size="3"
-            color={count > 0 ? undefined : 'gray'}
-            weight={count > 0 ? 'medium' : 'regular'}
-            style={{
-              ...(count > 0
-                ? {
-                    color:
-                      color === 'red' ? 'var(--red-11)' : 'var(--orange-11)',
-                  }
-                : null),
-              fontVariantNumeric: 'tabular-nums',
-              minWidth: '1.5ch',
-              textAlign: 'right',
-            }}
-          >
-            {count}
-          </Text>
-        )}
-        <Box style={{ color: 'var(--gray-8)', lineHeight: 0, flexShrink: 0 }}>
-          <NavArrowRight width={18} height={18} />
-        </Box>
-      </Flex>
-    </Box>
+      <Text size="3" weight="medium">
+        {message}
+      </Text>
+    </Flex>
   )
 }
 
 export function HomeAttentionSummary({
   canVisitJobs,
+  showMatters,
   showConflicts,
+  unreadMatters,
+  mattersLoading,
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
-  conflictDaysFilter,
-  onConflictDaysFilterChange,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
+  getInitials,
+  getAvatarUrl,
 }: {
   canVisitJobs: boolean
-  /** Profile preference — chip always shown when true, including count 0. */
+  showMatters: boolean
+  /** Profile preference — row always shown when true, including count 0. */
   showConflicts: boolean
+  unreadMatters: Array<HomeMatter>
+  mattersLoading: boolean
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
-  conflictDaysFilter: ConflictDaysFilter
-  onConflictDaysFilterChange: (value: ConflictDaysFilter) => void
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
+  getInitials: (name: string | null, email: string) => string
+  getAvatarUrl: (avatarPath: string | null) => string | null
 }) {
   const navigate = useNavigate()
   const [sheet, setSheet] = React.useState<HomeAttentionSheet>(null)
@@ -150,7 +89,9 @@ export function HomeAttentionSummary({
     [crewConflicts, vehicleConflicts, equipmentConflicts],
   )
 
+  const mattersCount = unreadMatters.filter((m) => m.created_by).length
   const invoiceCount = jobsReadyToInvoice.length
+  const showMattersRow = showMatters
   const showConflictsRow = showConflicts
   const showInvoiceRow = canVisitJobs
 
@@ -160,50 +101,91 @@ export function HomeAttentionSummary({
     [crewConflicts, vehicleConflicts, equipmentConflicts],
   )
 
-  if (!showConflictsRow && !showInvoiceRow) {
+  if (!showMattersRow && !showConflictsRow && !showInvoiceRow) {
     return null
   }
 
+  const rows: Array<'matters' | 'invoice' | 'conflicts'> = []
+  if (showMattersRow) rows.push('matters')
+  if (showInvoiceRow) rows.push('invoice')
+  if (showConflictsRow) rows.push('conflicts')
+
   return (
     <>
-      <Card size="2" style={{ padding: 0, overflow: 'hidden' }}>
-        {showConflictsRow && (
-          <SummaryRow
-            icon={<WarningTriangle width={18} height={18} />}
-            label="Scheduling conflicts"
-            count={conflictCount}
-            color="red"
-            showDivider={showInvoiceRow}
-            onClick={() => setSheet('conflicts')}
-          />
-        )}
-        {showInvoiceRow && (
-          <SummaryRow
-            icon={<LotOfCash width={18} height={18} />}
-            label="Ready to invoice"
-            count={invoiceCount}
-            loading={jobsReadyToInvoiceLoading}
-            color="orange"
-            onClick={() => setSheet('invoice')}
-          />
-        )}
-      </Card>
+      <Flex direction="column" gap="2">
+        {rows.map((key) => {
+          if (key === 'matters') {
+            return (
+              <Card
+                key={key}
+                size="2"
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                <HomeDisclosureRow
+                  icon={<Message width={18} height={18} />}
+                  label="Matters"
+                  count={mattersCount}
+                  loading={mattersLoading}
+                  tone={mattersCount > 0 ? 'accent' : 'green'}
+                  onClick={() => setSheet('matters')}
+                />
+              </Card>
+            )
+          }
+          if (key === 'invoice') {
+            return (
+              <Card
+                key={key}
+                size="2"
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                <HomeDisclosureRow
+                  icon={<LotOfCash width={18} height={18} />}
+                  label="Ready to invoice"
+                  count={invoiceCount}
+                  loading={jobsReadyToInvoiceLoading}
+                  tone={invoiceCount > 0 ? 'orange' : 'green'}
+                  onClick={() => setSheet('invoice')}
+                />
+              </Card>
+            )
+          }
+          return (
+            <Card key={key} size="2" style={{ padding: 0, overflow: 'hidden' }}>
+              <HomeDisclosureRow
+                icon={<WarningTriangle width={18} height={18} />}
+                label="Scheduling conflicts"
+                count={conflictCount}
+                tone={conflictCount > 0 ? 'red' : 'green'}
+                onClick={() => setSheet('conflicts')}
+              />
+            </Card>
+          )
+        })}
+      </Flex>
+
+      <HomeBottomSheet
+        open={sheet === 'matters'}
+        onOpenChange={(open) => setSheet(open ? 'matters' : null)}
+        title="Matters"
+      >
+        <MattersScrollContent
+          matters={unreadMatters}
+          loading={mattersLoading}
+          getInitials={getInitials}
+          getAvatarUrl={getAvatarUrl}
+          fillHeight={false}
+          emptyFallback={<SheetClearState message="All matters read" />}
+        />
+      </HomeBottomSheet>
 
       <HomeBottomSheet
         open={sheet === 'conflicts'}
         onOpenChange={(open) => setSheet(open ? 'conflicts' : null)}
         title="Scheduling conflicts"
-        headerAction={
-          <ConflictDaysSelect
-            value={conflictDaysFilter}
-            onChange={onConflictDaysFilterChange}
-          />
-        }
       >
         {conflictCards.length === 0 ? (
-          <Text size="2" color="gray">
-            No conflicts in this period
-          </Text>
+          <SheetClearState message="No scheduling conflicts" />
         ) : (
           <HorizontalCardScroller>
             {conflictCards.map((item) => (
@@ -223,9 +205,7 @@ export function HomeAttentionSummary({
             <Spinner size="3" />
           </Flex>
         ) : jobsReadyToInvoice.length === 0 ? (
-          <Text size="2" color="gray">
-            No completed jobs waiting for invoice
-          </Text>
+          <SheetClearState message="Nothing waiting to invoice" />
         ) : (
           <HorizontalCardScroller>
             {jobsReadyToInvoice.map((job) => {
@@ -259,7 +239,7 @@ export function HomeAttentionSummary({
                             flexShrink: 0,
                           }}
                         />
-                        <Text size="2" weight="bold" as="div">
+                        <Text size="3" weight="bold" as="div">
                           {job.title}
                         </Text>
                       </Flex>
@@ -269,11 +249,11 @@ export function HomeAttentionSummary({
                             #{job.jobnr}
                           </Badge>
                         )}
-                        <Text size="1" color="gray">
+                        <Text size="2" color="gray">
                           {customerLabel}
                         </Text>
                       </Flex>
-                      <Text size="1" color="gray">
+                      <Text size="2" color="gray">
                         {formatJobWhen(job.start_at, job.end_at)}
                       </Text>
                     </Flex>

@@ -325,7 +325,7 @@ export default function JobsPage() {
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
-          visible={!isLarge}
+          visible={!isLarge && selection != null}
         />
       }
     />

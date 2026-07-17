@@ -620,6 +620,8 @@ function InternalEquipmentTable({
                 borderRadius: 8,
                 overflow: 'hidden',
                 background: 'var(--gray-a1)',
+                maxWidth: '100%',
+                minWidth: 0,
               }}
             >
               <Box
@@ -649,7 +651,7 @@ function InternalEquipmentTable({
               </Box>
 
               {isCategoryExpanded && (
-                <Box p="3">
+                <Box p="3" style={{ overflowX: 'auto', maxWidth: '100%' }}>
                   <Table.Root variant="surface">
                     <Table.Header>
                       <Table.Row>
@@ -1591,6 +1593,8 @@ function ExternalEquipmentTable({
                 borderRadius: 8,
                 overflow: 'hidden',
                 background: 'var(--gray-a1)',
+                maxWidth: '100%',
+                minWidth: 0,
               }}
             >
               {/* Owner Header */}
@@ -1757,7 +1761,10 @@ function ExternalEquipmentTable({
                         </Box>
 
                         {/* Items Table */}
-                        <Box mt="3">
+                        <Box
+                          mt="3"
+                          style={{ overflowX: 'auto', maxWidth: '100%' }}
+                        >
                           <Table.Root variant="surface">
                             <Table.Header>
                               <Table.Row>

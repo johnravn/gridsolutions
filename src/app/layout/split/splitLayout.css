@@ -1,3 +1,16 @@
+.split-layout-chrome {
+  height: var(--app-split-height);
+  max-height: var(--app-split-height);
+}
+
+/* Desktop only — mobile stacks two full-height cards and must grow */
+@media (min-width: 1024px) {
+  .split-layout-root {
+    height: var(--app-split-height);
+    max-height: var(--app-split-height);
+  }
+}
+
 @keyframes split-glow-pulse {
   0%,
   100% {

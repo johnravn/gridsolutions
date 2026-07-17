@@ -266,103 +266,105 @@ const FilesTab = React.forwardRef<FilesTabHandle, { job: JobDetail }>(
               </Text>
             </Box>
           ) : (
-            <Table.Root variant="surface">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>File</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Uploaded by</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell style={{ width: 80 }}>
-                    Actions
-                  </Table.ColumnHeaderCell>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {files.map((file: any) => (
-                  <Table.Row key={file.id}>
-                    <Table.Cell>
-                      <Flex align="center" gap="2">
-                        <GoogleDocs width={16} height={16} />
-                        <Text size="2" weight="medium">
-                          {file.filename || 'Unnamed file'}
-                        </Text>
-                        {file.size_bytes && (
-                          <Text size="1" color="gray">
-                            ({(file.size_bytes / 1024).toFixed(1)} KB)
-                          </Text>
-                        )}
-                      </Flex>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Text size="2" color={file.title ? undefined : 'gray'}>
-                        {file.title || '—'}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Text size="2" color={file.note ? undefined : 'gray'}>
-                        {file.note || '—'}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Text size="2" color="gray">
-                        {file.uploaded_by?.display_name ||
-                          file.uploaded_by?.email ||
-                          '—'}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Flex gap="1">
-                        <IconButton
-                          size="1"
-                          variant="soft"
-                          onClick={async () => {
-                            const { data } = await supabase.storage
-                              .from('job_files')
-                              .download(file.path)
-
-                            if (data && file.filename) {
-                              const url = window.URL.createObjectURL(data)
-                              const a = document.createElement('a')
-                              a.href = url
-                              a.download = file.filename
-                              document.body.appendChild(a)
-                              a.click()
-                              window.URL.revokeObjectURL(url)
-                              document.body.removeChild(a)
-                            }
-                          }}
-                        >
-                          <Download width={14} height={14} />
-                        </IconButton>
-                        {!isReadOnly && (
-                          <>
-                            <IconButton
-                              size="1"
-                              variant="soft"
-                              onClick={() => setEditFileId(file.id)}
-                            >
-                              <Edit width={14} height={14} />
-                            </IconButton>
-                            <IconButton
-                              size="1"
-                              variant="soft"
-                              color="red"
-                              onClick={() => {
-                                info('Deleting file...', 'Please wait')
-                                deleteFile.mutate(file.id)
-                              }}
-                            >
-                              <Trash width={14} height={14} />
-                            </IconButton>
-                          </>
-                        )}
-                      </Flex>
-                    </Table.Cell>
+            <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+              <Table.Root variant="surface">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>File</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Uploaded by</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: 80 }}>
+                      Actions
+                    </Table.ColumnHeaderCell>
                   </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Root>
+                </Table.Header>
+                <Table.Body>
+                  {files.map((file: any) => (
+                    <Table.Row key={file.id}>
+                      <Table.Cell>
+                        <Flex align="center" gap="2">
+                          <GoogleDocs width={16} height={16} />
+                          <Text size="2" weight="medium">
+                            {file.filename || 'Unnamed file'}
+                          </Text>
+                          {file.size_bytes && (
+                            <Text size="1" color="gray">
+                              ({(file.size_bytes / 1024).toFixed(1)} KB)
+                            </Text>
+                          )}
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color={file.title ? undefined : 'gray'}>
+                          {file.title || '—'}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color={file.note ? undefined : 'gray'}>
+                          {file.note || '—'}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Text size="2" color="gray">
+                          {file.uploaded_by?.display_name ||
+                            file.uploaded_by?.email ||
+                            '—'}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Flex gap="1">
+                          <IconButton
+                            size="1"
+                            variant="soft"
+                            onClick={async () => {
+                              const { data } = await supabase.storage
+                                .from('job_files')
+                                .download(file.path)
+
+                              if (data && file.filename) {
+                                const url = window.URL.createObjectURL(data)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = file.filename
+                                document.body.appendChild(a)
+                                a.click()
+                                window.URL.revokeObjectURL(url)
+                                document.body.removeChild(a)
+                              }
+                            }}
+                          >
+                            <Download width={14} height={14} />
+                          </IconButton>
+                          {!isReadOnly && (
+                            <>
+                              <IconButton
+                                size="1"
+                                variant="soft"
+                                onClick={() => setEditFileId(file.id)}
+                              >
+                                <Edit width={14} height={14} />
+                              </IconButton>
+                              <IconButton
+                                size="1"
+                                variant="soft"
+                                color="red"
+                                onClick={() => {
+                                  info('Deleting file...', 'Please wait')
+                                  deleteFile.mutate(file.id)
+                                }}
+                              >
+                                <Trash width={14} height={14} />
+                              </IconButton>
+                            </>
+                          )}
+                        </Flex>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            </Box>
           )}
         </Box>
 

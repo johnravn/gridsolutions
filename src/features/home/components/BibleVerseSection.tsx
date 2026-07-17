@@ -9,6 +9,7 @@ export function BibleVerseSection({
 }: {
   presentation?: 'desktop' | 'mobile'
 }) {
+  const isMobile = presentation === 'mobile'
   const todayKey = new Date().toISOString().slice(0, 10)
   const langPreference = 'en'
 
@@ -36,13 +37,14 @@ export function BibleVerseSection({
   const citation = data?.citation ? String(data.citation) : ''
   const passage = data?.passage ? String(data.passage) : ''
   const version = data?.version ? String(data.version) : ''
+  const verseTitle = citation || 'Verse of the Day'
 
   return (
     <DashboardCard
-      title="Today's Bible verse"
+      title={isMobile ? verseTitle : "Today's Bible verse"}
       icon={<QuoteIcon width={18} height={18} />}
-      notFullHeight={presentation === 'mobile'}
-      variant={presentation === 'mobile' ? 'plain' : 'card'}
+      notFullHeight={isMobile}
+      variant={isMobile ? 'plain' : 'card'}
     >
       {isLoading ? (
         <DashboardCardSkeleton rowCount={2} compact />
@@ -54,9 +56,11 @@ export function BibleVerseSection({
         </Box>
       ) : (
         <Flex direction="column" gap="2" py="2">
-          <Text weight="bold" size="4">
-            {citation || 'Verse of the Day'}
-          </Text>
+          {!isMobile && (
+            <Text weight="bold" size="4">
+              {verseTitle}
+            </Text>
+          )}
           <Text size="3" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
             <Quote>{passage || 'No verse text available.'}</Quote>
           </Text>
