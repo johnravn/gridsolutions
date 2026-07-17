@@ -3,56 +3,78 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import HomePageSkeleton from '@shared/ui/components/HomePageSkeleton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
-import { addDays, format, startOfMinute } from 'date-fns'
-import { nb } from 'date-fns/locale'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { addDays, startOfMinute } from 'date-fns'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { mattersIndexQueryAll } from '@features/matters/api/queries'
+import { useJobCrewRoleIds } from '@features/jobs/hooks/useJobCrewRoleIds'
 import { HomeDesktopLayout, HomeMobileLayout } from '@features/home/components'
 import { companyJobsWeekQuery } from '@features/home/api/companyJobsWeekQuery'
 import { companyWeekJobsBookingsQuery } from '@features/home/api/companyWeekJobsBookingsQuery'
+import { activeRecurringJobsQuery } from '@features/home/api/activeRecurringJobsQuery'
 import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
+import { projectLeadJobIdsQuery } from '@features/home/api/projectLeadJobIdsQuery'
 import {
   defaultHomeDashboardLayoutPreferences,
   profileHomeLayoutQuery,
 } from '@features/home/api/profileHomeLayoutQuery'
-import { useUpcomingJobs } from '@features/home/hooks/useUpcomingJobs'
-import { useHomeResizeLayout } from '@features/home/hooks/useHomeResizeLayout'
+import { resolveMyJobRole } from '@features/home/utils/resolveMyJobRole'
 import {
   crewConflictsQuery,
   equipmentConflictsQuery,
   vehicleConflictsQuery,
 } from '@features/conflicts/api/queries'
+import {
+  filterCrewConflictsByProjectLead,
+  filterEquipmentConflictsByProjectLead,
+  filterVehicleConflictsByProjectLead,
+} from '@features/conflicts/utils/filterConflictsByProjectLead'
 import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
-import type { HomeMatter } from '@features/home/types'
+import type { JobListRow } from '@features/jobs/types'
+import type { HomeMatter, WeekJobWithRole } from '@features/home/types'
+
+const LARGE_BREAKPOINT = '(min-width: 1024px)'
+
+function withMyJobRoles(
+  jobs: Array<JobListRow>,
+  userId: string | null,
+  crewJobIdSet: Set<string>,
+  isFreelancer: boolean,
+): Array<WeekJobWithRole> {
+  return jobs.map((job) => ({
+    ...job,
+    my_job_role: resolveMyJobRole({
+      userId,
+      projectLeadUserId: job.project_lead?.user_id,
+      isCrew: isFreelancer || crewJobIdSet.has(job.id),
+    }),
+  }))
+}
+
+function filterMyJobs(
+  jobs: Array<WeekJobWithRole>,
+  showMyJobsOnly: boolean,
+  isFreelancer: boolean,
+): Array<WeekJobWithRole> {
+  if (isFreelancer || !showMyJobsOnly) return jobs
+  return jobs.filter((job) => job.my_job_role !== null)
+}
 
 export default function HomePage() {
   const { companyId } = useCompany()
   const { userId, companyRole, caps } = useAuthz()
+  const isLarge = useMediaQuery(LARGE_BREAKPOINT)
+  const isFreelancer = companyRole === 'freelancer'
 
-  const [daysFilter, setDaysFilter] = React.useState<'7' | '14' | '30' | 'all'>(
-    'all',
-  )
-  const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(true)
-  const [jobsWeekOffset, setJobsWeekOffset] = React.useState<0 | 1>(0)
+  const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(false)
+  const [mobileWeekOffset, setMobileWeekOffset] = React.useState<0 | 1>(0)
   const [conflictDaysFilter, setConflictDaysFilter] =
     React.useState<ConflictDaysFilter>('30')
 
   const canVisitJobs = caps.has('visit:jobs')
-
-  const {
-    jobs: filteredUpcomingJobs,
-    loading: upcomingJobsLoading,
-    isFreelancer,
-  } = useUpcomingJobs({
-    companyId,
-    userId,
-    companyRole,
-    daysFilter,
-    showMyJobsOnly,
-  })
 
   const {
     data: jobsReadyToInvoice = [],
@@ -65,24 +87,60 @@ export default function HomePage() {
     enabled: !!companyId && !!userId && canVisitJobs,
   })
 
-  const { data: companyWeekJobs = [], isLoading: companyWeekJobsLoading } =
-    useQuery({
-      ...companyJobsWeekQuery({
-        companyId: companyId ?? '',
-        weekOffset: jobsWeekOffset,
-        userId,
-        companyRole,
-      }),
-      enabled: !!companyId && canVisitJobs,
-    })
+  const { data: week0Jobs = [], isLoading: week0Loading } = useQuery({
+    ...companyJobsWeekQuery({
+      companyId: companyId ?? '',
+      weekOffset: 0,
+      userId,
+      companyRole,
+    }),
+    enabled: !!companyId && canVisitJobs,
+  })
+
+  const { data: week1Jobs = [], isLoading: week1Loading } = useQuery({
+    ...companyJobsWeekQuery({
+      companyId: companyId ?? '',
+      weekOffset: 1,
+      userId,
+      companyRole,
+    }),
+    enabled: !!companyId && canVisitJobs,
+  })
+
+  const { data: week2Jobs = [], isLoading: week2Loading } = useQuery({
+    ...companyJobsWeekQuery({
+      companyId: companyId ?? '',
+      weekOffset: 2,
+      userId,
+      companyRole,
+    }),
+    enabled: !!companyId && canVisitJobs && isLarge,
+  })
+
+  const companyWeekJobsLoading = isLarge
+    ? week0Loading || week1Loading || week2Loading
+    : mobileWeekOffset === 0
+      ? week0Loading
+      : week1Loading
+
+  const bookingsSourceJobs = React.useMemo(() => {
+    if (isLarge) {
+      const byId = new Map<string, (typeof week0Jobs)[number]>()
+      for (const job of week0Jobs) byId.set(job.id, job)
+      for (const job of week1Jobs) byId.set(job.id, job)
+      for (const job of week2Jobs) byId.set(job.id, job)
+      return Array.from(byId.values())
+    }
+    return mobileWeekOffset === 0 ? week0Jobs : week1Jobs
+  }, [isLarge, mobileWeekOffset, week0Jobs, week1Jobs, week2Jobs])
 
   const jobsWeekBookingsMeta = React.useMemo(
     () =>
-      companyWeekJobs.map((j) => ({
+      bookingsSourceJobs.map((j) => ({
         id: j.id,
         leadUserId: j.project_lead?.user_id ?? null,
       })),
-    [companyWeekJobs],
+    [bookingsSourceJobs],
   )
 
   const {
@@ -91,11 +149,72 @@ export default function HomePage() {
   } = useQuery({
     ...companyWeekJobsBookingsQuery({
       companyId: companyId ?? '',
-      weekOffset: jobsWeekOffset,
+      weekOffset: isLarge ? 0 : mobileWeekOffset,
       jobsMeta: jobsWeekBookingsMeta,
     }),
     enabled: !!companyId && canVisitJobs && jobsWeekBookingsMeta.length > 0,
   })
+
+  const { data: activeRecurringJobs = [] } = useQuery({
+    ...activeRecurringJobsQuery({ companyId: companyId ?? '' }),
+    enabled: !!companyId && canVisitJobs && isLarge,
+  })
+
+  const allWeekJobIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const job of week0Jobs) ids.add(job.id)
+    for (const job of week1Jobs) ids.add(job.id)
+    for (const job of week2Jobs) ids.add(job.id)
+    return Array.from(ids)
+  }, [week0Jobs, week1Jobs, week2Jobs])
+
+  const crewJobIdSet = useJobCrewRoleIds({
+    companyId,
+    userId,
+    jobIds: isFreelancer ? [] : allWeekJobIds,
+  })
+
+  const jobsThisWeek = React.useMemo(
+    () =>
+      filterMyJobs(
+        withMyJobRoles(week0Jobs, userId, crewJobIdSet, isFreelancer),
+        showMyJobsOnly,
+        isFreelancer,
+      ),
+    [week0Jobs, userId, crewJobIdSet, isFreelancer, showMyJobsOnly],
+  )
+
+  const jobsNextWeek = React.useMemo(
+    () =>
+      filterMyJobs(
+        withMyJobRoles(week1Jobs, userId, crewJobIdSet, isFreelancer),
+        showMyJobsOnly,
+        isFreelancer,
+      ),
+    [week1Jobs, userId, crewJobIdSet, isFreelancer, showMyJobsOnly],
+  )
+
+  const jobsWeekAfter = React.useMemo(
+    () =>
+      filterMyJobs(
+        withMyJobRoles(week2Jobs, userId, crewJobIdSet, isFreelancer),
+        showMyJobsOnly,
+        isFreelancer,
+      ),
+    [week2Jobs, userId, crewJobIdSet, isFreelancer, showMyJobsOnly],
+  )
+
+  const mobileWeekJobs = React.useMemo(() => {
+    const source = mobileWeekOffset === 0 ? week0Jobs : week1Jobs
+    return withMyJobRoles(source, userId, crewJobIdSet, isFreelancer)
+  }, [
+    mobileWeekOffset,
+    week0Jobs,
+    week1Jobs,
+    userId,
+    crewJobIdSet,
+    isFreelancer,
+  ])
 
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
     ...mattersIndexQueryAll(),
@@ -107,15 +226,34 @@ export default function HomePage() {
   }, [mattersData])
 
   // IMPORTANT: make range stable so queryKey doesn't change every render
-  const { conflictFrom, conflictTo, conflictRangeLabel } = React.useMemo(() => {
+  const { conflictFrom, conflictTo } = React.useMemo(() => {
     const now = startOfMinute(new Date())
+    // Desktop attention band shows all upcoming conflicts (no upper bound).
+    // Mobile keeps a selectable window for the bottom-sheet filter.
+    if (isLarge) {
+      return {
+        conflictFrom: now.toISOString(),
+        conflictTo: null as string | null,
+      }
+    }
     const end = addDays(now, Number(conflictDaysFilter))
     return {
       conflictFrom: now.toISOString(),
       conflictTo: end.toISOString(),
-      conflictRangeLabel: `${format(now, 'd. MMM', { locale: nb })} – ${format(end, 'd. MMM yyyy', { locale: nb })}`,
     }
-  }, [companyId, conflictDaysFilter])
+  }, [companyId, conflictDaysFilter, isLarge])
+
+  const { data: projectLeadJobIds = [], isSuccess: projectLeadJobIdsLoaded } =
+    useQuery({
+      ...projectLeadJobIdsQuery({
+        companyId: companyId ?? '',
+        userId: userId ?? '',
+      }),
+      enabled: !!companyId && !!userId,
+    })
+
+  const shouldFetchConflicts =
+    !!companyId && projectLeadJobIdsLoaded && projectLeadJobIds.length > 0
 
   const { data: crewConflicts = [], isLoading: crewConflictsLoading } =
     useQuery({
@@ -124,7 +262,7 @@ export default function HomePage() {
         from: conflictFrom,
         to: conflictTo,
       }),
-      enabled: !!companyId,
+      enabled: shouldFetchConflicts,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
@@ -136,7 +274,7 @@ export default function HomePage() {
         from: conflictFrom,
         to: conflictTo,
       }),
-      enabled: !!companyId,
+      enabled: shouldFetchConflicts,
       staleTime: 5 * 60 * 1000,
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
@@ -150,13 +288,35 @@ export default function HomePage() {
       from: conflictFrom,
       to: conflictTo,
     }),
-    enabled: !!companyId,
+    enabled: shouldFetchConflicts,
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
+
+  const filteredCrewConflicts = React.useMemo(
+    () => filterCrewConflictsByProjectLead(crewConflicts, projectLeadJobIds),
+    [crewConflicts, projectLeadJobIds],
+  )
+  const filteredVehicleConflicts = React.useMemo(
+    () =>
+      filterVehicleConflictsByProjectLead(vehicleConflicts, projectLeadJobIds),
+    [vehicleConflicts, projectLeadJobIds],
+  )
+  const filteredEquipmentConflicts = React.useMemo(
+    () =>
+      filterEquipmentConflictsByProjectLead(
+        equipmentConflicts,
+        projectLeadJobIds,
+      ),
+    [equipmentConflicts, projectLeadJobIds],
+  )
+
   const conflictsLoading =
-    crewConflictsLoading || vehicleConflictsLoading || equipmentConflictsLoading
+    shouldFetchConflicts &&
+    (crewConflictsLoading ||
+      vehicleConflictsLoading ||
+      equipmentConflictsLoading)
 
   const getInitials = getInitialsFromNameOrEmail
 
@@ -166,20 +326,19 @@ export default function HomePage() {
     return data.publicUrl
   }
 
-  const { isLarge, containerRef, leftPanelWidth, isResizing, setIsResizing } =
-    useHomeResizeLayout()
-
   const { data: homeLayoutPrefs } = useQuery({
     ...profileHomeLayoutQuery(userId ?? ''),
     enabled: !!userId && !!companyId,
   })
   const homeLayout = homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
 
+  const conflictsSettled =
+    !homeLayout.showConflicts ||
+    (projectLeadJobIdsLoaded && !conflictsLoading)
+
   const isHomeDataLoading =
     mattersLoading ||
-    conflictsLoading ||
-    (canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading) ||
-    (homeLayout.showUpcomingJobs && upcomingJobsLoading)
+    (canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading)
 
   const showInitialSkeleton = useInitialPageLoad(isHomeDataLoading)
 
@@ -192,32 +351,23 @@ export default function HomePage() {
       <HomeMobileLayout
         userId={userId}
         canVisitJobs={canVisitJobs}
-        companyWeekJobs={companyWeekJobs}
+        companyWeekJobs={mobileWeekJobs}
         companyWeekJobsLoading={companyWeekJobsLoading}
         companyWeekBookingSummaries={companyWeekBookingSummaries}
         companyWeekBookingsDetailLoading={companyWeekBookingsDetailLoading}
-        jobsWeekOffset={jobsWeekOffset}
-        onJobsWeekOffsetChange={setJobsWeekOffset}
+        jobsWeekOffset={mobileWeekOffset}
+        onJobsWeekOffsetChange={setMobileWeekOffset}
         unreadMatters={unreadMatters}
         mattersLoading={mattersLoading}
         jobsReadyToInvoice={jobsReadyToInvoice}
         jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
-        upcomingJobs={filteredUpcomingJobs}
-        upcomingJobsLoading={upcomingJobsLoading}
-        showMyJobsOnly={showMyJobsOnly}
-        onToggleMyJobsOnly={setShowMyJobsOnly}
-        isFreelancer={isFreelancer}
-        daysFilter={daysFilter}
-        onDaysFilterChange={setDaysFilter}
         getInitials={getInitials}
         getAvatarUrl={getAvatarUrl}
-        crewConflicts={crewConflicts}
-        vehicleConflicts={vehicleConflicts}
-        equipmentConflicts={equipmentConflicts}
-        conflictsLoading={conflictsLoading}
+        crewConflicts={filteredCrewConflicts}
+        vehicleConflicts={filteredVehicleConflicts}
+        equipmentConflicts={filteredEquipmentConflicts}
         conflictDaysFilter={conflictDaysFilter}
         onConflictDaysFilterChange={setConflictDaysFilter}
-        conflictRangeLabel={conflictRangeLabel}
         homeLayout={homeLayout}
       />
     )
@@ -225,38 +375,28 @@ export default function HomePage() {
 
   return (
     <HomeDesktopLayout
-      containerRef={containerRef}
-      leftPanelWidth={leftPanelWidth}
-      isResizing={isResizing}
-      onResizeStart={() => setIsResizing(true)}
       userId={userId}
       canVisitJobs={canVisitJobs}
-      companyWeekJobs={companyWeekJobs}
+      jobsThisWeek={jobsThisWeek}
+      jobsNextWeek={jobsNextWeek}
+      jobsWeekAfter={jobsWeekAfter}
       companyWeekJobsLoading={companyWeekJobsLoading}
       companyWeekBookingSummaries={companyWeekBookingSummaries}
       companyWeekBookingsDetailLoading={companyWeekBookingsDetailLoading}
-      jobsWeekOffset={jobsWeekOffset}
-      onJobsWeekOffsetChange={setJobsWeekOffset}
+      activeRecurringJobs={activeRecurringJobs}
       unreadMatters={unreadMatters}
       mattersLoading={mattersLoading}
       jobsReadyToInvoice={jobsReadyToInvoice}
       jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
-      upcomingJobs={filteredUpcomingJobs}
-      upcomingJobsLoading={upcomingJobsLoading}
       showMyJobsOnly={showMyJobsOnly}
       onToggleMyJobsOnly={setShowMyJobsOnly}
       isFreelancer={isFreelancer}
-      daysFilter={daysFilter}
-      onDaysFilterChange={setDaysFilter}
       getInitials={getInitials}
       getAvatarUrl={getAvatarUrl}
-      crewConflicts={crewConflicts}
-      vehicleConflicts={vehicleConflicts}
-      equipmentConflicts={equipmentConflicts}
-      conflictsLoading={conflictsLoading}
-      conflictDaysFilter={conflictDaysFilter}
-      onConflictDaysFilterChange={setConflictDaysFilter}
-      conflictRangeLabel={conflictRangeLabel}
+      conflictsSettled={conflictsSettled}
+      crewConflicts={filteredCrewConflicts}
+      vehicleConflicts={filteredVehicleConflicts}
+      equipmentConflicts={filteredEquipmentConflicts}
       homeLayout={homeLayout}
     />
   )

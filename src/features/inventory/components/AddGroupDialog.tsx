@@ -2,7 +2,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  AlertDialog,
   Badge,
   Box,
   Button,
@@ -15,13 +14,11 @@ import {
   Spinner,
   Table,
   Text,
-  TextArea,
   TextField,
 } from '@radix-ui/themes'
-import { NewTab, Plus, Search, Sparks, Trash } from 'iconoir-react'
-import { useNavigate } from '@tanstack/react-router'
-import { useAuthz } from '@shared/auth/useAuthz'
-import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { Plus, Sparks, Trash } from 'iconoir-react'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import type { InventoryItemKind } from '../api/queries'
@@ -47,15 +44,34 @@ type Part = {
   unit_price: number | null
   part_type: 'item' | 'group'
 }
-type FormState = {
+type ScalarFormValues = {
   name: string
   categoryId: string | null
   description: string
   active: boolean
   price: number | null
-  parts: Array<Part>
   item_kind: InventoryItemKind
 }
+
+type FormState = ScalarFormValues & { parts: Array<Part> }
+
+const defaultValues: ScalarFormValues = {
+  name: '',
+  categoryId: null,
+  description: '',
+  active: true,
+  price: null,
+  item_kind: 'stock',
+}
+
+const schema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  categoryId: z.string().nullable(),
+  description: z.string(),
+  active: z.boolean(),
+  price: z.number().nullable(),
+  item_kind: z.enum(['stock', 'subrental']),
+})
 
 type EditInitialData = {
   id: string
@@ -94,10 +110,6 @@ export default function AddGroupDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
-  const navigate = useNavigate()
-  const { companyRole } = useAuthz()
-  const { canWrite } = useCompanyWriteAccess()
-  const isOwner = companyRole === 'owner' && canWrite
 
   const fmtCurrency = React.useMemo(
     () =>
@@ -109,15 +121,7 @@ export default function AddGroupDialog({
     [],
   )
 
-  const [form, setForm] = React.useState<FormState>({
-    name: '',
-    categoryId: null,
-    description: '',
-    active: true,
-    price: null,
-    parts: [],
-    item_kind: 'stock',
-  })
+  const [parts, setParts] = React.useState<Array<Part>>([])
   const [partQuantityDrafts, setPartQuantityDrafts] = React.useState<
     Record<string, string>
   >({})
@@ -125,35 +129,32 @@ export default function AddGroupDialog({
   const escapeForPostgrestOr = React.useCallback((value: string) => {
     return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
   }, [])
-  const set = <TKey extends keyof FormState>(
-    key: TKey,
-    value: FormState[TKey],
-  ) => setForm((s) => ({ ...s, [key]: value }))
 
-  // keep original price to detect changes in edit mode
   const originalPriceRef = React.useRef<number | null>(null)
 
-  // Reset form to initial state
-  const resetForm = React.useCallback(() => {
-    setForm({
-      name: '',
-      categoryId: null,
-      description: '',
-      active: true,
-      price: null,
-      parts: [],
-      item_kind: 'stock',
-    })
-    setSearch('')
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      const payload: FormState = { ...value, parts }
+      if (mode === 'create') {
+        await createMutation.mutateAsync(payload)
+      } else {
+        await editMutation.mutateAsync(payload)
+      }
+    },
+  })
+
+  const resetLocalState = React.useCallback(() => {
+    setParts([])
+    setPartQuantityDrafts({})
     originalPriceRef.current = null
   }, [])
 
   /* -------- Categories -------- */
-  const {
-    data: categories = [],
-    isLoading: catLoading,
-    error: catErr,
-  } = useQuery({
+  const { data: categories = [] } = useQuery({
     queryKey: ['company', companyId, 'item_categories'],
     enabled: !!companyId && open,
     queryFn: async (): Promise<Array<Option>> => {
@@ -182,12 +183,7 @@ export default function AddGroupDialog({
       item.nicknames,
     ].some((value) => value?.toLowerCase().includes(normalized))
   }, [])
-  const {
-    data: pickerItems = [],
-    isLoading: itemsLoading,
-    isFetching: itemsFetching,
-    error: itemsErr,
-  } = useQuery({
+  const { data: pickerItems = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['company', companyId, 'picker-items-groups', search],
     enabled: !!companyId && open,
     queryFn: async (): Promise<Array<PickerItem>> => {
@@ -330,12 +326,16 @@ export default function AddGroupDialog({
 
   /* -------- Reset form in CREATE mode when dialog opens -------- */
   React.useEffect(() => {
-    if (open && mode === 'create') {
-      resetForm()
+    if (!open) return
+    if (mode === 'create') {
+      form.reset(defaultValues)
+      resetLocalState()
+      setSearch('')
     }
-  }, [open, mode, resetForm])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open, mode])
 
-  /* -------- Prefill in EDIT mode (prevent infinite loop) -------- */
+  /* -------- Prefill in EDIT mode -------- */
   React.useEffect(() => {
     if (!open || mode !== 'edit' || !initialData) return
     const catId =
@@ -352,20 +352,29 @@ export default function AddGroupDialog({
       part_type: p.part_type ? p.part_type : p.item_id ? 'item' : 'group',
     }))
 
-    setForm((prev) => {
-      if (prev.name === initialData.name) return prev // Prevent infinite loop
-      return {
-        ...prev,
+    form.reset(
+      {
         name: initialData.name,
         categoryId: catId,
         description: initialData.description || '',
         active: initialData.active,
         price: initialData.price,
-        parts: newParts,
         item_kind: initialData.item_kind,
-      }
-    })
-  }, [open, mode, initialData, categories])
+      },
+      { keepDefaultValues: true },
+    )
+    setParts(newParts)
+    // Depend on stable fields — InventoryInspector rebuilds initialData each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill when edit opens
+  }, [
+    open,
+    mode,
+    initialData?.id,
+    initialData?.name,
+    initialData?.price,
+    initialData?.categoryName,
+    categories.length,
+  ])
 
   /* -------- Create mutation -------- */
   const createMutation = useMutation({
@@ -478,7 +487,9 @@ export default function AddGroupDialog({
           exact: false,
         }),
       ])
-      resetForm()
+      resetLocalState()
+      setSearch('')
+      form.reset(defaultValues)
       onOpenChange(false)
       success('Group created', 'Your group was added successfully.')
       onSaved?.()
@@ -568,21 +579,20 @@ export default function AddGroupDialog({
 
   /* -------- Add part handler -------- */
   const handleAddPart = (selected: PickerItem) => {
-    const existing = form.parts.find(
+    const existing = parts.find(
       (p) =>
         (selected.type === 'item' && p.item_id === selected.id) ||
         (selected.type === 'group' && p.child_group_id === selected.id),
     )
     if (existing) {
-      set(
-        'parts',
-        form.parts.map((p) =>
+      setParts(
+        parts.map((p) =>
           p === existing ? { ...p, quantity: p.quantity + 1 } : p,
         ),
       )
     } else {
-      set('parts', [
-        ...form.parts,
+      setParts([
+        ...parts,
         {
           item_id: selected.type === 'item' ? selected.id : null,
           child_group_id: selected.type === 'group' ? selected.id : null,
@@ -598,10 +608,7 @@ export default function AddGroupDialog({
 
   /* -------- Remove part handler -------- */
   const handleRemovePart = (index: number) => {
-    set(
-      'parts',
-      form.parts.filter((_, i) => i !== index),
-    )
+    setParts(parts.filter((_, i) => i !== index))
     setPartQuantityDrafts({})
   }
 
@@ -611,10 +618,7 @@ export default function AddGroupDialog({
   /* -------- Update part quantity -------- */
   const handleUpdateQuantity = (index: number, quantity: number) => {
     if (quantity < 1) return
-    set(
-      'parts',
-      form.parts.map((p, i) => (i === index ? { ...p, quantity } : p)),
-    )
+    setParts(parts.map((p, i) => (i === index ? { ...p, quantity } : p)))
   }
 
   // ===== TESTING ONLY: Auto-populate function =====
@@ -657,15 +661,15 @@ export default function AddGroupDialog({
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
 
-    setForm({
+    form.reset({
       name: randomName,
       categoryId: randomCategory?.id ?? null,
       description: randomDescription,
-      active: Math.random() > 0.2, // 80% chance of being active
+      active: Math.random() > 0.2,
       price: randomPrice,
-      parts: [], // Don't auto-populate parts as it requires item/group selection
       item_kind: isStock ? 'stock' : 'subrental',
     })
+    setParts([])
   }
   // ===== END TESTING ONLY =====
 
@@ -703,329 +707,340 @@ export default function AddGroupDialog({
             {/* ===== END TESTING ONLY ===== */}
           </Flex>
 
-          <Grid columns="2" gap="4" mt="4">
-            {/* LEFT COLUMN: Input Fields and Data */}
-            <Flex direction="column" gap="3">
-              {/* Name */}
-              <TextField.Root
-                placeholder="Group name"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-              />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Grid columns="2" gap="4" mt="4">
+                <Flex direction="column" gap="3">
+                  <form.AppField name="name">
+                    {(field) => <field.TextField placeholder="Group name" />}
+                  </form.AppField>
 
-              {/* Category */}
-              <Select.Root
-                value={form.categoryId ?? '__none__'}
-                onValueChange={(value) =>
-                  set('categoryId', value === '__none__' ? null : value)
-                }
-              >
-                <Select.Trigger>
-                  {form.categoryId
-                    ? categories.find((c) => c.id === form.categoryId)?.name ||
-                      'Category (optional)'
-                    : 'Category (optional)'}
-                </Select.Trigger>
-                <Select.Content style={{ zIndex: 10000 }}>
-                  <Select.Item value="__none__">None</Select.Item>
-                  {categories.map((cat) => (
-                    <Select.Item key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
+                  <form.Subscribe selector={(state) => state.values.categoryId}>
+                    {(categoryId) => (
+                      <Select.Root
+                        value={categoryId ?? '__none__'}
+                        onValueChange={(value) =>
+                          form.setFieldValue(
+                            'categoryId',
+                            value === '__none__' ? null : value,
+                          )
+                        }
+                      >
+                        <Select.Trigger>
+                          {categoryId
+                            ? categories.find((c) => c.id === categoryId)
+                                ?.name || 'Category (optional)'
+                            : 'Category (optional)'}
+                        </Select.Trigger>
+                        <Select.Content style={{ zIndex: 10000 }}>
+                          <Select.Item value="__none__">None</Select.Item>
+                          {categories.map((cat) => (
+                            <Select.Item key={cat.id} value={cat.id}>
+                              {cat.name}
+                            </Select.Item>
+                          ))}
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                  </form.Subscribe>
 
-              {/* Description */}
-              <TextArea
-                placeholder="Description (optional)"
-                value={form.description}
-                onChange={(e) => set('description', e.target.value)}
-                rows={3}
-              />
+                  <form.AppField name="description">
+                    {(field) => (
+                      <field.TextArea
+                        placeholder="Description (optional)"
+                        rows={3}
+                      />
+                    )}
+                  </form.AppField>
 
-              {/* Active */}
-              <label
-                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-              >
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(e) => set('active', e.target.checked)}
-                />
-                Active
-              </label>
+                  <form.AppField name="active">
+                    {(field) => <field.Checkbox label="Active" />}
+                  </form.AppField>
 
-              {/* Price */}
-              <TextField.Root
-                type="number"
-                placeholder="Price (optional)"
-                value={form.price ?? ''}
-                onChange={(e) =>
-                  set('price', e.target.value ? Number(e.target.value) : null)
-                }
-              />
+                  <form.AppField name="price">
+                    {(field) => (
+                      <TextField.Root
+                        type="number"
+                        placeholder="Price (optional)"
+                        value={field.state.value ?? ''}
+                        onChange={(e) =>
+                          field.handleChange(
+                            e.target.value ? Number(e.target.value) : null,
+                          )
+                        }
+                      />
+                    )}
+                  </form.AppField>
 
-              {/* Owner */}
-              <Separator />
-              <Text size="2" weight="bold">
-                Type
-              </Text>
-              <Select.Root
-                value={form.item_kind}
-                onValueChange={(v: string) =>
-                  set('item_kind', v as InventoryItemKind)
-                }
-              >
-                <Select.Trigger />
-                <Select.Content style={{ zIndex: 10000 }}>
-                  <Select.Item value="stock">Stock</Select.Item>
-                  <Select.Item value="subrental">Subrental</Select.Item>
-                </Select.Content>
-              </Select.Root>
+                  <Separator />
+                  <Text size="2" weight="bold">
+                    Type
+                  </Text>
+                  <form.AppField name="item_kind">
+                    {(field) => (
+                      <Select.Root
+                        value={field.state.value}
+                        onValueChange={(v: string) =>
+                          field.handleChange(v as InventoryItemKind)
+                        }
+                      >
+                        <Select.Trigger />
+                        <Select.Content style={{ zIndex: 10000 }}>
+                          <Select.Item value="stock">Stock</Select.Item>
+                          <Select.Item value="subrental">Subrental</Select.Item>
+                        </Select.Content>
+                      </Select.Root>
+                    )}
+                  </form.AppField>
 
-              {/* Actions */}
-              <Flex gap="2" justify="end" mt="auto">
-                <Button variant="soft" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => {
-                    if (mode === 'create') {
-                      createMutation.mutate(form)
-                    } else {
-                      editMutation.mutate(form)
-                    }
-                  }}
-                  disabled={
-                    !form.name.trim() ||
-                    createMutation.isPending ||
-                    editMutation.isPending
-                  }
-                >
-                  {mode === 'create' ? 'Create' : 'Update'}
-                </Button>
-              </Flex>
-            </Flex>
-
-            {/* RIGHT COLUMN: Parts Search and List */}
-            <Flex direction="column" gap="3">
-              <Text size="2" weight="bold">
-                Parts
-              </Text>
-
-              {/* Parts Search */}
-              <Flex direction="column" gap="2">
-                <Text size="2" color="gray">
-                  Search & Add
-                </Text>
-                <Box style={{ position: 'relative' }}>
-                  <Flex gap="2">
-                    <TextField.Root
-                      placeholder="Search items or groups..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      style={{ flex: 1 }}
+                  <Flex gap="2" justify="end" mt="auto">
+                    <Button
+                      type="button"
+                      variant="soft"
+                      onClick={() => onOpenChange(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <form.SubmitButton
+                      label={mode === 'create' ? 'Create' : 'Update'}
+                      pendingLabel="Saving…"
                     />
-                    {itemsLoading && <Spinner />}
+                  </Flex>
+                </Flex>
+
+                {/* RIGHT COLUMN: Parts Search and List */}
+                <Flex direction="column" gap="3">
+                  <Text size="2" weight="bold">
+                    Parts
+                  </Text>
+
+                  {/* Parts Search */}
+                  <Flex direction="column" gap="2">
+                    <Text size="2" color="gray">
+                      Search & Add
+                    </Text>
+                    <Box style={{ position: 'relative' }}>
+                      <Flex gap="2">
+                        <TextField.Root
+                          placeholder="Search items or groups..."
+                          value={search}
+                          onChange={(e) => setSearch(e.target.value)}
+                          style={{ flex: 1 }}
+                        />
+                        {itemsLoading && <Spinner />}
+                      </Flex>
+
+                      {search && (
+                        <Box
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            marginTop: '4px',
+                            border: '1px solid var(--gray-a6)',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            backgroundColor: 'var(--gray-1)',
+                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                            zIndex: 1000,
+                          }}
+                        >
+                          {pickerItems
+                            .filter((item) => matchesSearch(item, search))
+                            .map((item) => (
+                              <Box
+                                key={item.id}
+                                onClick={() => handleAddPart(item)}
+                                style={{
+                                  padding: '8px 12px',
+                                  cursor: 'pointer',
+                                  borderBottom: '1px solid var(--gray-a6)',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    'var(--gray-a3)'
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor =
+                                    'transparent'
+                                }}
+                              >
+                                <Flex direction="column" gap="1">
+                                  <Flex justify="between" align="center">
+                                    <Flex align="center" gap="2">
+                                      <Text size="2" weight="medium">
+                                        {item.name}
+                                      </Text>
+                                      {item.type === 'group' && (
+                                        <Badge color="blue" size="1">
+                                          Group
+                                        </Badge>
+                                      )}
+                                    </Flex>
+                                    {item.current_price != null && (
+                                      <Text size="1" color="gray">
+                                        {fmtCurrency.format(item.current_price)}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                  {item.type === 'item' &&
+                                    item.on_hand != null && (
+                                      <Text size="1" color="gray">
+                                        On hand: {item.on_hand}
+                                      </Text>
+                                    )}
+                                </Flex>
+                              </Box>
+                            ))}
+                        </Box>
+                      )}
+                    </Box>
                   </Flex>
 
-                  {search && (
-                    <Box
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        right: 0,
-                        marginTop: '4px',
-                        border: '1px solid var(--gray-a6)',
-                        borderRadius: '4px',
-                        maxHeight: '200px',
-                        overflowY: 'auto',
-                        backgroundColor: 'var(--gray-1)',
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                        zIndex: 1000,
-                      }}
-                    >
-                      {pickerItems
-                        .filter((item) => matchesSearch(item, search))
-                        .map((item) => (
-                          <Box
-                            key={item.id}
-                            onClick={() => handleAddPart(item)}
-                            style={{
-                              padding: '8px 12px',
-                              cursor: 'pointer',
-                              borderBottom: '1px solid var(--gray-a6)',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor =
-                                'var(--gray-a3)'
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor =
-                                'transparent'
-                            }}
-                          >
-                            <Flex direction="column" gap="1">
-                              <Flex justify="between" align="center">
-                                <Flex align="center" gap="2">
-                                  <Text size="2" weight="medium">
-                                    {item.name}
-                                  </Text>
-                                  {item.type === 'group' && (
-                                    <Badge color="blue" size="1">
-                                      Group
-                                    </Badge>
-                                  )}
-                                </Flex>
-                                {item.current_price != null && (
-                                  <Text size="1" color="gray">
-                                    {fmtCurrency.format(item.current_price)}
-                                  </Text>
-                                )}
-                              </Flex>
-                              {item.type === 'item' && item.on_hand != null && (
-                                <Text size="1" color="gray">
-                                  On hand: {item.on_hand}
-                                </Text>
-                              )}
-                            </Flex>
-                          </Box>
-                        ))}
-                    </Box>
-                  )}
-                </Box>
-              </Flex>
-
-              {/* Parts List */}
-              <Flex
-                direction="column"
-                gap="2"
-                style={{ flex: 1, minHeight: 0 }}
-              >
-                <Text size="2" color="gray">
-                  Added Parts ({form.parts.length})
-                </Text>
-                {form.parts.length > 0 ? (
-                  <Box
-                    style={{
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: '4px',
-                      flex: 1,
-                      minHeight: 0,
-                      overflowY: 'auto',
-                    }}
-                  >
-                    <Table.Root size="1">
-                      <Table.Header>
-                        <Table.Row>
-                          <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
-                        </Table.Row>
-                      </Table.Header>
-                      <Table.Body>
-                        {form.parts.map((part, index) => (
-                          <Table.Row key={index}>
-                            <Table.Cell>
-                              <Flex direction="column" gap="1">
-                                <Flex align="center" gap="2">
-                                  <Text size="2">{part.item_name}</Text>
-                                  {part.part_type === 'group' && (
-                                    <Badge color="blue" size="1">
-                                      Group
-                                    </Badge>
-                                  )}
-                                </Flex>
-                                {part.unit_price != null && (
-                                  <Text size="1" color="gray">
-                                    {fmtCurrency.format(part.unit_price)} each
-                                  </Text>
-                                )}
-                              </Flex>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <TextField.Root
-                                type="number"
-                                value={
-                                  partQuantityDrafts[partKey(part, index)] ??
-                                  String(part.quantity)
-                                }
-                                onChange={(e) => {
-                                  const nextValue = e.target.value
-                                  const key = partKey(part, index)
-                                  setPartQuantityDrafts((prev) => ({
-                                    ...prev,
-                                    [key]: nextValue,
-                                  }))
-
-                                  if (nextValue === '') return
-                                  const parsed = Number(nextValue)
-                                  if (Number.isNaN(parsed)) return
-
-                                  handleUpdateQuantity(
-                                    index,
-                                    Math.max(1, parsed),
-                                  )
-                                  setPartQuantityDrafts((prev) => {
-                                    const next = { ...prev }
-                                    delete next[key]
-                                    return next
-                                  })
-                                }}
-                                onBlur={() => {
-                                  const key = partKey(part, index)
-                                  if (partQuantityDrafts[key] === '') {
-                                    setPartQuantityDrafts((prev) => {
-                                      const next = { ...prev }
-                                      delete next[key]
-                                      return next
-                                    })
-                                  }
-                                }}
-                                style={{ width: '60px' }}
-                                size="1"
-                              />
-                            </Table.Cell>
-                            <Table.Cell>
-                              <IconButton
-                                size="1"
-                                color="red"
-                                variant="soft"
-                                onClick={() => handleRemovePart(index)}
-                              >
-                                <Trash width={14} height={14} />
-                              </IconButton>
-                            </Table.Cell>
-                          </Table.Row>
-                        ))}
-                      </Table.Body>
-                    </Table.Root>
-                  </Box>
-                ) : (
-                  <Box
-                    style={{
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: '4px',
-                      padding: '24px',
-                      textAlign: 'center',
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
+                  {/* Parts List */}
+                  <Flex
+                    direction="column"
+                    gap="2"
+                    style={{ flex: 1, minHeight: 0 }}
                   >
                     <Text size="2" color="gray">
-                      No parts added yet.
-                      <br />
-                      Search and click items to add them.
+                      Added Parts ({parts.length})
                     </Text>
-                  </Box>
-                )}
-              </Flex>
-            </Flex>
-          </Grid>
+                    {parts.length > 0 ? (
+                      <Box
+                        style={{
+                          border: '1px solid var(--gray-a6)',
+                          borderRadius: '4px',
+                          flex: 1,
+                          minHeight: 0,
+                          overflowY: 'auto',
+                        }}
+                      >
+                        <Table.Root size="1">
+                          <Table.Header>
+                            <Table.Row>
+                              <Table.ColumnHeaderCell>
+                                Name
+                              </Table.ColumnHeaderCell>
+                              <Table.ColumnHeaderCell>
+                                Qty
+                              </Table.ColumnHeaderCell>
+                              <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
+                            </Table.Row>
+                          </Table.Header>
+                          <Table.Body>
+                            {parts.map((part, index) => (
+                              <Table.Row key={index}>
+                                <Table.Cell>
+                                  <Flex direction="column" gap="1">
+                                    <Flex align="center" gap="2">
+                                      <Text size="2">{part.item_name}</Text>
+                                      {part.part_type === 'group' && (
+                                        <Badge color="blue" size="1">
+                                          Group
+                                        </Badge>
+                                      )}
+                                    </Flex>
+                                    {part.unit_price != null && (
+                                      <Text size="1" color="gray">
+                                        {fmtCurrency.format(part.unit_price)}{' '}
+                                        each
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <TextField.Root
+                                    type="number"
+                                    value={
+                                      partQuantityDrafts[
+                                        partKey(part, index)
+                                      ] ?? String(part.quantity)
+                                    }
+                                    onChange={(e) => {
+                                      const nextValue = e.target.value
+                                      const key = partKey(part, index)
+                                      setPartQuantityDrafts((prev) => ({
+                                        ...prev,
+                                        [key]: nextValue,
+                                      }))
+
+                                      if (nextValue === '') return
+                                      const parsed = Number(nextValue)
+                                      if (Number.isNaN(parsed)) return
+
+                                      handleUpdateQuantity(
+                                        index,
+                                        Math.max(1, parsed),
+                                      )
+                                      setPartQuantityDrafts((prev) => {
+                                        const next = { ...prev }
+                                        delete next[key]
+                                        return next
+                                      })
+                                    }}
+                                    onBlur={() => {
+                                      const key = partKey(part, index)
+                                      if (partQuantityDrafts[key] === '') {
+                                        setPartQuantityDrafts((prev) => {
+                                          const next = { ...prev }
+                                          delete next[key]
+                                          return next
+                                        })
+                                      }
+                                    }}
+                                    style={{ width: '60px' }}
+                                    size="1"
+                                  />
+                                </Table.Cell>
+                                <Table.Cell>
+                                  <IconButton
+                                    size="1"
+                                    color="red"
+                                    variant="soft"
+                                    onClick={() => handleRemovePart(index)}
+                                  >
+                                    <Trash width={14} height={14} />
+                                  </IconButton>
+                                </Table.Cell>
+                              </Table.Row>
+                            ))}
+                          </Table.Body>
+                        </Table.Root>
+                      </Box>
+                    ) : (
+                      <Box
+                        style={{
+                          border: '1px solid var(--gray-a6)',
+                          borderRadius: '4px',
+                          padding: '24px',
+                          textAlign: 'center',
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}
+                      >
+                        <Text size="2" color="gray">
+                          No parts added yet.
+                          <br />
+                          Search and click items to add them.
+                        </Text>
+                      </Box>
+                    )}
+                  </Flex>
+                </Flex>
+              </Grid>
+            </form.AppForm>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
     </>

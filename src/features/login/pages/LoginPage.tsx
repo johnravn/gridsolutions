@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import {
   Box,
@@ -9,17 +11,39 @@ import {
   Heading,
   Separator,
   Text,
-  TextField,
 } from '@radix-ui/themes'
 import { NavArrowLeft } from 'iconoir-react'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 
+const defaultValues = {
+  email: '',
+  password: '',
+}
+
+const schema = z.object({
+  email: z.string().trim().min(1, 'Email is required'),
+  password: z.string().min(1, 'Password is required'),
+})
+
 export default function LoginPage() {
   const navigate = useNavigate()
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      setError(null)
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: value.email,
+        password: value.password,
+      })
+      if (signInError) return setError(signInError.message)
+      navigate({ to: '/dashboard' })
+    },
+  })
 
   // Prevent body scroll and padding issues
   React.useEffect(() => {
@@ -50,19 +74,6 @@ export default function LoginPage() {
       document.documentElement.style.margin = originalHtmlStyle.margin
     }
   }, [])
-
-  async function signIn(e: React.FormEvent) {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
-    setLoading(false)
-    if (signInError) return setError(signInError.message)
-    navigate({ to: '/dashboard' })
-  }
 
   return (
     <Box
@@ -115,70 +126,55 @@ export default function LoginPage() {
           <Separator size="4" />
 
           {/* Form */}
-          <form onSubmit={signIn}>
-            <Flex direction="column" gap="3">
-              <Box>
-                <Text
-                  as="label"
-                  size="2"
-                  color="gray"
-                  mb="1"
-                  style={{ display: 'block' }}
-                >
-                  Email
-                </Text>
-                <TextField.Root
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  size="3"
-                  required
-                />
-              </Box>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Flex direction="column" gap="3">
+                <form.AppField name="email">
+                  {(field) => (
+                    <field.TextField
+                      label="Email"
+                      type="email"
+                      placeholder="you@company.com"
+                      autoComplete="email"
+                    />
+                  )}
+                </form.AppField>
 
-              <Box>
-                <Flex justify="between" align="center" mb="1">
-                  <Text as="label" size="2" color="gray">
-                    Password
-                  </Text>
-                  {/* Optional forgot link spot */}
-                  {/* <Text size="2" color="gray"><Link to="/forgot">Forgot?</Link></Text> */}
+                <form.AppField name="password">
+                  {(field) => (
+                    <field.TextField
+                      label="Password"
+                      type="password"
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                    />
+                  )}
+                </form.AppField>
+
+                {error && <Text color="red">{error}</Text>}
+
+                <Flex gap="3" align="center">
+                  <form.SubmitButton
+                    label="Sign in"
+                    pendingLabel="Signing in…"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="2"
+                    onClick={() => navigate({ to: '/signup' })}
+                  >
+                    Create account
+                  </Button>
                 </Flex>
-                <TextField.Root
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="current-password"
-                  size="3"
-                  required
-                />
-              </Box>
-
-              {error && <Text color="red">{error}</Text>}
-
-              <Flex gap="3" align="center">
-                <Button
-                  type="submit"
-                  size="2"
-                  disabled={loading}
-                  variant="solid"
-                >
-                  {loading ? 'Signing in…' : 'Sign in'}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="2"
-                  onClick={() => navigate({ to: '/signup' })}
-                  disabled={loading}
-                >
-                  Create account
-                </Button>
               </Flex>
-            </Flex>
+            </form.AppForm>
           </form>
         </Flex>
       </Card>

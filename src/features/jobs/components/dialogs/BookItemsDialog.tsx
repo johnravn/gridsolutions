@@ -1302,7 +1302,10 @@ export default function BookItemsDialog({
                             <Flex
                               gap="3"
                               wrap="wrap"
-                              style={{ fontSize: 12, color: 'var(--gray-11)' }}
+                              style={{
+                                fontSize: 'var(--font-size-2)',
+                                color: 'var(--gray-11)',
+                              }}
                             >
                               {r.category_name && (
                                 <Text size="1" color="gray">

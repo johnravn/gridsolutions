@@ -167,6 +167,54 @@ describe('DateTimeRangePicker', () => {
     })
   })
 
+  it('bumps end time when same start and end hour would be zero duration', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker startAt="" endAt="" onChange={onChange} />,
+    )
+    openPicker()
+    clickDay('2026-06-10')
+    switchPhase('Hours')
+
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '09' }))
+    fireEvent.click(dialog.getByRole('button', { name: '09' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atTime('2026-06-10', 9, 0),
+      endAt: atTime('2026-06-10', 9, 5),
+    })
+  })
+
+  it('does not allow selecting an end minute that equals start on same hour', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker startAt="" endAt="" onChange={onChange} />,
+    )
+    openPicker()
+    clickDay('2026-06-10')
+    switchPhase('Hours')
+
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '09' }))
+    fireEvent.click(dialog.getByRole('button', { name: '09' }))
+    switchPhase('Minutes')
+
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: 'End 09:05 10. jun 2026',
+      }),
+    )
+
+    expect(
+      dialog.getByRole('button', { name: 'End minute :00' }),
+    ).toBeDisabled()
+
+    const callsBefore = onChange.mock.calls.length
+    fireEvent.click(dialog.getByRole('button', { name: 'End minute :00' }))
+    expect(onChange.mock.calls.length).toBe(callsBefore)
+  })
+
   it('displays selected range in trigger', () => {
     renderWithProviders(
       <DateTimeRangePicker
@@ -177,6 +225,28 @@ describe('DateTimeRangePicker', () => {
       />,
     )
     expect(screen.getByText('Start')).toBeInTheDocument()
+    expect(screen.getByText('10. jun 2026')).toBeInTheDocument()
+    expect(screen.getByText('15. jun 2026')).toBeInTheDocument()
+    expect(screen.getByText('09:00')).toBeInTheDocument()
+    expect(screen.getByText('17:00')).toBeInTheDocument()
+  })
+
+  it('updates closed trigger when controlled props are prefilled after mount', () => {
+    const { rerender } = renderWithProviders(
+      <DateTimeRangePicker startAt="" endAt="" onChange={vi.fn()} locale="en" />,
+    )
+    expect(screen.getByText('Select period')).toBeInTheDocument()
+
+    rerender(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={vi.fn()}
+        locale="en"
+      />,
+    )
+
+    expect(screen.queryByText('Select period')).not.toBeInTheDocument()
     expect(screen.getByText('10. jun 2026')).toBeInTheDocument()
     expect(screen.getByText('15. jun 2026')).toBeInTheDocument()
     expect(screen.getByText('09:00')).toBeInTheDocument()

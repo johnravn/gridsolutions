@@ -18,15 +18,8 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { DatePicker } from '@shared/ui/components/pickers'
-import {
-  Archive,
-  ArrowDown,
-  ArrowUp,
-  CalendarXmark,
-  Plus,
-  Search,
-} from 'iconoir-react'
+import { DateRangePicker } from '@shared/ui/components/pickers'
+import { Archive, ArrowDown, ArrowUp, Plus, Search } from 'iconoir-react'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -70,7 +63,8 @@ export default function JobsTable({
   const { success, error: showError } = useToast()
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
-  const [selectedDate, setSelectedDate] = React.useState<string>('')
+  const [dateFrom, setDateFrom] = React.useState('')
+  const [dateTo, setDateTo] = React.useState('')
   const [includeArchived, setIncludeArchived] = React.useState(false)
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
@@ -92,7 +86,8 @@ export default function JobsTable({
       page,
       pageSize,
       search: debouncedSearch,
-      selectedDate,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
       sortBy,
       sortDir,
       userId,
@@ -287,7 +282,7 @@ export default function JobsTable({
   // Reset to page 1 when filters change
   React.useEffect(() => {
     setPage(1)
-  }, [search, selectedDate, sortBy, sortDir, includeArchived])
+  }, [search, dateFrom, dateTo, sortBy, sortDir, includeArchived])
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const startIndex = Math.max(0, (page - 1) * pageSize)
@@ -333,34 +328,20 @@ export default function JobsTable({
             {includeArchived ? 'Hide archived' : 'Show archived'}
           </Button>
 
-          {selectedDate ? (
-            <Tooltip
-              content={`Selected: ${new Date(selectedDate).toLocaleDateString()}`}
-            >
-              <IconButton
-                size="2"
-                variant="soft"
-                color="blue"
-                onClick={() => setSelectedDate('')}
-              >
-                <CalendarXmark width={16} height={16} />
-              </IconButton>
-            </Tooltip>
-          ) : (
-            <DatePicker
-              value=""
-              onChange={(iso) => {
-                // Convert ISO to YYYY-MM-DD for the query (which expects date string)
-                if (iso) {
-                  const d = new Date(iso)
-                  const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-                  setSelectedDate(dateStr)
-                }
-              }}
-              iconButton
-              iconButtonSize="2"
-            />
-          )}
+          <DateRangePicker
+            startDate={dateFrom}
+            endDate={dateTo}
+            onChange={({ startDate, endDate }) => {
+              setDateFrom(startDate)
+              setDateTo(endDate)
+            }}
+            onClear={() => {
+              setDateFrom('')
+              setDateTo('')
+            }}
+            iconButton
+            iconButtonSize="2"
+          />
 
           {canWrite && (
             <Button

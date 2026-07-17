@@ -11,11 +11,17 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { Check, Edit, Trash, Xmark } from 'iconoir-react'
 
-type FormState = { name: string }
+const defaultValues = { name: '' }
+
+const schema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+})
 
 type ItemBrand = {
   id: string
@@ -34,14 +40,23 @@ export default function EditBrandsDialog({
 }) {
   const qc = useQueryClient()
   const { success } = useToast()
-  const [form, setForm] = React.useState<FormState>({ name: '' })
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [editingName, setEditingName] = React.useState<string>('')
 
-  const set = <TKey extends keyof FormState>(
-    key: TKey,
-    value: FormState[TKey],
-  ) => setForm((s) => ({ ...s, [key]: value }))
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await createMutation.mutateAsync(value)
+    },
+  })
+
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
 
   /* ---------- Load brands ---------- */
   const brandsQueryKey = ['company', companyId, 'item_brands'] as const
@@ -68,7 +83,7 @@ export default function EditBrandsDialog({
 
   /* ---------- Create ---------- */
   const createMutation = useMutation({
-    mutationFn: async (f: FormState) => {
+    mutationFn: async (f: typeof defaultValues) => {
       if (!companyId) throw new Error('No company selected')
       const { error } = await supabase.from('item_brands').insert({
         company_id: companyId,
@@ -78,7 +93,7 @@ export default function EditBrandsDialog({
     },
     onSuccess: async (_, variables) => {
       const brandName = variables.name.trim()
-      setForm({ name: '' })
+      form.reset(defaultValues)
       await qc.invalidateQueries({ queryKey: brandsQueryKey })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
@@ -236,46 +251,46 @@ export default function EditBrandsDialog({
         </div>
 
         {/* Create */}
-        <Flex direction="column" gap="3" mt="3">
-          <div>
-            <Text
-              as="label"
-              size="2"
-              color="gray"
-              style={{ display: 'block', marginBottom: 6 }}
-            >
-              New brand name
-            </Text>
-            <TextField.Root
-              placeholder="e.g. Shure"
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-            />
-          </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label="New brand name"
+                    placeholder="e.g. Shure"
+                  />
+                )}
+              </form.AppField>
 
-          {(createMutation.isError ||
-            updateMutation.isError ||
-            deleteMutation.isError) && (
-            <Text color="red">
-              {(createMutation.error as any)?.message ||
-                (updateMutation.error as any)?.message ||
-                (deleteMutation.error as any)?.message ||
-                'Something went wrong'}
-            </Text>
-          )}
-        </Flex>
+              {(createMutation.isError ||
+                updateMutation.isError ||
+                deleteMutation.isError) && (
+                <Text color="red">
+                  {(createMutation.error as any)?.message ||
+                    (updateMutation.error as any)?.message ||
+                    (deleteMutation.error as any)?.message ||
+                    'Something went wrong'}
+                </Text>
+              )}
+            </Flex>
 
-        <Flex gap="2" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Close</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => createMutation.mutate({ name: form.name })}
-            disabled={!form.name.trim() || createMutation.isPending}
-          >
-            {createMutation.isPending ? 'Saving…' : 'Create'}
-          </Button>
-        </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Close
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Create" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

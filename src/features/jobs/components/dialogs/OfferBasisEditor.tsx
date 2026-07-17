@@ -14,6 +14,7 @@ import {
 import { Import, Lock } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import {
   companyExpansionQuery,
   crewPricingLevelsQuery,
@@ -31,6 +32,10 @@ import {
 } from '../../utils/offerCalculations'
 import { useOfferEditorAutosave } from '../../hooks/useOfferEditorAutosave'
 import {
+  canAutosaveOfferBasisState,
+  editorStateHasLineItems,
+} from '../../utils/offerBasisWriteSafety'
+import {
   lineItemsFromBasisDetail,
   lineItemsFromLocalEditorState,
 } from './technical-offer-editor/basisLineItems'
@@ -42,6 +47,7 @@ import {
   OFFER_EDITOR_DIALOG_CLASS,
   offerEditorDialogContentStyle,
 } from './offerEditorDialogStyles'
+import { UnsavedChangesCloseGuard } from './UnsavedChangesCloseGuard'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
 import type {
   OfferCrewItem,
@@ -135,9 +141,11 @@ export default function OfferBasisEditor({
     string | null
   >(null)
   const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const [importConfirmOpen, setImportConfirmOpen] = React.useState(false)
   const [baselineSerialized, setBaselineSerialized] = React.useState<
     string | null
   >(null)
+  const baselineSerializedRef = React.useRef<string | null>(null)
   const editorFormRef = React.useRef({
     basisTitle: '',
     daysOfUse: 1,
@@ -148,6 +156,9 @@ export default function OfferBasisEditor({
     transportGroups: [] as Array<LocalTransportGroup>,
   })
   const initializedBasisIdRef = React.useRef<string | null>(null)
+  /** Synchronous gate so double-clicks / autosave+manual cannot overlap delete+rewrite. */
+  const saveInFlightRef = React.useRef(false)
+  const closeGuardActionRef = React.useRef(false)
 
   editorFormRef.current = {
     basisTitle,
@@ -393,7 +404,10 @@ export default function OfferBasisEditor({
     if (!open) {
       initializedBasisIdRef.current = null
       setBaselineSerialized(null)
+      baselineSerializedRef.current = null
       setCloseGuardOpen(false)
+      setImportConfirmOpen(false)
+      closeGuardActionRef.current = false
     }
   }, [open])
 
@@ -419,17 +433,17 @@ export default function OfferBasisEditor({
       setVatPercent(existingBasis.vat_percent === 0 ? 0 : 25)
       setDaysOfUseDraft(null)
       setDiscountPercentDraft(null)
-      setBaselineSerialized(
-        serializeBasisEditorState({
-          basisTitle: existingBasis.title,
-          daysOfUse: existingBasis.days_of_use,
-          discountPercent: existingBasis.discount_percent,
-          vatPercent: existingBasis.vat_percent === 0 ? 0 : 25,
-          equipmentGroups: parsed.equipmentGroups,
-          crewItems: parsed.crewItems,
-          transportGroups: parsed.transportGroups,
-        }),
-      )
+      const nextBaseline = serializeBasisEditorState({
+        basisTitle: existingBasis.title,
+        daysOfUse: existingBasis.days_of_use,
+        discountPercent: existingBasis.discount_percent,
+        vatPercent: existingBasis.vat_percent === 0 ? 0 : 25,
+        equipmentGroups: parsed.equipmentGroups,
+        crewItems: parsed.crewItems,
+        transportGroups: parsed.transportGroups,
+      })
+      baselineSerializedRef.current = nextBaseline
+      setBaselineSerialized(nextBaseline)
     } else if (!hasPersistedBasis) {
       initializedBasisIdRef.current = null
       setEquipmentGroups([])
@@ -443,17 +457,17 @@ export default function OfferBasisEditor({
       setVatPercent(25)
       setDaysOfUseDraft(null)
       setDiscountPercentDraft(null)
-      setBaselineSerialized(
-        serializeBasisEditorState({
-          basisTitle: defaultTitle,
-          daysOfUse: defaultDaysOfUse,
-          discountPercent: defaultDiscountPercent,
-          vatPercent: 25,
-          equipmentGroups: [],
-          crewItems: [],
-          transportGroups: [],
-        }),
-      )
+      const nextBaseline = serializeBasisEditorState({
+        basisTitle: defaultTitle,
+        daysOfUse: defaultDaysOfUse,
+        discountPercent: defaultDiscountPercent,
+        vatPercent: 25,
+        equipmentGroups: [],
+        crewItems: [],
+        transportGroups: [],
+      })
+      baselineSerializedRef.current = nextBaseline
+      setBaselineSerialized(nextBaseline)
     }
   }, [
     open,
@@ -469,7 +483,8 @@ export default function OfferBasisEditor({
 
   const hasUnsavedChanges = React.useCallback(() => {
     if (!open || isReadOnly) return false
-    if (baselineSerialized === null) return false
+    const baseline = baselineSerializedRef.current
+    if (baseline === null) return false
     const current = editorFormRef.current
     return (
       serializeBasisEditorState({
@@ -480,7 +495,7 @@ export default function OfferBasisEditor({
         equipmentGroups: current.equipmentGroups,
         crewItems: current.crewItems,
         transportGroups: current.transportGroups,
-      }) !== baselineSerialized
+      }) !== baseline
     )
   }, [
     open,
@@ -495,11 +510,26 @@ export default function OfferBasisEditor({
     transportGroups,
   ])
 
+  const isDirty = hasUnsavedChanges()
+
+  React.useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
   const saveMutation = useMutation({
     mutationFn: async (payload?: {
       closeAfterSave?: boolean
       autosave?: boolean
     }) => {
+      const form = editorFormRef.current
       let workingBasisId = persistedBasisId
       if (!workingBasisId) {
         workingBasisId = await createEmptyOfferBasis({
@@ -511,13 +541,13 @@ export default function OfferBasisEditor({
 
       await saveOfferBasis({
         basisId: workingBasisId,
-        title: basisTitle.trim() || defaultTitle,
-        daysOfUse,
-        discountPercent,
-        vatPercent,
-        equipmentGroups,
-        crewItems,
-        transportGroups,
+        title: form.basisTitle.trim() || defaultTitle,
+        daysOfUse: form.daysOfUse,
+        discountPercent: form.discountPercent,
+        vatPercent: form.vatPercent,
+        equipmentGroups: form.equipmentGroups,
+        crewItems: form.crewItems,
+        transportGroups: form.transportGroups,
       })
       return {
         basisId: workingBasisId,
@@ -538,17 +568,17 @@ export default function OfferBasisEditor({
       setCurrentBasisId(savedBasisId)
       initializedBasisIdRef.current = savedBasisId
       const current = editorFormRef.current
-      setBaselineSerialized(
-        serializeBasisEditorState({
-          basisTitle: current.basisTitle,
-          daysOfUse: current.daysOfUse,
-          discountPercent: current.discountPercent,
-          vatPercent: current.vatPercent,
-          equipmentGroups: current.equipmentGroups,
-          crewItems: current.crewItems,
-          transportGroups: current.transportGroups,
-        }),
-      )
+      const nextBaseline = serializeBasisEditorState({
+        basisTitle: current.basisTitle,
+        daysOfUse: current.daysOfUse,
+        discountPercent: current.discountPercent,
+        vatPercent: current.vatPercent,
+        equipmentGroups: current.equipmentGroups,
+        crewItems: current.crewItems,
+        transportGroups: current.transportGroups,
+      })
+      baselineSerializedRef.current = nextBaseline
+      setBaselineSerialized(nextBaseline)
 
       if (!result.autosave) {
         success(
@@ -564,10 +594,49 @@ export default function OfferBasisEditor({
     onError: (e: any) => {
       toastError(
         'Failed to save offer basis',
-        e?.message ?? 'Please check your inputs and try again.',
+        `${e?.message ?? 'Please check your inputs and try again.'} Your edits are still in this dialog — click Save again. Do not discard or reload until it succeeds.`,
       )
     },
   })
+
+  type SaveResult = {
+    basisId: string
+    closeAfterSave: boolean
+    autosave: boolean
+  }
+
+  const savePromiseRef = React.useRef<Promise<SaveResult> | null>(null)
+
+  const requestSaveAsync = React.useCallback(
+    async (payload?: { closeAfterSave?: boolean; autosave?: boolean }) => {
+      if (savePromiseRef.current) {
+        await savePromiseRef.current.catch(() => undefined)
+        if (!hasUnsavedChanges()) {
+          if (payload?.closeAfterSave) onOpenChange(false)
+          return null
+        }
+      }
+
+      saveInFlightRef.current = true
+      const promise = saveMutation.mutateAsync(payload).finally(() => {
+        saveInFlightRef.current = false
+        if (savePromiseRef.current === promise) {
+          savePromiseRef.current = null
+        }
+      })
+      savePromiseRef.current = promise
+      return promise
+    },
+    [saveMutation, hasUnsavedChanges, onOpenChange],
+  )
+
+  const requestSave = React.useCallback(
+    (payload?: { closeAfterSave?: boolean; autosave?: boolean }) => {
+      if (saveInFlightRef.current || savePromiseRef.current) return
+      void requestSaveAsync(payload)
+    },
+    [requestSaveAsync],
+  )
 
   const importFromBookingsMutation = useMutation({
     mutationFn: async () => {
@@ -601,17 +670,17 @@ export default function OfferBasisEditor({
         setVatPercent(detail.vat_percent === 0 ? 0 : 25)
         setDaysOfUseDraft(null)
         setDiscountPercentDraft(null)
-        setBaselineSerialized(
-          serializeBasisEditorState({
-            basisTitle: detail.title,
-            daysOfUse: detail.days_of_use,
-            discountPercent: detail.discount_percent,
-            vatPercent: detail.vat_percent === 0 ? 0 : 25,
-            equipmentGroups: parsed.equipmentGroups,
-            crewItems: parsed.crewItems,
-            transportGroups: parsed.transportGroups,
-          }),
-        )
+        const nextBaseline = serializeBasisEditorState({
+          basisTitle: detail.title,
+          daysOfUse: detail.days_of_use,
+          discountPercent: detail.discount_percent,
+          vatPercent: detail.vat_percent === 0 ? 0 : 25,
+          equipmentGroups: parsed.equipmentGroups,
+          crewItems: parsed.crewItems,
+          transportGroups: parsed.transportGroups,
+        })
+        baselineSerializedRef.current = nextBaseline
+        setBaselineSerialized(nextBaseline)
       }
 
       setCurrentBasisId(savedBasisId)
@@ -632,16 +701,64 @@ export default function OfferBasisEditor({
   })
 
   const isLoading = isLoadingJob || (hasPersistedBasis && isLoadingBasis)
+  const baselineHadLineItems = React.useMemo(() => {
+    if (!baselineSerialized) return false
+    try {
+      const parsed = JSON.parse(baselineSerialized) as {
+        equipmentGroups?: Array<{ items: Array<unknown> }>
+        crewItems?: Array<unknown>
+        transportGroups?: Array<{ items: Array<unknown> }>
+      }
+      return editorStateHasLineItems({
+        equipmentGroups: parsed.equipmentGroups ?? [],
+        crewItems: parsed.crewItems ?? [],
+        transportGroups: parsed.transportGroups ?? [],
+      })
+    } catch {
+      return false
+    }
+  }, [baselineSerialized])
+
+  const requestImportFromBookings = () => {
+    if (
+      saveMutation.isPending ||
+      importFromBookingsMutation.isPending ||
+      saveInFlightRef.current
+    ) {
+      return
+    }
+    if (
+      editorStateHasLineItems({
+        equipmentGroups,
+        crewItems,
+        transportGroups,
+      })
+    ) {
+      setImportConfirmOpen(true)
+      return
+    }
+    importFromBookingsMutation.mutate()
+  }
 
   useOfferEditorAutosave({
-    enabled: open && !isReadOnly && !isLoading,
+    enabled: open && !isReadOnly && !isLoading && baselineSerialized !== null,
     hasUnsavedChanges,
-    isSaving: saveMutation.isPending,
-    save: () => saveMutation.mutate({ autosave: true }),
+    isSaving: saveMutation.isPending || importFromBookingsMutation.isPending,
+    canSave: () => {
+      if (importFromBookingsMutation.isPending || saveInFlightRef.current) {
+        return false
+      }
+      return canAutosaveOfferBasisState({
+        baselineHadLineItems,
+        current: editorFormRef.current,
+      })
+    },
+    save: () => requestSave({ autosave: true }),
   })
 
   const handleDialogOpenChange = (next: boolean) => {
     if (next) return
+    if (closeGuardOpen) return
     if (!isReadOnly && hasUnsavedChanges()) {
       setCloseGuardOpen(true)
       return
@@ -650,17 +767,29 @@ export default function OfferBasisEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
+    if (closeGuardActionRef.current || saveInFlightRef.current) return
+    closeGuardActionRef.current = true
     try {
-      await saveMutation.mutateAsync({ closeAfterSave: true })
+      await requestSaveAsync({ closeAfterSave: true })
       setCloseGuardOpen(false)
     } catch {
-      // mutation shows error
+      // mutation shows error, or save already in progress
+    } finally {
+      closeGuardActionRef.current = false
     }
   }
 
   const discardFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    closeGuardActionRef.current = true
     setCloseGuardOpen(false)
     onOpenChange(false)
+    closeGuardActionRef.current = false
+  }
+
+  const keepEditingFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    setCloseGuardOpen(false)
   }
 
   return (
@@ -670,6 +799,22 @@ export default function OfferBasisEditor({
         maxWidth="1280px"
         className={OFFER_EDITOR_DIALOG_CLASS}
         style={offerEditorDialogContentStyle}
+        onPointerDownOutside={(event) => {
+          if (closeGuardOpen) event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          if (closeGuardOpen) event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          if (closeGuardOpen) {
+            event.preventDefault()
+            return
+          }
+          if (!isReadOnly && hasUnsavedChanges()) {
+            event.preventDefault()
+            setCloseGuardOpen(true)
+          }
+        }}
       >
         <Flex
           direction="column"
@@ -683,7 +828,7 @@ export default function OfferBasisEditor({
                 <Button
                   size="2"
                   variant="soft"
-                  onClick={() => importFromBookingsMutation.mutate()}
+                  onClick={requestImportFromBookings}
                   disabled={
                     importFromBookingsMutation.isPending ||
                     saveMutation.isPending ||
@@ -695,8 +840,12 @@ export default function OfferBasisEditor({
                 </Button>
                 <Button
                   size="2"
-                  onClick={() => saveMutation.mutate({})}
-                  disabled={saveMutation.isPending || isLoading}
+                  onClick={() => requestSave({})}
+                  disabled={
+                    saveMutation.isPending ||
+                    importFromBookingsMutation.isPending ||
+                    isLoading
+                  }
                 >
                   Save
                 </Button>
@@ -818,12 +967,12 @@ export default function OfferBasisEditor({
                   flexDirection: 'column',
                 }}
               >
-                <Tabs.List>
+                <AnimatedTabsList>
                   <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>
                   <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
                   <Tabs.Trigger value="transport">Transport</Tabs.Trigger>
                   <Tabs.Trigger value="totals">Totals</Tabs.Trigger>
-                </Tabs.List>
+                </AnimatedTabsList>
 
                 <Box
                   pt="3"
@@ -891,31 +1040,56 @@ export default function OfferBasisEditor({
         </Flex>
       </Dialog.Content>
 
-      <Dialog.Root open={closeGuardOpen} onOpenChange={setCloseGuardOpen}>
-        <Dialog.Content maxWidth="480px" style={{ zIndex: 101 }}>
-          <Dialog.Title>Unsaved changes</Dialog.Title>
+      <UnsavedChangesCloseGuard
+        open={closeGuardOpen}
+        isSaving={saveMutation.isPending}
+        onKeepEditing={keepEditingFromCloseGuard}
+        onDiscard={discardFromCloseGuard}
+        onSaveAndClose={() => void saveFromCloseGuardAndExit()}
+      />
+
+      <Dialog.Root
+        open={importConfirmOpen}
+        onOpenChange={(next) => {
+          // Buttons only — ignore dismiss gestures.
+          if (next) setImportConfirmOpen(true)
+        }}
+      >
+        <Dialog.Content
+          maxWidth="480px"
+          style={{ zIndex: 101 }}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
+        >
+          <Dialog.Title>Replace offer basis from bookings?</Dialog.Title>
           <Separator my="3" />
           <Text size="2">
-            You have unsaved changes. Save them before closing, discard them, or
-            keep editing.
+            This replaces the current equipment, crew, and transport lines with
+            whatever is booked on the job. Unsaved edits in this dialog will be
+            lost.
           </Text>
           <Flex gap="2" mt="4" justify="end" wrap="wrap">
-            <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>
-              Keep editing
-            </Button>
             <Button
               variant="soft"
-              color="red"
-              onClick={discardFromCloseGuard}
-              disabled={saveMutation.isPending}
+              onClick={() => setImportConfirmOpen(false)}
+              disabled={importFromBookingsMutation.isPending}
             >
-              Discard
+              Cancel
             </Button>
             <Button
-              onClick={() => void saveFromCloseGuardAndExit()}
-              disabled={saveMutation.isPending || isLoading}
+              color="red"
+              onClick={() => {
+                setImportConfirmOpen(false)
+                importFromBookingsMutation.mutate()
+              }}
+              disabled={
+                importFromBookingsMutation.isPending || saveMutation.isPending
+              }
             >
-              {saveMutation.isPending ? 'Saving…' : 'Save & close'}
+              {importFromBookingsMutation.isPending
+                ? 'Importing…'
+                : 'Replace from bookings'}
             </Button>
           </Flex>
         </Dialog.Content>

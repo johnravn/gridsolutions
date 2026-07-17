@@ -10,7 +10,9 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { Check, Plus, Search } from 'iconoir-react'
+import { Plus, Search } from 'iconoir-react'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import AddContactDialog from '@features/customers/components/dialogs/AddContactDialog'
@@ -25,6 +27,16 @@ type Props = {
   onSaved?: () => void
 }
 
+const defaultValues = {
+  search: '',
+  selectedContactId: null as UUID | null,
+}
+
+const schema = z.object({
+  search: z.string(),
+  selectedContactId: z.string().min(1, 'Select a contact first'),
+})
+
 export default function ContactDialog({
   open,
   onOpenChange,
@@ -34,19 +46,26 @@ export default function ContactDialog({
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
-  const [search, setSearch] = React.useState('')
-  const [selectedContactId, setSelectedContactId] = React.useState<UUID | null>(
-    job.customer_contact_id ?? null,
-  )
   const [addContactOpen, setAddContactOpen] = React.useState(false)
 
   const customerId = job.customer_id
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await useContactMutation.mutateAsync(value.selectedContactId as UUID)
+    },
+  })
 
   // Fetch contacts for the customer
   const { data: contacts = [], isFetching } = useQuery({
     queryKey: ['company', companyId, 'customer', customerId, 'contacts'],
     enabled: open && !!customerId,
     queryFn: async () => {
+      if (!customerId) return []
       const { data, error } = await supabase
         .from('contacts')
         .select('id, name, email, phone, title')
@@ -64,31 +83,23 @@ export default function ContactDialog({
     },
   })
 
-  // Filter contacts based on search
-  const filteredContacts = React.useMemo(() => {
-    if (!search.trim()) return contacts
-    const query = search.toLowerCase().trim()
-    return contacts.filter(
-      (c) =>
-        c.name.toLowerCase().includes(query) ||
-        c.email?.toLowerCase().includes(query) ||
-        c.phone?.includes(query) ||
-        c.title?.toLowerCase().includes(query),
-    )
-  }, [contacts, search])
-
   // Initialize selected contact when dialog opens
   React.useEffect(() => {
     if (open) {
-      setSelectedContactId(job.customer_contact_id ?? null)
-      setSearch('')
+      form.reset(
+        {
+          search: '',
+          selectedContactId: job.customer_contact_id ?? null,
+        },
+        { keepDefaultValues: true },
+      )
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open, job.customer_contact_id])
 
   // Mutation to link contact to job
   const useContactMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedContactId) throw new Error('Select a contact first')
+    mutationFn: async (selectedContactId: UUID) => {
       if (!job.id) throw new Error('Missing job id')
 
       const { error } = await supabase
@@ -142,108 +153,155 @@ export default function ContactDialog({
         <Dialog.Content maxWidth="600px" style={{ height: 'auto' }}>
           <Dialog.Title>Select contact</Dialog.Title>
 
-          <Flex direction="column" gap="3" mt="3">
-            <TextField.Root
-              placeholder="Search contacts…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              size="3"
-            >
-              <TextField.Slot side="left">
-                <Search />
-              </TextField.Slot>
-              <TextField.Slot side="right">
-                {isFetching && <Spinner />}
-              </TextField.Slot>
-            </TextField.Root>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Flex direction="column" gap="3" mt="3">
+                <form.AppField name="search">
+                  {(field) => (
+                    <TextField.Root
+                      placeholder="Search contacts…"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      size="3"
+                    >
+                      <TextField.Slot side="left">
+                        <Search />
+                      </TextField.Slot>
+                      <TextField.Slot side="right">
+                        {isFetching && <Spinner />}
+                      </TextField.Slot>
+                    </TextField.Root>
+                  )}
+                </form.AppField>
 
-            <Flex justify="between" align="center">
-              <Text size="2" color="gray">
-                {filteredContacts.length} contact
-                {filteredContacts.length !== 1 ? 's' : ''}
-              </Text>
-              <Button
-                variant="soft"
-                size="2"
-                onClick={() => setAddContactOpen(true)}
-              >
-                <Plus /> Add new contact
-              </Button>
-            </Flex>
+                <form.Subscribe
+                  selector={(state) =>
+                    [
+                      state.values.search,
+                      state.values.selectedContactId,
+                    ] as const
+                  }
+                >
+                  {([search, selectedContactId]) => {
+                    const searchQuery = search ?? ''
+                    const filteredContacts = (() => {
+                      if (!searchQuery.trim()) return contacts
+                      const query = searchQuery.toLowerCase().trim()
+                      return contacts.filter(
+                        (c) =>
+                          c.name.toLowerCase().includes(query) ||
+                          c.email?.toLowerCase().includes(query) ||
+                          c.phone?.includes(query) ||
+                          c.title?.toLowerCase().includes(query),
+                      )
+                    })()
 
-            <ScrollArea
-              type="auto"
-              scrollbars="vertical"
-              style={{ maxHeight: '400px' }}
-            >
-              <Flex direction="column" gap="1" p="1">
-                {filteredContacts.length === 0 ? (
-                  <Box p="3">
-                    <Text color="gray">
-                      {search.trim()
-                        ? 'No contacts found matching your search.'
-                        : 'No contacts found. Add one to get started.'}
-                    </Text>
-                  </Box>
-                ) : (
-                  filteredContacts.map((contact) => {
-                    const isSelected = selectedContactId === contact.id
                     return (
-                      <Box
-                        key={contact.id}
-                        p="3"
-                        style={{
-                          borderRadius: 8,
-                          cursor: 'pointer',
-                          background: isSelected
-                            ? 'var(--accent-a3)'
-                            : undefined,
-                          outline: isSelected
-                            ? '2px solid var(--accent-9)'
-                            : '1px solid var(--gray-5)',
-                        }}
-                        onClick={() => setSelectedContactId(contact.id)}
-                      >
-                        <Text weight="medium">{contact.name}</Text>
-                        {(contact.email || contact.phone || contact.title) && (
-                          <Flex direction="column" gap="1" mt="1">
-                            {contact.title && (
-                              <Text size="2" color="gray">
-                                {contact.title}
-                              </Text>
-                            )}
-                            {contact.email && (
-                              <Text size="2" color="gray">
-                                {contact.email}
-                              </Text>
-                            )}
-                            {contact.phone && (
-                              <Text size="2" color="gray">
-                                {prettyPhone(contact.phone)}
-                              </Text>
+                      <>
+                        <Flex justify="between" align="center">
+                          <Text size="2" color="gray">
+                            {filteredContacts.length} contact
+                            {filteredContacts.length !== 1 ? 's' : ''}
+                          </Text>
+                          <Button
+                            type="button"
+                            variant="soft"
+                            size="2"
+                            onClick={() => setAddContactOpen(true)}
+                          >
+                            <Plus /> Add new contact
+                          </Button>
+                        </Flex>
+
+                        <ScrollArea
+                          type="auto"
+                          scrollbars="vertical"
+                          style={{ maxHeight: '400px' }}
+                        >
+                          <Flex direction="column" gap="1" p="1">
+                            {filteredContacts.length === 0 ? (
+                              <Box p="3">
+                                <Text color="gray">
+                                  {search.trim()
+                                    ? 'No contacts found matching your search.'
+                                    : 'No contacts found. Add one to get started.'}
+                                </Text>
+                              </Box>
+                            ) : (
+                              filteredContacts.map((contact) => {
+                                const isSelected =
+                                  selectedContactId === contact.id
+                                return (
+                                  <Box
+                                    key={contact.id}
+                                    p="3"
+                                    style={{
+                                      borderRadius: 8,
+                                      cursor: 'pointer',
+                                      background: isSelected
+                                        ? 'var(--accent-a3)'
+                                        : undefined,
+                                      outline: isSelected
+                                        ? '2px solid var(--accent-9)'
+                                        : '1px solid var(--gray-5)',
+                                    }}
+                                    onClick={() =>
+                                      form.setFieldValue(
+                                        'selectedContactId',
+                                        contact.id,
+                                      )
+                                    }
+                                  >
+                                    <Text weight="medium">{contact.name}</Text>
+                                    {(contact.email ||
+                                      contact.phone ||
+                                      contact.title) && (
+                                      <Flex direction="column" gap="1" mt="1">
+                                        {contact.title && (
+                                          <Text size="2" color="gray">
+                                            {contact.title}
+                                          </Text>
+                                        )}
+                                        {contact.email && (
+                                          <Text size="2" color="gray">
+                                            {contact.email}
+                                          </Text>
+                                        )}
+                                        {contact.phone && (
+                                          <Text size="2" color="gray">
+                                            {prettyPhone(contact.phone)}
+                                          </Text>
+                                        )}
+                                      </Flex>
+                                    )}
+                                  </Box>
+                                )
+                              })
                             )}
                           </Flex>
-                        )}
-                      </Box>
+                        </ScrollArea>
+                      </>
                     )
-                  })
-                )}
+                  }}
+                </form.Subscribe>
               </Flex>
-            </ScrollArea>
-          </Flex>
 
-          <Flex justify="end" gap="2" mt="4">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              variant="solid"
-              disabled={!selectedContactId || useContactMutation.isPending}
-              onClick={() => useContactMutation.mutate()}
-            >
-              {useContactMutation.isPending ? 'Saving…' : 'Use'}
-            </Button>
-          </Flex>
+              <Flex justify="end" gap="2" mt="4">
+                <Dialog.Close>
+                  <Button type="button" variant="soft">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <form.SubmitButton label="Use" pendingLabel="Saving…" />
+              </Flex>
+            </form.AppForm>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
 

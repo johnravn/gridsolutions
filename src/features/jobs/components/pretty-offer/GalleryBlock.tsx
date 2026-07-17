@@ -26,8 +26,7 @@ export function GalleryBlock({ block }: Props) {
           {items.map((item) => {
             const src = resolvePrettyOfferMediaUrl(item.url)
             if (!src) return null
-            const alt =
-              item.summary || block.text_content || 'Gallery image'
+            const alt = item.summary || block.text_content || 'Gallery image'
             return (
               <Box key={item.id}>
                 <PrettyOfferClickableImage

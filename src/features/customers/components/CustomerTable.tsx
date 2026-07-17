@@ -38,6 +38,7 @@ const COLUMNS: Array<IndexColumn> = [
 ]
 
 export default function CustomerTable({
+  createShortcutRef,
   selectedId,
   onSelect,
   showRegular,
@@ -47,6 +48,7 @@ export default function CustomerTable({
   onSelect: (id: string) => void
   showRegular: boolean
   showPartner: boolean
+  createShortcutRef?: React.MutableRefObject<(() => void) | null>
 }) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -55,6 +57,13 @@ export default function CustomerTable({
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [addOpen, setAddOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!createShortcutRef) return
+    createShortcutRef.current = () => setAddOpen(true)
+    return () => {
+      createShortcutRef.current = null
+    }
+  }, [createShortcutRef])
 
   const {
     data: rows = [],

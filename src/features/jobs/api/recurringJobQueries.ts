@@ -16,7 +16,7 @@ import type {
 } from '../types'
 
 const RECURRING_JOB_SELECT = `
-  id, company_id, title, description, archived,
+  id, company_id, title, description, archived, period_start, period_end,
   project_lead_user_id, customer_id, customer_user_id, customer_contact_id,
   customer:customer_id ( id, name ),
   customer_user:customer_user_id ( user_id, display_name, email ),
@@ -413,6 +413,8 @@ export async function createRecurringJob(payload: {
   customerId?: UUID | null
   customerUserId?: UUID | null
   customerContactId?: UUID | null
+  periodStart: string
+  periodEnd?: string | null
 }): Promise<UUID> {
   const { data, error } = await supabase
     .from('recurring_jobs')
@@ -424,6 +426,8 @@ export async function createRecurringJob(payload: {
       customer_id: payload.customerId ?? null,
       customer_user_id: payload.customerUserId ?? null,
       customer_contact_id: payload.customerContactId ?? null,
+      period_start: payload.periodStart,
+      period_end: payload.periodEnd ?? null,
     })
     .select('id')
     .single()
@@ -440,6 +444,8 @@ export async function updateRecurringJob(payload: {
   customerId?: UUID | null
   customerUserId?: UUID | null
   customerContactId?: UUID | null
+  periodStart: string
+  periodEnd?: string | null
 }): Promise<void> {
   const { error } = await supabase
     .from('recurring_jobs')
@@ -450,6 +456,8 @@ export async function updateRecurringJob(payload: {
       customer_id: payload.customerId ?? null,
       customer_user_id: payload.customerUserId ?? null,
       customer_contact_id: payload.customerContactId ?? null,
+      period_start: payload.periodStart,
+      period_end: payload.periodEnd ?? null,
     })
     .eq('id', payload.id)
 

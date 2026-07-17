@@ -88,7 +88,7 @@ function RadiusOption({
       <Text
         size="1"
         color={isSelected ? undefined : 'gray'}
-        style={{ fontSize: '10px' }}
+        style={{ fontSize: 'var(--font-size-1)' }}
       >
         {label}
       </Text>

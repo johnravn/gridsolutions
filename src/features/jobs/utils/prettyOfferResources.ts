@@ -1,4 +1,5 @@
 import { parseColumnLayoutColumns } from './columnLayoutStorage'
+import { parseOptionsGroups } from './optionsBlockStorage'
 import {
   isStorageMediaPath,
   resolvePrettyOfferMediaUrl,
@@ -107,6 +108,13 @@ function collectFromBlocks(
       case 'column_layout':
         for (const column of parseColumnLayoutColumns(block.items)) {
           collectFromBlocks(column.blocks, moduleTitle, resources, seen)
+        }
+        break
+      case 'options':
+        for (const group of parseOptionsGroups(block.items)) {
+          for (const option of group.options) {
+            collectFromBlocks(option.blocks, moduleTitle, resources, seen)
+          }
         }
         break
     }

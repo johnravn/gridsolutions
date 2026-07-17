@@ -57,6 +57,8 @@ export type RecurringJobListRow = {
   title: string
   description: string | null
   archived: boolean
+  period_start: string | null
+  period_end: string | null
   job_count: number
   customer?: {
     id: UUID
@@ -438,6 +440,16 @@ export type JobOffer = {
   pretty_use_customer_background?: boolean
   pretty_intro_text?: string | null
   pretty_subcontractor_markup_percent?: number | null
+  accepted_option_selections?: Array<AcceptedOptionSelection> | null
+  accepted_options_subtotal?: number | null
+}
+
+export type AcceptedOptionSelection = {
+  option_id: string
+  block_id: string
+  module_id: string
+  label: string
+  price: number
 }
 
 export type PrettyModuleHeroMediaType = 'image' | 'video'
@@ -609,6 +621,7 @@ export type PrettyModuleBlockType =
   | 'link'
   | 'column_layout'
   | 'file_upload'
+  | 'options'
 
 export type PrettyOfferModuleTimelineItem = {
   id: UUID
@@ -809,6 +822,7 @@ export type OfferAcceptance = {
   last_name: string
   phone: string
   terms_accepted: boolean
+  selected_option_ids?: Array<string>
 }
 
 // Rejection data

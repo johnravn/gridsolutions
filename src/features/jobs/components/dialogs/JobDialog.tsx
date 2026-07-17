@@ -10,13 +10,17 @@ import {
   Select,
   Separator,
   Text,
-  TextArea,
-  TextField,
 } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
 import { upsertTimePeriod } from '@features/jobs/api/queries'
 import { recurringJobsIndexQuery } from '@features/jobs/api/recurringJobQueries'
-import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+import {
+  DateTimeRangePicker,
+  isInvalidTimeRange,
+} from '@shared/ui/components/pickers'
+import { z } from 'zod'
+import { useStore } from '@tanstack/react-form'
+import { useAppForm } from '@shared/form'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
@@ -25,8 +29,119 @@ import {
 } from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
 import { Sparks } from 'iconoir-react'
+import {
+  JOB_AUTOFILL_SEEDS,
+  getJobAutofillSeed,
+  pickBySeedIndex,
+  pickRandomJobAutofillSeedId,
+} from '../../utils/jobAutofillSeeds'
 import type { JobDetail, JobStatus, UUID } from '../../types'
 import type { RecurringJobCreateDefaults } from '../../utils/recurringJobCreateDefaults'
+
+const JOB_STATUSES = [
+  'draft',
+  'planned',
+  'requested',
+  'canceled',
+  'confirmed',
+  'in_progress',
+  'completed',
+  'invoiced',
+  'paid',
+] as const satisfies ReadonlyArray<JobStatus>
+
+type JobFormValues = {
+  title: string
+  description: string
+  status: JobStatus
+  startAt: string
+  endAt: string
+  syncTimePeriods: boolean
+  createCrewBookingForProjectLead: boolean
+  projectLead: UUID | ''
+  isCompanyCustomer: boolean
+  customerId: UUID | ''
+  customerUserId: UUID | ''
+  contactId: UUID | ''
+  recurringJobId: UUID | ''
+}
+
+const emptyDefaults: JobFormValues = {
+  title: '',
+  description: '',
+  status: 'planned',
+  startAt: '',
+  endAt: '',
+  syncTimePeriods: false,
+  createCrewBookingForProjectLead: true,
+  projectLead: '',
+  isCompanyCustomer: false,
+  customerId: '',
+  customerUserId: '',
+  contactId: '',
+  recurringJobId: '',
+}
+
+const schema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    description: z.string(),
+    status: z.enum(JOB_STATUSES),
+    startAt: z.string(),
+    endAt: z.string(),
+    syncTimePeriods: z.boolean(),
+    createCrewBookingForProjectLead: z.boolean(),
+    projectLead: z.string(),
+    isCompanyCustomer: z.boolean(),
+    customerId: z.string(),
+    customerUserId: z.string(),
+    contactId: z.string(),
+    recurringJobId: z.string(),
+  })
+  .refine((v) => !isInvalidTimeRange(v.startAt, v.endAt), {
+    message: 'End time must be after start time.',
+    path: ['endAt'],
+  })
+
+function buildCreateDefaults(
+  recurringJobIdProp: UUID | null | undefined,
+  recurringJobDefaults?: RecurringJobCreateDefaults,
+): JobFormValues {
+  const d = recurringJobDefaults
+  return {
+    title: d?.title ?? '',
+    description: d?.description ?? '',
+    status: d?.status ?? 'planned',
+    startAt: d?.startAt ?? '',
+    endAt: d?.endAt ?? '',
+    syncTimePeriods: false,
+    createCrewBookingForProjectLead: !d?.fromTemplate,
+    projectLead: d?.projectLeadUserId ?? '',
+    isCompanyCustomer: Boolean(d?.customerUserId),
+    customerId: d?.customerId ?? '',
+    customerUserId: d?.customerUserId ?? '',
+    contactId: d?.customerContactId ?? '',
+    recurringJobId: recurringJobIdProp ?? '',
+  }
+}
+
+function buildEditDefaults(initialData: JobDetail): JobFormValues {
+  return {
+    title: initialData.title,
+    description: initialData.description ?? '',
+    status: initialData.status,
+    startAt: initialData.start_at ?? '',
+    endAt: initialData.end_at ?? '',
+    syncTimePeriods: false,
+    createCrewBookingForProjectLead: true,
+    projectLead: initialData.project_lead_user_id ?? '',
+    isCompanyCustomer: Boolean(initialData.customer_user_id),
+    customerId: initialData.customer_id ?? '',
+    customerUserId: initialData.customer_user_id ?? '',
+    contactId: initialData.customer_contact_id ?? '',
+    recurringJobId: initialData.recurring_job_id ?? '',
+  }
+}
 
 type Props = {
   open: boolean
@@ -53,105 +168,43 @@ export default function JobDialog({
 
   const { success, error: showError } = useToast()
 
-  const [title, setTitle] = React.useState(initialData?.title ?? '')
-  const [description, setDescription] = React.useState(
-    initialData?.description ?? '',
+  const [autofillSeedId, setAutofillSeedId] = React.useState<number | null>(
+    null,
   )
-  const [status, setStatus] = React.useState<JobStatus>(
-    initialData?.status ?? 'planned',
-  )
-  const [startAt, setStartAt] = React.useState(initialData?.start_at ?? '')
-  const [endAt, setEndAt] = React.useState(initialData?.end_at ?? '')
-  const [syncTimePeriods, setSyncTimePeriods] = React.useState(false)
-  const [createCrewBookingForProjectLead, setCreateCrewBookingForProjectLead] =
-    React.useState(true)
-  const [projectLead, setProjectLead] = React.useState<UUID | ''>(
-    initialData?.project_lead_user_id ?? '',
-  )
-  const [isCompanyCustomer, setIsCompanyCustomer] = React.useState(
-    Boolean(initialData?.customer_user_id),
-  )
-  const [customerId, setCustomerId] = React.useState<UUID | ''>(
-    initialData?.customer_id ?? '',
-  )
-  const [customerUserId, setCustomerUserId] = React.useState<UUID | ''>(
-    initialData?.customer_user_id ?? '',
-  )
-  const [contactId, setContactId] = React.useState<UUID | ''>(
-    initialData?.customer_contact_id ?? '',
-  )
-  const [recurringJobId, setRecurringJobId] = React.useState<UUID | ''>(
-    initialData?.recurring_job_id ?? recurringJobIdProp ?? '',
-  )
-  const applyingDefaultsRef = React.useRef(false)
-  const resetCreateFields = React.useCallback(() => {
-    const d = recurringJobDefaults
-    applyingDefaultsRef.current = true
-    setTitle(d?.title ?? '')
-    setDescription(d?.description ?? '')
-    setStatus(d?.status ?? 'planned')
-    setStartAt(d?.startAt ?? '')
-    setEndAt(d?.endAt ?? '')
-    setCreateCrewBookingForProjectLead(!d?.fromTemplate)
-    setProjectLead(d?.projectLeadUserId ?? '')
-    setIsCompanyCustomer(Boolean(d?.customerUserId))
-    setCustomerId(d?.customerId ?? '')
-    setCustomerUserId(d?.customerUserId ?? '')
-    setContactId(d?.customerContactId ?? '')
-    setRecurringJobId(recurringJobIdProp ?? '')
-  }, [recurringJobIdProp, recurringJobDefaults])
-  const getDateMs = (value: string) => {
-    const ms = new Date(value).getTime()
-    return Number.isNaN(ms) ? null : ms
-  }
-  const hasInvalidTimeRange = (() => {
-    const startMs = getDateMs(startAt)
-    const endMs = getDateMs(endAt)
-    if (startMs === null || endMs === null) return false
-    return endMs < startMs
-  })()
+  const pendingAutofillContactIndexRef = React.useRef<number | null>(null)
+
+  const form = useAppForm({
+    defaultValues: emptyDefaults,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await upsert.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
-    if (!open || mode !== 'edit' || !initialData) return
-    applyingDefaultsRef.current = true
-    setTitle(initialData.title)
-    setDescription(initialData.description ?? '')
-    setStatus(initialData.status)
-    setStartAt(initialData.start_at ?? '')
-    setEndAt(initialData.end_at ?? '')
-    setSyncTimePeriods(false)
-    setProjectLead(initialData.project_lead_user_id ?? '')
-    setIsCompanyCustomer(Boolean(initialData.customer_user_id))
-    setCustomerId(initialData.customer_id ?? '')
-    setCustomerUserId(initialData.customer_user_id ?? '')
-    setContactId(initialData.customer_contact_id ?? '')
-    setRecurringJobId(initialData.recurring_job_id ?? '')
-  }, [open, mode, initialData])
-
-  React.useEffect(() => {
-    if (!open || mode !== 'create') return
-    resetCreateFields()
-  }, [open, mode, resetCreateFields])
-
-  React.useEffect(() => {
-    if (applyingDefaultsRef.current) {
-      applyingDefaultsRef.current = false
-      return
+    if (!open) return
+    if (mode === 'edit' && initialData) {
+      form.reset(buildEditDefaults(initialData), { keepDefaultValues: true })
+    } else if (mode === 'create') {
+      form.reset(
+        buildCreateDefaults(recurringJobIdProp, recurringJobDefaults),
+        { keepDefaultValues: true },
+      )
+      setAutofillSeedId(null)
+      pendingAutofillContactIndexRef.current = null
     }
-    setContactId('')
-    if (customerId) {
-      setCustomerUserId('')
-    }
-  }, [customerId])
+    // Use stable job id — full initialData identity churn would wipe in-progress edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [
+    open,
+    mode,
+    initialData?.id,
+    recurringJobIdProp,
+    recurringJobDefaults,
+  ])
 
-  React.useEffect(() => {
-    if (customerUserId) {
-      setCustomerId('') // clear customer selection if user is selected
-      setContactId('') // clear contact selection when user is selected
-    }
-  }, [customerUserId])
-
-  // Set current user as project lead when creating a new job (unless recurring defaults provide one)
   React.useEffect(() => {
     if (!open || mode !== 'create') return
     if (recurringJobDefaults?.projectLeadUserId) return
@@ -162,7 +215,6 @@ export default function JobDialog({
       } = await supabase.auth.getUser()
       if (!user?.id) return
 
-      // Freelancers must not be set as project lead.
       const { data: cu, error: cuErr } = await supabase
         .from('company_user_profiles')
         .select('role')
@@ -172,10 +224,11 @@ export default function JobDialog({
       if (cuErr) return
       if (cu?.role === 'freelancer') return
 
-      setProjectLead(user.id)
+      form.setFieldValue('projectLead', user.id)
     }
 
-    setCurrentUserAsLead()
+    void setCurrentUserAsLead()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- set lead on create open
   }, [open, mode, companyId, recurringJobDefaults?.projectLeadUserId])
 
   const { data: leads = [] } = useQuery({
@@ -235,6 +288,11 @@ export default function JobDialog({
     },
   })
 
+  const customerId = useStore(
+    form.store,
+    (s: { values: JobFormValues }) => s.values.customerId,
+  )
+
   const { data: contacts = [], isFetching: contactsLoading } = useQuery({
     queryKey: ['company', companyId, 'customer', customerId, 'contacts'],
     enabled: open && !!customerId,
@@ -254,6 +312,20 @@ export default function JobDialog({
       }>
     },
   })
+
+  // ===== TESTING ONLY: apply contact index after customer contacts load =====
+  React.useEffect(() => {
+    const contactIndex = pendingAutofillContactIndexRef.current
+    if (contactIndex === null || !customerId || contactsLoading) return
+    pendingAutofillContactIndexRef.current = null
+    const contact = pickBySeedIndex(contacts, contactIndex)
+    form.setFieldValue('contactId', contact?.id ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- apply pending autofill contact
+  }, [customerId, contacts, contactsLoading])
+
+  // Contact/customerUser clears happen in the Select onValueChange handlers.
+  // A customerId effect races with form.reset + useStore: the seed flag is
+  // consumed on the empty→seeded transition and then wipes contactId.
 
   const cascadeBookingStatus = async (jobId: UUID, nextStatus: JobStatus) => {
     if (nextStatus !== 'confirmed' && nextStatus !== 'canceled') return
@@ -309,7 +381,22 @@ export default function JobDialog({
   // const { success, info, error } = useToast()  // you already have this
 
   const upsert = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: JobFormValues) => {
+      const {
+        title,
+        description,
+        status,
+        startAt,
+        endAt,
+        syncTimePeriods,
+        createCrewBookingForProjectLead,
+        projectLead,
+        customerId: nextCustomerId,
+        customerUserId: nextCustomerUserId,
+        contactId,
+        recurringJobId,
+      } = value
+
       if (projectLead) {
         const unchangedLead =
           mode === 'edit' && projectLead === initialData?.project_lead_user_id
@@ -320,7 +407,7 @@ export default function JobDialog({
             'Invalid project lead',
             'Freelancers cannot be set as project lead.',
           )
-          setProjectLead('')
+          form.setFieldValue('projectLead', '')
           throw new Error('Invalid project lead')
         }
       }
@@ -336,8 +423,8 @@ export default function JobDialog({
             start_at: startAt || null,
             end_at: endAt || null,
             project_lead_user_id: projectLead || null,
-            customer_id: customerId || null,
-            customer_user_id: customerUserId || null,
+            customer_id: nextCustomerId || null,
+            customer_user_id: nextCustomerUserId || null,
             customer_contact_id: contactId || null,
             recurring_job_id: recurringJobId || recurringJobIdProp || null,
           })
@@ -468,8 +555,8 @@ export default function JobDialog({
             start_at: startAt || null,
             end_at: endAt || null,
             project_lead_user_id: projectLead || null,
-            customer_id: customerId || null,
-            customer_user_id: customerUserId || null,
+            customer_id: nextCustomerId || null,
+            customer_user_id: nextCustomerUserId || null,
             customer_contact_id: contactId || null,
             recurring_job_id: recurringJobId || null,
           })
@@ -565,12 +652,18 @@ export default function JobDialog({
         return initialData.id
       }
     },
-    onSuccess: (id) => {
+    onSuccess: (id, value) => {
       const action = mode === 'create' ? 'created' : 'updated'
-      success(`Job ${action}`, `“${title.trim()}” was ${action} successfully.`)
+      success(
+        `Job ${action}`,
+        `"${value.title.trim()}" was ${action} successfully.`,
+      )
 
       if (mode === 'create') {
-        resetCreateFields()
+        form.reset(
+          buildCreateDefaults(recurringJobIdProp, recurringJobDefaults),
+          { keepDefaultValues: true },
+        )
       }
       onOpenChange(false)
       onSaved?.(id)
@@ -613,85 +706,74 @@ export default function JobDialog({
     },
   })
 
-  const disabled =
-    upsert.isPending ||
-    !title.trim() ||
-    (mode === 'create' && (!startAt || !endAt)) ||
-    hasInvalidTimeRange
+  const applyAutofillSeed = React.useCallback(
+    (seedId: number) => {
+      const seed = getJobAutofillSeed(seedId)
+      if (!seed) return
 
-  // ===== TESTING ONLY: Auto-populate function =====
-  // TODO: Remove this function and button when testing is complete
-  const autoPopulateFields = () => {
-    const jobTitles = [
-      'Corporate Event Setup',
-      'Concert Production',
-      'Conference AV',
-      'Wedding Sound & Lighting',
-      'Festival Stage Management',
-      'Corporate Presentation',
-      'Live Streaming Setup',
-      'Theater Production',
-      'Trade Show Installation',
-      'Product Launch Event',
-    ]
-    const descriptions = [
-      'Full production setup for corporate event',
-      'Complete concert production package',
-      'AV equipment for conference',
-      'Sound and lighting for wedding',
-      'Stage management for festival',
-      'Presentation equipment setup',
-      'Live streaming equipment package',
-      'Theater production equipment',
-      'Trade show installation and setup',
-      'Product launch event production',
-    ]
-    const statuses: Array<JobStatus> = [
-      'planned',
-      'requested',
-      'confirmed',
-      'in_progress',
-    ]
+      const startDate = new Date()
+      startDate.setDate(startDate.getDate() + seed.daysFromNow)
+      startDate.setHours(seed.startHour, 0, 0, 0)
 
-    const randomTitle = jobTitles[Math.floor(Math.random() * jobTitles.length)]
-    const randomDescription =
-      descriptions[Math.floor(Math.random() * descriptions.length)]
-    const randomStatus = statuses[Math.floor(Math.random() * statuses.length)]
+      const endDate = new Date(startDate)
+      endDate.setHours(endDate.getHours() + seed.durationHours)
 
-    // Set dates: start in 1-30 days, end 3-8 hours after start
-    const daysFromNow = Math.floor(Math.random() * 30) + 1
-    const startDate = new Date()
-    startDate.setDate(startDate.getDate() + daysFromNow)
-    startDate.setHours(9 + Math.floor(Math.random() * 8), 0, 0, 0) // 9 AM - 5 PM
-
-    const endDate = new Date(startDate)
-    const hoursToAdd = 3 + Math.floor(Math.random() * 5) // 3-8 hours
-    endDate.setHours(endDate.getHours() + hoursToAdd)
-
-    const startAtStr = startDate.toISOString()
-    const endAtStr = endDate.toISOString()
-
-    // Set random project lead if available
-    const randomLead =
-      leads.length > 0 ? leads[Math.floor(Math.random() * leads.length)] : null
-
-    // Set random customer if available
-    const randomCustomer =
-      customers.length > 0
-        ? customers[Math.floor(Math.random() * customers.length)]
+      const lead = pickBySeedIndex(leads, seed.projectLeadIndex)
+      const customer = pickBySeedIndex(customers, seed.customerIndex)
+      const recurring = !recurringJobIdProp
+        ? pickBySeedIndex(recurringJobs, seed.recurringJobIndex)
         : null
 
-    setTitle(randomTitle)
-    setDescription(randomDescription)
-    setStatus(randomStatus)
-    setStartAt(startAtStr)
-    setEndAt(endAtStr)
-    setProjectLead(randomLead?.user_id ?? '')
-    setIsCompanyCustomer(false)
-    setCustomerId(randomCustomer?.id ?? '')
-    setCustomerUserId('')
-    setContactId('')
-  }
+      const nextCustomerId = customer?.id ?? ''
+      form.setFieldValue('title', seed.title)
+      form.setFieldValue('description', seed.description)
+      form.setFieldValue('status', seed.status)
+      form.setFieldValue('startAt', startDate.toISOString())
+      form.setFieldValue('endAt', endDate.toISOString())
+      form.setFieldValue('projectLead', lead?.user_id ?? '')
+      form.setFieldValue('isCompanyCustomer', false)
+      form.setFieldValue('customerId', nextCustomerId)
+      form.setFieldValue('customerUserId', '')
+      form.setFieldValue(
+        'createCrewBookingForProjectLead',
+        seed.createCrewBooking,
+      )
+      if (!recurringJobIdProp) {
+        form.setFieldValue('recurringJobId', recurring?.id ?? '')
+      }
+
+      if (nextCustomerId && seed.contactIndex >= 0) {
+        if (nextCustomerId === customerId) {
+          pendingAutofillContactIndexRef.current = null
+          form.setFieldValue(
+            'contactId',
+            pickBySeedIndex(contacts, seed.contactIndex)?.id ?? '',
+          )
+        } else {
+          pendingAutofillContactIndexRef.current = seed.contactIndex
+          form.setFieldValue('contactId', '')
+        }
+      } else {
+        pendingAutofillContactIndexRef.current = null
+        form.setFieldValue('contactId', '')
+      }
+
+      setAutofillSeedId(seed.id)
+    },
+    [
+      leads,
+      customers,
+      recurringJobs,
+      recurringJobIdProp,
+      customerId,
+      contacts,
+      form,
+    ],
+  )
+
+  const autofillSeed = autofillSeedId
+    ? getJobAutofillSeed(autofillSeedId)
+    : undefined
   // ===== END TESTING ONLY =====
 
   return (
@@ -702,305 +784,366 @@ export default function JobDialog({
         onPointerDownOutside={preventDialogCloseOnSearchableSelect}
         onInteractOutside={preventDialogCloseOnSearchableSelect}
       >
-        <Flex align="center" justify="between">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
           <Dialog.Title>
             {mode === 'edit' ? 'Edit job' : 'New job'}
           </Dialog.Title>
-          {/* ===== TESTING ONLY: Auto-fill button ===== */}
+          {/* ===== TESTING ONLY: Auto-fill + seed picker ===== */}
           {mode === 'create' && (
-            <Button
-              size="2"
-              variant="soft"
-              onClick={autoPopulateFields}
-              type="button"
-              style={{ marginLeft: 'auto' }}
-            >
-              <Sparks width={16} height={16} />
-              Auto-fill
-            </Button>
+            <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
+              {autofillSeed && (
+                <Select.Root
+                  value={String(autofillSeed.id)}
+                  onValueChange={(value) => applyAutofillSeed(Number(value))}
+                >
+                  <Select.Trigger
+                    variant="soft"
+                    placeholder="Seed"
+                    style={{ maxWidth: 220 }}
+                  />
+                  <Select.Content style={{ zIndex: 10000 }}>
+                    {JOB_AUTOFILL_SEEDS.map((seed) => (
+                      <Select.Item key={seed.id} value={String(seed.id)}>
+                        #{seed.id} · {seed.label}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              )}
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() =>
+                  applyAutofillSeed(pickRandomJobAutofillSeedId(autofillSeedId))
+                }
+                type="button"
+              >
+                <Sparks width={16} height={16} />
+                Auto-fill
+              </Button>
+            </Flex>
           )}
           {/* ===== END TESTING ONLY ===== */}
         </Flex>
         <Separator my="2" />
 
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 12,
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto',
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Field label="Title">
-              <TextField.Root
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Enter job title"
-              />
-            </Field>
-
-            <Flex wrap={'wrap'}>
-              <Field label="Status">
-                <Select.Root
-                  value={status}
-                  onValueChange={(v) => setStatus(v as JobStatus)}
-                >
-                  <Select.Trigger />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {(
-                      [
-                        'draft',
-                        'planned',
-                        'requested',
-                        'canceled',
-                        'confirmed',
-                        'in_progress',
-                        'completed',
-                        'invoiced',
-                        'paid',
-                      ] as Array<JobStatus>
-                    ).map((s) => (
-                      <Select.Item key={s} value={s}>
-                        {makeWordPresentable(s)}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </Field>
-
-              <Field label="Project lead">
-                <SearchableSelect
-                  options={leads.map((u) => ({
-                    value: u.user_id,
-                    label: u.display_name ?? u.email,
-                  }))}
-                  value={projectLead}
-                  onValueChange={(v) => setProjectLead(v)}
-                  placeholder="Search project lead…"
-                  emptyMessage="No project leads found"
-                  dropdownMaxWidth={280}
-                  style={{ width: '100%', minWidth: 0 }}
-                />
-              </Field>
-
-              {(mode === 'edit' || !recurringJobIdProp) && (
-                <Field label="Recurring job">
-                  <SearchableSelect
-                    options={[
-                      { value: '', label: 'None' },
-                      ...recurringJobs.map((r) => ({
-                        value: r.id,
-                        label: r.title,
-                      })),
-                    ]}
-                    value={recurringJobId}
-                    onValueChange={(v) => setRecurringJobId(v)}
-                    placeholder="Link to recurring job…"
-                    emptyMessage="No recurring jobs found"
-                    dropdownMaxWidth={280}
-                    style={{ width: '100%', minWidth: 0 }}
-                  />
-                </Field>
-              )}
-            </Flex>
-
-            <Flex wrap={'wrap'} direction="column" gap="2">
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
+          <form.AppForm>
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+                gap: 12,
+                flex: 1,
+                minHeight: 0,
+                overflowY: 'auto',
+              }}
+            >
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
               >
-                <Checkbox
-                  checked={isCompanyCustomer}
-                  onCheckedChange={(checked) => {
-                    const isChecked = checked === true
-                    setIsCompanyCustomer(isChecked)
-                    if (isChecked) {
-                      setCustomerId('')
-                      setContactId('')
-                    } else {
-                      setCustomerUserId('')
-                    }
-                  }}
-                />
-                <Text size="2">Customer is a member of the company</Text>
-              </label>
-              <Box>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                    gap: 12,
-                    width: '100%',
-                  }}
-                >
-                  <Field label="Customer">
-                    <SearchableSelect
-                      options={customers.map((c) => ({
-                        value: c.id,
-                        label: c.name,
-                      }))}
-                      value={customerId}
-                      onValueChange={(v) => setCustomerId(v)}
-                      disabled={isCompanyCustomer}
-                      placeholder={
-                        isCompanyCustomer
-                          ? 'Disabled for company member'
-                          : 'Search customer…'
-                      }
-                      emptyMessage="No customers found"
-                      dropdownMaxWidth={280}
-                      style={{ width: '100%', minWidth: 0 }}
+                <form.AppField name="title">
+                  {(field) => (
+                    <field.TextField
+                      label="Title"
+                      placeholder="Enter job title"
                     />
-                  </Field>
+                  )}
+                </form.AppField>
 
-                  <Field label="Main contact">
-                    <SearchableSelect
-                      options={contacts.map((c) => ({
-                        value: c.id,
-                        label: c.name,
-                      }))}
-                      value={contactId}
-                      onValueChange={(v) => setContactId(v)}
-                      disabled={
-                        isCompanyCustomer ||
-                        !customerId ||
-                        contactsLoading ||
-                        contacts.length === 0
-                      }
-                      placeholder={
-                        isCompanyCustomer
-                          ? 'Disabled for company member'
-                          : !customerId
-                            ? 'Select a customer first'
-                            : contactsLoading
-                              ? 'Loading…'
-                              : 'Search contact…'
-                      }
-                      emptyMessage="No contacts found"
-                      dropdownMaxWidth={280}
-                      style={{ width: '100%', minWidth: 0 }}
-                    />
-                  </Field>
-                </div>
+                <Flex wrap={'wrap'}>
+                  <form.AppField name="status">
+                    {(field) => (
+                      <Field label="Status">
+                        <Select.Root
+                          value={field.state.value}
+                          onValueChange={(v) =>
+                            field.handleChange(v as JobStatus)
+                          }
+                        >
+                          <Select.Trigger />
+                          <Select.Content style={{ zIndex: 10000 }}>
+                            {JOB_STATUSES.map((s) => (
+                              <Select.Item key={s} value={s}>
+                                {makeWordPresentable(s)}
+                              </Select.Item>
+                            ))}
+                          </Select.Content>
+                        </Select.Root>
+                      </Field>
+                    )}
+                  </form.AppField>
 
-                {isCompanyCustomer && (
-                  <Field label="Customer from company">
-                    <SearchableSelect
-                      options={companyUsers.map((u) => ({
-                        value: u.user_id,
-                        label: u.display_name ?? u.email,
-                      }))}
-                      value={customerUserId}
-                      onValueChange={(v) => setCustomerUserId(v)}
-                      placeholder="Search company member…"
-                      emptyMessage="No company members found"
-                      dropdownMaxWidth={280}
-                      style={{ width: '100%', minWidth: 0 }}
-                    />
-                  </Field>
-                )}
-              </Box>
-            </Flex>
-          </div>
+                  <form.AppField name="projectLead">
+                    {(field) => (
+                      <Field label="Project lead">
+                        <SearchableSelect
+                          options={leads.map((u) => ({
+                            value: u.user_id,
+                            label: u.display_name ?? u.email,
+                          }))}
+                          value={field.state.value}
+                          onValueChange={field.handleChange}
+                          placeholder="Search project lead…"
+                          emptyMessage="No project leads found"
+                          dropdownMaxWidth={280}
+                          style={{ width: '100%', minWidth: 0 }}
+                        />
+                      </Field>
+                    )}
+                  </form.AppField>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <Field label="Time period">
-              <DateTimeRangePicker
-                startAt={startAt}
-                endAt={endAt}
-                onChange={({ startAt: s, endAt: e }) => {
-                  setStartAt(s)
-                  setEndAt(e)
-                }}
-                invalid={hasInvalidTimeRange}
-              />
-            </Field>
-            {mode === 'create' && (
-              <label
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--space-2)',
-                  cursor: 'pointer',
-                  width: '100%',
-                }}
+                  {(mode === 'edit' || !recurringJobIdProp) && (
+                    <form.AppField name="recurringJobId">
+                      {(field) => (
+                        <Field label="Recurring job">
+                          <SearchableSelect
+                            options={[
+                              { value: '', label: 'None' },
+                              ...recurringJobs.map((r) => ({
+                                value: r.id,
+                                label: r.title,
+                              })),
+                            ]}
+                            value={field.state.value}
+                            onValueChange={field.handleChange}
+                            placeholder="Link to recurring job…"
+                            emptyMessage="No recurring jobs found"
+                            dropdownMaxWidth={280}
+                            style={{ width: '100%', minWidth: 0 }}
+                          />
+                        </Field>
+                      )}
+                    </form.AppField>
+                  )}
+                </Flex>
+
+                <Flex wrap={'wrap'} direction="column" gap="2">
+                  <form.AppField name="isCompanyCustomer">
+                    {(field) => (
+                      <Flex align="center" gap="2">
+                        <Checkbox
+                          checked={!!field.state.value}
+                          onCheckedChange={(checked) => {
+                            const isChecked = checked === true
+                            field.handleChange(isChecked)
+                            if (isChecked) {
+                              form.setFieldValue('customerId', '')
+                              form.setFieldValue('contactId', '')
+                            } else {
+                              form.setFieldValue('customerUserId', '')
+                            }
+                          }}
+                        />
+                        <Text as="label" size="2">
+                          Customer is a member of the company
+                        </Text>
+                      </Flex>
+                    )}
+                  </form.AppField>
+                  <Box>
+                    <form.Subscribe
+                      selector={(state) => ({
+                        isCompanyCustomer: state.values.isCompanyCustomer,
+                        customerId: state.values.customerId,
+                        contactId: state.values.contactId,
+                        customerUserId: state.values.customerUserId,
+                      })}
+                    >
+                      {({
+                        isCompanyCustomer,
+                        customerId: selectedCustomerId,
+                        contactId: selectedContactId,
+                        customerUserId: selectedCustomerUserId,
+                      }) => (
+                        <>
+                          <div
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns:
+                                'repeat(auto-fit, minmax(140px, 1fr))',
+                              gap: 12,
+                              width: '100%',
+                            }}
+                          >
+                            <Field label="Customer">
+                              <SearchableSelect
+                                options={customers.map((c) => ({
+                                  value: c.id,
+                                  label: c.name,
+                                }))}
+                                value={selectedCustomerId}
+                                onValueChange={(v) => {
+                                  form.setFieldValue('contactId', '')
+                                  pendingAutofillContactIndexRef.current = null
+                                  if (v) form.setFieldValue('customerUserId', '')
+                                  form.setFieldValue('customerId', v)
+                                }}
+                                disabled={isCompanyCustomer}
+                                placeholder={
+                                  isCompanyCustomer
+                                    ? 'Disabled for company member'
+                                    : 'Search customer…'
+                                }
+                                emptyMessage="No customers found"
+                                dropdownMaxWidth={280}
+                                style={{ width: '100%', minWidth: 0 }}
+                              />
+                            </Field>
+
+                            <Field label="Main contact">
+                              <SearchableSelect
+                                options={contacts.map((c) => ({
+                                  value: c.id,
+                                  label: c.name,
+                                }))}
+                                value={selectedContactId}
+                                onValueChange={(v) =>
+                                  form.setFieldValue('contactId', v)
+                                }
+                                disabled={
+                                  isCompanyCustomer ||
+                                  !selectedCustomerId ||
+                                  contactsLoading ||
+                                  contacts.length === 0
+                                }
+                                placeholder={
+                                  isCompanyCustomer
+                                    ? 'Disabled for company member'
+                                    : !selectedCustomerId
+                                      ? 'Select a customer first'
+                                      : contactsLoading
+                                        ? 'Loading…'
+                                        : 'Search contact…'
+                                }
+                                emptyMessage="No contacts found"
+                                dropdownMaxWidth={280}
+                                style={{ width: '100%', minWidth: 0 }}
+                              />
+                            </Field>
+                          </div>
+
+                          {isCompanyCustomer && (
+                            <Field label="Customer from company">
+                              <SearchableSelect
+                                options={companyUsers.map((u) => ({
+                                  value: u.user_id,
+                                  label: u.display_name ?? u.email,
+                                }))}
+                                value={selectedCustomerUserId}
+                                onValueChange={(v) => {
+                                  if (v) {
+                                    form.setFieldValue('customerId', '')
+                                    form.setFieldValue('contactId', '')
+                                  }
+                                  form.setFieldValue('customerUserId', v)
+                                }}
+                                placeholder="Search company member…"
+                                emptyMessage="No company members found"
+                                dropdownMaxWidth={280}
+                                style={{ width: '100%', minWidth: 0 }}
+                              />
+                            </Field>
+                          )}
+                        </>
+                      )}
+                    </form.Subscribe>
+                  </Box>
+                </Flex>
+              </div>
+
+              <div
+                style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
               >
-                <Checkbox
-                  checked={createCrewBookingForProjectLead}
-                  onCheckedChange={(checked) =>
-                    setCreateCrewBookingForProjectLead(checked === true)
-                  }
-                />
-                <Text size="2">
-                  Create crew booking for project lead (job duration)
-                </Text>
-              </label>
-            )}
-            {mode === 'edit' &&
-              initialData &&
-              (startAt !== (initialData.start_at ?? '') ||
-                endAt !== (initialData.end_at ?? '')) && (
-                <label
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--space-2)',
-                    cursor: 'pointer',
-                    width: '100%',
-                  }}
+                <form.Subscribe
+                  selector={(state) => [
+                    state.values.startAt,
+                    state.values.endAt,
+                  ]}
                 >
-                  <Checkbox
-                    checked={syncTimePeriods}
-                    onCheckedChange={(checked) =>
-                      setSyncTimePeriods(checked === true)
-                    }
-                  />
-                  <Text size="2">
-                    Sync crew, equipment and vehicle bookings to new times
-                  </Text>
-                </label>
-              )}
-            <Field label="Notes">
-              <TextArea
-                rows={5}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
-            </Field>
-          </div>
-        </div>
+                  {([startAt, endAt]) => {
+                    const timeRangeInvalid = isInvalidTimeRange(startAt, endAt)
+                    return (
+                      <>
+                        <Field label="Time period">
+                          <DateTimeRangePicker
+                            startAt={startAt}
+                            endAt={endAt}
+                            onChange={({ startAt: s, endAt: e }) => {
+                              form.setFieldValue('startAt', s)
+                              form.setFieldValue('endAt', e)
+                            }}
+                            invalid={timeRangeInvalid}
+                          />
+                        </Field>
+                        {mode === 'create' && (
+                          <form.AppField name="createCrewBookingForProjectLead">
+                            {(field) => (
+                              <field.Checkbox label="Create crew booking for project lead (job duration)" />
+                            )}
+                          </form.AppField>
+                        )}
+                        {mode === 'edit' &&
+                          initialData &&
+                          (startAt !== (initialData.start_at ?? '') ||
+                            endAt !== (initialData.end_at ?? '')) && (
+                            <form.AppField name="syncTimePeriods">
+                              {(field) => (
+                                <field.Checkbox label="Sync crew, equipment and vehicle bookings to new times" />
+                              )}
+                            </form.AppField>
+                          )}
+                      </>
+                    )
+                  }}
+                </form.Subscribe>
 
-        <Flex justify="end" gap="2" mt="3">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            variant="solid"
-            onClick={() => {
-              if (!title.trim()) {
-                return showError('Missing title', 'Please enter a job title.')
-              }
-              if (hasInvalidTimeRange) {
-                return showError(
-                  'Invalid time range',
-                  'End time must be after start time.',
+                <form.AppField name="description">
+                  {(field) => <field.TextArea label="Notes" rows={5} />}
+                </form.AppField>
+              </div>
+            </div>
+
+            <form.Subscribe
+              selector={(state) => ({
+                title: state.values.title,
+                startAt: state.values.startAt,
+                endAt: state.values.endAt,
+                isSubmitting: state.isSubmitting,
+              })}
+            >
+              {({ title, startAt, endAt, isSubmitting }) => {
+                const timeRangeInvalid = isInvalidTimeRange(startAt, endAt)
+                const disabled =
+                  isSubmitting ||
+                  upsert.isPending ||
+                  !title.trim() ||
+                  (mode === 'create' && (!startAt || !endAt)) ||
+                  timeRangeInvalid
+                return (
+                  <Flex justify="end" gap="2" mt="3">
+                    <Dialog.Close>
+                      <Button type="button" variant="soft">
+                        Cancel
+                      </Button>
+                    </Dialog.Close>
+                    <form.SubmitButton
+                      label={mode === 'edit' ? 'Save' : 'Create'}
+                      pendingLabel="Saving…"
+                      disabled={disabled}
+                    />
+                  </Flex>
                 )
-              }
-              upsert.mutate()
-            }}
-            disabled={disabled}
-          >
-            {upsert.isPending ? 'Saving…' : mode === 'edit' ? 'Save' : 'Create'}
-          </Button>
-        </Flex>
+              }}
+            </form.Subscribe>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

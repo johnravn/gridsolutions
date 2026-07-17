@@ -1,6 +1,6 @@
 // src/features/company/components/CompanyPersonalizationTab.tsx
 import * as React from 'react'
-import { Box, Button, Card, Flex, Heading, Text } from '@radix-ui/themes'
+import { Box, Button, Card, Flex, Heading } from '@radix-ui/themes'
 import { Refresh } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -10,14 +10,12 @@ import AccentColorPicker from './AccentColorPicker'
 import RadiusPicker from './RadiusPicker'
 import GrayColorPicker from './GrayColorPicker'
 import PanelBackgroundPicker from './PanelBackgroundPicker'
-import ScalingPicker from './ScalingPicker'
 import ThemePreview from './ThemePreview'
 import type {
   RadixAccentColor,
   RadixGrayColor,
   RadixPanelBackground,
   RadixRadius,
-  RadixScaling,
 } from '../api/queries'
 
 // Default values
@@ -25,7 +23,6 @@ const DEFAULT_ACCENT_COLOR: RadixAccentColor = 'indigo'
 const DEFAULT_RADIUS: RadixRadius = 'small'
 const DEFAULT_GRAY_COLOR: RadixGrayColor = 'gray'
 const DEFAULT_PANEL_BACKGROUND: RadixPanelBackground = 'translucent'
-const DEFAULT_SCALING: RadixScaling = '100%'
 
 // Helper to validate accent color
 function getValidAccentColor(
@@ -96,9 +93,6 @@ export default function CompanyPersonalizationTab() {
         | RadixPanelBackground
         | undefined) ?? DEFAULT_PANEL_BACKGROUND,
     )
-  const [scaling, setScaling] = React.useState<RadixScaling>(
-    (companyData?.theme_scaling as RadixScaling | undefined) ?? DEFAULT_SCALING,
-  )
 
   // Update state when company data changes
   React.useEffect(() => {
@@ -116,10 +110,6 @@ export default function CompanyPersonalizationTab() {
           | RadixPanelBackground
           | undefined) ?? DEFAULT_PANEL_BACKGROUND,
       )
-      setScaling(
-        (companyData.theme_scaling as RadixScaling | undefined) ??
-          DEFAULT_SCALING,
-      )
     }
   }, [companyData])
 
@@ -133,7 +123,6 @@ export default function CompanyPersonalizationTab() {
         radius,
         grayColor,
         panelBackground,
-        scaling,
       })
     },
     onSuccess: async () => {
@@ -165,11 +154,6 @@ export default function CompanyPersonalizationTab() {
           },
         }),
       )
-      window.dispatchEvent(
-        new CustomEvent('theme-changed', {
-          detail: { property: 'scaling', value: scaling },
-        }),
-      )
     },
     onError: (e: any) => {
       toastError('Failed to save', e?.message ?? 'Please try again.')
@@ -189,17 +173,14 @@ export default function CompanyPersonalizationTab() {
       (companyData.theme_panel_background as
         | RadixPanelBackground
         | undefined) ?? DEFAULT_PANEL_BACKGROUND
-    const currentScaling =
-      (companyData.theme_scaling as RadixScaling | undefined) ?? DEFAULT_SCALING
 
     return (
       currentAccent !== accentColor ||
       currentRadius !== radius ||
       currentGrayColor !== grayColor ||
-      currentPanelBackground !== panelBackground ||
-      currentScaling !== scaling
+      currentPanelBackground !== panelBackground
     )
-  }, [companyData, accentColor, radius, grayColor, panelBackground, scaling])
+  }, [companyData, accentColor, radius, grayColor, panelBackground])
 
   // Handle save
   const handleSave = React.useCallback(() => {
@@ -212,7 +193,6 @@ export default function CompanyPersonalizationTab() {
     setRadius(DEFAULT_RADIUS)
     setGrayColor(DEFAULT_GRAY_COLOR)
     setPanelBackground(DEFAULT_PANEL_BACKGROUND)
-    setScaling(DEFAULT_SCALING)
   }, [])
 
   // Handle cancel - reset to saved values
@@ -230,10 +210,6 @@ export default function CompanyPersonalizationTab() {
         (companyData.theme_panel_background as
           | RadixPanelBackground
           | undefined) ?? DEFAULT_PANEL_BACKGROUND,
-      )
-      setScaling(
-        (companyData.theme_scaling as RadixScaling | undefined) ??
-          DEFAULT_SCALING,
       )
     }
   }, [companyData])
@@ -278,7 +254,6 @@ export default function CompanyPersonalizationTab() {
               radius={radius}
               grayColor={grayColor}
               panelBackground={panelBackground}
-              scaling={scaling}
             />
           </Box>
 
@@ -308,9 +283,6 @@ export default function CompanyPersonalizationTab() {
 
                 {/* Border Radius Picker */}
                 <RadiusPicker value={radius} onChange={setRadius} />
-
-                {/* Scaling Picker */}
-                <ScalingPicker value={scaling} onChange={setScaling} />
 
                 {/* Panel Background Picker */}
                 <PanelBackgroundPicker

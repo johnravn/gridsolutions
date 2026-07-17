@@ -1,50 +1,7 @@
-import { Box, Button, Dialog, Flex, Text } from '@radix-ui/themes'
-import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
+import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { WarningTriangle } from 'iconoir-react'
+import { ConflictCard } from './ConflictCard'
 import type { OverlapConflict } from '../api/overlapChecks'
-
-function formatPeriod(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  return `${format(s, 'd. MMM yyyy HH:mm', { locale: nb })} – ${format(e, 'd. MMM yyyy HH:mm', { locale: nb })}`
-}
-
-function ConflictCard({ conflict }: { conflict: OverlapConflict }) {
-  return (
-    <Box
-      p="2"
-      style={{
-        borderRadius: 8,
-        backgroundColor: 'var(--amber-a2)',
-        border: '1px solid var(--amber-a5)',
-      }}
-    >
-      {conflict.itemName ? (
-        <Text size="2" weight="medium" color="amber" as="div">
-          {conflict.itemName}
-          {conflict.quantity != null ? ` × ${conflict.quantity}` : ''}
-        </Text>
-      ) : null}
-      <Text size="2" weight="medium" as="div">
-        {conflict.jobTitle ?? 'Personal / other booking'}
-      </Text>
-      <Text size="1" color="gray" as="div" mt="1">
-        {formatPeriod(conflict.startAt, conflict.endAt)}
-      </Text>
-      {conflict.customerName ? (
-        <Text size="1" color="gray" as="div">
-          Customer: {conflict.customerName}
-        </Text>
-      ) : null}
-      {conflict.projectLeadName ? (
-        <Text size="1" color="gray" as="div">
-          Project lead: {conflict.projectLeadName}
-        </Text>
-      ) : null}
-    </Box>
-  )
-}
 
 export function ForceBookingDialog({
   open,
@@ -85,7 +42,7 @@ export function ForceBookingDialog({
 
         <Flex direction="column" gap="2" mt="3">
           {lines.map((line, index) => (
-            <Box
+            <Flex
               key={`${line}-${index}`}
               p="2"
               style={{
@@ -97,7 +54,7 @@ export function ForceBookingDialog({
               <Text size="2" as="div">
                 {line}
               </Text>
-            </Box>
+            </Flex>
           ))}
           {conflictRows.map((conflict, index) => (
             <ConflictCard

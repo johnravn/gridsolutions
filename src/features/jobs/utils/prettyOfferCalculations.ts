@@ -659,8 +659,7 @@ export function validatePricingBases(
         })
       } else if (timelineModuleIds.has(split.module_id)) {
         const moduleTitle =
-          moduleById.get(split.module_id)?.title?.trim() ||
-          'Program timeline'
+          moduleById.get(split.module_id)?.title?.trim() || 'Program timeline'
         issues.push({
           basisId: basis.id,
           message: `Split "${split.title}" cannot be assigned to timeline module "${moduleTitle}".`,
@@ -748,7 +747,10 @@ export function buildPrettyOfferPricingFields(
   total_with_vat: number
 } {
   const { daysOfUse, vatPercent, discountPercent = 0 } = options
-  const { totalBeforeDiscount } = calculatePrettyOfferTotals(modules, vatPercent)
+  const { totalBeforeDiscount } = calculatePrettyOfferTotals(
+    modules,
+    vatPercent,
+  )
   const discountAmount = (totalBeforeDiscount * discountPercent) / 100
   const totalAfterDiscount = totalBeforeDiscount - discountAmount
   const totalWithVat = totalAfterDiscount * (1 + vatPercent / 100)

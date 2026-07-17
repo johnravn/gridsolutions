@@ -1,6 +1,6 @@
 // src/app/layout/Sidebar.tsx
 import * as React from 'react'
-import { Link } from '@tanstack/react-router'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   Avatar,
@@ -15,7 +15,6 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import * as ScrollArea from '@radix-ui/react-scroll-area'
 import {
   BoxIso,
   Building,
@@ -32,6 +31,7 @@ import {
   StatsUpSquare,
   User,
   UserLove,
+  Xmark,
 } from 'iconoir-react'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
@@ -40,15 +40,29 @@ import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
+import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useDemoMode } from '@features/demo/hooks/useDemoMode'
+import { useSidebarNavKeyboardShortcut } from '@shared/lib/keyboardShortcuts'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useTheme } from '../hooks/useTheme'
-import { APP_VERSION } from '../config/version'
+import { APP_VERSION } from '../config/releaseNotes'
+import { useSidebarNavIndicators } from './useSidebarNavIndicators'
 
-const SIDEBAR_EXPANDED = 200
-const SIDEBAR_COLLAPSED = 64
+/** Keep the mobile drawer open while interacting with the portaled company Select. */
+function preventDialogCloseOnSelect(e: {
+  preventDefault: () => void
+  target: EventTarget | null
+  detail?: { originalEvent?: Event }
+}) {
+  const el = (e.detail?.originalEvent?.target ?? e.target) as HTMLElement | null
+  if (el?.closest('.rt-SelectContent')) {
+    e.preventDefault()
+  }
+}
+
+const SIDEBAR_WIDTH = 200
 
 type NavItem = { to: string; label: string; icon: React.ReactNode }
 
@@ -60,9 +74,9 @@ export const NAV: Array<Array<NavItem>> = [
     { to: '/vehicles', label: 'Vehicles', icon: <Car /> },
     { to: '/crew', label: 'Crew', icon: <Group /> },
     { to: '/jobs', label: 'Jobs', icon: <GoogleDocs /> },
-    { to: '/calendar', label: 'Calendar', icon: <Calendar /> },
-    { to: '/logging', label: 'Logging', icon: <Clock /> },
     { to: '/customers', label: 'Customers', icon: <UserLove /> },
+    { to: '/logging', label: 'Logging', icon: <Clock /> },
+    { to: '/calendar', label: 'Calendar', icon: <Calendar /> },
   ],
   [
     { to: '/matters', label: 'Matters', icon: <Message /> },
@@ -72,6 +86,70 @@ export const NAV: Array<Array<NavItem>> = [
   ],
   [{ to: '/super', label: 'Super', icon: <Potion /> }],
 ]
+
+const PUBLIC_LABELS = new Set(['Home', 'Calendar', 'Matters', 'Profile'])
+
+const LABEL_TO_CAP: Record<string, string> = {
+  Home: 'visit:home',
+  Inventory: 'visit:inventory',
+  Vehicles: 'visit:vehicles',
+  Crew: 'visit:crew',
+  Jobs: 'visit:jobs',
+  Calendar: 'visit:calendar',
+  Logging: 'visit:logging',
+  Customers: 'visit:customers',
+  Latest: 'visit:latest',
+  Matters: 'visit:matters',
+  Company: 'visit:company',
+  Reporting: 'visit:company',
+  Profile: 'visit:profile',
+  Super: 'visit:super',
+}
+
+function useAllowedSidebarRoutes() {
+  const { caps, loading: authzLoading, isGlobalSuperuser } = useAuthz()
+  const { data: user } = useQuery({
+    queryKey: ['auth', 'user'],
+    queryFn: async () => {
+      const { data } = await supabase.auth.getUser()
+      return data.user ?? null
+    },
+  })
+  const hasUser = !!user
+
+  const allowed = React.useCallback(
+    (label: string) => {
+      const cap = LABEL_TO_CAP[label]
+
+      if (label === 'Super') {
+        if (!authzLoading) {
+          return caps.has('visit:super')
+        }
+        if (isGlobalSuperuser) {
+          return true
+        }
+        return hasUser
+      }
+
+      if (authzLoading) {
+        return cap ? PUBLIC_LABELS.has(label) : true
+      }
+
+      return cap ? canVisit(caps, cap as any) : true
+    },
+    [authzLoading, caps, hasUser, isGlobalSuperuser],
+  )
+
+  const allowedRoutes = React.useMemo(
+    () =>
+      NAV.flat()
+        .filter((n) => allowed(n.label))
+        .map((n) => n.to),
+    [allowed],
+  )
+
+  return { allowed, allowedRoutes, user }
+}
 
 export function Sidebar({
   open,
@@ -92,7 +170,20 @@ export function Sidebar({
   onLogout?: () => void
 }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
-  const staticWidth = isMobile ? 0 : open ? SIDEBAR_EXPANDED : SIDEBAR_COLLAPSED
+  const staticWidth = isMobile ? 0 : SIDEBAR_WIDTH
+  const navigate = useNavigate()
+  const { allowedRoutes } = useAllowedSidebarRoutes()
+
+  // Keep this on the outer Sidebar so it stays mounted on mobile when the
+  // drawer dialog (and its SidebarContent) unmounts.
+  useSidebarNavKeyboardShortcut({
+    routes: allowedRoutes,
+    currentPath,
+    onNavigate: (to) => {
+      void navigate({ to })
+      if (isMobile) onToggle(false)
+    },
+  })
 
   return (
     <>
@@ -101,7 +192,6 @@ export function Sidebar({
         asChild
         style={{
           width: staticWidth,
-          transition: 'width 180ms ease',
         }}
       >
         <aside aria-label="Sidebar navigation" />
@@ -112,6 +202,9 @@ export function Sidebar({
         <Dialog.Root open={open} onOpenChange={(next) => onToggle(next)}>
           <Dialog.Content
             aria-describedby={undefined}
+            onPointerDownOutside={preventDialogCloseOnSelect}
+            onInteractOutside={preventDialogCloseOnSelect}
+            className="app-sidebar-glass"
             style={{
               position: 'fixed',
               left: 0,
@@ -126,7 +219,10 @@ export function Sidebar({
               padding: 0,
               paddingTop: 'var(--app-safe-top)',
               paddingBottom: 'var(--app-safe-bottom)',
-              overflow: 'hidden',
+              overflowX: 'visible',
+              overflowY: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
             <Dialog.Title
@@ -149,7 +245,6 @@ export function Sidebar({
               onToggle={onToggle}
               currentPath={currentPath}
               isMobile={isMobile}
-              showCollapseButton
               userDisplayName={userDisplayName}
               userEmail={userEmail}
               userAvatarUrl={userAvatarUrl}
@@ -176,11 +271,10 @@ export function Sidebar({
             }}
           >
             <SidebarContent
-              open={open}
+              open
               onToggle={onToggle}
               currentPath={currentPath}
               isMobile={isMobile}
-              showCollapseButton
             />
           </Box>
         </Box>
@@ -212,23 +306,24 @@ function SidebarContent({
   onLogout?: () => void
 }) {
   const { companies, companyId, setCompanyId, loading, company } = useCompany()
-  const { caps, loading: authzLoading, isGlobalSuperuser } = useAuthz()
   const { isDemoMode } = useDemoMode()
   const { isDark } = useTheme()
+  const { allowed, user } = useAllowedSidebarRoutes()
+  const { userId } = useAuthz()
 
-  // Get userId to check if user is logged in (for optimistic super tab display)
-  const { data: user } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data } = await supabase.auth.getUser()
-      return data.user ?? null
-    },
-  })
   const { data: unreadMatters = 0 } = useQuery({
     ...unreadMattersCountQueryAll(),
     enabled: !!user?.id,
   })
 
+  const { data: jobsReadyToInvoice = [] } = useQuery({
+    ...jobsReadyToInvoiceQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: !!companyId && !!userId,
+  })
+  const readyToInvoiceCount = jobsReadyToInvoice.length
   const { data: companyExpansion } = useQuery({
     ...(companyId
       ? companyExpansionQuery({ companyId })
@@ -238,76 +333,43 @@ function SidebarContent({
         }),
     enabled: !!companyId,
   })
-  const hasUser = !!user
   const companiesSorted = React.useMemo(
     () => [...companies].sort((a, b) => a.name.localeCompare(b.name)),
     [companies],
   )
   const logo = isDark ? logoWhite : logoBlack
 
-  const PUBLIC_LABELS = new Set(['Home', 'Calendar', 'Matters', 'Profile'])
   const isSandboxMode =
     !!companyExpansion &&
     companyExpansion.accounting_software === 'conta' &&
     companyExpansion.accounting_api_environment === 'sandbox'
 
-  function allowed(label: string) {
-    const labelToCap: Record<string, string> = {
-      Home: 'visit:home',
-      Inventory: 'visit:inventory',
-      Vehicles: 'visit:vehicles',
-      Crew: 'visit:crew',
-      Jobs: 'visit:jobs',
-      Calendar: 'visit:calendar',
-      Logging: 'visit:logging',
-      Customers: 'visit:customers',
-      Latest: 'visit:latest',
-      Matters: 'visit:matters',
-      Company: 'visit:company',
-      Reporting: 'visit:company',
-      Profile: 'visit:profile',
-      Super: 'visit:super',
-    }
-    const cap = labelToCap[label]
-
-    // Super tab: always accessible for superusers, even during loading or without company
-    if (label === 'Super') {
-      // If we have a user and authz is loaded, check capability
-      if (!authzLoading) {
-        return caps.has('visit:super')
-      }
-      // During loading, if user is already determined to be superuser, show it
-      if (isGlobalSuperuser) {
-        return true
-      }
-      // During loading and we don't know yet: show optimistically if user is logged in
-      // (will be hidden if they turn out not to be a superuser once loading completes)
-      return hasUser
-    }
-
-    // 👇 Key change: while authz is loading, be conservative.
-    // Only show public-safe labels to avoid the "everything flashes" issue.
-    if (authzLoading) {
-      return cap ? PUBLIC_LABELS.has(label) : true
-    }
-
-    // Once loaded, use real capabilities
-    // Note: 'visit:latest' is conditionally granted to freelancers in useAuthz
-    return cap ? canVisit(caps, cap as any) : true
-  }
+  const navListProps = useSidebarNavIndicators(currentPath)
 
   return (
     <aside
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100dvh',
+        height: '100%',
+        minHeight: 0,
+        flex: 1,
+        /* Let hover nudge paint into the main area; nav stretches so no clip needed */
+        overflow: 'visible',
       }}
     >
       {/* Mobile user panel */}
       {isMobile && (
         <>
-          <Flex align="center" justify="between" pl="5" pr="3" py="3" gap="3">
+          <Flex
+            align="center"
+            justify="between"
+            pl="5"
+            pr="3"
+            py="3"
+            gap="3"
+            style={{ flexShrink: 0 }}
+          >
             <Flex align="center" gap="3" style={{ minWidth: 0, flex: 1 }}>
               <Button
                 variant="ghost"
@@ -355,15 +417,22 @@ function SidebarContent({
       )}
 
       {/* Header / Company selector */}
-      <Flex align="center" justify="between" px="3" py="3" gap="3">
+      <Flex
+        align="center"
+        justify="between"
+        px="3"
+        py="3"
+        gap="3"
+        style={{ flexShrink: 0 }}
+      >
         <Flex align="center" gap="2" style={{ minWidth: 0, flex: 1 }}>
           {open && (
-            <div style={{ width: '100%' }}>
+            <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
               <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
                 Company
               </Text>
               {!loading && isDemoMode && company && (
-                <Text size="3" weight="medium">
+                <Text size="3" weight="medium" truncate>
                   {company.name}
                 </Text>
               )}
@@ -378,8 +447,9 @@ function SidebarContent({
                   <Select.Trigger
                     placeholder="Select company"
                     variant="ghost"
+                    style={{ maxWidth: '100%' }}
                   />
-                  <Select.Content>
+                  <Select.Content style={{ zIndex: 10000 }}>
                     {companiesSorted.map((c) => (
                       <Select.Item key={c.id} value={c.id}>
                         {c.name}
@@ -402,30 +472,136 @@ function SidebarContent({
           )}
         </Flex>
 
-        {showCollapseButton && (
-          <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
-            <IconButton
-              size="2"
-              variant="ghost"
-              onClick={() => onToggle(!open)}
-              aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <Menu />
-            </IconButton>
-          </Tooltip>
+        {isMobile ? (
+          <IconButton
+            size="3"
+            variant="ghost"
+            onClick={() => onToggle(false)}
+            aria-label="Close menu"
+            style={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}
+          >
+            <Xmark width={22} height={22} />
+          </IconButton>
+        ) : (
+          showCollapseButton && (
+            <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
+              <IconButton
+                size="2"
+                variant="ghost"
+                onClick={() => onToggle(!open)}
+                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                <Menu />
+              </IconButton>
+            </Tooltip>
+          )
         )}
       </Flex>
 
       <Separator size="4" />
 
-      {/* Main nav area */}
-      <Box flexGrow="1" style={{ minHeight: 0 }}>
-        <ScrollArea.Root style={{ height: '100%' }}>
-          <ScrollArea.Viewport style={{ padding: '8px 8px 16px' }}>
-            <Flex direction="column" gap="4">
-              {NAV[0]
-                .filter((n) => allowed(n.label))
-                .map((n) => (
+      {/* Main nav area — fixed-height items; scroll when needed */}
+      <Box
+        flexGrow="1"
+        style={{
+          position: 'relative',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          /* Keep overflow visible so hover/radius aren't clipped horizontally */
+          overflow: 'visible',
+        }}
+      >
+        <Box
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            WebkitOverflowScrolling: 'touch',
+            overscrollBehavior: 'contain',
+            paddingTop: 'var(--space-2)',
+            paddingRight: 'var(--space-2)',
+            paddingBottom: 'var(--space-2)',
+            paddingLeft: 0,
+          }}
+        >
+          <Flex direction="column" gap="1" {...navListProps}>
+          {NAV[0]
+            .filter((n) => allowed(n.label))
+            .map((n) => (
+              <NavItem
+                key={n.to}
+                to={n.to}
+                icon={n.icon}
+                label={n.label}
+                open={open}
+                currentPath={currentPath}
+                isMobile={isMobile}
+                onCloseMobile={() => onToggle(false)}
+                badge={
+                  n.label === 'Jobs' && readyToInvoiceCount > 0 ? (
+                    <Badge
+                      size="1"
+                      radius="full"
+                      style={{
+                        minWidth: 18,
+                        height: 18,
+                        padding: '0 5px',
+                        fontSize: 'var(--font-size-1)',
+                      }}
+                    >
+                      {readyToInvoiceCount > 99
+                        ? '99+'
+                        : readyToInvoiceCount}
+                    </Badge>
+                  ) : undefined
+                }
+              />
+            ))}
+          {(() => {
+            const items = NAV[1].filter((n) => allowed(n.label))
+            if (items.length === 0) return null
+            return (
+              <>
+                <Separator size="4" />
+                {items.map((n) => (
+                  <NavItem
+                    key={n.to}
+                    to={n.to}
+                    icon={n.icon}
+                    label={n.label}
+                    open={open}
+                    currentPath={currentPath}
+                    isMobile={isMobile}
+                    onCloseMobile={() => onToggle(false)}
+                    badge={
+                      n.label === 'Matters' && unreadMatters > 0 ? (
+                        <Badge
+                          size="1"
+                          radius="full"
+                          style={{
+                            minWidth: 18,
+                            height: 18,
+                            padding: '0 5px',
+                            fontSize: 'var(--font-size-1)',
+                          }}
+                        >
+                          {unreadMatters > 99 ? '99+' : unreadMatters}
+                        </Badge>
+                      ) : undefined
+                    }
+                  />
+                ))}
+              </>
+            )
+          })()}
+          {(() => {
+            const items = NAV[2].filter((n) => allowed(n.label))
+            if (items.length === 0) return null
+            return (
+              <>
+                <Separator size="4" />
+                {items.map((n) => (
                   <NavItem
                     key={n.to}
                     to={n.to}
@@ -437,75 +613,27 @@ function SidebarContent({
                     onCloseMobile={() => onToggle(false)}
                   />
                 ))}
-              {(() => {
-                const items = NAV[1].filter((n) => allowed(n.label))
-                if (items.length === 0) return null
-                return (
-                  <>
-                    <Separator />
-                    {items.map((n) => (
-                      <NavItem
-                        key={n.to}
-                        to={n.to}
-                        icon={n.icon}
-                        label={n.label}
-                        open={open}
-                        currentPath={currentPath}
-                        isMobile={isMobile}
-                        onCloseMobile={() => onToggle(false)}
-                        badge={
-                          n.label === 'Matters' && unreadMatters > 0 ? (
-                            <Badge
-                              size="1"
-                              radius="full"
-                              style={{
-                                minWidth: 18,
-                                height: 18,
-                                padding: '0 5px',
-                                fontSize: 11,
-                              }}
-                            >
-                              {unreadMatters > 99 ? '99+' : unreadMatters}
-                            </Badge>
-                          ) : undefined
-                        }
-                      />
-                    ))}
-                  </>
-                )
-              })()}
-              {(() => {
-                const items = NAV[2].filter((n) => allowed(n.label))
-                if (items.length === 0) return null
-                return (
-                  <>
-                    <Separator />
-                    {items.map((n) => (
-                      <NavItem
-                        key={n.to}
-                        to={n.to}
-                        icon={n.icon}
-                        label={n.label}
-                        open={open}
-                        currentPath={currentPath}
-                        isMobile={isMobile}
-                        onCloseMobile={() => onToggle(false)}
-                      />
-                    ))}
-                  </>
-                )
-              })()}
-            </Flex>
-          </ScrollArea.Viewport>
-          <ScrollArea.Scrollbar orientation="vertical">
-            <ScrollArea.Thumb />
-          </ScrollArea.Scrollbar>
-        </ScrollArea.Root>
+              </>
+            )
+          })()}
+        </Flex>
+        </Box>
       </Box>
 
-      {/* Footer logo (only when open) */}
+      {/* Footer logo (only when open) — fade softens overflow into the logo */}
       {open && (
-        <Box px="3" py="3">
+        <Box
+          px="3"
+          py="3"
+          style={{
+            position: 'relative',
+            flexShrink: 0,
+            ...(isMobile
+              ? { background: 'var(--sidebar-surface)' }
+              : undefined),
+          }}
+        >
+          {isMobile && <div className="app-sidebar-fade" aria-hidden />}
           <Flex direction="column" align="center" justify="center" gap="2">
             <img
               src={logo}
@@ -515,7 +643,7 @@ function SidebarContent({
             <Text
               size="1"
               color="gray"
-              style={{ fontSize: '10px', letterSpacing: '0.5px' }}
+              style={{ fontSize: 'var(--font-size-1)', letterSpacing: '0.5px' }}
             >
               v{APP_VERSION}
             </Text>
@@ -558,25 +686,27 @@ function NavItem({
   }
 
   const content = (
-    <Button
-      variant={active ? 'outline' : 'ghost'}
-      size="2"
-      highContrast
-      asChild
-    >
+    <Button variant="ghost" size={isMobile ? '3' : '2'} highContrast asChild>
       <Link
         to={to}
         onClick={handleClick}
-        className="sidebar-nav-item"
+        className={
+          active
+            ? 'sidebar-nav-item sidebar-nav-item--active'
+            : 'sidebar-nav-item'
+        }
         style={{
           justifyContent: open ? 'flex-start' : 'center',
+          alignItems: 'center',
           gap: 10,
           width: '100%',
+          maxWidth: '100%',
+          minWidth: 0,
           position: 'relative',
         }}
       >
         {open ? (
-          icon
+          <Box style={{ flexShrink: 0, display: 'inline-flex' }}>{icon}</Box>
         ) : (
           <Box style={{ position: 'relative', display: 'inline-flex' }}>
             {icon}
@@ -594,8 +724,23 @@ function NavItem({
           </Box>
         )}
         {open && (
-          <Flex align="center" justify="between" style={{ flex: 1 }}>
-            <span style={{ lineHeight: 1 }}>{label}</span>
+          <Flex
+            align="center"
+            justify="between"
+            gap="2"
+            style={{ flex: 1, minWidth: 0 }}
+          >
+            <span
+              style={{
+                lineHeight: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {label}
+            </span>
             {badge}
           </Flex>
         )}
@@ -603,12 +748,17 @@ function NavItem({
     </Button>
   )
 
-  if (!open) {
-    return (
-      <Tooltip content={label} delayDuration={300}>
-        {content}
-      </Tooltip>
-    )
-  }
-  return content
+  const slotted = (
+    <div className="sidebar-nav-slot">
+      {!open ? (
+        <Tooltip content={label} delayDuration={300}>
+          {content}
+        </Tooltip>
+      ) : (
+        content
+      )}
+    </div>
+  )
+
+  return slotted
 }

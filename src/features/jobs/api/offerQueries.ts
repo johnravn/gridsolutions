@@ -780,6 +780,7 @@ export async function acceptOffer(
     p_first_name: acceptance.first_name,
     p_last_name: acceptance.last_name,
     p_phone: acceptance.phone,
+    p_selected_option_ids: acceptance.selected_option_ids ?? [],
   })
   if (error) throw error
 }

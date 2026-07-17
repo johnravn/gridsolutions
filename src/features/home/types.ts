@@ -1,5 +1,7 @@
 // Types for home dashboard sections
 
+import type { JobListRow } from '@features/jobs/types'
+
 export type DaysFilter = '7' | '14' | '30' | 'all'
 
 export type MyJobRole = 'crew' | 'project_lead' | 'both' | null
@@ -21,6 +23,10 @@ export type UpcomingJob = {
     email: string
     avatar_url: string | null
   } | null
+}
+
+export type WeekJobWithRole = JobListRow & {
+  my_job_role: MyJobRole
 }
 
 export type MatterType =

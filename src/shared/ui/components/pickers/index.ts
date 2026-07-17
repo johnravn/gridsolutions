@@ -1,4 +1,5 @@
 export { default as DatePicker } from './DatePicker'
+export { default as DateRangePicker } from './DateRangePicker'
 export { default as DateTimeRangePicker } from './DateTimeRangePicker'
 export { default as TimeOfDayPicker } from './TimeOfDayPicker'
 export * from './dateTimeUtils'

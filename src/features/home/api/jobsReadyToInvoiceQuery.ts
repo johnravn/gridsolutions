@@ -28,7 +28,6 @@ export function jobsReadyToInvoiceQuery({
         .eq('status', 'completed')
         .eq('archived', false)
         .order('start_at', { ascending: false })
-        .limit(25)
 
       if (error) throw error
       return (data ?? []) as Array<HomeJobReadyToInvoice>

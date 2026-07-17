@@ -1,6 +1,7 @@
 import { Tabs } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import { JobBookingConflictsBanner } from '@features/conflicts/components/JobBookingConflictsBanner'
@@ -39,11 +40,11 @@ export default function BookingsTab({
         />
       )}
 
-      <Tabs.List mb="3">
+      <AnimatedTabsList mb="3">
         <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
         <Tabs.Trigger value="equipment">Equipment</Tabs.Trigger>
         <Tabs.Trigger value="transport">Transport</Tabs.Trigger>
-      </Tabs.List>
+      </AnimatedTabsList>
 
       <Tabs.Content value="equipment">
         <EquipmentTab jobId={jobId} />

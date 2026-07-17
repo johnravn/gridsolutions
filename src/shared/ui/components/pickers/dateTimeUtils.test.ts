@@ -5,11 +5,15 @@ import {
   buildCalendarDays,
   buildRangeIso,
   endOfDay,
+  ensurePositiveDuration,
+  ensurePositiveSameDayTimes,
   extractRangeTimes,
   formatDateLabel,
   handleRangeDateClick,
   handleRangeHourClick,
+  isEndMinuteDisabled,
   isInvalidTimeRange,
+  isStartMinuteDisabled,
   normalizeDateRange,
   parseIso,
   startOfDay,
@@ -112,6 +116,22 @@ describe('dateTimeUtils', () => {
     expect(result.endAt).toBe(atTime('2026-06-15', 17, 45))
   })
 
+  it('builds range ISO with positive duration when hours match', () => {
+    const result = buildRangeIso(
+      '2026-06-15',
+      '2026-06-15',
+      {
+        startHour: 9,
+        endHour: 9,
+        startMinute: 0,
+        endMinute: 0,
+      },
+      5 * 60_000,
+    )
+    expect(result.startAt).toBe(atTime('2026-06-15', 9, 0))
+    expect(result.endAt).toBe(atTime('2026-06-15', 9, 5))
+  })
+
   it('extracts hour selections from ISO values', () => {
     expect(
       extractRangeTimes(atHour('2026-06-15', 9), atHour('2026-06-15', 17)),
@@ -147,8 +167,63 @@ describe('dateTimeUtils', () => {
       isInvalidTimeRange(atHour('2026-06-15', 14), atHour('2026-06-15', 10)),
     ).toBe(true)
     expect(
+      isInvalidTimeRange(atHour('2026-06-15', 9), atHour('2026-06-15', 9)),
+    ).toBe(true)
+    expect(
       isInvalidTimeRange(atHour('2026-06-15', 9), atHour('2026-06-15', 17)),
     ).toBe(false)
+  })
+
+  it('ensures positive duration when start equals end', () => {
+    const equal = atHour('2026-06-15', 9)
+    expect(ensurePositiveDuration(equal, equal)).toEqual({
+      startAt: equal,
+      endAt: new Date(new Date(equal).getTime() + 60_000).toISOString(),
+    })
+  })
+
+  it('bumps same-day times when duration would be zero', () => {
+    expect(
+      ensurePositiveSameDayTimes(
+        {
+          startHour: 9,
+          endHour: 9,
+          startMinute: 0,
+          endMinute: 0,
+        },
+        5,
+      ),
+    ).toEqual({
+      startHour: 9,
+      endHour: 9,
+      startMinute: 0,
+      endMinute: 5,
+    })
+    expect(
+      ensurePositiveSameDayTimes(
+        {
+          startHour: 23,
+          endHour: 23,
+          startMinute: 55,
+          endMinute: 55,
+        },
+        5,
+      ),
+    ).toBeNull()
+  })
+
+  it('disables minutes that would create zero duration', () => {
+    const times = {
+      startHour: 9,
+      endHour: 9,
+      startMinute: 15,
+      endMinute: 30,
+    }
+    expect(isEndMinuteDisabled(15, times, true)).toBe(true)
+    expect(isEndMinuteDisabled(30, times, true)).toBe(false)
+    expect(isStartMinuteDisabled(30, times, true)).toBe(true)
+    expect(isStartMinuteDisabled(15, times, true)).toBe(false)
+    expect(isEndMinuteDisabled(15, times, false)).toBe(false)
   })
 
   it('handles range hour clicks with swap', () => {

@@ -74,6 +74,7 @@ type Props = {
   includeExternal: boolean
   search: string
   onSearch: (v: string) => void
+  createShortcutRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export default function VehiclesView({
@@ -82,11 +83,19 @@ export default function VehiclesView({
   includeExternal,
   search,
   onSearch,
+  createShortcutRef,
 }: Props) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [addOpen, setAddOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!createShortcutRef) return
+    createShortcutRef.current = () => setAddOpen(true)
+    return () => {
+      createShortcutRef.current = null
+    }
+  }, [createShortcutRef])
   const { sortBy, sortDir, handleSort } = useClientSort<SortBy>('name', 'asc')
 
   const {

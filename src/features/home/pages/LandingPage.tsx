@@ -1,6 +1,12 @@
 import { useNavigate, useRouterState } from '@tanstack/react-router'
 import { Box, Button, Container, Flex, Heading, Text } from '@radix-ui/themes'
-import { motion, useScroll, useTransform } from 'framer-motion'
+import {
+  motion,
+  useMotionValue,
+  useScroll,
+  useSpring,
+  useTransform,
+} from 'framer-motion'
 import { useEffect, useRef, useState } from 'react'
 import {
   Activity,
@@ -13,13 +19,21 @@ import {
   CheckCircle,
   GoogleDocs,
   Group,
+  HomeSimple,
   Mail,
+  Menu,
   Message,
+  MoreVert,
+  OpenInBrowser,
   Phone,
   ReportColumns,
+  Safari,
+  ShareIos,
   Shield,
+  SmartphoneDevice,
   Sparks,
   User,
+  Xmark,
 } from 'iconoir-react'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
@@ -27,7 +41,7 @@ import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import { prettyPhone } from '@shared/phone/phone'
 import { useTheme } from '@app/hooks/useTheme'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import type { ReactNode } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 
 const SUPPORT_PHONE_E164 = '+4795721220'
 const SUPPORT_EMAIL = 'john.ravndal@gmail.com'
@@ -64,14 +78,25 @@ export default function LandingPage() {
   }, [pathname])
 
   const [navHovered, setNavHovered] = useState<string | null>(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const navItems: Array<{ label: string; id: string }> = [
     { label: 'Features', id: 'features' },
+    { label: 'App', id: 'app' },
     { label: 'Why Grid', id: 'why' },
     { label: 'Try Demo', id: '/demo' },
     { label: 'Contact', id: 'contact' },
     { label: 'Get Started', id: 'get-started' },
     { label: 'Sign In', id: '/login' },
   ]
+
+  const handleNavClick = (id: string) => {
+    setMobileMenuOpen(false)
+    scrollToSection(id)
+  }
+
+  useEffect(() => {
+    if (isMd) setMobileMenuOpen(false)
+  }, [isMd])
 
   return (
     <Box
@@ -87,7 +112,7 @@ export default function LandingPage() {
         maxWidth: '100vw',
       }}
     >
-      {/* Header – minimal nav */}
+      {/* Header – desktop links / mobile hamburger */}
       <motion.header
         style={{
           position: 'fixed',
@@ -115,7 +140,10 @@ export default function LandingPage() {
               <Flex
                 align="center"
                 style={{ cursor: 'pointer' }}
-                onClick={() => navigate({ to: '/' })}
+                onClick={() => {
+                  setMobileMenuOpen(false)
+                  navigate({ to: '/' })
+                }}
               >
                 <img
                   src={isDark ? logoWhite : logoBlack}
@@ -124,48 +152,106 @@ export default function LandingPage() {
                 />
               </Flex>
             </motion.div>
+
+            {isMd ? (
+              <Flex align="center" gap="6" justify="end">
+                {navItems.map((item) => (
+                  <motion.button
+                    key={item.id}
+                    type="button"
+                    onClick={() => scrollToSection(item.id)}
+                    onMouseEnter={() => setNavHovered(item.id)}
+                    onMouseLeave={() => setNavHovered(null)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      padding: '0.35rem 0',
+                      fontFamily: 'inherit',
+                      fontSize: 14,
+                      fontWeight: 500,
+                      letterSpacing: '0.02em',
+                      position: 'relative',
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
+                  >
+                    <span
+                      style={{
+                        color:
+                          navHovered === item.id
+                            ? 'var(--accent-11)'
+                            : 'var(--gray-11)',
+                        transition: 'color 0.2s ease',
+                      }}
+                    >
+                      {item.label}
+                    </span>
+                  </motion.button>
+                ))}
+              </Flex>
+            ) : (
+              <button
+                type="button"
+                aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+                aria-expanded={mobileMenuOpen}
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  border: '1px solid var(--gray-a5)',
+                  background: 'var(--color-panel-solid)',
+                  color: 'var(--gray-12)',
+                  cursor: 'pointer',
+                  padding: 0,
+                }}
+              >
+                {mobileMenuOpen ? (
+                  <Xmark width={20} height={20} />
+                ) : (
+                  <Menu width={20} height={20} />
+                )}
+              </button>
+            )}
+          </Flex>
+
+          {!isMd && mobileMenuOpen ? (
             <Flex
-              align="center"
-              gap={isMd ? '6' : '3'}
-              wrap="wrap"
-              justify="end"
+              direction="column"
+              gap="1"
+              style={{
+                marginTop: '0.75rem',
+                paddingTop: '0.5rem',
+                borderTop: '1px solid var(--gray-a4)',
+              }}
             >
               {navItems.map((item) => (
-                <motion.button
+                <button
                   key={item.id}
                   type="button"
-                  onClick={() => scrollToSection(item.id)}
-                  onMouseEnter={() => setNavHovered(item.id)}
-                  onMouseLeave={() => setNavHovered(null)}
+                  onClick={() => handleNavClick(item.id)}
                   style={{
                     background: 'none',
                     border: 'none',
                     cursor: 'pointer',
-                    padding: '0.35rem 0',
+                    textAlign: 'left',
+                    padding: '0.75rem 0.25rem',
                     fontFamily: 'inherit',
-                    fontSize: isMd ? 14 : 13,
+                    fontSize: 15,
                     fontWeight: 500,
-                    letterSpacing: '0.02em',
-                    position: 'relative',
+                    color: 'var(--gray-12)',
+                    letterSpacing: '0.01em',
                   }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                 >
-                  <span
-                    style={{
-                      color:
-                        navHovered === item.id
-                          ? 'var(--accent-11)'
-                          : 'var(--gray-11)',
-                      transition: 'color 0.2s ease',
-                    }}
-                  >
-                    {item.label}
-                  </span>
-                </motion.button>
+                  {item.label}
+                </button>
               ))}
             </Flex>
-          </Flex>
+          ) : null}
         </Container>
       </motion.header>
 
@@ -176,7 +262,7 @@ export default function LandingPage() {
           minHeight: isMd ? '100vh' : 'auto',
           display: 'flex',
           alignItems: 'center',
-          paddingTop: isMd ? '80px' : '60px',
+          paddingTop: isMd ? '80px' : '1.5rem',
           paddingBottom: isMd ? '2rem' : '1rem',
           paddingLeft: isMd ? 0 : '1rem',
           paddingRight: isMd ? 0 : '1rem',
@@ -357,6 +443,7 @@ export default function LandingPage() {
               <Text
                 size={isMd ? '4' : '3'}
                 style={{
+                  display: 'block',
                   color: 'var(--gray-11)',
                   lineHeight: 1.7,
                   maxWidth: 640,
@@ -368,15 +455,17 @@ export default function LandingPage() {
                 read-only, so you can click around freely without changing
                 anything.
               </Text>
-              <Button
-                size={isMd ? '4' : '3'}
-                variant="solid"
-                onClick={() => navigate({ to: '/demo' })}
-                style={{ padding: '0.85rem 2.5rem' }}
-              >
-                Try Demo
-                <Sparks style={{ marginLeft: 8, verticalAlign: 'middle' }} />
-              </Button>
+              <Flex justify="center">
+                <Button
+                  size={isMd ? '4' : '3'}
+                  variant="solid"
+                  onClick={() => navigate({ to: '/demo' })}
+                  style={{ padding: '0.85rem 2.5rem' }}
+                >
+                  Try Demo
+                  <Sparks style={{ marginLeft: 8, verticalAlign: 'middle' }} />
+                </Button>
+              </Flex>
             </Box>
           </motion.div>
         </Container>
@@ -388,6 +477,7 @@ export default function LandingPage() {
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '2rem 1rem',
+          scrollMarginTop: 72,
         }}
       >
         <Container size="4">
@@ -429,13 +519,16 @@ export default function LandingPage() {
         </Container>
       </Box>
 
+      <AppPwaSection isMd={isMd} isSm={isSm} />
+
       {/* Problem/Solution Section */}
       <Box
         id="why"
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
-          background: 'var(--gray-2)',
+          background: 'transparent',
+          scrollMarginTop: 72,
         }}
       >
         <Container size="4">
@@ -576,6 +669,7 @@ export default function LandingPage() {
         style={{
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
+          scrollMarginTop: 72,
         }}
       >
         <Container size="4">
@@ -730,7 +824,7 @@ export default function LandingPage() {
           position: 'relative',
           padding: isMd ? '6rem 0' : '3rem 1rem',
           background: 'var(--gray-2)',
-          scrollMarginTop: '80px',
+          scrollMarginTop: isMd ? '80px' : '1rem',
         }}
       >
         <Container size="4">
@@ -759,10 +853,11 @@ export default function LandingPage() {
               <Text
                 size={isMd ? '4' : '3'}
                 style={{
+                  display: 'block',
                   color: 'var(--gray-11)',
                   lineHeight: 1.7,
                   maxWidth: 520,
-                  margin: '0 auto 2rem',
+                  margin: '0 auto 0.8rem',
                 }}
               >
                 Need help getting access to your company? Reach out and we will
@@ -1107,6 +1202,494 @@ function HeroGraphicCards() {
         ))}
       </motion.div>
     </Flex>
+  )
+}
+
+type InstallPlatform = 'ios' | 'android'
+
+const iosSteps = [
+  {
+    icon: <Safari width={18} height={18} />,
+    label: 'Open Grid in Safari',
+  },
+  {
+    icon: <ShareIos width={18} height={18} />,
+    label: 'Tap Share, then Add to Home Screen',
+  },
+  {
+    icon: <HomeSimple width={18} height={18} />,
+    label: 'Tap Add — Grid appears on your home screen',
+  },
+] as const
+
+const androidSteps = [
+  {
+    icon: <OpenInBrowser width={18} height={18} />,
+    label: 'Open Grid in Chrome',
+  },
+  {
+    icon: <MoreVert width={18} height={18} />,
+    label: 'Tap the menu (⋮), then Install app',
+  },
+  {
+    icon: <SmartphoneDevice width={18} height={18} />,
+    label: 'Confirm Install — Grid opens like an app',
+  },
+] as const
+
+function AppInstallGuide() {
+  const [platform, setPlatform] = useState<InstallPlatform>('ios')
+  const steps = platform === 'ios' ? iosSteps : androidSteps
+
+  return (
+    <Box
+      style={{
+        background: 'var(--color-panel-translucent)',
+        backdropFilter: 'blur(8px)',
+        borderRadius: 16,
+        border: '1px solid var(--gray-4)',
+        padding: '1.25rem',
+      }}
+    >
+      <Flex gap="2" style={{ marginBottom: '1rem' }}>
+        {(
+          [
+            {
+              id: 'ios' as const,
+              label: 'iPhone',
+              icon: <Safari width={16} height={16} />,
+            },
+            {
+              id: 'android' as const,
+              label: 'Android',
+              icon: <SmartphoneDevice width={16} height={16} />,
+            },
+          ] as const
+        ).map((tab) => {
+          const active = platform === tab.id
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setPlatform(tab.id)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '0.4rem 0.85rem',
+                borderRadius: 999,
+                border: active
+                  ? '1px solid var(--accent-7)'
+                  : '1px solid var(--gray-5)',
+                background: active ? 'var(--accent-3)' : 'transparent',
+                color: active ? 'var(--accent-11)' : 'var(--gray-11)',
+                cursor: 'pointer',
+                fontSize: 13,
+                fontWeight: 500,
+                fontFamily: 'inherit',
+              }}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          )
+        })}
+      </Flex>
+      <Flex direction="column" gap="3">
+        {steps.map((step, index) => (
+          <Flex key={step.label} align="start" gap="3">
+            <Box
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: 'var(--accent-3)',
+                color: 'var(--accent-11)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              {index + 1}
+            </Box>
+            <Flex align="center" gap="2" style={{ paddingTop: 3 }}>
+              <Box style={{ color: 'var(--gray-10)', display: 'flex' }}>
+                {step.icon}
+              </Box>
+              <Text
+                size="2"
+                style={{ color: 'var(--gray-12)', lineHeight: 1.5 }}
+              >
+                {step.label}
+              </Text>
+            </Flex>
+          </Flex>
+        ))}
+      </Flex>
+    </Box>
+  )
+}
+
+function useSectionPhoneTilt(enabled: boolean) {
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const canTilt = enabled && !prefersReducedMotion
+  const rotateXRaw = useMotionValue(0)
+  const rotateYRaw = useMotionValue(0)
+  const translateXRaw = useMotionValue(0)
+  const translateYRaw = useMotionValue(0)
+  const rotateX = useSpring(rotateXRaw, { stiffness: 180, damping: 22 })
+  const rotateY = useSpring(rotateYRaw, { stiffness: 180, damping: 22 })
+  const translateX = useSpring(translateXRaw, { stiffness: 180, damping: 22 })
+  const translateY = useSpring(translateYRaw, { stiffness: 180, damping: 22 })
+
+  const onMouseMove = (event: MouseEvent<HTMLDivElement>) => {
+    if (!canTilt) return
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = (event.clientX - rect.left) / rect.width - 0.5
+    const y = (event.clientY - rect.top) / rect.height - 0.5
+    rotateXRaw.set(y * -10)
+    rotateYRaw.set(x * 18)
+    translateXRaw.set(x * 14)
+    translateYRaw.set(y * 8)
+  }
+
+  const onMouseLeave = () => {
+    rotateXRaw.set(0)
+    rotateYRaw.set(0)
+    translateXRaw.set(0)
+    translateYRaw.set(0)
+  }
+
+  return {
+    canTilt,
+    rotateX,
+    rotateY,
+    translateX,
+    translateY,
+    onMouseMove,
+    onMouseLeave,
+  }
+}
+
+function AppPwaSection({ isMd, isSm }: { isMd: boolean; isSm: boolean }) {
+  const {
+    canTilt,
+    rotateX,
+    rotateY,
+    translateX,
+    translateY,
+    onMouseMove,
+    onMouseLeave,
+  } = useSectionPhoneTilt(isMd)
+
+  return (
+    <Box
+      id="app"
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
+      style={{
+        position: 'relative',
+        padding: isMd ? '6rem 0' : '3rem 1rem',
+        background: 'var(--gray-2)',
+        scrollMarginTop: 72,
+      }}
+    >
+      <Container size="4">
+        <Flex
+          direction={{ initial: 'column', md: 'row' }}
+          gap={isMd ? '8' : '5'}
+          align="center"
+        >
+          <Box style={{ flex: 1, width: '100%' }}>
+            <motion.div
+              initial={{ opacity: 0, x: -30 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.4 }}
+            >
+              <Flex align="center" gap="2" style={{ marginBottom: '0.75rem' }}>
+                <Box
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    background: 'var(--accent-3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'var(--accent-11)',
+                  }}
+                >
+                  <SmartphoneDevice width={22} height={22} />
+                </Box>
+                <Text
+                  size="2"
+                  weight="medium"
+                  style={{ color: 'var(--accent-11)' }}
+                >
+                  Progressive Web App
+                </Text>
+              </Flex>
+              <Heading
+                size={isMd ? '8' : isSm ? '7' : '6'}
+                style={{ marginBottom: '1rem', color: 'var(--gray-12)' }}
+              >
+                Use Grid on your phone
+              </Heading>
+              <Text
+                size={isSm ? '4' : '3'}
+                style={{
+                  color: 'var(--gray-11)',
+                  lineHeight: 1.8,
+                  marginBottom: '1.5rem',
+                  display: 'block',
+                }}
+              >
+                We don&apos;t have a native App Store or Play Store app. Grid is
+                a Progressive Web App — install it from your browser and it
+                opens full-screen from your home screen, just like a native app.
+                No store download required.
+              </Text>
+              <AppInstallGuide />
+            </motion.div>
+          </Box>
+          <Box
+            style={{
+              flex: isMd ? '0 0 280px' : '1',
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5, delay: 0.1 }}
+            >
+              <PwaPhoneMockup
+                canTilt={canTilt}
+                rotateX={rotateX}
+                rotateY={rotateY}
+                translateX={translateX}
+                translateY={translateY}
+              />
+            </motion.div>
+          </Box>
+        </Flex>
+      </Container>
+    </Box>
+  )
+}
+
+function PwaPhoneMockup({
+  canTilt,
+  rotateX,
+  rotateY,
+  translateX,
+  translateY,
+}: {
+  canTilt: boolean
+  rotateX: ReturnType<typeof useSpring>
+  rotateY: ReturnType<typeof useSpring>
+  translateX: ReturnType<typeof useSpring>
+  translateY: ReturnType<typeof useSpring>
+}) {
+  const { isDark } = useTheme()
+
+  return (
+    <div
+      style={{
+        perspective: 900,
+        width: 260,
+        height: 520,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      <motion.div
+        style={{
+          width: 240,
+          height: 490,
+          borderRadius: 36,
+          background: isDark ? 'var(--gray-1)' : '#1a1a1c',
+          border: '2px solid var(--gray-6)',
+          boxShadow:
+            '0 24px 48px var(--gray-a6), inset 0 0 0 1px var(--gray-a3)',
+          padding: 10,
+          position: 'relative',
+          rotateX,
+          rotateY,
+          x: translateX,
+          y: translateY,
+          transformStyle: 'preserve-3d',
+          willChange: canTilt ? 'transform' : undefined,
+        }}
+      >
+        {/* Dynamic Island */}
+        <Box
+          style={{
+            position: 'absolute',
+            top: 18,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 72,
+            height: 22,
+            borderRadius: 12,
+            background: isDark ? 'var(--gray-3)' : '#0a0a0b',
+            zIndex: 2,
+          }}
+        />
+        {/* Screen */}
+        <Box
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: 28,
+            background: 'var(--color-background)',
+            overflow: 'hidden',
+            position: 'relative',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          {/* Status bar */}
+          <Flex
+            justify="between"
+            align="center"
+            style={{
+              padding: '12px 18px 6px',
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--gray-12)',
+            }}
+          >
+            <span>9:41</span>
+            <Flex gap="1" align="center">
+              <Box
+                style={{
+                  width: 14,
+                  height: 8,
+                  borderRadius: 2,
+                  border: '1px solid var(--gray-11)',
+                }}
+              />
+            </Flex>
+          </Flex>
+
+          {/* App header */}
+          <Flex align="center" gap="2" style={{ padding: '8px 14px 12px' }}>
+            <img
+              src={isDark ? logoWhite : logoBlack}
+              alt=""
+              style={{ height: 18, width: 'auto' }}
+            />
+            <Box style={{ flex: 1 }} />
+            <Box
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 999,
+                background: 'var(--accent-4)',
+              }}
+            />
+          </Flex>
+
+          {/* Week strip */}
+          <Flex gap="1" style={{ padding: '0 12px 12px' }}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Box
+                key={i}
+                style={{
+                  flex: 1,
+                  height: 44,
+                  borderRadius: 10,
+                  background: i === 2 ? 'var(--accent-4)' : 'var(--gray-3)',
+                  border:
+                    i === 2
+                      ? '1px solid var(--accent-7)'
+                      : '1px solid transparent',
+                }}
+              />
+            ))}
+          </Flex>
+
+          {/* Section cards */}
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ padding: '0 12px', flex: 1 }}
+          >
+            {[
+              { titleW: '55%', rows: 2 },
+              { titleW: '40%', rows: 3 },
+              { titleW: '48%', rows: 2 },
+            ].map((card, cardIndex) => (
+              <Box
+                key={cardIndex}
+                style={{
+                  borderRadius: 12,
+                  background: 'var(--color-panel-solid)',
+                  border: '1px solid var(--gray-4)',
+                  padding: 10,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                }}
+              >
+                <Box
+                  style={{
+                    height: 8,
+                    width: card.titleW,
+                    borderRadius: 4,
+                    background: 'var(--gray-5)',
+                  }}
+                />
+                {Array.from({ length: card.rows }).map((_, rowIndex) => (
+                  <Flex key={rowIndex} gap="2" align="center">
+                    <Box
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        background:
+                          cardIndex === 0 && rowIndex === 0
+                            ? 'var(--accent-5)'
+                            : 'var(--gray-4)',
+                        flexShrink: 0,
+                      }}
+                    />
+                    <Box
+                      style={{
+                        height: 7,
+                        flex: 1,
+                        borderRadius: 4,
+                        background: 'var(--gray-4)',
+                      }}
+                    />
+                  </Flex>
+                ))}
+              </Box>
+            ))}
+          </Flex>
+
+          {/* Home indicator */}
+          <Box
+            style={{
+              width: 96,
+              height: 4,
+              borderRadius: 2,
+              background: 'var(--gray-8)',
+              margin: '10px auto 8px',
+            }}
+          />
+        </Box>
+      </motion.div>
+    </div>
   )
 }
 

@@ -85,9 +85,7 @@ describe('validatePrettyOfferModules', () => {
           timeline_items: [],
         },
       ]),
-    ).toEqual([
-      expect.objectContaining({ field: 'timeline_items' }),
-    ])
+    ).toEqual([expect.objectContaining({ field: 'timeline_items' })])
     expect(
       isPrettyModuleStoryComplete({
         id: 'timeline-1',

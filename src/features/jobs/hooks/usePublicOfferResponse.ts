@@ -19,6 +19,9 @@ import type {
 export function usePublicOfferResponse(
   accessToken: string,
   offer: OfferDetail | undefined,
+  options?: {
+    getSelectedOptionIds?: () => Array<string>
+  },
 ) {
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
@@ -64,7 +67,11 @@ export function usePublicOfferResponse(
   )
 
   const acceptMutation = useMutation({
-    mutationFn: () => acceptOffer(accessToken, acceptanceForm),
+    mutationFn: () =>
+      acceptOffer(accessToken, {
+        ...acceptanceForm,
+        selected_option_ids: options?.getSelectedOptionIds?.() ?? [],
+      }),
     onSuccess: () => {
       success('Offer Accepted', 'Thank you for accepting the offer!')
       qc.invalidateQueries({ queryKey: ['public-offer', accessToken] })
@@ -128,7 +135,9 @@ export function usePublicOfferResponse(
     if (!offer) return
     setDownloadingPDF(true)
     try {
-      await exportOfferAsPDF(offer)
+      await exportOfferAsPDF(offer, {
+        selectedOptionIds: options?.getSelectedOptionIds?.() ?? [],
+      })
       success('PDF downloaded', 'The offer has been downloaded as PDF.')
     } catch (err) {
       toastError(

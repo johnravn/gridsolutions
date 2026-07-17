@@ -62,6 +62,7 @@ type Props = {
   showGroupOnlyItems: boolean
   showGroups: boolean
   showItems: boolean
+  createShortcutRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export default function InventoryTable({
@@ -74,6 +75,7 @@ export default function InventoryTable({
   showGroupOnlyItems,
   showGroups,
   showItems,
+  createShortcutRef,
 }: Props) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -88,6 +90,13 @@ export default function InventoryTable({
 
   const [addItemOpen, setAddItemOpen] = React.useState(false)
   const [addGroupDialog, setAddGroupDialog] = React.useState(false)
+  React.useEffect(() => {
+    if (!createShortcutRef) return
+    createShortcutRef.current = () => setAddItemOpen(true)
+    return () => {
+      createShortcutRef.current = null
+    }
+  }, [createShortcutRef])
 
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
 

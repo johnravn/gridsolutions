@@ -249,7 +249,7 @@ export default function SubscribeToCalendarDialog({
                         style={{
                           marginTop: 'var(--space-1)',
                           fontFamily: 'monospace',
-                          fontSize: 11,
+                          fontSize: 'var(--font-size-1)',
                         }}
                       />
                     </Box>

@@ -1,0 +1,23 @@
+@keyframes split-glow-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 8px var(--accent-a5),
+      0 0 12px var(--accent-a4);
+  }
+  50% {
+    box-shadow:
+      0 0 12px var(--accent-a6),
+      0 0 18px var(--accent-a5);
+  }
+}
+
+.split-glow-bar {
+  animation: split-glow-pulse 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .split-glow-bar {
+    animation: none;
+  }
+}

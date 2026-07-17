@@ -165,7 +165,7 @@ function SeriesStatusTimeline({
                   style={{
                     color: hasJobs ? colors.text : 'var(--gray-9)',
                     textAlign: 'center',
-                    fontSize: 10,
+                    fontSize: 'var(--font-size-1)',
                     lineHeight: 1.2,
                     opacity: hasJobs ? 1 : 0.65,
                     wordBreak: 'break-word',

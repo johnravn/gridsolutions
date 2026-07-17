@@ -1,4 +1,5 @@
 import { supabase } from '@shared/api/supabase'
+import { endOfDay, startOfDay } from '@shared/ui/components/pickers'
 import type {
   AddressListRow,
   JobDetail,
@@ -15,7 +16,8 @@ function escapeForPostgrestOr(value: string) {
 export function jobsIndexQuery({
   companyId,
   search,
-  selectedDate,
+  dateFrom,
+  dateTo,
   sortBy = 'start_at',
   sortDir = 'desc',
   userId,
@@ -23,11 +25,19 @@ export function jobsIndexQuery({
   includeArchived = false,
   showOnlyArchived = false,
   onlyCrewForUserId = null,
+  /** When set, only jobs where this user is project lead (mirrors homepage ready-to-invoice). */
+  projectLeadUserId = null,
+  /** When set, restrict to these statuses server-side (e.g. ready-to-invoice → completed). */
+  statuses = null,
   maxRows = 150,
+  upcomingFrom = null,
 }: {
   companyId: string
   search: string
-  selectedDate?: string
+  /** Local calendar date YYYY-MM-DD — inclusive start of period filter on job start_at. */
+  dateFrom?: string
+  /** Local calendar date YYYY-MM-DD — inclusive end of period filter on job start_at. */
+  dateTo?: string
   sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
   sortDir?: 'asc' | 'desc'
   userId?: string | null
@@ -35,11 +45,15 @@ export function jobsIndexQuery({
   includeArchived?: boolean
   showOnlyArchived?: boolean
   onlyCrewForUserId?: string | null
+  projectLeadUserId?: string | null
+  statuses?: Array<JobListRow['status']> | null
   /**
    * Safety cap to avoid fetching an entire company’s job history in one request.
    * Use `jobsIndexPageQuery` for real pagination when you need full browsing.
    */
   maxRows?: number
+  /** When set, only return in-progress jobs or jobs starting at/after this ISO timestamp. */
+  upcomingFrom?: string | null
 }) {
   return {
     queryKey: [
@@ -47,7 +61,8 @@ export function jobsIndexQuery({
       companyId,
       'jobs-index',
       search,
-      selectedDate,
+      dateFrom,
+      dateTo,
       sortBy,
       sortDir,
       userId,
@@ -55,7 +70,10 @@ export function jobsIndexQuery({
       includeArchived,
       showOnlyArchived,
       onlyCrewForUserId,
+      projectLeadUserId,
+      statuses,
       maxRows,
+      upcomingFrom,
     ],
     queryFn: async (): Promise<Array<JobListRow>> => {
       let q = supabase
@@ -81,19 +99,31 @@ export function jobsIndexQuery({
         }
       }
 
-      // Bound the dataset when a specific date is selected (dramatically reduces rows for big tenants).
-      if (selectedDate) {
-        // selectedDate is expected to be YYYY-MM-DD
-        const from = `${selectedDate}T00:00:00.000Z`
-        const to = `${selectedDate}T23:59:59.999Z`
-        // Start at/before end-of-day AND (end_at is null OR end_at after start-of-day)
-        q = q.lte('start_at', to).or(`end_at.is.null,end_at.gte.${from}`)
+      if (projectLeadUserId) {
+        q = q.eq('project_lead_user_id', projectLeadUserId)
+      }
+
+      if (statuses && statuses.length > 0) {
+        q = q.in('status', statuses)
+      }
+
+      // Jobs whose start_at falls within the selected period (inclusive).
+      if (dateFrom && dateTo) {
+        q = q
+          .gte('start_at', startOfDay(dateFrom))
+          .lte('start_at', endOfDay(dateTo))
       }
 
       // Narrow server-side on title when possible; customer name still filtered client-side.
       if (search.trim()) {
         const safe = escapePgLike(search.trim())
         q = q.ilike('title', `%${safe}%`)
+      }
+
+      if (upcomingFrom) {
+        q = q
+          .neq('status', 'canceled')
+          .or(`status.eq.in_progress,start_at.gte.${upcomingFrom}`)
       }
 
       // Sorting
@@ -116,36 +146,6 @@ export function jobsIndexQuery({
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       let results = (data || []) as unknown as Array<JobListRow>
-
-      // Filter by selected date (jobs in progress on that date)
-      if (selectedDate) {
-        const selected = new Date(selectedDate)
-        selected.setHours(0, 0, 0, 0)
-        const selectedDateStr = selected.toISOString().split('T')[0]
-
-        results = results.filter((job) => {
-          if (!job.start_at) return false
-
-          const startDate = new Date(job.start_at)
-          startDate.setHours(0, 0, 0, 0)
-          const startDateStr = startDate.toISOString().split('T')[0]
-
-          // If no end_at, check if selected date >= start date
-          const jobEndAt = job.end_at
-          if (!jobEndAt) {
-            return selectedDateStr >= startDateStr
-          }
-
-          const endDate = new Date(jobEndAt)
-          endDate.setHours(0, 0, 0, 0)
-          const endDateStr = endDate.toISOString().split('T')[0]
-
-          // Job is in progress if selected date is between start and end (inclusive)
-          return (
-            selectedDateStr >= startDateStr && selectedDateStr <= endDateStr
-          )
-        })
-      }
 
       // Client-side fuzzy filtering across title, customer name, customer user name, project lead name, status, and date
       // (PostgREST doesn't support filtering on joined columns like customer.name)
@@ -325,7 +325,8 @@ export function jobsIndexPageQuery({
   page,
   pageSize,
   search,
-  selectedDate,
+  dateFrom,
+  dateTo,
   sortBy = 'start_at',
   sortDir = 'desc',
   userId,
@@ -338,7 +339,10 @@ export function jobsIndexPageQuery({
   page: number
   pageSize: number
   search: string
-  selectedDate?: string
+  /** Local calendar date YYYY-MM-DD — inclusive start of period filter on job start_at. */
+  dateFrom?: string
+  /** Local calendar date YYYY-MM-DD — inclusive end of period filter on job start_at. */
+  dateTo?: string
   sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
   sortDir?: 'asc' | 'desc'
   userId?: string | null
@@ -355,7 +359,8 @@ export function jobsIndexPageQuery({
       page,
       pageSize,
       search,
-      selectedDate,
+      dateFrom,
+      dateTo,
       sortBy,
       sortDir,
       userId,
@@ -388,10 +393,10 @@ export function jobsIndexPageQuery({
         if (!includeArchived) q = q.eq('archived', false)
       }
 
-      if (selectedDate) {
-        const dayFrom = `${selectedDate}T00:00:00.000Z`
-        const dayTo = `${selectedDate}T23:59:59.999Z`
-        q = q.lte('start_at', dayTo).or(`end_at.is.null,end_at.gte.${dayFrom}`)
+      if (dateFrom && dateTo) {
+        q = q
+          .gte('start_at', startOfDay(dateFrom))
+          .lte('start_at', endOfDay(dateTo))
       }
 
       // Narrow server-side when possible (title only); customer name still requires client-side fuzzy search elsewhere.

@@ -1,9 +1,14 @@
 // src/features/vehicles/components/dialogs/BookPersonalVehicleDialog.tsx
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+import {
+  DateTimeRangePicker,
+  isInvalidTimeRange,
+} from '@shared/ui/components/pickers'
 import {
   createPersonalVehicleBooking,
   updatePersonalVehicleBooking,
@@ -27,6 +32,23 @@ type Props = {
   onSaved?: () => void
 }
 
+const defaultValues = {
+  title: '',
+  startAt: '',
+  endAt: '',
+}
+
+const schema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    startAt: z.string().min(1, 'Start time is required'),
+    endAt: z.string().min(1, 'End time is required'),
+  })
+  .refine((v) => !isInvalidTimeRange(v.startAt, v.endAt), {
+    message: 'End time must be after start time.',
+    path: ['endAt'],
+  })
+
 export default function BookPersonalVehicleDialog({
   open,
   onOpenChange,
@@ -38,31 +60,53 @@ export default function BookPersonalVehicleDialog({
 }: Props) {
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
-  const [title, setTitle] = React.useState(initial?.title ?? '')
-  const [startAt, setStartAt] = React.useState(initial?.startAt ?? '')
-  const [endAt, setEndAt] = React.useState(initial?.endAt ?? '')
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      if (mode === 'create') {
+        await createMut.mutateAsync(value)
+      } else {
+        await updateMut.mutateAsync(value)
+      }
+    },
+  })
 
   React.useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initial) {
-      setTitle(initial.title)
-      setStartAt(initial.startAt)
-      setEndAt(initial.endAt)
+      form.reset(
+        {
+          title: initial.title,
+          startAt: initial.startAt,
+          endAt: initial.endAt,
+        },
+        { keepDefaultValues: true },
+      )
     } else {
-      setTitle('')
-      setStartAt('')
-      setEndAt('')
+      form.reset(defaultValues, { keepDefaultValues: true })
     }
-  }, [open, mode, initial])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [
+    open,
+    mode,
+    initial?.timePeriodId,
+    initial?.title,
+    initial?.startAt,
+    initial?.endAt,
+  ])
 
   const createMut = useMutation({
-    mutationFn: () =>
+    mutationFn: async (value: typeof defaultValues) =>
       createPersonalVehicleBooking({
         companyId,
         vehicleId,
-        title: title.trim() || 'Personal booking',
-        startAt,
-        endAt,
+        title: value.title.trim() || 'Personal booking',
+        startAt: value.startAt,
+        endAt: value.endAt,
       }),
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -76,20 +120,21 @@ export default function BookPersonalVehicleDialog({
     onError: (err: unknown) => {
       showError(
         'Failed to create booking',
-        (err as Error)?.message ||
-          'Vehicle may already be booked for this period.',
+        err instanceof Error
+          ? err.message
+          : 'Vehicle may already be booked for this period.',
       )
     },
   })
 
   const updateMut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof defaultValues) => {
       if (!initial) throw new Error('No booking to update')
       await updatePersonalVehicleBooking({
         timePeriodId: initial.timePeriodId,
-        title: title.trim() || undefined,
-        startAt,
-        endAt,
+        title: value.title.trim() || undefined,
+        startAt: value.startAt,
+        endAt: value.endAt,
       })
     },
     onSuccess: async () => {
@@ -104,18 +149,12 @@ export default function BookPersonalVehicleDialog({
     onError: (err: unknown) => {
       showError(
         'Failed to update',
-        (err as Error)?.message ?? 'Please try again.',
+        err instanceof Error ? err.message : 'Please try again.',
       )
     },
   })
 
-  const save = mode === 'create' ? createMut.mutate : updateMut.mutate
   const isPending = createMut.isPending || updateMut.isPending
-  const canSave =
-    title.trim().length > 0 &&
-    startAt &&
-    endAt &&
-    new Date(endAt) > new Date(startAt)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -124,43 +163,58 @@ export default function BookPersonalVehicleDialog({
           {mode === 'create' ? 'Book vehicle' : 'Edit booking'}
         </Dialog.Title>
 
-        <Box
-          mt="4"
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
         >
-          <Box>
-            <Text size="2" weight="medium" mb="2" as="div">
-              Title
-            </Text>
-            <TextField.Root
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. Personal errand"
-            />
-          </Box>
-
-          <DateTimeRangePicker
-            startAt={startAt}
-            endAt={endAt}
-            onChange={({ startAt: s, endAt: e }) => {
-              setStartAt(s)
-              setEndAt(e)
-            }}
-          />
-
-          <Flex justify="end" gap="2" mt="2">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              variant="solid"
-              onClick={() => save()}
-              disabled={isPending || !canSave}
+          <form.AppForm>
+            <Box
+              mt="4"
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
             >
-              {isPending ? 'Saving…' : mode === 'create' ? 'Book' : 'Save'}
-            </Button>
-          </Flex>
-        </Box>
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title"
+                    placeholder="e.g. Personal errand"
+                  />
+                )}
+              </form.AppField>
+
+              <form.Subscribe
+                selector={(state) => [state.values.startAt, state.values.endAt]}
+              >
+                {([startAt, endAt]) => (
+                  <DateTimeRangePicker
+                    startAt={startAt}
+                    endAt={endAt}
+                    onChange={({ startAt: s, endAt: e }) => {
+                      form.setFieldValue('startAt', s)
+                      form.setFieldValue('endAt', e)
+                    }}
+                    invalid={isInvalidTimeRange(startAt, endAt)}
+                  />
+                )}
+              </form.Subscribe>
+
+              <Flex justify="end" gap="2" mt="2">
+                <Dialog.Close>
+                  <Button type="button" variant="soft">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <form.SubmitButton
+                  label={mode === 'create' ? 'Book' : 'Save'}
+                  pendingLabel="Saving…"
+                  disabled={isPending}
+                />
+              </Flex>
+            </Box>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

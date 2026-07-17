@@ -6,6 +6,12 @@ import type { OfferDetail } from '@features/jobs/types'
 export type EquipmentConflictPreview = {
   summaryLines: Array<string>
   conflicts: Array<OverlapConflict>
+  conflictingItemIds: Array<string>
+}
+
+export type BasisBookingConflictPreview = EquipmentConflictPreview & {
+  jobStartAt: string
+  jobEndAt: string
 }
 
 type OfferItemQuantityInput = {
@@ -94,7 +100,7 @@ export async function getEquipmentConflictsForOfferBooking({
 }): Promise<EquipmentConflictPreview> {
   const itemQuantityMap = await buildOfferItemQuantityMap(offer)
   if (itemQuantityMap.size === 0) {
-    return { summaryLines: [], conflicts: [] }
+    return { summaryLines: [], conflicts: [], conflictingItemIds: [] }
   }
 
   const allItemIds = Array.from(itemQuantityMap.keys())
@@ -135,7 +141,7 @@ export async function getEquipmentConflictsForOfferBooking({
   }
 
   if (overlappingPeriodIds.size === 0) {
-    return { summaryLines: [], conflicts: [] }
+    return { summaryLines: [], conflicts: [], conflictingItemIds: [] }
   }
 
   const { data: overlappingReservations, error: reservationsErr } =
@@ -213,6 +219,7 @@ export async function getEquipmentConflictsForOfferBooking({
 
   const summaryLines: Array<string> = []
   const conflicts: Array<OverlapConflict> = []
+  const conflictingItemIds: Array<string> = []
 
   for (const [itemId, newQty] of itemQuantityMap.entries()) {
     const onHand = itemOnHandMap.get(itemId) ?? 0
@@ -225,6 +232,7 @@ export async function getEquipmentConflictsForOfferBooking({
 
     if (!hasCapacityConflict && !hasPlannedConflict) continue
 
+    conflictingItemIds.push(itemId)
     const itemName = itemNameMap.get(itemId) ?? 'Item'
 
     if (hasCapacityConflict) {
@@ -267,5 +275,6 @@ export async function getEquipmentConflictsForOfferBooking({
   return {
     summaryLines,
     conflicts: dedupeOverlapConflicts(conflicts),
+    conflictingItemIds,
   }
 }

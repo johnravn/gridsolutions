@@ -542,7 +542,7 @@ function JobStatusTimeline({
                 <Text
                   size="1"
                   weight="bold"
-                  style={{ color: 'white', fontSize: '12px' }}
+                  style={{ color: 'white', fontSize: 'var(--font-size-2)' }}
                 >
                   ✓
                 </Text>
@@ -566,7 +566,7 @@ function JobStatusTimeline({
                 color: isActive || isPast ? colors.text : 'var(--gray-a9)',
                 textAlign: 'center',
                 transition: 'color 0.3s ease',
-                fontSize: '11px',
+                fontSize: 'var(--font-size-1)',
                 opacity: isFuture ? 0.5 : 1,
                 whiteSpace: 'nowrap',
               }}
@@ -637,7 +637,7 @@ function JobStatusTimeline({
                     <Text
                       size="1"
                       weight="bold"
-                      style={{ color: 'white', fontSize: '12px' }}
+                      style={{ color: 'white', fontSize: 'var(--font-size-2)' }}
                     >
                       ✕
                     </Text>
@@ -653,7 +653,7 @@ function JobStatusTimeline({
                       : 'var(--gray-a9)',
                     textAlign: 'center',
                     transition: 'color 0.3s ease',
-                    fontSize: '11px',
+                    fontSize: 'var(--font-size-1)',
                     opacity: !isCanceled ? 0.5 : 1,
                     whiteSpace: 'nowrap',
                   }}
@@ -745,7 +745,10 @@ function JobStatusTimeline({
                           <Text
                             size="1"
                             weight="bold"
-                            style={{ color: 'white', fontSize: '12px' }}
+                            style={{
+                              color: 'white',
+                              fontSize: 'var(--font-size-2)',
+                            }}
                           >
                             ✓
                           </Text>
@@ -772,7 +775,7 @@ function JobStatusTimeline({
                             isActive || isPast ? colors.text : 'var(--gray-a9)',
                           textAlign: 'center',
                           transition: 'color 0.3s ease',
-                          fontSize: '11px',
+                          fontSize: 'var(--font-size-1)',
                           opacity: isFuture ? 0.5 : 1,
                           whiteSpace: 'nowrap',
                         }}
@@ -832,7 +835,7 @@ function JobStatusTimeline({
                   <Text
                     size="1"
                     weight="bold"
-                    style={{ color: 'white', fontSize: '12px' }}
+                    style={{ color: 'white', fontSize: 'var(--font-size-2)' }}
                   >
                     ✕
                   </Text>
@@ -848,7 +851,7 @@ function JobStatusTimeline({
                     : 'var(--gray-a9)',
                   textAlign: 'center',
                   transition: 'color 0.3s ease',
-                  fontSize: '11px',
+                  fontSize: 'var(--font-size-1)',
                   opacity: !isCanceled ? 0.5 : 1,
                   whiteSpace: 'nowrap',
                 }}

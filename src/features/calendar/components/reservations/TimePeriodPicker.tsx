@@ -3,7 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Flex, Select, TextField } from '@radix-ui/themes'
 import { Calendar, Edit, Plus } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+import {
+  DateTimeRangePicker,
+  isInvalidTimeRange,
+} from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
   jobTimePeriodsQuery,
@@ -170,6 +173,10 @@ export default function TimePeriodPicker({
               <Button
                 size="1"
                 variant="solid"
+                disabled={
+                  save.isPending ||
+                  isInvalidTimeRange(editing.start_at, editing.end_at)
+                }
                 onClick={() =>
                   save.mutate({
                     id: editing.id || undefined,
@@ -366,7 +373,10 @@ export function FixedTimePeriodEditor({
                     size="1"
                     variant="solid"
                     onClick={() => save.mutate()}
-                    disabled={save.isPending}
+                    disabled={
+                      save.isPending ||
+                      isInvalidTimeRange(editData.start_at, editData.end_at)
+                    }
                   >
                     {save.isPending ? 'Saving...' : 'Save'}
                   </Button>

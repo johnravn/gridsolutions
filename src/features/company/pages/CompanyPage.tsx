@@ -3,6 +3,7 @@ import * as React from 'react'
 import { Box, Tabs } from '@radix-ui/themes'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import {
   useTabKeyboardScopeProps,
@@ -98,7 +99,7 @@ export default function CompanyPage() {
           minHeight: 0,
         }}
       >
-        <Tabs.List>
+        <AnimatedTabsList>
           <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
           <Tabs.Trigger value="users">Users</Tabs.Trigger>
           <Tabs.Trigger value="logging">Logging</Tabs.Trigger>
@@ -106,7 +107,7 @@ export default function CompanyPage() {
           <Tabs.Trigger value="personalization">Personalization</Tabs.Trigger>
           <Tabs.Trigger value="rates">Rates</Tabs.Trigger>
           <Tabs.Trigger value="setup">Setup</Tabs.Trigger>
-        </Tabs.List>
+        </AnimatedTabsList>
 
         <Box
           pt="4"

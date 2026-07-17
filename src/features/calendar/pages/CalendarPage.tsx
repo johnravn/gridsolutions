@@ -269,10 +269,26 @@ export default function CalendarPage() {
   }
 
   return (
-    <Card>
-      <Box p="4">
+    <Card
+      style={{
+        height: '100%',
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        p="4"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {/* Filters - on same line */}
-        <Flex align="center" gap="3" mb="4" wrap="wrap">
+        <Flex align="center" gap="3" mb="4" wrap="wrap" style={{ flexShrink: 0 }}>
           {/* Category Dropdown */}
           <Flex align="center" gap="2">
             <Text weight="bold" size="2">

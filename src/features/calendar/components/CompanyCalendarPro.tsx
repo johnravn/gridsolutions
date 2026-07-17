@@ -376,7 +376,7 @@ export default function CompanyCalendarPro({
               <span
                 style={{
                   fontWeight: 600,
-                  fontSize: 11,
+                  fontSize: 'var(--font-size-1)',
                   flexShrink: 0,
                 }}
               >
@@ -385,7 +385,7 @@ export default function CompanyCalendarPro({
             )}
             <span
               style={{
-                fontSize: 11,
+                fontSize: 'var(--font-size-1)',
                 whiteSpace: 'nowrap',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
@@ -406,11 +406,17 @@ export default function CompanyCalendarPro({
     <Box
       className="companyCalendar"
       p="3"
-      style={{ background: 'transparent' }}
+      style={{
+        background: 'transparent',
+        flex: 1,
+        minHeight: 0,
+        display: 'flex',
+        flexDirection: 'column',
+      }}
     >
       {/* Controls - only show if hideCreateButton is false (for backward compatibility) */}
       {!hideCreateButton && (
-        <Flex align="center" wrap="wrap" gap="3" mb="2">
+        <Flex align="center" wrap="wrap" gap="3" mb="2" style={{ flexShrink: 0 }}>
           {/* Kind filter */}
           <Flex align="center" gap="2">
             <Text weight="bold" size="2">
@@ -506,109 +512,112 @@ export default function CompanyCalendarPro({
       )}
 
       {/* Calendar or List */}
-      {!listMode ? (
-        <FullCalendar
-          key="calendar"
-          plugins={[
-            dayGridPlugin,
-            timeGridPlugin,
-            listPlugin,
-            interactionPlugin,
-          ]}
-          initialView="dayGridMonth"
-          headerToolbar={{
-            start: 'prev,next today',
-            center: 'title',
-            end: 'dayGridMonth,timeGridWeek,timeGridDay',
-          }}
-          timeZone="Europe/Oslo"
-          locale={enLocale}
-          selectable={false}
-          editable={false}
-          select={undefined}
-          eventClick={handleEventClick}
-          eventContent={renderEvent}
-          events={filtered.map((event) => {
-            const props = event.extendedProps as any
-            const category = props?.category
-            const status = props?.status
-            const title = event.title || ''
-            const isCanceled = status === 'canceled'
-            const colors = isCanceled
-              ? {
-                  bg: 'var(--gray-a3)',
-                  border: 'var(--gray-a5)',
-                  text: 'var(--gray-9)',
-                }
-              : getRadixColorsForPeriod(title, category)
-            return {
-              ...event,
-              backgroundColor: colors.bg,
-              borderColor: colors.border,
-              textColor: colors.text,
-              classNames: isCanceled
-                ? [
-                    ...((event.classNames as Array<string>) || []),
-                    'fc-event-canceled',
-                  ]
-                : event.classNames,
-            }
-          })}
-          height="auto"
-          dayMaxEventRows
-          slotMinTime="07:00:00"
-          slotMaxTime="20:00:00"
-          eventDisplay="block"
-        />
-      ) : (
-        <FullCalendar
-          key="list"
-          plugins={[listPlugin]}
-          initialView="listMonth"
-          headerToolbar={{
-            start: 'prev,next today',
-            center: 'title',
-            end: 'listMonth,listWeek,listDay',
-          }}
-          buttonText={{
-            listMonth: 'month',
-            listWeek: 'week',
-            listDay: 'day',
-          }}
-          timeZone="Europe/Oslo"
-          locale={enLocale}
-          eventClick={handleEventClick}
-          eventContent={renderEvent}
-          events={filtered.map((event) => {
-            const props = event.extendedProps as any
-            const eventCategory = props?.category
-            const status = props?.status
-            const title = event.title || ''
-            const isCanceled = status === 'canceled'
-            const colors = isCanceled
-              ? {
-                  bg: 'var(--gray-a3)',
-                  border: 'var(--gray-a5)',
-                  text: 'var(--gray-9)',
-                }
-              : getRadixColorsForPeriod(title, eventCategory)
-            return {
-              ...event,
-              backgroundColor: colors.bg,
-              borderColor: colors.border,
-              textColor: colors.text,
-              classNames: isCanceled
-                ? [
-                    ...((event.classNames as Array<string>) || []),
-                    'fc-event-canceled',
-                  ]
-                : event.classNames,
-            }
-          })}
-          height="auto"
-          noEventsContent="No bookings found"
-        />
-      )}
+      <Box style={{ flex: 1, minHeight: 0 }}>
+        {!listMode ? (
+          <FullCalendar
+            key="calendar"
+            plugins={[
+              dayGridPlugin,
+              timeGridPlugin,
+              listPlugin,
+              interactionPlugin,
+            ]}
+            initialView="dayGridMonth"
+            headerToolbar={{
+              start: 'prev,next today',
+              center: 'title',
+              end: 'dayGridMonth,timeGridWeek,timeGridDay',
+            }}
+            timeZone="Europe/Oslo"
+            locale={enLocale}
+            selectable={false}
+            editable={false}
+            select={undefined}
+            eventClick={handleEventClick}
+            eventContent={renderEvent}
+            events={filtered.map((event) => {
+              const props = event.extendedProps as any
+              const category = props?.category
+              const status = props?.status
+              const title = event.title || ''
+              const isCanceled = status === 'canceled'
+              const colors = isCanceled
+                ? {
+                    bg: 'var(--gray-a3)',
+                    border: 'var(--gray-a5)',
+                    text: 'var(--gray-9)',
+                  }
+                : getRadixColorsForPeriod(title, category)
+              return {
+                ...event,
+                backgroundColor: colors.bg,
+                borderColor: colors.border,
+                textColor: colors.text,
+                classNames: isCanceled
+                  ? [
+                      ...((event.classNames as Array<string>) || []),
+                      'fc-event-canceled',
+                    ]
+                  : event.classNames,
+              }
+            })}
+            height="100%"
+            expandRows
+            dayMaxEventRows
+            slotMinTime="07:00:00"
+            slotMaxTime="20:00:00"
+            eventDisplay="block"
+          />
+        ) : (
+          <FullCalendar
+            key="list"
+            plugins={[listPlugin]}
+            initialView="listMonth"
+            headerToolbar={{
+              start: 'prev,next today',
+              center: 'title',
+              end: 'listMonth,listWeek,listDay',
+            }}
+            buttonText={{
+              listMonth: 'month',
+              listWeek: 'week',
+              listDay: 'day',
+            }}
+            timeZone="Europe/Oslo"
+            locale={enLocale}
+            eventClick={handleEventClick}
+            eventContent={renderEvent}
+            events={filtered.map((event) => {
+              const props = event.extendedProps as any
+              const eventCategory = props?.category
+              const status = props?.status
+              const title = event.title || ''
+              const isCanceled = status === 'canceled'
+              const colors = isCanceled
+                ? {
+                    bg: 'var(--gray-a3)',
+                    border: 'var(--gray-a5)',
+                    text: 'var(--gray-9)',
+                  }
+                : getRadixColorsForPeriod(title, eventCategory)
+              return {
+                ...event,
+                backgroundColor: colors.bg,
+                borderColor: colors.border,
+                textColor: colors.text,
+                classNames: isCanceled
+                  ? [
+                      ...((event.classNames as Array<string>) || []),
+                      'fc-event-canceled',
+                    ]
+                  : event.classNames,
+              }
+            })}
+            height="100%"
+            noEventsContent="No bookings found"
+          />
+        )}
+      </Box>
     </Box>
   )
 }

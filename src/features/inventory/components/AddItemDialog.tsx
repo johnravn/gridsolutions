@@ -1,4 +1,4 @@
-// src/features/inventory/components/AddInventoryDialog.tsx
+// src/features/inventory/components/AddItemDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -7,12 +7,12 @@ import {
   Dialog,
   Flex,
   Select,
-  Switch,
   Text,
-  TextArea,
   TextField,
 } from '@radix-ui/themes'
 import { useNavigate } from '@tanstack/react-router'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
@@ -21,19 +21,47 @@ import { Plus, Sparks } from 'iconoir-react'
 import BrandAutocomplete from './BrandAutocomplete'
 import type { InventoryItemKind } from '../api/queries'
 
-type FormState = {
+type FormValues = {
   name: string
-  categoryId?: string | null
-  brandId?: string | null
-  model?: string
+  categoryId: string | null
+  brandId: string | null
+  model: string
   allow_individual_booking: boolean
   total_quantity: number
   active: boolean
-  notes?: string
-  nicknames?: string
-  price?: number | null
+  notes: string
+  nicknames: string
+  price: number | null
   item_kind: InventoryItemKind
 }
+
+const defaultValues: FormValues = {
+  name: '',
+  categoryId: null,
+  brandId: null,
+  model: '',
+  allow_individual_booking: true,
+  total_quantity: 0,
+  active: true,
+  notes: '',
+  nicknames: '',
+  price: null,
+  item_kind: 'stock',
+}
+
+const schema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  categoryId: z.string().nullable(),
+  brandId: z.string().nullable(),
+  model: z.string(),
+  allow_individual_booking: z.boolean(),
+  total_quantity: z.number().min(0),
+  active: z.boolean(),
+  notes: z.string(),
+  nicknames: z.string(),
+  price: z.number().nullable(),
+  item_kind: z.enum(['stock', 'subrental']),
+})
 
 type Option = { id: string; name: string }
 
@@ -50,6 +78,27 @@ type EditInitialData = {
   nicknames?: string | null
   price: number | null
   item_kind: InventoryItemKind
+}
+
+function buildEditValues(
+  initialData: EditInitialData,
+  categories: Array<Option>,
+): FormValues {
+  const catId =
+    categories.find((c) => c.name === initialData.categoryName)?.id ?? null
+  return {
+    name: initialData.name,
+    categoryId: catId,
+    brandId: null,
+    model: initialData.model ?? '',
+    allow_individual_booking: initialData.allow_individual_booking,
+    total_quantity: initialData.total_quantity,
+    active: initialData.active,
+    notes: initialData.notes ?? '',
+    nicknames: initialData.nicknames ?? '',
+    price: initialData.price,
+    item_kind: initialData.item_kind,
+  }
 }
 
 export default function AddItemDialog({
@@ -76,45 +125,28 @@ export default function AddItemDialog({
   const { canWrite } = useCompanyWriteAccess()
   const isOwner = companyRole === 'owner' && canWrite
 
-  const [form, setForm] = React.useState<FormState>({
-    name: '',
-    categoryId: null,
-    brandId: null,
-    model: '',
-    allow_individual_booking: true,
-    total_quantity: 0,
-    active: true,
-    notes: '',
-    nicknames: '',
-    price: undefined,
-    item_kind: 'stock',
-  })
+  const [brandName, setBrandName] = React.useState<string | null>(null)
   const [totalQuantityDraft, setTotalQuantityDraft] = React.useState<
     string | null
   >(null)
-  // keep a stable ref of original price for change detection
   const originalPriceRef = React.useRef<number | null>(null)
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
 
-  const set = <TKey extends keyof FormState>(
-    key: TKey,
-    value: FormState[TKey],
-  ) => setForm((s) => ({ ...s, [key]: value }))
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      if (mode === 'edit') {
+        setConfirmOpen(true)
+      } else {
+        await createMutation.mutateAsync(value)
+      }
+    },
+  })
 
-  // Reset form to initial state
-  const resetForm = React.useCallback(() => {
-    setForm({
-      name: '',
-      categoryId: null,
-      brandId: null,
-      model: '',
-      allow_individual_booking: true,
-      total_quantity: 0,
-      active: true,
-      notes: '',
-      nicknames: '',
-      price: undefined,
-      item_kind: 'stock',
-    })
+  const resetLocalState = React.useCallback(() => {
     setBrandName(null)
     setTotalQuantityDraft(null)
     originalPriceRef.current = null
@@ -140,27 +172,21 @@ export default function AddItemDialog({
     staleTime: 60_000,
   })
 
-  // Brand name state (for autocomplete)
-  const [brandName, setBrandName] = React.useState<string | null>(null)
-
-  /* -------- Reset form in CREATE mode when dialog opens -------- */
   React.useEffect(() => {
-    if (open && mode === 'create') {
-      resetForm()
+    if (!open) return
+    if (mode === 'create') {
+      form.reset(defaultValues)
+      resetLocalState()
     }
-  }, [open, mode, resetForm])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open, mode])
 
-  // Prefill on EDIT (only once per dialog open)
   React.useEffect(() => {
     if (!open || mode !== 'edit' || !initialData) return
-    // try to map category name to ID once options are loaded
-    const catId =
-      categories.find((c) => c.name === initialData.categoryName)?.id ?? null
 
-    // Set brand name directly (autocomplete will handle ID lookup)
     setBrandName(initialData.brandName)
+    originalPriceRef.current = initialData.price ?? null
 
-    // Try to find brand ID if brand name exists
     if (initialData.brandName) {
       supabase
         .from('item_brands')
@@ -174,112 +200,92 @@ export default function AddItemDialog({
             return
           }
           if (data) {
-            set('brandId', data.id)
+            form.setFieldValue('brandId', data.id)
           }
         })
     }
 
-    originalPriceRef.current = initialData.price ?? null
-
-    setForm((prev) => {
-      // Only update if values are different (prevents infinite loop)
-      if (
-        prev.name === initialData.name &&
-        prev.categoryId === catId &&
-        prev.model === (initialData.model ?? '') &&
-        prev.allow_individual_booking ===
-          initialData.allow_individual_booking &&
-        prev.total_quantity === initialData.total_quantity &&
-        prev.active === initialData.active &&
-        prev.notes === (initialData.notes ?? '') &&
-        prev.nicknames === (initialData.nicknames ?? '') &&
-        prev.price === initialData.price
-      ) {
-        return prev
-      }
-      return {
-        name: initialData.name,
-        categoryId: catId,
-        brandId: null, // Will be set by autocomplete
-        model: initialData.model ?? '',
-        allow_individual_booking: initialData.allow_individual_booking,
-        total_quantity: initialData.total_quantity,
-        active: initialData.active,
-        notes: initialData.notes ?? '',
-        nicknames: initialData.nicknames ?? '',
-        price: initialData.price,
-        item_kind: initialData.item_kind,
-      }
+    form.reset(buildEditValues(initialData, categories), {
+      keepDefaultValues: true,
     })
-    // Only run this effect when dialog is opened in edit mode, or when categories are loaded
-  }, [open, mode, initialData, categories])
+    // Depend on stable fields — InventoryInspector rebuilds initialData each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- prefill when edit opens
+  }, [
+    open,
+    mode,
+    initialData?.id,
+    initialData?.name,
+    initialData?.price,
+    initialData?.brandName,
+    initialData?.categoryName,
+    categories.length,
+  ])
 
-  /* ---------------- CREATE ---------------- */
+  const resolveBrandId = async (
+    f: FormValues,
+    currentBrandName: string | null,
+  ) => {
+    let brandId = f.brandId
+    if (currentBrandName && currentBrandName.trim() && !brandId) {
+      const brandNameTrimmed = currentBrandName.trim()
+      const { data: existing, error: existingError } = await supabase
+        .from('item_brands')
+        .select('id')
+        .eq('company_id', companyId)
+        .ilike('name', brandNameTrimmed)
+        .maybeSingle()
+      if (existingError) throw existingError
+
+      if (existing) {
+        brandId = existing.id
+      } else {
+        const { data: newBrand, error: brandError } = await supabase
+          .from('item_brands')
+          .insert({
+            company_id: companyId,
+            name: brandNameTrimmed,
+          })
+          .select('id')
+          .single()
+        if (brandError) throw brandError
+        brandId = newBrand.id
+      }
+    }
+    return brandId
+  }
+
   const createMutation = useMutation({
-    mutationFn: async (f: FormState) => {
+    mutationFn: async (f: FormValues) => {
       if (!companyId) throw new Error('No company selected')
 
-      // If brand name exists but no brand ID, create or find the brand
-      let brandId = f.brandId
-      if (brandName && brandName.trim() && !brandId) {
-        const brandNameTrimmed = brandName.trim()
-        // Try to find existing brand first (case-insensitive)
-        const { data: existing, error: existingError } = await supabase
-          .from('item_brands')
-          .select('id')
-          .eq('company_id', companyId)
-          .ilike('name', brandNameTrimmed)
-          .maybeSingle()
-        if (existingError) throw existingError
-
-        if (existing) {
-          brandId = existing.id
-        } else {
-          // Create new brand
-          const { data: newBrand, error: brandError } = await supabase
-            .from('item_brands')
-            .insert({
-              company_id: companyId,
-              name: brandNameTrimmed,
-            })
-            .select('id')
-            .single()
-
-          if (brandError) throw brandError
-          brandId = newBrand.id
-        }
-      }
+      const brandId = await resolveBrandId(f, brandName)
 
       const { data: itemId, error } = await supabase.rpc(
         'create_item_with_price',
         {
           p_company_id: companyId,
           p_name: f.name,
-          p_category_id: f.categoryId ?? null,
-          p_brand_id: brandId ?? null,
-          p_model: f.model || null,
+          p_category_id: f.categoryId ?? undefined,
+          p_brand_id: brandId ?? undefined,
+          p_model: f.model || undefined,
           p_allow_individual_booking: f.allow_individual_booking,
           p_total_quantity: f.total_quantity || 0,
           p_active: f.active,
-          p_notes: f.notes || null,
-          p_nicknames: f.nicknames || null,
-          p_price: f.price ?? null,
-          p_effective_from: null,
+          p_notes: f.notes || undefined,
+          p_nicknames: f.nicknames || undefined,
+          p_price: f.price ?? undefined,
+          p_effective_from: undefined,
         },
       )
       if (error) throw error
 
-      // Update item_kind separately since the function doesn't support it
       if (itemId) {
         const { error: updateError } = await supabase
           .from('items')
-          .update({
-            item_kind: f.item_kind,
-          })
+          .update({ item_kind: f.item_kind })
           .eq('id', itemId)
         if (updateError) throw updateError
 
-        // Log activity
         try {
           const { logActivity } = await import('@features/latest/api/queries')
           await logActivity({
@@ -295,7 +301,6 @@ export default function AddItemDialog({
             title: f.name,
           })
         } catch (logErr) {
-          // Don't fail the mutation if logging fails
           console.error('Failed to log activity:', logErr)
         }
       }
@@ -319,7 +324,8 @@ export default function AddItemDialog({
           exact: false,
         }),
       ])
-      resetForm()
+      form.reset(defaultValues)
+      resetLocalState()
       onOpenChange(false)
       success('Success!', 'Item was added to inventory')
       onSaved?.()
@@ -329,44 +335,13 @@ export default function AddItemDialog({
     },
   })
 
-  /* ---------------- EDIT ---------------- */
   const editMutation = useMutation({
-    mutationFn: async (f: FormState) => {
+    mutationFn: async (f: FormValues) => {
       if (!companyId) throw new Error('No company selected')
       if (!initialData?.id) throw new Error('Missing item id')
 
-      // If brand name exists but no brand ID, create or find the brand
-      let brandId = f.brandId
-      if (brandName && brandName.trim() && !brandId) {
-        const brandNameTrimmed = brandName.trim()
-        // Try to find existing brand first (case-insensitive)
-        const { data: existing, error: existingError } = await supabase
-          .from('item_brands')
-          .select('id')
-          .eq('company_id', companyId)
-          .ilike('name', brandNameTrimmed)
-          .maybeSingle()
-        if (existingError) throw existingError
+      const brandId = await resolveBrandId(f, brandName)
 
-        if (existing) {
-          brandId = existing.id
-        } else {
-          // Create new brand
-          const { data: newBrand, error: brandError } = await supabase
-            .from('item_brands')
-            .insert({
-              company_id: companyId,
-              name: brandNameTrimmed,
-            })
-            .select('id')
-            .single()
-
-          if (brandError) throw brandError
-          brandId = newBrand.id
-        }
-      }
-
-      // 1) Update the item row
       const { error: upErr } = await supabase
         .from('items')
         .update({
@@ -386,9 +361,8 @@ export default function AddItemDialog({
 
       if (upErr) throw upErr
 
-      // 2) Price history (only append if changed and provided)
       const newPrice =
-        f.price === undefined ? originalPriceRef.current : f.price // if field untouched, treat as unchanged
+        f.price === undefined ? originalPriceRef.current : f.price
       const changed = newPrice !== originalPriceRef.current
 
       if (changed && newPrice != null) {
@@ -431,25 +405,11 @@ export default function AddItemDialog({
     },
   })
 
-  const loading = catLoading
-  const saving =
-    mode === 'create' ? createMutation.isPending : editMutation.isPending
-
-  // Confirmation alert for EDIT mode
-  const [confirmOpen, setConfirmOpen] = React.useState(false)
-  const handleSave = () => {
-    if (mode === 'edit') {
-      setConfirmOpen(true)
-    } else {
-      createMutation.mutate(form)
-    }
-  }
   const confirmAndSave = () => {
     setConfirmOpen(false)
-    editMutation.mutate(form)
+    editMutation.mutate(form.state.values)
   }
 
-  // Auto-populate function for testing
   const autoPopulateFields = () => {
     const itemNames = [
       'XLR Cable 3m',
@@ -507,47 +467,33 @@ export default function AddItemDialog({
     const randomNotes = notes[Math.floor(Math.random() * notes.length)]
     const randomQuantity = Math.floor(Math.random() * 50) + 1
     const randomPrice = Math.floor(Math.random() * 5000) + 100
-
-    // Set random category if available
     const randomCategory =
       categories.length > 0
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
+    const isStock = Math.random() > 0.3
 
-    const isStock = Math.random() > 0.3 // 70% chance of being stock
-
-    setForm({
+    form.reset({
       name: randomName,
       categoryId: randomCategory?.id ?? null,
-      brandId: null, // Will be set via brandName
+      brandId: null,
       model: randomModel,
       allow_individual_booking: Math.random() > 0.5,
       total_quantity: isStock ? randomQuantity : 0,
-      active: Math.random() > 0.2, // 80% chance of being active
+      active: Math.random() > 0.2,
       notes: randomNotes,
       nicknames: '',
       price: randomPrice,
       item_kind: isStock ? 'stock' : 'subrental',
     })
-
-    // Set brand name for autocomplete
     setBrandName(randomBrand)
   }
 
   const title = mode === 'edit' ? 'Edit item' : 'Add item to inventory'
-  const actionLabel =
-    mode === 'edit'
-      ? saving
-        ? 'Saving…'
-        : 'Save'
-      : saving
-        ? 'Saving…'
-        : 'Create'
 
   return (
     <>
       <Dialog.Root open={open} onOpenChange={onOpenChange}>
-        {/* Only render trigger in CREATE mode when showTrigger is true; in EDIT the parent opens it */}
         {mode === 'create' && showTrigger && (
           <Dialog.Trigger>
             <Button size="2" variant="solid">
@@ -576,214 +522,246 @@ export default function AddItemDialog({
             Add item details, including category, brand, and pricing.
           </Dialog.Description>
 
-          <Flex direction="column" gap="3" mt="1">
-            {/* Name */}
-            <Field label="Name">
-              <TextField.Root
-                placeholder="e.g. XLR 3m"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-              />
-            </Field>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Flex direction="column" gap="3" mt="1">
+                <form.AppField name="name">
+                  {(field) => (
+                    <field.TextField label="Name" placeholder="e.g. XLR 3m" />
+                  )}
+                </form.AppField>
 
-            <Flex gap="3" wrap="wrap">
-              {/* Category */}
-              <Field label="Category">
-                <Select.Root
-                  value={form.categoryId ?? undefined}
-                  onValueChange={(v) => {
-                    if (v === '__new_category__') {
-                      navigate({ to: '/company', search: { tab: 'setup' } })
-                      onOpenChange(false)
-                    } else {
-                      set('categoryId', v)
-                    }
-                  }}
-                  disabled={loading}
-                >
-                  <Select.Trigger
-                    placeholder={loading ? 'Loading…' : 'Select category'}
-                    style={{ width: '100%' }}
-                  />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Group>
-                      {categories.map((c: Option) => (
-                        <Select.Item key={c.id} value={c.id}>
-                          {c.name}
-                        </Select.Item>
-                      ))}
-                      {isOwner && (
-                        <>
-                          <Select.Separator />
-                          <Select.Item value="__new_category__">
-                            + New category
-                          </Select.Item>
-                        </>
-                      )}
-                    </Select.Group>
-                  </Select.Content>
-                </Select.Root>
-              </Field>
+                <Flex gap="3" wrap="wrap">
+                  <form.AppField name="categoryId">
+                    {(field) => (
+                      <Field label="Category">
+                        <Select.Root
+                          value={field.state.value ?? undefined}
+                          onValueChange={(v) => {
+                            if (v === '__new_category__') {
+                              navigate({
+                                to: '/company',
+                                search: { tab: 'setup' },
+                              })
+                              onOpenChange(false)
+                            } else {
+                              field.handleChange(v)
+                            }
+                          }}
+                          disabled={catLoading}
+                        >
+                          <Select.Trigger
+                            placeholder={
+                              catLoading ? 'Loading…' : 'Select category'
+                            }
+                            style={{ width: '100%' }}
+                          />
+                          <Select.Content style={{ zIndex: 10000 }}>
+                            <Select.Group>
+                              {categories.map((c: Option) => (
+                                <Select.Item key={c.id} value={c.id}>
+                                  {c.name}
+                                </Select.Item>
+                              ))}
+                              {isOwner && (
+                                <>
+                                  <Select.Separator />
+                                  <Select.Item value="__new_category__">
+                                    + New category
+                                  </Select.Item>
+                                </>
+                              )}
+                            </Select.Group>
+                          </Select.Content>
+                        </Select.Root>
+                      </Field>
+                    )}
+                  </form.AppField>
 
-              {/* Brand */}
-              <Field label="Brand">
-                <BrandAutocomplete
-                  companyId={companyId}
-                  value={brandName}
-                  onChange={(name) => {
-                    setBrandName(name)
-                    if (!name) {
-                      set('brandId', null)
-                    }
-                  }}
-                  onBrandIdChange={(id) => set('brandId', id)}
-                  disabled={loading}
-                  placeholder="Type brand name..."
+                  <Field label="Brand">
+                    <BrandAutocomplete
+                      companyId={companyId}
+                      value={brandName}
+                      onChange={(name) => {
+                        setBrandName(name)
+                        if (!name) {
+                          form.setFieldValue('brandId', null)
+                        }
+                      }}
+                      onBrandIdChange={(id) =>
+                        form.setFieldValue('brandId', id)
+                      }
+                      disabled={catLoading}
+                      placeholder="Type brand name..."
+                    />
+                  </Field>
+
+                  <form.AppField name="model">
+                    {(field) => (
+                      <field.TextField
+                        label="Model"
+                        placeholder="e.g. Pro, Standard, 2024"
+                      />
+                    )}
+                  </form.AppField>
+
+                  <form.AppField name="item_kind">
+                    {(field) => (
+                      <Field label="Type">
+                        <Select.Root
+                          value={field.state.value}
+                          onValueChange={(v: string) =>
+                            field.handleChange(v as InventoryItemKind)
+                          }
+                        >
+                          <Select.Trigger />
+                          <Select.Content style={{ zIndex: 10000 }}>
+                            <Select.Item value="stock">Stock</Select.Item>
+                            <Select.Item value="subrental">
+                              Subrental
+                            </Select.Item>
+                          </Select.Content>
+                        </Select.Root>
+                      </Field>
+                    )}
+                  </form.AppField>
+                </Flex>
+
+                <Flex gap="3" wrap="wrap">
+                  <form.AppField name="allow_individual_booking">
+                    {(field) => (
+                      <field.Switch label="Allow individual booking" />
+                    )}
+                  </form.AppField>
+
+                  <form.AppField name="active">
+                    {(field) => <field.Switch label="Active" />}
+                  </form.AppField>
+
+                  <form.Subscribe
+                    selector={(state) => state.values.total_quantity}
+                  >
+                    {(totalQuantity) => (
+                      <Field label="Total quantity">
+                        <TextField.Root
+                          type="number"
+                          inputMode="numeric"
+                          min="0"
+                          value={totalQuantityDraft ?? String(totalQuantity)}
+                          onChange={(e) => {
+                            const nextValue = e.target.value
+                            setTotalQuantityDraft(nextValue)
+                            if (nextValue === '') return
+                            const parsed = Number(nextValue)
+                            if (Number.isNaN(parsed)) return
+                            form.setFieldValue(
+                              'total_quantity',
+                              Math.max(0, parsed),
+                            )
+                            setTotalQuantityDraft(null)
+                          }}
+                          onBlur={() => {
+                            if (totalQuantityDraft === '') {
+                              setTotalQuantityDraft(null)
+                            }
+                          }}
+                        />
+                      </Field>
+                    )}
+                  </form.Subscribe>
+                </Flex>
+
+                <Flex gap="3" wrap="wrap">
+                  <form.AppField name="price">
+                    {(field) => (
+                      <Field
+                        label={
+                          mode === 'edit'
+                            ? 'Price (creates history if changed)'
+                            : 'Price'
+                        }
+                      >
+                        <TextField.Root
+                          type="number"
+                          inputMode="decimal"
+                          step="0.01"
+                          min="0"
+                          placeholder="e.g. 199.00"
+                          value={
+                            field.state.value == null
+                              ? ''
+                              : String(field.state.value)
+                          }
+                          onChange={(e) =>
+                            field.handleChange(
+                              e.target.value === ''
+                                ? null
+                                : Number(e.target.value),
+                            )
+                          }
+                        />
+                      </Field>
+                    )}
+                  </form.AppField>
+                </Flex>
+
+                <form.AppField name="notes">
+                  {(field) => (
+                    <field.TextArea
+                      label="Notes"
+                      rows={3}
+                      placeholder="Optional notes…"
+                    />
+                  )}
+                </form.AppField>
+
+                <form.AppField name="nicknames">
+                  {(field) => (
+                    <field.TextArea
+                      label="Nicknames (search keywords)"
+                      rows={2}
+                      placeholder="e.g. audio, cable, xlrf, backup"
+                    />
+                  )}
+                </form.AppField>
+
+                {(catErr || createMutation.isError || editMutation.isError) && (
+                  <Text color="red">
+                    {catErr?.message ||
+                      createMutation.error?.message ||
+                      editMutation.error?.message ||
+                      'Failed'}
+                  </Text>
+                )}
+              </Flex>
+
+              <Flex gap="2" mt="4" justify="end">
+                <Dialog.Close>
+                  <Button type="button" variant="soft">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <form.SubmitButton
+                  label={mode === 'edit' ? 'Save' : 'Create'}
+                  pendingLabel="Saving…"
                 />
-              </Field>
-
-              {/* Model */}
-              <Field label="Model">
-                <TextField.Root
-                  value={form.model ?? ''}
-                  onChange={(e) => set('model', e.target.value)}
-                  placeholder="e.g. Pro, Standard, 2024"
-                />
-              </Field>
-              <Field label="Type">
-                <Select.Root
-                  value={form.item_kind}
-                  onValueChange={(v: string) =>
-                    set('item_kind', v as InventoryItemKind)
-                  }
-                >
-                  <Select.Trigger />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    <Select.Item value="stock">Stock</Select.Item>
-                    <Select.Item value="subrental">Subrental</Select.Item>
-                  </Select.Content>
-                </Select.Root>
-              </Field>
-            </Flex>
-
-            <Flex gap="3" wrap="wrap">
-              <Field label="Allow individual booking">
-                <Switch
-                  checked={form.allow_individual_booking}
-                  onCheckedChange={(v) =>
-                    set('allow_individual_booking', Boolean(v))
-                  }
-                />
-              </Field>
-
-              <Field label="Active">
-                <Switch
-                  checked={form.active}
-                  onCheckedChange={(v) => set('active', Boolean(v))}
-                />
-              </Field>
-
-              <Field label="Total quantity">
-                <TextField.Root
-                  type="number"
-                  inputMode="numeric"
-                  min="0"
-                  value={totalQuantityDraft ?? String(form.total_quantity)}
-                  onChange={(e) => {
-                    const nextValue = e.target.value
-                    setTotalQuantityDraft(nextValue)
-
-                    if (nextValue === '') return
-                    const parsed = Number(nextValue)
-                    if (Number.isNaN(parsed)) return
-
-                    set('total_quantity', Math.max(0, parsed))
-                    setTotalQuantityDraft(null)
-                  }}
-                  onBlur={() => {
-                    if (totalQuantityDraft === '') {
-                      setTotalQuantityDraft(null)
-                    }
-                  }}
-                />
-              </Field>
-            </Flex>
-
-            {/* Price */}
-            <Flex gap="3" wrap="wrap">
-              <Field
-                label={
-                  mode === 'edit'
-                    ? 'Price (creates history if changed)'
-                    : 'Price'
-                }
-              >
-                <TextField.Root
-                  type="number"
-                  inputMode="decimal"
-                  step="0.01"
-                  min="0"
-                  placeholder="e.g. 199.00"
-                  value={form.price == null ? '' : String(form.price)}
-                  onChange={(e) =>
-                    set(
-                      'price',
-                      e.target.value === '' ? null : Number(e.target.value),
-                    )
-                  }
-                />
-              </Field>
-            </Flex>
-
-            <Field label="Notes">
-              <TextArea
-                rows={3}
-                value={form.notes ?? ''}
-                onChange={(e) => set('notes', e.target.value)}
-                placeholder="Optional notes…"
-              />
-            </Field>
-
-            <Field label="Nicknames (search keywords)">
-              <TextArea
-                rows={2}
-                value={form.nicknames ?? ''}
-                onChange={(e) => set('nicknames', e.target.value)}
-                placeholder="e.g. audio, cable, xlrf, backup"
-              />
-            </Field>
-
-            {(catErr || createMutation.isError || editMutation.isError) && (
-              <Text color="red">
-                {catErr?.message ||
-                  createMutation.error?.message ||
-                  editMutation.error?.message ||
-                  'Failed'}
-              </Text>
-            )}
-          </Flex>
-
-          <Flex gap="2" mt="4" justify="end">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              onClick={handleSave}
-              disabled={!form.name || saving}
-              variant="solid"
-            >
-              {actionLabel}
-            </Button>
-          </Flex>
+              </Flex>
+            </form.AppForm>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
 
-      {/* Confirm on edit */}
       <AlertDialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialog.Content maxWidth="480px">
           <AlertDialog.Title>Save changes?</AlertDialog.Title>
           <AlertDialog.Description size="2">
-            You’re about to update this item. If you changed the price, a new
+            You're about to update this item. If you changed the price, a new
             price history entry will be added. Are you sure you want to
             continue?
           </AlertDialog.Description>
@@ -803,7 +781,6 @@ export default function AddItemDialog({
   )
 }
 
-/** Small helper for tidy label + control layout */
 function Field({
   label,
   children,

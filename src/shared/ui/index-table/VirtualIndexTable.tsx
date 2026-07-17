@@ -14,6 +14,7 @@ import {
   virtualSpacerStyle,
 } from './indexTableStyles'
 import { IndexTableBodySkeleton } from './IndexTableBodySkeleton'
+import { useIndexTableSelectionKeyboard } from './useIndexTableSelectionKeyboard'
 import type { FooterCount, SortDir, VirtualIndexTableProps } from './types'
 
 function formatFooterCount(footerCount: FooterCount): string {
@@ -96,6 +97,22 @@ export function VirtualIndexTable<TRow, TSort extends string = string>({
 
   const useHorizontalScroll =
     horizontalScroll ?? columns.length + (renderRowActions ? 1 : 0) > 3
+
+  useIndexTableSelectionKeyboard({
+    enabled: selectable && onSelect != null,
+    selectedId,
+    getIds: () => rows.map((row) => getRowId(row)),
+    isIndexSelectable: isRowSelectable
+      ? (index) => {
+          const row = rows[index]
+          return row != null && isRowSelectable(row)
+        }
+      : undefined,
+    onSelect: onSelect ?? (() => {}),
+    scrollToIndex: (index) => {
+      rowVirtualizer.scrollToIndex(index, { align: 'auto' })
+    },
+  })
 
   const loadingBody =
     loadingVariant === 'spinner' ? (

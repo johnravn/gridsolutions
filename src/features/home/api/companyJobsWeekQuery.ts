@@ -83,7 +83,7 @@ async function filterJobsVisibleToFreelancer(
   return results.filter((job) => visibleJobIds.has(job.id))
 }
 
-export type CompanyJobsWeekOffset = 0 | 1
+export type CompanyJobsWeekOffset = 0 | 1 | 2
 
 export function companyJobsWeekQuery({
   companyId,

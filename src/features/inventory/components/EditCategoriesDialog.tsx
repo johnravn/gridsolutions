@@ -1,4 +1,4 @@
-// src/features/inventory/components/AddInventoryDialog.tsx
+// src/features/inventory/components/EditCategoriesDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -11,12 +11,16 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { Check, Edit, Trash, Xmark } from 'iconoir-react'
 
-type FormState = {
-  name: string
-}
+const defaultValues = { name: '' }
+
+const schema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+})
 
 type ItemCategory = {
   id: string
@@ -34,14 +38,23 @@ export default function EditCategoriesDialog({
   companyId: string
 }) {
   const qc = useQueryClient()
-  const [form, setForm] = React.useState<FormState>({ name: '' })
   const [editingId, setEditingId] = React.useState<string | null>(null)
   const [editingName, setEditingName] = React.useState<string>('')
 
-  const set = <TKey extends keyof FormState>(
-    key: TKey,
-    value: FormState[TKey],
-  ) => setForm((s) => ({ ...s, [key]: value }))
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await createMutation.mutateAsync(value)
+    },
+  })
+
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
 
   /* ---------- Load categories ---------- */
   const categoriesQueryKey = ['company', companyId, 'item-categories'] as const
@@ -53,7 +66,7 @@ export default function EditCategoriesDialog({
     error,
   } = useQuery({
     queryKey: categoriesQueryKey,
-    enabled: !!companyId && open, // only fetch when dialog open
+    enabled: !!companyId && open,
     queryFn: async (): Promise<Array<ItemCategory>> => {
       const { data, error } = await supabase
         .from('item_categories')
@@ -68,7 +81,7 @@ export default function EditCategoriesDialog({
 
   /* ---------- Create ---------- */
   const createMutation = useMutation({
-    mutationFn: async (f: FormState) => {
+    mutationFn: async (f: typeof defaultValues) => {
       if (!companyId) throw new Error('No company selected')
       const { error } = await supabase.from('item_categories').insert({
         company_id: companyId,
@@ -77,9 +90,8 @@ export default function EditCategoriesDialog({
       if (error) throw error
     },
     onSuccess: async () => {
-      setForm({ name: '' })
+      form.reset(defaultValues)
       await qc.invalidateQueries({ queryKey: categoriesQueryKey })
-      // also refresh inventory list, if you show categories there
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -235,47 +247,46 @@ export default function EditCategoriesDialog({
         </div>
 
         {/* Create */}
-        <Flex direction="column" gap="3" mt="3">
-          <div>
-            <Text
-              as="label"
-              size="2"
-              color="gray"
-              style={{ display: 'block', marginBottom: 6 }}
-            >
-              New category name
-            </Text>
-            <TextField.Root
-              placeholder="e.g. Audio"
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-            />
-          </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label="New category name"
+                    placeholder="e.g. Audio"
+                  />
+                )}
+              </form.AppField>
 
-          {(createMutation.isError ||
-            updateMutation.isError ||
-            deleteMutation.isError) && (
-            <Text color="red">
-              {(createMutation.error as any)?.message ||
-                (updateMutation.error as any)?.message ||
-                (deleteMutation.error as any)?.message ||
-                'Something went wrong'}
-            </Text>
-          )}
-        </Flex>
+              {(createMutation.isError ||
+                updateMutation.isError ||
+                deleteMutation.isError) && (
+                <Text color="red">
+                  {(createMutation.error as any)?.message ||
+                    (updateMutation.error as any)?.message ||
+                    (deleteMutation.error as any)?.message ||
+                    'Something went wrong'}
+                </Text>
+              )}
+            </Flex>
 
-        <Flex gap="2" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Close</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => createMutation.mutate({ name: form.name })}
-            disabled={!form.name.trim() || createMutation.isPending}
-            variant="solid"
-          >
-            {createMutation.isPending ? 'Saving…' : 'Create'}
-          </Button>
-        </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Close
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Create" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

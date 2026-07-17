@@ -27,10 +27,8 @@ export function TimelineModuleEditor({
   )
 
   const handleImport = () => {
-    const items = mapProgramPeriodsToTimelineItems(
-      module.id,
-      timePeriods,
-      () => createTempId('timeline-item'),
+    const items = mapProgramPeriodsToTimelineItems(module.id, timePeriods, () =>
+      createTempId('timeline-item'),
     )
     onChange({ ...module, timeline_items: items })
   }

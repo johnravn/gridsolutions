@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import '../shared/theme/appleDensity.css';
 
 /* Main app only — avoid scanning Storybook scaffold/build output (prevents stale asset refs). */
 @source not "../stories/**";
@@ -18,11 +19,19 @@
   --app-safe-bottom: env(safe-area-inset-bottom, 0px);
   --app-safe-left: env(safe-area-inset-left, 0px);
   --app-safe-right: env(safe-area-inset-right, 0px);
-  --app-topbar-height: 56px;
-  --app-content-padding: 32px;
+  /* Mac density chrome (≥1024); iOS overrides below */
+  --app-topbar-height: 52px;
+  --app-content-padding: 20px;
   --app-chrome-height: calc(
     var(--app-topbar-height) + var(--app-content-padding) + var(--app-safe-top)
   );
+}
+
+@media (max-width: 1023px) {
+  :root {
+    --app-topbar-height: 44px;
+    --app-content-padding: 16px;
+  }
 }
 
 /* Radix Themes defaults interactive cursors to `default`; use pointer for clickables. */
@@ -63,6 +72,18 @@ button:not(:disabled),
   overscroll-behavior-y: contain;
 }
 
+/* Phone / tablet: hide vertical scrollbar (iOS-style; scroll still works) */
+@media (max-width: 1023px) {
+  .app-main-scroll {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .app-main-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* iOS Safari zooms when focusing inputs with font-size < 16px */
 @media (hover: none) and (pointer: coarse) {
   input,
@@ -74,9 +95,69 @@ button:not(:disabled),
   }
 }
 
-code {
-  font-family:
-    source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+/*
+ * iOS-sized hit targets on small screens (≥44px).
+ * Bumps Radix size 1–2 controls; size 3+ already near this.
+ */
+@media (max-width: 1023px) {
+  .rt-BaseButton:where(.rt-r-size-1),
+  .rt-BaseButton:where(.rt-r-size-2) {
+    --base-button-height: 44px;
+    min-height: 44px;
+  }
+
+  .rt-IconButton:where(.rt-r-size-1),
+  .rt-IconButton:where(.rt-r-size-2),
+  .rt-IconButton:where(.rt-r-size-3) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .rt-TextFieldRoot,
+  .rt-SelectTrigger,
+  .rt-TextAreaRoot {
+    min-height: 44px;
+  }
+
+  .sidebar-nav-item {
+    min-height: 44px;
+  }
+
+  /* Dialog / sheet primary row actions */
+  .rt-DialogContent .rt-Button:where(.rt-r-size-1),
+  .rt-AlertDialogContent .rt-Button:where(.rt-r-size-1) {
+    min-height: 44px;
+  }
+}
+
+/* Mobile drawer: Radix translucent panel (not the Card frosted override) */
+.app-sidebar-glass {
+  --sidebar-surface: var(--color-panel-translucent);
+  background: var(--color-panel-translucent) !important;
+  backdrop-filter: blur(64px) !important;
+  -webkit-backdrop-filter: blur(64px) !important;
+}
+
+.app-sidebar-fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 56px;
+  pointer-events: none;
+  z-index: 1;
+  background: linear-gradient(to bottom, transparent, var(--sidebar-surface));
+}
+
+/* Company Select in the rail: same ghost content-box overflow issue */
+aside .rt-SelectTrigger:where(.rt-variant-ghost) {
+  box-sizing: border-box;
+  max-width: 100%;
+  --margin-top-override: 0px;
+  --margin-right-override: 0px;
+  --margin-bottom-override: 0px;
+  --margin-left-override: 0px;
+  margin: 0;
 }
 
 /* Make cards translucent to show animated background */
@@ -86,6 +167,11 @@ code {
   background: rgba(255, 255, 255, 0.75) !important;
   backdrop-filter: blur(16px) saturate(180%);
   -webkit-backdrop-filter: blur(16px) saturate(200%);
+}
+
+/* Mobile home: hide horizontal scroller chrome (iOS-style) */
+.home-horizontal-scroller::-webkit-scrollbar {
+  display: none;
 }
 
 /* Override for cards that explicitly set background via inline styles in light mode */
@@ -218,18 +304,136 @@ code {
   cursor: col-resize !important;
 }
 
-/* Dev badges: constrained width, horizontal scroll loop when text overflows */
-/* Sidebar nav: subtle hover nudge (fine pointer only; no effect on touch) */
+/* Sidebar nav: Radix ghost uses content-box + negative margins — keep width
+   under control, but allow the hover nudge to paint outside the rail. */
+.sidebar-nav-item {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  --margin-top-override: 0px;
+  --margin-right-override: 0px;
+  --margin-bottom-override: 0px;
+  --margin-left-override: 0px;
+  margin: 0;
+  overflow: visible;
+  transition:
+    transform var(--motion-duration-reveal) var(--motion-ease-reveal-out),
+    font-weight var(--motion-duration-reveal) var(--motion-ease-reveal-out);
+}
+
+.sidebar-nav-item--active {
+  font-weight: 600;
+}
+
+/* Shared sliding pills replace per-item hover/active backgrounds */
+.sidebar-nav-list {
+  --sidebar-indicator-x: 0px;
+  --sidebar-indicator-y: 0px;
+  --sidebar-indicator-width: 0px;
+  --sidebar-indicator-height: 0px;
+  --sidebar-indicator-opacity: 0;
+  --sidebar-hover-x: 0px;
+  --sidebar-hover-y: 0px;
+  --sidebar-hover-width: 0px;
+  --sidebar-hover-height: 0px;
+  --sidebar-hover-scale: 0;
+}
+
+.sidebar-nav-list::before,
+.sidebar-nav-list::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  border-radius: var(--radius-2);
+  background-color: var(--gray-a3);
+}
+
+.sidebar-nav-list::before {
+  z-index: 0;
+  width: var(--sidebar-hover-width);
+  height: var(--sidebar-hover-height);
+  transform: translate(var(--sidebar-hover-x), var(--sidebar-hover-y))
+    scale(var(--sidebar-hover-scale));
+  transform-origin: center;
+}
+
+.sidebar-nav-list::after {
+  z-index: 0;
+  width: var(--sidebar-indicator-width);
+  height: var(--sidebar-indicator-height);
+  opacity: var(--sidebar-indicator-opacity);
+  transform: translate(
+    var(--sidebar-indicator-x),
+    var(--sidebar-indicator-y)
+  );
+}
+
+.sidebar-nav-list .sidebar-nav-slot {
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-nav-list .sidebar-nav-item,
+.sidebar-nav-list .sidebar-nav-item:hover,
+.sidebar-nav-list .sidebar-nav-item:active,
+.sidebar-nav-list .sidebar-nav-item--active {
+  background-color: transparent !important;
+}
+
 @media (hover: hover) and (pointer: fine) {
   @media (prefers-reduced-motion: no-preference) {
-    .sidebar-nav-item {
-      transition: transform var(--motion-duration-reveal)
-        var(--motion-ease-reveal-out);
-    }
-
-    .sidebar-nav-item:hover {
+    .sidebar-nav-item:hover,
+    .sidebar-nav-item--active {
       transform: translateX(var(--motion-offset-nudge-x));
     }
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .sidebar-nav-list[data-animate]::before {
+    transition:
+      transform 100ms var(--motion-ease-reveal-out),
+      width 100ms var(--motion-ease-reveal-out),
+      height 100ms var(--motion-ease-reveal-out);
+  }
+
+  .sidebar-nav-list[data-hover-snap]::before {
+    transition: none;
+  }
+
+  .sidebar-nav-list[data-animate]::after {
+    transition:
+      transform 220ms var(--motion-ease-reveal-out),
+      width 220ms var(--motion-ease-reveal-out),
+      height 220ms var(--motion-ease-reveal-out),
+      opacity 120ms var(--motion-ease-reveal);
+  }
+}
+
+.sidebar-nav-slot {
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+.sidebar-nav-slot .rt-BaseButton:where(.sidebar-nav-item) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  height: 36px;
+  padding-left: var(--space-4);
+  padding-right: var(--space-2);
+  --button-ghost-padding-x: var(--space-2);
+  --button-ghost-padding-y: 0px;
+  border-radius: var(--radius-2);
+}
+
+@media (max-width: 768px) {
+  .sidebar-nav-slot .rt-BaseButton:where(.sidebar-nav-item) {
+    height: 44px;
   }
 }
 
@@ -682,5 +886,105 @@ code {
   .offer-basis-card__offer-row-actions {
     opacity: 1;
     pointer-events: auto;
+  }
+}
+
+/* Animated tab underline + hover pill: slide between triggers via transform */
+.animated-tabs-list {
+  position: relative;
+  --tab-indicator-x: 0px;
+  --tab-indicator-y: 0px;
+  --tab-indicator-width: 0px;
+  --tab-indicator-opacity: 0;
+  --tab-indicator-scale: 0;
+  --tab-hover-x: 0px;
+  --tab-hover-y: 0px;
+  --tab-hover-width: 0px;
+  --tab-hover-height: 0px;
+  --tab-hover-scale: 0;
+}
+
+.animated-tabs-list::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--tab-hover-width);
+  height: var(--tab-hover-height);
+  background-color: var(--gray-a3);
+  border-radius: var(--tab-inner-border-radius, var(--radius-2));
+  transform: translate(var(--tab-hover-x), var(--tab-hover-y))
+    scale(var(--tab-hover-scale));
+  transform-origin: center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.animated-tabs-list::after {
+  content: '';
+  position: absolute;
+  /* Position via left/top so scale can animate independently (no slide on wrap). */
+  top: var(--tab-indicator-y);
+  left: var(--tab-indicator-x);
+  height: 2px;
+  width: var(--tab-indicator-width);
+  opacity: var(--tab-indicator-opacity);
+  background-color: var(--accent-indicator);
+  transform: scale(var(--tab-indicator-scale));
+  transform-origin: center;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.animated-tabs-list.rt-high-contrast::after {
+  background-color: var(--accent-12);
+}
+
+.animated-tabs-list .rt-BaseTabListTrigger {
+  z-index: 1;
+}
+
+.animated-tabs-list
+  .rt-BaseTabListTrigger:where([data-state='active'], [data-active])::before {
+  content: none;
+}
+
+/* Shared hover pill replaces the per-trigger background */
+@media (hover: hover) {
+  .animated-tabs-list
+    .rt-BaseTabListTrigger:where(:hover)
+    :where(.rt-BaseTabListTriggerInner),
+  .animated-tabs-list
+    .rt-BaseTabListTrigger:where(:focus-visible:hover)
+    :where(.rt-BaseTabListTriggerInner) {
+    background-color: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animated-tabs-list[data-animate]::before {
+    transition:
+      transform 140ms var(--motion-ease-reveal-out),
+      width 140ms var(--motion-ease-reveal-out),
+      height 140ms var(--motion-ease-reveal-out);
+  }
+
+  .animated-tabs-list[data-hover-snap]::before,
+  .animated-tabs-list[data-indicator-snap]::after {
+    transition: none !important;
+  }
+
+  .animated-tabs-list[data-animate]::after {
+    transition:
+      left 220ms var(--motion-ease-reveal-out),
+      top 220ms var(--motion-ease-reveal-out),
+      width 220ms var(--motion-ease-reveal-out),
+      transform 220ms var(--motion-ease-reveal-out),
+      opacity 120ms var(--motion-ease-reveal);
+  }
+
+  /* After a row-wrap snap, only scale should animate — never left/top. */
+  .animated-tabs-list[data-animate][data-indicator-zoom]::after {
+    transition: transform 110ms var(--motion-ease-reveal-out);
   }
 }

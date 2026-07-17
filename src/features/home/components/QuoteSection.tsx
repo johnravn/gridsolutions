@@ -5,7 +5,11 @@ import { DAILY_QUOTES } from '../data/quotes'
 import { pickQuoteForDate } from '../utils/dailyInspiration'
 import { DashboardCard } from './DashboardCard'
 
-export function QuoteSection() {
+export function QuoteSection({
+  presentation = 'desktop',
+}: {
+  presentation?: 'desktop' | 'mobile'
+}) {
   const todayKey = React.useMemo(
     () => new Date().toISOString().slice(0, 10),
     [],
@@ -19,7 +23,8 @@ export function QuoteSection() {
     <DashboardCard
       title="Today's quote"
       icon={<QuoteIcon width={18} height={18} />}
-      notFullHeight
+      notFullHeight={presentation === 'mobile'}
+      variant={presentation === 'mobile' ? 'plain' : 'card'}
     >
       {!quote ? (
         <Box py="4">
