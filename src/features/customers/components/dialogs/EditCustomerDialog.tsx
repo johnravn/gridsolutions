@@ -1,14 +1,8 @@
 import * as React from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-  Button,
-  Dialog,
-  Flex,
-  Select,
-  Switch,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+import { Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { formatVATInput } from '@shared/lib/generalFunctions'
@@ -21,6 +15,9 @@ import {
   sanitizeCustomHexInput,
 } from '../CustomerBrandColorsFields'
 import { upsertCustomer } from '../../api/queries'
+import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
+
+const STANDARD_PRICING_LEVEL = '__standard__'
 
 type Initial = {
   id: string
@@ -34,6 +31,51 @@ type Initial = {
   crew_pricing_level_id?: string | null
 }
 
+function parseAddress(addr: string | null) {
+  if (!addr)
+    return { address_line: '', zip_code: '', city: '', country: 'Norway' }
+  const parts = addr
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  return {
+    address_line: parts[0] || '',
+    zip_code: parts[1] || '',
+    city: parts[2] || '',
+    country: parts[3] || 'Norway',
+  }
+}
+
+function buildDefaults(initial: Initial) {
+  return {
+    id: initial.id,
+    name: initial.name,
+    logo_path: initial.logo_path ?? null,
+    crew_pricing_level_id:
+      initial.crew_pricing_level_id ?? STANDARD_PRICING_LEVEL,
+    accent_color: normalizeAccentColor(initial.accent_color),
+    accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
+    vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
+    is_partner: initial.is_partner,
+    ...parseAddress(initial.address),
+  }
+}
+
+const schema = z.object({
+  id: z.string(),
+  name: z.string().trim().min(1, 'Name is required'),
+  logo_path: z.string().nullable(),
+  crew_pricing_level_id: z.string(),
+  accent_color: z.custom<RadixAccentColor>(),
+  accent_color_custom: z.string(),
+  vat_number: z.string(),
+  is_partner: z.boolean(),
+  address_line: z.string(),
+  zip_code: z.string(),
+  city: z.string(),
+  country: z.string(),
+})
+
 export default function EditCustomerDialog({
   open,
   onOpenChange,
@@ -46,47 +88,26 @@ export default function EditCustomerDialog({
   onSaved?: () => void
 }) {
   const { companyId } = useCompany()
-
-  // Parse address from comma-separated string
-  const parseAddress = React.useCallback((addr: string | null) => {
-    if (!addr)
-      return { address_line: '', zip_code: '', city: '', country: 'Norway' }
-    const parts = addr
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean)
-    return {
-      address_line: parts[0] || '',
-      zip_code: parts[1] || '',
-      city: parts[2] || '',
-      country: parts[3] || 'Norway',
-    }
-  }, [])
-
-  const [form, setForm] = React.useState({
-    ...initial,
-    crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
-    accent_color: normalizeAccentColor(initial.accent_color),
-    accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
-    vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
-    ...parseAddress(initial.address),
-  })
+  const { success } = useToast()
 
   const { data: levels = [] } = useQuery({
     ...crewPricingLevelsQuery(companyId ?? ''),
     enabled: !!companyId && open,
   })
 
+  const form = useAppForm({
+    defaultValues: buildDefaults(initial),
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await mut.mutateAsync(value)
+    },
+  })
+
   React.useEffect(() => {
-    if (!open) return
-    setForm({
-      ...initial,
-      crew_pricing_level_id: initial.crew_pricing_level_id ?? null,
-      accent_color: normalizeAccentColor(initial.accent_color),
-      accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
-      vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
-      ...parseAddress(initial.address),
-    })
+    if (open) form.reset(buildDefaults(initial), { keepDefaultValues: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens or initial changes
   }, [
     open,
     initial.id,
@@ -98,43 +119,36 @@ export default function EditCustomerDialog({
     initial.accent_color,
     initial.accent_color_custom,
     initial.crew_pricing_level_id,
-    parseAddress,
   ])
 
-  const set = (k: keyof typeof form, v: any) =>
-    setForm((s) => ({ ...s, [k]: v }))
-  const setAddr = (
-    k: 'address_line' | 'zip_code' | 'city' | 'country',
-    v: any,
-  ) => setForm((s) => ({ ...s, [k]: v }))
-  const { success } = useToast()
-
   const mut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: ReturnType<typeof buildDefaults>) => {
       if (!companyId) throw new Error('No company selected')
 
-      // Build address string from components for the customer.address field
       const addressParts = [
-        form.address_line,
-        form.zip_code,
-        form.city,
-        form.country,
+        value.address_line,
+        value.zip_code,
+        value.city,
+        value.country,
       ]
         .filter(Boolean)
         .join(', ')
       const addressString = addressParts || null
 
       return upsertCustomer({
-        id: form.id,
+        id: value.id,
         company_id: companyId,
-        name: form.name,
-        vat_number: form.vat_number.trim() || null,
+        name: value.name,
+        vat_number: value.vat_number.trim() || null,
         address: addressString,
-        is_partner: !!form.is_partner,
-        logo_path: form.logo_path ?? null,
-        crew_pricing_level_id: form.crew_pricing_level_id ?? null,
-        accent_color: form.accent_color,
-        accent_color_custom: sanitizeCustomHexInput(form.accent_color_custom),
+        is_partner: !!value.is_partner,
+        logo_path: value.logo_path ?? null,
+        crew_pricing_level_id:
+          value.crew_pricing_level_id === STANDARD_PRICING_LEVEL
+            ? null
+            : value.crew_pricing_level_id,
+        accent_color: value.accent_color,
+        accent_color_custom: sanitizeCustomHexInput(value.accent_color_custom),
       })
     },
     onSuccess: () => {
@@ -148,130 +162,130 @@ export default function EditCustomerDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Edit customer</Dialog.Title>
-        <Flex direction="column" gap="3" mt="3">
-          <Field label="Name">
-            <TextField.Root
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              autoFocus
-            />
-          </Field>
-          <Field label="VAT number">
-            <TextField.Root
-              value={form.vat_number}
-              onChange={(e) =>
-                set('vat_number', formatVATInput(e.target.value))
-              }
-              placeholder="e.g., 123 456 789"
-            />
-          </Field>
-          <Field label="Address line">
-            <TextField.Root
-              value={form.address_line}
-              onChange={(e) => setAddr('address_line', e.target.value)}
-              placeholder="Street and number"
-            />
-          </Field>
-          <FieldRow>
-            <Flex gap={'2'} width={'100%'}>
-              <Field label="ZIP">
-                <NorwayZipCodeField
-                  value={form.zip_code}
-                  onChange={(val) => setAddr('zip_code', val)}
-                  autoCompleteCity={(city) => setAddr('city', city)}
-                />
-              </Field>
-              <Field label="City" style={{ flex: 1 }}>
-                <TextField.Root
-                  value={form.city}
-                  onChange={(e) => setAddr('city', e.target.value)}
-                  placeholder="e.g., Oslo"
-                />
-              </Field>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="name">
+                {(field) => <field.TextField label="Name" />}
+              </form.AppField>
+              <form.AppField name="vat_number">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      VAT number
+                    </Text>
+                    <TextField.Root
+                      value={field.state.value}
+                      placeholder="e.g., 123 456 789"
+                      onBlur={field.handleBlur}
+                      onChange={(e) =>
+                        field.handleChange(formatVATInput(e.target.value))
+                      }
+                    />
+                  </Flex>
+                )}
+              </form.AppField>
+              <form.AppField name="address_line">
+                {(field) => (
+                  <field.TextField
+                    label="Address line"
+                    placeholder="Street and number"
+                  />
+                )}
+              </form.AppField>
+              <Flex gap="2" width="100%">
+                <form.AppField name="zip_code">
+                  {(field) => (
+                    <Flex direction="column" gap="1">
+                      <Text as="label" size="2" weight="medium">
+                        ZIP
+                      </Text>
+                      <NorwayZipCodeField
+                        value={field.state.value}
+                        onChange={(val) => field.handleChange(val)}
+                        autoCompleteCity={(city) =>
+                          form.setFieldValue('city', city)
+                        }
+                      />
+                    </Flex>
+                  )}
+                </form.AppField>
+                <form.AppField name="city">
+                  {(field) => (
+                    <field.TextField
+                      label="City"
+                      placeholder="e.g., Oslo"
+                      style={{ flex: 1 }}
+                    />
+                  )}
+                </form.AppField>
+              </Flex>
+              <form.AppField name="country">
+                {(field) => <field.TextField label="Country" />}
+              </form.AppField>
+              <form.AppField name="crew_pricing_level_id">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      Crew pricing level
+                    </Text>
+                    <Select.Root
+                      value={field.state.value}
+                      onValueChange={field.handleChange}
+                    >
+                      <Select.Trigger placeholder="Standard" />
+                      <Select.Content style={{ zIndex: 10000 }}>
+                        <Select.Item value={STANDARD_PRICING_LEVEL}>
+                          Standard
+                        </Select.Item>
+                        {levels.map((level) => (
+                          <Select.Item key={level.id} value={level.id}>
+                            {level.name}
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Root>
+                  </Flex>
+                )}
+              </form.AppField>
+              <form.AppField name="accent_color">
+                {(accentColorField) => (
+                  <form.AppField name="accent_color_custom">
+                    {(accentColorCustomField) => (
+                      <CustomerBrandColorsFields
+                        accentColor={accentColorField.state.value}
+                        accentColorCustom={accentColorCustomField.state.value}
+                        onAccentColorChange={accentColorField.handleChange}
+                        onAccentColorCustomChange={
+                          accentColorCustomField.handleChange
+                        }
+                      />
+                    )}
+                  </form.AppField>
+                )}
+              </form.AppField>
+              <form.AppField name="is_partner">
+                {(field) => <field.Switch label="Partner" />}
+              </form.AppField>
             </Flex>
-          </FieldRow>
-          <Field label="Country">
-            <TextField.Root
-              value={form.country}
-              onChange={(e) => setAddr('country', e.target.value)}
-            />
-          </Field>
-          <Field label="Crew pricing level">
-            <Select.Root
-              value={form.crew_pricing_level_id ?? '__standard__'}
-              onValueChange={(v) =>
-                set('crew_pricing_level_id', v === '__standard__' ? null : v)
-              }
-            >
-              <Select.Trigger placeholder="Standard" />
-              <Select.Content style={{ zIndex: 10000 }}>
-                <Select.Item value="__standard__">Standard</Select.Item>
-                {levels.map((level) => (
-                  <Select.Item key={level.id} value={level.id}>
-                    {level.name}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-          </Field>
-          <CustomerBrandColorsFields
-            accentColor={form.accent_color}
-            accentColorCustom={form.accent_color_custom}
-            onAccentColorChange={(color) => set('accent_color', color)}
-            onAccentColorCustomChange={(value) =>
-              set('accent_color_custom', value)
-            }
-          />
-          <Flex align="center" gap="2">
-            <Text size="2" color="gray">
-              Partner
-            </Text>
-            <Switch
-              checked={form.is_partner}
-              onCheckedChange={(v) => set('is_partner', !!v)}
-            />
-          </Flex>
-        </Flex>
 
-        <Flex gap="2" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => mut.mutate()}
-            disabled={!form.name.trim() || mut.isPending}
-          >
-            {mut.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Save" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
-  )
-}
-
-function Field({
-  label,
-  children,
-  style,
-}: {
-  label: string
-  children: React.ReactNode
-  style?: React.CSSProperties
-}) {
-  return (
-    <div style={style}>
-      <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-        {label}
-      </Text>
-      {children}
-    </div>
-  )
-}
-
-function FieldRow({ children }: { children: React.ReactNode }) {
-  return (
-    <Flex direction="column" gap="2">
-      {children}
-    </Flex>
   )
 }

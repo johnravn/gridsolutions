@@ -99,6 +99,129 @@ function portalAppearance(): 'light' | 'dark' {
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
 }
 
+/** Includes disabled controls so we can wait for the intended next field. */
+const FIELD_SELECTOR = [
+  'a[href]',
+  'button',
+  'textarea',
+  'input:not([type="hidden"])',
+  'select',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+const FOCUS_NEXT_WAIT_MS = 3000
+const FOCUS_NEXT_POLL_MS = 50
+
+function isDisplayed(el: HTMLElement) {
+  if (el.closest('[hidden], [aria-hidden="true"]')) return false
+  const style = window.getComputedStyle(el)
+  return style.display !== 'none' && style.visibility !== 'hidden'
+}
+
+function isEnabledFocusable(el: HTMLElement) {
+  if (!isDisplayed(el)) return false
+  if (el.getAttribute('aria-disabled') === 'true') return false
+  if ((el as HTMLInputElement).disabled) return false
+  return true
+}
+
+function focusElement(el: HTMLElement) {
+  el.focus()
+  if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+    el.select()
+  }
+}
+
+function listFields(root: ParentNode) {
+  return Array.from(root.querySelectorAll<HTMLElement>(FIELD_SELECTOR)).filter(
+    isDisplayed,
+  )
+}
+
+/**
+ * Move focus to the next control in the nearest dialog (or document).
+ * If that control is temporarily disabled (e.g. Main contact while contacts
+ * load), wait briefly for it to become enabled before falling back.
+ */
+function focusNextFocusable(from: HTMLElement) {
+  const root = from.closest('[role="dialog"]') ?? document.body
+  const fields = listFields(root)
+  const fromIndex = fields.indexOf(from)
+  if (fromIndex < 0) {
+    from.blur()
+    return
+  }
+
+  const targetIndex = fromIndex + 1
+  if (targetIndex >= fields.length) {
+    from.blur()
+    return
+  }
+
+  const intendedNow = fields[targetIndex]
+  if (isEnabledFocusable(intendedNow)) {
+    focusElement(intendedNow)
+    return
+  }
+
+  let settled = false
+  let pollTimer: ReturnType<typeof setTimeout> | undefined
+
+  const cleanup = () => {
+    observer.disconnect()
+    if (pollTimer !== undefined) clearTimeout(pollTimer)
+    clearTimeout(timeoutTimer)
+  }
+
+  const settle = (action: () => void) => {
+    if (settled) return
+    settled = true
+    cleanup()
+    action()
+  }
+
+  const tryFocusIntended = () => {
+    const current = listFields(root)
+    if (targetIndex >= current.length) return false
+    const intended = current[targetIndex]
+    if (isEnabledFocusable(intended)) {
+      settle(() => focusElement(intended))
+      return true
+    }
+    return false
+  }
+
+  const finishWithFallback = () => {
+    settle(() => {
+      const current = listFields(root)
+      const stillFrom = current.indexOf(from)
+      const start = stillFrom >= 0 ? stillFrom + 1 : targetIndex
+      const nextEnabled = current.slice(start).find(isEnabledFocusable)
+      if (nextEnabled) focusElement(nextEnabled)
+      else from.blur()
+    })
+  }
+
+  const observer = new MutationObserver(() => {
+    tryFocusIntended()
+  })
+
+  observer.observe(root, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ['disabled', 'aria-disabled'],
+  })
+
+  const poll = () => {
+    if (settled || tryFocusIntended()) return
+    pollTimer = setTimeout(poll, FOCUS_NEXT_POLL_MS)
+  }
+
+  const timeoutTimer = setTimeout(finishWithFallback, FOCUS_NEXT_WAIT_MS)
+  pollTimer = setTimeout(poll, FOCUS_NEXT_POLL_MS)
+}
+
 function setOpenState(
   open: boolean,
   setOpen: React.Dispatch<React.SetStateAction<boolean>>,
@@ -210,12 +333,21 @@ export function SearchableSelect({
     onInputChange?.(v)
   }
 
-  const handleSelect = (option: SearchableSelectOption) => {
+  const handleSelect = (
+    option: SearchableSelectOption,
+    { advanceFocus = false }: { advanceFocus?: boolean } = {},
+  ) => {
     selectingRef.current = true
     onValueChange(option.value)
     setInputValue(option.label)
     setOpenState(false, setOpen, onOpenChange)
-    inputRef.current?.blur()
+    const current = inputRef.current
+    if (advanceFocus && current) {
+      // Defer so the dropdown unmounts and React can re-enable downstream fields.
+      requestAnimationFrame(() => focusNextFocusable(current))
+    } else {
+      current?.blur()
+    }
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -249,7 +381,7 @@ export function SearchableSelect({
 
     if (e.key === 'Enter' && highlightedIndex !== null) {
       e.preventDefault()
-      handleSelect(filteredOptions[highlightedIndex])
+      handleSelect(filteredOptions[highlightedIndex], { advanceFocus: true })
     }
   }
 

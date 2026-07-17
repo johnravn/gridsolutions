@@ -167,7 +167,48 @@ export function isInvalidTimeRange(startAt: string, endAt: string): boolean {
   const startMs = parseIso(startAt)?.getTime()
   const endMs = parseIso(endAt)?.getTime()
   if (startMs == null || endMs == null) return false
-  return endMs < startMs
+  // Zero-duration ranges (start === end) are invalid.
+  return endMs <= startMs
+}
+
+/** Bump end so the range has a positive duration (default min 1 minute). */
+export function ensurePositiveDuration(
+  startAt: string,
+  endAt: string,
+  minDurationMs = 60_000,
+): { startAt: string; endAt: string } {
+  const startMs = parseIso(startAt)?.getTime()
+  const endMs = parseIso(endAt)?.getTime()
+  if (startMs == null || endMs == null) return { startAt, endAt }
+  if (endMs > startMs) return { startAt, endAt }
+  return { startAt, endAt: new Date(startMs + minDurationMs).toISOString() }
+}
+
+/**
+ * When start/end land on the same local day with equal (or inverted) times,
+ * bump the end by `minuteStep` so duration cannot be zero.
+ * Returns null when a positive same-day duration is impossible (e.g. start at 23:59).
+ */
+export function ensurePositiveSameDayTimes(
+  times: RangeTimeSelection,
+  minuteStep: number,
+): RangeTimeSelection | null {
+  if (times.startHour == null || times.endHour == null) return times
+
+  const startMinute = times.startMinute ?? 0
+  const endMinute = times.endMinute ?? 0
+  const startTotal = times.startHour * 60 + startMinute
+  const endTotal = times.endHour * 60 + endMinute
+  if (endTotal > startTotal) return times
+
+  const bumped = startTotal + Math.max(1, minuteStep)
+  if (bumped >= 24 * 60) return null
+
+  return {
+    ...times,
+    endHour: Math.floor(bumped / 60),
+    endMinute: bumped % 60,
+  }
 }
 
 /** True when ISO is at start of day with no specific hour chosen. */
@@ -307,6 +348,30 @@ export function handleRangeHourClick(
   return { start: normalized.start, end: normalized.end }
 }
 
+/** Minutes that would make end <= start on the same hour (zero/negative duration). */
+export function isEndMinuteDisabled(
+  minute: number,
+  times: RangeTimeSelection,
+  sameDay: boolean,
+): boolean {
+  if (!sameDay) return false
+  if (times.startHour == null || times.endHour == null) return false
+  if (times.startHour !== times.endHour) return false
+  return minute <= (times.startMinute ?? 0)
+}
+
+/** Minutes that would make start >= end on the same hour (zero/negative duration). */
+export function isStartMinuteDisabled(
+  minute: number,
+  times: RangeTimeSelection,
+  sameDay: boolean,
+): boolean {
+  if (!sameDay) return false
+  if (times.startHour == null || times.endHour == null) return false
+  if (times.startHour !== times.endHour) return false
+  return minute >= (times.endMinute ?? 0)
+}
+
 export function isHourInRange(
   hour: number,
   start: number | null,
@@ -370,6 +435,7 @@ export function buildRangeIso(
   startDate: string,
   endDate: string,
   times: RangeTimeSelection,
+  minDurationMs = 60_000,
 ): { startAt: string; endAt: string } {
   const startAt =
     times.startHour != null
@@ -379,7 +445,7 @@ export function buildRangeIso(
     times.endHour != null
       ? atTime(endDate, times.endHour, times.endMinute ?? 0)
       : endOfDay(endDate)
-  return { startAt, endAt }
+  return ensurePositiveDuration(startAt, endAt, minDurationMs)
 }
 
 export function extractRangeTimes(

@@ -15,9 +15,11 @@ import { prettyPhone } from '@shared/phone/phone'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { formatPublicOfferCurrency } from '../../hooks/usePublicOfferResponse'
 import { resolveModuleCustomerPrice } from '../../utils/prettyOfferCalculations'
+import { applyOptionsToOfferTotals } from '../../utils/prettyOfferOptions'
 import { hasPrettyOfferStatusNotice } from '../../utils/prettyOfferStatusNotice'
 import { PrettyOfferResourceSummary } from './PrettyOfferResourceSummary'
 import { PrettyOfferStatusNotice } from './PrettyOfferStatusNotice'
+import { usePrettyOfferOptions } from './PrettyOfferOptionsContext'
 import type { OfferDetail, PublicPrettyOfferModule } from '../../types'
 import type { usePublicOfferResponse } from '../../hooks/usePublicOfferResponse'
 
@@ -383,6 +385,7 @@ export function PrettyOfferFooter(props: Props) {
   const preview = props.preview === true
   const canAccept = preview ? false : props.canAccept
   const response = preview ? null : props.response
+  const optionsContext = usePrettyOfferOptions()
 
   const pricedModules = modules
     .map((module) => ({
@@ -395,9 +398,49 @@ export function PrettyOfferFooter(props: Props) {
     (sum, entry) => sum + (entry.price ?? 0),
     0,
   )
-  const discountAmount =
-    offer.total_before_discount - offer.total_after_discount
-  const vatAmount = offer.total_with_vat - offer.total_after_discount
+
+  const isAccepted = offer.status === 'accepted'
+  const hasOfferOptions = (optionsContext?.allOptions.length ?? 0) > 0
+  const acceptedOptionsSubtotal = offer.accepted_options_subtotal ?? 0
+  const optionsSubtotal = isAccepted
+    ? acceptedOptionsSubtotal
+    : (optionsContext?.optionsSubtotal ?? 0)
+
+  const baseSubtotal =
+    isAccepted && acceptedOptionsSubtotal > 0
+      ? offer.total_before_discount - acceptedOptionsSubtotal
+      : offer.total_before_discount
+
+  const displayTotals = isAccepted
+    ? {
+        totalBeforeDiscount: offer.total_before_discount,
+        discountAmount:
+          offer.total_before_discount - offer.total_after_discount,
+        totalAfterDiscount: offer.total_after_discount,
+        vatAmount: offer.total_with_vat - offer.total_after_discount,
+        totalWithVat: offer.total_with_vat,
+      }
+    : optionsContext
+      ? optionsContext.getAdjustedTotals(
+          baseSubtotal,
+          offer.vat_percent,
+          offer.discount_percent,
+        )
+      : applyOptionsToOfferTotals(
+          baseSubtotal,
+          0,
+          offer.vat_percent,
+          offer.discount_percent,
+        )
+
+  const selectedOptionLines =
+    isAccepted && offer.accepted_option_selections?.length
+      ? offer.accepted_option_selections
+      : (optionsContext?.selectedOptions.map((option) => ({
+          option_id: option.optionId,
+          label: option.label,
+          price: option.price,
+        })) ?? [])
 
   return (
     <Box className="pretty-deck-footer-wrap">
@@ -457,31 +500,68 @@ export function PrettyOfferFooter(props: Props) {
               value={String(offer.days_of_use)}
               muted
             />
+            {hasOfferOptions && (
+              <PricingRow
+                label="Base subtotal"
+                value={formatPublicOfferCurrency(baseSubtotal)}
+              />
+            )}
+            {selectedOptionLines.length > 0 && (
+              <>
+                <Text
+                  size="1"
+                  weight="bold"
+                  color="gray"
+                  mt="2"
+                  mb="2"
+                  as="div"
+                >
+                  SELECTED OPTIONS
+                </Text>
+                {selectedOptionLines.map((option) => (
+                  <PricingRow
+                    key={option.option_id}
+                    label={option.label || 'Option'}
+                    value={formatPublicOfferCurrency(option.price)}
+                    muted
+                  />
+                ))}
+                <PricingRow
+                  label="Options subtotal"
+                  value={formatPublicOfferCurrency(optionsSubtotal)}
+                  emphasis
+                />
+              </>
+            )}
             <PricingRow
-              label="Subtotal"
-              value={formatPublicOfferCurrency(offer.total_before_discount)}
+              label={hasOfferOptions ? 'Subtotal incl. options' : 'Subtotal'}
+              value={formatPublicOfferCurrency(
+                displayTotals.totalBeforeDiscount,
+              )}
             />
             {offer.discount_percent > 0 && (
               <>
                 <PricingRow
                   label={`Discount (${offer.discount_percent}%)`}
-                  value={`-${formatPublicOfferCurrency(discountAmount)}`}
+                  value={`-${formatPublicOfferCurrency(displayTotals.discountAmount)}`}
                   valueColor="green"
                 />
                 <PricingRow
                   label="After discount"
-                  value={formatPublicOfferCurrency(offer.total_after_discount)}
+                  value={formatPublicOfferCurrency(
+                    displayTotals.totalAfterDiscount,
+                  )}
                   emphasis
                 />
               </>
             )}
             <PricingRow
               label={`VAT (${offer.vat_percent}%)`}
-              value={formatPublicOfferCurrency(vatAmount)}
+              value={formatPublicOfferCurrency(displayTotals.vatAmount)}
             />
             <PricingRow
               label="Total incl. VAT"
-              value={formatPublicOfferCurrency(offer.total_with_vat)}
+              value={formatPublicOfferCurrency(displayTotals.totalWithVat)}
               total
             />
           </Box>

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as React from 'react'
 import { fireEvent, screen } from '@testing-library/react'
 import { renderWithProviders } from '@test/render'
 import { SearchableSelect } from './SearchableSelect'
@@ -131,5 +132,72 @@ describe('SearchableSelect', () => {
 
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onValueChange).toHaveBeenCalledWith('b')
+  })
+
+  it('advances focus to the next field after Enter selection', async () => {
+    const onValueChange = vi.fn()
+
+    renderWithProviders(
+      <div role="dialog">
+        <SearchableSelect
+          options={options}
+          value=""
+          onValueChange={onValueChange}
+          placeholder="Pick one"
+          data-testid="search-select"
+        />
+        <input data-testid="next-field" />
+      </div>,
+    )
+
+    const input = screen.getByTestId('search-select')
+    const nextField = screen.getByTestId('next-field')
+    fireEvent.focus(input)
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onValueChange).toHaveBeenCalledWith('a')
+    await vi.waitFor(() => {
+      expect(nextField).toHaveFocus()
+    })
+  })
+
+  it('waits for a temporarily disabled next field before advancing', async () => {
+    const onValueChange = vi.fn()
+
+    function Harness() {
+      const [nextDisabled, setNextDisabled] = React.useState(true)
+
+      return (
+        <div role="dialog">
+          <SearchableSelect
+            options={options}
+            value=""
+            onValueChange={(value) => {
+              onValueChange(value)
+              setTimeout(() => setNextDisabled(false), 80)
+            }}
+            placeholder="Pick one"
+            data-testid="search-select"
+          />
+          <input data-testid="next-field" disabled={nextDisabled} />
+          <input data-testid="fallback-field" />
+        </div>
+      )
+    }
+
+    renderWithProviders(<Harness />)
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    expect(onValueChange).toHaveBeenCalledWith('a')
+    expect(screen.getByTestId('fallback-field')).not.toHaveFocus()
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('next-field')).toHaveFocus()
+    })
   })
 })

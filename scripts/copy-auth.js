@@ -48,10 +48,11 @@ async function copyAuth() {
   const tempFile = join(tmpdir(), `supabase_auth_${Date.now()}.sql`)
 
   try {
-    // Dump auth schema (users, identities, but skip sessions/refresh_tokens)
+    // Dump auth schema (users, identities, but skip sessions/refresh_tokens).
+    // Keep stderr out of the SQL file so CLI notices don't break the filter.
     execSync(
-      `npx supabase db dump --linked --schema auth --data-only > "${tempFile}" 2>&1`,
-      { stdio: 'pipe' },
+      `npx supabase db dump --linked --schema auth --data-only > "${tempFile}"`,
+      { stdio: ['ignore', 'pipe', 'inherit'] },
     )
   } catch (error) {
     // Check if it's just a warning or actual error
@@ -87,7 +88,15 @@ async function copyAuth() {
   log('2️⃣  Processing auth data...', 'cyan')
   const dumpContent = fs.readFileSync(tempFile, 'utf-8')
 
-  // Filter to only include INSERT statements for users and identities
+  // Filter to only include INSERT statements for users and identities.
+  // Newer dumps quote identifiers: INSERT INTO "auth"."users" (...)
+  const normalizeInsertTarget = (line) =>
+    line
+      .toUpperCase()
+      .replace(/"/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+
   const lines = dumpContent.split('\n')
   const filteredLines = []
   let inUsersInsert = false
@@ -96,22 +105,23 @@ async function copyAuth() {
 
   for (const line of lines) {
     const trimmed = line.trim()
+    const normalized = normalizeInsertTarget(trimmed)
 
     // Skip empty lines and comments
     if (!trimmed || trimmed.startsWith('--')) {
       continue
     }
 
-    // Detect INSERT INTO auth.users
-    if (trimmed.toUpperCase().startsWith('INSERT INTO AUTH.USERS')) {
+    // Detect INSERT INTO auth.users (quoted or unquoted)
+    if (normalized.startsWith('INSERT INTO AUTH.USERS')) {
       inUsersInsert = true
       inIdentitiesInsert = false
       currentInsert = [line]
       continue
     }
 
-    // Detect INSERT INTO auth.identities
-    if (trimmed.toUpperCase().startsWith('INSERT INTO AUTH.IDENTITIES')) {
+    // Detect INSERT INTO auth.identities (quoted or unquoted)
+    if (normalized.startsWith('INSERT INTO AUTH.IDENTITIES')) {
       inIdentitiesInsert = true
       inUsersInsert = false
       currentInsert = [line]
@@ -119,7 +129,7 @@ async function copyAuth() {
     }
 
     // Skip other INSERT statements (sessions, refresh_tokens, audit_log_entries, etc.)
-    if (trimmed.toUpperCase().startsWith('INSERT INTO')) {
+    if (normalized.startsWith('INSERT INTO')) {
       inUsersInsert = false
       inIdentitiesInsert = false
       currentInsert = []
@@ -138,8 +148,8 @@ async function copyAuth() {
     // Continue INSERT statement if we're in one
     if (inUsersInsert || inIdentitiesInsert) {
       currentInsert.push(line)
-      // End of INSERT statement
-      if (trimmed.endsWith(');')) {
+      // End of INSERT statement (single- or multi-row)
+      if (trimmed.endsWith(';')) {
         filteredLines.push(...currentInsert)
         filteredLines.push('') // Add blank line
         currentInsert = []
@@ -160,12 +170,15 @@ async function copyAuth() {
     return
   }
 
-  // Write filtered content to temp file
+  // Write filtered content to temp file (idempotent if users already exist)
   const filteredFile = join(
     tmpdir(),
     `supabase_auth_filtered_${Date.now()}.sql`,
   )
-  writeFileSync(filteredFile, filteredLines.join('\n'), 'utf-8')
+  const filteredSql = filteredLines
+    .join('\n')
+    .replace(/;\s*$/gm, '\nON CONFLICT DO NOTHING;')
+  writeFileSync(filteredFile, filteredSql, 'utf-8')
 
   // Step 3: Restore to local
   log('3️⃣  Restoring auth users to local database...', 'cyan')
@@ -190,37 +203,15 @@ async function copyAuth() {
   }
 
   try {
-    // First, temporarily disable triggers on auth.users and auth.identities
-    // because Supabase has triggers that might interfere with bulk inserts
-    const disableTriggersSQL = `
-ALTER TABLE auth.users DISABLE TRIGGER ALL;
-ALTER TABLE auth.identities DISABLE TRIGGER ALL;
-`
-
+    // Restore users/identities. Prefer no trigger fiddling — local postgres
+    // is often not owner of auth.* (supabase_auth_admin owns them).
     execSync(
-      `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "${disableTriggersSQL.replace(/"/g, '\\"')}"`,
-      { stdio: 'pipe' },
-    )
-
-    // Now restore the data
-    execSync(
-      `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -f "${filteredFile}"`,
+      `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -v ON_ERROR_STOP=1 -f "${filteredFile}"`,
       { stdio: 'inherit' },
-    )
-
-    // Re-enable triggers
-    const enableTriggersSQL = `
-ALTER TABLE auth.users ENABLE TRIGGER ALL;
-ALTER TABLE auth.identities ENABLE TRIGGER ALL;
-`
-
-    execSync(
-      `PGPASSWORD=postgres ${psqlPath} -h 127.0.0.1 -p 54322 -U postgres -d postgres -c "${enableTriggersSQL.replace(/"/g, '\\"')}"`,
-      { stdio: 'pipe' },
     )
   } catch (error) {
     log('❌ Failed to restore auth users to local database.', 'red')
-    log('   Error:', error.message, 'red')
+    log(`   Error: ${error instanceof Error ? error.message : String(error)}`, 'red')
     if (existsSync(tempFile)) unlinkSync(tempFile)
     if (existsSync(filteredFile)) unlinkSync(filteredFile)
     process.exit(1)
@@ -230,12 +221,11 @@ ALTER TABLE auth.identities ENABLE TRIGGER ALL;
   if (existsSync(tempFile)) unlinkSync(tempFile)
   if (existsSync(filteredFile)) unlinkSync(filteredFile)
 
-  // Count how many users were copied
-  const userCount = filteredLines.filter((l) =>
-    l.toUpperCase().includes('INSERT INTO AUTH.USERS'),
+  const userInsertLines = filteredLines.filter((l) =>
+    normalizeInsertTarget(l).startsWith('INSERT INTO AUTH.USERS'),
   ).length
 
-  log(`✅ Copied ${userCount} user(s) successfully!`, 'green')
+  log(`✅ Copied auth users successfully (${userInsertLines} INSERT block(s))!`, 'green')
   console.log('')
   log('💡 Note:', 'blue')
   log('   - Users can now log in locally with their remote passwords', 'cyan')

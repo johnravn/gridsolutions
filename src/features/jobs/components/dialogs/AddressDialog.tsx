@@ -1,4 +1,3 @@
-// src/features/jobs/components/dialogs/JobDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,12 +8,13 @@ import {
   Flex,
   Grid,
   ScrollArea,
-  SegmentedControl,
   Spinner,
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { Check, EditPencil, Plus, Search, Trash, Xmark } from 'iconoir-react'
+import { EditPencil, Plus, Search, Trash, Xmark } from 'iconoir-react'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import MapEmbed from '@shared/maps/MapEmbed'
@@ -42,35 +42,52 @@ type AddressRow = {
   is_personal?: boolean | null
 }
 
-type AddressForm = {
-  id: string | null
-  name: string
-  address_line: string
-  zip_code: string
-  city: string
-  country: string
+type PanelMode = 'view' | 'edit' | 'create'
+
+const emptyForm = {
+  id: null as string | null,
+  name: '',
+  address_line: '',
+  zip_code: '',
+  city: '',
+  country: 'Norway',
 }
 
-type PanelMode = 'view' | 'edit' | 'create'
+const schema = z.object({
+  id: z.string().nullable(),
+  name: z.string(),
+  address_line: z.string().trim().min(1, 'Address line is required'),
+  zip_code: z.string().trim().min(1, 'ZIP is required'),
+  city: z.string().trim().min(1, 'City is required'),
+  country: z.string().trim().min(1, 'Country is required'),
+})
+
+function rowToFormValues(row: AddressRow) {
+  return {
+    id: row.id,
+    name: row.name ?? '',
+    address_line: row.address_line ?? '',
+    zip_code: row.zip_code ?? '',
+    city: row.city ?? '',
+    country: row.country ?? '',
+  }
+}
 
 export default function AddressDialog({
   open,
   onOpenChange,
   companyId,
-  mode = 'create',
   initialData,
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
 
-  // ── List state
   const [search, setSearch] = React.useState('')
   const { data: rows = [], isFetching } = useQuery({
     ...addressIndexQuery({ companyId, search }),
     enabled: !!companyId && open,
   })
 
-  // ── Selection + panel mode
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [panelMode, setPanelMode] = React.useState<PanelMode>('view')
 
@@ -79,46 +96,39 @@ export default function AddressDialog({
     [rows, selectedId],
   )
 
-  // ── Working form (used for view/edit/create + live map)
-  const emptyForm = React.useMemo<AddressForm>(
-    () => ({
-      id: null,
-      name: '',
-      address_line: '',
-      zip_code: '',
-      city: '',
-      country: 'Norway',
-    }),
-    [],
-  )
-  const [form, setForm] = React.useState<AddressForm>(emptyForm)
-  const setFormVal = <TKey extends keyof AddressForm>(
-    k: TKey,
-    v: AddressForm[TKey],
-  ) => setForm((s) => ({ ...s, [k]: (v ?? '') as any }))
+  const form = useAppForm({
+    defaultValues: emptyForm,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await saveMutation.mutateAsync(value)
+    },
+  })
 
-  // ── Seed selection/form when dialog opens or initialData changes
   React.useEffect(() => {
     if (!open) return
-    // Prefer job’s current address if editing a job that already has one
     const init = initialData?.address
     if (init?.id) {
       setSelectedId(init.id)
       setPanelMode('view')
-      setForm({
-        id: init.id,
-        name: init.name,
-        address_line: init.address_line,
-        zip_code: init.zip_code,
-        city: init.city,
-        country: init.country,
-      })
+      form.reset(
+        {
+          id: init.id,
+          name: init.name,
+          address_line: init.address_line,
+          zip_code: init.zip_code,
+          city: init.city,
+          country: init.country,
+        },
+        { keepDefaultValues: true },
+      )
     } else {
-      // default—no preselection
       setSelectedId(null)
       setPanelMode('view')
-      setForm(emptyForm)
+      form.reset(emptyForm, { keepDefaultValues: true })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [
     open,
     initialData?.address?.id,
@@ -127,35 +137,17 @@ export default function AddressDialog({
     initialData?.address?.zip_code,
     initialData?.address?.city,
     initialData?.address?.country,
-    emptyForm,
   ])
 
-  // ── When user selects from the list, switch to view mode and populate form
   React.useEffect(() => {
     if (!selectedId) return
-    const r = rows.find((x) => x.id === selectedId)
-    if (!r) return
+    const row = rows.find((x) => x.id === selectedId)
+    if (!row) return
     setPanelMode('view')
-    setForm({
-      id: r.id,
-      name: r.name ?? '',
-      address_line: r.address_line,
-      zip_code: r.zip_code,
-      city: r.city,
-      country: r.country,
-    })
+    form.reset(rowToFormValues(row), { keepDefaultValues: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync form when selection changes
   }, [selectedId, rows])
 
-  // ── Map query string (live)
-  const mapQuery = React.useMemo(() => {
-    const parts = [form.address_line, form.zip_code, form.city, form.country]
-      .filter(Boolean)
-      .join(', ')
-    return parts
-  }, [form.address_line, form.zip_code, form.city, form.country])
-
-  // ── Mutations
-  // ── Link selected address to the calling job
   const useAddressMutation = useMutation({
     mutationFn: async () => {
       if (!selectedId) throw new Error('Select an address first')
@@ -169,7 +161,6 @@ export default function AddressDialog({
       if (error) throw error
     },
     onSuccess: async () => {
-      // Refresh addresses + this job’s detail
       await Promise.all([
         qc.invalidateQueries({
           queryKey: ['address', companyId, 'address-index'],
@@ -178,43 +169,41 @@ export default function AddressDialog({
       ])
       success('Address set on job')
       onOpenChange(false)
-      // onSaved?.(initialData!.id)
     },
-    onError: (e: any) => {
+    onError: (e: unknown) => {
       toastError(
         'Failed to set address on job',
-        e?.message ?? 'Please try again.',
+        e instanceof Error ? e.message : 'Please try again.',
       )
     },
   })
 
   const saveMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof emptyForm) => {
       const payload = {
-        name: form.name || null,
-        address_line: form.address_line || null,
-        zip_code: form.zip_code || null,
-        city: form.city || null,
-        country: form.country || null,
+        name: value.name || null,
+        address_line: value.address_line || '',
+        zip_code: value.zip_code || '',
+        city: value.city || '',
+        country: value.country || '',
         company_id: companyId,
       }
 
-      if (panelMode === 'edit' && form.id) {
+      if (panelMode === 'edit' && value.id) {
         if (selectedRow?.is_personal) {
           throw new Error('Personal addresses cannot be edited')
         }
         const { error } = await supabase
           .from('addresses')
           .update(payload)
-          .eq('id', form.id)
+          .eq('id', value.id)
         if (error) throw error
-        return form.id
+        return value.id
       }
 
-      // create
       const { data, error } = await supabase
         .from('addresses')
-        .insert([payload]) // created addresses default to is_personal=false unless you set it
+        .insert([payload])
         .select('id')
         .single()
       if (error) throw error
@@ -228,21 +217,25 @@ export default function AddressDialog({
       setPanelMode('view')
       success('Address saved')
     },
-    onError: (e: any) => {
-      toastError('Failed to save address', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to save address',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      if (!form.id) throw new Error('Nothing selected to delete')
+      const addressId = form.state.values.id
+      if (!addressId) throw new Error('Nothing selected to delete')
       if (selectedRow?.is_personal)
         throw new Error('Personal addresses cannot be deleted')
 
       const { error } = await supabase
         .from('addresses')
-        .update({ deleted: true }) // ⬅️ soft delete
-        .eq('id', form.id)
+        .update({ deleted: true })
+        .eq('id', addressId)
 
       if (error) throw error
     },
@@ -251,21 +244,17 @@ export default function AddressDialog({
         queryKey: ['address', companyId, 'address-index'],
       })
       setSelectedId(null)
-      setForm(emptyForm)
+      form.reset(emptyForm, { keepDefaultValues: true })
       setPanelMode('view')
       info('Address deleted')
     },
-    onError: (e: any) => {
-      toastError('Failed to delete', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to delete',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
     },
   })
-
-  const canSave =
-    (panelMode === 'edit' || panelMode === 'create') &&
-    !!form.address_line &&
-    !!form.city &&
-    !!form.zip_code &&
-    !!form.country
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -285,7 +274,6 @@ export default function AddressDialog({
           gap="4"
           style={{ minHeight: 0, flex: 1, overflow: 'hidden' }}
         >
-          {/* ── Column 1: List + Search */}
           <Box
             style={{
               display: 'flex',
@@ -333,7 +321,6 @@ export default function AddressDialog({
             </ScrollArea>
           </Box>
 
-          {/* ── Column 2: Details / Editor */}
           <Flex direction="column" style={{ minHeight: 0 }}>
             <Flex justify="between" align="center" mb="2" gap="2">
               <Text weight="medium">Details</Text>
@@ -343,7 +330,7 @@ export default function AddressDialog({
                   size="2"
                   onClick={() => {
                     setPanelMode('create')
-                    setForm(emptyForm)
+                    form.reset(emptyForm, { keepDefaultValues: true })
                     setSelectedId(null)
                   }}
                 >
@@ -352,108 +339,173 @@ export default function AddressDialog({
               ) : null}
             </Flex>
 
-            {/* Content area (fills available height, scrolls if needed) */}
             <Flex
               direction="column"
               gap="3"
               style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}
             >
               {panelMode === 'view' ? (
-                <DetailFieldGroup form={form} />
+                <form.Subscribe selector={(state) => state.values}>
+                  {(values) => <DetailFieldGroup values={values} />}
+                </form.Subscribe>
               ) : (
-                <EditFieldGroup form={form} setFormVal={setFormVal} />
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    void form.handleSubmit()
+                  }}
+                >
+                  <form.AppForm>
+                    <Flex direction="column" gap="3">
+                      <form.AppField name="name">
+                        {(field) => (
+                          <field.TextField
+                            label="Name"
+                            placeholder="e.g., Hotel Plaza"
+                          />
+                        )}
+                      </form.AppField>
+                      <form.AppField name="address_line">
+                        {(field) => (
+                          <field.TextField
+                            label="Address line"
+                            placeholder="Street and number"
+                          />
+                        )}
+                      </form.AppField>
+                      <Flex gap="3" wrap="wrap">
+                        <form.AppField name="zip_code">
+                          {(field) => (
+                            <Flex
+                              direction="column"
+                              gap="1"
+                              style={{ minWidth: 160 }}
+                            >
+                              <Text as="label" size="2" weight="medium">
+                                ZIP
+                              </Text>
+                              <NorwayZipCodeField
+                                value={field.state.value}
+                                onChange={(val) => field.handleChange(val)}
+                                autoCompleteCity={(city) =>
+                                  form.setFieldValue('city', city)
+                                }
+                              />
+                            </Flex>
+                          )}
+                        </form.AppField>
+                        <form.AppField name="city">
+                          {(field) => (
+                            <field.TextField
+                              label="City"
+                              placeholder="e.g., Oslo"
+                              style={{ minWidth: 160 }}
+                            />
+                          )}
+                        </form.AppField>
+                      </Flex>
+                      <form.AppField name="country">
+                        {(field) => <field.TextField label="Country" />}
+                      </form.AppField>
+                    </Flex>
+
+                    <Flex justify="end" gap="2" mt="3">
+                      <Button
+                        type="button"
+                        variant="soft"
+                        onClick={() => {
+                          if (selectedId) {
+                            setPanelMode('view')
+                            const row = rows.find((x) => x.id === selectedId)
+                            if (row) {
+                              form.reset(rowToFormValues(row), {
+                                keepDefaultValues: true,
+                              })
+                            }
+                          } else {
+                            setPanelMode('view')
+                            form.reset(emptyForm, { keepDefaultValues: true })
+                          }
+                        }}
+                      >
+                        <Xmark /> Cancel
+                      </Button>
+                      <form.SubmitButton
+                        label="Save address"
+                        pendingLabel="Saving…"
+                        disabled={saveMutation.isPending}
+                      />
+                    </Flex>
+                  </form.AppForm>
+                </form>
               )}
             </Flex>
 
-            {/* Footer actions */}
-            <Flex justify="end" gap="2" mt="3">
-              {panelMode === 'view' ? (
-                <>
-                  <Button
-                    variant="ghost"
-                    disabled={!selectedId || selectedRow?.is_personal}
-                    onClick={() => {
-                      if (!selectedRow?.is_personal) setPanelMode('edit')
-                    }}
-                  >
-                    <EditPencil /> Edit
-                  </Button>
+            {panelMode === 'view' ? (
+              <Flex justify="end" gap="2" mt="3">
+                <Button
+                  variant="ghost"
+                  disabled={!selectedId || selectedRow?.is_personal}
+                  onClick={() => {
+                    if (!selectedRow?.is_personal) setPanelMode('edit')
+                  }}
+                >
+                  <EditPencil /> Edit
+                </Button>
 
-                  <Button
-                    variant="ghost"
-                    color="red"
-                    disabled={
-                      !selectedId ||
-                      selectedRow?.is_personal ||
-                      deleteMutation.isPending
-                    }
-                    onClick={() => {
-                      if (!selectedRow?.is_personal) deleteMutation.mutate()
-                    }}
-                  >
-                    <Trash /> Delete
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="soft"
-                    onClick={() => {
-                      // cancel edit/create -> back to view (or clear)
-                      if (selectedId) {
-                        setPanelMode('view')
-                        // reset form to selected
-                        const r = rows.find((x) => x.id === selectedId)
-                        if (r) {
-                          setForm({
-                            id: r.id,
-                            name: r.name ?? '',
-                            address_line: r.address_line,
-                            zip_code: r.zip_code,
-                            city: r.city,
-                            country: r.country,
-                          })
-                        }
-                      } else {
-                        setPanelMode('view')
-                        setForm(emptyForm)
-                      }
-                    }}
-                  >
-                    <Xmark /> Cancel
-                  </Button>
-                  <Button
-                    variant="solid"
-                    disabled={!canSave || saveMutation.isPending}
-                    onClick={() => saveMutation.mutate()}
-                  >
-                    <Check /> Save address
-                  </Button>
-                </>
-              )}
-            </Flex>
+                <Button
+                  variant="ghost"
+                  color="red"
+                  disabled={
+                    !selectedId ||
+                    selectedRow?.is_personal ||
+                    deleteMutation.isPending
+                  }
+                  onClick={() => {
+                    if (!selectedRow?.is_personal) deleteMutation.mutate()
+                  }}
+                >
+                  <Trash /> Delete
+                </Button>
+              </Flex>
+            ) : null}
           </Flex>
 
-          {/* ── Column 3: Map */}
-          <Box
-            style={{
-              maxWidth: '100%',
-              minHeight: 170,
-              maxHeight: 320,
-              flex: 1,
-              overflow: 'hidden',
-              borderRadius: 8,
-            }}
+          <form.Subscribe
+            selector={(state) => [
+              state.values.address_line,
+              state.values.zip_code,
+              state.values.city,
+              state.values.country,
+            ]}
           >
-            {mapQuery ? <MapEmbed query={mapQuery} zoom={14} /> : null}
-          </Box>
+            {([addressLine, zipCode, city, country]) => {
+              const mapQuery = [addressLine, zipCode, city, country]
+                .filter(Boolean)
+                .join(', ')
+              return (
+                <Box
+                  style={{
+                    maxWidth: '100%',
+                    minHeight: 170,
+                    maxHeight: 320,
+                    flex: 1,
+                    overflow: 'hidden',
+                    borderRadius: 8,
+                  }}
+                >
+                  {mapQuery ? <MapEmbed query={mapQuery} zoom={14} /> : null}
+                </Box>
+              )
+            }}
+          </form.Subscribe>
         </Grid>
 
         <Flex justify="end" gap="2" mt="3">
           <Dialog.Close>
             <Button variant="soft">Close</Button>
           </Dialog.Close>
-          {/* ➕ New: Use button */}
           <Button
             variant="solid"
             disabled={!selectedId || useAddressMutation.isPending}
@@ -467,7 +519,6 @@ export default function AddressDialog({
   )
 }
 
-// ───────────────────────────────── helpers/components
 function ListRow({
   selected,
   name,
@@ -506,86 +557,17 @@ function ListRow({
   )
 }
 
-function DetailFieldGroup({ form }: { form: AddressForm }) {
+function DetailFieldGroup({ values }: { values: typeof emptyForm }) {
   return (
     <Flex direction="column" gap="2">
-      <KV label="Name">{form.name || '—'}</KV>
-      <KV label="Address">{form.address_line || '—'}</KV>
+      <KV label="Name">{values.name || '—'}</KV>
+      <KV label="Address">{values.address_line || '—'}</KV>
       <Flex gap="3" wrap="wrap">
-        <KV label="ZIP">{form.zip_code || '—'}</KV>
-        <KV label="City">{form.city || '—'}</KV>
+        <KV label="ZIP">{values.zip_code || '—'}</KV>
+        <KV label="City">{values.city || '—'}</KV>
       </Flex>
-      <KV label="Country">{form.country || '—'}</KV>
+      <KV label="Country">{values.country || '—'}</KV>
     </Flex>
-  )
-}
-
-function EditFieldGroup({
-  form,
-  setFormVal,
-}: {
-  form: AddressForm
-  setFormVal: <TKey extends keyof AddressForm>(
-    k: TKey,
-    v: AddressForm[TKey],
-  ) => void
-}) {
-  return (
-    <Flex direction="column" gap="3">
-      <Field label="Name">
-        <TextField.Root
-          value={form.name}
-          onChange={(e) => setFormVal('name', e.target.value)}
-          placeholder="e.g., Hotel Plaza"
-        />
-      </Field>
-      <Field label="Address line">
-        <TextField.Root
-          value={form.address_line}
-          onChange={(e) => setFormVal('address_line', e.target.value)}
-          placeholder="Street and number"
-        />
-      </Field>
-      <Flex gap="3" wrap="wrap">
-        <Field label="ZIP">
-          <NorwayZipCodeField
-            value={form.zip_code}
-            onChange={(val) => setFormVal('zip_code', val)}
-            autoCompleteCity={(city) => setFormVal('city', city)}
-          />
-        </Field>
-        <Field label="City">
-          <TextField.Root
-            value={form.city}
-            onChange={(e) => setFormVal('city', e.target.value)}
-            placeholder="e.g., Oslo"
-          />
-        </Field>
-      </Flex>
-      <Field label="Country">
-        <TextField.Root
-          value={form.country}
-          onChange={(e) => setFormVal('country', e.target.value)}
-        />
-      </Field>
-    </Flex>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div style={{ minWidth: 160 }}>
-      <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-        {label}
-      </Text>
-      {children}
-    </div>
   )
 }
 

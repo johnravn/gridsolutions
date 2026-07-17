@@ -87,6 +87,34 @@ function periodsOverlap(
   return start1 < end2 && end1 > start2
 }
 
+export function overlapHoursBetweenPeriods(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string,
+): number {
+  const start = Math.max(new Date(aStart).getTime(), new Date(bStart).getTime())
+  const end = Math.min(new Date(aEnd).getTime(), new Date(bEnd).getTime())
+  if (end <= start) return 0
+  return (end - start) / (1000 * 60 * 60)
+}
+
+export function formatOverlapDuration(hours: number): string {
+  if (hours <= 0) return 'No overlap'
+  if (hours < 1) {
+    const mins = Math.round(hours * 60)
+    return `${mins} min overlap`
+  }
+  if (hours < 24) {
+    const rounded = Math.round(hours * 10) / 10
+    return `${rounded} h overlap`
+  }
+  const days = Math.floor(hours / 24)
+  const remaining = Math.round(hours % 24)
+  if (remaining === 0) return `${days} d overlap`
+  return `${days} d ${remaining} h overlap`
+}
+
 export async function findCrewOverlaps({
   userIds,
   startAt,

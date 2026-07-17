@@ -1,0 +1,2 @@
+-- No-op stub created by interrupted `supabase migration new`.
+-- Actual drop lives in 20260717183743_drop_theme_scaling.sql.

@@ -1,3 +1,4 @@
+import { createOptionsBlockItems } from '../../../utils/optionsBlockStorage'
 import { createColumnLayoutItems } from './columnLayoutStorage'
 import type {
   PrettyCategoryType,
@@ -73,7 +74,9 @@ export function createEmptyModule(sortOrder: number): LocalPrettyModule {
   }
 }
 
-export function createEmptyTimelineModule(sortOrder: number): LocalPrettyModule {
+export function createEmptyTimelineModule(
+  sortOrder: number,
+): LocalPrettyModule {
   return {
     ...createEmptyModule(sortOrder),
     module_type: 'timeline',
@@ -126,6 +129,10 @@ export function createEmptyContentBlock(
   if (blockType === 'column_layout') {
     base.caption = '2'
     base.items = createColumnLayoutItems(id, 2)
+  }
+
+  if (blockType === 'options') {
+    base.items = createOptionsBlockItems(id)
   }
 
   return base
@@ -193,6 +200,7 @@ export const BLOCK_TYPE_LABELS: Record<PrettyModuleBlockType, string> = {
   link: 'Link',
   column_layout: 'Column layout',
   file_upload: 'File upload',
+  options: 'Options',
 }
 
 export const MODULE_TYPE_LABELS: Record<PrettyModuleType, string> = {
@@ -204,7 +212,21 @@ export const COLUMN_LAYOUT_BLOCK_TYPES = new Set<PrettyModuleBlockType>([
   'column_layout',
 ])
 
+export const OPTIONS_BLOCK_TYPES = new Set<PrettyModuleBlockType>(['options'])
+
 export const NESTED_ADDABLE_BLOCK_TYPES: Array<PrettyModuleBlockType> = [
+  'subtitle',
+  'description',
+  'simple_list',
+  'interactive_list',
+  'gallery',
+  'video',
+  'link',
+  'file_upload',
+  'options',
+]
+
+export const NESTED_OPTION_CONTENT_BLOCK_TYPES: Array<PrettyModuleBlockType> = [
   'subtitle',
   'description',
   'simple_list',

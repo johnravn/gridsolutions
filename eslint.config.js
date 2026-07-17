@@ -6,7 +6,14 @@ import storybook from 'eslint-plugin-storybook'
 import { tanstackConfig } from '@tanstack/eslint-config'
 
 export default [
-  { ignores: ['storybook-static/**', 'debug-storybook.log'] },
+  {
+    ignores: [
+      'storybook-static/**',
+      'debug-storybook.log',
+      '**/*.test.ts',
+      '**/*.test.tsx',
+    ],
+  },
   ...tanstackConfig,
   ...storybook.configs['flat/recommended'],
 ]

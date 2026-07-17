@@ -3,10 +3,8 @@ import {
   Badge,
   Box,
   Button,
-  Card,
   Dialog,
   Flex,
-  Grid,
   Heading,
   IconButton,
   SegmentedControl,
@@ -18,18 +16,14 @@ import {
   TextField,
   Tooltip,
 } from '@radix-ui/themes'
-import { InfoCircle, Lock, TransitionLeft } from 'iconoir-react'
+import { InfoCircle, Lock } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
-import {
-  getModShortcutLabel,
-  useModKeyShortcut,
-} from '@shared/lib/keyboardShortcuts'
+import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton } from '@app/layout/split'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import {
   createTimeEntry,
@@ -90,7 +84,7 @@ export default function LoggingPage() {
   const [endAt, setEndAt] = React.useState(defaultEndAt)
   const hasInvalidTimeRange = React.useMemo(() => {
     if (!startAt || !endAt) return false
-    return new Date(endAt).getTime() < new Date(startAt).getTime()
+    return new Date(endAt).getTime() <= new Date(startAt).getTime()
   }, [endAt, startAt])
   const pickedHours = React.useMemo(
     () => formatHoursBetween(startAt, endAt),
@@ -831,293 +825,36 @@ export default function LoggingPage() {
     </>
   )
 
-  // 35/65 split; same responsive pattern as you use elsewhere
-  const [isLarge, setIsLarge] = React.useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(min-width: 1024px)').matches
-      : false,
-  )
-  React.useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e: MediaQueryListEvent) => setIsLarge(e.matches)
-    try {
-      mq.addEventListener('change', onChange)
-      return () => mq.removeEventListener('change', onChange)
-    } catch {
-      mq.addListener(onChange)
-      return () => mq.removeListener(onChange)
-    }
-  }, [])
-
-  // Resize state: track left panel width as percentage (default 35% for 35/65 ratio)
-  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(35)
-  const [isMinimized, setIsMinimized] = React.useState(false)
-  const [savedWidth, setSavedWidth] = React.useState<number>(35)
-  const [isResizing, setIsResizing] = React.useState(false)
-  const containerRef = React.useRef<HTMLDivElement>(null)
-
-  const toggleMinimize = React.useCallback(() => {
-    if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 35)
-      setIsMinimized(false)
-    } else {
-      setSavedWidth(leftPanelWidth)
-      setIsMinimized(true)
-    }
-  }, [isMinimized, leftPanelWidth, savedWidth])
-
-  const handleGlowingBarClick = React.useCallback(() => {
-    if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 35)
-      setIsMinimized(false)
-    }
-  }, [isMinimized, savedWidth])
-
-  const collapseShortcutLabel = getModShortcutLabel('B')
-  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
-
-  // Handle mouse move for resizing
-  React.useEffect(() => {
-    if (!isResizing) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const containerWidth = containerRect.width
-
-      // Calculate mouse position relative to container
-      const mouseX = e.clientX - containerRect.left
-
-      // Calculate new left panel width percentage
-      // Min 25%, Max 75% to prevent panels from getting too small
-      const minWidth = 25
-      const maxWidth = 75
-      const newWidthPercent = Math.max(
-        minWidth,
-        Math.min(maxWidth, (mouseX / containerWidth) * 100),
-      )
-
-      setLeftPanelWidth(newWidthPercent)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      // Restore cursor and text selection
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    // Set global cursor and prevent text selection during resize
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      // Cleanup in case component unmounts during resize
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizing])
-
-  if (!companyId) return <PageSkeleton columns="1fr" showInspector={false} />
-
-  // On small screens, use Grid layout (stack)
-  if (!isLarge) {
+  if (!companyId) {
     return (
-      <section style={{ minHeight: 0 }}>
-        <Grid columns="1fr" gap="4" align="stretch" style={{ minHeight: 0 }}>
-          <Card size="3" style={{ minHeight: 0 }}>
-            {entryForm}
-          </Card>
-          <Card size="3" style={{ overflowX: 'auto', minHeight: 0 }}>
-            {entriesTable}
-          </Card>
-        </Grid>
-      </section>
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.logging}
+        leftMinWidthPx={320}
+        rightMinWidthPx={320}
+        showLeftHeader={false}
+        showRightHeader={false}
+        showInspector={false}
+      />
     )
   }
 
-  // On large screens, use resizable flex layout
   return (
-    <section style={{ height: '100%', minHeight: 0 }}>
-      <Flex
-        ref={containerRef}
-        gap="2"
-        align="stretch"
-        style={{
-          height: '100%',
-          minHeight: 0,
-          position: 'relative',
-        }}
-      >
-        {/* LEFT */}
-        <Card
-          size="3"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
-            height: '100%',
-            minWidth: isMinimized ? '60px' : '320px',
-            maxWidth: isMinimized ? '60px' : '75%',
-            minHeight: 0,
-            flexShrink: 0,
-            transition: isResizing ? 'none' : 'width 0.1s ease-out',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {isMinimized ? (
-            <Box
-              onClick={handleGlowingBarClick}
-              onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement)
-                  bar.style.setProperty('width', '24px')
-              }}
-              onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement)
-                  bar.style.setProperty('width', '12px')
-              }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                cursor: 'pointer',
-                zIndex: 1,
-              }}
-            >
-              <Box
-                data-glowing-bar
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '20px',
-                  bottom: '20px',
-                  transform: 'translateX(-50%)',
-                  width: '12px',
-                  borderRadius: '4px',
-                  background:
-                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
-                  pointerEvents: 'none',
-                  zIndex: 5,
-                  transition: 'all 0.2s ease-out',
-                  animation: 'glow-pulse 5s ease-in-out infinite',
-                }}
-              />
-              <style>{`
-                @keyframes glow-pulse {
-                  0%, 100% {
-                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
-                  }
-                  50% {
-                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
-                  }
-                }
-              `}</style>
-            </Box>
-          ) : (
-            <>
-              <Box
-                style={{ position: 'absolute', top: 12, right: 12, zIndex: 5 }}
-              >
-                <Tooltip
-                  content={`Collapse sidebar (${collapseShortcutLabel})`}
-                >
-                  <IconButton
-                    size="3"
-                    variant="ghost"
-                    onClick={toggleMinimize}
-                    style={{ flexShrink: 0 }}
-                  >
-                    <TransitionLeft width={22} height={22} />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-              <Box
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                }}
-              >
-                {entryForm}
-              </Box>
-            </>
-          )}
-        </Card>
-
-        {/* RESIZER */}
-        {!isMinimized && (
-          <Box
-            className="section-resizer"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              setIsResizing(true)
-            }}
-            style={{
-              width: '6px',
-              height: '20%',
-              cursor: 'col-resize',
-              backgroundColor: 'var(--gray-a4)',
-              borderRadius: '4px',
-              flexShrink: 0,
-              alignSelf: 'center',
-              userSelect: 'none',
-              margin: '0 -4px',
-              zIndex: 10,
-              transition: isResizing ? 'none' : 'background-color 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                e.currentTarget.style.cursor = 'col-resize'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-              }
-            }}
-          />
-        )}
-
-        {/* RIGHT */}
-        <Card
-          size="3"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            height: '100%',
-            maxHeight: '100%',
-            overflow: 'hidden',
-            minWidth: '320px',
-            minHeight: 0,
-            transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
-          }}
-        >
-          <Box
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            {entriesTable}
-          </Box>
-        </Card>
-      </Flex>
-    </section>
+    <SplitPage
+      defaultLeftWidth={SPLIT_LEFT_WIDTH.logging}
+      leftMinWidthPx={320}
+      rightMinWidthPx={320}
+      showLeftHeader={false}
+      showRightHeader={false}
+      left={entryForm}
+      leftBodyStyle={{ overflowY: 'auto' }}
+      right={entriesTable}
+      rightBodyStyle={{
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      mobileRightCardStyle={{ overflowX: 'auto' }}
+    />
   )
 }
 

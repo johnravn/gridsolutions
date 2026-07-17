@@ -23,6 +23,7 @@ import {
   useTabKeyboardShortcuts,
 } from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { supabase } from '@shared/api/supabase'
 import CompaniesTable from '../components/CompaniesTable'
 import CompanyDialog from '../components/CompanyDialog'
@@ -552,12 +553,12 @@ export default function SuperPage() {
           minHeight: 0,
         }}
       >
-        <Tabs.List>
+        <AnimatedTabsList>
           <Tabs.Trigger value="monitor">Monitor</Tabs.Trigger>
           <Tabs.Trigger value="companies">Companies</Tabs.Trigger>
           <Tabs.Trigger value="users">Users</Tabs.Trigger>
           <Tabs.Trigger value="email">Email</Tabs.Trigger>
-        </Tabs.List>
+        </AnimatedTabsList>
 
         <Box
           pt="4"

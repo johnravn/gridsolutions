@@ -34,6 +34,7 @@ type Props = {
   showFreelancers: boolean
   showMyPending: boolean
   internalNotesByUserId?: Record<string, string>
+  createShortcutRef?: React.MutableRefObject<(() => void) | null>
 }
 
 const GRID_COLUMNS = 'minmax(180px, 2fr) minmax(120px, 1fr) 100px'
@@ -51,6 +52,7 @@ export default function CrewTable({
   showFreelancers,
   showMyPending,
   internalNotesByUserId,
+  createShortcutRef,
 }: Props) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -134,6 +136,13 @@ export default function CrewTable({
   }
 
   const [addOpen, setAddOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!createShortcutRef) return
+    createShortcutRef.current = () => setAddOpen(true)
+    return () => {
+      createShortcutRef.current = null
+    }
+  }, [createShortcutRef])
 
   const delInvite = useMutation({
     mutationFn: (inviteId: string) => deleteInvite({ inviteId }),

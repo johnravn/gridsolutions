@@ -151,27 +151,39 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     staleTime: 300_000,
   })
 
-  // 4) Resolve an effective company id (priority: LS > server > first)
+  // 4) Resolve an effective company id (priority: server > LS > first).
+  // profiles.selected_company_id is the source of truth (cross-device).
+  // While the server pref is still loading, use LS as a fast path — but never
+  // fall back to companies[0] until the server pref has been fetched, or we
+  // permanently overwrite the DB preference with the wrong company via the
+  // LS sync effect below.
+  // Optimistic switches update the query cache in setCompanyId so the UI
+  // does not snap back to a stale server value while the save is in flight.
   const companies = companiesQ.data ?? EMPTY_COMPANIES
+  const serverPrefFetched = serverPrefQ.isFetched
   const resolvedCompanyId = React.useMemo(() => {
     if (!companies.length) return null
+
+    const ls =
+      companyId && companies.some((c) => c.id === companyId) ? companyId : null
 
     const server =
       serverPrefQ.data && companies.some((c) => c.id === serverPrefQ.data)
         ? serverPrefQ.data
         : null
+
+    if (!serverPrefFetched) {
+      return ls
+    }
+
     if (server) return server
-
-    const ls =
-      companyId && companies.some((c) => c.id === companyId) ? companyId : null
     if (ls) return ls
-
     return companies[0]?.id ?? null
-  }, [companies, companyId, serverPrefQ.data])
+  }, [companies, companyId, serverPrefQ.data, serverPrefFetched])
 
-  // Keep localStorage in sync with the resolved id
+  // Keep localStorage in sync with the resolved id (only once we have one)
   React.useEffect(() => {
-    if (!lsKey) return
+    if (!lsKey || !resolvedCompanyId) return
     if (resolvedCompanyId !== companyId) {
       setCompanyIdState(resolvedCompanyId)
       safeSetLS(lsKey, resolvedCompanyId)
@@ -203,8 +215,11 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     // update local fast path
     setCompanyIdState(id)
     if (lsKey) safeSetLS(lsKey, id)
-    // persist to server
-    if (userId) savePref.mutate(id)
+    // optimistic cache so resolution stays on the new id while saving
+    if (userId) {
+      qc.setQueryData(['profile', userId, 'selected-company-id'], id)
+      savePref.mutate(id)
+    }
   }
 
   const company = companies.find((c) => c.id === resolvedCompanyId) ?? null

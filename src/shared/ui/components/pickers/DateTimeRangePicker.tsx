@@ -8,15 +8,18 @@ import { SegmentedControl } from './SegmentedControl'
 import {
   buildRangeIso,
   dateToLocalDate,
+  ensurePositiveSameDayTimes,
   extractRangeTimes,
   formatDateLabel,
   formatTimeLabel,
   getInitialMonth,
   handleRangeDateClick,
   handleRangeHourClick,
+  isEndMinuteDisabled,
   isFullDayEnd,
   isFullDayStart,
   isInvalidTimeRange,
+  isStartMinuteDisabled,
   parseIso,
   startOfDay,
   toLocalDate,
@@ -139,6 +142,14 @@ export default function DateTimeRangePicker({
     setActiveTimeTab('start')
   }, [open, syncFromProps])
 
+  // Keep the closed trigger in sync when the parent form resets/prefills
+  // (e.g. Edit Job / Add Role). Internal selection state otherwise wins and
+  // can leave the trigger empty or stale after form.reset().
+  React.useEffect(() => {
+    if (open) return
+    syncFromProps()
+  }, [startAt, endAt, open, syncFromProps])
+
   const endDate = dateSelection.start
     ? resolveEndDate(dateSelection.start, dateSelection.end)
     : null
@@ -158,6 +169,16 @@ export default function DateTimeRangePicker({
     }, MULTI_DAY_END_TAB_DELAY_MS)
   }
 
+  const minDurationMs = minuteStep * 60_000
+
+  const applySameDayTimes = (
+    times: RangeTimeSelection,
+  ): RangeTimeSelection | null => {
+    if (!isSameDay) return times
+    if (times.startHour == null || times.endHour == null) return times
+    return ensurePositiveSameDayTimes(times, minuteStep)
+  }
+
   const commitRange = (
     dates: { start: string; end: string },
     times: RangeTimeSelection,
@@ -166,6 +187,7 @@ export default function DateTimeRangePicker({
       dates.start,
       dates.end,
       times,
+      minDurationMs,
     )
     onChange({ startAt: newStart, endAt: newEnd })
   }
@@ -196,7 +218,7 @@ export default function DateTimeRangePicker({
     )
     const hadCompleteHours =
       timeSelection.startHour != null && timeSelection.endHour != null
-    const times = {
+    const draft: RangeTimeSelection = {
       startHour: next.start,
       endHour: next.end,
       startMinute:
@@ -207,6 +229,8 @@ export default function DateTimeRangePicker({
             : (timeSelection.startMinute ?? 0),
       endMinute: next.end != null ? (timeSelection.endMinute ?? 0) : null,
     }
+    const times = applySameDayTimes(draft)
+    if (!times) return
     setTimeSelection(times)
     commitRange({ start: dateSelection.start, end: endDate }, times)
     if (next.start != null && next.end == null) {
@@ -216,11 +240,13 @@ export default function DateTimeRangePicker({
 
   const handleStartHourClick = (hour: number) => {
     if (disabled || !dateSelection.start || !endDate) return
-    const times = {
+    const draft = {
       ...timeSelection,
       startHour: hour,
       startMinute: timeSelection.startMinute ?? 0,
     }
+    const times = applySameDayTimes(draft)
+    if (!times) return
     setTimeSelection(times)
     commitRange({ start: dateSelection.start, end: endDate }, times)
     scheduleAdvanceToEndTab()
@@ -228,11 +254,13 @@ export default function DateTimeRangePicker({
 
   const handleEndHourClick = (hour: number) => {
     if (disabled || !dateSelection.start || !endDate) return
-    const times = {
+    const draft = {
       ...timeSelection,
       endHour: hour,
       endMinute: timeSelection.endMinute ?? 0,
     }
+    const times = applySameDayTimes(draft)
+    if (!times) return
     setTimeSelection(times)
     commitRange({ start: dateSelection.start, end: endDate }, times)
   }
@@ -240,7 +268,10 @@ export default function DateTimeRangePicker({
   const handleStartMinuteClick = (minute: number) => {
     if (disabled || !dateSelection.start || !endDate) return
     if (timeSelection.startHour == null) return
-    const times = { ...timeSelection, startMinute: minute }
+    if (isStartMinuteDisabled(minute, timeSelection, isSameDay)) return
+    const draft = { ...timeSelection, startMinute: minute }
+    const times = applySameDayTimes(draft)
+    if (!times) return
     setTimeSelection(times)
     commitRange({ start: dateSelection.start, end: endDate }, times)
     scheduleAdvanceToEndTab()
@@ -249,7 +280,10 @@ export default function DateTimeRangePicker({
   const handleEndMinuteClick = (minute: number) => {
     if (disabled || !dateSelection.start || !endDate) return
     if (timeSelection.endHour == null) return
-    const times = { ...timeSelection, endMinute: minute }
+    if (isEndMinuteDisabled(minute, timeSelection, isSameDay)) return
+    const draft = { ...timeSelection, endMinute: minute }
+    const times = applySameDayTimes(draft)
+    if (!times) return
     setTimeSelection(times)
     commitRange({ start: dateSelection.start, end: endDate }, times)
   }
@@ -460,6 +494,9 @@ export default function DateTimeRangePicker({
                       selectedMinute={timeSelection.startMinute}
                       onMinuteClick={handleStartMinuteClick}
                       disabled={disabled || timeSelection.startHour == null}
+                      isMinuteDisabled={(minute) =>
+                        isStartMinuteDisabled(minute, timeSelection, isSameDay)
+                      }
                     />
                   ) : (
                     <MinuteGrid
@@ -468,6 +505,9 @@ export default function DateTimeRangePicker({
                       selectedMinute={timeSelection.endMinute}
                       onMinuteClick={handleEndMinuteClick}
                       disabled={disabled || timeSelection.endHour == null}
+                      isMinuteDisabled={(minute) =>
+                        isEndMinuteDisabled(minute, timeSelection, isSameDay)
+                      }
                     />
                   )}
                   <Text size="1" color="gray" mt="3">

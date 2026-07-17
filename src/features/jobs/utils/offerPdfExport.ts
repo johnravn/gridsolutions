@@ -2,9 +2,19 @@
 import jsPDF from 'jspdf'
 import { calculateRentalFactor } from './offerCalculations'
 import { formatOfferNumberDisplay } from './offerNumber'
+import { parseOptionsGroups } from './optionsBlockStorage'
+import {
+  applyOptionsToOfferTotals,
+  calculateOptionsSubtotal,
+  collectOfferOptions,
+} from './prettyOfferOptions'
 import { normalizeTransportGroups } from './transportGroups'
 import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
+
+export type OfferPdfExportOptions = {
+  selectedOptionIds?: Array<string>
+}
 
 const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('nb-NO', {
@@ -155,7 +165,10 @@ const tintColor = (
 /**
  * Export an offer as PDF
  */
-export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
+export async function exportOfferAsPDF(
+  offer: OfferDetail,
+  exportOptions?: OfferPdfExportOptions,
+): Promise<void> {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
@@ -701,129 +714,178 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
         }
         yPos += 2
       } else {
-      const blocks = [...(module.blocks ?? module.content_blocks ?? [])].sort(
-        (a, b) => a.sort_order - b.sort_order,
-      )
+        const blocks = [...(module.blocks ?? module.content_blocks ?? [])].sort(
+          (a, b) => a.sort_order - b.sort_order,
+        )
 
-      for (const block of blocks) {
-        ensureSpace(6)
-        doc.setFont('helvetica', 'normal')
+        for (const block of blocks) {
+          ensureSpace(6)
+          doc.setFont('helvetica', 'normal')
 
-        if (block.block_type === 'subtitle' && block.text_content) {
-          doc.setFont('helvetica', 'bold')
-          const lines = doc.splitTextToSize(block.text_content, contentWidth)
-          lines.forEach((line: string) => {
-            ensureSpace(6)
-            doc.text(line, margin, yPos)
-            yPos += lineHeight
-          })
-          yPos += 2
-          continue
-        }
-
-        if (block.block_type === 'description' && block.text_content) {
-          const lines = doc.splitTextToSize(block.text_content, contentWidth)
-          lines.forEach((line: string) => {
-            ensureSpace(6)
-            doc.text(line, margin, yPos)
-            yPos += lineHeight
-          })
-          yPos += 2
-          continue
-        }
-
-        if (block.block_type === 'simple_list') {
-          if (block.text_content) {
+          if (block.block_type === 'subtitle' && block.text_content) {
             doc.setFont('helvetica', 'bold')
-            const titleLines = doc.splitTextToSize(
-              block.text_content,
-              contentWidth,
-            )
-            titleLines.forEach((line: string) => {
+            const lines = doc.splitTextToSize(block.text_content, contentWidth)
+            lines.forEach((line: string) => {
               ensureSpace(6)
               doc.text(line, margin, yPos)
               yPos += lineHeight
             })
-            doc.setFont('helvetica', 'normal')
             yPos += 2
+            continue
           }
-          for (const item of [...(block.items ?? [])].sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )) {
-            const label = item.summary
-              ? `• ${item.label} — ${item.summary}`
-              : `• ${item.label}`
-            const lines = doc.splitTextToSize(label, contentWidth)
+
+          if (block.block_type === 'description' && block.text_content) {
+            const lines = doc.splitTextToSize(block.text_content, contentWidth)
             lines.forEach((line: string) => {
               ensureSpace(6)
               doc.text(line, margin, yPos)
               yPos += lineHeight
             })
+            yPos += 2
+            continue
           }
-          yPos += 2
-          continue
-        }
 
-        if (block.block_type === 'interactive_list') {
-          for (const item of [...(block.items ?? [])].sort(
-            (a, b) => a.sort_order - b.sort_order,
-          )) {
-            const detail = item.detail ? `: ${item.detail}` : ''
-            const lines = doc.splitTextToSize(
-              `• ${item.label}${detail}`,
-              contentWidth,
-            )
-            lines.forEach((line: string) => {
-              ensureSpace(6)
-              doc.text(line, margin, yPos)
-              yPos += lineHeight
-            })
-          }
-          yPos += 2
-          continue
-        }
-
-        if (block.block_type === 'gallery') {
-          const images = [...(block.items ?? [])]
-            .filter((item) => item.url)
-            .sort((a, b) => a.sort_order - b.sort_order)
-          if (images.length > 0) {
-            doc.setFont('helvetica', 'italic')
-            for (const image of images) {
-              const caption = image.summary ? ` (${image.summary})` : ''
-              const mediaLines = doc.splitTextToSize(
-                `gallery image: ${image.url}${caption}`,
+          if (block.block_type === 'simple_list') {
+            if (block.text_content) {
+              doc.setFont('helvetica', 'bold')
+              const titleLines = doc.splitTextToSize(
+                block.text_content,
                 contentWidth,
               )
-              mediaLines.forEach((line: string) => {
+              titleLines.forEach((line: string) => {
+                ensureSpace(6)
+                doc.text(line, margin, yPos)
+                yPos += lineHeight
+              })
+              doc.setFont('helvetica', 'normal')
+              yPos += 2
+            }
+            for (const item of [...(block.items ?? [])].sort(
+              (a, b) => a.sort_order - b.sort_order,
+            )) {
+              const label = item.summary
+                ? `• ${item.label} — ${item.summary}`
+                : `• ${item.label}`
+              const lines = doc.splitTextToSize(label, contentWidth)
+              lines.forEach((line: string) => {
                 ensureSpace(6)
                 doc.text(line, margin, yPos)
                 yPos += lineHeight
               })
             }
             yPos += 2
+            continue
           }
-          continue
-        }
 
-        if (
-          (block.block_type === 'video' || block.block_type === 'link') &&
-          block.url
-        ) {
-          doc.setFont('helvetica', 'italic')
-          const mediaLabel =
-            block.block_type === 'link'
-              ? `${block.link_title || 'Link'}: ${block.url}`
-              : `${block.block_type}: ${block.url}`
-          const mediaLines = doc.splitTextToSize(mediaLabel, contentWidth)
-          mediaLines.forEach((line: string) => {
-            ensureSpace(6)
-            doc.text(line, margin, yPos)
-            yPos += lineHeight
-          })
-          yPos += 2
+          if (block.block_type === 'interactive_list') {
+            for (const item of [...(block.items ?? [])].sort(
+              (a, b) => a.sort_order - b.sort_order,
+            )) {
+              const detail = item.detail ? `: ${item.detail}` : ''
+              const lines = doc.splitTextToSize(
+                `• ${item.label}${detail}`,
+                contentWidth,
+              )
+              lines.forEach((line: string) => {
+                ensureSpace(6)
+                doc.text(line, margin, yPos)
+                yPos += lineHeight
+              })
+            }
+            yPos += 2
+            continue
+          }
+
+          if (block.block_type === 'gallery') {
+            const images = [...(block.items ?? [])]
+              .filter((item) => item.url)
+              .sort((a, b) => a.sort_order - b.sort_order)
+            if (images.length > 0) {
+              doc.setFont('helvetica', 'italic')
+              for (const image of images) {
+                const caption = image.summary ? ` (${image.summary})` : ''
+                const mediaLines = doc.splitTextToSize(
+                  `gallery image: ${image.url}${caption}`,
+                  contentWidth,
+                )
+                mediaLines.forEach((line: string) => {
+                  ensureSpace(6)
+                  doc.text(line, margin, yPos)
+                  yPos += lineHeight
+                })
+              }
+              yPos += 2
+            }
+            continue
+          }
+
+          if (
+            (block.block_type === 'video' || block.block_type === 'link') &&
+            block.url
+          ) {
+            doc.setFont('helvetica', 'italic')
+            const mediaLabel =
+              block.block_type === 'link'
+                ? `${block.link_title || 'Link'}: ${block.url}`
+                : `${block.block_type}: ${block.url}`
+            const mediaLines = doc.splitTextToSize(mediaLabel, contentWidth)
+            mediaLines.forEach((line: string) => {
+              ensureSpace(6)
+              doc.text(line, margin, yPos)
+              yPos += lineHeight
+            })
+            yPos += 2
+            continue
+          }
+
+          if (block.block_type === 'options') {
+            if (block.text_content) {
+              doc.setFont('helvetica', 'bold')
+              const titleLines = doc.splitTextToSize(
+                block.text_content,
+                contentWidth,
+              )
+              titleLines.forEach((line: string) => {
+                ensureSpace(6)
+                doc.text(line, margin, yPos)
+                yPos += lineHeight
+              })
+              doc.setFont('helvetica', 'normal')
+              yPos += 2
+            }
+
+            for (const group of parseOptionsGroups(block.items)) {
+              const groupTitle =
+                group.title?.trim() ||
+                (group.selectionMode === 'single'
+                  ? 'Choose one'
+                  : 'Optional add-ons')
+              doc.setFont('helvetica', 'bold')
+              const groupLines = doc.splitTextToSize(groupTitle, contentWidth)
+              groupLines.forEach((line: string) => {
+                ensureSpace(6)
+                doc.text(line, margin, yPos)
+                yPos += lineHeight
+              })
+              doc.setFont('helvetica', 'normal')
+
+              for (const option of group.options) {
+                const priceLabel =
+                  option.price > 0 ? ` (+${formatCurrency(option.price)})` : ''
+                const lines = doc.splitTextToSize(
+                  `• ${option.label || 'Option'}${priceLabel}`,
+                  contentWidth,
+                )
+                lines.forEach((line: string) => {
+                  ensureSpace(6)
+                  doc.text(line, margin + 4, yPos)
+                  yPos += lineHeight
+                })
+              }
+              yPos += 2
+            }
+          }
         }
-      }
       }
 
       if (module.show_price && module.display_price != null) {
@@ -866,7 +928,38 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   }
 
   yPos += 6
-  const subtotalBlockHeight = 9 + 3 * 5 + 6
+  const allOfferOptions = collectOfferOptions(offer.modules ?? [])
+  const selectedOptionIds =
+    exportOptions?.selectedOptionIds ??
+    offer.accepted_option_selections?.map((entry) => entry.option_id) ??
+    []
+  const optionsSubtotal =
+    offer.accepted_options_subtotal ??
+    (selectedOptionIds.length > 0
+      ? calculateOptionsSubtotal(selectedOptionIds, allOfferOptions)
+      : 0)
+  const baseSubtotal =
+    offer.status === 'accepted' && (offer.accepted_options_subtotal ?? 0) > 0
+      ? offer.total_before_discount - (offer.accepted_options_subtotal ?? 0)
+      : offer.total_before_discount
+  const displayTotals =
+    offer.status === 'accepted' && (offer.accepted_options_subtotal ?? 0) > 0
+      ? {
+          totalBeforeDiscount: offer.total_before_discount,
+          discountAmount:
+            offer.total_before_discount - offer.total_after_discount,
+          totalAfterDiscount: offer.total_after_discount,
+          vatAmount: offer.total_with_vat - offer.total_after_discount,
+          totalWithVat: offer.total_with_vat,
+        }
+      : applyOptionsToOfferTotals(
+          baseSubtotal,
+          optionsSubtotal,
+          offer.vat_percent,
+          offer.discount_percent,
+        )
+
+  const subtotalBlockHeight = 9 + 3 * 5 + 6 + (optionsSubtotal > 0 ? 10 : 0)
   ensureSpace(subtotalBlockHeight)
   addSectionHeader('Subtotals')
   const subtotalX = margin + 100
@@ -892,6 +985,28 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   })
   yPos += 6
 
+  if (optionsSubtotal > 0) {
+    addSectionHeader('Selected options')
+    for (const optionId of selectedOptionIds) {
+      const option = allOfferOptions.find(
+        (entry) => entry.optionId === optionId,
+      )
+      if (!option) continue
+      doc.text(option.label || 'Option', margin, yPos)
+      doc.text(formatCurrency(option.price), subtotalX, yPos, {
+        align: 'right',
+      })
+      yPos += 5
+    }
+    doc.setFont('helvetica', 'bold')
+    doc.text('Options subtotal', margin, yPos)
+    doc.text(formatCurrency(optionsSubtotal), subtotalX, yPos, {
+      align: 'right',
+    })
+    doc.setFont('helvetica', 'normal')
+    yPos += 6
+  }
+
   const totalsLineCount = 4 + (offer.discount_percent > 0 ? 1 : 0) + 1
   const totalsBlockHeight = 9 + totalsLineCount * 5 + 8
   ensureSpace(totalsBlockHeight)
@@ -901,36 +1016,40 @@ export async function exportOfferAsPDF(offer: OfferDetail): Promise<void> {
   doc.setFont('helvetica', 'normal')
   doc.setTextColor(30)
   doc.text('Total Before Discount', margin, yPos)
-  doc.text(formatCurrency(offer.total_before_discount), subtotalX, yPos, {
+  doc.text(formatCurrency(displayTotals.totalBeforeDiscount), subtotalX, yPos, {
     align: 'right',
   })
   yPos += 5
 
   if (offer.discount_percent > 0) {
-    const discountAmount =
-      offer.total_before_discount - offer.total_after_discount
     doc.text(`Equipment discount (${offer.discount_percent}%)`, margin, yPos)
-    doc.text(`-${formatCurrency(discountAmount)}`, subtotalX, yPos, {
-      align: 'right',
-    })
+    doc.text(
+      `-${formatCurrency(displayTotals.discountAmount)}`,
+      subtotalX,
+      yPos,
+      {
+        align: 'right',
+      },
+    )
     yPos += 5
   }
 
   doc.text('Total After Discount', margin, yPos)
-  doc.text(formatCurrency(offer.total_after_discount), subtotalX, yPos, {
+  doc.text(formatCurrency(displayTotals.totalAfterDiscount), subtotalX, yPos, {
     align: 'right',
   })
   yPos += 5
 
-  const vatAmount = offer.total_with_vat - offer.total_after_discount
   doc.text(`VAT (${offer.vat_percent}%)`, margin, yPos)
-  doc.text(formatCurrency(vatAmount), subtotalX, yPos, { align: 'right' })
+  doc.text(formatCurrency(displayTotals.vatAmount), subtotalX, yPos, {
+    align: 'right',
+  })
   yPos += 7
 
   doc.setFontSize(11)
   doc.setFont('helvetica', 'bold')
   doc.text('Total With VAT', margin, yPos)
-  doc.text(formatCurrency(offer.total_with_vat), subtotalX, yPos, {
+  doc.text(formatCurrency(displayTotals.totalWithVat), subtotalX, yPos, {
     align: 'right',
   })
 

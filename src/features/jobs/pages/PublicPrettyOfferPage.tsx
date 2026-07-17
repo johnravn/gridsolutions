@@ -4,6 +4,10 @@ import { PrettyOfferHero } from '../components/pretty-offer/PrettyOfferHero'
 import { PrettyOfferModuleSlide } from '../components/pretty-offer/PrettyOfferModuleSlide'
 import { PrettyOfferFooter } from '../components/pretty-offer/PrettyOfferFooter'
 import { PrettyOfferStatusBanner } from '../components/pretty-offer/PrettyOfferStatusNotice'
+import {
+  PrettyOfferOptionsProvider,
+  usePrettyOfferOptions,
+} from '../components/pretty-offer/PrettyOfferOptionsContext'
 import { hasPrettyOfferStatusNotice } from '../utils/prettyOfferStatusNotice'
 import '../components/pretty-offer/prettyOfferDeckStyles.css'
 import { usePublicOfferResponse } from '../hooks/usePublicOfferResponse'
@@ -19,10 +23,13 @@ type Props = {
   accessToken: string
 }
 
-export default function PublicPrettyOfferPage({ offer, accessToken }: Props) {
+function PublicPrettyOfferPageContent({ offer, accessToken }: Props) {
   const prettyTheme = resolvePrettyOfferTheme(offer)
   const themeStyle = buildDeckGradientCss(prettyTheme)
-  const response = usePublicOfferResponse(accessToken, offer)
+  const optionsContext = usePrettyOfferOptions()
+  const response = usePublicOfferResponse(accessToken, offer, {
+    getSelectedOptionIds: () => [...(optionsContext?.selectedOptionIds ?? [])],
+  })
 
   const canAccept = offer.status === 'sent'
   const showStatusNotice = hasPrettyOfferStatusNotice(offer)
@@ -76,5 +83,16 @@ export default function PublicPrettyOfferPage({ offer, accessToken }: Props) {
         )}
       </motion.div>
     </Box>
+  )
+}
+
+export default function PublicPrettyOfferPage({ offer, accessToken }: Props) {
+  return (
+    <PrettyOfferOptionsProvider
+      modules={offer.modules ?? []}
+      acceptedSelections={offer.accepted_option_selections}
+    >
+      <PublicPrettyOfferPageContent offer={offer} accessToken={accessToken} />
+    </PrettyOfferOptionsProvider>
   )
 }

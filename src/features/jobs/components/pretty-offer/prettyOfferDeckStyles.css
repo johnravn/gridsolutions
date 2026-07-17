@@ -523,8 +523,7 @@
 
 .pretty-deck-resource-summary__chevron {
   flex-shrink: 0;
-  transition: transform var(--motion-duration-reveal)
-    var(--motion-ease-reveal);
+  transition: transform var(--motion-duration-reveal) var(--motion-ease-reveal);
 }
 
 .pretty-deck-resource-summary[aria-expanded='true']
@@ -706,4 +705,47 @@
   .pretty-deck-logo-lockup__divider {
     display: none;
   }
+}
+
+.pretty-deck-options-block {
+  margin-top: 0.5rem;
+}
+
+.pretty-deck-options-group + .pretty-deck-options-group {
+  margin-top: 0.25rem;
+}
+
+.pretty-deck-option-card {
+  border: 1px solid var(--gray-a5);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  background: color-mix(in srgb, var(--color-panel-solid) 92%, transparent);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease;
+}
+
+.pretty-deck-option-card--selected {
+  border-color: var(--pretty-deck-brand-solid, var(--accent-9));
+  box-shadow: 0 0 0 1px
+    color-mix(
+      in srgb,
+      var(--pretty-deck-brand-solid, var(--accent-9)) 35%,
+      transparent
+    );
+  background: color-mix(
+    in srgb,
+    var(--pretty-deck-brand-solid, var(--accent-9)) 8%,
+    var(--color-panel-solid)
+  );
+}
+
+.pretty-deck-option-price {
+  white-space: nowrap;
+  color: var(--pretty-deck-brand-solid, var(--accent-11));
+}
+
+.pretty-deck-option-content {
+  border-left: 2px solid var(--gray-a5);
 }

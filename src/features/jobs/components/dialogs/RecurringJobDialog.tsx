@@ -1,17 +1,13 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Button,
-  Checkbox,
-  Dialog,
-  Flex,
-  Select,
-  Text,
-  TextArea,
-  TextField,
-} from '@radix-ui/themes'
+import { Box, Button, Checkbox, Dialog, Flex, Text } from '@radix-ui/themes'
+import { format } from 'date-fns'
+import { z } from 'zod'
+import { useStore } from '@tanstack/react-form'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import DateTimePicker from '@shared/ui/components/DateTimePicker'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
@@ -31,6 +27,66 @@ type Props = {
   onSaved?: (id: UUID) => void
 }
 
+function todayIsoDate(): string {
+  return format(new Date(), 'yyyy-MM-dd')
+}
+
+function dateOnlyToPickerValue(dateOnly: string): string {
+  if (!dateOnly) return ''
+  return `${dateOnly}T12:00:00`
+}
+
+function pickerValueToDateOnly(value: string): string {
+  if (!value) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
+  return format(new Date(value), 'yyyy-MM-dd')
+}
+
+const defaultValues = {
+  title: '',
+  description: '',
+  projectLead: '' as UUID | '',
+  isCompanyCustomer: false,
+  customerId: '' as UUID | '',
+  customerUserId: '' as UUID | '',
+  contactId: '' as UUID | '',
+  periodStart: todayIsoDate(),
+  periodEnd: '',
+}
+
+const schema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    description: z.string(),
+    projectLead: z.string(),
+    isCompanyCustomer: z.boolean(),
+    customerId: z.string(),
+    customerUserId: z.string(),
+    contactId: z.string(),
+    periodStart: z.string().min(1, 'Period start is required'),
+    periodEnd: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.isCompanyCustomer && data.customerId && !data.contactId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Select a contact',
+        path: ['contactId'],
+      })
+    }
+    if (
+      data.periodStart &&
+      data.periodEnd &&
+      data.periodEnd < data.periodStart
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Period end must be on or after period start',
+        path: ['periodEnd'],
+      })
+    }
+  })
+
 export default function RecurringJobDialog({
   open,
   onOpenChange,
@@ -42,38 +98,45 @@ export default function RecurringJobDialog({
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
 
-  const [title, setTitle] = React.useState('')
-  const [description, setDescription] = React.useState('')
-  const [projectLead, setProjectLead] = React.useState<UUID | ''>('')
-  const [isCompanyCustomer, setIsCompanyCustomer] = React.useState(false)
-  const [customerId, setCustomerId] = React.useState<UUID | ''>('')
-  const [customerUserId, setCustomerUserId] = React.useState<UUID | ''>('')
-  const [contactId, setContactId] = React.useState<UUID | ''>('')
-  const applyingDefaultsRef = React.useRef(false)
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await save.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
-    if (!open || mode !== 'edit' || !initialData) return
-    applyingDefaultsRef.current = true
-    setTitle(initialData.title)
-    setDescription(initialData.description ?? '')
-    setProjectLead(initialData.project_lead_user_id ?? '')
-    setIsCompanyCustomer(Boolean(initialData.customer_user_id))
-    setCustomerId(initialData.customer_id ?? '')
-    setCustomerUserId(initialData.customer_user_id ?? '')
-    setContactId(initialData.customer_contact_id ?? '')
-  }, [open, mode, initialData])
-
-  React.useEffect(() => {
-    if (!open || mode !== 'create') return
-    applyingDefaultsRef.current = true
-    setTitle('')
-    setDescription('')
-    setProjectLead('')
-    setIsCompanyCustomer(false)
-    setCustomerId('')
-    setCustomerUserId('')
-    setContactId('')
-  }, [open, mode])
+    if (!open) return
+    if (mode === 'edit' && initialData) {
+      form.reset(
+        {
+          title: initialData.title,
+          description: initialData.description ?? '',
+          projectLead: initialData.project_lead_user_id ?? '',
+          isCompanyCustomer: Boolean(initialData.customer_user_id),
+          customerId: initialData.customer_id ?? '',
+          customerUserId: initialData.customer_user_id ?? '',
+          contactId: initialData.customer_contact_id ?? '',
+          periodStart: initialData.period_start ?? todayIsoDate(),
+          periodEnd: initialData.period_end ?? '',
+        },
+        { keepDefaultValues: true },
+      )
+    } else {
+      form.reset(
+        {
+          ...defaultValues,
+          periodStart: todayIsoDate(),
+          periodEnd: '',
+        },
+        { keepDefaultValues: true },
+      )
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open, mode, initialData?.id])
 
   React.useEffect(() => {
     if (!open || mode !== 'create') return
@@ -89,26 +152,16 @@ export default function RecurringJobDialog({
         .eq('user_id', user.id)
         .maybeSingle()
       if (cu?.role === 'freelancer') return
-      setProjectLead(user.id)
+      form.setFieldValue('projectLead', user.id)
     }
-    setCurrentUserAsLead()
+    void setCurrentUserAsLead()
+    // Set lead on create open
   }, [open, mode, companyId])
 
-  React.useEffect(() => {
-    if (applyingDefaultsRef.current) {
-      applyingDefaultsRef.current = false
-      return
-    }
-    if (customerId) setCustomerUserId('')
-    setContactId('')
-  }, [customerId])
-
-  React.useEffect(() => {
-    if (customerUserId) {
-      setCustomerId('')
-      setContactId('')
-    }
-  }, [customerUserId])
+  const customerId = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.customerId,
+  )
 
   const { data: leads = [] } = useQuery({
     queryKey: ['company', companyId, 'project-leads'],
@@ -181,27 +234,36 @@ export default function RecurringJobDialog({
   })
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof defaultValues) => {
+      const periodStart = pickerValueToDateOnly(value.periodStart)
+      const periodEnd = value.periodEnd
+        ? pickerValueToDateOnly(value.periodEnd)
+        : null
+
       if (mode === 'create') {
         return createRecurringJob({
           companyId,
-          title,
-          description: description || null,
-          projectLeadUserId: projectLead || null,
-          customerId: customerId || null,
-          customerUserId: customerUserId || null,
-          customerContactId: contactId || null,
+          title: value.title,
+          description: value.description || null,
+          projectLeadUserId: value.projectLead || null,
+          customerId: value.customerId || null,
+          customerUserId: value.customerUserId || null,
+          customerContactId: value.contactId || null,
+          periodStart,
+          periodEnd,
         })
       }
       if (!initialData) throw new Error('Missing recurring job')
       await updateRecurringJob({
         id: initialData.id,
-        title,
-        description: description || null,
-        projectLeadUserId: projectLead || null,
-        customerId: customerId || null,
-        customerUserId: customerUserId || null,
-        customerContactId: contactId || null,
+        title: value.title,
+        description: value.description || null,
+        projectLeadUserId: value.projectLead || null,
+        customerId: value.customerId || null,
+        customerUserId: value.customerUserId || null,
+        customerContactId: value.contactId || null,
+        periodStart,
+        periodEnd,
       })
       return initialData.id
     },
@@ -210,6 +272,9 @@ export default function RecurringJobDialog({
         queryKey: ['company', companyId, 'recurring-jobs-index'],
       })
       qc.invalidateQueries({ queryKey: ['recurring-jobs-detail', id] })
+      qc.invalidateQueries({
+        queryKey: ['home', companyId, 'active-recurring-jobs'],
+      })
       success(
         mode === 'create' ? 'Recurring job created' : 'Recurring job updated',
       )
@@ -220,10 +285,6 @@ export default function RecurringJobDialog({
       showError('Failed to save', err.message)
     },
   })
-
-  const needsContact = !isCompanyCustomer && !!customerId
-  const disabled =
-    save.isPending || !title.trim() || (needsContact && !contactId)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -240,132 +301,234 @@ export default function RecurringJobDialog({
           remains its own job.
         </Dialog.Description>
 
-        <Flex direction="column" gap="3">
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Title
-            </Text>
-            <TextField.Root
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g. National Theatre — Spring 2026"
-            />
-          </label>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3">
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title"
+                    placeholder="e.g. National Theatre — Spring 2026"
+                  />
+                )}
+              </form.AppField>
 
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Notes
-            </Text>
-            <TextArea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Internal notes for this recurring job series"
-              rows={4}
-            />
-          </label>
+              <form.AppField name="description">
+                {(field) => (
+                  <field.TextArea
+                    label="Notes"
+                    placeholder="Internal notes for this recurring job series"
+                    rows={4}
+                  />
+                )}
+              </form.AppField>
 
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Project lead
-            </Text>
-            <Select.Root
-              value={projectLead || undefined}
-              onValueChange={(v) => setProjectLead(v)}
-            >
-              <Select.Trigger placeholder="Select project lead" />
-              <Select.Content>
-                {leads.map((l) => (
-                  <Select.Item key={l.user_id} value={l.user_id}>
-                    {l.display_name || l.email}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-          </label>
+              <Flex gap="3" wrap="wrap">
+                <form.AppField name="periodStart">
+                  {(field) => (
+                    <Box style={{ flex: '1 1 160px', minWidth: 0 }}>
+                      <DateTimePicker
+                        dateOnly
+                        label="Period start"
+                        value={dateOnlyToPickerValue(field.state.value)}
+                        onChange={(v) =>
+                          field.handleChange(pickerValueToDateOnly(v))
+                        }
+                        invalid={field.state.meta.errors.length > 0}
+                        locale="nb"
+                      />
+                      {field.state.meta.errors[0] != null && (
+                        <Text size="1" color="red" mt="1" as="div">
+                          {String(field.state.meta.errors[0])}
+                        </Text>
+                      )}
+                    </Box>
+                  )}
+                </form.AppField>
 
-          <Flex align="center" gap="2">
-            <Checkbox
-              checked={isCompanyCustomer}
-              onCheckedChange={(v) => {
-                setIsCompanyCustomer(v === true)
-                if (v) {
-                  setCustomerId('')
-                } else {
-                  setCustomerUserId('')
+                <form.AppField name="periodEnd">
+                  {(field) => (
+                    <Box style={{ flex: '1 1 160px', minWidth: 0 }}>
+                      <DateTimePicker
+                        dateOnly
+                        label="Period end (optional)"
+                        placeholder="Open-ended"
+                        value={dateOnlyToPickerValue(field.state.value)}
+                        onChange={(v) =>
+                          field.handleChange(pickerValueToDateOnly(v))
+                        }
+                        invalid={field.state.meta.errors.length > 0}
+                        locale="nb"
+                      />
+                      {field.state.meta.errors[0] != null && (
+                        <Text size="1" color="red" mt="1" as="div">
+                          {String(field.state.meta.errors[0])}
+                        </Text>
+                      )}
+                    </Box>
+                  )}
+                </form.AppField>
+              </Flex>
+
+              <form.AppField name="projectLead">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      Project lead
+                    </Text>
+                    <SearchableSelect
+                      options={leads.map((l) => ({
+                        value: l.user_id,
+                        label: l.display_name || l.email,
+                      }))}
+                      value={field.state.value}
+                      onValueChange={field.handleChange}
+                      placeholder="Search project lead…"
+                      emptyMessage="No project leads found"
+                      style={{ width: '100%', minWidth: 0 }}
+                    />
+                  </Flex>
+                )}
+              </form.AppField>
+
+              <form.AppField name="isCompanyCustomer">
+                {(field) => (
+                  <Flex align="center" gap="2">
+                    <Checkbox
+                      checked={!!field.state.value}
+                      onCheckedChange={(v) => {
+                        field.handleChange(v === true)
+                        if (v) {
+                          form.setFieldValue('customerId', '')
+                        } else {
+                          form.setFieldValue('customerUserId', '')
+                        }
+                      }}
+                    />
+                    <Text as="label" size="2">
+                      Customer is a company member
+                    </Text>
+                  </Flex>
+                )}
+              </form.AppField>
+
+              <form.Subscribe
+                selector={(state) => state.values.isCompanyCustomer}
+              >
+                {(isCompanyCustomer) =>
+                  isCompanyCustomer ? (
+                    <form.AppField name="customerUserId">
+                      {(field) => (
+                        <Flex direction="column" gap="1">
+                          <Text as="div" size="2" weight="medium">
+                            Company member
+                          </Text>
+                          <SearchableSelect
+                            options={companyUsers.map((u) => ({
+                              value: u.user_id,
+                              label: u.display_name || u.email,
+                            }))}
+                            value={field.state.value}
+                            onValueChange={(v) => {
+                              field.handleChange(v)
+                              form.setFieldValue('customerId', '')
+                              form.setFieldValue('contactId', '')
+                            }}
+                            placeholder="Select member"
+                            style={{ width: '100%', minWidth: 0 }}
+                          />
+                        </Flex>
+                      )}
+                    </form.AppField>
+                  ) : (
+                    <>
+                      <form.AppField name="customerId">
+                        {(field) => (
+                          <Flex direction="column" gap="1">
+                            <Text as="div" size="2" weight="medium">
+                              Customer
+                            </Text>
+                            <SearchableSelect
+                              options={customers.map((c) => ({
+                                value: c.id,
+                                label: c.name,
+                              }))}
+                              value={field.state.value}
+                              onValueChange={(v) => {
+                                field.handleChange(v)
+                                form.setFieldValue('customerUserId', '')
+                                form.setFieldValue('contactId', '')
+                              }}
+                              placeholder="Select customer"
+                              style={{ width: '100%', minWidth: 0 }}
+                            />
+                          </Flex>
+                        )}
+                      </form.AppField>
+
+                      <form.AppField name="contactId">
+                        {(field) => (
+                          <Flex direction="column" gap="1">
+                            <Text as="div" size="2" weight="medium">
+                              Standard contact
+                            </Text>
+                            <SearchableSelect
+                              options={contacts.map((c) => ({
+                                value: c.id,
+                                label: c.name,
+                              }))}
+                              value={field.state.value}
+                              onValueChange={field.handleChange}
+                              disabled={
+                                !customerId ||
+                                contactsLoading ||
+                                contacts.length === 0
+                              }
+                              placeholder={
+                                !customerId
+                                  ? 'Select a customer first'
+                                  : contactsLoading
+                                    ? 'Loading…'
+                                    : contacts.length === 0
+                                      ? 'No contacts for this customer'
+                                      : 'Select contact'
+                              }
+                              emptyMessage="No contacts found"
+                              style={{ width: '100%', minWidth: 0 }}
+                            />
+                            {field.state.meta.errors[0] != null && (
+                              <Text size="1" color="red" as="div">
+                                {String(field.state.meta.errors[0])}
+                              </Text>
+                            )}
+                          </Flex>
+                        )}
+                      </form.AppField>
+                    </>
+                  )
                 }
-              }}
-            />
-            <Text as="label" size="2">
-              Customer is a company member
-            </Text>
-          </Flex>
+              </form.Subscribe>
+            </Flex>
 
-          {isCompanyCustomer ? (
-            <>
-              <Text as="div" size="2" mb="1" weight="medium">
-                Company member
-              </Text>
-              <SearchableSelect
-                options={companyUsers.map((u) => ({
-                  value: u.user_id,
-                  label: u.display_name || u.email,
-                }))}
-                value={customerUserId}
-                onValueChange={(v) => setCustomerUserId(v)}
-                placeholder="Select member"
+            <Flex gap="3" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft" color="gray">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton
+                label={mode === 'create' ? 'Create' : 'Save'}
+                pendingLabel="Saving…"
               />
-            </>
-          ) : (
-            <>
-              <Text as="div" size="2" mb="1" weight="medium">
-                Customer
-              </Text>
-              <SearchableSelect
-                options={customers.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                }))}
-                value={customerId}
-                onValueChange={(v) => setCustomerId(v)}
-                placeholder="Select customer"
-              />
-
-              <Text as="div" size="2" mb="1" weight="medium">
-                Standard contact
-              </Text>
-              <SearchableSelect
-                options={contacts.map((c) => ({
-                  value: c.id,
-                  label: c.name,
-                }))}
-                value={contactId}
-                onValueChange={(v) => setContactId(v)}
-                disabled={
-                  !customerId || contactsLoading || contacts.length === 0
-                }
-                placeholder={
-                  !customerId
-                    ? 'Select a customer first'
-                    : contactsLoading
-                      ? 'Loading…'
-                      : 'Select contact'
-                }
-                emptyMessage="No contacts found"
-              />
-            </>
-          )}
-        </Flex>
-
-        <Flex gap="3" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft" color="gray">
-              Cancel
-            </Button>
-          </Dialog.Close>
-          <Button disabled={disabled} onClick={() => save.mutate()}>
-            {mode === 'create' ? 'Create' : 'Save'}
-          </Button>
-        </Flex>
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

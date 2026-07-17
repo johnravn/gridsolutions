@@ -11,6 +11,9 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useStore } from '@tanstack/react-form'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
@@ -25,6 +28,20 @@ import {
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { CrewReqStatus, UUID } from '../../types'
 
+const defaultValues = {
+  userId: '' as UUID | '',
+  search: '',
+  status: 'planned' as CrewReqStatus,
+  timePeriodId: '',
+}
+
+const schema = z.object({
+  userId: z.string().min(1, 'Choose a person'),
+  search: z.string(),
+  status: z.enum(['planned', 'confirmed', 'canceled']),
+  timePeriodId: z.string().min(1, 'Choose a role/time period'),
+})
+
 export default function AddCrewDialog({
   open,
   onOpenChange,
@@ -36,17 +53,32 @@ export default function AddCrewDialog({
 }) {
   const qc = useQueryClient()
   const { userId: authUserId } = useAuthz()
-  const [userId, setUserId] = React.useState<UUID | ''>('')
-  const [search, setSearch] = React.useState('')
-  const [status, setStatus] = React.useState<CrewReqStatus>('planned')
-  const [timePeriodId, setTimePeriodId] = React.useState<string>('')
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceConflicts, setForceConflicts] = React.useState<
     Array<OverlapConflict>
   >([])
   const [forceResourceLabel, setForceResourceLabel] = React.useState('')
 
-  // search crew by name/email
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async () => {
+      await save.mutateAsync({})
+    },
+  })
+
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
+
+  const search = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.search,
+  )
+
   const { data: people = [], isFetching } = useQuery({
     queryKey: ['crew-picker', search],
     enabled: open,
@@ -56,7 +88,6 @@ export default function AddCrewDialog({
         .select('user_id, display_name, email')
         .limit(20)
 
-      // Apply fuzzy search using multiple patterns
       if (search.trim()) {
         const term = search.trim()
         const patterns = [
@@ -84,7 +115,6 @@ export default function AddCrewDialog({
     },
   })
 
-  // Load roles (time periods with category = 'crew') for this job
   const { data: roles = [] } = useQuery({
     queryKey: ['jobs', jobId, 'time_periods', 'roles'],
     enabled: open,
@@ -109,11 +139,16 @@ export default function AddCrewDialog({
 
   React.useEffect(() => {
     if (!open) return
-    if (roles.length && !timePeriodId) setTimePeriodId(roles[0].id)
-  }, [open, roles, timePeriodId])
+    const { timePeriodId } = form.state.values
+    if (roles.length && !timePeriodId) {
+      form.setFieldValue('timePeriodId', roles[0].id)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-select first role
+  }, [open, roles])
 
   const save = useMutation({
     mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
+      const { userId, status, timePeriodId } = form.state.values
       if (!userId) throw new Error('Choose a person')
       if (!timePeriodId) throw new Error('Choose a role/time period')
 
@@ -152,13 +187,12 @@ export default function AddCrewDialog({
       setForceDialogOpen(false)
       await qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       await qc.invalidateQueries({ queryKey: ['conflicts'] })
+      form.reset(defaultValues)
       onOpenChange(false)
-      setUserId('')
-      setStatus('planned')
     },
-    onError: (e: any) => {
-      if (e?.message === 'OVERLAP_NEEDS_FORCE') return
-      const msg = e?.hint || e?.message || 'Please try again.'
+    onError: (e: Error) => {
+      if (e.message === 'OVERLAP_NEEDS_FORCE') return
+      const msg = e.message || 'Please try again.'
       if (isCrewOverlapError(msg) && !forceDialogOpen) {
         setForceResourceLabel('Selected crew')
         setForceConflicts([])
@@ -166,8 +200,6 @@ export default function AddCrewDialog({
       }
     },
   })
-
-  const disabled = save.isPending || !userId || !timePeriodId
 
   return (
     <>
@@ -179,114 +211,149 @@ export default function AddCrewDialog({
             period.
           </Dialog.Description>
 
-          <Field label="Person">
-            <TextField.Root
-              placeholder="Search name or email…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Box
-              mt="2"
-              p="2"
-              style={{
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 8,
-                maxHeight: 220,
-                overflow: 'auto',
-              }}
-            >
-              {isFetching && (
-                <Text size="2" color="gray">
-                  Searching…
-                </Text>
-              )}
-              {!isFetching && people.length === 0 && (
-                <Text size="2" color="gray">
-                  No results
-                </Text>
-              )}
-              {!isFetching &&
-                people.map((p, idx) => (
-                  <Box
-                    key={p.user_id}
-                    p="2"
-                    style={{
-                      cursor: 'pointer',
-                      borderRadius: 6,
-                      background:
-                        userId === p.user_id ? 'var(--blue-a3)' : 'transparent',
-                    }}
-                    onClick={() => setUserId(p.user_id)}
-                  >
-                    <Flex align="center" justify="between">
-                      <div>
-                        <Text weight="medium">{p.display_name ?? p.email}</Text>
-                        {p.display_name && (
-                          <Text size="1" color="gray" style={{ marginLeft: 6 }}>
-                            {p.email}
-                          </Text>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Field label="Person">
+                <form.AppField name="search">
+                  {(field) => (
+                    <TextField.Root
+                      placeholder="Search name or email…"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                  )}
+                </form.AppField>
+                <Box
+                  mt="2"
+                  p="2"
+                  style={{
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 8,
+                    maxHeight: 220,
+                    overflow: 'auto',
+                  }}
+                >
+                  {isFetching && (
+                    <Text size="2" color="gray">
+                      Searching…
+                    </Text>
+                  )}
+                  {!isFetching && people.length === 0 && (
+                    <Text size="2" color="gray">
+                      No results
+                    </Text>
+                  )}
+                  {!isFetching &&
+                    people.map((p, idx) => (
+                      <form.Subscribe
+                        key={p.user_id}
+                        selector={(state) => state.values.userId}
+                      >
+                        {(userId) => (
+                          <Box
+                            p="2"
+                            style={{
+                              cursor: 'pointer',
+                              borderRadius: 6,
+                              background:
+                                userId === p.user_id
+                                  ? 'var(--blue-a3)'
+                                  : 'transparent',
+                            }}
+                            onClick={() =>
+                              form.setFieldValue('userId', p.user_id)
+                            }
+                          >
+                            <Flex align="center" justify="between">
+                              <div>
+                                <Text weight="medium">
+                                  {p.display_name ?? p.email}
+                                </Text>
+                                {p.display_name && (
+                                  <Text
+                                    size="1"
+                                    color="gray"
+                                    style={{ marginLeft: 6 }}
+                                  >
+                                    {p.email}
+                                  </Text>
+                                )}
+                              </div>
+                              {userId === p.user_id && (
+                                <Text size="1" color="blue">
+                                  Selected
+                                </Text>
+                              )}
+                            </Flex>
+                            {idx < people.length - 1 && <Separator my="2" />}
+                          </Box>
                         )}
-                      </div>
-                      {userId === p.user_id && (
-                        <Text size="1" color="blue">
-                          Selected
-                        </Text>
-                      )}
-                    </Flex>
-                    {idx < people.length - 1 && <Separator my="2" />}
-                  </Box>
-                ))}
-            </Box>
-          </Field>
+                      </form.Subscribe>
+                    ))}
+                </Box>
+              </Field>
 
-          <Field label="Role / Time period">
-            <Select.Root
-              value={timePeriodId}
-              onValueChange={(v) => setTimePeriodId(v)}
-            >
-              <Select.Trigger placeholder="Select role…" />
-              <Select.Content style={{ zIndex: 10000 }}>
-                {roles.map((tp) => (
-                  <Select.Item key={tp.id} value={tp.id}>
-                    {(tp.title || 'Untitled') +
-                      ' — ' +
-                      formatWhen(tp.start_at) +
-                      ' → ' +
-                      formatWhen(tp.end_at)}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-          </Field>
+              <form.AppField name="timePeriodId">
+                {(field) => (
+                  <Field label="Role / Time period">
+                    <Select.Root
+                      value={field.state.value}
+                      onValueChange={field.handleChange}
+                    >
+                      <Select.Trigger placeholder="Select role…" />
+                      <Select.Content style={{ zIndex: 10000 }}>
+                        {roles.map((tp) => (
+                          <Select.Item key={tp.id} value={tp.id}>
+                            {(tp.title || 'Untitled') +
+                              ' — ' +
+                              formatWhen(tp.start_at) +
+                              ' → ' +
+                              formatWhen(tp.end_at)}
+                          </Select.Item>
+                        ))}
+                      </Select.Content>
+                    </Select.Root>
+                  </Field>
+                )}
+              </form.AppField>
 
-          <Field label="Status">
-            <Select.Root
-              value={status}
-              onValueChange={(v: string) => setStatus(v as CrewReqStatus)}
-            >
-              <Select.Trigger />
-              <Select.Content style={{ zIndex: 10000 }}>
-                <Select.Item value="planned">planned</Select.Item>
-                <Select.Item value="confirmed">confirmed</Select.Item>
-                <Select.Item value="canceled">canceled</Select.Item>
-              </Select.Content>
-            </Select.Root>
-          </Field>
+              <form.AppField name="status">
+                {(field) => (
+                  <Field label="Status">
+                    <Select.Root
+                      value={field.state.value}
+                      onValueChange={(v: string) =>
+                        field.handleChange(v as CrewReqStatus)
+                      }
+                    >
+                      <Select.Trigger />
+                      <Select.Content style={{ zIndex: 10000 }}>
+                        <Select.Item value="planned">planned</Select.Item>
+                        <Select.Item value="confirmed">confirmed</Select.Item>
+                        <Select.Item value="canceled">canceled</Select.Item>
+                      </Select.Content>
+                    </Select.Root>
+                  </Field>
+                )}
+              </form.AppField>
 
-          {/* Start/end are defined by the selected role's time period */}
-
-          <Flex justify="end" gap="2" mt="3">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              variant="solid"
-              onClick={() => save.mutate({})}
-              disabled={disabled}
-            >
-              {save.isPending ? 'Saving…' : 'Add'}
-            </Button>
-          </Flex>
+              <Flex justify="end" gap="2" mt="3">
+                <Dialog.Close>
+                  <Button type="button" variant="soft">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <form.SubmitButton label="Add" pendingLabel="Saving…" />
+              </Flex>
+            </form.AppForm>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
 
@@ -320,22 +387,17 @@ export function EditCrewDialog({
 }) {
   const qc = useQueryClient()
   const [status, setStatus] = React.useState<CrewReqStatus>(row.status)
-  // Times now come from the role (time period)
 
   React.useEffect(() => {
     if (!open) return
     setStatus(row.status)
-    // no-op for start/end
   }, [open, row])
 
   const save = useMutation({
     mutationFn: async () => {
       const { error } = await supabase
         .from('reserved_crew')
-        .update({
-          status,
-          // start/end removed; defined by time_period
-        })
+        .update({ status })
         .eq('id', row.id)
       if (error) throw error
     },
@@ -362,7 +424,6 @@ export function EditCrewDialog({
             </Select.Content>
           </Select.Root>
         </Field>
-        {/* Start/end are defined by the role's time period */}
         <Flex justify="end" gap="2" mt="3">
           <Dialog.Close>
             <Button variant="soft">Cancel</Button>
@@ -389,7 +450,13 @@ function Field({
 }) {
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ color: 'var(--gray-11)', fontSize: 12, marginBottom: 6 }}>
+      <div
+        style={{
+          color: 'var(--gray-11)',
+          fontSize: 'var(--font-size-2)',
+          marginBottom: 6,
+        }}
+      >
         {label}
       </div>
       {children}

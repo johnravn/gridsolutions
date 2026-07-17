@@ -1,13 +1,8 @@
 import * as React from 'react'
 import { useMutation } from '@tanstack/react-query'
-import {
-  Button,
-  Dialog,
-  Flex,
-  Text,
-  TextArea,
-  TextField,
-} from '@radix-ui/themes'
+import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { addContact } from '../../api/queries'
@@ -20,6 +15,22 @@ type Props = {
   onSaved?: () => void
 }
 
+const defaultValues = {
+  name: '',
+  email: '',
+  phone: '',
+  title: '',
+  notes: '',
+}
+
+const schema = z.object({
+  name: z.string().trim().min(1, 'Name is required'),
+  email: z.string(),
+  phone: z.string(),
+  title: z.string(),
+  notes: z.string(),
+})
+
 export default function AddContactDialog({
   open,
   onOpenChange,
@@ -27,33 +38,37 @@ export default function AddContactDialog({
   customerId,
   onSaved,
 }: Props) {
-  const [form, setForm] = React.useState({
-    name: '',
-    email: '',
-    phone: '',
-    title: '',
-    notes: '',
-  })
-  const set = (k: keyof typeof form, v: any) =>
-    setForm((s) => ({ ...s, [k]: v }))
+  const { success } = useToast()
 
-  const canSave = form.name.trim().length > 0
-  const { success, error } = useToast()
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await mut.mutateAsync(value)
+    },
+  })
+
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
 
   const mut = useMutation({
-    mutationFn: async () =>
+    mutationFn: async (value: typeof defaultValues) =>
       addContact({
         company_id: companyId,
         customer_id: customerId,
-        name: form.name.trim(),
-        email: form.email.trim() || null,
-        phone: form.phone.trim() || null,
-        title: form.title.trim() || null,
-        notes: form.notes.trim() || null,
+        name: value.name.trim(),
+        email: value.email.trim() || null,
+        phone: value.phone.trim() || null,
+        title: value.title.trim() || null,
+        notes: value.notes.trim() || null,
       }),
     onSuccess: () => {
       onOpenChange(false)
-      setForm({ name: '', email: '', phone: '', title: '', notes: '' })
+      form.reset(defaultValues)
       success('Success', 'Contact added to customer')
       onSaved?.()
     },
@@ -64,80 +79,85 @@ export default function AddContactDialog({
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Add contact</Dialog.Title>
 
-        <Flex direction="column" gap="3" mt="3">
-          <Field label="Name *">
-            <TextField.Root
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              placeholder="Contact full name"
-              autoFocus
-            />
-          </Field>
-          <Flex gap="3" wrap="wrap">
-            <Field label="Email">
-              <TextField.Root
-                type="email"
-                value={form.email}
-                onChange={(e) => set('email', e.target.value)}
-                placeholder="email@example.com"
-              />
-            </Field>
-            <Field label="Phone">
-              <PhoneInputField
-                id="signup-phone"
-                value={form.phone}
-                onChange={(val) => set('phone', val ?? '')} // <-- fix
-                defaultCountry="NO"
-                placeholder="Enter phone number"
-              />
-            </Field>
-          </Flex>
-          <Field label="Title / Role">
-            <TextField.Root
-              value={form.title}
-              onChange={(e) => set('title', e.target.value)}
-              placeholder="e.g., Project Manager, CFO"
-            />
-          </Field>
-          <Field label="Notes">
-            <TextArea
-              rows={3}
-              value={form.notes}
-              onChange={(e) => set('notes', e.target.value)}
-              placeholder="Additional information about this contact"
-            />
-          </Field>
-        </Flex>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="name">
+                {(field) => (
+                  <field.TextField
+                    label="Name *"
+                    placeholder="Contact full name"
+                  />
+                )}
+              </form.AppField>
+              <Flex gap="3" wrap="wrap">
+                <form.AppField name="email">
+                  {(field) => (
+                    <field.TextField
+                      label="Email"
+                      type="email"
+                      placeholder="email@example.com"
+                      style={{ flex: '1 1', minWidth: 220 }}
+                    />
+                  )}
+                </form.AppField>
+                <form.AppField name="phone">
+                  {(field) => (
+                    <Flex
+                      direction="column"
+                      gap="1"
+                      style={{ flex: '1 1', minWidth: 220 }}
+                    >
+                      <Text as="label" size="2" weight="medium">
+                        Phone
+                      </Text>
+                      <PhoneInputField
+                        id="signup-phone"
+                        value={field.state.value}
+                        onChange={(val) => field.handleChange(val ?? '')}
+                        defaultCountry="NO"
+                        placeholder="Enter phone number"
+                      />
+                    </Flex>
+                  )}
+                </form.AppField>
+              </Flex>
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title / Role"
+                    placeholder="e.g., Project Manager, CFO"
+                  />
+                )}
+              </form.AppField>
+              <form.AppField name="notes">
+                {(field) => (
+                  <field.TextArea
+                    label="Notes"
+                    rows={3}
+                    placeholder="Additional information about this contact"
+                  />
+                )}
+              </form.AppField>
+            </Flex>
 
-        <Flex gap="2" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => mut.mutate()}
-            disabled={!canSave || mut.isPending}
-          >
-            {mut.isPending ? 'Saving…' : 'Create'}
-          </Button>
-        </Flex>
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Create" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div style={{ flex: '1 1', minWidth: 50 }}>
-      <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-        {label}
-      </Text>
-      {children}
-    </div>
   )
 }

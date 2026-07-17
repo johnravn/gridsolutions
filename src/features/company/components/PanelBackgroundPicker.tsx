@@ -90,7 +90,7 @@ function PanelBackgroundOption({
         <Text size="2" weight="medium">
           {label}
         </Text>
-        <Text size="1" color="gray" style={{ fontSize: '10px' }}>
+        <Text size="1" color="gray" style={{ fontSize: 'var(--font-size-1)' }}>
           {description}
         </Text>
       </Flex>

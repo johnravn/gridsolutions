@@ -9,10 +9,12 @@ import {
   Select,
   Separator,
   Text,
-  TextArea,
   TextField,
 } from '@radix-ui/themes'
 import { Plus, Trash } from 'iconoir-react'
+import { z } from 'zod'
+import { useStore } from '@tanstack/react-form'
+import { useAppForm } from '@shared/form'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
@@ -177,6 +179,59 @@ type Props = {
   initialData?: RecurringJobTemplate
 }
 
+const defaultValues = {
+  name: '',
+  title: '',
+  description: '',
+  status: 'planned' as JobStatus,
+  durationHours: '3',
+  startTime: '',
+  crewRoles: [] as Array<RecurringJobTemplateCrewRole>,
+}
+
+const schema = z
+  .object({
+    name: z.string().trim().min(1, 'Template name is required'),
+    title: z.string().trim().min(1, 'Default job title is required'),
+    description: z.string(),
+    status: z.enum([
+      'draft',
+      'planned',
+      'requested',
+      'confirmed',
+      'in_progress',
+    ]),
+    durationHours: z.string(),
+    startTime: z.string(),
+    crewRoles: z.array(
+      z.object({
+        title: z.string(),
+        needed_count: z.number(),
+        role_category: z.string().nullable(),
+      }),
+    ),
+  })
+  .superRefine((data, ctx) => {
+    const hours = Number(data.durationHours)
+    if (!Number.isFinite(hours) || hours <= 0) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Duration must be greater than 0',
+        path: ['durationHours'],
+      })
+    }
+    if (
+      data.startTime.trim() &&
+      !normalizeTemplateStartTimeForDb(data.startTime.trim())
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Invalid start time',
+        path: ['startTime'],
+      })
+    }
+  })
+
 export default function RecurringJobTemplateDialog({
   open,
   onOpenChange,
@@ -189,55 +244,55 @@ export default function RecurringJobTemplateDialog({
   const { success, error: showError } = useToast()
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
 
-  const [name, setName] = React.useState('')
-  const [title, setTitle] = React.useState('')
-  const [description, setDescription] = React.useState('')
-  const [status, setStatus] = React.useState<JobStatus>('planned')
-  const [durationHours, setDurationHours] = React.useState('3')
-  const [startTime, setStartTime] = React.useState('')
-  const [crewRoles, setCrewRoles] = React.useState<
-    Array<RecurringJobTemplateCrewRole>
-  >([])
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await save.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
-    if (!open || mode !== 'edit' || !initialData) return
-    setName(initialData.name)
-    setTitle(initialData.title)
-    setDescription(initialData.description ?? '')
-    setStatus(initialData.status)
-    setDurationHours(String(initialData.duration_hours))
-    setStartTime(formatTemplateStartTimeForInput(initialData.start_time))
-    setCrewRoles(
-      initialData.crew_roles.length > 0
-        ? initialData.crew_roles.map((role) => ({ ...role }))
-        : [],
-    )
-  }, [open, mode, initialData])
-
-  React.useEffect(() => {
-    if (!open || mode !== 'create') return
-    setName('')
-    setTitle('')
-    setDescription('')
-    setStatus('planned')
-    setDurationHours('3')
-    setStartTime('')
-    setCrewRoles([])
-  }, [open, mode])
+    if (!open) return
+    if (mode === 'edit' && initialData) {
+      form.reset(
+        {
+          name: initialData.name,
+          title: initialData.title,
+          description: initialData.description ?? '',
+          status: initialData.status,
+          durationHours: String(initialData.duration_hours),
+          startTime: formatTemplateStartTimeForInput(initialData.start_time),
+          crewRoles:
+            initialData.crew_roles.length > 0
+              ? initialData.crew_roles.map((role) => ({ ...role }))
+              : [],
+        },
+        { keepDefaultValues: true },
+      )
+    } else {
+      form.reset(defaultValues, { keepDefaultValues: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open, mode, initialData?.id])
 
   const updateCrewRole = (
     index: number,
     patch: Partial<RecurringJobTemplateCrewRole>,
   ) => {
-    setCrewRoles((roles) =>
+    const roles = form.state.values.crewRoles
+    form.setFieldValue(
+      'crewRoles',
       roles.map((role, i) => (i === index ? { ...role, ...patch } : role)),
     )
   }
 
   const save = useMutation({
-    mutationFn: async () => {
-      const hours = Number(durationHours)
-      const normalizedRoles = crewRoles
+    mutationFn: async (value: typeof defaultValues) => {
+      const hours = Number(value.durationHours)
+      const normalizedRoles = value.crewRoles
         .map((role) => ({
           title: role.title.trim(),
           needed_count: Math.max(1, Math.floor(role.needed_count)),
@@ -246,13 +301,13 @@ export default function RecurringJobTemplateDialog({
         .filter((role) => role.title.length > 0)
 
       const payload = {
-        name,
-        title,
-        description: description || null,
-        status,
+        name: value.name,
+        title: value.title,
+        description: value.description || null,
+        status: value.status,
         durationHours: Number.isFinite(hours) ? hours : 3,
-        startTime: startTime.trim()
-          ? normalizeTemplateStartTimeForDb(startTime.trim())
+        startTime: value.startTime.trim()
+          ? normalizeTemplateStartTimeForDb(value.startTime.trim())
           : null,
         crewRoles: normalizedRoles,
       }
@@ -281,21 +336,15 @@ export default function RecurringJobTemplateDialog({
     onError: (err: Error) => showError('Failed to save template', err.message),
   })
 
-  const hoursNum = Number(durationHours)
-  const startTimeValid =
-    !startTime.trim() || normalizeTemplateStartTimeForDb(startTime.trim())
-  const disabled =
-    save.isPending ||
-    !name.trim() ||
-    !title.trim() ||
-    !Number.isFinite(hoursNum) ||
-    hoursNum <= 0 ||
-    !startTimeValid
-
   const leftColumnRef = React.useRef<HTMLDivElement>(null)
   const crewHeaderRef = React.useRef<HTMLDivElement>(null)
   const [leftColumnHeight, setLeftColumnHeight] = React.useState(0)
   const [crewHeaderHeight, setCrewHeaderHeight] = React.useState(0)
+
+  const formValues = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values,
+  )
 
   React.useLayoutEffect(() => {
     if (!open) return
@@ -319,12 +368,12 @@ export default function RecurringJobTemplateDialog({
   }, [
     open,
     isSmallScreen,
-    name,
-    title,
-    description,
-    status,
-    durationHours,
-    startTime,
+    formValues.name,
+    formValues.title,
+    formValues.description,
+    formValues.status,
+    formValues.durationHours,
+    formValues.startTime,
   ])
 
   const crewListMaxHeight =
@@ -347,176 +396,223 @@ export default function RecurringJobTemplateDialog({
           the date.
         </Dialog.Description>
 
-        <Flex
-          direction={isSmallScreen ? 'column' : 'row'}
-          gap="4"
-          align={isSmallScreen ? 'stretch' : 'flex-start'}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
         >
-          <Box ref={leftColumnRef} style={{ flex: '1 1 280px', minWidth: 0 }}>
-            <Flex direction="column" gap="3">
-              <label>
-                <Text as="div" size="2" mb="1" weight="medium">
-                  Template name
-                </Text>
-                <TextField.Root
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="e.g. Standard evening show"
-                />
-              </label>
+          <form.AppForm>
+            <Flex
+              direction={isSmallScreen ? 'column' : 'row'}
+              gap="4"
+              align={isSmallScreen ? 'stretch' : 'start'}
+            >
+              <Box
+                ref={leftColumnRef}
+                style={{ flex: '1 1 280px', minWidth: 0 }}
+              >
+                <Flex direction="column" gap="3">
+                  <form.AppField name="name">
+                    {(field) => (
+                      <field.TextField
+                        label="Template name"
+                        placeholder="e.g. Standard evening show"
+                      />
+                    )}
+                  </form.AppField>
 
-              <label>
-                <Text as="div" size="2" mb="1" weight="medium">
-                  Default job title
-                </Text>
-                <TextField.Root
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Title for new jobs"
-                />
-              </label>
+                  <form.AppField name="title">
+                    {(field) => (
+                      <field.TextField
+                        label="Default job title"
+                        placeholder="Title for new jobs"
+                      />
+                    )}
+                  </form.AppField>
 
-              <label>
-                <Text as="div" size="2" mb="1" weight="medium">
-                  Default job notes
-                </Text>
-                <TextArea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Optional notes pre-filled on the job"
-                  rows={3}
-                />
-              </label>
+                  <form.AppField name="description">
+                    {(field) => (
+                      <field.TextArea
+                        label="Default job notes"
+                        placeholder="Optional notes pre-filled on the job"
+                        rows={3}
+                      />
+                    )}
+                  </form.AppField>
 
-              <label>
-                <Text as="div" size="2" mb="1" weight="medium">
-                  Default status
-                </Text>
-                <Select.Root
-                  value={status}
-                  onValueChange={(v) => setStatus(v as JobStatus)}
+                  <form.AppField name="status">
+                    {(field) => (
+                      <Flex direction="column" gap="1">
+                        <Text as="label" size="2" weight="medium">
+                          Default status
+                        </Text>
+                        <Select.Root
+                          value={field.state.value}
+                          onValueChange={(v) =>
+                            field.handleChange(v as JobStatus)
+                          }
+                        >
+                          <Select.Trigger />
+                          <Select.Content style={{ zIndex: 10000 }}>
+                            {STATUS_OPTIONS.map((s) => (
+                              <Select.Item key={s} value={s}>
+                                {makeWordPresentable(s)}
+                              </Select.Item>
+                            ))}
+                          </Select.Content>
+                        </Select.Root>
+                      </Flex>
+                    )}
+                  </form.AppField>
+
+                  <Flex gap="3" wrap="wrap">
+                    <form.AppField name="durationHours">
+                      {(field) => (
+                        <Flex
+                          direction="column"
+                          gap="1"
+                          style={{ flex: '1 1 120px' }}
+                        >
+                          <Text as="label" size="2" weight="medium">
+                            Duration (hours)
+                          </Text>
+                          <TextField.Root
+                            type="number"
+                            min="0.5"
+                            step="0.5"
+                            value={field.state.value}
+                            onBlur={field.handleBlur}
+                            onChange={(e) => field.handleChange(e.target.value)}
+                          />
+                        </Flex>
+                      )}
+                    </form.AppField>
+
+                    <form.AppField name="startTime">
+                      {(field) => (
+                        <Flex
+                          direction="column"
+                          gap="1"
+                          style={{ flex: '1 1 120px' }}
+                        >
+                          <Text as="label" size="2" weight="medium">
+                            Start time
+                          </Text>
+                          <DateTimePicker
+                            timeOnly
+                            value={field.state.value}
+                            onChange={field.handleChange}
+                          />
+                        </Flex>
+                      )}
+                    </form.AppField>
+                  </Flex>
+                </Flex>
+              </Box>
+
+              {isSmallScreen ? (
+                <Separator size="4" />
+              ) : (
+                <Separator orientation="vertical" size="4" />
+              )}
+
+              <Flex
+                direction="column"
+                style={{
+                  flex: '1 1 280px',
+                  minWidth: 0,
+                  minHeight: 0,
+                  maxHeight:
+                    !isSmallScreen && leftColumnHeight > 0
+                      ? leftColumnHeight
+                      : undefined,
+                }}
+              >
+                <Box ref={crewHeaderRef}>
+                  <Flex
+                    justify="between"
+                    align="center"
+                    gap="2"
+                    mb="2"
+                    wrap="wrap"
+                  >
+                    <Text size="2" weight="medium">
+                      Crew roles
+                    </Text>
+                    <Button
+                      type="button"
+                      size="1"
+                      variant="soft"
+                      onClick={() =>
+                        form.setFieldValue('crewRoles', [
+                          ...form.state.values.crewRoles,
+                          emptyCrewRole(),
+                        ])
+                      }
+                    >
+                      <Plus width={14} height={14} />
+                      Add role
+                    </Button>
+                  </Flex>
+                  <Text size="1" color="gray" mb="2">
+                    Roles use the job start and end when you use this template.
+                  </Text>
+                </Box>
+
+                <Box
+                  style={{
+                    overflowY: 'auto',
+                    minHeight: 0,
+                    flex:
+                      !isSmallScreen && leftColumnHeight > 0 ? 1 : undefined,
+                    maxHeight: crewListMaxHeight,
+                    paddingRight: 4,
+                  }}
                 >
-                  <Select.Trigger />
-                  <Select.Content style={{ zIndex: 10000 }}>
-                    {STATUS_OPTIONS.map((s) => (
-                      <Select.Item key={s} value={s}>
-                        {makeWordPresentable(s)}
-                      </Select.Item>
-                    ))}
-                  </Select.Content>
-                </Select.Root>
-              </label>
-
-              <Flex gap="3" wrap="wrap">
-                <label style={{ flex: '1 1 120px' }}>
-                  <Text as="div" size="2" mb="1" weight="medium">
-                    Duration (hours)
-                  </Text>
-                  <TextField.Root
-                    type="number"
-                    min="0.5"
-                    step="0.5"
-                    value={durationHours}
-                    onChange={(e) => setDurationHours(e.target.value)}
-                  />
-                </label>
-
-                <label style={{ flex: '1 1 120px' }}>
-                  <Text as="div" size="2" mb="1" weight="medium">
-                    Start time
-                  </Text>
-                  <DateTimePicker
-                    timeOnly
-                    value={startTime}
-                    onChange={setStartTime}
-                  />
-                </label>
+                  <form.Subscribe selector={(state) => state.values.crewRoles}>
+                    {(crewRoles) =>
+                      crewRoles.length === 0 ? (
+                        <Text size="2" color="gray">
+                          No crew roles defined.
+                        </Text>
+                      ) : (
+                        <Flex direction="column" gap="2">
+                          {crewRoles.map((role, index) => (
+                            <TemplateCrewRoleFields
+                              key={index}
+                              role={role}
+                              onChange={(patch) => updateCrewRole(index, patch)}
+                              onRemove={() =>
+                                form.setFieldValue(
+                                  'crewRoles',
+                                  crewRoles.filter((_, i) => i !== index),
+                                )
+                              }
+                            />
+                          ))}
+                        </Flex>
+                      )
+                    }
+                  </form.Subscribe>
+                </Box>
               </Flex>
             </Flex>
-          </Box>
 
-          {isSmallScreen ? (
-            <Separator size="4" />
-          ) : (
-            <Separator orientation="vertical" size="4" />
-          )}
-
-          <Flex
-            direction="column"
-            style={{
-              flex: '1 1 280px',
-              minWidth: 0,
-              minHeight: 0,
-              maxHeight:
-                !isSmallScreen && leftColumnHeight > 0
-                  ? leftColumnHeight
-                  : undefined,
-            }}
-          >
-            <Box ref={crewHeaderRef}>
-              <Flex justify="between" align="center" gap="2" mb="2" wrap="wrap">
-                <Text size="2" weight="medium">
-                  Crew roles
-                </Text>
-                <Button
-                  size="1"
-                  variant="soft"
-                  onClick={() =>
-                    setCrewRoles((roles) => [...roles, emptyCrewRole()])
-                  }
-                >
-                  <Plus width={14} height={14} />
-                  Add role
+            <Flex gap="3" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft" color="gray">
+                  Cancel
                 </Button>
-              </Flex>
-              <Text size="1" color="gray" mb="2">
-                Roles use the job start and end when you use this template.
-              </Text>
-            </Box>
-
-            <Box
-              style={{
-                overflowY: 'auto',
-                minHeight: 0,
-                flex: !isSmallScreen && leftColumnHeight > 0 ? 1 : undefined,
-                maxHeight: crewListMaxHeight,
-                paddingRight: 4,
-              }}
-            >
-              {crewRoles.length === 0 ? (
-                <Text size="2" color="gray">
-                  No crew roles defined.
-                </Text>
-              ) : (
-                <Flex direction="column" gap="2">
-                  {crewRoles.map((role, index) => (
-                    <TemplateCrewRoleFields
-                      key={index}
-                      role={role}
-                      onChange={(patch) => updateCrewRole(index, patch)}
-                      onRemove={() =>
-                        setCrewRoles((roles) =>
-                          roles.filter((_, i) => i !== index),
-                        )
-                      }
-                    />
-                  ))}
-                </Flex>
-              )}
-            </Box>
-          </Flex>
-        </Flex>
-
-        <Flex gap="3" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft" color="gray">
-              Cancel
-            </Button>
-          </Dialog.Close>
-          <Button disabled={disabled} onClick={() => save.mutate()}>
-            {mode === 'create' ? 'Create' : 'Save'}
-          </Button>
-        </Flex>
+              </Dialog.Close>
+              <form.SubmitButton
+                label={mode === 'create' ? 'Create' : 'Save'}
+                pendingLabel="Saving…"
+              />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

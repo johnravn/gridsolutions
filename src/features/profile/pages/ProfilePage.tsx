@@ -22,6 +22,7 @@ import {
   useTabKeyboardShortcuts,
 } from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import ProfilePageSkeleton from '@shared/ui/components/ProfilePageSkeleton'
 import { DatePicker } from '@shared/ui/components/pickers'
 import { Camera, Lock } from 'iconoir-react'
@@ -31,6 +32,7 @@ import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import ChangePasswordDialog from '@features/profile/components/ChangePasswordDialog'
 import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatterEmailSettings'
 import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
+import ProfileShortcutsTab from '@features/profile/components/ProfileShortcutsTab'
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
 
 type ProfileRow = {
@@ -74,7 +76,12 @@ type AddressForm = {
   country: string
 }
 
-const PROFILE_TABS = ['general', 'notifications', 'personalization'] as const
+const PROFILE_TABS = [
+  'general',
+  'notifications',
+  'personalization',
+  'shortcuts',
+] as const
 
 export default function ProfilePage() {
   const qc = useQueryClient()
@@ -429,13 +436,14 @@ export default function ProfilePage() {
           minHeight: 0,
         }}
       >
-        <Tabs.List>
+        <AnimatedTabsList>
           <Tabs.Trigger value="general">General</Tabs.Trigger>
           <Tabs.Trigger value="notifications">
             Matter notifications
           </Tabs.Trigger>
           <Tabs.Trigger value="personalization">Personalization</Tabs.Trigger>
-        </Tabs.List>
+          <Tabs.Trigger value="shortcuts">Shortcuts</Tabs.Trigger>
+        </AnimatedTabsList>
 
         <Box
           pt="4"
@@ -783,6 +791,18 @@ export default function ProfilePage() {
               saveProfile={() => mut.mutateAsync()}
               isSaving={mut.isPending}
             />
+          </Tabs.Content>
+
+          <Tabs.Content
+            value="shortcuts"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <ProfileShortcutsTab />
           </Tabs.Content>
         </Box>
       </Tabs.Root>

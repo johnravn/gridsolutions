@@ -608,16 +608,17 @@ export function PricingBasisSection({
 
               {pricingModules.length === 0 && (
                 <Text size="2" color="gray">
-                  Add a standard module first, then connect pricing splits to it.
-                  Timeline modules cannot receive cost splits.
+                  Add a standard module first, then connect pricing splits to
+                  it. Timeline modules cannot receive cost splits.
                 </Text>
               )}
 
-              {pricingModules.length > 0 && selectedBasis.splits.length === 0 && (
-                <Text size="2" color="gray">
-                  No splits yet for this basis.
-                </Text>
-              )}
+              {pricingModules.length > 0 &&
+                selectedBasis.splits.length === 0 && (
+                  <Text size="2" color="gray">
+                    No splits yet for this basis.
+                  </Text>
+                )}
 
               {pricingModules.length > 0 && selectedBasis.splits.length > 0 && (
                 <Flex direction="column" gap="0">

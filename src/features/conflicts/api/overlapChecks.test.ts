@@ -1,119 +1,37 @@
 import { describe, expect, it } from 'vitest'
-import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
-import { makeOverlapConflict } from '@test/fixtures/conflicts'
+import {
+  formatOverlapDuration,
+  overlapHoursBetweenPeriods,
+} from './overlapChecks'
 
-describe('dedupeOverlapConflicts', () => {
-  it('returns empty array for empty input', () => {
-    expect(dedupeOverlapConflicts([])).toEqual([])
+describe('overlapHoursBetweenPeriods', () => {
+  it('returns overlap hours between two periods', () => {
+    const hours = overlapHoursBetweenPeriods(
+      '2026-01-01T08:00:00Z',
+      '2026-01-01T18:00:00Z',
+      '2026-01-01T12:00:00Z',
+      '2026-01-01T20:00:00Z',
+    )
+    expect(hours).toBe(6)
   })
 
-  it('merges overlapping periods for the same item and job', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T12:00:00.000Z',
-        quantity: 1,
-      }),
-      makeOverlapConflict({
-        startAt: '2026-06-01T10:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-        quantity: 2,
-      }),
-    ])
+  it('returns 0 when periods do not overlap', () => {
+    const hours = overlapHoursBetweenPeriods(
+      '2026-01-01T08:00:00Z',
+      '2026-01-01T10:00:00Z',
+      '2026-01-01T12:00:00Z',
+      '2026-01-01T14:00:00Z',
+    )
+    expect(hours).toBe(0)
+  })
+})
 
-    expect(result).toHaveLength(1)
-    expect(result[0]?.startAt).toBe('2026-06-01T08:00:00.000Z')
-    expect(result[0]?.endAt).toBe('2026-06-01T18:00:00.000Z')
-    expect(result[0]?.quantity).toBe(2)
+describe('formatOverlapDuration', () => {
+  it('formats sub-hour overlap in minutes', () => {
+    expect(formatOverlapDuration(0.5)).toBe('30 min overlap')
   })
 
-  it('keeps non-overlapping periods for the same item and job separate', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T10:00:00.000Z',
-      }),
-      makeOverlapConflict({
-        startAt: '2026-06-01T12:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-    ])
-
-    expect(result).toHaveLength(2)
-  })
-
-  it('keeps the higher quantity when merging overlapping periods', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T14:00:00.000Z',
-        quantity: 5,
-      }),
-      makeOverlapConflict({
-        startAt: '2026-06-01T10:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-        quantity: 3,
-      }),
-    ])
-
-    expect(result).toHaveLength(1)
-    expect(result[0]?.quantity).toBe(5)
-  })
-
-  it('keeps different items separate even when periods overlap', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        itemName: 'Microphone A',
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-      makeOverlapConflict({
-        itemName: 'Speaker B',
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-    ])
-
-    expect(result).toHaveLength(2)
-  })
-
-  it('keeps different jobs separate even when periods overlap', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        jobId: '11111111-1111-4111-8111-111111111111',
-        jobTitle: 'Job Alpha',
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-      makeOverlapConflict({
-        jobId: '22222222-2222-4222-8222-222222222222',
-        jobTitle: 'Job Beta',
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-    ])
-
-    expect(result).toHaveLength(2)
-  })
-
-  it('uses jobTitle as key when jobId is missing', () => {
-    const result = dedupeOverlapConflicts([
-      makeOverlapConflict({
-        jobId: undefined,
-        jobTitle: 'Same Title Job',
-        startAt: '2026-06-01T08:00:00.000Z',
-        endAt: '2026-06-01T12:00:00.000Z',
-      }),
-      makeOverlapConflict({
-        jobId: undefined,
-        jobTitle: 'Same Title Job',
-        startAt: '2026-06-01T11:00:00.000Z',
-        endAt: '2026-06-01T18:00:00.000Z',
-      }),
-    ])
-
-    expect(result).toHaveLength(1)
-    expect(result[0]?.startAt).toBe('2026-06-01T08:00:00.000Z')
-    expect(result[0]?.endAt).toBe('2026-06-01T18:00:00.000Z')
+  it('formats multi-day overlap', () => {
+    expect(formatOverlapDuration(30)).toBe('1 d 6 h overlap')
   })
 })

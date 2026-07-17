@@ -6,7 +6,6 @@ import {
   createRouter,
   redirect,
 } from '@tanstack/react-router'
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools'
 import CalendarPage from '@features/calendar/pages/CalendarPage'
 import VehiclesPage from '@features/vehicles/pages/VehiclesPage'
 import JobsPage from '@features/jobs/pages/JobsPage'
@@ -30,9 +29,9 @@ import LoggingPage from '@features/logging/pages/LoggingPage'
 import ReportingPage from '@features/reporting/pages/ReportingPage'
 import DemoPage from '@features/demo/pages/DemoPage'
 import AppShell from '../layout/AppShell'
+import MasterDetailLayout from '../layout/split/MasterDetailLayout'
 import RequireCap from './guards/RequireCap'
 import type { Capability } from '@shared/auth/permissions'
-// import { Outlet } from '@tanstack/react-router'
 
 // Root keeps your shell & devtools as-is
 const rootRoute = createRootRoute({
@@ -137,32 +136,39 @@ const homeRoute = createRoute({
   component: guarded('visit:home', HomePage),
 })
 
-const inventoryRoute = createRoute({
-  getParentRoute: () => authedRoute,
-  path: 'inventory',
-  component: guarded('visit:inventory', InventoryPage),
-})
-
 const calendarRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'calendar',
   component: guarded('visit:calendar', CalendarPage),
 })
 
-const loggingRoute = createRoute({
+/** Persistent list/inspector chrome for master-detail pages. */
+const splitLayoutRoute = createRoute({
   getParentRoute: () => authedRoute,
+  id: 'split-layout',
+  component: MasterDetailLayout,
+})
+
+const inventoryRoute = createRoute({
+  getParentRoute: () => splitLayoutRoute,
+  path: 'inventory',
+  component: guarded('visit:inventory', InventoryPage),
+})
+
+const loggingRoute = createRoute({
+  getParentRoute: () => splitLayoutRoute,
   path: 'logging',
   component: guarded('visit:logging', LoggingPage),
 })
 
 const vehiclesRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'vehicles',
   component: guarded('visit:vehicles', VehiclesPage),
 })
 
 const jobsRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'jobs',
   validateSearch: (search: Record<string, unknown>) => ({
     jobId: (search.jobId as string | undefined) || undefined,
@@ -173,13 +179,13 @@ const jobsRoute = createRoute({
 })
 
 const crewRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'crew',
   component: guarded('visit:crew', CrewPage),
 })
 
 const mattersRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'matters',
   validateSearch: (search: Record<string, unknown>) => ({
     matterId: (search.matterId as string | undefined) || undefined,
@@ -197,13 +203,13 @@ const companyRoute = createRoute({
 })
 
 const customersRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'customers',
   component: guarded('visit:customers', CustomerPage),
 })
 
 const latestRoute = createRoute({
-  getParentRoute: () => authedRoute,
+  getParentRoute: () => splitLayoutRoute,
   path: 'latest',
   validateSearch: (search: Record<string, unknown>) => ({
     activityId: (search.activityId as string | undefined) || undefined,
@@ -221,7 +227,10 @@ const notificationsRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'notifications',
   beforeLoad: () => {
-    throw redirect({ to: '/matters' })
+    throw redirect({
+      to: '/matters',
+      search: { matterId: undefined },
+    })
   },
   component: () => null,
 })
@@ -255,22 +264,23 @@ const routeTree = rootRoute.addChildren([
   publicOfferRoute,
   demoRoute,
   authedRoute.addChildren([
-    // protected
     homeRoute,
-    inventoryRoute,
     calendarRoute,
-    loggingRoute,
-    vehiclesRoute,
-    jobsRoute,
-    crewRoute,
-    mattersRoute,
     companyRoute,
-    customersRoute,
-    latestRoute,
     profileRoute,
     notificationsRoute,
     reportingRoute,
     superRoute,
+    splitLayoutRoute.addChildren([
+      inventoryRoute,
+      loggingRoute,
+      vehiclesRoute,
+      jobsRoute,
+      crewRoute,
+      mattersRoute,
+      customersRoute,
+      latestRoute,
+    ]),
   ]),
   notFoundRoute,
 ])

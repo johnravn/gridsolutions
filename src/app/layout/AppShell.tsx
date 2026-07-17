@@ -15,7 +15,7 @@ import {
   IconButton,
   Text,
 } from '@radix-ui/themes'
-import { Menu } from 'iconoir-react'
+import { Menu, Xmark } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 // add
 import { useQuery } from '@tanstack/react-query'
@@ -26,8 +26,10 @@ import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
 import { DemoModeBadge } from '@features/demo/components/DemoModeBadge'
+import { GlobalHotkeys } from '@shared/hotkeys'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAppResume } from '../hooks/useAppResume'
+import { WhatsNewPopover } from '../components/WhatsNewPopover'
 import { NAV, Sidebar } from './Sidebar'
 
 const prefersReducedMotionQuery = '(prefers-reduced-motion: reduce)'
@@ -95,13 +97,15 @@ export default function AppShell() {
     expansionForDevBadge.accounting_api_environment === 'production'
 
   // Load my profile row
-  const { data: myProfile } = useQuery({
+  const { data: myProfile, isSuccess: profileLoaded } = useQuery({
     queryKey: ['my-profile', authUser?.id],
     enabled: !!authUser?.id,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('user_id,email,display_name,avatar_url')
+        .select(
+          'user_id,email,display_name,avatar_url,last_seen_release_version',
+        )
         .eq('user_id', authUser!.id)
         .maybeSingle()
       if (error) throw error
@@ -110,6 +114,7 @@ export default function AppShell() {
         email: string
         display_name: string | null
         avatar_url: string | null
+        last_seen_release_version: string | null
       }
     },
   })
@@ -191,6 +196,7 @@ export default function AppShell() {
       direction="row"
       style={{ position: 'relative', minHeight: 0 }} // allow children to shrink
     >
+      {!isPublic ? <GlobalHotkeys /> : null}
       {/* Animated background - only on authenticated pages and if enabled */}
       {!isPublic && showAnimatedBackground && (
         <AnimatedBackground
@@ -202,8 +208,11 @@ export default function AppShell() {
 
       {!isPublic && !showNoCompanyMessage && (
         <Sidebar
-          open={open}
-          onToggle={(next) => setOpen(next ?? !open)}
+          open={isMobile ? open : true}
+          onToggle={(next) => {
+            if (!isMobile) return
+            setOpen(next ?? !open)
+          }}
           currentPath={currentPath}
           // NEW:
           userDisplayName={displayName}
@@ -243,21 +252,45 @@ export default function AppShell() {
             >
               {!isPublic && isMobile && (
                 <IconButton
-                  size="2"
+                  size="3"
                   variant="ghost"
                   aria-label={(open ? 'Close' : 'Open') + ' menu'}
+                  aria-expanded={open}
                   onClick={() => setOpen((o) => !o)}
+                  style={{ minWidth: 44, minHeight: 44 }}
                 >
-                  <Menu />
+                  {open ? (
+                    <Xmark width={22} height={22} />
+                  ) : (
+                    <Menu width={22} height={22} />
+                  )}
                 </IconButton>
               )}
               {!isPublic && (
-                <Text size="8" weight="light">
+                <Text
+                  size="8"
+                  weight="light"
+                  style={{ flex: isMobile ? 1 : undefined }}
+                >
                   {title}
                 </Text>
               )}
+              {!isPublic && isMobile && (
+                <WhatsNewPopover
+                  userId={authUser?.id}
+                  profileLoaded={profileLoaded}
+                  lastSeenReleaseVersion={myProfile?.last_seen_release_version}
+                />
+              )}
               {!isPublic && !isMobile && (
                 <Flex align="center" gap="3">
+                  <WhatsNewPopover
+                    userId={authUser?.id}
+                    profileLoaded={profileLoaded}
+                    lastSeenReleaseVersion={
+                      myProfile?.last_seen_release_version
+                    }
+                  />
                   <Link to="/profile" style={{ textDecoration: 'none' }}>
                     <Flex
                       align="center"

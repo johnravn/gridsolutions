@@ -21,6 +21,7 @@ import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import {
   useTabKeyboardScopeProps,
@@ -512,7 +513,7 @@ export default function JobInspector({
             </DropdownMenu.Root>
           </Flex>
         ) : (
-          <Tabs.List wrap="wrap" mb="2">
+          <AnimatedTabsList wrap="wrap" mb="2">
             <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
             <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
             <Tabs.Trigger value="program">Program</Tabs.Trigger>
@@ -534,7 +535,7 @@ export default function JobInspector({
             {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
             <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
             <Tabs.Trigger value="files">Files</Tabs.Trigger>
-          </Tabs.List>
+          </AnimatedTabsList>
         )}
 
         <Tabs.Content value="overview" mt={'10px'}>

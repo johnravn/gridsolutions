@@ -14,6 +14,8 @@ type Props = {
   onMinuteClick: (minute: number) => void
   label?: string
   disabled?: boolean
+  /** Return true to disable a specific minute option (e.g. zero-duration). */
+  isMinuteDisabled?: (minute: number) => boolean
 }
 
 export function MinuteGrid({
@@ -23,6 +25,7 @@ export function MinuteGrid({
   onMinuteClick,
   label = 'Minute',
   disabled = false,
+  isMinuteDisabled,
 }: Props) {
   const isRangeMode = rangeSelection != null
   const minutes = buildMinuteOptions(step)
@@ -48,6 +51,7 @@ export function MinuteGrid({
             ? isMinuteInRange(m, rangeSelection.start, rangeSelection.end)
             : false
           const minuteSelected = !isRangeMode && m === selectedMinute
+          const minuteDisabled = disabled || (isMinuteDisabled?.(m) ?? false)
 
           let border = '1px solid var(--gray-6)'
           let background = 'var(--gray-2)'
@@ -69,7 +73,7 @@ export function MinuteGrid({
               key={m}
               type="button"
               aria-label={ariaLabel}
-              disabled={disabled}
+              disabled={minuteDisabled}
               onClick={() => onMinuteClick(m)}
               style={{
                 padding: '8px 4px',
@@ -77,12 +81,12 @@ export function MinuteGrid({
                 border,
                 background,
                 color,
-                cursor: disabled ? 'not-allowed' : 'pointer',
+                cursor: minuteDisabled ? 'not-allowed' : 'pointer',
                 fontSize: 'var(--font-size-1)',
                 fontWeight,
                 transition: 'all 0.15s',
                 textAlign: 'center',
-                opacity: disabled ? 0.6 : 1,
+                opacity: minuteDisabled ? 0.6 : 1,
               }}
             >
               {minuteLabel}

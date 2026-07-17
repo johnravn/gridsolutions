@@ -151,7 +151,6 @@ export type RadixGrayColor =
   | 'olive'
   | 'sand'
 export type RadixPanelBackground = 'solid' | 'translucent'
-export type RadixScaling = '90%' | '95%' | '100%' | '105%' | '110%'
 
 export type CompanyDetail = {
   id: string
@@ -165,7 +164,6 @@ export type CompanyDetail = {
   theme_radius: RadixRadius | null
   theme_gray_color: RadixGrayColor | null
   theme_panel_background: RadixPanelBackground | null
-  theme_scaling: RadixScaling | null
   logo_path: string | null
   logo_light_path: string | null
   logo_dark_path: string | null
@@ -196,7 +194,6 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
           theme_radius,
           theme_gray_color,
           theme_panel_background,
-          theme_scaling,
           logo_path,
           logo_light_path,
           logo_dark_path,
@@ -235,7 +232,6 @@ export function companyDetailQuery({ companyId }: { companyId: string }) {
           (data.theme_gray_color as RadixGrayColor | null) ?? null,
         theme_panel_background:
           (data.theme_panel_background as RadixPanelBackground | null) ?? null,
-        theme_scaling: (data.theme_scaling as RadixScaling | null) ?? null,
         logo_path: data.logo_path ?? null,
         logo_light_path: data.logo_light_path ?? null,
         logo_dark_path: data.logo_dark_path ?? null,
@@ -331,14 +327,12 @@ export async function updateCompanyTheme({
   radius,
   grayColor,
   panelBackground,
-  scaling,
 }: {
   companyId: string
   accentColor?: RadixAccentColor | null
   radius?: RadixRadius | null
   grayColor?: RadixGrayColor | null
   panelBackground?: RadixPanelBackground | null
-  scaling?: RadixScaling | null
 }) {
   const { data: auth, error: authErr } = await supabase.auth.getUser()
   if (authErr) throw authErr
@@ -351,7 +345,6 @@ export async function updateCompanyTheme({
   if (grayColor !== undefined) updates.theme_gray_color = grayColor
   if (panelBackground !== undefined)
     updates.theme_panel_background = panelBackground
-  if (scaling !== undefined) updates.theme_scaling = scaling
 
   const { error } = await supabase
     .from('companies')

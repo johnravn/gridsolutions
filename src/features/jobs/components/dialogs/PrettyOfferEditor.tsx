@@ -22,6 +22,7 @@ import {
 import { Download, Eye, Lock, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import {
   exportOfferPDF,
@@ -56,6 +57,7 @@ import {
   OFFER_EDITOR_DIALOG_CLASS,
   offerEditorDialogContentStyle,
 } from './offerEditorDialogStyles'
+import { UnsavedChangesCloseGuard } from './UnsavedChangesCloseGuard'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
 import type {
   OfferBasisDetail,
@@ -153,6 +155,7 @@ export default function PrettyOfferEditor({
   const [prettyUseCustomerBrandColors, setPrettyUseCustomerBrandColors] =
     React.useState(false)
   const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const closeGuardActionRef = React.useRef(false)
   const [offerMetadataExpanded, setOfferMetadataExpanded] = React.useState(true)
   const [baselineSerialized, setBaselineSerialized] = React.useState<
     string | null
@@ -456,6 +459,20 @@ export default function PrettyOfferEditor({
     pricingBases,
   ])
 
+  const isDirty = hasUnsavedChanges()
+
+  React.useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
+
   const saveMutation = useMutation({
     mutationFn: async (payload?: {
       closeAfterSave?: boolean
@@ -536,6 +553,7 @@ export default function PrettyOfferEditor({
 
   const handleOfferDialogOpenChange = (next: boolean) => {
     if (next) return
+    if (closeGuardOpen) return
     if (!readOnly && hasUnsavedChanges()) {
       setCloseGuardOpen(true)
       return
@@ -544,17 +562,27 @@ export default function PrettyOfferEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    closeGuardActionRef.current = true
     try {
       await saveMutation.mutateAsync({ closeAfterSave: true })
       setCloseGuardOpen(false)
     } catch {
       // mutation shows error
+    } finally {
+      closeGuardActionRef.current = false
     }
   }
 
   const discardFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
     setCloseGuardOpen(false)
     onOpenChange(false)
+  }
+
+  const keepEditingFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    setCloseGuardOpen(false)
   }
 
   return (
@@ -564,6 +592,22 @@ export default function PrettyOfferEditor({
         maxWidth="1280px"
         className={OFFER_EDITOR_DIALOG_CLASS}
         style={offerEditorDialogContentStyle}
+        onPointerDownOutside={(event) => {
+          if (closeGuardOpen) event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          if (closeGuardOpen) event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          if (closeGuardOpen) {
+            event.preventDefault()
+            return
+          }
+          if (!readOnly && hasUnsavedChanges()) {
+            event.preventDefault()
+            setCloseGuardOpen(true)
+          }
+        }}
       >
         <Flex
           direction="column"
@@ -609,7 +653,10 @@ export default function PrettyOfferEditor({
               {!readOnly && (
                 <Button
                   size="2"
-                  onClick={() => saveMutation.mutate({})}
+                  onClick={() => {
+                    if (saveMutation.isPending) return
+                    saveMutation.mutate({})
+                  }}
                   disabled={saveMutation.isPending || !activeOfferId}
                 >
                   Save
@@ -733,7 +780,7 @@ export default function PrettyOfferEditor({
                   flexDirection: 'column',
                 }}
               >
-                <Tabs.List>
+                <AnimatedTabsList>
                   <Tabs.Trigger value="modules">Modules</Tabs.Trigger>
                   <Tabs.Trigger value="pricing">Pricing basis</Tabs.Trigger>
                   <Tabs.Trigger value="totals">Totals</Tabs.Trigger>
@@ -741,7 +788,7 @@ export default function PrettyOfferEditor({
                     <Eye width={14} height={14} />
                     Preview
                   </Tabs.Trigger>
-                </Tabs.List>
+                </AnimatedTabsList>
 
                 <Box
                   pt="3"
@@ -844,7 +891,9 @@ export default function PrettyOfferEditor({
                             }
                           : null
                       }
-                      prettyUseCustomerBrandColors={prettyUseCustomerBrandColors}
+                      prettyUseCustomerBrandColors={
+                        prettyUseCustomerBrandColors
+                      }
                       showPricePerLine={showPricePerLine}
                     />
                   </Tabs.Content>
@@ -855,35 +904,14 @@ export default function PrettyOfferEditor({
         </Flex>
       </Dialog.Content>
 
-      <Dialog.Root open={closeGuardOpen} onOpenChange={setCloseGuardOpen}>
-        <Dialog.Content maxWidth="480px" style={{ zIndex: 101 }}>
-          <Dialog.Title>Unsaved changes</Dialog.Title>
-          <Separator my="3" />
-          <Text size="2">
-            You have unsaved changes. Save them before closing, discard them, or
-            keep editing.
-          </Text>
-          <Flex gap="2" mt="4" justify="end" wrap="wrap">
-            <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>
-              Keep editing
-            </Button>
-            <Button
-              variant="soft"
-              color="red"
-              onClick={discardFromCloseGuard}
-              disabled={saveMutation.isPending}
-            >
-              Discard
-            </Button>
-            <Button
-              onClick={() => void saveFromCloseGuardAndExit()}
-              disabled={saveMutation.isPending || !activeOfferId}
-            >
-              {saveMutation.isPending ? 'Saving…' : 'Save & close'}
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
+      <UnsavedChangesCloseGuard
+        open={closeGuardOpen}
+        isSaving={saveMutation.isPending}
+        canSave={!!activeOfferId}
+        onKeepEditing={keepEditingFromCloseGuard}
+        onDiscard={discardFromCloseGuard}
+        onSaveAndClose={() => void saveFromCloseGuardAndExit()}
+      />
     </Dialog.Root>
   )
 }

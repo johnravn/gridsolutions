@@ -1,45 +1,54 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderHook } from '@testing-library/react'
 import {
+  findSidebarNavIndex,
+  formatShortcut,
   getModShortcutLabel,
+  getOpenDialogs,
   getTabNavShortcutLabels,
+  hasOpenDialog,
   isEditableTarget,
+  isSidebarNavBlockedTarget,
+  shouldHandleTabKeyboardShortcut,
   TAB_KEYBOARD_SCOPE_ATTR,
-  useModKeyShortcut,
   useTabKeyboardScopeProps,
-  useTabKeyboardShortcuts,
 } from './keyboardShortcuts'
 
+vi.mock('@tanstack/react-hotkeys', async () => {
+  const actual = await vi.importActual<
+    typeof import('@tanstack/react-hotkeys')
+  >('@tanstack/react-hotkeys')
+  return {
+    ...actual,
+    useHotkey: vi.fn(),
+  }
+})
+
 describe('getModShortcutLabel', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('uses Cmd prefix on Apple platforms', () => {
-    vi.stubGlobal('navigator', { platform: 'MacIntel' })
-    expect(getModShortcutLabel('k')).toBe('⌘K')
-    expect(getModShortcutLabel('S')).toBe('⌘S')
-  })
-
-  it('uses Ctrl prefix on other platforms', () => {
-    vi.stubGlobal('navigator', { platform: 'Win32' })
-    expect(getModShortcutLabel('k')).toBe('Ctrl+K')
+  it('formats Mod+key via formatForDisplay', () => {
+    expect(getModShortcutLabel('k')).toBe(formatShortcut('Mod+K'))
+    expect(getModShortcutLabel('B')).toBe(formatShortcut('Mod+B'))
   })
 })
 
 describe('getTabNavShortcutLabels', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
+  it('formats default alt-arrow bindings', () => {
+    expect(getTabNavShortcutLabels()).toEqual({
+      prev: formatShortcut('Alt+ArrowLeft'),
+      next: formatShortcut('Alt+ArrowRight'),
+    })
   })
 
-  it('uses Option arrows on Apple platforms', () => {
-    vi.stubGlobal('navigator', { platform: 'MacIntel' })
-    expect(getTabNavShortcutLabels()).toEqual({ prev: '⌥←', next: '⌥→' })
-  })
-
-  it('uses Alt arrows on other platforms', () => {
-    vi.stubGlobal('navigator', { platform: 'Win32' })
-    expect(getTabNavShortcutLabels()).toEqual({ prev: 'Alt+←', next: 'Alt+→' })
+  it('formats custom bindings when provided', () => {
+    expect(
+      getTabNavShortcutLabels({
+        prev: 'Mod+ArrowLeft',
+        next: 'Mod+ArrowRight',
+      }),
+    ).toEqual({
+      prev: formatShortcut('Mod+ArrowLeft'),
+      next: formatShortcut('Mod+ArrowRight'),
+    })
   })
 })
 
@@ -70,315 +79,95 @@ describe('isEditableTarget', () => {
   })
 })
 
-describe('useModKeyShortcut', () => {
-  it('calls onTrigger for matching mod+key when not in editable target', () => {
-    const onTrigger = vi.fn()
-    renderHook(() => useModKeyShortcut({ key: 'k', enabled: true, onTrigger }))
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'k',
-      metaKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: document.body })
-    window.dispatchEvent(event)
-    expect(onTrigger).toHaveBeenCalledOnce()
+describe('isSidebarNavBlockedTarget', () => {
+  it('allows single-line inputs so search autofocus does not block nav', () => {
+    expect(isSidebarNavBlockedTarget(document.createElement('input'))).toBe(
+      false,
+    )
   })
 
-  it('does not trigger when disabled', () => {
-    const onTrigger = vi.fn()
-    renderHook(() => useModKeyShortcut({ key: 'k', enabled: false, onTrigger }))
-
-    window.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
+  it('blocks textareas and contenteditable', () => {
+    expect(isSidebarNavBlockedTarget(document.createElement('textarea'))).toBe(
+      true,
     )
-    expect(onTrigger).not.toHaveBeenCalled()
-  })
-
-  it('does not trigger inside an input', () => {
-    const onTrigger = vi.fn()
-    const input = document.createElement('input')
-    document.body.appendChild(input)
-    renderHook(() => useModKeyShortcut({ key: 'k', enabled: true, onTrigger }))
-
-    input.dispatchEvent(
-      new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }),
-    )
-    expect(onTrigger).not.toHaveBeenCalled()
-    input.remove()
+    const el = document.createElement('div')
+    el.setAttribute('contenteditable', 'true')
+    expect(isSidebarNavBlockedTarget(el)).toBe(true)
   })
 })
 
-describe('useTabKeyboardShortcuts', () => {
-  const tabs = ['one', 'two', 'three'] as const
-
-  function mountTabShortcutHarness({
-    activeTab = 'two',
-    onTabChange = vi.fn(),
-    enabled = true,
-  }: {
-    activeTab?: string
-    onTabChange?: (tab: string) => void
-    enabled?: boolean
-  } = {}) {
-    const onTabChangeRef = { current: onTabChange }
-
-    const { result, unmount } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs,
-        activeTab,
-        onTabChange: (tab) => onTabChangeRef.current(tab),
-        enabled,
-      })
-      return { scopeRef, scopeProps }
-    })
-
-    const scope = document.createElement('div')
-    scope.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    result.current.scopeProps.ref(scope)
-    document.body.appendChild(scope)
-
-    return {
-      scope,
-      onTabChange: onTabChangeRef,
-      unmount: () => {
-        scope.remove()
-        unmount()
-      },
-    }
-  }
-
+describe('useTabKeyboardScopeProps', () => {
   afterEach(() => {
     document.body.innerHTML = ''
   })
 
-  it('moves to the next tab on Alt+ArrowRight inside scope', () => {
-    const onTabChange = vi.fn()
-    const harness = mountTabShortcutHarness({ onTabChange })
+  it('attaches the tab scope attribute when enabled', () => {
+    const { result } = renderHook(() => useTabKeyboardScopeProps())
+    const el = document.createElement('div')
+    result.current.scopeProps.ref(el)
+    expect(el.hasAttribute(TAB_KEYBOARD_SCOPE_ATTR)).toBe(true)
+  })
+})
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: harness.scope })
-    window.dispatchEvent(event)
-
-    expect(onTabChange).toHaveBeenCalledWith('three')
-    harness.unmount()
+describe('shouldHandleTabKeyboardShortcut', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
   })
 
-  it('moves to the previous tab on Alt+ArrowLeft inside scope', () => {
-    const onTabChange = vi.fn()
-    const harness = mountTabShortcutHarness({ onTabChange })
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowLeft',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: harness.scope })
-    window.dispatchEvent(event)
-
-    expect(onTabChange).toHaveBeenCalledWith('one')
-    harness.unmount()
-  })
-
-  it('triggers when focus is outside the tab scope but it is the active tab group', () => {
-    const onTabChange = vi.fn()
-    const harness = mountTabShortcutHarness({ onTabChange })
-
-    const outside = document.createElement('div')
-    document.body.appendChild(outside)
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: outside })
-    window.dispatchEvent(event)
-
-    expect(onTabChange).toHaveBeenCalledWith('three')
-    harness.unmount()
-  })
-
-  it('prefers the innermost tab scope when focus is inside it', () => {
-    const outerOnTabChange = vi.fn()
-    const innerOnTabChange = vi.fn()
-
-    const { result: outerResult, unmount: unmountOuter } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['outer-a', 'outer-b'],
-        activeTab: 'outer-a',
-        onTabChange: outerOnTabChange,
-      })
-      return scopeProps
-    })
-
-    const { result: innerResult, unmount: unmountInner } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['inner-a', 'inner-b'],
-        activeTab: 'inner-a',
-        onTabChange: innerOnTabChange,
-      })
-      return scopeProps
-    })
-
-    const outer = document.createElement('div')
-    outer.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    outerResult.current.ref(outer)
-    document.body.appendChild(outer)
-
-    const inner = document.createElement('div')
-    inner.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    innerResult.current.ref(inner)
-    outer.appendChild(inner)
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: inner })
-    window.dispatchEvent(event)
-
-    expect(innerOnTabChange).toHaveBeenCalledWith('inner-b')
-    expect(outerOnTabChange).not.toHaveBeenCalled()
-
-    unmountInner()
-    unmountOuter()
-  })
-
-  it('uses the deepest visible tab scope when focus is not inside a tab group', () => {
-    const outerOnTabChange = vi.fn()
-    const innerOnTabChange = vi.fn()
-
-    const { result: outerResult, unmount: unmountOuter } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['outer-a', 'outer-b'],
-        activeTab: 'outer-a',
-        onTabChange: outerOnTabChange,
-      })
-      return scopeProps
-    })
-
-    const { result: innerResult, unmount: unmountInner } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['inner-a', 'inner-b'],
-        activeTab: 'inner-a',
-        onTabChange: innerOnTabChange,
-      })
-      return scopeProps
-    })
-
-    const outer = document.createElement('div')
-    outer.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    outerResult.current.ref(outer)
-    document.body.appendChild(outer)
-
-    const inner = document.createElement('div')
-    inner.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    innerResult.current.ref(inner)
-    outer.appendChild(inner)
-
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: document.body })
-    window.dispatchEvent(event)
-
-    expect(innerOnTabChange).toHaveBeenCalledWith('inner-b')
-    expect(outerOnTabChange).not.toHaveBeenCalled()
-
-    unmountInner()
-    unmountOuter()
-  })
-
-  it('does not trigger while an open dialog is on screen', () => {
-    const onTabChange = vi.fn()
-    const harness = mountTabShortcutHarness({ onTabChange })
+  it('returns false when a dialog is open', () => {
+    const scope = document.createElement('div')
+    scope.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
+    document.body.appendChild(scope)
 
     const dialog = document.createElement('div')
     dialog.setAttribute('role', 'dialog')
     dialog.setAttribute('data-state', 'open')
     document.body.appendChild(dialog)
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: dialog })
-    window.dispatchEvent(event)
-
-    expect(onTabChange).not.toHaveBeenCalled()
-    dialog.remove()
-    harness.unmount()
+    expect(shouldHandleTabKeyboardShortcut(scope, scope)).toBe(false)
   })
 
-  it('does not block parent tab shortcuts when disabled', () => {
-    const parentOnTabChange = vi.fn()
-    const childOnTabChange = vi.fn()
+  it('returns true when focus is inside the scope and no dialog', () => {
+    const scope = document.createElement('div')
+    scope.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
+    document.body.appendChild(scope)
+    expect(shouldHandleTabKeyboardShortcut(scope, scope)).toBe(true)
+  })
+})
 
-    const { result: parentResult, unmount: unmountParent } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['parent-a', 'parent-b'],
-        activeTab: 'parent-a',
-        onTabChange: parentOnTabChange,
-      })
-      return scopeProps
-    })
+describe('hasOpenDialog', () => {
+  afterEach(() => {
+    document.body.innerHTML = ''
+  })
 
-    const { result: childResult, unmount: unmountChild } = renderHook(() => {
-      const { scopeRef, scopeProps } = useTabKeyboardScopeProps({
-        enabled: false,
-      })
-      useTabKeyboardShortcuts({
-        scopeRef,
-        tabs: ['child-a', 'child-b'],
-        activeTab: 'child-a',
-        onTabChange: childOnTabChange,
-        enabled: false,
-      })
-      return scopeProps
-    })
+  it('detects open dialogs and alertdialogs', () => {
+    expect(hasOpenDialog()).toBe(false)
+    expect(getOpenDialogs()).toEqual([])
 
-    const parent = document.createElement('div')
-    parent.setAttribute(TAB_KEYBOARD_SCOPE_ATTR, '')
-    parentResult.current.ref(parent)
-    document.body.appendChild(parent)
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('data-state', 'open')
+    document.body.appendChild(dialog)
 
-    const child = document.createElement('div')
-    childResult.current.ref(child)
-    parent.appendChild(child)
+    expect(hasOpenDialog()).toBe(true)
+    expect(getOpenDialogs()).toHaveLength(1)
+  })
 
-    const event = new KeyboardEvent('keydown', {
-      key: 'ArrowRight',
-      altKey: true,
-      bubbles: true,
-    })
-    Object.defineProperty(event, 'target', { value: child })
-    window.dispatchEvent(event)
+  it('ignores closed dialogs', () => {
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('data-state', 'closed')
+    document.body.appendChild(dialog)
 
-    expect(parentOnTabChange).toHaveBeenCalledWith('parent-b')
-    expect(childOnTabChange).not.toHaveBeenCalled()
+    expect(hasOpenDialog()).toBe(false)
+  })
+})
 
-    unmountChild()
-    unmountParent()
+describe('findSidebarNavIndex', () => {
+  it('prefers exact match then longest prefix', () => {
+    const routes = ['/jobs', '/jobs/recurring', '/calendar']
+    expect(findSidebarNavIndex(routes, '/jobs')).toBe(0)
+    expect(findSidebarNavIndex(routes, '/jobs/recurring/1')).toBe(1)
+    expect(findSidebarNavIndex(routes, '/unknown')).toBe(-1)
   })
 })

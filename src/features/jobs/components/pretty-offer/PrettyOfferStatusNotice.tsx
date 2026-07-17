@@ -1,8 +1,6 @@
 import { Box, Flex, Heading, Text } from '@radix-ui/themes'
-import {
-  resolvePrettyOfferStatusNotice,
-  type PrettyOfferStatusKind,
-} from '../../utils/prettyOfferStatusNotice'
+import { resolvePrettyOfferStatusNotice } from '../../utils/prettyOfferStatusNotice'
+import type { PrettyOfferStatusKind } from '../../utils/prettyOfferStatusNotice'
 import type { OfferDetail } from '../../types'
 import './prettyOfferDeckStyles.css'
 

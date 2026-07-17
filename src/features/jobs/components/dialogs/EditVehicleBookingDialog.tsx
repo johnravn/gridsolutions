@@ -8,8 +8,9 @@ import {
   Flex,
   SegmentedControl,
   Text,
-  TextField,
 } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import type { ExternalReqStatus } from '../../types'
@@ -19,6 +20,16 @@ type EditVehicleBookingRow = {
   external_status: ExternalReqStatus | null
   external_note: string | null
 }
+
+const defaultValues = {
+  status: 'planned' as ExternalReqStatus,
+  note: '',
+}
+
+const schema = z.object({
+  status: z.enum(['planned', 'requested', 'confirmed']),
+  note: z.string(),
+})
 
 export default function EditVehicleBookingDialog({
   open,
@@ -33,22 +44,34 @@ export default function EditVehicleBookingDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
-  const [status, setStatus] = React.useState<ExternalReqStatus>(
-    row.external_status ?? 'planned',
-  )
-  const [note, setNote] = React.useState(row.external_note ?? '')
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await save.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
     if (!open) return
-    setStatus(row.external_status ?? 'planned')
-    setNote(row.external_note ?? '')
-  }, [open, row])
+    form.reset(
+      {
+        status: row.external_status ?? 'planned',
+        note: row.external_note ?? '',
+      },
+      { keepDefaultValues: true },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open, row.id, row.external_status, row.external_note])
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof defaultValues) => {
       const payload: any = {
-        external_status: status,
-        external_note: note.trim() || null,
+        external_status: value.status,
+        external_note: value.note.trim() || null,
       }
 
       const { error } = await supabase
@@ -73,49 +96,59 @@ export default function EditVehicleBookingDialog({
       <Dialog.Content maxWidth="460px">
         <Dialog.Title>Edit vehicle booking</Dialog.Title>
 
-        <Box
-          mt="4"
-          style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
         >
-          <Field label="Status">
-            <SegmentedControl.Root
-              size="2"
-              value={status}
-              onValueChange={(v) => setStatus(v as ExternalReqStatus)}
+          <form.AppForm>
+            <Box
+              mt="4"
+              style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
             >
-              <SegmentedControl.Item value="planned">
-                Planned
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="requested">
-                Requested
-              </SegmentedControl.Item>
-              <SegmentedControl.Item value="confirmed">
-                Confirmed
-              </SegmentedControl.Item>
-            </SegmentedControl.Root>
-          </Field>
+              <Field label="Status">
+                <form.AppField name="status">
+                  {(field) => (
+                    <SegmentedControl.Root
+                      size="2"
+                      value={field.state.value}
+                      onValueChange={(v) =>
+                        field.handleChange(v as ExternalReqStatus)
+                      }
+                    >
+                      <SegmentedControl.Item value="planned">
+                        Planned
+                      </SegmentedControl.Item>
+                      <SegmentedControl.Item value="requested">
+                        Requested
+                      </SegmentedControl.Item>
+                      <SegmentedControl.Item value="confirmed">
+                        Confirmed
+                      </SegmentedControl.Item>
+                    </SegmentedControl.Root>
+                  )}
+                </form.AppField>
+              </Field>
 
-          <Field label="Note">
-            <TextField.Root
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Optional note…"
-            />
-          </Field>
+              <form.AppField name="note">
+                {(field) => (
+                  <field.TextField label="Note" placeholder="Optional note…" />
+                )}
+              </form.AppField>
 
-          <Flex justify="end" gap="2" mt="2">
-            <Dialog.Close>
-              <Button variant="soft">Cancel</Button>
-            </Dialog.Close>
-            <Button
-              variant="solid"
-              onClick={() => save.mutate()}
-              disabled={save.isPending}
-            >
-              {save.isPending ? 'Saving…' : 'Save'}
-            </Button>
-          </Flex>
-        </Box>
+              <Flex justify="end" gap="2" mt="2">
+                <Dialog.Close>
+                  <Button type="button" variant="soft">
+                    Cancel
+                  </Button>
+                </Dialog.Close>
+                <form.SubmitButton label="Save" pendingLabel="Saving…" />
+              </Flex>
+            </Box>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

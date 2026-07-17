@@ -2,10 +2,12 @@
 /**
  * Transform a remote Supabase data dump for local schema ahead of production.
  *
- * Remote may still expose items/item_groups ownership columns
- * (internally_owned, external_owner_id, internal_owner_company_id) while local
- * migrations use item_kind (stock | subrental). This rewrites INSERT statements
- * and returns SQL to backfill reserved_items.subcontractor_id from subrental items.
+ * Remote may still expose:
+ * - items/item_groups ownership columns (internally_owned, …) while local uses item_kind
+ * - companies.theme_scaling while local has dropped that column
+ *
+ * Rewrites INSERT statements and returns SQL to backfill
+ * reserved_items.subcontractor_id from subrental items.
  */
 
 const ITEMS_OLD_HEADER =
@@ -17,6 +19,11 @@ const ITEM_GROUPS_OLD_HEADER =
   'INSERT INTO "public"."item_groups" ("id", "company_id", "name", "description", "active", "category_id", "deleted", "unique", "internally_owned", "external_owner_id", "group_type")'
 const ITEM_GROUPS_NEW_HEADER =
   'INSERT INTO "public"."item_groups" ("id", "company_id", "name", "description", "active", "category_id", "deleted", "unique", "item_kind", "group_type")'
+
+const COMPANIES_OLD_HEADER =
+  'INSERT INTO "public"."companies" ("id", "name", "created_at", "address", "vat_number", "general_email", "contact_person_id", "accent_color", "job_number_counter", "theme_radius", "theme_gray_color", "theme_panel_background", "theme_scaling", "terms_and_conditions_type", "terms_and_conditions_text", "terms_and_conditions_pdf_path", "logo_path", "logo_light_path", "logo_dark_path", "employee_daily_rate", "employee_hourly_rate", "owner_daily_rate", "owner_hourly_rate", "offer_number_counter", "is_demo")'
+const COMPANIES_NEW_HEADER =
+  'INSERT INTO "public"."companies" ("id", "name", "created_at", "address", "vat_number", "general_email", "contact_person_id", "accent_color", "job_number_counter", "theme_radius", "theme_gray_color", "theme_panel_background", "terms_and_conditions_type", "terms_and_conditions_text", "terms_and_conditions_pdf_path", "logo_path", "logo_light_path", "logo_dark_path", "employee_daily_rate", "employee_hourly_rate", "owner_daily_rate", "owner_hourly_rate", "offer_number_counter", "is_demo")'
 
 /** @type {Map<string, string>} item_id -> subcontractor customer_id */
 const subrentalItemOwners = new Map()
@@ -153,13 +160,34 @@ function transformItemGroupRow(values) {
   return [...values.slice(0, 8), itemKind, values[10]]
 }
 
+/** Drop theme_scaling (index 12) when present; leave already-stripped rows alone. */
+/** @param {Array<string | boolean | null>} values */
+function transformCompanyRow(values) {
+  if (values.length === 24) {
+    return values
+  }
+
+  if (values.length !== 25) {
+    throw new Error(`Unexpected companies row column count: ${values.length}`)
+  }
+
+  return [...values.slice(0, 12), ...values.slice(13)]
+}
+
 /**
  * @param {string} sql
  * @param {string} oldHeader
  * @param {string} newHeader
  * @param {(values: Array<string | boolean | null>) => Array<string | boolean | null>} transformRow
+ * @param {{ onConflict?: string }} [options]
  */
-function transformInsertBlock(sql, oldHeader, newHeader, transformRow) {
+function transformInsertBlock(
+  sql,
+  oldHeader,
+  newHeader,
+  transformRow,
+  options = {},
+) {
   if (!sql.includes(oldHeader)) {
     return sql
   }
@@ -253,9 +281,73 @@ function transformInsertBlock(sql, oldHeader, newHeader, transformRow) {
     searchFrom = end + 1
   }
 
+  const conflict = options.onConflict ? `\n${options.onConflict}` : ''
   return (
-    prefix + newHeader + ' VALUES\n\t' + tuples.join(',\n\t') + ';' + suffix
+    prefix +
+    newHeader +
+    ' VALUES\n\t' +
+    tuples.join(',\n\t') +
+    conflict +
+    ';' +
+    suffix
   )
+}
+
+/**
+ * Seed/migration already inserts Demo Company. Remote dumps include it in the
+ * same multi-row INSERT — without ON CONFLICT the whole statement fails and
+ * every other company is skipped.
+ *
+ * @param {string} sql
+ */
+function ensureCompaniesOnConflict(sql) {
+  const marker = 'INSERT INTO "public"."companies"'
+  const start = sql.indexOf(marker)
+  if (start === -1) return { sql, changed: false }
+
+  const statement = sql.slice(start)
+  if (/ON CONFLICT/i.test(statement.slice(0, statement.indexOf(';') + 1))) {
+    return { sql, changed: false }
+  }
+
+  let inString = false
+  let parenDepth = 0
+  let endIdx = -1
+  for (let i = 0; i < statement.length; i += 1) {
+    const char = statement[i]
+    if (inString) {
+      if (char === "'") {
+        if (statement[i + 1] === "'") {
+          i += 1
+          continue
+        }
+        inString = false
+      }
+      continue
+    }
+    if (char === "'") {
+      inString = true
+      continue
+    }
+    if (char === '(') parenDepth += 1
+    if (char === ')') parenDepth -= 1
+    if (char === ';' && parenDepth === 0) {
+      endIdx = i
+      break
+    }
+  }
+
+  if (endIdx === -1) {
+    throw new Error('Unterminated companies INSERT statement')
+  }
+
+  const rewritten =
+    sql.slice(0, start) +
+    statement.slice(0, endIdx) +
+    '\nON CONFLICT (id) DO NOTHING;' +
+    statement.slice(endIdx + 1)
+
+  return { sql: rewritten, changed: true }
 }
 
 export function buildSubrentalBackfillSql() {
@@ -291,13 +383,15 @@ ON CONFLICT (job_id, customer_id) DO NOTHING;
 
 /**
  * @param {string} dumpSql
- * @returns {{ sql: string, transformed: boolean, subrentalItems: number }}
+ * @returns {{ sql: string, transformed: boolean, subrentalItems: number, droppedThemeScaling: boolean, companiesOnConflict: boolean }}
  */
 export function transformRemoteDataDump(dumpSql) {
   subrentalItemOwners.clear()
 
   let sql = dumpSql
   let transformed = false
+  let droppedThemeScaling = false
+  let companiesOnConflict = false
 
   if (sql.includes(ITEMS_OLD_HEADER)) {
     sql = transformInsertBlock(
@@ -319,9 +413,31 @@ export function transformRemoteDataDump(dumpSql) {
     transformed = true
   }
 
+  if (sql.includes(COMPANIES_OLD_HEADER)) {
+    sql = transformInsertBlock(
+      sql,
+      COMPANIES_OLD_HEADER,
+      COMPANIES_NEW_HEADER,
+      transformCompanyRow,
+      { onConflict: 'ON CONFLICT (id) DO NOTHING' },
+    )
+    droppedThemeScaling = true
+    companiesOnConflict = true
+    transformed = true
+  } else {
+    const result = ensureCompaniesOnConflict(sql)
+    sql = result.sql
+    if (result.changed) {
+      companiesOnConflict = true
+      transformed = true
+    }
+  }
+
   return {
     sql,
     transformed,
     subrentalItems: subrentalItemOwners.size,
+    droppedThemeScaling,
+    companiesOnConflict,
   }
 }

@@ -85,7 +85,7 @@ export default function MattersFilter({
                 borderRadius: '50%',
                 backgroundColor: 'var(--accent-9)',
                 color: 'white',
-                fontSize: '10px',
+                fontSize: 'var(--font-size-1)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

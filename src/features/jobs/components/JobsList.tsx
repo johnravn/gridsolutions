@@ -23,7 +23,10 @@ import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
 import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
-import { IndexTableBodySkeleton } from '@shared/ui/index-table'
+import {
+  IndexTableBodySkeleton,
+  useIndexTableSelectionKeyboard,
+} from '@shared/ui/index-table'
 import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
@@ -57,20 +60,29 @@ type MyJobRole = 'crew' | 'project_lead' | 'both' | null
 const GRID_COLUMNS = 'minmax(0, 1fr) minmax(90px, auto) auto'
 
 export default function JobsList({
+  createShortcutRef,
   selection,
   onSelectJob,
   onSelectRecurringJob,
   statusFilter,
   showOnlyArchived,
-  selectedDate,
+  dateFrom,
+  dateTo,
+  readyToInvoiceFilter = false,
   compact = false,
 }: {
+  /** Binds the page-level create shortcut to this list's create dialog. */
+  createShortcutRef?: React.MutableRefObject<(() => void) | null>
   selection: JobsPageSelection
   onSelectJob: (id: string | null) => void
   onSelectRecurringJob: (id: string | null) => void
   statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
-  selectedDate: string
+  /** Local calendar YYYY-MM-DD — jobs starting in this period. */
+  dateFrom: string
+  dateTo: string
+  /** Same criteria as homepage: completed + current user is project lead */
+  readyToInvoiceFilter?: boolean
   /** When true, use a stacked card layout for better mobile display */
   compact?: boolean
 }) {
@@ -84,6 +96,13 @@ export default function JobsList({
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
   const [createOpen, setCreateOpen] = React.useState(false)
+  React.useEffect(() => {
+    if (!createShortcutRef) return
+    createShortcutRef.current = () => setCreateOpen(true)
+    return () => {
+      createShortcutRef.current = null
+    }
+  }, [createShortcutRef])
   const [createRecurringOpen, setCreateRecurringOpen] = React.useState(false)
   const [recurringJobsOpen, setRecurringJobsOpen] = React.useState(true)
   const [recurringHeaderHovered, setRecurringHeaderHovered] =
@@ -104,12 +123,15 @@ export default function JobsList({
     ...jobsIndexQuery({
       companyId: companyId ?? '__none__',
       search: debouncedSearch,
-      selectedDate,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
       sortBy,
       sortDir,
       userId,
       companyRole,
       showOnlyArchived,
+      projectLeadUserId: readyToInvoiceFilter ? userId : null,
+      statuses: readyToInvoiceFilter ? ['completed'] : null,
       maxRows: 150,
     }),
     enabled: !!companyId,
@@ -193,8 +215,11 @@ export default function JobsList({
     if (statusFilter.length > 0) {
       filtered = filtered.filter((j) => statusFilter.includes(j.status))
     }
+    if (readyToInvoiceFilter && userId) {
+      filtered = filtered.filter((j) => j.project_lead?.user_id === userId)
+    }
     return filtered
-  }, [allData, statusFilter])
+  }, [allData, statusFilter, readyToInvoiceFilter, userId])
 
   const crewJobIdSet = useJobCrewRoleIds({
     companyId,
@@ -226,6 +251,39 @@ export default function JobsList({
     if (rows.length === 0 || isLoading) return
     rowVirtualizer.measure()
   }, [rows.length, isLoading, rowVirtualizer])
+
+  useIndexTableSelectionKeyboard({
+    enabled: selectedJobId != null,
+    selectedId: selectedJobId,
+    getIds: () => rows.map((r) => r.id),
+    onSelect: (id) => onSelectJob(id),
+    scrollToIndex: (index) => {
+      rowVirtualizer.scrollToIndex(index, { align: 'auto' })
+    },
+  })
+
+  const visibleRecurringIds = React.useMemo(() => {
+    if (readyToInvoiceFilter) return []
+    if (searchRecurringHits.length > 0) {
+      return searchRecurringHits.map((r) => r.id)
+    }
+    if (recurringJobsOpen) {
+      return pinnedRecurringJobs.map((r) => r.id)
+    }
+    return []
+  }, [
+    readyToInvoiceFilter,
+    searchRecurringHits,
+    recurringJobsOpen,
+    pinnedRecurringJobs,
+  ])
+
+  useIndexTableSelectionKeyboard({
+    enabled: selectedRecurringJobId != null,
+    selectedId: selectedRecurringJobId,
+    getIds: () => visibleRecurringIds,
+    onSelect: (id) => onSelectRecurringJob(id),
+  })
 
   const handleSort = (column: SortBy) => {
     if (sortBy === column) {
@@ -334,7 +392,7 @@ export default function JobsList({
         }}
       />
 
-      {pinnedRecurringJobs.length > 0 && (
+      {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
         <Box mb="2">
           <Flex
             align="center"
@@ -491,7 +549,7 @@ export default function JobsList({
               marginTop: 8,
             }}
           >
-            {searchRecurringHits.length > 0 && (
+            {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
               <Box mb="2">
                 {searchRecurringHits.map((row) => (
                   <RecurringJobListRow
@@ -508,7 +566,8 @@ export default function JobsList({
               <Box p="3">
                 <IndexTableBodySkeleton rowCount={8} />
               </Box>
-            ) : rows.length === 0 && searchRecurringHits.length === 0 ? (
+            ) : rows.length === 0 &&
+              (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
                   {allData.length === 0

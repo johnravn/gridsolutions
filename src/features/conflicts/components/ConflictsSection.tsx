@@ -25,7 +25,7 @@ function formatPeriod(start: string, end: string) {
   return `${format(s, 'd. MMM HH:mm', { locale: nb })} – ${format(e, 'HH:mm', { locale: nb })}`
 }
 
-function ConflictDaysSelect({
+export function ConflictDaysSelect({
   value,
   onChange,
 }: {
@@ -90,13 +90,14 @@ export function ConflictsSection({
     unresolved.equipment.length
   const forcedCount =
     forced.crew.length + forced.vehicles.length + forced.equipment.length
+  const totalCount = unresolvedCount + forcedCount
 
   return (
     <DashboardCard
       title="Scheduling conflicts"
       icon={<WarningTriangle width={18} height={18} />}
+      count={totalCount}
       subtitle={rangeLabel}
-      notFullHeight
       headerAction={
         <ConflictDaysSelect value={daysFilter} onChange={onDaysFilterChange} />
       }
@@ -247,7 +248,7 @@ function ConflictJobLink({
     <Link asChild size="1" underline="hover" weight="medium" color="blue">
       <RouterLink
         to="/jobs"
-        search={{ jobId, tab: undefined }}
+        search={{ jobId, recurringJobId: undefined, tab: undefined }}
         style={{ cursor: 'pointer' }}
       >
         {children}

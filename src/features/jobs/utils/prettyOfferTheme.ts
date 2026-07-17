@@ -78,7 +78,9 @@ export function hexToRgb(
   }
 }
 
-export function resolveCustomerColorHex(theme: PrettyOfferTheme): string | null {
+export function resolveCustomerColorHex(
+  theme: PrettyOfferTheme,
+): string | null {
   if (theme.customHex) return theme.customHex
   if (theme.radixAccent) return RADIX_ACCENT_HEX[theme.radixAccent]
   return null
@@ -87,8 +89,7 @@ export function resolveCustomerColorHex(theme: PrettyOfferTheme): string | null 
 export function getContrastText(hex: string): string {
   const rgb = hexToRgb(hex)
   if (!rgb) return '#ffffff'
-  const luminance =
-    (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255
+  const luminance = (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255
   return luminance > 0.55 ? '#1a1a1a' : '#ffffff'
 }
 

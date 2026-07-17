@@ -7,6 +7,11 @@ import {
   calculateSplitAmount,
   calculateSplitAmountBeforeMarkup,
 } from '../../../utils/prettyOfferCalculations'
+import {
+  calculateOptionsSubtotal,
+  collectOfferOptions,
+  resolveDefaultSelectedOptionIds,
+} from '../../../utils/prettyOfferOptions'
 import type { LocalPrettyModule, LocalPricingBasis } from './types'
 import type {
   JobSubcontractorQuote,
@@ -75,6 +80,12 @@ export function TotalsSection({
   )
 
   const totals = calculatePrettyOfferTotals(modulesWithCost, vatPercent)
+  const offerOptions = collectOfferOptions(modulesWithCost)
+  const defaultSelectedOptionIds = resolveDefaultSelectedOptionIds(offerOptions)
+  const previewOptionsSubtotal = calculateOptionsSubtotal(
+    defaultSelectedOptionIds,
+    offerOptions,
+  )
   const customerDisplayTotal = modulesWithCost.reduce((sum, module) => {
     if (module.show_price && module.display_price != null) {
       return sum + module.display_price
@@ -128,24 +139,16 @@ export function TotalsSection({
                         <Text size="1" color="gray">
                           {split.title} → {module?.title || 'Module'}
                         </Text>
-                        <Text size="1">
-                          {formatMoney(splitAmount(split))}
-                        </Text>
+                        <Text size="1">{formatMoney(splitAmount(split))}</Text>
                       </Flex>
                     )
                   })}
                   {markupAmount > 0 && (
-                    <Flex
-                      justify="between"
-                      pl="3"
-                      style={{ opacity: 0.9 }}
-                    >
+                    <Flex justify="between" pl="3" style={{ opacity: 0.9 }}>
                       <Text size="1" color="gray">
                         Subcontractor markup ({subcontractorMarkupPercent}%)
                       </Text>
-                      <Text size="1">
-                        {formatMoney(markupAmount)}
-                      </Text>
+                      <Text size="1">{formatMoney(markupAmount)}</Text>
                     </Flex>
                   )}
                 </Box>
@@ -181,6 +184,47 @@ export function TotalsSection({
           </Text>
         )}
       </Flex>
+
+      {offerOptions.length > 0 && (
+        <Box mb="4">
+          <Separator size="4" my="3" />
+          <Text size="2" weight="medium" mb="1" as="div">
+            Optional add-ons
+          </Text>
+          <Text size="1" color="gray" mb="2" as="div">
+            Base total excludes options. The customer total depends on their
+            selections.
+          </Text>
+          <Flex direction="column" gap="2">
+            {offerOptions.map((option) => (
+              <Flex key={option.optionId} justify="between" align="center">
+                <Box>
+                  <Text size="2">{option.label || 'Untitled option'}</Text>
+                  {option.groupTitle && (
+                    <Text size="1" color="gray" as="div">
+                      {option.groupTitle}
+                      {option.selectionMode === 'single'
+                        ? ' · choose one'
+                        : ' · checkbox'}
+                    </Text>
+                  )}
+                </Box>
+                <Text size="2">{formatMoney(option.price)}</Text>
+              </Flex>
+            ))}
+          </Flex>
+          {previewOptionsSubtotal > 0 && (
+            <Flex justify="between" mt="2">
+              <Text size="2" color="gray">
+                Default selections add
+              </Text>
+              <Text size="2" color="gray">
+                {formatMoney(previewOptionsSubtotal)}
+              </Text>
+            </Flex>
+          )}
+        </Box>
+      )}
 
       <Separator size="4" mb="3" />
 

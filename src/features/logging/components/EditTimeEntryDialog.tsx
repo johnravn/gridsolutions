@@ -1,25 +1,38 @@
 import * as React from 'react'
-import {
-  Button,
-  Dialog,
-  Flex,
-  Text,
-  TextArea,
-  TextField,
-} from '@radix-ui/themes'
+import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { useMutation } from '@tanstack/react-query'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { updateTimeEntry } from '../api/timeEntries'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
 
-type FormState = {
-  title: string
-  jobNumber: string
-  note: string
-  startAt: string
-  endAt: string
+const defaultValues = {
+  title: '',
+  jobNumber: '',
+  note: '',
+  startAt: '',
+  endAt: '',
 }
+
+function hasInvalidTimeRange(startAt: string, endAt: string) {
+  if (!startAt || !endAt) return false
+  return new Date(endAt).getTime() <= new Date(startAt).getTime()
+}
+
+const schema = z
+  .object({
+    title: z.string().trim().min(1, 'Title is required'),
+    jobNumber: z.string(),
+    note: z.string(),
+    startAt: z.string().min(1, 'Start time is required'),
+    endAt: z.string().min(1, 'End time is required'),
+  })
+  .refine((v) => !hasInvalidTimeRange(v.startAt, v.endAt), {
+    message: 'End time must be after start time',
+    path: ['endAt'],
+  })
 
 export default function EditTimeEntryDialog({
   open,
@@ -35,58 +48,44 @@ export default function EditTimeEntryDialog({
   disabled?: boolean
 }) {
   const { success, error } = useToast()
-  const [form, setForm] = React.useState<FormState>({
-    title: '',
-    jobNumber: '',
-    note: '',
-    startAt: '',
-    endAt: '',
-  })
-  const hasInvalidTimeRange = React.useMemo(() => {
-    if (!form.startAt || !form.endAt) return false
-    return new Date(form.endAt).getTime() < new Date(form.startAt).getTime()
-  }, [form.endAt, form.startAt])
 
-  const set = <TKey extends keyof FormState>(
-    key: TKey,
-    value: FormState[TKey],
-  ) => setForm((prev) => ({ ...prev, [key]: value }))
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await updateMutation.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
     if (!open || !entry) return
-    setForm({
-      title: entry.title ?? '',
-      jobNumber: entry.job_number ?? '',
-      note: entry.note ?? '',
-      startAt: entry.start_at ?? '',
-      endAt: entry.end_at ?? '',
-    })
+    form.reset(
+      {
+        title: entry.title ?? '',
+        jobNumber: entry.job_number ?? '',
+        note: entry.note ?? '',
+        startAt: entry.start_at ?? '',
+        endAt: entry.end_at ?? '',
+      },
+      { keepDefaultValues: true },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open, entry?.id])
 
-  const pickedHours = React.useMemo(
-    () => formatHoursBetween(form.startAt, form.endAt),
-    [form.startAt, form.endAt],
-  )
-
   const updateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof defaultValues) => {
       if (!entry) throw new Error('Missing entry')
-      if (!form.title.trim()) throw new Error('Title is required')
-      if (!form.startAt || !form.endAt) {
-        throw new Error('Start and end time are required')
-      }
-      if (hasInvalidTimeRange) {
-        throw new Error('End time must be after start time')
-      }
 
       await updateTimeEntry({
         id: entry.id,
         changes: {
-          title: form.title.trim(),
-          job_number: form.jobNumber.trim() || null,
-          note: form.note.trim() || null,
-          start_at: form.startAt,
-          end_at: form.endAt,
+          title: value.title.trim(),
+          job_number: value.jobNumber.trim() || null,
+          note: value.note.trim() || null,
+          start_at: value.startAt,
+          end_at: value.endAt,
         },
       })
     },
@@ -108,86 +107,105 @@ export default function EditTimeEntryDialog({
           Update the details for this entry.
         </Dialog.Description>
 
-        <Flex direction="column" gap="3">
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Title
-            </Text>
-            <TextField.Root
-              value={form.title}
-              onChange={(e) => set('title', e.target.value)}
-              placeholder="Time entry title"
-              disabled={disabled}
-            />
-          </label>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3">
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title"
+                    placeholder="Time entry title"
+                    disabled={disabled}
+                  />
+                )}
+              </form.AppField>
 
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Job number
-            </Text>
-            <TextField.Root
-              value={form.jobNumber}
-              onChange={(e) => set('jobNumber', e.target.value)}
-              placeholder="Optional"
-              disabled={disabled}
-            />
-          </label>
+              <form.AppField name="jobNumber">
+                {(field) => (
+                  <field.TextField
+                    label="Job number"
+                    placeholder="Optional"
+                    disabled={disabled}
+                  />
+                )}
+              </form.AppField>
 
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Time period
-            </Text>
-            <DateTimeRangePicker
-              startAt={form.startAt}
-              endAt={form.endAt}
-              onChange={({ startAt, endAt }) => {
-                set('startAt', startAt)
-                set('endAt', endAt)
-              }}
-              invalid={hasInvalidTimeRange}
-              disabled={disabled}
-              locale="nb"
-            />
-          </label>
+              <form.AppField name="startAt">
+                {(startField) => (
+                  <form.AppField name="endAt">
+                    {(endField) => (
+                      <label>
+                        <Text as="div" size="2" mb="1" weight="medium">
+                          Time period
+                        </Text>
+                        <DateTimeRangePicker
+                          startAt={startField.state.value}
+                          endAt={endField.state.value}
+                          onChange={({ startAt, endAt }) => {
+                            startField.handleChange(startAt)
+                            endField.handleChange(endAt)
+                          }}
+                          invalid={hasInvalidTimeRange(
+                            startField.state.value,
+                            endField.state.value,
+                          )}
+                          disabled={disabled}
+                          locale="nb"
+                        />
+                      </label>
+                    )}
+                  </form.AppField>
+                )}
+              </form.AppField>
 
-          <label>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Note
-            </Text>
-            <TextArea
-              rows={2}
-              value={form.note}
-              onChange={(e) => set('note', e.target.value)}
-              placeholder="Optional notes"
-              style={{ minHeight: 60, width: '100%', display: 'block' }}
-              disabled={disabled}
-            />
-          </label>
+              <form.AppField name="note">
+                {(field) => (
+                  <field.TextArea
+                    label="Note"
+                    rows={2}
+                    placeholder="Optional notes"
+                    style={{ minHeight: 60, width: '100%', display: 'block' }}
+                    disabled={disabled}
+                  />
+                )}
+              </form.AppField>
 
-          <Flex justify="between" align="center" mt="2">
-            <Text size="3" weight="medium">
-              {pickedHours}
-            </Text>
-            <Flex gap="2">
-              <Dialog.Close>
-                <Button variant="soft" disabled={updateMutation.isPending}>
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button
-                onClick={() => updateMutation.mutate()}
-                disabled={
-                  disabled ||
-                  updateMutation.isPending ||
-                  !form.title.trim() ||
-                  hasInvalidTimeRange
-                }
+              <form.Subscribe
+                selector={(state) => [state.values.startAt, state.values.endAt]}
               >
-                {updateMutation.isPending ? 'Saving…' : 'Save'}
-              </Button>
+                {([startAt, endAt]) => (
+                  <Flex justify="between" align="center" mt="2">
+                    <Text size="3" weight="medium">
+                      {formatHoursBetween(startAt, endAt)}
+                    </Text>
+                    <Flex gap="2">
+                      <Dialog.Close>
+                        <Button
+                          type="button"
+                          variant="soft"
+                          disabled={updateMutation.isPending}
+                        >
+                          Cancel
+                        </Button>
+                      </Dialog.Close>
+                      <form.SubmitButton
+                        label="Save"
+                        pendingLabel="Saving…"
+                        disabled={disabled}
+                      />
+                    </Flex>
+                  </Flex>
+                )}
+              </form.Subscribe>
             </Flex>
-          </Flex>
-        </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

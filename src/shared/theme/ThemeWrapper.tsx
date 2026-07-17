@@ -9,7 +9,6 @@ import type {
   RadixGrayColor,
   RadixPanelBackground,
   RadixRadius,
-  RadixScaling,
 } from '@features/company/api/queries'
 
 export function ThemeWrapper({ children }: { children: React.ReactNode }) {
@@ -40,9 +39,6 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
         | RadixPanelBackground
         | undefined) ?? 'solid',
     )
-  const [scaling, setScaling] = React.useState<RadixScaling>(
-    (companyData?.theme_scaling as RadixScaling | undefined) ?? '100%',
-  )
 
   // Update theme properties when company data changes
   React.useEffect(() => {
@@ -106,12 +102,6 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
     } else {
       setPanelBackground('solid')
     }
-
-    if (companyData?.theme_scaling) {
-      setScaling(companyData.theme_scaling)
-    } else {
-      setScaling('100%')
-    }
   }, [companyData])
 
   // Listen for theme changes from pickers
@@ -130,8 +120,6 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
         setGrayColor(e.detail.value as RadixGrayColor)
       } else if (e.detail.property === 'panelBackground' && e.detail.value) {
         setPanelBackground(e.detail.value as RadixPanelBackground)
-      } else if (e.detail.property === 'scaling' && e.detail.value) {
-        setScaling(e.detail.value as RadixScaling)
       }
     }
 
@@ -158,7 +146,6 @@ export function ThemeWrapper({ children }: { children: React.ReactNode }) {
       accentColor={accentColor}
       grayColor={grayColor}
       panelBackground={panelBackground}
-      scaling={scaling}
     >
       {children}
     </Theme>

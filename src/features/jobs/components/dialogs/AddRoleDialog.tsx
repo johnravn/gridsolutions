@@ -1,9 +1,12 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+import { jobDetailQuery } from '@features/jobs/api/queries'
 
 const TITLE_SUGGESTIONS = [
   'Technician',
@@ -16,6 +19,22 @@ const TITLE_SUGGESTIONS = [
 
 const CATEGORY_SUGGESTIONS = ['Audio', 'Lights', 'AV', 'Transport', 'Rigging']
 
+const defaultValues = {
+  title: '',
+  needed: 1,
+  startAt: '',
+  endAt: '',
+  roleCategory: '',
+}
+
+const schema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  needed: z.number().min(1, 'At least one person is required'),
+  startAt: z.string().min(1, 'Start date is required'),
+  endAt: z.string().min(1, 'End date is required'),
+  roleCategory: z.string(),
+})
+
 export default function AddRoleDialog({
   open,
   onOpenChange,
@@ -26,66 +45,70 @@ export default function AddRoleDialog({
   jobId: string
 }) {
   const qc = useQueryClient()
-  const [title, setTitle] = React.useState('')
-  const [needed, setNeeded] = React.useState<number>(1)
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
-  const [startAt, setStartAt] = React.useState('')
-  const [endAt, setEndAt] = React.useState('')
-  const [roleCategory, setRoleCategory] = React.useState('')
   const [focusedField, setFocusedField] = React.useState<
     'title' | 'category' | null
   >(null)
 
-  // Fetch company_id from job
+  // Prefer the job-page cache so start/end are available on first open render.
   const { data: job } = useQuery({
-    queryKey: ['jobs-detail-lite', jobId],
+    ...jobDetailQuery({ jobId }),
     enabled: open,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('jobs')
-        .select('id, company_id, start_at, end_at')
-        .eq('id', jobId)
-        .single()
-      if (error) throw error
-      return data as {
-        id: string
-        company_id: string
-        start_at: string | null
-        end_at: string | null
-      }
+  })
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await save.mutateAsync(value)
     },
   })
 
-  // Set default dates when job loads
   React.useEffect(() => {
-    if (!open || !job) return
-    if (!startAt && job.start_at) {
-      setStartAt(job.start_at)
-    }
-    if (!endAt && job.end_at) {
-      setEndAt(job.end_at)
-    }
-  }, [open, job, startAt, endAt])
-
-  React.useEffect(() => {
-    if (!open) setFocusedField(null)
+    if (!open) return
+    form.reset(
+      {
+        title: '',
+        needed: 1,
+        startAt: job?.start_at ?? '',
+        endAt: job?.end_at ?? '',
+        roleCategory: '',
+      },
+      { keepDefaultValues: true },
+    )
+    setNeededDraft(null)
+    setFocusedField(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open])
 
-  const save = useMutation({
-    mutationFn: async () => {
-      if (!job?.company_id) throw new Error('Missing company')
-      if (!title.trim()) throw new Error('Title required')
-      if (!startAt || !endAt) throw new Error('Start and end dates required')
+  // If job times weren't cached on open, seed empty period fields once they load.
+  // Only fill blanks so we don't overwrite a period the user already edited.
+  React.useEffect(() => {
+    if (!open || !job) return
+    if (!form.getFieldValue('startAt') && job.start_at) {
+      form.setFieldValue('startAt', job.start_at)
+    }
+    if (!form.getFieldValue('endAt') && job.end_at) {
+      form.setFieldValue('endAt', job.end_at)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fill defaults when job times load
+  }, [open, job?.start_at, job?.end_at])
 
-      const payload: any = {
+  const save = useMutation({
+    mutationFn: async (value: typeof defaultValues) => {
+      if (!job?.company_id) throw new Error('Missing company')
+
+      const payload = {
         job_id: jobId,
         company_id: job.company_id,
-        title: title.trim(),
-        start_at: startAt,
-        end_at: endAt,
-        needed_count: needed,
-        category: 'crew',
-        role_category: roleCategory.trim().toLowerCase() || null,
+        title: value.title.trim(),
+        start_at: value.startAt,
+        end_at: value.endAt,
+        needed_count: value.needed,
+        category: 'crew' as const,
+        role_category: value.roleCategory.trim().toLowerCase() || undefined,
       }
 
       const { error } = await supabase.from('time_periods').insert(payload)
@@ -96,116 +119,135 @@ export default function AddRoleDialog({
       await qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
-      onOpenChange(false)
-      setTitle('')
-      setNeeded(1)
+      form.reset(defaultValues, { keepDefaultValues: true })
       setNeededDraft(null)
-      setStartAt('')
-      setEndAt('')
-      setRoleCategory('')
       setFocusedField(null)
+      onOpenChange(false)
     },
   })
-
-  const disabled = save.isPending || !title.trim() || !startAt || !endAt
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="600px">
         <Dialog.Title>Add role</Dialog.Title>
-        <Flex direction="column" gap="3" mt="3">
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Title
-            </Text>
-            <TextField.Root
-              placeholder="e.g. FOH, Monitor, Loader"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onFocus={() => setFocusedField('title')}
-              onBlur={() =>
-                setFocusedField((prev) => (prev === 'title' ? null : prev))
-              }
-            />
-            <AnimatedQuickSuggestions
-              suggestions={TITLE_SUGGESTIONS}
-              open={focusedField === 'title'}
-              staticOpen={!title.trim()}
-              showLabel
-              onSelect={setTitle}
-              onAfterSelect={() => setFocusedField(null)}
-            />
-          </Box>
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Needed
-            </Text>
-            <TextField.Root
-              type="number"
-              min="1"
-              value={neededDraft ?? String(needed)}
-              onChange={(e) => {
-                const nextValue = e.target.value
-                setNeededDraft(nextValue)
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="title">
+                {(field) => (
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Title
+                    </Text>
+                    <TextField.Root
+                      placeholder="e.g. FOH, Monitor, Loader"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      onFocus={() => setFocusedField('title')}
+                    />
+                    <AnimatedQuickSuggestions
+                      suggestions={TITLE_SUGGESTIONS}
+                      open={focusedField === 'title'}
+                      staticOpen={!field.state.value.trim()}
+                      showLabel
+                      onSelect={(value) => field.handleChange(value)}
+                      onAfterSelect={() => setFocusedField(null)}
+                    />
+                  </Box>
+                )}
+              </form.AppField>
 
-                if (nextValue === '') return
-                const parsed = Number(nextValue)
-                if (Number.isNaN(parsed)) return
+              <form.AppField name="needed">
+                {(field) => (
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Needed
+                    </Text>
+                    <TextField.Root
+                      type="number"
+                      min="1"
+                      value={neededDraft ?? String(field.state.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value
+                        setNeededDraft(nextValue)
 
-                setNeeded(Math.max(1, parsed))
-                setNeededDraft(null)
-              }}
-              onBlur={() => {
-                if (neededDraft === '') {
-                  setNeededDraft(null)
-                }
-              }}
-              style={{ width: 120 }}
-            />
-          </Box>
-          <DateTimeRangePicker
-            startAt={startAt}
-            endAt={endAt}
-            onChange={({ startAt: s, endAt: e }) => {
-              setStartAt(s)
-              setEndAt(e)
-            }}
-          />
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Role Category
-            </Text>
-            <TextField.Root
-              placeholder="e.g. Audio, Lights, AV"
-              value={roleCategory}
-              onChange={(e) => setRoleCategory(e.target.value)}
-              onFocus={() => setFocusedField('category')}
-              onBlur={() =>
-                setFocusedField((prev) => (prev === 'category' ? null : prev))
-              }
-            />
-            <AnimatedQuickSuggestions
-              suggestions={CATEGORY_SUGGESTIONS}
-              open={focusedField === 'category'}
-              staticOpen
-              showLabel
-              onSelect={setRoleCategory}
-              onAfterSelect={() => setFocusedField(null)}
-            />
-          </Box>
-        </Flex>
-        <Flex justify="end" gap="2" mt="4">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            variant="solid"
-            onClick={() => save.mutate()}
-            disabled={disabled}
-          >
-            {save.isPending ? 'Saving…' : 'Add role'}
-          </Button>
-        </Flex>
+                        if (nextValue === '') return
+                        const parsed = Number(nextValue)
+                        if (Number.isNaN(parsed)) return
+
+                        field.handleChange(Math.max(1, parsed))
+                        setNeededDraft(null)
+                      }}
+                      onBlur={() => {
+                        field.handleBlur()
+                        if (neededDraft === '') {
+                          setNeededDraft(null)
+                        }
+                      }}
+                      style={{ width: 120 }}
+                    />
+                  </Box>
+                )}
+              </form.AppField>
+
+              <form.Subscribe
+                selector={(state) => [state.values.startAt, state.values.endAt]}
+              >
+                {([startAt, endAt]) => (
+                  <DateTimeRangePicker
+                    startAt={startAt}
+                    endAt={endAt}
+                    onChange={({ startAt: s, endAt: e }) => {
+                      form.setFieldValue('startAt', s)
+                      form.setFieldValue('endAt', e)
+                    }}
+                  />
+                )}
+              </form.Subscribe>
+
+              <form.AppField name="roleCategory">
+                {(field) => (
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Role Category
+                    </Text>
+                    <TextField.Root
+                      placeholder="e.g. Audio, Lights, AV"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      onFocus={() => setFocusedField('category')}
+                    />
+                    <AnimatedQuickSuggestions
+                      suggestions={CATEGORY_SUGGESTIONS}
+                      open={focusedField === 'category'}
+                      staticOpen
+                      showLabel
+                      onSelect={(value) => field.handleChange(value)}
+                      onAfterSelect={() => setFocusedField(null)}
+                    />
+                  </Box>
+                )}
+              </form.AppField>
+            </Flex>
+
+            <Flex justify="end" gap="2" mt="4">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Add role" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

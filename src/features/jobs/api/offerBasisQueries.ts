@@ -8,6 +8,11 @@ import {
 import { calculateHoursPerDay } from '../components/dialogs/technical-offer-editor/utils'
 import { calculateRentalFactor } from '../utils/offerCalculations'
 import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
+import {
+  basisImportWouldWriteLines,
+  withOfferBasisWriteLock,
+} from '../utils/offerBasisWriteSafety'
+import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type {
   LocalCrewItem,
   LocalEquipmentGroup,
@@ -525,22 +530,8 @@ export async function createOfferBasisFromBookings({
   const title = basisTitleFromJob(job)
   const daysOfUse = offerDaySpanBetween(job.start_at, job.end_at)
 
-  let basisId = existingBasisId
-  if (basisId) {
-    await assertOfferBasisEditable(basisId)
-    await deleteOfferBasisLineItems(basisId)
-    const { error: daysError } = await supabase
-      .from('offer_bases')
-      .update({ days_of_use: daysOfUse })
-      .eq('id', basisId)
-    if (daysError) throw daysError
-  } else {
-    basisId = await createEmptyOfferBasis({
-      jobId,
-      companyId,
-      title,
-    })
-  }
+  // Do not delete existing line items until we know the import will write something.
+  let basisId: string | null = existingBasisId ?? null
 
   const { data: companyExpansion } = await supabase
     .from('company_expansions')
@@ -579,7 +570,16 @@ export async function createOfferBasisFromBookings({
   if (timePeriodError) throw timePeriodError
 
   if (!timePeriods || timePeriods.length === 0) {
-    return basisId
+    if (existingBasisId) {
+      throw new Error(
+        'No job bookings to import. The existing offer basis was left unchanged.',
+      )
+    }
+    return await createEmptyOfferBasis({
+      jobId,
+      companyId,
+      title,
+    })
   }
 
   const timePeriodIds = timePeriods.map((period) => period.id)
@@ -761,98 +761,14 @@ export async function createOfferBasisFromBookings({
     (a, b) => a.localeCompare(b),
   )
 
-  for (const [index, categoryName] of sortedCategoryNames.entries()) {
-    const category = equipmentByCategory.get(categoryName)
-    if (!category) continue
-
-    const { data: group, error: groupError } = await supabase
-      .from('offer_equipment_groups')
-      .insert({
-        offer_basis_id: basisId,
-        group_name: categoryName,
-        sort_order: index,
-      })
-      .select('id')
-      .single()
-
-    if (groupError) throw groupError
-
-    const itemLines = Array.from(category.items.entries()).map(
-      ([itemId, quantity], itemIndex) => {
-        const unitPrice = itemPriceMap.get(itemId) ?? 0
-        return {
-          offer_group_id: group.id,
-          item_id: itemId,
-          group_id: null,
-          quantity,
-          unit_price: unitPrice,
-          total_price: roundMoney(unitPrice * quantity * equipmentRentalFactor),
-          is_internal: itemInternalMap.get(itemId) ?? true,
-          sort_order: itemIndex,
-        }
-      },
-    )
-
-    const groupLines = Array.from(category.groups.entries()).map(
-      ([groupId, quantity], groupIndex) => {
-        const info = groupInfoMap.get(groupId)
-        const unitPrice = info?.current_price ?? 0
-        return {
-          offer_group_id: group.id,
-          item_id: null,
-          group_id: groupId,
-          quantity,
-          unit_price: unitPrice,
-          total_price: roundMoney(unitPrice * quantity * equipmentRentalFactor),
-          is_internal: info?.item_kind === 'stock',
-          sort_order: itemLines.length + groupIndex,
-        }
-      },
-    )
-
-    const itemsToInsert = [...itemLines, ...groupLines]
-
-    if (itemsToInsert.length > 0) {
-      const { error: itemsError } = await supabase
-        .from('offer_equipment_items')
-        .insert(itemsToInsert)
-
-      if (itemsError) throw itemsError
-    }
-  }
-
   const crewDailyRate =
     level?.crew_rate_per_day != null
       ? Number(level.crew_rate_per_day)
       : (companyExpansion?.crew_rate_per_day ?? 0)
   const crewPeriods = timePeriods.filter((period) => period.category === 'crew')
-  for (const [index, period] of crewPeriods.entries()) {
-    const crewCount = Math.max(0, period.needed_count ?? 0)
-    if (crewCount === 0) continue
-
-    const startDate =
-      period.start_at || job?.start_at || new Date().toISOString()
-    const endDate = period.end_at || job?.end_at || new Date().toISOString()
-    const dailyRate = crewDailyRate
-    const totalPrice =
-      dailyRate * crewCount * offerDaySpanBetween(startDate, endDate)
-
-    const { error: crewInsertError } = await supabase
-      .from('offer_crew_items')
-      .insert({
-        offer_basis_id: basisId,
-        role_title: period.title?.trim() || 'Crew',
-        role_category: period.role_category ?? null,
-        crew_count: crewCount,
-        start_date: startDate,
-        end_date: endDate,
-        daily_rate: dailyRate,
-        total_price: totalPrice,
-        sort_order: index,
-      })
-
-    if (crewInsertError) throw crewInsertError
-  }
+  const crewLineCount = crewPeriods.filter(
+    (period) => Math.max(0, period.needed_count ?? 0) > 0,
+  ).length
 
   const { data: transportBookings, error: transportError } = await supabase
     .from('reserved_vehicles')
@@ -861,103 +777,239 @@ export async function createOfferBasisFromBookings({
 
   if (transportError) throw transportError
 
-  const vehicleIds =
-    transportBookings
-      ?.map((booking) => booking.vehicle_id)
-      .filter((id): id is string => !!id) ?? []
+  const transportBookingRows = transportBookings ?? []
 
-  const vehicleMap = new Map<
-    string,
-    {
-      name: string
-      vehicle_category: OfferTransportItem['vehicle_category']
-      internally_owned: boolean
+  if (
+    !basisImportWouldWriteLines({
+      timePeriodCount: timePeriods.length,
+      equipmentCategoryCount: sortedCategoryNames.length,
+      crewLineCount,
+      transportBookingCount: transportBookingRows.length,
+    })
+  ) {
+    if (existingBasisId) {
+      throw new Error(
+        'No bookable equipment, crew, or transport found on this job. The existing offer basis was left unchanged.',
+      )
     }
-  >()
-  if (vehicleIds.length > 0) {
-    const { data: vehicles, error: vehiclesError } = await supabase
-      .from('vehicles')
-      .select('id, name, vehicle_category, internally_owned')
-      .in('id', vehicleIds)
-
-    if (vehiclesError) throw vehiclesError
-
-    if (vehicles) {
-      for (const vehicle of vehicles) {
-        vehicleMap.set(vehicle.id, {
-          name: vehicle.name,
-          vehicle_category: vehicle.vehicle_category ?? null,
-          internally_owned: !!vehicle.internally_owned,
-        })
-      }
-    }
+    return await createEmptyOfferBasis({
+      jobId,
+      companyId,
+      title,
+    })
   }
 
-  const transportBookingRows = transportBookings ?? []
-  let transportSortOrder = 0
-  if (transportBookingRows.length > 0) {
-    const { data: defaultTransportGroup, error: defaultTransportGroupError } =
-      await supabase
-        .from('offer_transport_groups')
+  if (basisId) {
+    await assertOfferBasisEditable(basisId)
+  } else {
+    basisId = await createEmptyOfferBasis({
+      jobId,
+      companyId,
+      title,
+    })
+  }
+
+  const workingBasisId = basisId
+
+  return await withOfferBasisWriteLock(workingBasisId, async () => {
+    if (existingBasisId) {
+      await deleteOfferBasisLineItems(workingBasisId)
+      const { error: daysError } = await supabase
+        .from('offer_bases')
+        .update({ days_of_use: daysOfUse })
+        .eq('id', workingBasisId)
+      if (daysError) throw daysError
+    }
+
+    for (const [index, categoryName] of sortedCategoryNames.entries()) {
+      const category = equipmentByCategory.get(categoryName)
+      if (!category) continue
+
+      const { data: group, error: groupError } = await supabase
+        .from('offer_equipment_groups')
         .insert({
-          offer_basis_id: basisId,
-          group_name: 'Transport',
-          sort_order: 0,
+          offer_basis_id: workingBasisId,
+          group_name: categoryName,
+          sort_order: index,
         })
         .select('id')
         .single()
 
-    if (defaultTransportGroupError) throw defaultTransportGroupError
-    const transportGroupId = defaultTransportGroup.id
+      if (groupError) throw groupError
 
-    for (const booking of transportBookingRows) {
-      const period = timePeriodMap.get(booking.time_period_id)
-      if (!period) continue
-      const vehicle = booking.vehicle_id
-        ? vehicleMap.get(booking.vehicle_id)
-        : null
+      const itemLines = Array.from(category.items.entries()).map(
+        ([itemId, quantity], itemIndex) => {
+          const unitPrice = itemPriceMap.get(itemId) ?? 0
+          return {
+            offer_group_id: group.id,
+            item_id: itemId,
+            group_id: null,
+            quantity,
+            unit_price: unitPrice,
+            total_price: roundMoney(
+              unitPrice * quantity * equipmentRentalFactor,
+            ),
+            is_internal: itemInternalMap.get(itemId) ?? true,
+            sort_order: itemIndex,
+          }
+        },
+      )
+
+      const groupLines = Array.from(category.groups.entries()).map(
+        ([groupId, quantity], groupIndex) => {
+          const info = groupInfoMap.get(groupId)
+          const unitPrice = info?.current_price ?? 0
+          return {
+            offer_group_id: group.id,
+            item_id: null,
+            group_id: groupId,
+            quantity,
+            unit_price: unitPrice,
+            total_price: roundMoney(
+              unitPrice * quantity * equipmentRentalFactor,
+            ),
+            is_internal: info?.item_kind === 'stock',
+            sort_order: itemLines.length + groupIndex,
+          }
+        },
+      )
+
+      const itemsToInsert = [...itemLines, ...groupLines]
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemsError } = await supabase
+          .from('offer_equipment_items')
+          .insert(itemsToInsert)
+
+        if (itemsError) throw itemsError
+      }
+    }
+
+    for (const [index, period] of crewPeriods.entries()) {
+      const crewCount = Math.max(0, period.needed_count ?? 0)
+      if (crewCount === 0) continue
 
       const startDate =
         period.start_at || job?.start_at || new Date().toISOString()
       const endDate = period.end_at || job?.end_at || new Date().toISOString()
-      const dailyRate = companyExpansion?.vehicle_daily_rate ?? 0
-      const distanceIncrement = Math.max(
-        1,
-        companyExpansion?.vehicle_distance_increment ?? 150,
-      )
-      const distanceKm = distanceIncrement
-      const distanceRate = companyExpansion?.vehicle_distance_rate ?? 0
-      const distanceIncrements = Math.ceil(distanceKm / distanceIncrement)
-      const distanceCost =
-        distanceRate > 0 && distanceIncrements > 0
-          ? distanceRate * distanceIncrements
-          : 0
+      const dailyRate = crewDailyRate
       const totalPrice =
-        dailyRate * offerDaySpanBetween(startDate, endDate) + distanceCost
+        dailyRate * crewCount * offerDaySpanBetween(startDate, endDate)
 
-      const { error: transportInsertError } = await supabase
-        .from('offer_transport_items')
+      const { error: crewInsertError } = await supabase
+        .from('offer_crew_items')
         .insert({
-          offer_basis_id: basisId,
-          transport_group_id: transportGroupId,
-          vehicle_name: vehicle?.name || 'Vehicle',
-          vehicle_id: booking.vehicle_id ?? null,
-          vehicle_category: vehicle?.vehicle_category ?? null,
-          distance_km: distanceKm,
+          offer_basis_id: workingBasisId,
+          role_title: period.title?.trim() || 'Crew',
+          role_category: period.role_category ?? null,
+          crew_count: crewCount,
           start_date: startDate,
           end_date: endDate,
           daily_rate: dailyRate,
           total_price: totalPrice,
-          is_internal: vehicle?.internally_owned ?? true,
-          sort_order: transportSortOrder,
+          sort_order: index,
         })
 
-      if (transportInsertError) throw transportInsertError
-      transportSortOrder += 1
+      if (crewInsertError) throw crewInsertError
     }
-  }
 
-  return basisId
+    const vehicleIds =
+      transportBookingRows
+        .map((booking) => booking.vehicle_id)
+        .filter((id): id is string => !!id) ?? []
+
+    const vehicleMap = new Map<
+      string,
+      {
+        name: string
+        vehicle_category: OfferTransportItem['vehicle_category']
+        internally_owned: boolean
+      }
+    >()
+    if (vehicleIds.length > 0) {
+      const { data: vehicles, error: vehiclesError } = await supabase
+        .from('vehicles')
+        .select('id, name, vehicle_category, internally_owned')
+        .in('id', vehicleIds)
+
+      if (vehiclesError) throw vehiclesError
+
+      if (vehicles) {
+        for (const vehicle of vehicles) {
+          vehicleMap.set(vehicle.id, {
+            name: vehicle.name,
+            vehicle_category: vehicle.vehicle_category ?? null,
+            internally_owned: !!vehicle.internally_owned,
+          })
+        }
+      }
+    }
+
+    let transportSortOrder = 0
+    if (transportBookingRows.length > 0) {
+      const { data: defaultTransportGroup, error: defaultTransportGroupError } =
+        await supabase
+          .from('offer_transport_groups')
+          .insert({
+            offer_basis_id: workingBasisId,
+            group_name: 'Transport',
+            sort_order: 0,
+          })
+          .select('id')
+          .single()
+
+      if (defaultTransportGroupError) throw defaultTransportGroupError
+      const transportGroupId = defaultTransportGroup.id
+
+      for (const booking of transportBookingRows) {
+        const period = timePeriodMap.get(booking.time_period_id)
+        if (!period) continue
+        const vehicle = booking.vehicle_id
+          ? vehicleMap.get(booking.vehicle_id)
+          : null
+
+        const startDate =
+          period.start_at || job?.start_at || new Date().toISOString()
+        const endDate = period.end_at || job?.end_at || new Date().toISOString()
+        const dailyRate = companyExpansion?.vehicle_daily_rate ?? 0
+        const distanceIncrement = Math.max(
+          1,
+          companyExpansion?.vehicle_distance_increment ?? 150,
+        )
+        const distanceKm = distanceIncrement
+        const distanceRate = companyExpansion?.vehicle_distance_rate ?? 0
+        const distanceIncrements = Math.ceil(distanceKm / distanceIncrement)
+        const distanceCost =
+          distanceRate > 0 && distanceIncrements > 0
+            ? distanceRate * distanceIncrements
+            : 0
+        const totalPrice =
+          dailyRate * offerDaySpanBetween(startDate, endDate) + distanceCost
+
+        const { error: transportInsertError } = await supabase
+          .from('offer_transport_items')
+          .insert({
+            offer_basis_id: workingBasisId,
+            transport_group_id: transportGroupId,
+            vehicle_name: vehicle?.name || 'Vehicle',
+            vehicle_id: booking.vehicle_id ?? null,
+            vehicle_category: vehicle?.vehicle_category ?? null,
+            distance_km: distanceKm,
+            start_date: startDate,
+            end_date: endDate,
+            daily_rate: dailyRate,
+            total_price: totalPrice,
+            is_internal: vehicle?.internally_owned ?? true,
+            sort_order: transportSortOrder,
+          })
+
+        if (transportInsertError) throw transportInsertError
+        transportSortOrder += 1
+      }
+    }
+
+    return workingBasisId
+  })
 }
 
 /**
@@ -1034,6 +1086,10 @@ async function deleteOfferBasisLineItems(basisId: string): Promise<void> {
 /**
  * Persist equipment, crew, and transport line items for an offer basis.
  * Does not update job_offers or recalculate offer totals.
+ *
+ * Writes are serialized per basis. Delete+reinsert is still not a DB
+ * transaction, but a failed rewrite is retried once so a transient mid-save
+ * failure is less likely to leave the basis empty.
  */
 export async function saveOfferBasis({
   basisId,
@@ -1100,227 +1156,242 @@ export async function saveOfferBasis({
     rentalFactorConfig = null
   }
 
-  await deleteOfferBasisLineItems(basisId)
+  const rewriteLineItems = async () => {
+    await deleteOfferBasisLineItems(basisId)
 
-  const equipmentRentalFactor = calculateRentalFactor(
-    normalizedDays,
-    rentalFactorConfig,
-  )
-  const roundMoney = (value: number) => Math.round(value * 100) / 100
-
-  for (const group of equipmentGroups) {
-    const isExistingGroup = !group.id.startsWith('temp-')
-
-    let groupId: string
-    if (isExistingGroup) {
-      const { data: upsertedGroup, error: groupErr } = await supabase
-        .from('offer_equipment_groups')
-        .upsert({
-          id: group.id,
-          offer_basis_id: basisId,
-          group_name: group.group_name,
-          sort_order: group.sort_order,
-        })
-        .select('id')
-        .single()
-
-      if (groupErr) throw groupErr
-      groupId = upsertedGroup.id
-    } else {
-      const { data: newGroup, error: groupErr } = await supabase
-        .from('offer_equipment_groups')
-        .insert({
-          offer_basis_id: basisId,
-          group_name: group.group_name,
-          sort_order: group.sort_order,
-        })
-        .select('id')
-        .single()
-
-      if (groupErr) throw groupErr
-      groupId = newGroup.id
-    }
-
-    for (const item of group.items) {
-      const isExistingItem = !item.id.startsWith('temp-')
-      const itemPayload = {
-        offer_group_id: groupId,
-        item_id: item.item_id,
-        group_id: item.group_id ?? null,
-        custom_line_description: item.custom_line_description?.trim() || null,
-        custom_line_brand: item.custom_line_brand?.trim() || null,
-        custom_line_model: item.custom_line_model?.trim() || null,
-        quantity: item.quantity,
-        unit_price: item.unit_price,
-        total_price: roundMoney(
-          item.unit_price * item.quantity * equipmentRentalFactor,
-        ),
-        is_internal: item.is_internal,
-        sort_order: item.sort_order,
-      }
-
-      if (isExistingItem) {
-        const { error: itemErr } = await supabase
-          .from('offer_equipment_items')
-          .upsert({ id: item.id, ...itemPayload })
-
-        if (itemErr) throw itemErr
-      } else {
-        const { error: itemErr } = await supabase
-          .from('offer_equipment_items')
-          .insert(itemPayload)
-
-        if (itemErr) throw itemErr
-      }
-    }
-  }
-
-  for (const item of crewItems) {
-    const isExistingItem = !item.id.startsWith('temp-')
-    const days = Math.ceil(
-      (new Date(item.end_date).getTime() -
-        new Date(item.start_date).getTime()) /
-        (1000 * 60 * 60 * 24),
+    const equipmentRentalFactor = calculateRentalFactor(
+      normalizedDays,
+      rentalFactorConfig,
     )
-    const safeDays = Math.max(1, days)
-    let totalPrice = item.daily_rate * item.crew_count * safeDays
-    if (item.billing_type === 'hourly' && item.hourly_rate !== null) {
-      const hoursPerDay =
-        item.hours_per_day ??
-        calculateHoursPerDay(item.start_date, item.end_date) ??
-        0
-      totalPrice = item.hourly_rate * hoursPerDay * item.crew_count * safeDays
+    const roundMoney = (value: number) => Math.round(value * 100) / 100
+
+    for (const group of equipmentGroups) {
+      const isExistingGroup = !group.id.startsWith('temp-')
+
+      let groupId: string
+      if (isExistingGroup) {
+        const { data: upsertedGroup, error: groupErr } = await supabase
+          .from('offer_equipment_groups')
+          .upsert({
+            id: group.id,
+            offer_basis_id: basisId,
+            group_name: group.group_name,
+            sort_order: group.sort_order,
+          })
+          .select('id')
+          .single()
+
+        if (groupErr) throw groupErr
+        groupId = upsertedGroup.id
+      } else {
+        const { data: newGroup, error: groupErr } = await supabase
+          .from('offer_equipment_groups')
+          .insert({
+            offer_basis_id: basisId,
+            group_name: group.group_name,
+            sort_order: group.sort_order,
+          })
+          .select('id')
+          .single()
+
+        if (groupErr) throw groupErr
+        groupId = newGroup.id
+      }
+
+      for (const item of group.items) {
+        const isExistingItem = !item.id.startsWith('temp-')
+        const itemPayload = {
+          offer_group_id: groupId,
+          item_id: item.item_id,
+          group_id: item.group_id ?? null,
+          custom_line_description: item.custom_line_description?.trim() || null,
+          custom_line_brand: item.custom_line_brand?.trim() || null,
+          custom_line_model: item.custom_line_model?.trim() || null,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          total_price: roundMoney(
+            item.unit_price * item.quantity * equipmentRentalFactor,
+          ),
+          is_internal: item.is_internal,
+          sort_order: item.sort_order,
+        }
+
+        if (isExistingItem) {
+          const { error: itemErr } = await supabase
+            .from('offer_equipment_items')
+            .upsert({ id: item.id, ...itemPayload })
+
+          if (itemErr) throw itemErr
+        } else {
+          const { error: itemErr } = await supabase
+            .from('offer_equipment_items')
+            .insert(itemPayload)
+
+          if (itemErr) throw itemErr
+        }
+      }
     }
 
-    const crewPayload = {
-      offer_basis_id: basisId,
-      role_title: item.role_title,
-      role_category: item.role_category ?? null,
-      crew_count: item.crew_count,
-      start_date: item.start_date,
-      end_date: item.end_date,
-      daily_rate: item.daily_rate,
-      hourly_rate: item.billing_type === 'hourly' ? item.hourly_rate : null,
-      hours_per_day: item.billing_type === 'hourly' ? item.hours_per_day : null,
-      billing_type: item.billing_type,
-      total_price: totalPrice,
-      sort_order: item.sort_order,
-    }
-
-    if (isExistingItem) {
-      const { error: itemErr } = await supabase
-        .from('offer_crew_items')
-        .upsert({ id: item.id, ...crewPayload })
-
-      if (itemErr) throw itemErr
-    } else {
-      const { error: itemErr } = await supabase
-        .from('offer_crew_items')
-        .insert(crewPayload)
-
-      if (itemErr) throw itemErr
-    }
-  }
-
-  const distanceIncrementSave = Math.max(
-    1,
-    companyExpansion?.vehicle_distance_increment ?? 150,
-  )
-
-  for (const group of transportGroups) {
-    const isExistingGroup = !group.id.startsWith('temp-')
-
-    let groupId: string
-    if (isExistingGroup) {
-      const { data: upsertedGroup, error: groupErr } = await supabase
-        .from('offer_transport_groups')
-        .upsert({
-          id: group.id,
-          offer_basis_id: basisId,
-          group_name: group.group_name,
-          sort_order: group.sort_order,
-        })
-        .select('id')
-        .single()
-
-      if (groupErr) throw groupErr
-      groupId = upsertedGroup.id
-    } else {
-      const { data: newGroup, error: groupErr } = await supabase
-        .from('offer_transport_groups')
-        .insert({
-          offer_basis_id: basisId,
-          group_name: group.group_name,
-          sort_order: group.sort_order,
-        })
-        .select('id')
-        .single()
-
-      if (groupErr) throw groupErr
-      groupId = newGroup.id
-    }
-
-    for (const item of group.items) {
+    for (const item of crewItems) {
       const isExistingItem = !item.id.startsWith('temp-')
       const days = Math.ceil(
         (new Date(item.end_date).getTime() -
           new Date(item.start_date).getTime()) /
           (1000 * 60 * 60 * 24),
       )
-      const derivedDays = Math.max(1, days)
-      const daysUsed = item.days_used ?? derivedDays
-      const effectiveDailyRate =
-        item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
-      const effectiveDistanceRate =
-        item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
-      const distanceIncrements = item.distance_km
-        ? Math.ceil(item.distance_km / distanceIncrementSave)
-        : 0
-      const distanceCost =
-        effectiveDistanceRate && distanceIncrements > 0
-          ? effectiveDistanceRate * distanceIncrements
-          : 0
-      const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
-      const totalPrice = dailyCost + distanceCost
+      const safeDays = Math.max(1, days)
+      let totalPrice = item.daily_rate * item.crew_count * safeDays
+      if (item.billing_type === 'hourly' && item.hourly_rate !== null) {
+        const hoursPerDay =
+          item.hours_per_day ??
+          calculateHoursPerDay(item.start_date, item.end_date) ??
+          0
+        totalPrice = item.hourly_rate * hoursPerDay * item.crew_count * safeDays
+      }
 
-      const transportPayload = {
+      const crewPayload = {
         offer_basis_id: basisId,
-        transport_group_id: groupId,
-        vehicle_name: item.vehicle_name,
-        vehicle_id: item.vehicle_id ?? undefined,
-        vehicle_category: item.vehicle_category,
-        distance_km: item.distance_km,
-        distance_rate: item.distance_rate ?? null,
+        role_title: item.role_title,
+        role_category: item.role_category ?? null,
+        crew_count: item.crew_count,
         start_date: item.start_date,
         end_date: item.end_date,
-        days_used: item.days_used ?? null,
-        daily_rate_count: item.daily_rate_count ?? null,
-        daily_rate: effectiveDailyRate,
+        daily_rate: item.daily_rate,
+        hourly_rate: item.billing_type === 'hourly' ? item.hourly_rate : null,
+        hours_per_day:
+          item.billing_type === 'hourly' ? item.hours_per_day : null,
+        billing_type: item.billing_type,
         total_price: totalPrice,
-        is_internal: item.is_internal,
         sort_order: item.sort_order,
       }
 
       if (isExistingItem) {
         const { error: itemErr } = await supabase
-          .from('offer_transport_items')
-          .upsert({ id: item.id, ...transportPayload })
+          .from('offer_crew_items')
+          .upsert({ id: item.id, ...crewPayload })
 
         if (itemErr) throw itemErr
       } else {
-        const insertPayload = { ...transportPayload }
-        if (item.vehicle_id === null) {
-          delete (insertPayload as { vehicle_id?: string | null }).vehicle_id
-        }
-
         const { error: itemErr } = await supabase
-          .from('offer_transport_items')
-          .insert(insertPayload)
+          .from('offer_crew_items')
+          .insert(crewPayload)
 
         if (itemErr) throw itemErr
       }
     }
+
+    const distanceIncrementSave = Math.max(
+      1,
+      companyExpansion?.vehicle_distance_increment ?? 150,
+    )
+
+    for (const group of transportGroups) {
+      const isExistingGroup = !group.id.startsWith('temp-')
+
+      let groupId: string
+      if (isExistingGroup) {
+        const { data: upsertedGroup, error: groupErr } = await supabase
+          .from('offer_transport_groups')
+          .upsert({
+            id: group.id,
+            offer_basis_id: basisId,
+            group_name: group.group_name,
+            sort_order: group.sort_order,
+          })
+          .select('id')
+          .single()
+
+        if (groupErr) throw groupErr
+        groupId = upsertedGroup.id
+      } else {
+        const { data: newGroup, error: groupErr } = await supabase
+          .from('offer_transport_groups')
+          .insert({
+            offer_basis_id: basisId,
+            group_name: group.group_name,
+            sort_order: group.sort_order,
+          })
+          .select('id')
+          .single()
+
+        if (groupErr) throw groupErr
+        groupId = newGroup.id
+      }
+
+      for (const item of group.items) {
+        const isExistingItem = !item.id.startsWith('temp-')
+        const days = Math.ceil(
+          (new Date(item.end_date).getTime() -
+            new Date(item.start_date).getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
+        const derivedDays = Math.max(1, days)
+        const daysUsed = item.days_used ?? derivedDays
+        const effectiveDailyRate =
+          item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
+        const effectiveDistanceRate =
+          item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
+        const distanceIncrements = item.distance_km
+          ? Math.ceil(item.distance_km / distanceIncrementSave)
+          : 0
+        const distanceCost =
+          effectiveDistanceRate && distanceIncrements > 0
+            ? effectiveDistanceRate * distanceIncrements
+            : 0
+        const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
+        const totalPrice = dailyCost + distanceCost
+
+        const transportPayload = {
+          offer_basis_id: basisId,
+          transport_group_id: groupId,
+          vehicle_name: item.vehicle_name,
+          vehicle_id: item.vehicle_id ?? undefined,
+          vehicle_category: item.vehicle_category,
+          distance_km: item.distance_km,
+          distance_rate: item.distance_rate ?? null,
+          start_date: item.start_date,
+          end_date: item.end_date,
+          days_used: item.days_used ?? null,
+          daily_rate_count: item.daily_rate_count ?? null,
+          daily_rate: effectiveDailyRate,
+          total_price: totalPrice,
+          is_internal: item.is_internal,
+          sort_order: item.sort_order,
+        }
+
+        if (isExistingItem) {
+          const { error: itemErr } = await supabase
+            .from('offer_transport_items')
+            .upsert({ id: item.id, ...transportPayload })
+
+          if (itemErr) throw itemErr
+        } else {
+          const insertPayload = { ...transportPayload }
+          if (item.vehicle_id === null) {
+            delete (insertPayload as { vehicle_id?: string | null }).vehicle_id
+          }
+
+          const { error: itemErr } = await supabase
+            .from('offer_transport_items')
+            .insert(insertPayload)
+
+          if (itemErr) throw itemErr
+        }
+      }
+    }
   }
+
+  await withOfferBasisWriteLock(basisId, async () => {
+    try {
+      await rewriteLineItems()
+    } catch (firstError) {
+      try {
+        await rewriteLineItems()
+      } catch {
+        throw firstError
+      }
+    }
+  })
 }
 
 /**
@@ -1536,7 +1607,11 @@ export async function markOfferBasisBookingsSynced(
 export async function createBookingsFromOfferBasis(
   basisId: string,
   userId: string,
-  options?: { force?: boolean; skipConflictCheck?: boolean },
+  options?: {
+    force?: boolean
+    skipConflictCheck?: boolean
+    excludeItemIds?: Array<string>
+  },
 ): Promise<void> {
   const basis = await (
     offerBasisDetailQuery(basisId)
@@ -1702,8 +1777,11 @@ export async function createBookingsFromOfferBasis(
       subcontractor_id: null
     }> = []
 
+    const excludeItemIds = new Set(options?.excludeItemIds ?? [])
+
     for (const entry of equipmentEntries) {
       if (entry.kind === 'item') {
+        if (excludeItemIds.has(entry.item_id)) continue
         reservedItems.push({
           time_period_id: timePeriodId,
           item_id: entry.item_id,
@@ -1723,6 +1801,7 @@ export async function createBookingsFromOfferBasis(
 
       const groupItems = groupItemsMap.get(entry.group_id) ?? []
       for (const groupItem of groupItems) {
+        if (excludeItemIds.has(groupItem.item_id)) continue
         reservedItems.push({
           time_period_id: timePeriodId,
           item_id: groupItem.item_id,
@@ -2011,10 +2090,46 @@ export async function createBookingsFromOfferBasis(
   }
 }
 
+export async function previewBookingConflictsForBasis(
+  basisId: string,
+): Promise<BasisBookingConflictPreview> {
+  const basis = await (
+    offerBasisDetailQuery(basisId)
+      .queryFn as () => Promise<OfferBasisDetail | null>
+  )()
+  if (!basis) throw new Error('Offer basis not found')
+
+  const { data: job, error: jobError } = await supabase
+    .from('jobs')
+    .select('id, start_at, end_at, company_id')
+    .eq('id', basis.job_id)
+    .single()
+
+  if (jobError) throw jobError
+  if (!job) throw new Error('Job not found')
+
+  const defaultStart = job.start_at || new Date().toISOString()
+  const defaultEnd = job.end_at || new Date().toISOString()
+
+  const preview = await getEquipmentConflictsForOfferBooking({
+    offer: basis as unknown as OfferDetail,
+    companyId: job.company_id,
+    jobId: basis.job_id,
+    startAt: defaultStart,
+    endAt: defaultEnd,
+  })
+
+  return {
+    ...preview,
+    jobStartAt: defaultStart,
+    jobEndAt: defaultEnd,
+  }
+}
+
 export async function syncBookingsFromOfferBasis(
   basisId: string,
   userId: string,
-  options?: { force?: boolean },
+  options?: { force?: boolean; skipConflictingEquipment?: boolean },
 ): Promise<Array<string>> {
   const basis = await (
     offerBasisDetailQuery(basisId)
@@ -2043,9 +2158,18 @@ export async function syncBookingsFromOfferBasis(
 
   if (
     !options?.force &&
+    !options?.skipConflictingEquipment &&
     (preview.summaryLines.length > 0 || preview.conflicts.length > 0)
   ) {
     throw new BookingOverlapError(preview.summaryLines, preview.conflicts)
+  }
+
+  const warnings: Array<string> = []
+  if (
+    options?.skipConflictingEquipment &&
+    preview.conflictingItemIds.length > 0
+  ) {
+    warnings.push(...preview.summaryLines.map((line) => `Skipped: ${line}`))
   }
 
   const { data: timePeriods, error: timePeriodsError } = await supabase
@@ -2087,6 +2211,9 @@ export async function syncBookingsFromOfferBasis(
   await createBookingsFromOfferBasis(basisId, userId, {
     force: options?.force,
     skipConflictCheck: true,
+    excludeItemIds: options?.skipConflictingEquipment
+      ? preview.conflictingItemIds
+      : undefined,
   })
-  return options?.force ? preview.summaryLines : []
+  return options?.force ? preview.summaryLines : warnings
 }

@@ -5,7 +5,6 @@ import {
   Badge,
   Box,
   Button,
-  Callout,
   Card,
   Dialog,
   DropdownMenu,
@@ -54,6 +53,7 @@ import {
   duplicateOfferBasis,
   jobOfferBasesQuery,
   offerBasisDetailQuery,
+  previewBookingConflictsForBasis,
   syncBookingsFromOfferBasis,
 } from '../../api/offerBasisQueries'
 import {
@@ -81,11 +81,30 @@ import {
   EMPTY_JOB_BOOKING_SUMMARY,
   buildOfferBasisBookingSummary,
 } from '../../utils/bookingSummary'
+import {
+  buildCurrentCrewMap,
+  buildCurrentEquipmentMap,
+  buildCurrentTransportMultiset,
+  buildExpectedCrewMap,
+  buildExpectedEquipmentMap,
+  buildExpectedTransportMultiset,
+  computeOfferDiff,
+  formatOfferDiffForPreview,
+  mapsEqual,
+} from '../../utils/offerBookingDiff'
 import { OffersStructureHelpDialog } from '../OffersStructureHelpDialog'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
+import { SyncBasisBookingsDialog } from '../dialogs/SyncBasisBookingsDialog'
+import type { SyncBasisConfirmMode } from '../dialogs/SyncBasisBookingsDialog'
+import type {
+  BookingsSnapshot,
+  FormattedOfferDiff,
+  SyncLineItems,
+} from '../../utils/offerBookingDiff'
+import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type { JobOfferBasisRow } from '../../api/offerBasisQueries'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
-import type { JobOffer, OfferDetail, OfferType } from '../../types'
+import type { JobOffer, OfferType } from '../../types'
 
 function getOfferStatusBadgeColor(offer: JobOffer) {
   if (offer.revision_requested_at) return 'orange'
@@ -115,18 +134,14 @@ function getOfferTypeLabel(type: OfferType) {
   return type === 'technical' ? 'Technical' : 'Pretty'
 }
 
-function getLatestOfferOnBasis(
-  offers: Array<JobOffer>,
-): JobOffer | null {
+function getLatestOfferOnBasis(offers: Array<JobOffer>): JobOffer | null {
   if (offers.length === 0) return null
   return (
     [...offers].sort((a, b) => {
       if (a.version_number !== b.version_number) {
         return b.version_number - a.version_number
       }
-      return (
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })[0] ?? null
   )
 }
@@ -135,134 +150,6 @@ type GroupItemRow = {
   group_id: string
   item_id: string
   quantity: number | null
-}
-
-type SyncLineItems = Pick<
-  OfferDetail,
-  'groups' | 'crew_items' | 'transport_items' | 'transport_groups'
->
-
-type BookingsSnapshot = {
-  equipment: Array<{
-    item_id: string
-    quantity: number
-    source_kind: 'direct' | 'group'
-    source_group_id: string | null
-  }>
-  crewPeriods: Array<{
-    title: string | null
-    start_at: string
-    end_at: string
-    needed_count: number | null
-    role_category: string | null
-  }>
-  transport: Array<{
-    vehicle_id: string
-  }>
-}
-
-type OfferDiff = {
-  equipmentChanges: Array<{
-    key: string
-    item_id: string
-    source_kind: 'direct' | 'group'
-    source_group_id: string | null
-    expected: number
-    current: number
-  }>
-  crewChanges: Array<{
-    key: string
-    title: string
-    start_at: string
-    end_at: string
-    expected: number
-    current: number
-  }>
-  expectedTransport: Array<string> | null
-  currentTransport: Array<string>
-}
-
-function offerDaySpanBetween(start?: string | null, end?: string | null) {
-  if (!start || !end) return 1
-  const startDate = new Date(start)
-  const endDate = new Date(end)
-  const diffMs = endDate.getTime() - startDate.getTime()
-  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24))
-  return Math.max(1, diffDays)
-}
-
-function makeEquipmentKey(row: {
-  item_id: string
-  source_kind: 'direct' | 'group'
-  source_group_id: string | null
-}) {
-  return `${row.source_kind}:${row.source_group_id ?? ''}:${row.item_id}`
-}
-
-function parseEquipmentKey(key: string): {
-  source_kind: 'direct' | 'group'
-  source_group_id: string | null
-  item_id: string
-} {
-  const [source_kind, source_group_id_raw, item_id] = key.split(':')
-  return {
-    source_kind: source_kind === 'group' ? 'group' : 'direct',
-    source_group_id: source_group_id_raw ? source_group_id_raw : null,
-    item_id: item_id || '',
-  }
-}
-
-function mapsEqual(a: Map<string, number>, b: Map<string, number>) {
-  if (a.size !== b.size) return false
-  for (const [k, v] of a.entries()) {
-    if ((b.get(k) ?? 0) !== v) return false
-  }
-  return true
-}
-
-function buildExpectedCrewMap(offerDetail: SyncLineItems) {
-  const m = new Map<string, number>()
-  for (const item of offerDetail.crew_items || []) {
-    const title = item.role_title.trim()
-    const start = item.start_date
-    const end = item.end_date
-    const k = `${title}__${start}__${end}`
-    m.set(k, (m.get(k) ?? 0) + item.crew_count)
-  }
-  for (const [k, v] of m.entries()) {
-    if (!v) m.delete(k)
-  }
-  return m
-}
-
-function buildCurrentCrewMap(snapshot: BookingsSnapshot) {
-  const m = new Map<string, number>()
-  for (const tp of snapshot.crewPeriods) {
-    const title = tp.title ? tp.title.trim() : ''
-    if (!title) continue
-    const k = `${title}__${tp.start_at}__${tp.end_at}`
-    m.set(k, tp.needed_count || 0)
-  }
-  for (const [k, v] of m.entries()) {
-    if (!v) m.delete(k)
-  }
-  return m
-}
-
-function buildExpectedTransportMultiset(offerDetail: SyncLineItems) {
-  const expected: Array<string> = []
-  for (const item of offerDetail.transport_items || []) {
-    if (!item.vehicle_id) return null
-    expected.push(item.vehicle_id)
-  }
-  expected.sort()
-  return expected
-}
-
-function buildCurrentTransportMultiset(snapshot: BookingsSnapshot) {
-  const current = snapshot.transport.map((t) => t.vehicle_id).filter(Boolean)
-  current.sort()
-  return current
 }
 
 export default function OffersTab({
@@ -278,14 +165,12 @@ export default function OffersTab({
   const [syncingBasisId, setSyncingBasisId] = React.useState<string | null>(
     null,
   )
-  const [syncConfirm, setSyncConfirm] = React.useState<{
+  const [syncPreview, setSyncPreview] = React.useState<{
     basisId: string
     basisTitle: string
-    removals: {
-      equipment: Array<string>
-      crew: Array<string>
-      transport: Array<string>
-    }
+    preview: FormattedOfferDiff | null
+    conflicts: BasisBookingConflictPreview | null
+    loading: boolean
   } | null>(null)
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceSummaryLines, setForceSummaryLines] = React.useState<
@@ -789,126 +674,6 @@ export default function OffersTab({
     },
   })
 
-  const buildCurrentEquipmentMap = React.useCallback(
-    (snapshot: BookingsSnapshot) => {
-      const m = new Map<string, number>()
-      for (const row of snapshot.equipment) {
-        const k = makeEquipmentKey(row)
-        m.set(k, (m.get(k) ?? 0) + row.quantity)
-      }
-      for (const [k, v] of m.entries()) {
-        if (!v) m.delete(k)
-      }
-      return m
-    },
-    [],
-  )
-
-  const buildExpectedEquipmentMap = React.useCallback(
-    (
-      detail: SyncLineItems,
-      groupItemsMap: Map<string, Array<{ item_id: string; quantity: number }>>,
-    ) => {
-      const m = new Map<string, number>()
-      for (const group of detail.groups || []) {
-        for (const item of group.items) {
-          if (item.item_id) {
-            const k = makeEquipmentKey({
-              item_id: item.item_id,
-              source_kind: 'direct',
-              source_group_id: null,
-            })
-            m.set(k, (m.get(k) ?? 0) + item.quantity)
-            continue
-          }
-
-          if (item.group_id) {
-            const members = groupItemsMap.get(item.group_id) ?? []
-            for (const member of members) {
-              const k = makeEquipmentKey({
-                item_id: member.item_id,
-                source_kind: 'group',
-                source_group_id: item.group_id,
-              })
-              const qty = (member.quantity || 1) * Math.max(0, item.quantity)
-              m.set(k, (m.get(k) ?? 0) + qty)
-            }
-          }
-        }
-      }
-      for (const [k, v] of m.entries()) {
-        if (!v) m.delete(k)
-      }
-      return m
-    },
-    [],
-  )
-
-  const computeOfferDiff = React.useCallback(
-    (
-      snapshot: BookingsSnapshot,
-      detail: SyncLineItems,
-      groupItemsMap: Map<string, Array<{ item_id: string; quantity: number }>>,
-    ): OfferDiff => {
-      const expectedEquip = buildExpectedEquipmentMap(detail, groupItemsMap)
-      const currentEquip = buildCurrentEquipmentMap(snapshot)
-
-      const expectedCrew = buildExpectedCrewMap(detail)
-      const currentCrew = buildCurrentCrewMap(snapshot)
-
-      const expectedTransport = buildExpectedTransportMultiset(detail)
-      const currentTransport = buildCurrentTransportMultiset(snapshot)
-
-      const equipmentChanges: OfferDiff['equipmentChanges'] = []
-      const allEquipKeys = new Set<string>([
-        ...Array.from(expectedEquip.keys()),
-        ...Array.from(currentEquip.keys()),
-      ])
-      for (const key of allEquipKeys) {
-        const expected = expectedEquip.get(key) ?? 0
-        const current = currentEquip.get(key) ?? 0
-        if (expected === current) continue
-        const parsed = parseEquipmentKey(key)
-        equipmentChanges.push({
-          key,
-          item_id: parsed.item_id,
-          source_kind: parsed.source_kind,
-          source_group_id: parsed.source_group_id,
-          expected,
-          current,
-        })
-      }
-
-      const crewChanges: OfferDiff['crewChanges'] = []
-      const allCrewKeys = new Set<string>([
-        ...Array.from(expectedCrew.keys()),
-        ...Array.from(currentCrew.keys()),
-      ])
-      for (const key of allCrewKeys) {
-        const expected = expectedCrew.get(key) ?? 0
-        const current = currentCrew.get(key) ?? 0
-        if (expected === current) continue
-        const [title, start_at, end_at] = key.split('__')
-        crewChanges.push({
-          key,
-          title: title || '',
-          start_at: start_at || '',
-          end_at: end_at || '',
-          expected,
-          current,
-        })
-      }
-
-      return {
-        equipmentChanges,
-        crewChanges,
-        expectedTransport,
-        currentTransport,
-      }
-    },
-    [buildCurrentEquipmentMap, buildExpectedEquipmentMap],
-  )
-
   const getBasisDiff = React.useCallback(
     (basisId: string) => {
       const snapshot = bookingsSnapshotQuery.data
@@ -928,7 +693,6 @@ export default function OffersTab({
       groupItemsQuery.data,
       groupItemsQuery.isLoading,
       basisDetailsById,
-      computeOfferDiff,
     ],
   )
 
@@ -968,6 +732,11 @@ export default function OffersTab({
     return name ? `${name}` : itemId
   }
 
+  const formatVehicle = (vehicleId: string) => {
+    const name = vehicleNamesQuery.data?.get(vehicleId)
+    return name ? name : vehicleId
+  }
+
   const buildDiffTooltip = (basisId: string) => {
     const diff = getBasisDiff(basisId)
     if (!diff) {
@@ -978,25 +747,13 @@ export default function OffersTab({
       )
     }
 
-    const removedEquipment = diff.equipmentChanges
-      .filter((c) => c.current > c.expected)
-      .sort((a, b) => b.current - b.expected - (a.current - a.expected))
-    const addedEquipment = diff.equipmentChanges
-      .filter((c) => c.expected > c.current)
-      .sort((a, b) => b.expected - b.current - (a.expected - a.current))
-
-    const removedCrew = diff.crewChanges
-      .filter((c) => c.current > c.expected)
-      .sort((a, b) => b.current - b.expected - (a.current - a.expected))
-    const addedCrew = diff.crewChanges
-      .filter((c) => c.expected > c.current)
-      .sort((a, b) => b.expected - b.current - (a.expected - a.current))
+    const formatted = formatOfferDiffForPreview(diff, formatItem, formatVehicle)
 
     const lines: Array<React.ReactNode> = []
 
     const pushSection = (
       title: string,
-      items: Array<React.ReactNode>,
+      items: Array<string>,
       emptyText: string,
     ) => {
       lines.push(
@@ -1011,7 +768,13 @@ export default function OffersTab({
           </Text>,
         )
       } else {
-        for (const node of items.slice(0, 8)) lines.push(node)
+        for (const line of items.slice(0, 8)) {
+          lines.push(
+            <Text key={`${title}-${line}`} size="1">
+              - {line}
+            </Text>,
+          )
+        }
         if (items.length > 8) {
           lines.push(
             <Text key={`${title}-more`} size="1" color="gray">
@@ -1025,51 +788,26 @@ export default function OffersTab({
 
     pushSection(
       'Removed from bookings (present now, not in basis)',
-      removedEquipment.map((c) => (
-        <Text key={`re-${c.key}`} size="1">
-          - {formatItem(c.item_id)}
-          {c.source_kind === 'group' ? ' (group)' : ''}: -
-          {c.current - c.expected}
-        </Text>
-      )),
+      formatted.equipmentRemovals,
       'None',
     )
 
     pushSection(
       'Added to bookings (in basis, missing now)',
-      addedEquipment.map((c) => (
-        <Text key={`ae-${c.key}`} size="1">
-          - {formatItem(c.item_id)}
-          {c.source_kind === 'group' ? ' (group)' : ''}: +
-          {c.expected - c.current}
-        </Text>
-      )),
+      formatted.equipmentAdditions,
       'None',
     )
 
     pushSection(
       'Crew role changes',
-      [...removedCrew, ...addedCrew].map((c) => (
-        <Text key={`cr-${c.key}`} size="1">
-          - {c.title || 'Crew'}: {c.current} → {c.expected}
-        </Text>
-      )),
+      [...formatted.crewRemovals, ...formatted.crewAdditions],
       'None',
     )
 
-    if (diff.expectedTransport === null) {
+    if (formatted.transportSummary) {
       lines.push(
         <Text key="transport" size="1" color="gray">
-          Transport: cannot be strictly compared (basis does not specify
-          vehicles).
-        </Text>,
-      )
-    } else {
-      const exp = diff.expectedTransport.join('|')
-      const cur = diff.currentTransport.join('|')
-      lines.push(
-        <Text key="transport" size="1" color={exp === cur ? 'gray' : undefined}>
-          Transport: {exp === cur ? 'matches' : 'differs'}
+          Transport: {formatted.transportSummary}
         </Text>,
       )
     }
@@ -1155,8 +893,6 @@ export default function OffersTab({
     },
     [
       bookingsSnapshotQuery.data,
-      buildCurrentEquipmentMap,
-      buildExpectedEquipmentMap,
       groupItemsQuery.data,
       groupItemsQuery.isLoading,
       basisDetailsById,
@@ -1223,8 +959,8 @@ export default function OffersTab({
       )
     },
     onError: (err: unknown) => {
-      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       if (handleBookingOverlapError(err)) return
+      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       toastError(
         'Failed to create bookings',
         err instanceof Error ? err.message : 'Please try again.',
@@ -1236,18 +972,24 @@ export default function OffersTab({
     mutationFn: async ({
       basisId,
       force = false,
+      skipConflictingEquipment = false,
     }: {
       basisId: string
       force?: boolean
+      skipConflictingEquipment?: boolean
     }) => {
       if (!user?.id) throw new Error('User not authenticated')
-      return await syncBookingsFromOfferBasis(basisId, user.id, { force })
+      return await syncBookingsFromOfferBasis(basisId, user.id, {
+        force,
+        skipConflictingEquipment,
+      })
     },
     onMutate: ({ basisId }) => {
       setSyncingBasisId(basisId)
     },
     onSuccess: (warnings) => {
       setForceDialogOpen(false)
+      setSyncPreview(null)
       pendingForceBookingRef.current = null
       invalidateOfferQueries()
       qc.invalidateQueries({ queryKey: ['job-calendar', jobId] })
@@ -1266,8 +1008,8 @@ export default function OffersTab({
     },
     onError: (err: unknown) => {
       setSyncingBasisId(null)
-      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       if (handleBookingOverlapError(err)) return
+      if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       toastError(
         'Failed to sync bookings',
         err instanceof Error ? err.message : 'Please try again.',
@@ -1523,14 +1265,24 @@ export default function OffersTab({
     async (
       basisId: string,
       action: 'sync' | 'create',
-      force = false,
+      options: {
+        force?: boolean
+        skipConflictingEquipment?: boolean
+      } = {},
     ): Promise<'overlap' | 'done'> => {
       pendingForceBookingRef.current = { basisId, action }
       try {
         if (action === 'sync') {
-          await syncBookingsMutation.mutateAsync({ basisId, force })
+          await syncBookingsMutation.mutateAsync({
+            basisId,
+            force: options.force,
+            skipConflictingEquipment: options.skipConflictingEquipment,
+          })
         } else {
-          await createBookingsMutation.mutateAsync({ basisId, force })
+          await createBookingsMutation.mutateAsync({
+            basisId,
+            force: options.force,
+          })
         }
         return 'done'
       } catch (err) {
@@ -1571,7 +1323,7 @@ export default function OffersTab({
   )
 
   const fetchBasisDiffForSync = React.useCallback(
-    async (basisId: string): Promise<OfferDiff | null> => {
+    async (basisId: string) => {
       const snapshotResult = await bookingsSnapshotQuery.refetch()
       const snapshot = snapshotResult.data
       const detail = await qc.fetchQuery(offerBasisDetailQuery(basisId))
@@ -1586,119 +1338,95 @@ export default function OffersTab({
       const groupItemsMap = await fetchGroupItemsMap(groupIds)
       return computeOfferDiff(snapshot, detail, groupItemsMap)
     },
-    [bookingsSnapshotQuery, computeOfferDiff, fetchGroupItemsMap, qc],
+    [bookingsSnapshotQuery, fetchGroupItemsMap, qc],
   )
 
   const handleSyncBookings = React.useCallback(
-    async (
-      basis: JobOfferBasisRow,
-    ): Promise<'overlap' | 'done' | undefined> => {
+    async (basis: JobOfferBasisRow) => {
       if (!user?.id) {
         toastError('Authentication required', 'Please log in to sync bookings.')
-        return undefined
+        return
       }
 
-      let diff: OfferDiff | null = null
+      const basisTitle = formatBasisVersionLabel(
+        basisVersionById.get(basis.id) ?? 1,
+      )
+
+      setSyncPreview({
+        basisId: basis.id,
+        basisTitle,
+        preview: null,
+        conflicts: null,
+        loading: true,
+      })
+
       try {
-        diff = await fetchBasisDiffForSync(basis.id)
-      } catch (e: any) {
-        toastError(
-          'Failed to check booking changes',
-          e?.message || 'Please try again.',
-        )
-        return
-      }
-      if (!diff) {
-        info(
-          'Just a sec…',
-          'Loading differences so we can warn you about removals. Try again in a moment.',
-        )
-        basesQuery.refetch()
-        bookingsSnapshotQuery.refetch()
-        groupItemsQuery.refetch()
-        return
-      }
+        const [diff, conflicts] = await Promise.all([
+          fetchBasisDiffForSync(basis.id),
+          previewBookingConflictsForBasis(basis.id),
+        ])
 
-      const equipmentRemovals: Array<string> = []
-      const crewRemovals: Array<string> = []
-      const transportRemovals: Array<string> = []
-
-      const removedEquipment = diff.equipmentChanges
-        .filter((c) => c.current > c.expected)
-        .sort((a, b) => b.current - b.expected - (a.current - a.expected))
-      for (const c of removedEquipment.slice(0, 10)) {
-        equipmentRemovals.push(
-          `Equipment: ${formatItem(c.item_id)}${c.source_kind === 'group' ? ' (group)' : ''} (-${c.current - c.expected})`,
-        )
-      }
-      if (removedEquipment.length > 10) {
-        equipmentRemovals.push(
-          `…and ${removedEquipment.length - 10} more equipment removals`,
-        )
-      }
-
-      const removedCrew = diff.crewChanges
-        .filter((c) => c.current > c.expected)
-        .sort((a, b) => b.current - b.expected - (a.current - a.expected))
-      for (const c of removedCrew.slice(0, 10)) {
-        crewRemovals.push(`${c.title || 'Crew'} (${c.current} → ${c.expected})`)
-      }
-      if (removedCrew.length > 10) {
-        crewRemovals.push(`…and ${removedCrew.length - 10} more crew removals`)
-      }
-
-      if (diff.expectedTransport === null) {
-        if (diff.currentTransport.length > 0) {
-          transportRemovals.push(
-            `Transport: existing vehicle bookings may be replaced (${diff.currentTransport.length} current)`,
+        if (!diff) {
+          setSyncPreview(null)
+          info(
+            'Just a sec…',
+            'Loading differences so we can preview the sync. Try again in a moment.',
           )
+          basesQuery.refetch()
+          bookingsSnapshotQuery.refetch()
+          groupItemsQuery.refetch()
+          return
         }
-      } else {
-        const expectedSet = new Set(diff.expectedTransport)
-        const removedVehicles = diff.currentTransport.filter(
-          (id) => !expectedSet.has(id),
-        )
-        if (removedVehicles.length > 0) {
-          transportRemovals.push(
-            `${removedVehicles.length} vehicle booking(s) will be removed/replaced`,
-          )
-        }
-      }
 
-      const totalRemovalCount =
-        equipmentRemovals.length +
-        crewRemovals.length +
-        transportRemovals.length
-      if (totalRemovalCount > 0) {
-        setSyncConfirm({
+        const preview = formatOfferDiffForPreview(
+          diff,
+          (itemId) => itemNamesQuery.data?.get(itemId) ?? itemId,
+          (vehicleId) => vehicleNamesQuery.data?.get(vehicleId) ?? vehicleId,
+        )
+
+        setSyncPreview({
           basisId: basis.id,
-          basisTitle: formatBasisVersionLabel(
-            basisVersionById.get(basis.id) ?? 1,
-          ),
-          removals: {
-            equipment: equipmentRemovals,
-            crew: crewRemovals,
-            transport: transportRemovals,
-          },
+          basisTitle,
+          preview,
+          conflicts,
+          loading: false,
         })
-        return undefined
+      } catch (e: unknown) {
+        setSyncPreview(null)
+        toastError(
+          'Failed to load sync preview',
+          e instanceof Error ? e.message : 'Please try again.',
+        )
       }
-
-      setSyncingBasisId(basis.id)
-      return await startBasisBooking(basis.id, 'sync')
     },
     [
       basesQuery,
       bookingsSnapshotQuery,
+      basisVersionById,
       fetchBasisDiffForSync,
-      formatItem,
       groupItemsQuery,
       info,
-      basisVersionById,
-      startBasisBooking,
+      itemNamesQuery.data,
       toastError,
       user?.id,
+      vehicleNamesQuery.data,
     ],
+  )
+
+  const handleSyncPreviewConfirm = React.useCallback(
+    async (mode: SyncBasisConfirmMode) => {
+      if (!syncPreview) return
+      try {
+        await startBasisBooking(syncPreview.basisId, 'sync', {
+          force: mode === 'force',
+          skipConflictingEquipment: mode === 'skip-conflicts',
+        })
+        setSyncPreview(null)
+      } catch {
+        // Errors handled by mutation onError
+      }
+    },
+    [startBasisBooking, syncPreview],
   )
 
   const handleBasisSync = React.useCallback(
@@ -2744,108 +2472,21 @@ export default function OffersTab({
         </Dialog.Root>
       )}
 
-      {syncConfirm && (
-        <Dialog.Root
-          open={!!syncConfirm}
-          onOpenChange={(v) => !v && setSyncConfirm(null)}
-        >
-          <Dialog.Content maxWidth="560px">
-            <Dialog.Title>Sync bookings from this offer basis?</Dialog.Title>
-            <Separator my="3" />
-            <Callout.Root color="yellow">
-              <Callout.Icon>
-                <InfoCircle width={18} height={18} />
-              </Callout.Icon>
-              <Callout.Text>
-                Syncing <strong>{syncConfirm.basisTitle}</strong> will{' '}
-                <strong>remove or reduce</strong> existing bookings so they
-                match the offer basis.
-              </Callout.Text>
-            </Callout.Root>
-
-            <Box
-              mt="3"
-              p="3"
-              style={{
-                background: 'var(--gray-a2)',
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 8,
-              }}
-            >
-              <Flex direction="column" gap="3">
-                {syncConfirm.removals.equipment.length > 0 && (
-                  <Box>
-                    <Text size="2" weight="bold">
-                      Equipment
-                    </Text>
-                    <Flex direction="column" gap="1" mt="2">
-                      {syncConfirm.removals.equipment.map((line, idx) => (
-                        <Text key={`equip-${idx}`} size="2">
-                          - {line.replace(/^Equipment:\s*/, '')}
-                        </Text>
-                      ))}
-                    </Flex>
-                  </Box>
-                )}
-
-                {syncConfirm.removals.crew.length > 0 && (
-                  <Box>
-                    <Text size="2" weight="bold">
-                      Crew
-                    </Text>
-                    <Flex direction="column" gap="1" mt="2">
-                      {syncConfirm.removals.crew.map((line, idx) => (
-                        <Text key={`crew-${idx}`} size="2">
-                          - {line}
-                        </Text>
-                      ))}
-                    </Flex>
-                  </Box>
-                )}
-
-                {syncConfirm.removals.transport.length > 0 && (
-                  <Box>
-                    <Text size="2" weight="bold">
-                      Vehicles
-                    </Text>
-                    <Flex direction="column" gap="1" mt="2">
-                      {syncConfirm.removals.transport.map((line, idx) => (
-                        <Text key={`transport-${idx}`} size="2">
-                          - {line.replace(/^Transport:\s*/, '')}
-                        </Text>
-                      ))}
-                    </Flex>
-                  </Box>
-                )}
-              </Flex>
-            </Box>
-
-            <Flex gap="2" mt="4" justify="end">
-              <Dialog.Close>
-                <Button
-                  color="yellow"
-                  variant="soft"
-                  disabled={syncBookingsMutation.isPending}
-                >
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button
-                color="yellow"
-                variant="surface"
-                onClick={() => {
-                  void startBasisBooking(syncConfirm.basisId, 'sync')
-                  setSyncConfirm(null)
-                }}
-                disabled={syncBookingsMutation.isPending}
-              >
-                {syncBookingsMutation.isPending
-                  ? 'Syncing…'
-                  : 'Sync & replace bookings'}
-              </Button>
-            </Flex>
-          </Dialog.Content>
-        </Dialog.Root>
+      {syncPreview && (
+        <SyncBasisBookingsDialog
+          open={!!syncPreview}
+          onOpenChange={(open) => {
+            if (!open && !syncBookingsMutation.isPending) setSyncPreview(null)
+          }}
+          basisTitle={syncPreview.basisTitle}
+          preview={syncPreview.preview}
+          conflicts={syncPreview.conflicts}
+          loading={syncPreview.loading}
+          syncing={syncBookingsMutation.isPending}
+          onConfirm={(mode) => {
+            void handleSyncPreviewConfirm(mode)
+          }}
+        />
       )}
 
       {linkDialogOpen && (

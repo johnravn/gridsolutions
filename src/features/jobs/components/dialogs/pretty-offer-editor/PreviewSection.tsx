@@ -2,6 +2,7 @@ import { Box } from '@radix-ui/themes'
 import { PrettyOfferHero } from '../../pretty-offer/PrettyOfferHero'
 import { PrettyOfferModuleSlide } from '../../pretty-offer/PrettyOfferModuleSlide'
 import { PrettyOfferFooter } from '../../pretty-offer/PrettyOfferFooter'
+import { PrettyOfferOptionsProvider } from '../../pretty-offer/PrettyOfferOptionsContext'
 import PrettyOfferModuleView from '../../PrettyOfferModuleView'
 import {
   applyComputedCostsToModules,
@@ -110,7 +111,7 @@ export function PreviewSection({
     sorted.length === 0 ? (
       <PrettyOfferModuleView.EmptyState />
     ) : previewOffer ? (
-      <>
+      <PrettyOfferOptionsProvider modules={modulesWithCost}>
         <PrettyOfferHero offer={previewOffer} />
         {publicModules.map((module, index) => (
           <PrettyOfferModuleSlide
@@ -125,7 +126,7 @@ export function PreviewSection({
           modules={publicModules}
           showPricePerLine={showPricePerLine}
         />
-      </>
+      </PrettyOfferOptionsProvider>
     ) : (
       sorted.map((module) => (
         <PrettyOfferModuleView

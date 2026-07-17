@@ -1,29 +1,17 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Button,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  IconButton,
-  Separator,
-  Tooltip,
-} from '@radix-ui/themes'
+import { Button } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { Refresh, TransitionLeft } from 'iconoir-react'
+import { Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import {
-  getModShortcutLabel,
-  useModKeyShortcut,
-} from '@shared/lib/keyboardShortcuts'
+import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { useRegisterShortcutAction } from '@shared/hotkeys'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
-import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
+import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
 import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
@@ -31,9 +19,19 @@ import { customersIndexQuery } from '../api/queries'
 
 export default function CustomerPage() {
   const { companyId } = useCompany()
+  const { canWrite } = useCompanyWriteAccess()
+  const { isLarge, hasSlots } = useSplitLayout()
+  const createCustomerShortcutRef = React.useRef<(() => void) | null>(null)
+  useRegisterShortcutAction(
+    'create.customer',
+    () => createCustomerShortcutRef.current?.(),
+    canWrite,
+  )
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const inspectorRef = React.useRef<HTMLDivElement>(null)
+  const listRef = React.useRef<HTMLElement>(null)
 
   const { data: accountingConfig } = useQuery({
     queryKey: ['company', companyId, 'accounting-config'],
@@ -85,106 +83,13 @@ export default function CustomerPage() {
         toastError('Some errors', res.errors.slice(0, 3).join('; '))
       }
     },
-    onError: (e: any) => {
-      toastError('Sync failed', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      const message =
+        e instanceof Error ? e.message : 'Please try again.'
+      toastError('Sync failed', message)
     },
   })
 
-  // responsive (>= 1024px)
-  const [isLarge, setIsLarge] = React.useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(min-width: 1024px)').matches
-      : false,
-  )
-  React.useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e: MediaQueryListEvent) => setIsLarge(e.matches)
-    try {
-      mq.addEventListener('change', onChange)
-      return () => mq.removeEventListener('change', onChange)
-    } catch {
-      mq.addListener(onChange)
-      return () => mq.removeListener(onChange)
-    }
-  }, [])
-
-  // Resize state: track left panel width as percentage (default 50% for 1fr/1fr ratio)
-  const [leftPanelWidth, setLeftPanelWidth] = React.useState<number>(50)
-  const [isMinimized, setIsMinimized] = React.useState(false)
-  const [savedWidth, setSavedWidth] = React.useState<number>(50)
-  const [isResizing, setIsResizing] = React.useState(false)
-  const containerRef = React.useRef<HTMLDivElement>(null)
-  const inspectorRef = React.useRef<HTMLDivElement>(null)
-  const listRef = React.useRef<HTMLElement>(null)
-
-  const toggleMinimize = React.useCallback(() => {
-    if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 50)
-      setIsMinimized(false)
-    } else {
-      setSavedWidth(leftPanelWidth)
-      setIsMinimized(true)
-    }
-  }, [isMinimized, leftPanelWidth, savedWidth])
-
-  const handleGlowingBarClick = React.useCallback(() => {
-    if (isMinimized) {
-      setLeftPanelWidth(savedWidth || 50)
-      setIsMinimized(false)
-    }
-  }, [isMinimized, savedWidth])
-
-  const collapseShortcutLabel = getModShortcutLabel('B')
-  useModKeyShortcut({ key: 'b', enabled: isLarge, onTrigger: toggleMinimize })
-
-  // Handle mouse move for resizing
-  React.useEffect(() => {
-    if (!isResizing) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!containerRef.current) return
-      const containerRect = containerRef.current.getBoundingClientRect()
-      const containerWidth = containerRect.width
-
-      // Calculate mouse position relative to container
-      const mouseX = e.clientX - containerRect.left
-
-      // Calculate new left panel width percentage
-      // Min 25%, Max 75% to prevent panels from getting too small
-      const minWidth = 25
-      const maxWidth = 75
-      const newWidthPercent = Math.max(
-        minWidth,
-        Math.min(maxWidth, (mouseX / containerWidth) * 100),
-      )
-
-      setLeftPanelWidth(newWidthPercent)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizing(false)
-      // Restore cursor and text selection
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    // Set global cursor and prevent text selection during resize
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      // Cleanup in case component unmounts during resize
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizing])
-
-  // On small screens: when an item is selected, scroll to the inspector
   React.useEffect(() => {
     if (!isLarge && selectedId != null && inspectorRef.current) {
       inspectorRef.current.scrollIntoView({
@@ -211,337 +116,98 @@ export default function CustomerPage() {
   })
   const showInitialSkeleton = useInitialPageLoad(customersIndexLoading)
 
-  if (!companyId || showInitialSkeleton) {
-    return <PageSkeleton columns="2fr 3fr" />
+  if (!companyId || (showInitialSkeleton && !hasSlots)) {
+    return (
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.customers}
+        title="Customers"
+      />
+    )
   }
 
-  if (!isLarge) {
-    return (
-      <section
-        ref={listRef}
-        style={{
-          minHeight: 0,
-          minWidth: 0,
-          maxWidth: '100%',
-          overflowX: 'hidden',
-        }}
+  const syncButton =
+    accountingConfig?.accounting_software === 'conta' &&
+    accountingConfig.accounting_organization_id ? (
+      <Button
+        size="2"
+        variant="soft"
+        onClick={() => syncMutation.mutate()}
+        disabled={syncMutation.isPending}
       >
-        <Grid
-          columns="1fr"
-          gap="4"
-          align="stretch"
-          style={{ minHeight: 0, minWidth: 0, maxWidth: '100%' }}
-        >
-          {/* LEFT: list — viewport height minus app chrome and padding */}
-          <Card
-            size="3"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              height: MOBILE_CARD_HEIGHT,
-              minHeight: 0,
-              minWidth: 0,
-            }}
-          >
-            <Flex
-              align="center"
-              justify="between"
-              mb="3"
-              style={{ flexShrink: 0 }}
-            >
-              <Heading size="5">Customers</Heading>
-              {accountingConfig?.accounting_software === 'conta' &&
-                accountingConfig?.accounting_organization_id && (
-                  <Button
-                    size="2"
-                    variant="soft"
-                    onClick={() => syncMutation.mutate()}
-                    disabled={syncMutation.isPending}
-                  >
-                    <Refresh width={14} height={14} />
-                    {syncMutation.isPending ? 'Syncing…' : 'Sync with Conta'}
-                  </Button>
-                )}
-            </Flex>
-            <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
-            <Box
-              style={{
-                flex: 1,
-                minHeight: 0,
-                minWidth: 0,
-                overflowY: 'auto',
-                overflowX: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <CustomerTable
-                selectedId={selectedId}
-                onSelect={setSelectedId}
-                showRegular={true}
-                showPartner={true}
-              />
-            </Box>
-          </Card>
+        <Refresh width={14} height={14} />
+        {syncMutation.isPending ? 'Syncing…' : 'Sync with Conta'}
+      </Button>
+    ) : null
 
-          {/* RIGHT: Inspector — below the fold on mobile; scroll into view when item selected */}
-          <div
-            ref={inspectorRef}
-            style={{
-              minHeight: 0,
-              minWidth: 0,
-              maxWidth: '100%',
-              width: '100%',
-              height: MOBILE_CARD_HEIGHT,
-              overflow: 'hidden',
-            }}
-          >
-            <Card
-              size="3"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                height: MOBILE_CARD_HEIGHT,
-                overflow: 'hidden',
-                minHeight: 0,
-                maxWidth: '100%',
-              }}
-            >
-              <Heading size="5" mb="3" style={{ flexShrink: 0 }}>
-                Inspector
-              </Heading>
-              <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
-              <Box
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  overflowX: 'hidden',
-                  minWidth: 0,
-                  maxWidth: '100%',
-                }}
-              >
-                <CustomerInspector
-                  id={selectedId}
-                  onDeleted={() => setSelectedId(null)}
-                />
-              </Box>
-            </Card>
-          </div>
-        </Grid>
+  return (
+    <SplitPage
+      defaultLeftWidth={SPLIT_LEFT_WIDTH.customers}
+      title="Customers"
+      leftToolbar={syncButton}
+      left={
+        <CustomerTable
+          createShortcutRef={createCustomerShortcutRef}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          showRegular={true}
+          showPartner={true}
+        />
+      }
+      leftBodyStyle={{
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      right={
+        <CustomerInspector
+          id={selectedId}
+          onDeleted={() => setSelectedId(null)}
+        />
+      }
+      mobileLeftCardStyle={{ height: MOBILE_CARD_HEIGHT, minWidth: 0 }}
+      mobileLeftBodyStyle={{
+        flex: 1,
+        minHeight: 0,
+        minWidth: 0,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+      }}
+      mobileRightCardStyle={{
+        height: MOBILE_CARD_HEIGHT,
+        overflow: 'hidden',
+        maxWidth: '100%',
+      }}
+      mobileRightBodyStyle={{
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        minWidth: 0,
+        maxWidth: '100%',
+      }}
+      mobileSectionRef={listRef}
+      mobileRightWrapper={(card) => (
+        <div
+          ref={inspectorRef}
+          style={{
+            minHeight: 0,
+            minWidth: 0,
+            maxWidth: '100%',
+            width: '100%',
+            height: MOBILE_CARD_HEIGHT,
+            overflow: 'hidden',
+          }}
+        >
+          {card}
+        </div>
+      )}
+      mobileFooter={
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
           visible={!isLarge}
         />
-      </section>
-    )
-  }
-
-  // On large screens, use resizable flex layout
-  return (
-    <section style={{ height: '100%', minHeight: 0 }}>
-      <Flex
-        ref={containerRef}
-        gap="2"
-        align="stretch"
-        style={{
-          height: '100%',
-          minHeight: 0,
-          position: 'relative',
-        }}
-      >
-        {/* LEFT */}
-        <Card
-          size="3"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: isMinimized ? '60px' : `${leftPanelWidth}%`,
-            height: '100%',
-            minWidth: isMinimized ? '60px' : '300px',
-            maxWidth: isMinimized ? '60px' : '75%',
-            minHeight: 0,
-            flexShrink: 0,
-            transition: isResizing ? 'none' : 'width 0.1s ease-out',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {isMinimized ? (
-            <Box
-              onClick={handleGlowingBarClick}
-              onMouseEnter={(e) => {
-                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement) bar.style.width = '24px'
-              }}
-              onMouseLeave={(e) => {
-                const bar = e.currentTarget.querySelector('[data-glowing-bar]')
-                if (bar instanceof HTMLElement) bar.style.width = '12px'
-              }}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                cursor: 'pointer',
-                zIndex: 1,
-              }}
-            >
-              <Box
-                data-glowing-bar
-                style={{
-                  position: 'absolute',
-                  left: '50%',
-                  top: '20px',
-                  bottom: '20px',
-                  transform: 'translateX(-50%)',
-                  width: '12px',
-                  borderRadius: '4px',
-                  background:
-                    'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
-                  pointerEvents: 'none',
-                  zIndex: 5,
-                  transition: 'all 0.2s ease-out',
-                  animation: 'glow-pulse 5s ease-in-out infinite',
-                }}
-              />
-              <style>{`
-                @keyframes glow-pulse {
-                  0%, 100% {
-                    box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
-                  }
-                  50% {
-                    box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
-                  }
-                }
-              `}</style>
-            </Box>
-          ) : (
-            <>
-              <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
-                <Heading size="5">Customers</Heading>
-                <Flex gap="2" align="center">
-                  {accountingConfig?.accounting_software === 'conta' &&
-                    accountingConfig?.accounting_organization_id && (
-                      <Button
-                        size="2"
-                        variant="soft"
-                        onClick={() => syncMutation.mutate()}
-                        disabled={syncMutation.isPending}
-                      >
-                        <Refresh width={14} height={14} />
-                        {syncMutation.isPending
-                          ? 'Syncing…'
-                          : 'Sync with Conta'}
-                      </Button>
-                    )}
-                  <Tooltip
-                    content={`Collapse sidebar (${collapseShortcutLabel})`}
-                  >
-                    <IconButton
-                      size="3"
-                      variant="ghost"
-                      onClick={toggleMinimize}
-                      style={{ flexShrink: 0 }}
-                    >
-                      <TransitionLeft width={22} height={22} />
-                    </IconButton>
-                  </Tooltip>
-                </Flex>
-              </Flex>
-              <Separator size="4" mb="3" />
-              <Box
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflow: 'hidden',
-                  display: 'flex',
-                  flexDirection: 'column',
-                }}
-              >
-                <CustomerTable
-                  selectedId={selectedId}
-                  onSelect={setSelectedId}
-                  showRegular={true}
-                  showPartner={true}
-                />
-              </Box>
-            </>
-          )}
-        </Card>
-
-        {/* RESIZER */}
-        {!isMinimized && (
-          <Box
-            className="section-resizer"
-            onMouseDown={(e) => {
-              e.preventDefault()
-              setIsResizing(true)
-            }}
-            style={{
-              width: '6px',
-              height: '20%',
-              cursor: 'col-resize',
-              backgroundColor: 'var(--gray-a4)',
-              borderRadius: '4px',
-              flexShrink: 0,
-              alignSelf: 'center',
-              userSelect: 'none',
-              margin: '0 -4px',
-              zIndex: 10,
-              transition: isResizing ? 'none' : 'background-color 0.2s',
-            }}
-            onMouseEnter={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                e.currentTarget.style.cursor = 'col-resize'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isResizing) {
-                e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-              }
-            }}
-          />
-        )}
-
-        {/* RIGHT */}
-        <Card
-          size="3"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            flex: 1,
-            height: '100%',
-            maxHeight: '100%',
-            overflow: 'hidden',
-            minWidth: '300px',
-            minHeight: 0,
-            transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
-          }}
-        >
-          <Heading size="5" mb="3">
-            Inspector
-          </Heading>
-          <Separator size="4" mb="3" />
-          <Box
-            style={{
-              flex: 1,
-              minHeight: 0,
-              minWidth: 0,
-              overflowY: 'auto',
-              overflowX: 'hidden',
-            }}
-          >
-            <CustomerInspector
-              id={selectedId}
-              onDeleted={() => setSelectedId(null)}
-            />
-          </Box>
-        </Card>
-      </Flex>
-    </section>
+      }
+    />
   )
 }

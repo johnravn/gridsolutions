@@ -208,13 +208,19 @@ describe('prettyOfferCalculations', () => {
         },
       ],
       [
-        { id: 'timeline-1', module_type: 'timeline', title: 'Program timeline' },
+        {
+          id: 'timeline-1',
+          module_type: 'timeline',
+          title: 'Program timeline',
+        },
       ],
       new Map(),
     )
 
     expect(issues).toHaveLength(1)
-    expect(issues[0]?.message).toContain('cannot be assigned to timeline module')
+    expect(issues[0]?.message).toContain(
+      'cannot be assigned to timeline module',
+    )
   })
 
   it('reports subcontractor allocation status', () => {
@@ -617,9 +623,7 @@ describe('prettyOfferCalculations', () => {
     expect(basisMarkupAmount(basis, { subcontractorMarkupPercent: 15 })).toBe(
       1500,
     )
-    expect(basisSubtotal(basis, { subcontractorMarkupPercent: 15 })).toBe(
-      11500,
-    )
+    expect(basisSubtotal(basis, { subcontractorMarkupPercent: 15 })).toBe(11500)
     expect(
       basisMarkupAmount(
         { ...basis, apply_subcontractor_markup: false },

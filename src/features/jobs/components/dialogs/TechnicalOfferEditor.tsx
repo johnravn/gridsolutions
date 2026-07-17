@@ -16,6 +16,7 @@ import { Download, Eye, Lock } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import {
   companyExpansionQuery,
   crewPricingLevelsQuery,
@@ -44,6 +45,7 @@ import {
   OFFER_EDITOR_DIALOG_CLASS,
   offerEditorDialogContentStyle,
 } from './offerEditorDialogStyles'
+import { UnsavedChangesCloseGuard } from './UnsavedChangesCloseGuard'
 import type { RentalFactorConfig } from '../../utils/offerCalculations'
 import type { OfferBasisDetail, OfferDetail } from '../../types'
 import type {
@@ -267,6 +269,7 @@ export default function TechnicalOfferEditor({
   const [title, setTitle] = React.useState('')
   const [showPricePerLine, setShowPricePerLine] = React.useState(true)
   const [closeGuardOpen, setCloseGuardOpen] = React.useState(false)
+  const closeGuardActionRef = React.useRef(false)
   const [lockSendStep, setLockSendStep] = React.useState<
     null | 'choose' | 'email'
   >(null)
@@ -327,6 +330,20 @@ export default function TechnicalOfferEditor({
       }) !== baselineSerialized
     )
   }, [open, isReadOnly, baselineSerialized, title, showPricePerLine])
+
+  const isDirty = hasUnsavedChanges()
+
+  React.useEffect(() => {
+    if (!isDirty) return
+
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [isDirty])
 
   React.useEffect(() => {
     if (!open) {
@@ -647,6 +664,7 @@ export default function TechnicalOfferEditor({
 
   const handleOfferDialogOpenChange = (next: boolean) => {
     if (next) return
+    if (closeGuardOpen) return
     if (lockSendStep) {
       setLockSendStep(null)
       return
@@ -659,6 +677,7 @@ export default function TechnicalOfferEditor({
   }
 
   const handleSaveClick = () => {
+    if (saveMutation.isPending) return
     saveMutation.mutate({ closeAfterSave: false })
   }
 
@@ -737,18 +756,28 @@ export default function TechnicalOfferEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    closeGuardActionRef.current = true
     try {
       await saveMutation.mutateAsync({ closeAfterSave: true })
       setCloseGuardOpen(false)
       onOpenChange(false)
     } catch {
       // mutation shows error
+    } finally {
+      closeGuardActionRef.current = false
     }
   }
 
   const discardFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
     setCloseGuardOpen(false)
     onOpenChange(false)
+  }
+
+  const keepEditingFromCloseGuard = () => {
+    if (closeGuardActionRef.current || saveMutation.isPending) return
+    setCloseGuardOpen(false)
   }
 
   const linkedBasisTitle = linkedBasisDetail?.title.trim() || 'Offer basis'
@@ -772,6 +801,22 @@ export default function TechnicalOfferEditor({
         maxWidth="1280px"
         className={OFFER_EDITOR_DIALOG_CLASS}
         style={offerEditorDialogContentStyle}
+        onPointerDownOutside={(event) => {
+          if (closeGuardOpen || lockSendStep) event.preventDefault()
+        }}
+        onInteractOutside={(event) => {
+          if (closeGuardOpen || lockSendStep) event.preventDefault()
+        }}
+        onEscapeKeyDown={(event) => {
+          if (closeGuardOpen || lockSendStep) {
+            event.preventDefault()
+            return
+          }
+          if (!isReadOnly && hasUnsavedChanges()) {
+            event.preventDefault()
+            setCloseGuardOpen(true)
+          }
+        }}
       >
         <Flex
           direction="column"
@@ -876,7 +921,7 @@ export default function TechnicalOfferEditor({
                   flexDirection: 'column',
                 }}
               >
-                <Tabs.List>
+                <AnimatedTabsList>
                   {basisIdForPreview ? (
                     <Tabs.Trigger value="basis">Basis</Tabs.Trigger>
                   ) : null}
@@ -887,7 +932,7 @@ export default function TechnicalOfferEditor({
                       Preview
                     </Tabs.Trigger>
                   ) : null}
-                </Tabs.List>
+                </AnimatedTabsList>
 
                 <Box
                   pt="3"
@@ -913,7 +958,7 @@ export default function TechnicalOfferEditor({
                           <Text color="gray">Loading basis…</Text>
                         ) : (
                           <Tabs.Root defaultValue="equipment">
-                            <Tabs.List>
+                            <AnimatedTabsList>
                               <Tabs.Trigger value="equipment">
                                 Equipment
                               </Tabs.Trigger>
@@ -921,7 +966,7 @@ export default function TechnicalOfferEditor({
                               <Tabs.Trigger value="transport">
                                 Transport
                               </Tabs.Trigger>
-                            </Tabs.List>
+                            </AnimatedTabsList>
 
                             <Box pt="3">
                               <Tabs.Content value="equipment">
@@ -1017,35 +1062,14 @@ export default function TechnicalOfferEditor({
         </Flex>
       </Dialog.Content>
 
-      <Dialog.Root open={closeGuardOpen} onOpenChange={setCloseGuardOpen}>
-        <Dialog.Content maxWidth="480px" style={{ zIndex: 101 }}>
-          <Dialog.Title>Unsaved changes</Dialog.Title>
-          <Separator my="3" />
-          <Text size="2">
-            You have unsaved changes. Save them before closing, discard them, or
-            keep editing.
-          </Text>
-          <Flex gap="2" mt="4" justify="end" wrap="wrap">
-            <Button variant="soft" onClick={() => setCloseGuardOpen(false)}>
-              Keep editing
-            </Button>
-            <Button
-              variant="soft"
-              color="red"
-              onClick={discardFromCloseGuard}
-              disabled={saveMutation.isPending}
-            >
-              Discard
-            </Button>
-            <Button
-              onClick={() => void saveFromCloseGuardAndExit()}
-              disabled={saveMutation.isPending || !canSave}
-            >
-              {saveMutation.isPending ? 'Saving…' : 'Save & close'}
-            </Button>
-          </Flex>
-        </Dialog.Content>
-      </Dialog.Root>
+      <UnsavedChangesCloseGuard
+        open={closeGuardOpen}
+        isSaving={saveMutation.isPending}
+        canSave={canSave}
+        onKeepEditing={keepEditingFromCloseGuard}
+        onDiscard={discardFromCloseGuard}
+        onSaveAndClose={() => void saveFromCloseGuardAndExit()}
+      />
 
       <Dialog.Root
         open={lockSendStep === 'choose'}

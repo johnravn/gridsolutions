@@ -11,29 +11,76 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { fmtVAT } from '@shared/lib/generalFunctions'
+import { formatVATInput } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { supabase } from '@shared/api/supabase'
 import { updateCompany } from '../../api/queries'
 import type { CompanyDetail } from '../../api/queries'
 
-type AddressForm = {
-  address_line: string
-  zip_code: string
-  city: string
-  country: string
+function parseAddress(addr: string | null) {
+  if (!addr) {
+    return {
+      address_line: '',
+      zip_code: '',
+      city: '',
+      country: 'Norway',
+    }
+  }
+  const parts = addr
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  if (parts.length >= 4) {
+    return {
+      address_line: parts[0] || '',
+      zip_code: parts[1] || '',
+      city: parts[2] || '',
+      country: parts[3] || 'Norway',
+    }
+  }
+  if (parts.length === 1) {
+    return {
+      address_line: parts[0] || '',
+      zip_code: '',
+      city: '',
+      country: 'Norway',
+    }
+  }
+  return {
+    address_line: addr,
+    zip_code: '',
+    city: '',
+    country: 'Norway',
+  }
 }
 
-type Initial = {
-  id: string
-  name: string
-  vat_number: string
-  general_email: string
-  contact_person_id: string | null
+function buildDefaults(initial: CompanyDetail) {
+  return {
+    id: initial.id,
+    name: initial.name,
+    vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
+    general_email: initial.general_email ?? '',
+    contact_person_id: initial.contact_person_id ?? '',
+    ...parseAddress(initial.address ?? null),
+  }
 }
+
+const schema = z.object({
+  id: z.string(),
+  name: z.string().trim().min(1, 'Company name is required'),
+  vat_number: z.string(),
+  general_email: z.string(),
+  contact_person_id: z.string(),
+  address_line: z.string(),
+  zip_code: z.string(),
+  city: z.string(),
+  country: z.string(),
+})
 
 export default function EditCompanyDialog({
   open,
@@ -47,98 +94,23 @@ export default function EditCompanyDialog({
   onSaved?: () => void
 }) {
   const { companyId } = useCompany()
-  const formatVATForInput = (vat: string | null | undefined): string => {
-    if (!vat) return ''
-    const formatted = fmtVAT(vat)
-    return formatted === '—' ? '' : formatted
-  }
-
-  // Parse address string into components
-  const parseAddress = (addr: string | null): AddressForm => {
-    if (!addr) {
-      return {
-        address_line: '',
-        zip_code: '',
-        city: '',
-        country: 'Norway',
-      }
-    }
-    // Try to parse a comma-separated address
-    const parts = addr
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean)
-    if (parts.length >= 4) {
-      return {
-        address_line: parts[0] || '',
-        zip_code: parts[1] || '',
-        city: parts[2] || '',
-        country: parts[3] || 'Norway',
-      }
-    }
-    // If not comma-separated, try common patterns or just put it all in address_line
-    if (parts.length === 1) {
-      return {
-        address_line: parts[0] || '',
-        zip_code: '',
-        city: '',
-        country: 'Norway',
-      }
-    }
-    // Default: put in address_line
-    return {
-      address_line: addr,
-      zip_code: '',
-      city: '',
-      country: 'Norway',
-    }
-  }
-
-  const [form, setForm] = React.useState<Initial>({
-    id: initial.id,
-    name: initial.name,
-    vat_number: formatVATForInput(initial.vat_number),
-    general_email: initial.general_email ?? '',
-    contact_person_id: initial.contact_person_id ?? null,
-  })
-
-  const [address, setAddress] = React.useState<AddressForm>(
-    parseAddress(initial.address ?? null),
-  )
-
-  React.useEffect(() => {
-    setForm({
-      id: initial.id,
-      name: initial.name,
-      vat_number: formatVATForInput(initial.vat_number),
-      general_email: initial.general_email ?? '',
-      contact_person_id: initial.contact_person_id ?? null,
-    })
-    setAddress(parseAddress(initial.address ?? null))
-  }, [initial.id])
-
-  const set = (k: keyof Initial, v: any) => setForm((s) => ({ ...s, [k]: v }))
-  const setAddrVal = <TKey extends keyof AddressForm>(
-    key: TKey,
-    value: AddressForm[TKey],
-  ) => setAddress((s) => ({ ...s, [key]: value }))
   const { success, error } = useToast()
 
-  // Build a single-line address for the map preview and saving
-  const mapQuery = [
-    address.address_line,
-    address.zip_code,
-    address.city,
-    address.country,
-  ]
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .join(', ')
+  const form = useAppForm({
+    defaultValues: buildDefaults(initial),
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await mut.mutateAsync(value)
+    },
+  })
 
-  // Combine address fields into single string for saving
-  const combinedAddress = mapQuery || null
+  React.useEffect(() => {
+    if (open) form.reset(buildDefaults(initial), { keepDefaultValues: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens or initial changes
+  }, [open, initial.id])
 
-  // Load company users for contact person selection (only employees and owners)
   const { data: companyUsers = [] } = useQuery({
     queryKey: ['company', companyId, 'contact-person-candidates'],
     enabled: open && !!companyId,
@@ -163,18 +135,29 @@ export default function EditCompanyDialog({
   })
 
   const mut = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: ReturnType<typeof buildDefaults>) => {
       if (!companyId) throw new Error('No company selected')
+
+      const mapQuery = [
+        value.address_line,
+        value.zip_code,
+        value.city,
+        value.country,
+      ]
+        .map((v) => v.trim())
+        .filter(Boolean)
+        .join(', ')
+
       return updateCompany({
         companyId,
-        id: form.id,
-        name: form.name.trim(),
-        address: combinedAddress,
-        vat_number: form.vat_number
-          ? form.vat_number.replace(/[\s-]/g, '') || null
+        id: value.id,
+        name: value.name.trim(),
+        address: mapQuery || null,
+        vat_number: value.vat_number
+          ? value.vat_number.replace(/[\s-]/g, '') || null
           : null,
-        general_email: form.general_email.trim() || null,
-        contact_person_id: form.contact_person_id || null,
+        general_email: value.general_email.trim() || null,
+        contact_person_id: value.contact_person_id || null,
       })
     },
     onSuccess: () => {
@@ -182,14 +165,10 @@ export default function EditCompanyDialog({
       onSaved?.()
       success('Success', 'Company data saved')
     },
-    onError: (e: any) => {
+    onError: (e: Error) => {
       error('Failed to save', e?.message ?? 'Please try again.')
     },
   })
-
-  const selectedContactPerson = companyUsers.find(
-    (u) => u.user_id === form.contact_person_id,
-  )
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -198,194 +177,209 @@ export default function EditCompanyDialog({
         style={{ maxHeight: '90vh', overflow: 'auto' }}
       >
         <Dialog.Title>Edit company</Dialog.Title>
-        <Flex direction="column" gap="3" mt="3">
-          <Field label="Company name">
-            <TextField.Root
-              value={form.name}
-              onChange={(e) => set('name', e.target.value)}
-              autoFocus
-            />
-          </Field>
 
-          <Separator size="4" />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="name">
+                {(field) => <field.TextField label="Company name" />}
+              </form.AppField>
 
-          <Text as="div" size="2" weight="bold" mb="2">
-            Address
-          </Text>
+              <Separator size="4" />
 
-          <Field label="Address line">
-            <TextField.Root
-              value={address.address_line}
-              onChange={(e) => setAddrVal('address_line', e.target.value)}
-              placeholder="Street and number"
-            />
-          </Field>
-
-          <Grid columns="2" gap="3">
-            <Field label="ZIP code">
-              <TextField.Root
-                value={address.zip_code}
-                onChange={(e) => setAddrVal('zip_code', e.target.value)}
-                placeholder="e.g., 0361"
-              />
-            </Field>
-            <Field label="City">
-              <TextField.Root
-                value={address.city}
-                onChange={(e) => setAddrVal('city', e.target.value)}
-                placeholder="e.g., Oslo"
-              />
-            </Field>
-          </Grid>
-
-          <Field label="Country">
-            <TextField.Root
-              value={address.country}
-              onChange={(e) => setAddrVal('country', e.target.value)}
-              placeholder="e.g., Norway"
-            />
-          </Field>
-
-          {/* Live map preview (only if we have something to show) */}
-          {mapQuery && (
-            <Box mt="2" style={{ maxWidth: 400 }}>
-              <Text as="div" size="1" color="gray" mb="2">
-                Map preview
+              <Text as="div" size="2" weight="bold" mb="2">
+                Address
               </Text>
-              <MapEmbed query={mapQuery} zoom={15} />
-            </Box>
-          )}
 
-          <Separator size="4" />
+              <form.AppField name="address_line">
+                {(field) => (
+                  <field.TextField
+                    label="Address line"
+                    placeholder="Street and number"
+                  />
+                )}
+              </form.AppField>
 
-          <Field label="VAT number">
-            <TextField.Root
-              value={form.vat_number}
-              onChange={(e) => {
-                const input = e.target.value.replace(/[\s-]/g, '')
-                if (input === '' || /^\d{0,9}$/.test(input)) {
-                  const formatted =
-                    input.length <= 3
-                      ? input
-                      : input.length <= 6
-                        ? `${input.slice(0, 3)} ${input.slice(3)}`
-                        : `${input.slice(0, 3)} ${input.slice(3, 6)} ${input.slice(6)}`
-                  set('vat_number', formatted)
-                }
-              }}
-              placeholder="123 456 789"
-            />
-          </Field>
+              <Grid columns="2" gap="3">
+                <form.AppField name="zip_code">
+                  {(field) => (
+                    <field.TextField
+                      label="ZIP code"
+                      placeholder="e.g., 0361"
+                    />
+                  )}
+                </form.AppField>
+                <form.AppField name="city">
+                  {(field) => (
+                    <field.TextField label="City" placeholder="e.g., Oslo" />
+                  )}
+                </form.AppField>
+              </Grid>
 
-          <Field label="General email">
-            <TextField.Root
-              type="email"
-              value={form.general_email}
-              onChange={(e) => set('general_email', e.target.value)}
-              placeholder="company@example.com"
-            />
-          </Field>
+              <form.AppField name="country">
+                {(field) => (
+                  <field.TextField label="Country" placeholder="e.g., Norway" />
+                )}
+              </form.AppField>
 
-          <Field label="Contact person">
-            <Text as="div" size="1" color="gray" mb="2">
-              The person to contact from this company (for system owner)
-            </Text>
-            <Select.Root
-              value={form.contact_person_id || undefined}
-              onValueChange={(val) => set('contact_person_id', val || null)}
-            >
-              <Select.Trigger placeholder="Select contact person" />
-              <Select.Content style={{ zIndex: 10000 }}>
-                {companyUsers.map((u) => {
-                  const extraParts = []
-                  if (u.phone) {
-                    extraParts.push(prettyPhone(u.phone))
-                  }
-                  if (u.email && u.display_name) {
-                    extraParts.push(u.email)
-                  }
-                  const extra =
-                    extraParts.length > 0 ? ` (${extraParts.join(', ')})` : ''
-
-                  return (
-                    <Select.Item key={u.user_id} value={u.user_id}>
-                      {u.display_name || u.email}
-                      {extra}
-                    </Select.Item>
-                  )
-                })}
-              </Select.Content>
-            </Select.Root>
-            {selectedContactPerson && (
-              <Flex
-                direction="column"
-                gap="1"
-                mt="2"
-                style={{
-                  padding: 8,
-                  background: 'var(--gray-a2)',
-                  borderRadius: 4,
-                }}
+              <form.Subscribe
+                selector={(state) => [
+                  state.values.address_line,
+                  state.values.zip_code,
+                  state.values.city,
+                  state.values.country,
+                ]}
               >
-                <Text size="2" weight="medium">
-                  {selectedContactPerson.display_name || 'No name'}
-                </Text>
-                {selectedContactPerson.email && (
-                  <Text size="1" color="gray">
-                    Email:{' '}
-                    <a
-                      href={`mailto:${selectedContactPerson.email}`}
-                      style={{ color: 'inherit' }}
-                    >
-                      {selectedContactPerson.email}
-                    </a>
-                  </Text>
-                )}
-                {selectedContactPerson.phone && (
-                  <Text size="1" color="gray">
-                    Phone:{' '}
-                    <a
-                      href={`tel:${selectedContactPerson.phone}`}
-                      style={{ color: 'inherit' }}
-                    >
-                      {prettyPhone(selectedContactPerson.phone)}
-                    </a>
-                  </Text>
-                )}
-              </Flex>
-            )}
-          </Field>
-        </Flex>
+                {([addressLine, zipCode, city, country]) => {
+                  const mapQuery = [addressLine, zipCode, city, country]
+                    .map((v) => v.trim())
+                    .filter(Boolean)
+                    .join(', ')
+                  if (!mapQuery) return null
+                  return (
+                    <Box mt="2" style={{ maxWidth: 400 }}>
+                      <Text as="div" size="1" color="gray" mb="2">
+                        Map preview
+                      </Text>
+                      <MapEmbed query={mapQuery} zoom={15} />
+                    </Box>
+                  )
+                }}
+              </form.Subscribe>
 
-        <Flex gap="2" mt="4" justify="end">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            onClick={() => mut.mutate()}
-            disabled={!form.name.trim() || mut.isPending}
-          >
-            {mut.isPending ? 'Saving…' : 'Save'}
-          </Button>
-        </Flex>
+              <Separator size="4" />
+
+              <form.AppField name="vat_number">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      VAT number
+                    </Text>
+                    <TextField.Root
+                      value={field.state.value}
+                      placeholder="123 456 789"
+                      onBlur={field.handleBlur}
+                      onChange={(e) =>
+                        field.handleChange(formatVATInput(e.target.value))
+                      }
+                    />
+                  </Flex>
+                )}
+              </form.AppField>
+
+              <form.AppField name="general_email">
+                {(field) => (
+                  <field.TextField
+                    label="General email"
+                    type="email"
+                    placeholder="company@example.com"
+                  />
+                )}
+              </form.AppField>
+
+              <form.AppField name="contact_person_id">
+                {(field) => {
+                  const selectedContactPerson = companyUsers.find(
+                    (u) => u.user_id === field.state.value,
+                  )
+                  return (
+                    <Flex direction="column" gap="1">
+                      <Text as="label" size="2" weight="medium">
+                        Contact person
+                      </Text>
+                      <Text as="div" size="1" color="gray" mb="1">
+                        The person to contact from this company (for system
+                        owner)
+                      </Text>
+                      <Select.Root
+                        value={field.state.value || undefined}
+                        onValueChange={(val) => field.handleChange(val)}
+                      >
+                        <Select.Trigger placeholder="Select contact person" />
+                        <Select.Content style={{ zIndex: 10000 }}>
+                          {companyUsers.map((u) => {
+                            const extraParts = []
+                            if (u.phone) {
+                              extraParts.push(prettyPhone(u.phone))
+                            }
+                            if (u.email && u.display_name) {
+                              extraParts.push(u.email)
+                            }
+                            const extra =
+                              extraParts.length > 0
+                                ? ` (${extraParts.join(', ')})`
+                                : ''
+
+                            return (
+                              <Select.Item key={u.user_id} value={u.user_id}>
+                                {u.display_name || u.email}
+                                {extra}
+                              </Select.Item>
+                            )
+                          })}
+                        </Select.Content>
+                      </Select.Root>
+                      {selectedContactPerson && (
+                        <Flex
+                          direction="column"
+                          gap="1"
+                          mt="2"
+                          style={{
+                            padding: 8,
+                            background: 'var(--gray-a2)',
+                            borderRadius: 4,
+                          }}
+                        >
+                          <Text size="2" weight="medium">
+                            {selectedContactPerson.display_name || 'No name'}
+                          </Text>
+                          {selectedContactPerson.email && (
+                            <Text size="1" color="gray">
+                              Email:{' '}
+                              <a
+                                href={`mailto:${selectedContactPerson.email}`}
+                                style={{ color: 'inherit' }}
+                              >
+                                {selectedContactPerson.email}
+                              </a>
+                            </Text>
+                          )}
+                          {selectedContactPerson.phone && (
+                            <Text size="1" color="gray">
+                              Phone:{' '}
+                              <a
+                                href={`tel:${selectedContactPerson.phone}`}
+                                style={{ color: 'inherit' }}
+                              >
+                                {prettyPhone(selectedContactPerson.phone)}
+                              </a>
+                            </Text>
+                          )}
+                        </Flex>
+                      )}
+                    </Flex>
+                  )
+                }}
+              </form.AppField>
+            </Flex>
+
+            <Flex gap="2" mt="4" justify="end">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Save" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
-  )
-}
-
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
-  return (
-    <div>
-      <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-        {label}
-      </Text>
-      {children}
-    </div>
   )
 }

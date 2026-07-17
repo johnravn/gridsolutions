@@ -4,7 +4,13 @@ import { normalizeDailyInspirationType } from '../utils/dailyInspiration'
 import { BibleVerseSection } from './BibleVerseSection'
 import { QuoteSection } from './QuoteSection'
 
-export function DailyInspirationSection({ userId }: { userId: string | null }) {
+export function DailyInspirationSection({
+  userId,
+  presentation = 'desktop',
+}: {
+  userId: string | null
+  presentation?: 'desktop' | 'mobile'
+}) {
   const { data: inspirationType } = useQuery({
     queryKey: ['profile', userId ?? '__none__', 'daily-inspiration-type'],
     enabled: !!userId,
@@ -28,6 +34,7 @@ export function DailyInspirationSection({ userId }: { userId: string | null }) {
 
   const resolved = normalizeDailyInspirationType(inspirationType)
 
-  if (resolved === 'bibleverse') return <BibleVerseSection />
-  return <QuoteSection />
+  if (resolved === 'bibleverse')
+    return <BibleVerseSection presentation={presentation} />
+  return <QuoteSection presentation={presentation} />
 }

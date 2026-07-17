@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Box, Card, Flex, Heading, Text } from '@radix-ui/themes'
+import { Badge, Box, Card, Flex, Heading, Text } from '@radix-ui/themes'
 
 function IconBadge({ children }: { children: React.ReactNode }) {
   return (
@@ -29,6 +29,8 @@ export function DashboardCard({
   scrollContainerStyle,
   subtitle,
   fillHeight,
+  count,
+  variant = 'card',
 }: {
   title: string
   icon: React.ReactNode
@@ -45,81 +47,116 @@ export function DashboardCard({
    * `notFullHeight` is used with an inner scroll region).
    */
   fillHeight?: boolean
+  /** Shown beside the title when > 0 (e.g. unread / pending counts). */
+  count?: number
+  /** `plain` = title + content only (no outer Card). Used on mobile home. */
+  variant?: 'card' | 'plain'
 }) {
+  const isPlain = variant === 'plain'
+
   const cardStyle: React.CSSProperties | undefined =
-    fillHeight || !notFullHeight
+    !isPlain && (fillHeight || !notFullHeight)
       ? {
           height: '100%',
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-        }
-      : undefined
-
-  const columnStyle: React.CSSProperties = fillHeight
-    ? { flex: 1, minHeight: 0, overflow: 'hidden' }
-    : notFullHeight
-      ? {}
-      : { height: '100%' }
-
-  const contentBoxStyle: React.CSSProperties | undefined = notFullHeight
-    ? fillHeight
-      ? {
           flex: 1,
           minHeight: 0,
-          overflow: 'hidden',
+          alignSelf: 'stretch',
           display: 'flex',
           flexDirection: 'column',
         }
       : undefined
-    : {
-        flex: 1,
-        minHeight: 0,
-        overflowY: 'auto',
-        ...scrollContainerStyle,
-      }
+
+  const columnStyle: React.CSSProperties = isPlain
+    ? {}
+    : fillHeight
+      ? { flex: 1, minHeight: 0, overflow: 'hidden' }
+      : notFullHeight
+        ? {}
+        : { height: '100%' }
+
+  const contentBoxStyle: React.CSSProperties | undefined = isPlain
+    ? undefined
+    : notFullHeight
+      ? fillHeight
+        ? {
+            flex: 1,
+            minHeight: 0,
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }
+        : undefined
+      : {
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          ...scrollContainerStyle,
+        }
+
+  const body = (
+    <Flex direction="column" gap={isPlain ? '4' : '3'} style={columnStyle}>
+      <Flex
+        align="start"
+        justify="between"
+        gap="3"
+        wrap="wrap"
+        style={{ flexShrink: 0 }}
+      >
+        <Flex
+          align={subtitle != null ? 'start' : 'center'}
+          gap="2"
+          style={{ minWidth: 0 }}
+        >
+          {!isPlain ? <IconBadge>{icon}</IconBadge> : null}
+          <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+            <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+              <Heading size={isPlain ? '5' : '4'} weight="bold">
+                {title}
+              </Heading>
+              {count != null && count > 0 ? (
+                <Badge
+                  size="1"
+                  radius="full"
+                  highContrast
+                  style={{
+                    minWidth: 20,
+                    height: 20,
+                    padding: '0 6px',
+                    fontSize: 'var(--font-size-1)',
+                    flexShrink: 0,
+                  }}
+                >
+                  {count > 99 ? '99+' : count}
+                </Badge>
+              ) : null}
+            </Flex>
+            {subtitle != null ? (
+              <Text as="div" size="2" color="gray" style={{ lineHeight: 1.35 }}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </Flex>
+        </Flex>
+        {headerAction ? (
+          <Box style={{ flexShrink: 0, alignSelf: 'center' }}>
+            {headerAction}
+          </Box>
+        ) : null}
+      </Flex>
+
+      <Box style={contentBoxStyle}>{children}</Box>
+
+      {footer && <Flex justify="end">{footer}</Flex>}
+    </Flex>
+  )
+
+  if (isPlain) {
+    return <Box style={{ width: '100%', minWidth: 0 }}>{body}</Box>
+  }
 
   return (
     <Card size="3" style={cardStyle}>
-      <Flex direction="column" gap="3" style={columnStyle}>
-        <Flex
-          align="start"
-          justify="between"
-          gap="3"
-          wrap="wrap"
-          style={{ flexShrink: 0 }}
-        >
-          <Flex
-            align={subtitle != null ? 'start' : 'center'}
-            gap="2"
-            style={{ minWidth: 0 }}
-          >
-            <IconBadge>{icon}</IconBadge>
-            <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-              <Heading size="4">{title}</Heading>
-              {subtitle != null ? (
-                <Text
-                  as="div"
-                  size="2"
-                  color="gray"
-                  style={{ lineHeight: 1.35 }}
-                >
-                  {subtitle}
-                </Text>
-              ) : null}
-            </Flex>
-          </Flex>
-          {headerAction ? (
-            <Box style={{ flexShrink: 0, alignSelf: 'start' }}>
-              {headerAction}
-            </Box>
-          ) : null}
-        </Flex>
-
-        <Box style={contentBoxStyle}>{children}</Box>
-
-        {footer && <Flex justify="end">{footer}</Flex>}
-      </Flex>
+      {body}
     </Card>
   )
 }

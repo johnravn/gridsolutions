@@ -18,6 +18,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { formatDistanceToNow } from 'date-fns'
 import {
   getInitialsFromNameOrEmail,
@@ -273,12 +274,12 @@ export default function LatestInspector({
           value={activeTab}
           onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
         >
-          <Tabs.List>
+          <AnimatedTabsList>
             <Tabs.Trigger value="details">Details</Tabs.Trigger>
             <Tabs.Trigger value="comments">
               Comments ({comments.length})
             </Tabs.Trigger>
-          </Tabs.List>
+          </AnimatedTabsList>
 
           <Box pt="4">
             <Tabs.Content value="details">
@@ -528,12 +529,12 @@ export default function LatestInspector({
         value={activeTab}
         onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
       >
-        <Tabs.List>
+        <AnimatedTabsList>
           <Tabs.Trigger value="details">Details</Tabs.Trigger>
           <Tabs.Trigger value="comments">
             Comments ({comments.length})
           </Tabs.Trigger>
-        </Tabs.List>
+        </AnimatedTabsList>
 
         <Box pt="4">
           <Tabs.Content value="details">

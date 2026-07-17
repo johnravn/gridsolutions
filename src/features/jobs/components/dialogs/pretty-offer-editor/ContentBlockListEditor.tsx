@@ -25,8 +25,13 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
+import {
+  countOptionGroupsInBlock,
+  countOptionsInBlock,
+} from '../../../utils/optionsBlockStorage'
 import { SortableContentBlock } from './sortable'
 import { ColumnLayoutBlockEditor } from './ColumnLayoutBlockEditor'
+import { OptionsBlockEditor } from './OptionsBlockEditor'
 import { getColumnCount, parseColumnLayoutColumns } from './columnLayoutStorage'
 import {
   BLOCK_TYPE_LABELS,
@@ -35,6 +40,7 @@ import {
   GALLERY_BLOCK_TYPES,
   LIST_BLOCK_TYPES,
   MEDIA_BLOCK_TYPES,
+  OPTIONS_BLOCK_TYPES,
   TEXT_BLOCK_TYPES,
   TOP_LEVEL_ADDABLE_BLOCK_TYPES,
   VIDEO_BLOCK_TYPES,
@@ -98,6 +104,14 @@ function getBlockSummary(block: LocalContentBlock): string | null {
     )
     const layoutLabel = `${count} columns · ${nestedCount} block${nestedCount === 1 ? '' : 's'}`
     return header ? `${header} · ${layoutLabel}` : layoutLabel
+  }
+
+  if (block.block_type === 'options') {
+    const header = block.text_content?.trim()
+    const groupCount = countOptionGroupsInBlock(block)
+    const optionCount = countOptionsInBlock(block)
+    const optionsLabel = `${groupCount} group${groupCount === 1 ? '' : 's'} · ${optionCount} option${optionCount === 1 ? '' : 's'}`
+    return header ? `${header} · ${optionsLabel}` : optionsLabel
   }
 
   if (MEDIA_BLOCK_TYPES.has(block.block_type)) {
@@ -357,6 +371,20 @@ export function ContentBlockListEditor({
                               block.block_type,
                             ) && (
                               <ColumnLayoutBlockEditor
+                                block={block}
+                                moduleId={moduleId}
+                                jobId={jobId}
+                                companyId={companyId}
+                                offerId={offerId}
+                                readOnly={readOnly}
+                                onChange={(updates) =>
+                                  updateBlock(block.id, updates)
+                                }
+                              />
+                            )}
+
+                            {OPTIONS_BLOCK_TYPES.has(block.block_type) && (
+                              <OptionsBlockEditor
                                 block={block}
                                 moduleId={moduleId}
                                 jobId={jobId}

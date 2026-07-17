@@ -1,99 +1,87 @@
-import * as React from 'react'
 import { Box, Flex } from '@radix-ui/themes'
-import { ConflictsSection } from '@features/conflicts/components/ConflictsSection'
 import { CompanyJobsWeekSection } from './CompanyJobsWeekSection'
 import { DailyInspirationSection } from './DailyInspirationSection'
-import { JobsReadyToInvoiceSection } from './JobsReadyToInvoiceSection'
-import { MattersSection } from './MattersSection'
-import { UpcomingJobsSection } from './UpcomingJobsSection'
+import { HomeAttentionBand } from './HomeAttentionBand'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
-import type { JobListRow } from '@features/jobs/types'
 import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
-import type { CompanyJobsWeekOffset } from '../api/companyJobsWeekQuery'
-import type { HomeJobReadyToInvoice, HomeMatter, UpcomingJob } from '../types'
+import type { ActiveRecurringJob } from '../api/activeRecurringJobsQuery'
+import type {
+  HomeJobReadyToInvoice,
+  HomeMatter,
+  WeekJobWithRole,
+} from '../types'
 import type { HomeDashboardLayoutPreferences } from '../api/profileHomeLayoutQuery'
 
 type HomeDesktopLayoutProps = {
-  // Resize state
-  containerRef: React.RefObject<HTMLDivElement | null>
-  leftPanelWidth: number
-  isResizing: boolean
-  onResizeStart: (e: React.MouseEvent) => void
-  // Content
   userId: string | null
   canVisitJobs: boolean
-  companyWeekJobs: Array<JobListRow>
+  jobsThisWeek: Array<WeekJobWithRole>
+  jobsNextWeek: Array<WeekJobWithRole>
+  jobsWeekAfter: Array<WeekJobWithRole>
   companyWeekJobsLoading: boolean
   companyWeekBookingSummaries: Record<string, WeekJobBookingSummary>
   companyWeekBookingsDetailLoading: boolean
-  jobsWeekOffset: CompanyJobsWeekOffset
-  onJobsWeekOffsetChange: (offset: CompanyJobsWeekOffset) => void
+  activeRecurringJobs: Array<ActiveRecurringJob>
   unreadMatters: Array<HomeMatter>
   mattersLoading: boolean
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
-  upcomingJobs: Array<UpcomingJob>
-  upcomingJobsLoading: boolean
   showMyJobsOnly: boolean
   onToggleMyJobsOnly: (value: boolean) => void
   isFreelancer: boolean
-  daysFilter: '7' | '14' | '30' | 'all'
-  onDaysFilterChange: (value: '7' | '14' | '30' | 'all') => void
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
+  /** False while conflict prefs/data are still resolving (avoids flashing All clear). */
+  conflictsSettled: boolean
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
-  conflictsLoading: boolean
-  conflictDaysFilter: ConflictDaysFilter
-  onConflictDaysFilterChange: (value: ConflictDaysFilter) => void
-  conflictRangeLabel: string
   homeLayout: HomeDashboardLayoutPreferences
 }
 
 export function HomeDesktopLayout({
-  containerRef,
-  leftPanelWidth,
-  isResizing,
-  onResizeStart,
   userId,
   canVisitJobs,
-  companyWeekJobs,
+  jobsThisWeek,
+  jobsNextWeek,
+  jobsWeekAfter,
   companyWeekJobsLoading,
   companyWeekBookingSummaries,
   companyWeekBookingsDetailLoading,
-  jobsWeekOffset,
-  onJobsWeekOffsetChange,
+  activeRecurringJobs,
   unreadMatters,
   mattersLoading,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
-  upcomingJobs,
-  upcomingJobsLoading,
   showMyJobsOnly,
   onToggleMyJobsOnly,
   isFreelancer,
-  daysFilter,
-  onDaysFilterChange,
   getInitials,
   getAvatarUrl,
+  conflictsSettled,
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
-  conflictsLoading,
-  conflictDaysFilter,
-  onConflictDaysFilterChange,
-  conflictRangeLabel,
   homeLayout,
 }: HomeDesktopLayoutProps) {
+  const showInspiration = homeLayout.showDailyInspiration
+  const showAttentionBand =
+    homeLayout.showMatters || canVisitJobs || homeLayout.showConflicts
+  const showTopRow = showInspiration || showAttentionBand
+  const showJobs = canVisitJobs && homeLayout.showLatest
+
+  const gridTemplateColumns = showInspiration
+    ? showAttentionBand
+      ? '1fr 2fr'
+      : '1fr'
+    : '1fr'
+
   return (
     <Box
-      ref={containerRef}
       style={{
         width: '100%',
         height: '100%',
@@ -102,150 +90,99 @@ export function HomeDesktopLayout({
       }}
     >
       <Flex
-        direction="row"
-        gap="2"
-        align="stretch"
+        direction="column"
+        gap="4"
         style={{
           height: '100%',
           minHeight: 0,
         }}
       >
-        <Flex
-          direction="column"
-          gap="4"
-          style={{
-            width: `${leftPanelWidth}%`,
-            height: '100%',
-            minWidth: '300px',
-            maxWidth: '75%',
-            minHeight: 0,
-            flexShrink: 0,
-            transition: isResizing ? 'none' : 'width 0.1s ease-out',
-            position: 'relative',
-            overflow: 'hidden',
-          }}
-        >
-          {homeLayout.showDailyInspiration && (
-            <Box style={{ minHeight: 0 }}>
-              <DailyInspirationSection userId={userId} />
-            </Box>
-          )}
-          {homeLayout.showMatters && unreadMatters.length > 0 && (
-            <Box style={{ minHeight: 0 }}>
-              <MattersSection
-                matters={unreadMatters}
-                loading={mattersLoading}
-                getInitials={getInitials}
-                getAvatarUrl={getAvatarUrl}
-              />
-            </Box>
-          )}
-          {canVisitJobs && homeLayout.showLatest && (
-            <Box
-              style={{
-                flex: 1,
-                minHeight: 0,
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-              }}
-            >
-              <CompanyJobsWeekSection
-                jobs={companyWeekJobs}
-                loading={companyWeekJobsLoading}
-                weekOffset={jobsWeekOffset}
-                onWeekOffsetChange={onJobsWeekOffsetChange}
-                getInitials={getInitials}
-                getAvatarUrl={getAvatarUrl}
-                bookingSummaries={companyWeekBookingSummaries}
-                bookingsDetailLoading={companyWeekBookingsDetailLoading}
-              />
-            </Box>
-          )}
-        </Flex>
+        {showTopRow && (
+          <Box
+            style={{
+              display: 'grid',
+              gridTemplateColumns,
+              gap: 'var(--space-4)',
+              flexShrink: 0,
+              maxHeight: showJobs ? '28%' : undefined,
+              minHeight: 0,
+              overflow: 'hidden',
+              alignItems: 'stretch',
+            }}
+          >
+            {showInspiration && (
+              <Box
+                style={{
+                  minWidth: 0,
+                  minHeight: 0,
+                  height: '100%',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignSelf: 'stretch',
+                }}
+              >
+                <DailyInspirationSection userId={userId} />
+              </Box>
+            )}
+            {showAttentionBand && (
+              <Box
+                style={{
+                  minWidth: 0,
+                  minHeight: 0,
+                  height: '100%',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignSelf: 'stretch',
+                }}
+              >
+                <HomeAttentionBand
+                  showMatters={homeLayout.showMatters}
+                  showInvoices={canVisitJobs}
+                  showConflicts={homeLayout.showConflicts}
+                  unreadMatters={unreadMatters}
+                  mattersLoading={mattersLoading}
+                  jobsReadyToInvoice={jobsReadyToInvoice}
+                  jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+                  crewConflicts={crewConflicts}
+                  vehicleConflicts={vehicleConflicts}
+                  equipmentConflicts={equipmentConflicts}
+                  conflictsSettled={conflictsSettled}
+                  getInitials={getInitials}
+                  getAvatarUrl={getAvatarUrl}
+                />
+              </Box>
+            )}
+          </Box>
+        )}
 
-        <Box
-          className="section-resizer"
-          onMouseDown={(e) => {
-            e.preventDefault()
-            onResizeStart(e)
-          }}
-          style={{
-            width: '6px',
-            height: '15%',
-            cursor: 'col-resize',
-            backgroundColor: 'var(--gray-a4)',
-            borderRadius: '4px',
-            flexShrink: 0,
-            alignSelf: 'center',
-            userSelect: 'none',
-            margin: '0 -4px',
-            zIndex: 10,
-            transition: isResizing ? 'none' : 'background-color 0.2s',
-          }}
-          onMouseEnter={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-              e.currentTarget.style.cursor = 'col-resize'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!isResizing) {
-              e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-            }
-          }}
-        />
-
-        <Flex
-          direction="column"
-          gap="4"
-          style={{
-            flex: 1,
-            height: '100%',
-            maxHeight: '100%',
-            overflow: 'hidden',
-            minWidth: '300px',
-            minHeight: 0,
-            transition: isResizing ? 'none' : 'flex-basis 0.1s ease-out',
-          }}
-        >
-          {jobsReadyToInvoice.length > 0 && (
-            <Box style={{ minHeight: 0 }}>
-              <JobsReadyToInvoiceSection
-                jobs={jobsReadyToInvoice}
-                loading={jobsReadyToInvoiceLoading}
-              />
-            </Box>
-          )}
-          {homeLayout.showConflicts && (
-            <Box style={{ minHeight: 0 }}>
-              <ConflictsSection
-                crewConflicts={crewConflicts}
-                vehicleConflicts={vehicleConflicts}
-                equipmentConflicts={equipmentConflicts}
-                loading={conflictsLoading}
-                daysFilter={conflictDaysFilter}
-                onDaysFilterChange={onConflictDaysFilterChange}
-                rangeLabel={conflictRangeLabel}
-              />
-            </Box>
-          )}
-          {homeLayout.showUpcomingJobs && (
-            <Box style={{ flex: 2, minHeight: 0 }}>
-              <UpcomingJobsSection
-                jobs={upcomingJobs}
-                loading={upcomingJobsLoading}
-                showMyJobsOnly={showMyJobsOnly}
-                onToggleMyJobsOnly={onToggleMyJobsOnly}
-                getInitials={getInitials}
-                getAvatarUrl={getAvatarUrl}
-                isFreelancer={isFreelancer}
-                daysFilter={daysFilter}
-                onDaysFilterChange={onDaysFilterChange}
-              />
-            </Box>
-          )}
-        </Flex>
+        {showJobs && (
+          <Box
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <CompanyJobsWeekSection
+              jobsThisWeek={jobsThisWeek}
+              jobsNextWeek={jobsNextWeek}
+              jobsWeekAfter={jobsWeekAfter}
+              loading={companyWeekJobsLoading}
+              showMyJobsOnly={showMyJobsOnly}
+              onToggleMyJobsOnly={onToggleMyJobsOnly}
+              isFreelancer={isFreelancer}
+              getInitials={getInitials}
+              getAvatarUrl={getAvatarUrl}
+              bookingSummaries={companyWeekBookingSummaries}
+              bookingsDetailLoading={companyWeekBookingsDetailLoading}
+              activeRecurringJobs={activeRecurringJobs}
+            />
+          </Box>
+        )}
       </Flex>
     </Box>
   )

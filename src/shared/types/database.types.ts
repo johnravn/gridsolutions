@@ -317,7 +317,6 @@ export type Database = {
           theme_gray_color: string | null
           theme_panel_background: string | null
           theme_radius: string | null
-          theme_scaling: string | null
           vat_number: string | null
         }
         Insert: {
@@ -344,7 +343,6 @@ export type Database = {
           theme_gray_color?: string | null
           theme_panel_background?: string | null
           theme_radius?: string | null
-          theme_scaling?: string | null
           vat_number?: string | null
         }
         Update: {
@@ -371,7 +369,6 @@ export type Database = {
           theme_gray_color?: string | null
           theme_panel_background?: string | null
           theme_radius?: string | null
-          theme_scaling?: string | null
           vat_number?: string | null
         }
         Relationships: [
@@ -1523,6 +1520,8 @@ export type Database = {
           accepted_by_email: string | null
           accepted_by_name: string | null
           accepted_by_phone: string | null
+          accepted_option_selections: Json | null
+          accepted_options_subtotal: number | null
           access_token: string
           based_on_offer_id: string | null
           bookings_synced_at: string | null
@@ -1575,6 +1574,8 @@ export type Database = {
           accepted_by_email?: string | null
           accepted_by_name?: string | null
           accepted_by_phone?: string | null
+          accepted_option_selections?: Json | null
+          accepted_options_subtotal?: number | null
           access_token: string
           based_on_offer_id?: string | null
           bookings_synced_at?: string | null
@@ -1627,6 +1628,8 @@ export type Database = {
           accepted_by_email?: string | null
           accepted_by_name?: string | null
           accepted_by_phone?: string | null
+          accepted_option_selections?: Json | null
+          accepted_options_subtotal?: number | null
           access_token?: string
           based_on_offer_id?: string | null
           bookings_synced_at?: string | null
@@ -3413,6 +3416,7 @@ export type Database = {
           email: string
           first_name: string | null
           last_name: string | null
+          last_seen_release_version: string | null
           locale: string | null
           phone: string | null
           preferences: Json | null
@@ -3430,6 +3434,7 @@ export type Database = {
           email: string
           first_name?: string | null
           last_name?: string | null
+          last_seen_release_version?: string | null
           locale?: string | null
           phone?: string | null
           preferences?: Json | null
@@ -3447,6 +3452,7 @@ export type Database = {
           email?: string
           first_name?: string | null
           last_name?: string | null
+          last_seen_release_version?: string | null
           locale?: string | null
           phone?: string | null
           preferences?: Json | null
@@ -3546,6 +3552,8 @@ export type Database = {
           customer_user_id: string | null
           description: string | null
           id: string
+          period_end: string | null
+          period_start: string | null
           project_lead_user_id: string | null
           title: string
           updated_at: string
@@ -3559,6 +3567,8 @@ export type Database = {
           customer_user_id?: string | null
           description?: string | null
           id?: string
+          period_end?: string | null
+          period_start?: string | null
           project_lead_user_id?: string | null
           title: string
           updated_at?: string
@@ -3572,6 +3582,8 @@ export type Database = {
           customer_user_id?: string | null
           description?: string | null
           id?: string
+          period_end?: string | null
+          period_start?: string | null
           project_lead_user_id?: string | null
           title?: string
           updated_at?: string
@@ -4727,6 +4739,16 @@ export type Database = {
         Args: { p_item_id: string; p_job_id: string }
         Returns: Json
       }
+      collect_offer_options: {
+        Args: { p_offer_id: string }
+        Returns: {
+          block_id: string
+          label: string
+          module_id: string
+          option_id: string
+          price: number
+        }[]
+      }
       create_group_with_price_and_parts: {
         Args: {
           p_active?: boolean
@@ -4967,15 +4989,26 @@ export type Database = {
         Args: { p_company_id: string; p_recipient_user_id: string }
         Returns: boolean
       }
-      public_offer_accept: {
-        Args: {
-          p_access_token: string
-          p_first_name: string
-          p_last_name: string
-          p_phone: string
-        }
-        Returns: undefined
-      }
+      public_offer_accept:
+        | {
+            Args: {
+              p_access_token: string
+              p_first_name: string
+              p_last_name: string
+              p_phone: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              p_access_token: string
+              p_first_name: string
+              p_last_name: string
+              p_phone: string
+              p_selected_option_ids?: Json
+            }
+            Returns: undefined
+          }
       public_offer_get: { Args: { p_access_token: string }; Returns: Json }
       public_offer_mark_viewed: {
         Args: { p_access_token: string }
@@ -5030,6 +5063,7 @@ export type Database = {
           email: string
           first_name: string | null
           last_name: string | null
+          last_seen_release_version: string | null
           locale: string | null
           phone: string | null
           preferences: Json | null
@@ -5145,6 +5179,7 @@ export type Database = {
         | "gallery"
         | "column_layout"
         | "file_upload"
+        | "options"
       pretty_module_media_type: "image" | "video" | "link"
       pretty_module_type: "standard" | "timeline"
       pretty_pricing_basis_type: "technical" | "subcontractor" | "custom"
@@ -5393,6 +5428,7 @@ export const Constants = {
         "gallery",
         "column_layout",
         "file_upload",
+        "options",
       ],
       pretty_module_media_type: ["image", "video", "link"],
       pretty_module_type: ["standard", "timeline"],

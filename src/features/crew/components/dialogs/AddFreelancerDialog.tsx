@@ -1,6 +1,8 @@
 import * as React from 'react'
 import { useMutation } from '@tanstack/react-query'
-import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { Button, Dialog, Flex } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { sendWelcomeEmailForPendingInvite } from '@shared/email/supabaseEdgeEmail'
@@ -15,6 +17,18 @@ type AddInviteResult =
       role: 'owner' | 'employee' | 'freelancer' | 'super_user'
     }
 
+const defaultValues = {
+  email: '',
+}
+
+const schema = z.object({
+  email: z
+    .string()
+    .trim()
+    .min(1, 'Email is required')
+    .email('Enter a valid email address'),
+})
+
 export default function AddFreelancerDialog({
   open,
   onOpenChange,
@@ -26,24 +40,34 @@ export default function AddFreelancerDialog({
 }) {
   const { companyId } = useCompany()
   const { info, error, success } = useToast()
-  const [email, setEmail] = React.useState('')
 
-  const normalized = email.trim().toLowerCase()
-  const canSubmit =
-    !!companyId && !!normalized && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await mut.mutateAsync(value.email.trim().toLowerCase())
+    },
+  })
 
-  const mut = useMutation<AddInviteResult, unknown, void>({
-    mutationFn: async () => {
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
+
+  const mut = useMutation<AddInviteResult, unknown, string>({
+    mutationFn: async (email) => {
       if (!companyId) throw new Error('No company selected')
       return await addMemberOrInvite({
         companyId,
-        email: normalized,
+        email,
         role: 'freelancer',
       })
     },
     onSuccess: (res) => {
       const finish = () => {
-        setEmail('')
+        form.reset(defaultValues)
         onOpenChange(false)
         onAdded?.()
       }
@@ -57,13 +81,12 @@ export default function AddFreelancerDialog({
         return
       }
       if (res.type === 'already_member') {
-        info('Already a member', `This user is already in your crew.`)
+        info('Already a member', 'This user is already in your crew.')
         finish()
         return
       }
 
       if (res.type === 'invited') {
-        // New row: trg_pending_invites_send_welcome_email already calls send-welcome-email via pg_net.
         success(
           'Invitation sent',
           'They’ll receive an email with a link to join. They’ll be added when they sign up.',
@@ -72,7 +95,6 @@ export default function AddFreelancerDialog({
         return
       }
 
-      // already_invited: no new INSERT, so the DB trigger does not run — resend from the client.
       void sendWelcomeEmailForPendingInvite(res.pending_invite_id)
         .then((emailRes) => {
           if (emailRes.ok) {
@@ -97,16 +119,10 @@ export default function AddFreelancerDialog({
           finish()
         })
     },
-    onError: (e: any) => {
-      error('Failed', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      error('Failed', e instanceof Error ? e.message : 'Please try again.')
     },
   })
-
-  function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!canSubmit || mut.isPending) return
-    mut.mutate()
-  }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -119,31 +135,36 @@ export default function AddFreelancerDialog({
           join.
         </Dialog.Description>
 
-        <form onSubmit={onSubmit}>
-          <Flex direction="column" gap="3" mt="3">
-            <label>
-              <Text size="2">Email</Text>
-              <TextField.Root
-                type="email"
-                required
-                placeholder="freelancer@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoFocus
-              />
-            </label>
-          </Flex>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="email">
+                {(field) => (
+                  <field.TextField
+                    label="Email"
+                    type="email"
+                    placeholder="freelancer@example.com"
+                    autoComplete="email"
+                  />
+                )}
+              </form.AppField>
+            </Flex>
 
-          <Flex gap="3" justify="end" mt="4">
-            <Dialog.Close>
-              <Button type="button" variant="soft" disabled={mut.isPending}>
-                Cancel
-              </Button>
-            </Dialog.Close>
-            <Button type="submit" disabled={!canSubmit || mut.isPending}>
-              {mut.isPending ? 'Saving…' : 'Add'}
-            </Button>
-          </Flex>
+            <Flex gap="3" justify="end" mt="4">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton label="Add" pendingLabel="Saving…" />
+            </Flex>
+          </form.AppForm>
         </form>
       </Dialog.Content>
     </Dialog.Root>

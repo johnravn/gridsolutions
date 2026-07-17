@@ -1,7 +1,10 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { addDays, startOfMinute } from 'date-fns'
 import { supabase } from '@shared/api/supabase'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
+import { resolveMyJobRole } from '../utils/resolveMyJobRole'
+import type { CompanyRole } from '@shared/auth/permissions'
 import type { UpcomingJob } from '../types'
 
 export function useUpcomingJobs({
@@ -13,19 +16,24 @@ export function useUpcomingJobs({
 }: {
   companyId: string | null
   userId: string | null
-  companyRole: string | null
+  companyRole: CompanyRole | null
   daysFilter: '7' | '14' | '30' | 'all'
   showMyJobsOnly: boolean
 }) {
-  const now = new Date()
   const isFreelancer = companyRole === 'freelancer'
 
-  const dateRangeEnd = React.useMemo(() => {
-    if (daysFilter === 'all') return null
-    const endDate = new Date(now)
-    endDate.setDate(now.getDate() + parseInt(daysFilter, 10))
-    return endDate
-  }, [daysFilter, now])
+  // Stable timestamps so queryKey doesn't change every render (see HomePage conflict range).
+  const { upcomingFrom, now, dateRangeEnd } = React.useMemo(() => {
+    const current = startOfMinute(new Date())
+    return {
+      upcomingFrom: current.toISOString(),
+      now: current,
+      dateRangeEnd:
+        daysFilter === 'all'
+          ? null
+          : addDays(current, parseInt(daysFilter, 10)),
+    }
+  }, [daysFilter])
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
@@ -36,6 +44,7 @@ export function useUpcomingJobs({
       userId: userId ?? null,
       companyRole: companyRole ?? null,
       maxRows: 30,
+      upcomingFrom,
     }),
     enabled: !!companyId,
   })
@@ -118,17 +127,12 @@ export function useUpcomingJobs({
 
   const upcomingJobsWithMyRole = React.useMemo((): Array<UpcomingJob> => {
     return upcomingJobs.map((job) => {
-      const isProjectLead = !!userId && job.project_lead?.user_id === userId
       const isCrew = isFreelancer || crewJobIdSet.has(job.id)
-
-      const my_job_role: UpcomingJob['my_job_role'] = isProjectLead
-        ? isCrew
-          ? 'both'
-          : 'project_lead'
-        : isCrew
-          ? 'crew'
-          : null
-
+      const my_job_role = resolveMyJobRole({
+        userId,
+        projectLeadUserId: job.project_lead?.user_id,
+        isCrew,
+      })
       return { ...job, my_job_role }
     })
   }, [upcomingJobs, crewJobIdSet, userId, isFreelancer])

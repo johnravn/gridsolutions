@@ -16,6 +16,9 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { Car } from 'iconoir-react'
+import { z } from 'zod'
+import { useStore } from '@tanstack/react-form'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import LazyImage from '@shared/ui/components/LazyImage'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -47,6 +50,50 @@ type ReservedVehicleInsert =
 type ViewMode = 'grid' | 'list'
 type OwnerType = VehicleOwnerKind
 
+const defaultValues = {
+  vehicleId: '' as UUID | '',
+  ownerType: 'company' as OwnerType,
+  viewMode: 'grid' as ViewMode,
+  search: '',
+  createNewTimePeriod: false,
+  selectedTimePeriodId: '' as UUID | '',
+  timePeriodStartAt: '',
+  timePeriodEndAt: '',
+  status: 'planned' as ExternalReqStatus,
+  note: '',
+}
+
+const schema = z
+  .object({
+    vehicleId: z.string().min(1, 'Choose a vehicle'),
+    ownerType: z.enum(['company', 'partner', 'person']),
+    viewMode: z.enum(['grid', 'list']),
+    search: z.string(),
+    createNewTimePeriod: z.boolean(),
+    selectedTimePeriodId: z.string(),
+    timePeriodStartAt: z.string(),
+    timePeriodEndAt: z.string(),
+    status: z.enum(['planned', 'requested', 'confirmed']),
+    note: z.string(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.createNewTimePeriod) {
+      if (!data.timePeriodStartAt || !data.timePeriodEndAt) {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Time period dates required',
+          path: ['timePeriodStartAt'],
+        })
+      }
+    } else if (!data.selectedTimePeriodId) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Please select a time period or create a new one',
+        path: ['selectedTimePeriodId'],
+      })
+    }
+  })
+
 export default function BookVehicleDialog({
   open,
   onOpenChange,
@@ -68,31 +115,49 @@ export default function BookVehicleDialog({
   >([])
   const [forceResourceLabel, setForceResourceLabel] = React.useState('')
 
-  // Vehicle selection
-  const [vehicleId, setVehicleId] = React.useState<UUID | ''>('')
-  const [ownerType, setOwnerType] = React.useState<OwnerType>('company')
-  const [viewMode, setViewMode] = React.useState<ViewMode>('grid')
-  const [search, setSearch] = React.useState('')
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async () => {
+      await save.mutateAsync({})
+    },
+  })
 
-  // Time period
-  const [createNewTimePeriod, setCreateNewTimePeriod] = React.useState(false)
-  const [selectedTimePeriodId, setSelectedTimePeriodId] = React.useState<
-    UUID | ''
-  >('')
-  const [timePeriodStartAt, setTimePeriodStartAt] = React.useState<string>('')
-  const [timePeriodEndAt, setTimePeriodEndAt] = React.useState<string>('')
+  React.useEffect(() => {
+    if (open) form.reset(defaultValues, { keepDefaultValues: true })
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
+  }, [open])
 
-  // External fields
-  const [status, setStatus] = React.useState<ExternalReqStatus>('planned')
-  const [note, setNote] = React.useState('')
+  // Subscribe so setFieldValue updates (e.g. createNewTimePeriod) re-render and
+  // re-run the job-date seed effect. Reading form.state.values does not.
+  const vehicleId = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.vehicleId,
+  )
+  const ownerType = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.ownerType,
+  )
+  const search = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.search,
+  )
+  const createNewTimePeriod = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.createNewTimePeriod,
+  )
+  const selectedTimePeriodId = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.selectedTimePeriodId,
+  )
 
-  // Fetch job details
   const { data: job } = useQuery({
     ...jobDetailQuery({ jobId }),
     enabled: open,
   })
 
-  // Fetch vehicles - we need to fetch both internal and external, then filter
   const { data: allVehicles = [] } = useQuery({
     ...vehiclesIndexQuery({
       companyId,
@@ -102,7 +167,6 @@ export default function BookVehicleDialog({
     enabled: open,
   })
 
-  // Filter to active vehicles only and by owner type
   const vehicles = React.useMemo(() => {
     return allVehicles
       .filter((v) => !v.deleted)
@@ -117,7 +181,6 @@ export default function BookVehicleDialog({
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId)
 
-  // Fetch existing transport time periods for the selected vehicle's owner
   const { data: existingTimePeriods = [] } = useQuery({
     queryKey: [
       'jobs',
@@ -129,7 +192,6 @@ export default function BookVehicleDialog({
     queryFn: async () => {
       if (!selectedVehicle || !jobId) return []
 
-      // Get all transport time periods for this job
       const { data: timePeriods, error: tpErr } = await supabase
         .from('time_periods')
         .select('id, title, start_at, end_at')
@@ -143,7 +205,6 @@ export default function BookVehicleDialog({
 
       const timePeriodIds = timePeriods.map((tp) => tp.id)
 
-      // Get vehicles on these time periods
       const { data: reservedVehicles, error: rvErr } = await supabase
         .from('reserved_vehicles')
         .select(
@@ -155,87 +216,72 @@ export default function BookVehicleDialog({
 
       const selectedOwnerKey = vehicleOwnerKey(selectedVehicle)
 
-      // Filter to time periods that have vehicles from the same owner
-      const matchingPeriods = timePeriods.filter((tp) => {
+      return timePeriods.filter((tp) => {
         const vehiclesOnPeriod = reservedVehicles.filter(
-          (rv: any) => rv.time_period_id === tp.id,
+          (rv: { time_period_id: string }) => rv.time_period_id === tp.id,
         )
 
         if (vehiclesOnPeriod.length === 0) return false
 
         const owners = new Set<string>()
-        vehiclesOnPeriod.forEach((rv: any) => {
+        vehiclesOnPeriod.forEach((rv: { vehicle: unknown }) => {
           const vehicle = Array.isArray(rv.vehicle) ? rv.vehicle[0] : rv.vehicle
           if (vehicle) owners.add(vehicleOwnerKey(vehicle))
         })
 
         return owners.size === 1 && owners.has(selectedOwnerKey)
       })
-
-      return matchingPeriods
     },
   })
 
-  // Auto-select existing time period when vehicle is selected
   React.useEffect(() => {
     if (!selectedVehicle) {
-      setSelectedTimePeriodId('')
-      setCreateNewTimePeriod(true)
+      form.setFieldValue('selectedTimePeriodId', '')
+      form.setFieldValue('createNewTimePeriod', true)
       return
     }
 
-    // If no existing time periods, always create new
     if (existingTimePeriods.length === 0) {
-      setSelectedTimePeriodId('')
-      setCreateNewTimePeriod(true)
+      form.setFieldValue('selectedTimePeriodId', '')
+      form.setFieldValue('createNewTimePeriod', true)
       return
     }
 
-    // If time periods exist and we haven't explicitly chosen to create new, use existing
-    if (existingTimePeriods.length > 0 && !createNewTimePeriod) {
-      // Only auto-select if we don't have one selected yet or if the selected one is invalid
+    const values = form.state.values
+    if (existingTimePeriods.length > 0 && !values.createNewTimePeriod) {
       if (
-        !selectedTimePeriodId ||
-        !existingTimePeriods.find((tp) => tp.id === selectedTimePeriodId)
+        !values.selectedTimePeriodId ||
+        !existingTimePeriods.find((tp) => tp.id === values.selectedTimePeriodId)
       ) {
-        setSelectedTimePeriodId(existingTimePeriods[0].id)
-        setTimePeriodStartAt(existingTimePeriods[0].start_at)
-        setTimePeriodEndAt(existingTimePeriods[0].end_at)
+        form.setFieldValue('selectedTimePeriodId', existingTimePeriods[0].id)
+        form.setFieldValue('timePeriodStartAt', existingTimePeriods[0].start_at)
+        form.setFieldValue('timePeriodEndAt', existingTimePeriods[0].end_at)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync time period selection
   }, [selectedVehicle, existingTimePeriods])
 
-  // Set default dates from job when creating new time period
   React.useEffect(() => {
-    if (createNewTimePeriod && job) {
-      if (job.start_at) {
-        setTimePeriodStartAt(job.start_at)
-      }
-      if (job.end_at) {
-        setTimePeriodEndAt(job.end_at)
-      }
-    }
-  }, [createNewTimePeriod, job])
+    if (!open || !createNewTimePeriod || !job) return
+    if (job.start_at) form.setFieldValue('timePeriodStartAt', job.start_at)
+    if (job.end_at) form.setFieldValue('timePeriodEndAt', job.end_at)
+    // Seed when creating a new period or when job times become available.
+    // Do not depend on the whole `job` object — refetches would clobber edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- default dates from job
+  }, [open, createNewTimePeriod, job?.start_at, job?.end_at])
 
-  // Update dates when selected time period changes
   React.useEffect(() => {
-    if (
-      !createNewTimePeriod &&
-      selectedTimePeriodId &&
-      existingTimePeriods.length > 0
-    ) {
-      const selectedPeriod = existingTimePeriods.find(
-        (tp) => tp.id === selectedTimePeriodId,
-      )
-      if (selectedPeriod) {
-        setTimePeriodStartAt(selectedPeriod.start_at)
-        setTimePeriodEndAt(selectedPeriod.end_at)
-        setAutoSetEndTime(false) // Don't auto-set when using existing period
-      }
+    if (createNewTimePeriod || !selectedTimePeriodId) return
+    const selectedPeriod = existingTimePeriods.find(
+      (tp) => tp.id === selectedTimePeriodId,
+    )
+    if (selectedPeriod) {
+      form.setFieldValue('timePeriodStartAt', selectedPeriod.start_at)
+      form.setFieldValue('timePeriodEndAt', selectedPeriod.end_at)
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- sync dates from period
   }, [selectedTimePeriodId, createNewTimePeriod, existingTimePeriods])
 
-  // Generate time period title
   const timePeriodTitle = React.useMemo(() => {
     if (!selectedVehicle) return ''
     if (!selectedVehicle.internally_owned) {
@@ -248,39 +294,24 @@ export default function BookVehicleDialog({
     return `${selectedVehicle.name} Transport period`
   }, [selectedVehicle])
 
-  // Reset when dialog closes
-  React.useEffect(() => {
-    if (!open) {
-      setVehicleId('')
-      setOwnerType('company')
-      setViewMode('grid')
-      setSearch('')
-      setCreateNewTimePeriod(false)
-      setSelectedTimePeriodId('')
-      setTimePeriodStartAt('')
-      setTimePeriodEndAt('')
-      setStatus('planned')
-      setNote('')
-    }
-  }, [open])
-
   const save = useMutation({
     mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
-      if (!vehicleId) throw new Error('Choose a vehicle')
+      const value = form.state.values
+      if (!value.vehicleId) throw new Error('Choose a vehicle')
       if (!job) throw new Error('Job not loaded')
 
-      const selectedV = vehicles.find((v) => v.id === vehicleId)
+      const selectedV = vehicles.find((v) => v.id === value.vehicleId)
       if (!selectedV) throw new Error('Vehicle not found')
 
       let timePeriodId: UUID
-      let windowStart = timePeriodStartAt
-      let windowEnd = timePeriodEndAt
+      let windowStart = value.timePeriodStartAt
+      let windowEnd = value.timePeriodEndAt
 
-      if (createNewTimePeriod) {
-        // Create new time period
+      if (value.createNewTimePeriod) {
         if (!timePeriodTitle) throw new Error('Time period title required')
-        if (!timePeriodStartAt || !timePeriodEndAt)
+        if (!value.timePeriodStartAt || !value.timePeriodEndAt) {
           throw new Error('Time period dates required')
+        }
 
         const { data: newTp, error: createErr } = await supabase
           .from('time_periods')
@@ -288,8 +319,8 @@ export default function BookVehicleDialog({
             job_id: jobId,
             company_id: companyId,
             title: timePeriodTitle,
-            start_at: timePeriodStartAt,
-            end_at: timePeriodEndAt,
+            start_at: value.timePeriodStartAt,
+            end_at: value.timePeriodEndAt,
             category: 'transport',
           })
           .select('id')
@@ -297,11 +328,10 @@ export default function BookVehicleDialog({
         if (createErr) throw createErr
         timePeriodId = newTp.id
       } else {
-        // Use existing time period
-        if (!selectedTimePeriodId) {
+        if (!value.selectedTimePeriodId) {
           throw new Error('Please select a time period or create a new one')
         }
-        timePeriodId = selectedTimePeriodId
+        timePeriodId = value.selectedTimePeriodId
         const window = await getTimePeriodWindow(timePeriodId)
         if (!window) throw new Error('Time period not found')
         windowStart = window.startAt
@@ -310,7 +340,7 @@ export default function BookVehicleDialog({
 
       if (!force && windowStart && windowEnd) {
         const overlaps = await findVehicleOverlaps({
-          vehicleId,
+          vehicleId: value.vehicleId,
           startAt: windowStart,
           endAt: windowEnd,
         })
@@ -324,7 +354,7 @@ export default function BookVehicleDialog({
 
       const payload: ReservedVehicleInsert = {
         time_period_id: timePeriodId,
-        vehicle_id: vehicleId,
+        vehicle_id: value.vehicleId,
       }
 
       if (force && authUserId) {
@@ -332,9 +362,9 @@ export default function BookVehicleDialog({
       }
 
       if (!selectedV.internally_owned) {
-        payload.external_status = status
-        if (note.trim()) {
-          payload.external_note = note.trim()
+        payload.external_status = value.status
+        if (value.note.trim()) {
+          payload.external_note = value.note.trim()
         }
       }
 
@@ -347,11 +377,12 @@ export default function BookVehicleDialog({
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
       await qc.invalidateQueries({ queryKey: ['conflicts'] })
       success('Success', 'Vehicle booked successfully')
+      form.reset(defaultValues, { keepDefaultValues: true })
       onOpenChange(false)
     },
-    onError: (err: any) => {
-      if (err?.message === 'OVERLAP_NEEDS_FORCE') return
-      const msg = err?.message ?? 'Please try again.'
+    onError: (err: Error) => {
+      if (err.message === 'OVERLAP_NEEDS_FORCE') return
+      const msg = err.message || 'Please try again.'
       const isOverlap = isVehicleOverlapError(msg)
       if (isOverlap && !forceDialogOpen) {
         setForceResourceLabel(selectedVehicle?.name ?? 'Vehicle')
@@ -380,204 +411,260 @@ export default function BookVehicleDialog({
             period.
           </Dialog.Description>
 
-          <Flex direction="column" gap="4" mt="4" style={{ overflowY: 'auto' }}>
-            {/* Vehicle Selection */}
-            <Box>
-              <Flex align="center" justify="between" mb="3" wrap="wrap" gap="3">
-                <Text size="3" weight="medium">
-                  Select Vehicle
-                </Text>
-                <Flex align="center" gap="3" wrap="wrap">
-                  <SegmentedControl.Root
-                    value={ownerType}
-                    onValueChange={(v) => {
-                      setOwnerType(v as OwnerType)
-                      setVehicleId('')
-                    }}
-                  >
-                    <SegmentedControl.Item value="company">
-                      Company
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="partner">
-                      Partner
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="person">
-                      Personal
-                    </SegmentedControl.Item>
-                  </SegmentedControl.Root>
-
-                  <SegmentedControl.Root
-                    value={viewMode}
-                    onValueChange={(v) => setViewMode(v as ViewMode)}
-                  >
-                    <SegmentedControl.Item value="grid">
-                      Grid
-                    </SegmentedControl.Item>
-                    <SegmentedControl.Item value="list">
-                      List
-                    </SegmentedControl.Item>
-                  </SegmentedControl.Root>
-                </Flex>
-              </Flex>
-
-              <TextField.Root
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search vehicles…"
-                size="2"
-                mb="3"
-              />
-
-              <Box style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                {viewMode === 'grid' ? (
-                  <VehicleGrid
-                    vehicles={vehicles}
-                    selectedId={vehicleId}
-                    onSelect={setVehicleId}
-                  />
-                ) : (
-                  <VehicleList
-                    vehicles={vehicles}
-                    selectedId={vehicleId}
-                    onSelect={setVehicleId}
-                  />
-                )}
-              </Box>
-            </Box>
-
-            <Separator />
-
-            {/* Time Period Selection */}
-            {vehicleId && (
-              <Box>
-                <Text size="3" weight="medium" mb="3">
-                  Time Period
-                </Text>
-
-                {existingTimePeriods.length > 0 && !createNewTimePeriod ? (
-                  <>
-                    <Text size="2" color="gray" mb="2">
-                      Existing time period for this owner found. Use it or
-                      create a new one.
-                    </Text>
-                    <Select.Root
-                      value={selectedTimePeriodId}
-                      onValueChange={setSelectedTimePeriodId}
-                    >
-                      <Select.Trigger placeholder="Select time period…" />
-                      <Select.Content style={{ zIndex: 10000 }}>
-                        {existingTimePeriods.map((tp) => (
-                          <Select.Item key={tp.id} value={tp.id}>
-                            {tp.title || 'Untitled'} (
-                            {new Date(tp.start_at).toLocaleString()} -{' '}
-                            {new Date(tp.end_at).toLocaleString()})
-                          </Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Root>
-                    <Button
-                      variant="ghost"
-                      size="2"
-                      mt="2"
-                      onClick={() => {
-                        setCreateNewTimePeriod(true)
-                        setSelectedTimePeriodId('')
-                      }}
-                    >
-                      Create new time period
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Box
-                      p="2"
-                      style={{
-                        border: '1px solid var(--gray-a5)',
-                        borderRadius: 8,
-                        background: 'var(--gray-a2)',
-                        marginBottom: '16px',
-                      }}
-                    >
-                      <Text size="2" weight="medium">
-                        {timePeriodTitle || '—'}
-                      </Text>
-                    </Box>
-
-                    <DateTimeRangePicker
-                      startAt={timePeriodStartAt}
-                      endAt={timePeriodEndAt}
-                      onChange={({ startAt: s, endAt: e }) => {
-                        setTimePeriodStartAt(s)
-                        setTimePeriodEndAt(e)
-                      }}
-                    />
-                  </>
-                )}
-              </Box>
-            )}
-
-            {/* External Fields */}
-            {vehicleId && isExternal && (
-              <>
-                <Separator />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Flex
+                direction="column"
+                gap="4"
+                mt="4"
+                style={{ overflowY: 'auto' }}
+              >
                 <Box>
-                  <Text size="3" weight="medium" mb="3">
-                    External Details
-                  </Text>
-                  <Box mb="3">
-                    <Text size="2" weight="medium" mb="2" as="div">
-                      Status
+                  <Flex
+                    align="center"
+                    justify="between"
+                    mb="3"
+                    wrap="wrap"
+                    gap="3"
+                  >
+                    <Text size="3" weight="medium">
+                      Select Vehicle
                     </Text>
-                    <SegmentedControl.Root
-                      size="2"
-                      value={status}
-                      onValueChange={(v) => setStatus(v as ExternalReqStatus)}
+                    <Flex align="center" gap="3" wrap="wrap">
+                      <form.AppField name="ownerType">
+                        {(field) => (
+                          <SegmentedControl.Root
+                            value={field.state.value}
+                            onValueChange={(v) => {
+                              field.handleChange(v as OwnerType)
+                              form.setFieldValue('vehicleId', '')
+                            }}
+                          >
+                            <SegmentedControl.Item value="company">
+                              Company
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item value="partner">
+                              Partner
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item value="person">
+                              Personal
+                            </SegmentedControl.Item>
+                          </SegmentedControl.Root>
+                        )}
+                      </form.AppField>
+
+                      <form.AppField name="viewMode">
+                        {(field) => (
+                          <SegmentedControl.Root
+                            value={field.state.value}
+                            onValueChange={(v) =>
+                              field.handleChange(v as ViewMode)
+                            }
+                          >
+                            <SegmentedControl.Item value="grid">
+                              Grid
+                            </SegmentedControl.Item>
+                            <SegmentedControl.Item value="list">
+                              List
+                            </SegmentedControl.Item>
+                          </SegmentedControl.Root>
+                        )}
+                      </form.AppField>
+                    </Flex>
+                  </Flex>
+
+                  <form.AppField name="search">
+                    {(field) => (
+                      <TextField.Root
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                        placeholder="Search vehicles…"
+                        size="2"
+                        mb="3"
+                      />
+                    )}
+                  </form.AppField>
+
+                  <Box style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    <form.Subscribe
+                      selector={(state) => [
+                        state.values.viewMode,
+                        state.values.vehicleId,
+                      ]}
                     >
-                      <SegmentedControl.Item value="planned">
-                        Planned
-                      </SegmentedControl.Item>
-                      <SegmentedControl.Item value="requested">
-                        Requested
-                      </SegmentedControl.Item>
-                      <SegmentedControl.Item value="confirmed">
-                        Confirmed
-                      </SegmentedControl.Item>
-                    </SegmentedControl.Root>
-                  </Box>
-                  <Box>
-                    <Text size="2" weight="medium" mb="2" as="div">
-                      Note
-                    </Text>
-                    <TextField.Root
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                      placeholder="Optional note…"
-                    />
+                      {([viewMode, selectedId]) =>
+                        viewMode === 'grid' ? (
+                          <VehicleGrid
+                            vehicles={vehicles}
+                            selectedId={selectedId}
+                            onSelect={(id) =>
+                              form.setFieldValue('vehicleId', id)
+                            }
+                          />
+                        ) : (
+                          <VehicleList
+                            vehicles={vehicles}
+                            selectedId={selectedId}
+                            onSelect={(id) =>
+                              form.setFieldValue('vehicleId', id)
+                            }
+                          />
+                        )
+                      }
+                    </form.Subscribe>
                   </Box>
                 </Box>
-              </>
-            )}
 
-            {/* Actions */}
-            <Flex justify="end" gap="2" mt="4">
-              <Dialog.Close>
-                <Button variant="soft">Cancel</Button>
-              </Dialog.Close>
-              <Button
-                variant="solid"
-                onClick={() => save.mutate({})}
-                disabled={
-                  save.isPending ||
-                  !vehicleId ||
-                  (!createNewTimePeriod && !selectedTimePeriodId) ||
-                  (createNewTimePeriod &&
-                    (!timePeriodStartAt || !timePeriodEndAt))
-                }
-              >
-                {save.isPending ? 'Saving…' : 'Book vehicle'}
-              </Button>
-            </Flex>
-          </Flex>
+                <Separator />
+
+                {vehicleId && (
+                  <Box>
+                    <Text size="3" weight="medium" mb="3">
+                      Time Period
+                    </Text>
+
+                    {existingTimePeriods.length > 0 && !createNewTimePeriod ? (
+                      <>
+                        <Text size="2" color="gray" mb="2">
+                          Existing time period for this owner found. Use it or
+                          create a new one.
+                        </Text>
+                        <form.AppField name="selectedTimePeriodId">
+                          {(field) => (
+                            <Select.Root
+                              value={field.state.value}
+                              onValueChange={field.handleChange}
+                            >
+                              <Select.Trigger placeholder="Select time period…" />
+                              <Select.Content style={{ zIndex: 10000 }}>
+                                {existingTimePeriods.map((tp) => (
+                                  <Select.Item key={tp.id} value={tp.id}>
+                                    {tp.title || 'Untitled'} (
+                                    {new Date(tp.start_at).toLocaleString()} -{' '}
+                                    {new Date(tp.end_at).toLocaleString()})
+                                  </Select.Item>
+                                ))}
+                              </Select.Content>
+                            </Select.Root>
+                          )}
+                        </form.AppField>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="2"
+                          mt="2"
+                          onClick={() => {
+                            form.setFieldValue('createNewTimePeriod', true)
+                            form.setFieldValue('selectedTimePeriodId', '')
+                          }}
+                        >
+                          Create new time period
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Box
+                          p="2"
+                          style={{
+                            border: '1px solid var(--gray-a5)',
+                            borderRadius: 8,
+                            background: 'var(--gray-a2)',
+                            marginBottom: '16px',
+                          }}
+                        >
+                          <Text size="2" weight="medium">
+                            {timePeriodTitle || '—'}
+                          </Text>
+                        </Box>
+
+                        <form.Subscribe
+                          selector={(state) => [
+                            state.values.timePeriodStartAt,
+                            state.values.timePeriodEndAt,
+                          ]}
+                        >
+                          {([startAt, endAt]) => (
+                            <DateTimeRangePicker
+                              startAt={startAt}
+                              endAt={endAt}
+                              onChange={({ startAt: s, endAt: e }) => {
+                                form.setFieldValue('timePeriodStartAt', s)
+                                form.setFieldValue('timePeriodEndAt', e)
+                              }}
+                            />
+                          )}
+                        </form.Subscribe>
+                      </>
+                    )}
+                  </Box>
+                )}
+
+                {vehicleId && isExternal && (
+                  <>
+                    <Separator />
+                    <Box>
+                      <Text size="3" weight="medium" mb="3">
+                        External Details
+                      </Text>
+                      <Box mb="3">
+                        <Text size="2" weight="medium" mb="2" as="div">
+                          Status
+                        </Text>
+                        <form.AppField name="status">
+                          {(field) => (
+                            <SegmentedControl.Root
+                              size="2"
+                              value={field.state.value}
+                              onValueChange={(v) =>
+                                field.handleChange(v as ExternalReqStatus)
+                              }
+                            >
+                              <SegmentedControl.Item value="planned">
+                                Planned
+                              </SegmentedControl.Item>
+                              <SegmentedControl.Item value="requested">
+                                Requested
+                              </SegmentedControl.Item>
+                              <SegmentedControl.Item value="confirmed">
+                                Confirmed
+                              </SegmentedControl.Item>
+                            </SegmentedControl.Root>
+                          )}
+                        </form.AppField>
+                      </Box>
+                      <form.AppField name="note">
+                        {(field) => (
+                          <field.TextField
+                            label="Note"
+                            placeholder="Optional note…"
+                          />
+                        )}
+                      </form.AppField>
+                    </Box>
+                  </>
+                )}
+
+                <Flex justify="end" gap="2" mt="4">
+                  <Dialog.Close>
+                    <Button type="button" variant="soft">
+                      Cancel
+                    </Button>
+                  </Dialog.Close>
+                  <form.SubmitButton
+                    label="Book vehicle"
+                    pendingLabel="Saving…"
+                  />
+                </Flex>
+              </Flex>
+            </form.AppForm>
+          </form>
         </Dialog.Content>
       </Dialog.Root>
 
@@ -593,7 +680,6 @@ export default function BookVehicleDialog({
   )
 }
 
-// Vehicle Grid Component
 function VehicleGrid({
   vehicles,
   selectedId,
@@ -726,7 +812,6 @@ function VehicleCard({
   )
 }
 
-// Vehicle List Component
 function VehicleList({
   vehicles,
   selectedId,

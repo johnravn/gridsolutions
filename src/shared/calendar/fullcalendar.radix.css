@@ -17,10 +17,18 @@
 }
 
 /* Container */
+.companyCalendar {
+  min-height: 0;
+}
+
 .companyCalendar .fc,
 .jobCalendar .fc {
   font-family: inherit;
   color: var(--gray-12);
+}
+
+.companyCalendar .fc {
+  height: 100%;
 }
 
 /* Toolbar */
@@ -100,7 +108,7 @@
 .companyCalendar .fc .fc-event .fc-event-main,
 .jobCalendar .fc .fc-event .fc-event-main {
   padding: 3px 4px;
-  font-size: 11px;
+  font-size: var(--font-size-1);
   line-height: 1.25;
   overflow: hidden;
   min-width: 0;
@@ -155,7 +163,7 @@
 }
 .companyCalendar .fc .fc-list-event,
 .jobCalendar .fc .fc-list-event {
-  font-size: 11px;
+  font-size: var(--font-size-1);
 }
 .companyCalendar .fc .fc-list-event td,
 .jobCalendar .fc .fc-list-event td {
@@ -164,9 +172,9 @@
 }
 .companyCalendar .fc .fc-list-event-time,
 .jobCalendar .fc .fc-list-event-time {
-  font-size: 11px;
+  font-size: var(--font-size-1);
 }
 .companyCalendar .fc .fc-list-event-title,
 .jobCalendar .fc .fc-list-event-title {
-  font-size: 11px;
+  font-size: var(--font-size-1);
 }

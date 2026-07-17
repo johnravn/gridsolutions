@@ -19,6 +19,7 @@ import { getInitials } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import {
   useTabKeyboardScopeProps,
   useTabKeyboardShortcuts,
@@ -212,12 +213,12 @@ export default function RecurringJobInspector({
       <Separator size="4" mb="3" />
 
       <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
-        <Tabs.List mb="3" wrap="wrap">
+        <AnimatedTabsList mb="3" wrap="wrap">
           <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
           <Tabs.Trigger value="jobs">Jobs</Tabs.Trigger>
           <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
           <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
-        </Tabs.List>
+        </AnimatedTabsList>
 
         <Tabs.Content value="overview">
           <RecurringOverviewTab detail={data} onSelectJob={onSelectJob} />

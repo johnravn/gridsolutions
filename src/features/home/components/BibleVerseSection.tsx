@@ -4,7 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 
-export function BibleVerseSection() {
+export function BibleVerseSection({
+  presentation = 'desktop',
+}: {
+  presentation?: 'desktop' | 'mobile'
+}) {
   const todayKey = new Date().toISOString().slice(0, 10)
   const langPreference = 'en'
 
@@ -37,7 +41,8 @@ export function BibleVerseSection() {
     <DashboardCard
       title="Today's Bible verse"
       icon={<QuoteIcon width={18} height={18} />}
-      notFullHeight
+      notFullHeight={presentation === 'mobile'}
+      variant={presentation === 'mobile' ? 'plain' : 'card'}
     >
       {isLoading ? (
         <DashboardCardSkeleton rowCount={2} compact />

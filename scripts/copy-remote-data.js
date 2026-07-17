@@ -107,22 +107,33 @@ async function copyData() {
     return
   }
 
-  // Step 1b: Transform remote dump when local schema is ahead (item_kind vs ownership)
+  // Step 1b: Transform remote dump when local schema is ahead of production
   log('1️⃣b Transforming dump for local schema...', 'cyan')
   const rawDump = readFileSync(tempFile, 'utf8')
   const {
     sql: transformedDump,
     transformed,
     subrentalItems,
+    droppedThemeScaling,
+    companiesOnConflict,
   } = transformRemoteDataDump(rawDump)
   writeFileSync(tempFile, transformedDump, 'utf8')
   if (transformed) {
-    log(
-      `   ✅ Mapped internally_owned → item_kind (stock/subrental); ${subrentalItems} subrental item(s) tracked for reservation backfill`,
-      'green',
-    )
+    const parts = []
+    if (subrentalItems > 0 || rawDump.includes('internally_owned')) {
+      parts.push(
+        `mapped internally_owned → item_kind (${subrentalItems} subrental item(s) for reservation backfill)`,
+      )
+    }
+    if (droppedThemeScaling) {
+      parts.push('dropped companies.theme_scaling')
+    }
+    if (companiesOnConflict) {
+      parts.push('companies INSERT uses ON CONFLICT (id) DO NOTHING')
+    }
+    log(`   ✅ ${parts.join('; ') || 'Applied schema transforms'}`, 'green')
   } else {
-    log('   ℹ️  No ownership → item_kind transform needed', 'cyan')
+    log('   ℹ️  No schema transforms needed', 'cyan')
   }
 
   const needsOfferBasisBackfill = remoteDumpUsesLegacyOfferSchema(rawDump)

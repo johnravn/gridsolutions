@@ -1,0 +1,79 @@
+/*
+ * Apple density tokens
+ *
+ * Remaps Radix --font-size-* / --line-height-* so size="3" = body on both platforms.
+ * ≥1024px  → macOS HIG density (body 13px)
+ * <1024px  → iOS HIG density (body 17px)
+ *
+ * Absolute px (not scaled) so density stays fixed after company scaling removal.
+ */
+
+.radix-themes {
+  /* Mac — caption → hero */
+  --font-size-1: 10px;
+  --font-size-2: 12px;
+  --font-size-3: 13px;
+  --font-size-4: 15px;
+  --font-size-5: 17px;
+  --font-size-6: 22px;
+  --font-size-7: 26px;
+  --font-size-8: 28px;
+  --font-size-9: 34px;
+
+  --line-height-1: 13px;
+  --line-height-2: 16px;
+  --line-height-3: 17px;
+  --line-height-4: 20px;
+  --line-height-5: 22px;
+  --line-height-6: 28px;
+  --line-height-7: 32px;
+  --line-height-8: 34px;
+  --line-height-9: 41px;
+
+  --heading-line-height-1: 13px;
+  --heading-line-height-2: 16px;
+  --heading-line-height-3: 17px;
+  --heading-line-height-4: 20px;
+  --heading-line-height-5: 22px;
+  --heading-line-height-6: 28px;
+  --heading-line-height-7: 32px;
+  --heading-line-height-8: 34px;
+  --heading-line-height-9: 41px;
+
+  --default-font-size: var(--font-size-3);
+}
+
+@media (max-width: 1023px) {
+  .radix-themes {
+    /* iOS — caption → hero */
+    --font-size-1: 12px;
+    --font-size-2: 15px;
+    --font-size-3: 17px;
+    --font-size-4: 20px;
+    --font-size-5: 22px;
+    --font-size-6: 28px;
+    --font-size-7: 34px;
+    --font-size-8: 36px;
+    --font-size-9: 40px;
+
+    --line-height-1: 16px;
+    --line-height-2: 20px;
+    --line-height-3: 22px;
+    --line-height-4: 24px;
+    --line-height-5: 28px;
+    --line-height-6: 34px;
+    --line-height-7: 41px;
+    --line-height-8: 43px;
+    --line-height-9: 48px;
+
+    --heading-line-height-1: 16px;
+    --heading-line-height-2: 20px;
+    --heading-line-height-3: 22px;
+    --heading-line-height-4: 24px;
+    --heading-line-height-5: 28px;
+    --heading-line-height-6: 34px;
+    --heading-line-height-7: 41px;
+    --heading-line-height-8: 43px;
+    --heading-line-height-9: 48px;
+  }
+}

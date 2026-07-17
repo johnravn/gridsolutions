@@ -1,8 +1,10 @@
 // src/features/login/pages/SignupPage.tsx
 import * as React from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
-import { supabase } from '@shared/api/supabase'
+import { z } from 'zod'
 import { isValidPhoneNumber } from 'react-phone-number-input' // ✅ add this
+import { useAppForm } from '@shared/form'
+import { supabase } from '@shared/api/supabase'
 import { PhoneInputField } from '@shared/phone/PhoneInputField' // ✅ add this
 import {
   Box,
@@ -13,7 +15,6 @@ import {
   Heading,
   Separator,
   Text,
-  TextField,
 } from '@radix-ui/themes'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
 
@@ -51,17 +52,88 @@ const PASSWORD_REQUIREMENTS: Array<PasswordRequirement> = [
   },
 ]
 
+const defaultValues = {
+  firstName: '',
+  lastName: '',
+  phone: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+}
+
+const schema = z
+  .object({
+    firstName: z.string().trim().min(1, 'First name is required'),
+    lastName: z.string().trim().min(1, 'Last name is required'),
+    phone: z
+      .string()
+      .min(1, 'Please enter a valid phone number')
+      .refine(
+        (v) => isValidPhoneNumber(v),
+        'Please enter a valid phone number',
+      ),
+    email: z.string().trim().min(1, 'Email is required'),
+    password: z.string().min(1, 'Password is required'),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.password === v.confirmPassword, {
+    message: 'Passwords do not match',
+    path: ['confirmPassword'],
+  })
+
 export default function SignupPage() {
   const navigate = useNavigate()
-  const [firstName, setFirstName] = React.useState('')
-  const [lastName, setLastName] = React.useState('')
-  const [phone, setPhone] = React.useState<string | undefined>(undefined) // ✅ allow undefined
-  const [email, setEmail] = React.useState('')
-  const [password, setPassword] = React.useState('')
-  const [confirmPassword, setConfirmPassword] = React.useState('')
-  const [loading, setLoading] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
   const [info, setInfo] = React.useState<string | null>(null)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      setError(null)
+      setInfo(null)
+
+      try {
+        const { error: signUpErr } = await supabase.auth.signUp({
+          email: value.email,
+          password: value.password,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
+            data: {
+              full_name: `${value.firstName} ${value.lastName}`.trim(),
+              first_name: value.firstName,
+              last_name: value.lastName,
+              phone: value.phone,
+            },
+          },
+        })
+        if (signUpErr) throw signUpErr
+      } catch (err: any) {
+        console.error('signUp failed:', {
+          message: err?.message,
+          status: err?.status,
+          name: err?.name,
+        })
+        setError(err?.message ?? 'Sign up failed')
+        return
+      }
+
+      // If a session exists immediately (email confirmation OFF),
+      // we can upsert into public.profiles right now.
+      const { data: sessionData } = await supabase.auth.getSession()
+      if (sessionData.session?.user) {
+        navigate({ to: '/dashboard' })
+        return
+      }
+
+      // If no session yet (email confirmation ON), show next steps.
+      setInfo(
+        'Check your email to confirm your account. Your profile will be created after confirmation.',
+      )
+    },
+  })
 
   // Prevent body scroll and padding issues
   React.useEffect(() => {
@@ -92,76 +164,6 @@ export default function SignupPage() {
       document.documentElement.style.margin = originalHtmlStyle.margin
     }
   }, [])
-
-  const passwordRequirements = React.useMemo(() => {
-    return PASSWORD_REQUIREMENTS.map((req) => ({
-      ...req,
-      satisfied: req.check(password),
-    }))
-  }, [password])
-
-  const passwordsMatch = React.useMemo(() => {
-    if (!password || !confirmPassword) return null
-    return password === confirmPassword
-  }, [password, confirmPassword])
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError(null)
-    setInfo(null)
-
-    if (!phone || !isValidPhoneNumber(phone)) {
-      setError('Please enter a valid phone number')
-      return
-    }
-
-    if (password !== confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const { error: signUpErr } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-          data: {
-            full_name: `${firstName} ${lastName}`.trim(),
-            first_name: firstName,
-            last_name: lastName,
-            phone,
-          },
-        },
-      })
-      if (signUpErr) throw signUpErr
-    } catch (err: any) {
-      console.error('signUp failed:', {
-        message: err?.message,
-        status: err?.status,
-        name: err?.name,
-      })
-      setLoading(false)
-      setError(err?.message ?? 'Sign up failed')
-      return
-    }
-
-    // 2) If a session exists immediately (email confirmation OFF),
-    //    we can upsert into public.profiles right now.
-    const { data: sessionData } = await supabase.auth.getSession()
-    if (sessionData.session?.user) {
-      setLoading(false)
-      navigate({ to: '/dashboard' })
-      return
-    }
-
-    // 3) If no session yet (email confirmation ON), show next steps.
-    setLoading(false)
-    setInfo(
-      'Check your email to confirm your account. Your profile will be created after confirmation.',
-    )
-  }
 
   return (
     <Box
@@ -201,199 +203,195 @@ export default function SignupPage() {
 
           <Separator size="4" />
 
-          <form onSubmit={onSubmit}>
-            <Flex direction="column" gap="3">
-              <Flex gap="3" wrap="wrap">
-                <Box style={{ flex: 1, minWidth: 180 }}>
-                  <Text
-                    as="label"
-                    size="2"
-                    color="gray"
-                    mb="1"
-                    style={{ display: 'block' }}
-                  >
-                    First name
-                  </Text>
-                  <TextField.Root
-                    placeholder="First name"
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    required
-                    size="3"
-                  />
-                </Box>
-                <Box style={{ flex: 1, minWidth: 180 }}>
-                  <Text
-                    as="label"
-                    size="2"
-                    color="gray"
-                    mb="1"
-                    style={{ display: 'block' }}
-                  >
-                    Last name
-                  </Text>
-                  <TextField.Root
-                    placeholder="Last name"
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    required
-                    size="3"
-                  />
-                </Box>
-              </Flex>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              void form.handleSubmit()
+            }}
+          >
+            <form.AppForm>
+              <Flex direction="column" gap="3">
+                <Flex gap="3" wrap="wrap">
+                  <Box style={{ flex: 1, minWidth: 180 }}>
+                    <form.AppField name="firstName">
+                      {(field) => (
+                        <field.TextField
+                          label="First name"
+                          placeholder="First name"
+                        />
+                      )}
+                    </form.AppField>
+                  </Box>
+                  <Box style={{ flex: 1, minWidth: 180 }}>
+                    <form.AppField name="lastName">
+                      {(field) => (
+                        <field.TextField
+                          label="Last name"
+                          placeholder="Last name"
+                        />
+                      )}
+                    </form.AppField>
+                  </Box>
+                </Flex>
 
-              <Box>
-                <Text
-                  as="label"
-                  size="2"
-                  color="gray"
-                  mb="1"
-                  style={{ display: 'block' }}
-                >
-                  Phone number
-                </Text>
-                <PhoneInputField
-                  id="signup-phone"
-                  value={phone}
-                  onChange={setPhone}
-                  defaultCountry="NO"
-                  placeholder="Enter phone number"
-                  disabled={loading}
-                />
-              </Box>
+                <form.AppField name="phone">
+                  {(field) => (
+                    <form.Subscribe selector={(state) => state.isSubmitting}>
+                      {(isSubmitting) => (
+                        <Box>
+                          <Text
+                            as="label"
+                            size="2"
+                            color="gray"
+                            mb="1"
+                            style={{ display: 'block' }}
+                          >
+                            Phone number
+                          </Text>
+                          <PhoneInputField
+                            id="signup-phone"
+                            value={field.state.value || undefined}
+                            onChange={(v) => field.handleChange(v ?? '')}
+                            defaultCountry="NO"
+                            placeholder="Enter phone number"
+                            disabled={isSubmitting}
+                          />
+                        </Box>
+                      )}
+                    </form.Subscribe>
+                  )}
+                </form.AppField>
 
-              <Box>
-                <Text
-                  as="label"
-                  size="2"
-                  color="gray"
-                  mb="1"
-                  style={{ display: 'block' }}
-                >
-                  Email
-                </Text>
-                <TextField.Root
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  autoComplete="email"
-                  required
-                  size="3"
-                />
-              </Box>
+                <form.AppField name="email">
+                  {(field) => (
+                    <field.TextField
+                      label="Email"
+                      type="email"
+                      placeholder="you@company.com"
+                      autoComplete="email"
+                    />
+                  )}
+                </form.AppField>
 
-              <Box>
-                <Text
-                  as="label"
-                  size="2"
-                  color="gray"
-                  mb="1"
-                  style={{ display: 'block' }}
-                >
-                  Password
-                </Text>
-                <TextField.Root
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  autoComplete="new-password"
-                  required
-                  size="3"
-                />
-                {password && (
-                  <Box
-                    mt="2"
-                    style={{
-                      padding: '12px',
-                      background: 'var(--gray-2)',
-                      borderRadius: '6px',
-                    }}
-                  >
-                    <Text
-                      size="2"
-                      weight="medium"
-                      mb="2"
-                      style={{ display: 'block' }}
-                    >
-                      Password requirements:
-                    </Text>
-                    <Flex direction="column" gap="1">
-                      {passwordRequirements.map((req) => (
-                        <Flex key={req.id} align="center" gap="2">
-                          <Checkbox checked={req.satisfied} disabled />
+                <Box>
+                  <form.AppField name="password">
+                    {(field) => (
+                      <field.TextField
+                        label="Password"
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                      />
+                    )}
+                  </form.AppField>
+                  <form.Subscribe selector={(state) => state.values.password}>
+                    {(password) =>
+                      password && (
+                        <Box
+                          mt="2"
+                          style={{
+                            padding: '12px',
+                            background: 'var(--gray-2)',
+                            borderRadius: '6px',
+                          }}
+                        >
                           <Text
                             size="2"
-                            style={{
-                              color: req.satisfied
-                                ? 'var(--green-11)'
-                                : 'var(--gray-11)',
-                              textDecoration: req.satisfied
-                                ? 'line-through'
-                                : 'none',
-                            }}
+                            weight="medium"
+                            mb="2"
+                            style={{ display: 'block' }}
                           >
-                            {req.label}
+                            Password requirements:
                           </Text>
-                        </Flex>
-                      ))}
-                    </Flex>
-                  </Box>
-                )}
-              </Box>
+                          <Flex direction="column" gap="1">
+                            {PASSWORD_REQUIREMENTS.map((req) => {
+                              const satisfied = req.check(password)
+                              return (
+                                <Flex key={req.id} align="center" gap="2">
+                                  <Checkbox checked={satisfied} disabled />
+                                  <Text
+                                    size="2"
+                                    style={{
+                                      color: satisfied
+                                        ? 'var(--green-11)'
+                                        : 'var(--gray-11)',
+                                      textDecoration: satisfied
+                                        ? 'line-through'
+                                        : 'none',
+                                    }}
+                                  >
+                                    {req.label}
+                                  </Text>
+                                </Flex>
+                              )
+                            })}
+                          </Flex>
+                        </Box>
+                      )
+                    }
+                  </form.Subscribe>
+                </Box>
 
-              <Box>
-                <Text
-                  as="label"
-                  size="2"
-                  color="gray"
-                  mb="1"
-                  style={{ display: 'block' }}
-                >
-                  Confirm password
-                </Text>
-                <TextField.Root
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  autoComplete="new-password"
-                  required
-                  size="3"
-                />
-                {passwordsMatch !== null && (
-                  <Box mt="2">
-                    {passwordsMatch ? (
-                      <Text size="2" color="green">
-                        ✓ Passwords match
-                      </Text>
-                    ) : (
-                      <Text size="2" color="red">
-                        ✗ Passwords do not match
-                      </Text>
+                <Box>
+                  <form.AppField name="confirmPassword">
+                    {(field) => (
+                      <field.TextField
+                        label="Confirm password"
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                      />
                     )}
-                  </Box>
-                )}
-              </Box>
+                  </form.AppField>
+                  <form.Subscribe
+                    selector={(state) => [
+                      state.values.password,
+                      state.values.confirmPassword,
+                    ]}
+                  >
+                    {([password, confirmPassword]) =>
+                      password &&
+                      confirmPassword && (
+                        <Box mt="2">
+                          {password === confirmPassword ? (
+                            <Text size="2" color="green">
+                              ✓ Passwords match
+                            </Text>
+                          ) : (
+                            <Text size="2" color="red">
+                              ✗ Passwords do not match
+                            </Text>
+                          )}
+                        </Box>
+                      )
+                    }
+                  </form.Subscribe>
+                </Box>
 
-              {error && <Text color="red">{error}</Text>}
-              {info && <Text color="green">{info}</Text>}
+                {error && <Text color="red">{error}</Text>}
+                {info && <Text color="green">{info}</Text>}
 
-              <Button type="submit" size="2" disabled={loading} variant="solid">
-                {loading ? 'Creating account…' : 'Create account'}
-              </Button>
+                <form.SubmitButton
+                  label="Create account"
+                  pendingLabel="Creating account…"
+                />
 
-              <Button
-                type="button"
-                variant="outline"
-                size="2"
-                onClick={() => navigate({ to: '/login' })}
-                disabled={loading}
-              >
-                Back to sign in
-              </Button>
-            </Flex>
+                <form.Subscribe selector={(state) => state.isSubmitting}>
+                  {(isSubmitting) => (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="2"
+                      onClick={() => navigate({ to: '/login' })}
+                      disabled={isSubmitting}
+                    >
+                      Back to sign in
+                    </Button>
+                  )}
+                </form.Subscribe>
+              </Flex>
+            </form.AppForm>
           </form>
 
           <Text size="2" color="gray">

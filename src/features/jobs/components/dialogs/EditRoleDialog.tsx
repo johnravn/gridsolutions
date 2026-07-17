@@ -1,6 +1,8 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
@@ -12,6 +14,32 @@ type InitialRole = {
   end_at: string | null
   needed_count: number | null
   role_category: string | null
+}
+
+const defaultValues = {
+  title: '',
+  needed: 1,
+  startAt: '',
+  endAt: '',
+  roleCategory: '',
+}
+
+const schema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  needed: z.number().min(1, 'At least one person is required'),
+  startAt: z.string().min(1, 'Start date is required'),
+  endAt: z.string().min(1, 'End date is required'),
+  roleCategory: z.string(),
+})
+
+function buildValuesFromInitial(initial: InitialRole): typeof defaultValues {
+  return {
+    title: initial.title ?? '',
+    needed: initial.needed_count ?? 1,
+    startAt: initial.start_at ?? '',
+    endAt: initial.end_at ?? '',
+    roleCategory: initial.role_category ?? '',
+  }
 }
 
 export default function EditRoleDialog({
@@ -27,36 +55,35 @@ export default function EditRoleDialog({
 }) {
   const qc = useQueryClient()
   const { error: toastError, success } = useToast()
-
-  const [title, setTitle] = React.useState('')
-  const [needed, setNeeded] = React.useState<number>(1)
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
-  const [startAt, setStartAt] = React.useState('')
-  const [endAt, setEndAt] = React.useState('')
-  const [roleCategory, setRoleCategory] = React.useState('')
+
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: async ({ value }) => {
+      await save.mutateAsync(value)
+    },
+  })
 
   React.useEffect(() => {
     if (!open || !initial) return
-    setTitle(initial.title ?? '')
-    setNeeded(initial.needed_count ?? 1)
+    form.reset(buildValuesFromInitial(initial), { keepDefaultValues: true })
     setNeededDraft(null)
-    setStartAt(initial.start_at ?? '')
-    setEndAt(initial.end_at ?? '')
-    setRoleCategory(initial.role_category ?? '')
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open, initial?.id])
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (value: typeof defaultValues) => {
       if (!initial?.id) throw new Error('Missing role')
-      if (!title.trim()) throw new Error('Title required')
-      if (!startAt || !endAt) throw new Error('Start and end dates required')
 
       const payload = {
-        title: title.trim(),
-        start_at: startAt,
-        end_at: endAt,
-        needed_count: needed,
-        role_category: roleCategory.trim().toLowerCase() || null,
+        title: value.title.trim(),
+        start_at: value.startAt,
+        end_at: value.endAt,
+        needed_count: value.needed,
+        role_category: value.roleCategory.trim().toLowerCase() || null,
       }
 
       const { error } = await supabase
@@ -74,90 +101,108 @@ export default function EditRoleDialog({
       success('Role updated', 'Role details saved.')
       onOpenChange(false)
     },
-    onError: (e: any) => {
+    onError: (e: unknown) => {
       toastError(
         'Failed to update role',
-        e?.hint || e?.message || 'Please try again.',
+        e instanceof Error ? e.message : 'Please try again.',
       )
     },
   })
-
-  const disabled =
-    save.isPending || !title.trim() || !startAt || !endAt || !initial?.id
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="600px">
         <Dialog.Title>Edit role</Dialog.Title>
-        <Flex direction="column" gap="3" mt="3">
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Title
-            </Text>
-            <TextField.Root
-              placeholder="e.g. FOH, Monitor, Loader"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </Box>
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Needed
-            </Text>
-            <TextField.Root
-              type="number"
-              min="1"
-              value={neededDraft ?? String(needed)}
-              onChange={(e) => {
-                const nextValue = e.target.value
-                setNeededDraft(nextValue)
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <Flex direction="column" gap="3" mt="3">
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title"
+                    placeholder="e.g. FOH, Monitor, Loader"
+                  />
+                )}
+              </form.AppField>
 
-                if (nextValue === '') return
-                const parsed = Number(nextValue)
-                if (Number.isNaN(parsed)) return
+              <form.AppField name="needed">
+                {(field) => (
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Needed
+                    </Text>
+                    <TextField.Root
+                      type="number"
+                      min="1"
+                      value={neededDraft ?? String(field.state.value)}
+                      onChange={(e) => {
+                        const nextValue = e.target.value
+                        setNeededDraft(nextValue)
 
-                setNeeded(Math.max(1, parsed))
-                setNeededDraft(null)
-              }}
-              onBlur={() => {
-                if (neededDraft === '') {
-                  setNeededDraft(null)
-                }
-              }}
-              style={{ width: 120 }}
-            />
-          </Box>
-          <DateTimeRangePicker
-            startAt={startAt}
-            endAt={endAt}
-            onChange={({ startAt: s, endAt: e }) => {
-              setStartAt(s)
-              setEndAt(e)
-            }}
-          />
-          <Box>
-            <Text size="2" color="gray" mb="1">
-              Role Category
-            </Text>
-            <TextField.Root
-              placeholder="e.g. Audio, Lights, AV"
-              value={roleCategory}
-              onChange={(e) => setRoleCategory(e.target.value)}
-            />
-          </Box>
-        </Flex>
-        <Flex justify="end" gap="2" mt="4">
-          <Dialog.Close>
-            <Button variant="soft">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            variant="solid"
-            onClick={() => save.mutate()}
-            disabled={disabled}
-          >
-            {save.isPending ? 'Saving…' : 'Save role'}
-          </Button>
-        </Flex>
+                        if (nextValue === '') return
+                        const parsed = Number(nextValue)
+                        if (Number.isNaN(parsed)) return
+
+                        field.handleChange(Math.max(1, parsed))
+                        setNeededDraft(null)
+                      }}
+                      onBlur={() => {
+                        field.handleBlur()
+                        if (neededDraft === '') {
+                          setNeededDraft(null)
+                        }
+                      }}
+                      style={{ width: 120 }}
+                    />
+                  </Box>
+                )}
+              </form.AppField>
+
+              <form.Subscribe
+                selector={(state) => [state.values.startAt, state.values.endAt]}
+              >
+                {([startAt, endAt]) => (
+                  <DateTimeRangePicker
+                    startAt={startAt}
+                    endAt={endAt}
+                    onChange={({ startAt: s, endAt: e }) => {
+                      form.setFieldValue('startAt', s)
+                      form.setFieldValue('endAt', e)
+                    }}
+                  />
+                )}
+              </form.Subscribe>
+
+              <form.AppField name="roleCategory">
+                {(field) => (
+                  <field.TextField
+                    label="Role Category"
+                    placeholder="e.g. Audio, Lights, AV"
+                  />
+                )}
+              </form.AppField>
+            </Flex>
+
+            <Flex justify="end" gap="2" mt="4">
+              <Dialog.Close>
+                <Button type="button" variant="soft">
+                  Cancel
+                </Button>
+              </Dialog.Close>
+              <form.SubmitButton
+                label="Save role"
+                pendingLabel="Saving…"
+                disabled={!initial?.id}
+              />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

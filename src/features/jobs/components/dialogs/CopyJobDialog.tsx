@@ -1,5 +1,7 @@
 import * as React from 'react'
 import { Button, Dialog, Flex, Separator, Text } from '@radix-ui/themes'
+import { z } from 'zod'
+import { useAppForm } from '@shared/form'
 import {
   DateTimeRangePicker,
   isInvalidTimeRange,
@@ -11,6 +13,21 @@ function addYearsKeepingTime(iso: string, years: number): string {
   d.setFullYear(d.getFullYear() + years)
   return d.toISOString()
 }
+
+const defaultValues = {
+  startAt: '',
+  endAt: '',
+}
+
+const schema = z
+  .object({
+    startAt: z.string().min(1, 'Start time is required'),
+    endAt: z.string().min(1, 'End time is required'),
+  })
+  .refine((v) => !isInvalidTimeRange(v.startAt, v.endAt), {
+    message: 'End time must be after start time.',
+    path: ['endAt'],
+  })
 
 export default function CopyJobDialog({
   open,
@@ -27,19 +44,27 @@ export default function CopyJobDialog({
   onConfirm: (payload: { startAt: string; endAt: string }) => void
   isCopying: boolean
 }) {
-  const [startAt, setStartAt] = React.useState('')
-  const [endAt, setEndAt] = React.useState('')
+  const form = useAppForm({
+    defaultValues,
+    validators: {
+      onSubmit: schema,
+    },
+    onSubmit: ({ value }) => {
+      onConfirm({ startAt: value.startAt, endAt: value.endAt })
+    },
+  })
 
   React.useEffect(() => {
     if (!open) return
-    if (initialStartAt) setStartAt(addYearsKeepingTime(initialStartAt, 1))
-    else setStartAt('')
-    if (initialEndAt) setEndAt(addYearsKeepingTime(initialEndAt, 1))
-    else setEndAt('')
+    form.reset(
+      {
+        startAt: initialStartAt ? addYearsKeepingTime(initialStartAt, 1) : '',
+        endAt: initialEndAt ? addYearsKeepingTime(initialEndAt, 1) : '',
+      },
+      { keepDefaultValues: true },
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open, initialStartAt, initialEndAt])
-
-  const hasInvalidTimeRange = isInvalidTimeRange(startAt, endAt)
-  const canSubmit = Boolean(startAt && endAt && !hasInvalidTimeRange)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -50,39 +75,58 @@ export default function CopyJobDialog({
         </Dialog.Description>
         <Separator my="3" />
 
-        <Flex direction="column" gap="3">
-          <DateTimeRangePicker
-            startAt={startAt}
-            endAt={endAt}
-            onChange={({ startAt: s, endAt: e }) => {
-              setStartAt(s)
-              setEndAt(e)
-            }}
-            invalid={hasInvalidTimeRange}
-          />
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            void form.handleSubmit()
+          }}
+        >
+          <form.AppForm>
+            <form.Subscribe
+              selector={(state) => [state.values.startAt, state.values.endAt]}
+            >
+              {([startAt, endAt]) => {
+                const hasInvalidTimeRange = isInvalidTimeRange(startAt, endAt)
+                return (
+                  <Flex direction="column" gap="3">
+                    <DateTimeRangePicker
+                      startAt={startAt}
+                      endAt={endAt}
+                      onChange={({ startAt: s, endAt: e }) => {
+                        form.setFieldValue('startAt', s)
+                        form.setFieldValue('endAt', e)
+                      }}
+                      invalid={hasInvalidTimeRange}
+                    />
 
-          {hasInvalidTimeRange && (
-            <Text size="2" color="red">
-              End time must be after start time.
-            </Text>
-          )}
-        </Flex>
+                    {hasInvalidTimeRange && (
+                      <Text size="2" color="red">
+                        End time must be after start time.
+                      </Text>
+                    )}
+                  </Flex>
+                )
+              }}
+            </form.Subscribe>
 
-        <Flex gap="3" mt="4" justify="end">
-          <Button
-            variant="soft"
-            onClick={() => onOpenChange(false)}
-            disabled={isCopying}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => onConfirm({ startAt, endAt })}
-            disabled={!canSubmit || isCopying}
-          >
-            {isCopying ? 'Copying…' : 'Copy job'}
-          </Button>
-        </Flex>
+            <Flex gap="3" mt="4" justify="end">
+              <Button
+                type="button"
+                variant="soft"
+                onClick={() => onOpenChange(false)}
+                disabled={isCopying}
+              >
+                Cancel
+              </Button>
+              <form.SubmitButton
+                label="Copy job"
+                pendingLabel="Copying…"
+                disabled={isCopying}
+              />
+            </Flex>
+          </form.AppForm>
+        </form>
       </Dialog.Content>
     </Dialog.Root>
   )

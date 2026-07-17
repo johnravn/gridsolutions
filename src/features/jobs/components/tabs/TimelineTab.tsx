@@ -465,7 +465,7 @@ function EditTimePeriodDialog({
     const startMs = getDateMs(startAt)
     const endMs = getDateMs(endAt)
     if (startMs === null || endMs === null) return false
-    return endMs < startMs
+    return endMs <= startMs
   })()
 
   const handleSave = () => {
