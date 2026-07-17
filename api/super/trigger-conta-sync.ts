@@ -3,8 +3,8 @@
  * POST /api/super/trigger-conta-sync
  */
 import { createClient } from '@supabase/supabase-js'
-import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron'
-import type { Database } from '../../src/shared/types/database.types'
+import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron.js'
+import type { Database } from '../../src/shared/types/database.types.js'
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
