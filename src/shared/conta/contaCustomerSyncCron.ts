@@ -3,9 +3,9 @@
  * No path aliases — safe for Vercel serverless.
  */
 
-import { makeContaFetch, syncCustomersWithContaCore } from './customerSyncCore'
+import { makeContaFetch, syncCustomersWithContaCore } from './customerSyncCore.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '../types/database.types'
+import type { Database } from '../types/database.types.js'
 
 const contaBaseUrl =
   process.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'

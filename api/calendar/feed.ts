@@ -9,8 +9,8 @@ import {
   parseTstzRange,
   rangesOverlap,
   withRecurringJobPrefix,
-} from './icsHelpers'
-import type { Database } from '../../src/shared/types/database.types'
+} from './icsHelpers.js'
+import type { Database } from '../../src/shared/types/database.types.js'
 
 type SubscriptionKind =
   | 'all_jobs'

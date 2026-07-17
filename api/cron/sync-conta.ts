@@ -3,9 +3,9 @@
  * Triggered daily by Vercel Cron (production). GET /api/cron/sync-conta
  */
 import { createClient } from '@supabase/supabase-js'
-import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron'
-import type { ContaSyncTriggerSource } from '../../src/shared/conta/contaCustomerSyncCron'
-import type { Database } from '../../src/shared/types/database.types'
+import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron.js'
+import type { ContaSyncTriggerSource } from '../../src/shared/conta/contaCustomerSyncCron.js'
+import type { Database } from '../../src/shared/types/database.types.js'
 
 function resolveTriggerSource(req: {
   headers?: Record<string, string | Array<string> | undefined>
