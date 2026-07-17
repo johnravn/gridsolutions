@@ -249,141 +249,145 @@ function TimePeriodsManager({
   })
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       {/* Time Periods Table */}
-      <Table.Root variant="surface" mb="3">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell style={{ width: '120px' }}>
-              Actions
-            </Table.ColumnHeaderCell>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {timePeriods.length === 0 && (
+      <Box style={{ overflowX: 'auto', maxWidth: '100%' }} mb="3">
+        <Table.Root variant="surface">
+          <Table.Header>
             <Table.Row>
-              <Table.Cell colSpan={4}>
-                <Text size="2" color="gray">
-                  No time periods yet
-                </Text>
-              </Table.Cell>
+              <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell style={{ width: '120px' }}>
+                Actions
+              </Table.ColumnHeaderCell>
             </Table.Row>
-          )}
+          </Table.Header>
+          <Table.Body>
+            {timePeriods.length === 0 && (
+              <Table.Row>
+                <Table.Cell colSpan={4}>
+                  <Text size="2" color="gray">
+                    No time periods yet
+                  </Text>
+                </Table.Cell>
+              </Table.Row>
+            )}
 
-          {/* Job Duration Row (always visible at top) */}
-          {jobDuration && (
-            <Table.Row>
-              <Table.Cell>
-                <Flex align="center" gap="2">
-                  <Text weight="bold">{jobDuration.title || '(untitled)'}</Text>
-                </Flex>
-              </Table.Cell>
-              <Table.Cell>
-                <Text size="2">{formatDateTime(jobDuration.start_at)}</Text>
-              </Table.Cell>
-              <Table.Cell>
-                <Text size="2">{formatDateTime(jobDuration.end_at)}</Text>
-              </Table.Cell>
-              <Table.Cell>
-                <Badge size="1" color="orange">
-                  Required
-                </Badge>
-              </Table.Cell>
-            </Table.Row>
-          )}
+            {/* Job Duration Row (always visible at top) */}
+            {jobDuration && (
+              <Table.Row>
+                <Table.Cell>
+                  <Flex align="center" gap="2">
+                    <Text weight="bold">
+                      {jobDuration.title || '(untitled)'}
+                    </Text>
+                  </Flex>
+                </Table.Cell>
+                <Table.Cell>
+                  <Text size="2">{formatDateTime(jobDuration.start_at)}</Text>
+                </Table.Cell>
+                <Table.Cell>
+                  <Text size="2">{formatDateTime(jobDuration.end_at)}</Text>
+                </Table.Cell>
+                <Table.Cell>
+                  <Badge size="1" color="orange">
+                    Required
+                  </Badge>
+                </Table.Cell>
+              </Table.Row>
+            )}
 
-          {/* Category Groups */}
-          {categoryOrder.map((category) => {
-            const periods = groupedPeriods.get(category) || []
-            if (periods.length === 0) return null
+            {/* Category Groups */}
+            {categoryOrder.map((category) => {
+              const periods = groupedPeriods.get(category) || []
+              if (periods.length === 0) return null
 
-            const isExpanded = expandedCategories.has(category)
-            const categoryLabel = categoryLabels[category]
+              const isExpanded = expandedCategories.has(category)
+              const categoryLabel = categoryLabels[category]
 
-            return (
-              <React.Fragment key={category}>
-                {/* Category Header Row */}
-                <Table.Row
-                  style={{
-                    cursor: 'pointer',
-                    background: 'var(--gray-a2)',
-                    fontWeight: '600',
-                  }}
-                  onClick={() => toggleCategory(category)}
-                >
-                  <Table.Cell colSpan={4}>
-                    <Flex align="center" gap="2">
-                      {isExpanded ? (
-                        <NavArrowDown width={18} height={18} />
-                      ) : (
-                        <NavArrowRight width={18} height={18} />
-                      )}
-                      <Text weight="bold">{categoryLabel}</Text>
-                      <Badge size="1" variant="soft" color="gray">
-                        {periods.length}
-                      </Badge>
-                    </Flex>
-                  </Table.Cell>
-                </Table.Row>
-
-                {/* Time Period Rows (when expanded) */}
-                {isExpanded &&
-                  periods.map((tp) => (
-                    <Table.Row key={tp.id}>
-                      <Table.Cell>
-                        <Flex
-                          align="center"
-                          gap="2"
-                          style={{ paddingLeft: 24 }}
-                        >
-                          <Text weight="regular">
-                            {tp.title || '(untitled)'}
-                          </Text>
-                        </Flex>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2">{formatDateTime(tp.start_at)}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2">{formatDateTime(tp.end_at)}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {!isReadOnly && (
-                          <Flex gap="2">
-                            <IconButton
-                              size="1"
-                              variant="ghost"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditing(tp)
-                              }}
-                            >
-                              <Edit />
-                            </IconButton>
-                            <IconButton
-                              size="1"
-                              variant="ghost"
-                              color="red"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setDeleting(tp)
-                              }}
-                            >
-                              <Trash />
-                            </IconButton>
-                          </Flex>
+              return (
+                <React.Fragment key={category}>
+                  {/* Category Header Row */}
+                  <Table.Row
+                    style={{
+                      cursor: 'pointer',
+                      background: 'var(--gray-a2)',
+                      fontWeight: '600',
+                    }}
+                    onClick={() => toggleCategory(category)}
+                  >
+                    <Table.Cell colSpan={4}>
+                      <Flex align="center" gap="2">
+                        {isExpanded ? (
+                          <NavArrowDown width={18} height={18} />
+                        ) : (
+                          <NavArrowRight width={18} height={18} />
                         )}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-              </React.Fragment>
-            )
-          })}
-        </Table.Body>
-      </Table.Root>
+                        <Text weight="bold">{categoryLabel}</Text>
+                        <Badge size="1" variant="soft" color="gray">
+                          {periods.length}
+                        </Badge>
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+
+                  {/* Time Period Rows (when expanded) */}
+                  {isExpanded &&
+                    periods.map((tp) => (
+                      <Table.Row key={tp.id}>
+                        <Table.Cell>
+                          <Flex
+                            align="center"
+                            gap="2"
+                            style={{ paddingLeft: 24 }}
+                          >
+                            <Text weight="regular">
+                              {tp.title || '(untitled)'}
+                            </Text>
+                          </Flex>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2">{formatDateTime(tp.start_at)}</Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2">{formatDateTime(tp.end_at)}</Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          {!isReadOnly && (
+                            <Flex gap="2">
+                              <IconButton
+                                size="1"
+                                variant="ghost"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditing(tp)
+                                }}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                size="1"
+                                variant="ghost"
+                                color="red"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleting(tp)
+                                }}
+                              >
+                                <Trash />
+                              </IconButton>
+                            </Flex>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                </React.Fragment>
+              )
+            })}
+          </Table.Body>
+        </Table.Root>
+      </Box>
 
       {/* Edit Dialog */}
       {editing && (

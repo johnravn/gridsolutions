@@ -174,112 +174,114 @@ export default function PrettyOffersTab({
           subcontractor quotes and rich media.
         </Text>
       ) : (
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Offer</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {offers.map((offer) => (
-              <Table.Row key={offer.id}>
-                <Table.Cell>
-                  <Text weight="medium">{offer.title}</Text>
-                  <Text size="1" color="gray" as="div">
-                    {formatOfferNumberDisplay(offer.offernr) ?? '—'}
-                  </Text>
-                </Table.Cell>
-                <Table.Cell>
-                  <Badge color={getOfferStatusBadgeColor(offer)}>
-                    {getOfferStatusLabel(offer)}
-                  </Badge>
-                </Table.Cell>
-                <Table.Cell>
-                  {offer.total_with_vat.toLocaleString('nb-NO', {
-                    style: 'currency',
-                    currency: 'NOK',
-                    maximumFractionDigits: 0,
-                  })}
-                </Table.Cell>
-                <Table.Cell>
-                  <Flex gap="1" align="center">
-                    <Tooltip content="Edit">
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        onClick={() => openEditor(offer.id)}
-                      >
-                        {offer.locked ? (
-                          <Eye width={16} height={16} />
-                        ) : (
-                          <Edit width={16} height={16} />
-                        )}
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip content="Copy public link">
-                      <CopyIconButton
-                        text={getOfferLink(offer)}
-                        copyLabel="Copy offer link"
-                      />
-                    </Tooltip>
-                    <Tooltip content="Open public page">
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        onClick={() =>
-                          window.open(getOfferLink(offer), '_blank')
-                        }
-                      >
-                        <Link width={16} height={16} />
-                      </IconButton>
-                    </Tooltip>
-                    <DropdownMenu.Root>
-                      <DropdownMenu.Trigger>
-                        <Button size="1" variant="ghost">
-                          More
-                        </Button>
-                      </DropdownMenu.Trigger>
-                      <DropdownMenu.Content>
-                        {!offer.locked && offer.status === 'draft' && (
-                          <DropdownMenu.Item
-                            onClick={() => lockMutation.mutate(offer.id)}
-                          >
-                            <Lock width={14} height={14} />
-                            Lock & send
-                          </DropdownMenu.Item>
-                        )}
-                        <DropdownMenu.Item
-                          onClick={() => duplicateMutation.mutate(offer.id)}
-                        >
-                          <Copy width={14} height={14} />
-                          Duplicate
-                        </DropdownMenu.Item>
-                        <DropdownMenu.Item
-                          onClick={() => exportPdfMutation.mutate(offer.id)}
-                        >
-                          <Download width={14} height={14} />
-                          Export PDF
-                        </DropdownMenu.Item>
-                        {offer.status === 'draft' && !offer.locked && (
-                          <DropdownMenu.Item
-                            color="red"
-                            onClick={() => deleteMutation.mutate(offer.id)}
-                          >
-                            <Trash width={14} height={14} />
-                            Delete
-                          </DropdownMenu.Item>
-                        )}
-                      </DropdownMenu.Content>
-                    </DropdownMenu.Root>
-                  </Flex>
-                </Table.Cell>
+        <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <Table.Root variant="surface">
+            <Table.Header>
+              <Table.Row>
+                <Table.ColumnHeaderCell>Offer</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Actions</Table.ColumnHeaderCell>
               </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
+            </Table.Header>
+            <Table.Body>
+              {offers.map((offer) => (
+                <Table.Row key={offer.id}>
+                  <Table.Cell>
+                    <Text weight="medium">{offer.title}</Text>
+                    <Text size="1" color="gray" as="div">
+                      {formatOfferNumberDisplay(offer.offernr) ?? '—'}
+                    </Text>
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Badge color={getOfferStatusBadgeColor(offer)}>
+                      {getOfferStatusLabel(offer)}
+                    </Badge>
+                  </Table.Cell>
+                  <Table.Cell>
+                    {offer.total_with_vat.toLocaleString('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      maximumFractionDigits: 0,
+                    })}
+                  </Table.Cell>
+                  <Table.Cell>
+                    <Flex gap="1" align="center">
+                      <Tooltip content="Edit">
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          onClick={() => openEditor(offer.id)}
+                        >
+                          {offer.locked ? (
+                            <Eye width={16} height={16} />
+                          ) : (
+                            <Edit width={16} height={16} />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip content="Copy public link">
+                        <CopyIconButton
+                          text={getOfferLink(offer)}
+                          copyLabel="Copy offer link"
+                        />
+                      </Tooltip>
+                      <Tooltip content="Open public page">
+                        <IconButton
+                          size="1"
+                          variant="ghost"
+                          onClick={() =>
+                            window.open(getOfferLink(offer), '_blank')
+                          }
+                        >
+                          <Link width={16} height={16} />
+                        </IconButton>
+                      </Tooltip>
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger>
+                          <Button size="1" variant="ghost">
+                            More
+                          </Button>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Content>
+                          {!offer.locked && offer.status === 'draft' && (
+                            <DropdownMenu.Item
+                              onClick={() => lockMutation.mutate(offer.id)}
+                            >
+                              <Lock width={14} height={14} />
+                              Lock & send
+                            </DropdownMenu.Item>
+                          )}
+                          <DropdownMenu.Item
+                            onClick={() => duplicateMutation.mutate(offer.id)}
+                          >
+                            <Copy width={14} height={14} />
+                            Duplicate
+                          </DropdownMenu.Item>
+                          <DropdownMenu.Item
+                            onClick={() => exportPdfMutation.mutate(offer.id)}
+                          >
+                            <Download width={14} height={14} />
+                            Export PDF
+                          </DropdownMenu.Item>
+                          {offer.status === 'draft' && !offer.locked && (
+                            <DropdownMenu.Item
+                              color="red"
+                              onClick={() => deleteMutation.mutate(offer.id)}
+                            >
+                              <Trash width={14} height={14} />
+                              Delete
+                            </DropdownMenu.Item>
+                          )}
+                        </DropdownMenu.Content>
+                      </DropdownMenu.Root>
+                    </Flex>
+                  </Table.Cell>
+                </Table.Row>
+              ))}
+            </Table.Body>
+          </Table.Root>
+        </Box>
       )}
 
       {editorOpen && (

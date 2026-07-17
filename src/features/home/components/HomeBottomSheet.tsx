@@ -19,6 +19,7 @@ export function HomeBottomSheet({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content
         aria-describedby={undefined}
+        className="home-bottom-sheet"
         style={{
           position: 'fixed',
           insetInline: 0,
@@ -49,7 +50,7 @@ export function HomeBottomSheet({
           style={{ flexShrink: 0 }}
         >
           <Dialog.Title mb="0" style={{ flex: 1, minWidth: 0 }}>
-            <Text size="4" weight="bold" as="span">
+            <Text size="5" weight="bold" as="span">
               {title}
             </Text>
           </Dialog.Title>

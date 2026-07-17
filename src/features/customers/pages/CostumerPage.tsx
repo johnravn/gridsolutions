@@ -205,7 +205,7 @@ export default function CustomerPage() {
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
-          visible={!isLarge}
+          visible={!isLarge && selectedId != null}
         />
       }
     />

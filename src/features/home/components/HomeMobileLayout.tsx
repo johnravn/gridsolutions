@@ -2,14 +2,13 @@ import { Box, Flex } from '@radix-ui/themes'
 import { HomeAttentionSummary } from './HomeAttentionSummary'
 import { CompanyJobsWeekSection } from './CompanyJobsWeekSection'
 import { DailyInspirationSection } from './DailyInspirationSection'
-import { MattersSection } from './MattersSection'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
 import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
+import type { ActiveRecurringJob } from '../api/activeRecurringJobsQuery'
 import type {
   HomeJobReadyToInvoice,
   HomeMatter,
@@ -17,15 +16,23 @@ import type {
 } from '../types'
 import type { HomeDashboardLayoutPreferences } from '../api/profileHomeLayoutQuery'
 
+type MobileWeekSegment = 0 | 1
+
 type HomeMobileLayoutProps = {
   userId: string | null
   canVisitJobs: boolean
-  companyWeekJobs: Array<WeekJobWithRole>
+  jobsThisWeek: Array<WeekJobWithRole>
+  jobsNextWeek: Array<WeekJobWithRole>
+  jobsWeekAfter: Array<WeekJobWithRole>
   companyWeekJobsLoading: boolean
   companyWeekBookingSummaries: Record<string, WeekJobBookingSummary>
   companyWeekBookingsDetailLoading: boolean
-  jobsWeekOffset: 0 | 1
-  onJobsWeekOffsetChange: (offset: 0 | 1) => void
+  weekSegment: MobileWeekSegment
+  onWeekSegmentChange: (segment: MobileWeekSegment) => void
+  showMyJobsOnly: boolean
+  onToggleMyJobsOnly: (value: boolean) => void
+  isFreelancer: boolean
+  activeRecurringJobs: Array<ActiveRecurringJob>
   unreadMatters: Array<HomeMatter>
   mattersLoading: boolean
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
@@ -35,20 +42,24 @@ type HomeMobileLayoutProps = {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
-  conflictDaysFilter: ConflictDaysFilter
-  onConflictDaysFilterChange: (value: ConflictDaysFilter) => void
   homeLayout: HomeDashboardLayoutPreferences
 }
 
 export function HomeMobileLayout({
   userId,
   canVisitJobs,
-  companyWeekJobs,
+  jobsThisWeek,
+  jobsNextWeek,
+  jobsWeekAfter,
   companyWeekJobsLoading,
   companyWeekBookingSummaries,
   companyWeekBookingsDetailLoading,
-  jobsWeekOffset,
-  onJobsWeekOffsetChange,
+  weekSegment,
+  onWeekSegmentChange,
+  showMyJobsOnly,
+  onToggleMyJobsOnly,
+  isFreelancer,
+  activeRecurringJobs,
   unreadMatters,
   mattersLoading,
   jobsReadyToInvoice,
@@ -58,8 +69,6 @@ export function HomeMobileLayout({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
-  conflictDaysFilter,
-  onConflictDaysFilterChange,
   homeLayout,
 }: HomeMobileLayoutProps) {
   return (
@@ -71,10 +80,10 @@ export function HomeMobileLayout({
     >
       <Flex
         direction="column"
-        gap="6"
+        gap="7"
         style={{
           minWidth: 0,
-          paddingBottom: 24,
+          paddingBottom: 40,
         }}
       >
         {homeLayout.showDailyInspiration && (
@@ -83,33 +92,32 @@ export function HomeMobileLayout({
 
         <HomeAttentionSummary
           canVisitJobs={canVisitJobs}
+          showMatters={homeLayout.showMatters}
           showConflicts={homeLayout.showConflicts}
+          unreadMatters={unreadMatters}
+          mattersLoading={mattersLoading}
           crewConflicts={crewConflicts}
           vehicleConflicts={vehicleConflicts}
           equipmentConflicts={equipmentConflicts}
-          conflictDaysFilter={conflictDaysFilter}
-          onConflictDaysFilterChange={onConflictDaysFilterChange}
           jobsReadyToInvoice={jobsReadyToInvoice}
           jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+          getInitials={getInitials}
+          getAvatarUrl={getAvatarUrl}
         />
-
-        {homeLayout.showMatters && unreadMatters.length > 0 && (
-          <MattersSection
-            matters={unreadMatters}
-            loading={mattersLoading}
-            getInitials={getInitials}
-            getAvatarUrl={getAvatarUrl}
-            presentation="mobile"
-          />
-        )}
 
         {canVisitJobs && homeLayout.showLatest && (
           <CompanyJobsWeekSection
             presentation="mobile"
-            jobs={companyWeekJobs}
+            jobsThisWeek={jobsThisWeek}
+            jobsNextWeek={jobsNextWeek}
+            jobsWeekAfter={jobsWeekAfter}
             loading={companyWeekJobsLoading}
-            weekOffset={jobsWeekOffset}
-            onWeekOffsetChange={onJobsWeekOffsetChange}
+            weekSegment={weekSegment}
+            onWeekSegmentChange={onWeekSegmentChange}
+            showMyJobsOnly={showMyJobsOnly}
+            onToggleMyJobsOnly={onToggleMyJobsOnly}
+            isFreelancer={isFreelancer}
+            activeRecurringJobs={activeRecurringJobs}
             getInitials={getInitials}
             getAvatarUrl={getAvatarUrl}
             bookingSummaries={companyWeekBookingSummaries}

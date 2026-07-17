@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import HomePageSkeleton from '@shared/ui/components/HomePageSkeleton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { addDays, startOfMinute } from 'date-fns'
+import { startOfMinute } from 'date-fns'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
@@ -32,7 +32,6 @@ import {
   filterEquipmentConflictsByProjectLead,
   filterVehicleConflictsByProjectLead,
 } from '@features/conflicts/utils/filterConflictsByProjectLead'
-import type { ConflictDaysFilter } from '@features/conflicts/components/ConflictsSection'
 import type { JobListRow } from '@features/jobs/types'
 import type { HomeMatter, WeekJobWithRole } from '@features/home/types'
 
@@ -70,9 +69,7 @@ export default function HomePage() {
   const isFreelancer = companyRole === 'freelancer'
 
   const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(false)
-  const [mobileWeekOffset, setMobileWeekOffset] = React.useState<0 | 1>(0)
-  const [conflictDaysFilter, setConflictDaysFilter] =
-    React.useState<ConflictDaysFilter>('30')
+  const [mobileWeekSegment, setMobileWeekSegment] = React.useState<0 | 1>(0)
 
   const canVisitJobs = caps.has('visit:jobs')
 
@@ -114,25 +111,18 @@ export default function HomePage() {
       userId,
       companyRole,
     }),
-    enabled: !!companyId && canVisitJobs && isLarge,
+    enabled: !!companyId && canVisitJobs,
   })
 
-  const companyWeekJobsLoading = isLarge
-    ? week0Loading || week1Loading || week2Loading
-    : mobileWeekOffset === 0
-      ? week0Loading
-      : week1Loading
+  const companyWeekJobsLoading = week0Loading || week1Loading || week2Loading
 
   const bookingsSourceJobs = React.useMemo(() => {
-    if (isLarge) {
-      const byId = new Map<string, (typeof week0Jobs)[number]>()
-      for (const job of week0Jobs) byId.set(job.id, job)
-      for (const job of week1Jobs) byId.set(job.id, job)
-      for (const job of week2Jobs) byId.set(job.id, job)
-      return Array.from(byId.values())
-    }
-    return mobileWeekOffset === 0 ? week0Jobs : week1Jobs
-  }, [isLarge, mobileWeekOffset, week0Jobs, week1Jobs, week2Jobs])
+    const byId = new Map<string, (typeof week0Jobs)[number]>()
+    for (const job of week0Jobs) byId.set(job.id, job)
+    for (const job of week1Jobs) byId.set(job.id, job)
+    for (const job of week2Jobs) byId.set(job.id, job)
+    return Array.from(byId.values())
+  }, [week0Jobs, week1Jobs, week2Jobs])
 
   const jobsWeekBookingsMeta = React.useMemo(
     () =>
@@ -149,7 +139,7 @@ export default function HomePage() {
   } = useQuery({
     ...companyWeekJobsBookingsQuery({
       companyId: companyId ?? '',
-      weekOffset: isLarge ? 0 : mobileWeekOffset,
+      weekOffset: isLarge ? 0 : mobileWeekSegment,
       jobsMeta: jobsWeekBookingsMeta,
     }),
     enabled: !!companyId && canVisitJobs && jobsWeekBookingsMeta.length > 0,
@@ -157,7 +147,7 @@ export default function HomePage() {
 
   const { data: activeRecurringJobs = [] } = useQuery({
     ...activeRecurringJobsQuery({ companyId: companyId ?? '' }),
-    enabled: !!companyId && canVisitJobs && isLarge,
+    enabled: !!companyId && canVisitJobs,
   })
 
   const allWeekJobIds = React.useMemo(() => {
@@ -204,18 +194,6 @@ export default function HomePage() {
     [week2Jobs, userId, crewJobIdSet, isFreelancer, showMyJobsOnly],
   )
 
-  const mobileWeekJobs = React.useMemo(() => {
-    const source = mobileWeekOffset === 0 ? week0Jobs : week1Jobs
-    return withMyJobRoles(source, userId, crewJobIdSet, isFreelancer)
-  }, [
-    mobileWeekOffset,
-    week0Jobs,
-    week1Jobs,
-    userId,
-    crewJobIdSet,
-    isFreelancer,
-  ])
-
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
     ...mattersIndexQueryAll(),
   })
@@ -228,20 +206,11 @@ export default function HomePage() {
   // IMPORTANT: make range stable so queryKey doesn't change every render
   const { conflictFrom, conflictTo } = React.useMemo(() => {
     const now = startOfMinute(new Date())
-    // Desktop attention band shows all upcoming conflicts (no upper bound).
-    // Mobile keeps a selectable window for the bottom-sheet filter.
-    if (isLarge) {
-      return {
-        conflictFrom: now.toISOString(),
-        conflictTo: null as string | null,
-      }
-    }
-    const end = addDays(now, Number(conflictDaysFilter))
     return {
       conflictFrom: now.toISOString(),
-      conflictTo: end.toISOString(),
+      conflictTo: null as string | null,
     }
-  }, [companyId, conflictDaysFilter, isLarge])
+  }, [companyId])
 
   const { data: projectLeadJobIds = [], isSuccess: projectLeadJobIdsLoaded } =
     useQuery({
@@ -333,8 +302,7 @@ export default function HomePage() {
   const homeLayout = homeLayoutPrefs ?? defaultHomeDashboardLayoutPreferences()
 
   const conflictsSettled =
-    !homeLayout.showConflicts ||
-    (projectLeadJobIdsLoaded && !conflictsLoading)
+    !homeLayout.showConflicts || (projectLeadJobIdsLoaded && !conflictsLoading)
 
   const isHomeDataLoading =
     mattersLoading ||
@@ -351,12 +319,18 @@ export default function HomePage() {
       <HomeMobileLayout
         userId={userId}
         canVisitJobs={canVisitJobs}
-        companyWeekJobs={mobileWeekJobs}
+        jobsThisWeek={jobsThisWeek}
+        jobsNextWeek={jobsNextWeek}
+        jobsWeekAfter={jobsWeekAfter}
         companyWeekJobsLoading={companyWeekJobsLoading}
         companyWeekBookingSummaries={companyWeekBookingSummaries}
         companyWeekBookingsDetailLoading={companyWeekBookingsDetailLoading}
-        jobsWeekOffset={mobileWeekOffset}
-        onJobsWeekOffsetChange={setMobileWeekOffset}
+        weekSegment={mobileWeekSegment}
+        onWeekSegmentChange={setMobileWeekSegment}
+        showMyJobsOnly={showMyJobsOnly}
+        onToggleMyJobsOnly={setShowMyJobsOnly}
+        isFreelancer={isFreelancer}
+        activeRecurringJobs={activeRecurringJobs}
         unreadMatters={unreadMatters}
         mattersLoading={mattersLoading}
         jobsReadyToInvoice={jobsReadyToInvoice}
@@ -366,8 +340,6 @@ export default function HomePage() {
         crewConflicts={filteredCrewConflicts}
         vehicleConflicts={filteredVehicleConflicts}
         equipmentConflicts={filteredEquipmentConflicts}
-        conflictDaysFilter={conflictDaysFilter}
-        onConflictDaysFilterChange={setConflictDaysFilter}
         homeLayout={homeLayout}
       />
     )

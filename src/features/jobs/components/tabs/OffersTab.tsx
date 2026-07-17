@@ -2309,7 +2309,7 @@ export default function OffersTab({
   }
 
   return (
-    <Box>
+    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex mb="3" justify="between" align="center" wrap="wrap" gap="2">
         <Flex align="center" gap="2">
           <Heading size="3">Offers</Heading>

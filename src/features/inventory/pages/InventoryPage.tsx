@@ -167,7 +167,7 @@ export default function InventoryPage() {
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
-          visible={!isLarge}
+          visible={!isLarge && selectedId != null}
         />
       }
     />

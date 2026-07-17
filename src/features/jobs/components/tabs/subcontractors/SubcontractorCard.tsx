@@ -406,94 +406,100 @@ export default function SubcontractorCard({
                     No quote versions yet.
                   </Text>
                 ) : (
-                  <Table.Root variant="ghost" size="1">
-                    <Table.Header>
-                      <Table.Row>
-                        <Table.ColumnHeaderCell>Version</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>PDF</Table.ColumnHeaderCell>
-                        {!isReadOnly && <Table.ColumnHeaderCell width="80px" />}
-                      </Table.Row>
-                    </Table.Header>
-                    <Table.Body>
-                      {quotes.map((quote) => (
-                        <Table.Row key={quote.id}>
-                          <Table.Cell>
-                            <Badge size="1">v{quote.version_number}</Badge>
-                          </Table.Cell>
-                          <Table.Cell>
-                            {formatMoney(quote.total_amount)}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {quote.note ? (
-                              <SubcontractorNotePreview
-                                note={quote.note}
-                                size="1"
-                                maxLength={QUOTE_NOTE_PREVIEW_MAX}
-                                onShowMore={() => openQuoteNoteDialog(quote)}
-                              />
-                            ) : !isReadOnly ? (
-                              <Button
-                                size="1"
-                                variant="soft"
-                                onClick={() => onEditQuote(quote)}
-                              >
-                                Add note
-                              </Button>
-                            ) : (
-                              <Text size="1" color="gray">
-                                —
-                              </Text>
-                            )}
-                          </Table.Cell>
-                          <Table.Cell>
-                            {quote.pdf_path ? (
-                              <Button
-                                size="1"
-                                variant="ghost"
-                                onClick={() =>
-                                  void getJobSubcontractorQuotePdfUrl(
-                                    quote.pdf_path!,
-                                  ).then((url) => window.open(url, '_blank'))
-                                }
-                              >
-                                <Download width={14} height={14} />
-                                View
-                              </Button>
-                            ) : (
-                              <Text size="1" color="gray">
-                                —
-                              </Text>
-                            )}
-                          </Table.Cell>
+                  <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                    <Table.Root variant="ghost" size="1">
+                      <Table.Header>
+                        <Table.Row>
+                          <Table.ColumnHeaderCell>
+                            Version
+                          </Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>Note</Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell>PDF</Table.ColumnHeaderCell>
                           {!isReadOnly && (
-                            <Table.Cell>
-                              <Flex gap="1">
-                                <Button
-                                  size="1"
-                                  variant="soft"
-                                  aria-label={`Edit quote v${quote.version_number}`}
-                                  onClick={() => onEditQuote(quote)}
-                                >
-                                  <Edit width={14} height={14} />
-                                </Button>
-                                <Button
-                                  size="1"
-                                  variant="soft"
-                                  color="red"
-                                  aria-label={`Delete quote v${quote.version_number}`}
-                                  onClick={() => setDeleteQuote(quote)}
-                                >
-                                  <Trash width={14} height={14} />
-                                </Button>
-                              </Flex>
-                            </Table.Cell>
+                            <Table.ColumnHeaderCell width="80px" />
                           )}
                         </Table.Row>
-                      ))}
-                    </Table.Body>
-                  </Table.Root>
+                      </Table.Header>
+                      <Table.Body>
+                        {quotes.map((quote) => (
+                          <Table.Row key={quote.id}>
+                            <Table.Cell>
+                              <Badge size="1">v{quote.version_number}</Badge>
+                            </Table.Cell>
+                            <Table.Cell>
+                              {formatMoney(quote.total_amount)}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {quote.note ? (
+                                <SubcontractorNotePreview
+                                  note={quote.note}
+                                  size="1"
+                                  maxLength={QUOTE_NOTE_PREVIEW_MAX}
+                                  onShowMore={() => openQuoteNoteDialog(quote)}
+                                />
+                              ) : !isReadOnly ? (
+                                <Button
+                                  size="1"
+                                  variant="soft"
+                                  onClick={() => onEditQuote(quote)}
+                                >
+                                  Add note
+                                </Button>
+                              ) : (
+                                <Text size="1" color="gray">
+                                  —
+                                </Text>
+                              )}
+                            </Table.Cell>
+                            <Table.Cell>
+                              {quote.pdf_path ? (
+                                <Button
+                                  size="1"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    void getJobSubcontractorQuotePdfUrl(
+                                      quote.pdf_path!,
+                                    ).then((url) => window.open(url, '_blank'))
+                                  }
+                                >
+                                  <Download width={14} height={14} />
+                                  View
+                                </Button>
+                              ) : (
+                                <Text size="1" color="gray">
+                                  —
+                                </Text>
+                              )}
+                            </Table.Cell>
+                            {!isReadOnly && (
+                              <Table.Cell>
+                                <Flex gap="1">
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    aria-label={`Edit quote v${quote.version_number}`}
+                                    onClick={() => onEditQuote(quote)}
+                                  >
+                                    <Edit width={14} height={14} />
+                                  </Button>
+                                  <Button
+                                    size="1"
+                                    variant="soft"
+                                    color="red"
+                                    aria-label={`Delete quote v${quote.version_number}`}
+                                    onClick={() => setDeleteQuote(quote)}
+                                  >
+                                    <Trash width={14} height={14} />
+                                  </Button>
+                                </Flex>
+                              </Table.Cell>
+                            )}
+                          </Table.Row>
+                        ))}
+                      </Table.Body>
+                    </Table.Root>
+                  </Box>
                 )}
               </Flex>
 

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Box, Flex, Link, Select, Text } from '@radix-ui/themes'
+import { Box, Flex, Link, Text } from '@radix-ui/themes'
 import { Link as RouterLink } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
@@ -17,36 +17,10 @@ import type {
   VehicleConflictRow,
 } from '../api/queries'
 
-export type ConflictDaysFilter = '7' | '14' | '30' | '90'
-
 function formatPeriod(start: string, end: string) {
   const s = new Date(start)
   const e = new Date(end)
   return `${format(s, 'd. MMM HH:mm', { locale: nb })} – ${format(e, 'HH:mm', { locale: nb })}`
-}
-
-export function ConflictDaysSelect({
-  value,
-  onChange,
-}: {
-  value: ConflictDaysFilter
-  onChange: (value: ConflictDaysFilter) => void
-}) {
-  return (
-    <Select.Root
-      size="1"
-      value={value}
-      onValueChange={(v) => onChange(v as ConflictDaysFilter)}
-    >
-      <Select.Trigger />
-      <Select.Content>
-        <Select.Item value="7">Next 7 days</Select.Item>
-        <Select.Item value="14">Next 14 days</Select.Item>
-        <Select.Item value="30">Next 30 days</Select.Item>
-        <Select.Item value="90">Next 90 days</Select.Item>
-      </Select.Content>
-    </Select.Root>
-  )
 }
 
 export function ConflictsSection({
@@ -54,17 +28,13 @@ export function ConflictsSection({
   vehicleConflicts,
   equipmentConflicts,
   loading,
-  daysFilter,
-  onDaysFilterChange,
   rangeLabel,
 }: {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
   loading: boolean
-  daysFilter: ConflictDaysFilter
-  onDaysFilterChange: (value: ConflictDaysFilter) => void
-  rangeLabel: string
+  rangeLabel?: string
 }) {
   const { unresolved, forced } = React.useMemo(() => {
     const crew = splitCrewConflicts(crewConflicts)
@@ -98,9 +68,6 @@ export function ConflictsSection({
       icon={<WarningTriangle width={18} height={18} />}
       count={totalCount}
       subtitle={rangeLabel}
-      headerAction={
-        <ConflictDaysSelect value={daysFilter} onChange={onDaysFilterChange} />
-      }
     >
       {loading ? (
         <DashboardCardSkeleton rowCount={3} compact />

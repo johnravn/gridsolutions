@@ -7,7 +7,6 @@ import {
   Badge,
   Box,
   Button,
-  Dialog,
   Flex,
   IconButton,
   Select,
@@ -31,7 +30,6 @@ import {
   StatsUpSquare,
   User,
   UserLove,
-  Xmark,
 } from 'iconoir-react'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
@@ -49,18 +47,6 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useTheme } from '../hooks/useTheme'
 import { APP_VERSION } from '../config/releaseNotes'
 import { useSidebarNavIndicators } from './useSidebarNavIndicators'
-
-/** Keep the mobile drawer open while interacting with the portaled company Select. */
-function preventDialogCloseOnSelect(e: {
-  preventDefault: () => void
-  target: EventTarget | null
-  detail?: { originalEvent?: Event }
-}) {
-  const el = (e.detail?.originalEvent?.target ?? e.target) as HTMLElement | null
-  if (el?.closest('.rt-SelectContent')) {
-    e.preventDefault()
-  }
-}
 
 const SIDEBAR_WIDTH = 200
 
@@ -174,8 +160,7 @@ export function Sidebar({
   const navigate = useNavigate()
   const { allowedRoutes } = useAllowedSidebarRoutes()
 
-  // Keep this on the outer Sidebar so it stays mounted on mobile when the
-  // drawer dialog (and its SidebarContent) unmounts.
+  // Keep this on the outer Sidebar so shortcuts work while the drawer is closed.
   useSidebarNavKeyboardShortcut({
     routes: allowedRoutes,
     currentPath,
@@ -184,6 +169,15 @@ export function Sidebar({
       if (isMobile) onToggle(false)
     },
   })
+
+  React.useEffect(() => {
+    if (!isMobile || !open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onToggle(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMobile, open, onToggle])
 
   return (
     <>
@@ -199,18 +193,31 @@ export function Sidebar({
 
       {/* Actual sidebar content */}
       {isMobile ? (
-        <Dialog.Root open={open} onOpenChange={(next) => onToggle(next)}>
-          <Dialog.Content
-            aria-describedby={undefined}
-            onPointerDownOutside={preventDialogCloseOnSelect}
-            onInteractOutside={preventDialogCloseOnSelect}
-            className="app-sidebar-glass"
+        <>
+          {/*
+            Non-modal drawer: avoid Radix Dialog's body scroll-lock.
+            That lock applies margin-right for scrollbar gap and fights iOS
+            visualViewport — the page card behind the glass jumped vertically
+            and grew wider once scrolling forced a reflow.
+          */}
+          <div
+            className="app-sidebar-backdrop"
+            data-open={open ? 'true' : undefined}
+            aria-hidden={!open}
+            onClick={() => onToggle(false)}
+          />
+          <aside
+            className="app-sidebar-glass app-sidebar-drawer"
+            data-open={open ? 'true' : undefined}
+            aria-hidden={!open}
+            aria-label="Navigation"
+            inert={!open ? true : undefined}
             style={{
               position: 'fixed',
               left: 0,
               top: 0,
-              height: '100dvh',
-              width: 'min(320px, 85vw)',
+              height: '100svh',
+              width: 'var(--app-sidebar-drawer-width)',
               maxWidth: '85vw',
               margin: 0,
               borderRadius: 0,
@@ -223,25 +230,11 @@ export function Sidebar({
               overflowY: 'hidden',
               display: 'flex',
               flexDirection: 'column',
+              zIndex: 101,
             }}
           >
-            <Dialog.Title
-              style={{
-                position: 'absolute',
-                width: 1,
-                height: 1,
-                padding: 0,
-                margin: -1,
-                overflow: 'hidden',
-                clip: 'rect(0,0,0,0)',
-                whiteSpace: 'nowrap',
-                border: 0,
-              }}
-            >
-              Navigation
-            </Dialog.Title>
             <SidebarContent
-              open={open}
+              open
               onToggle={onToggle}
               currentPath={currentPath}
               isMobile={isMobile}
@@ -250,8 +243,8 @@ export function Sidebar({
               userAvatarUrl={userAvatarUrl}
               onLogout={onLogout}
             />
-          </Dialog.Content>
-        </Dialog.Root>
+          </aside>
+        </>
       ) : (
         <Box
           style={{
@@ -265,7 +258,7 @@ export function Sidebar({
         >
           <Box
             style={{
-              height: '100dvh',
+              height: '100svh',
               width: staticWidth,
               pointerEvents: 'auto',
             }}
@@ -324,6 +317,19 @@ function SidebarContent({
     enabled: !!companyId && !!userId,
   })
   const readyToInvoiceCount = jobsReadyToInvoice.length
+  const navCountBadgeStyle = isMobile
+    ? {
+        minWidth: 24,
+        height: 24,
+        padding: '0 7px',
+        fontSize: 'var(--font-size-2)',
+      }
+    : {
+        minWidth: 18,
+        height: 18,
+        padding: '0 5px',
+        fontSize: 'var(--font-size-1)',
+      }
   const { data: companyExpansion } = useQuery({
     ...(companyId
       ? companyExpansionQuery({ companyId })
@@ -472,29 +478,17 @@ function SidebarContent({
           )}
         </Flex>
 
-        {isMobile ? (
-          <IconButton
-            size="3"
-            variant="ghost"
-            onClick={() => onToggle(false)}
-            aria-label="Close menu"
-            style={{ minWidth: 44, minHeight: 44, flexShrink: 0 }}
-          >
-            <Xmark width={22} height={22} />
-          </IconButton>
-        ) : (
-          showCollapseButton && (
-            <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
-              <IconButton
-                size="2"
-                variant="ghost"
-                onClick={() => onToggle(!open)}
-                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-              >
-                <Menu />
-              </IconButton>
-            </Tooltip>
-          )
+        {!isMobile && showCollapseButton && (
+          <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
+            <IconButton
+              size="2"
+              variant="ghost"
+              onClick={() => onToggle(!open)}
+              aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+            >
+              <Menu />
+            </IconButton>
+          </Tooltip>
         )}
       </Flex>
 
@@ -523,6 +517,16 @@ function SidebarContent({
             paddingRight: 'var(--space-2)',
             paddingBottom: 'var(--space-2)',
             paddingLeft: 0,
+            /* Soft bottom fade into the logo — same mask as home
+               horizontal scrollers into column separators. */
+            ...(isMobile
+              ? {
+                  maskImage:
+                    'linear-gradient(to bottom, #000 0%, #000 calc(100% - 28px), transparent 100%)',
+                  WebkitMaskImage:
+                    'linear-gradient(to bottom, #000 0%, #000 calc(100% - 28px), transparent 100%)',
+                }
+              : undefined),
           }}
         >
           <Flex direction="column" gap="1" {...navListProps}>
@@ -541,14 +545,9 @@ function SidebarContent({
                 badge={
                   n.label === 'Jobs' && readyToInvoiceCount > 0 ? (
                     <Badge
-                      size="1"
+                      size={isMobile ? '2' : '1'}
                       radius="full"
-                      style={{
-                        minWidth: 18,
-                        height: 18,
-                        padding: '0 5px',
-                        fontSize: 'var(--font-size-1)',
-                      }}
+                      style={navCountBadgeStyle}
                     >
                       {readyToInvoiceCount > 99
                         ? '99+'
@@ -577,14 +576,9 @@ function SidebarContent({
                     badge={
                       n.label === 'Matters' && unreadMatters > 0 ? (
                         <Badge
-                          size="1"
+                          size={isMobile ? '2' : '1'}
                           radius="full"
-                          style={{
-                            minWidth: 18,
-                            height: 18,
-                            padding: '0 5px',
-                            fontSize: 'var(--font-size-1)',
-                          }}
+                          style={navCountBadgeStyle}
                         >
                           {unreadMatters > 99 ? '99+' : unreadMatters}
                         </Badge>
@@ -620,7 +614,7 @@ function SidebarContent({
         </Box>
       </Box>
 
-      {/* Footer logo (only when open) — fade softens overflow into the logo */}
+      {/* Footer logo (only when open) */}
       {open && (
         <Box
           px="3"
@@ -628,17 +622,29 @@ function SidebarContent({
           style={{
             position: 'relative',
             flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             ...(isMobile
-              ? { background: 'var(--sidebar-surface)' }
+              ? {
+                  /* Match FAB height so logo + close sit on one row */
+                  minHeight: 'var(--app-menu-fab-size)',
+                  paddingRight:
+                    'calc(var(--space-3) + var(--app-menu-fab-size) + var(--space-2))',
+                }
               : undefined),
           }}
         >
-          {isMobile && <div className="app-sidebar-fade" aria-hidden />}
           <Flex direction="column" align="center" justify="center" gap="2">
             <img
               src={logo}
               alt="Grid Logo"
-              style={{ maxWidth: '70%', height: 'auto', borderRadius: 6 }}
+              style={{
+                maxWidth: isMobile ? '100%' : '70%',
+                width: isMobile ? 'min(200px, 100%)' : undefined,
+                height: 'auto',
+                borderRadius: 6,
+              }}
             />
             <Text
               size="1"

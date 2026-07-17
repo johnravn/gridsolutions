@@ -290,7 +290,10 @@ export default function JobInspector({
   const job = data
 
   return (
-    <Box {...scopeProps} style={{ maxWidth: '100%', minWidth: 0 }}>
+    <Box
+      {...scopeProps}
+      style={{ maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
+    >
       <Box
         mb="3"
         style={{

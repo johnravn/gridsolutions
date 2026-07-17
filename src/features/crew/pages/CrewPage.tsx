@@ -197,7 +197,7 @@ export default function CrewPage() {
         <ScrollToTopButton
           listRef={listRef}
           inspectorRef={inspectorRef}
-          visible={!isLarge}
+          visible={!isLarge && selectedUserId != null}
         />
       }
     />

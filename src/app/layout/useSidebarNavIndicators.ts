@@ -77,7 +77,9 @@ export function useSidebarNavIndicators(activeKey: string) {
 
     const resizeObserver = new ResizeObserver(updateActive)
     resizeObserver.observe(list)
-    for (const item of list.querySelectorAll<HTMLElement>('.sidebar-nav-item')) {
+    for (const item of list.querySelectorAll<HTMLElement>(
+      '.sidebar-nav-item',
+    )) {
       resizeObserver.observe(item)
     }
 
@@ -97,7 +99,10 @@ export function useSidebarNavIndicators(activeKey: string) {
       setHoverScale(0)
       setHover((prev) => (prev.ready ? { ...prev, ready: false } : prev))
       window.clearTimeout(scrollEndTimerRef.current)
-      scrollEndTimerRef.current = window.setTimeout(() => setCanAnimate(true), 80)
+      scrollEndTimerRef.current = window.setTimeout(
+        () => setCanAnimate(true),
+        80,
+      )
     }
 
     const scroller = list.parentElement

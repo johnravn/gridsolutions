@@ -220,85 +220,92 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
                 <Heading size="3">{groupName}</Heading>
               </Flex>
             )}
-            <Table.Root variant="surface" mb={groupName ? '3' : undefined}>
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
-                  {!isReadOnly && (
-                    <Table.ColumnHeaderCell style={{ width: '120px' }}>
-                      Actions
-                    </Table.ColumnHeaderCell>
-                  )}
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {periods.map((tp) => {
-                  const start = new Date(tp.start_at)
-                  const end = new Date(tp.end_at)
-                  const durationMs = end.getTime() - start.getTime()
-                  const durationHours = durationMs / (1000 * 60 * 60)
-                  const durationMins = durationMs / (1000 * 60)
+            <Box
+              style={{ overflowX: 'auto', maxWidth: '100%' }}
+              mb={groupName ? '3' : undefined}
+            >
+              <Table.Root variant="surface">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Start</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>End</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Duration</Table.ColumnHeaderCell>
+                    {!isReadOnly && (
+                      <Table.ColumnHeaderCell style={{ width: '120px' }}>
+                        Actions
+                      </Table.ColumnHeaderCell>
+                    )}
+                  </Table.Row>
+                </Table.Header>
+                <Table.Body>
+                  {periods.map((tp) => {
+                    const start = new Date(tp.start_at)
+                    const end = new Date(tp.end_at)
+                    const durationMs = end.getTime() - start.getTime()
+                    const durationHours = durationMs / (1000 * 60 * 60)
+                    const durationMins = durationMs / (1000 * 60)
 
-                  let durationText = ''
-                  if (durationHours >= 1) {
-                    const hours = Math.floor(durationHours)
-                    const mins = Math.floor(
-                      (durationMs % (1000 * 60 * 60)) / (1000 * 60),
-                    )
-                    if (mins > 0) {
-                      durationText = `${hours}h ${mins}m`
+                    let durationText = ''
+                    if (durationHours >= 1) {
+                      const hours = Math.floor(durationHours)
+                      const mins = Math.floor(
+                        (durationMs % (1000 * 60 * 60)) / (1000 * 60),
+                      )
+                      if (mins > 0) {
+                        durationText = `${hours}h ${mins}m`
+                      } else {
+                        durationText = `${hours}h`
+                      }
                     } else {
-                      durationText = `${hours}h`
+                      durationText = `${Math.floor(durationMins)}m`
                     }
-                  } else {
-                    durationText = `${Math.floor(durationMins)}m`
-                  }
 
-                  return (
-                    <Table.Row key={tp.id}>
-                      <Table.Cell>
-                        <Text weight="medium">{tp.title || '(untitled)'}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2">{formatTime(tp.start_at)}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2">{formatTime(tp.end_at)}</Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Text size="2" color="gray">
-                          {durationText}
-                        </Text>
-                      </Table.Cell>
-                      {!isReadOnly && (
+                    return (
+                      <Table.Row key={tp.id}>
                         <Table.Cell>
-                          <Flex gap="2">
-                            <IconButton
-                              size="1"
-                              variant="ghost"
-                              onClick={() => setEditing(tp)}
-                            >
-                              <Edit />
-                            </IconButton>
-                            <IconButton
-                              size="1"
-                              variant="ghost"
-                              color="red"
-                              onClick={() => setDeleting(tp)}
-                            >
-                              <Trash />
-                            </IconButton>
-                          </Flex>
+                          <Text weight="medium">
+                            {tp.title || '(untitled)'}
+                          </Text>
                         </Table.Cell>
-                      )}
-                    </Table.Row>
-                  )
-                })}
-              </Table.Body>
-            </Table.Root>
+                        <Table.Cell>
+                          <Text size="2">{formatTime(tp.start_at)}</Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2">{formatTime(tp.end_at)}</Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Text size="2" color="gray">
+                            {durationText}
+                          </Text>
+                        </Table.Cell>
+                        {!isReadOnly && (
+                          <Table.Cell>
+                            <Flex gap="2">
+                              <IconButton
+                                size="1"
+                                variant="ghost"
+                                onClick={() => setEditing(tp)}
+                              >
+                                <Edit />
+                              </IconButton>
+                              <IconButton
+                                size="1"
+                                variant="ghost"
+                                color="red"
+                                onClick={() => setDeleting(tp)}
+                              >
+                                <Trash />
+                              </IconButton>
+                            </Flex>
+                          </Table.Cell>
+                        )}
+                      </Table.Row>
+                    )
+                  })}
+                </Table.Body>
+              </Table.Root>
+            </Box>
           </Box>
         ))}
 

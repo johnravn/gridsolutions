@@ -437,178 +437,180 @@ export default function ContactsTab({
       <Heading size="2" mb="2" mt="4">
         From job
       </Heading>
-      <Table.Root variant="surface">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Company</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {(data?.jobContacts ?? []).map((r: any) => {
-            const isExpanded = expandedContactId === r.contact_id
-            return (
-              <React.Fragment key={r.contact_id}>
-                <Table.Row
-                  style={{
-                    cursor: 'pointer',
-                    transition: 'background-color 0.15s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'transparent'
-                  }}
-                  onClick={() => {
-                    setExpandedContactId(isExpanded ? null : r.contact_id)
-                  }}
-                >
-                  <Table.Cell>{r.contact?.name ?? '—'}</Table.Cell>
-                  <Table.Cell>{r.contact?.company_text ?? '—'}</Table.Cell>
-                  <Table.Cell>
-                    <Flex align="center" justify="between" width="100%">
-                      <Text>{r.role ?? '—'}</Text>
-                      <NavArrowDown
-                        width={16}
-                        height={16}
-                        style={{
-                          transform: isExpanded
-                            ? 'rotate(180deg)'
-                            : 'rotate(0deg)',
-                          transition: 'transform 0.2s',
-                          color: 'var(--gray-11)',
-                          flexShrink: 0,
-                        }}
-                      />
-                    </Flex>
-                  </Table.Cell>
-                </Table.Row>
-                {isExpanded && (
-                  <Table.Row>
-                    <Table.Cell colSpan={3}>
-                      <Box py="3" px="2">
-                        <Grid columns="2" gap="3">
-                          <Box>
-                            <Text size="1" color="gray" mb="1">
-                              Email
-                            </Text>
-                            <Text size="2">
-                              {r.contact?.email ? (
-                                <a
-                                  href={`mailto:${r.contact.email}`}
-                                  style={{
-                                    color: 'inherit',
-                                    textDecoration: 'none',
-                                  }}
-                                >
-                                  {r.contact.email}
-                                </a>
-                              ) : (
-                                '—'
-                              )}
-                            </Text>
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" mb="1">
-                              Phone
-                            </Text>
-                            {r.contact?.phone ? (
-                              <Flex align="center" gap="2">
-                                <a
-                                  href={`tel:${r.contact.phone}`}
-                                  style={{
-                                    color: 'inherit',
-                                    textDecoration: 'none',
-                                  }}
-                                >
-                                  <Text size="2">
-                                    {prettyPhone(r.contact.phone)}
-                                  </Text>
-                                </a>
-                                <CopyIconButton text={r.contact.phone} />
-                              </Flex>
-                            ) : (
-                              <Text size="2">—</Text>
-                            )}
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" mb="1">
-                              Title
-                            </Text>
-                            <Text size="2">{r.contact?.title ?? '—'}</Text>
-                          </Box>
-                          <Box>
-                            <Text size="1" color="gray" mb="1">
-                              Company
-                            </Text>
-                            <Text size="2">
-                              {r.contact?.company_text ?? '—'}
-                            </Text>
-                          </Box>
-                          {r.notes && (
-                            <Box style={{ gridColumn: 'span 2' }}>
-                              <Text size="1" color="gray" mb="1">
-                                Notes
-                              </Text>
-                              <Text size="2">{r.notes}</Text>
-                            </Box>
-                          )}
-                        </Grid>
-                        {!isReadOnly && (
-                          <Flex gap="2" mt="3" justify="end">
-                            <Button
-                              size="2"
-                              variant="soft"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setEditOpen({
-                                  link: {
-                                    contact_id: r.contact_id,
-                                    role: r.role,
-                                    notes: r.notes,
-                                  },
-                                  contact: r.contact,
-                                })
-                              }}
-                            >
-                              <Edit width={16} height={16} /> Edit
-                            </Button>
-                            <Button
-                              size="2"
-                              variant="soft"
-                              color="red"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setPendingDeleteContactId(r.contact_id)
-                                setPendingDeleteContactName(
-                                  r.contact?.name ?? 'contact',
-                                )
-                                setDeleteConfirmOpen(true)
-                              }}
-                              disabled={deleteContact.isPending}
-                            >
-                              <Trash width={16} height={16} /> Remove
-                            </Button>
-                          </Flex>
-                        )}
-                      </Box>
+      <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+        <Table.Root variant="surface">
+          <Table.Header>
+            <Table.Row>
+              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Company</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
+            </Table.Row>
+          </Table.Header>
+          <Table.Body>
+            {(data?.jobContacts ?? []).map((r: any) => {
+              const isExpanded = expandedContactId === r.contact_id
+              return (
+                <React.Fragment key={r.contact_id}>
+                  <Table.Row
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'background-color 0.15s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent'
+                    }}
+                    onClick={() => {
+                      setExpandedContactId(isExpanded ? null : r.contact_id)
+                    }}
+                  >
+                    <Table.Cell>{r.contact?.name ?? '—'}</Table.Cell>
+                    <Table.Cell>{r.contact?.company_text ?? '—'}</Table.Cell>
+                    <Table.Cell>
+                      <Flex align="center" justify="between" width="100%">
+                        <Text>{r.role ?? '—'}</Text>
+                        <NavArrowDown
+                          width={16}
+                          height={16}
+                          style={{
+                            transform: isExpanded
+                              ? 'rotate(180deg)'
+                              : 'rotate(0deg)',
+                            transition: 'transform 0.2s',
+                            color: 'var(--gray-11)',
+                            flexShrink: 0,
+                          }}
+                        />
+                      </Flex>
                     </Table.Cell>
                   </Table.Row>
-                )}
-              </React.Fragment>
-            )
-          })}
-          {(data?.jobContacts ?? []).length === 0 && (
-            <Table.Row>
-              <Table.Cell colSpan={3}>
-                <Text color="gray">No job contacts</Text>
-              </Table.Cell>
-            </Table.Row>
-          )}
-        </Table.Body>
-      </Table.Root>
+                  {isExpanded && (
+                    <Table.Row>
+                      <Table.Cell colSpan={3}>
+                        <Box py="3" px="2">
+                          <Grid columns="2" gap="3">
+                            <Box>
+                              <Text size="1" color="gray" mb="1">
+                                Email
+                              </Text>
+                              <Text size="2">
+                                {r.contact?.email ? (
+                                  <a
+                                    href={`mailto:${r.contact.email}`}
+                                    style={{
+                                      color: 'inherit',
+                                      textDecoration: 'none',
+                                    }}
+                                  >
+                                    {r.contact.email}
+                                  </a>
+                                ) : (
+                                  '—'
+                                )}
+                              </Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" mb="1">
+                                Phone
+                              </Text>
+                              {r.contact?.phone ? (
+                                <Flex align="center" gap="2">
+                                  <a
+                                    href={`tel:${r.contact.phone}`}
+                                    style={{
+                                      color: 'inherit',
+                                      textDecoration: 'none',
+                                    }}
+                                  >
+                                    <Text size="2">
+                                      {prettyPhone(r.contact.phone)}
+                                    </Text>
+                                  </a>
+                                  <CopyIconButton text={r.contact.phone} />
+                                </Flex>
+                              ) : (
+                                <Text size="2">—</Text>
+                              )}
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" mb="1">
+                                Title
+                              </Text>
+                              <Text size="2">{r.contact?.title ?? '—'}</Text>
+                            </Box>
+                            <Box>
+                              <Text size="1" color="gray" mb="1">
+                                Company
+                              </Text>
+                              <Text size="2">
+                                {r.contact?.company_text ?? '—'}
+                              </Text>
+                            </Box>
+                            {r.notes && (
+                              <Box style={{ gridColumn: 'span 2' }}>
+                                <Text size="1" color="gray" mb="1">
+                                  Notes
+                                </Text>
+                                <Text size="2">{r.notes}</Text>
+                              </Box>
+                            )}
+                          </Grid>
+                          {!isReadOnly && (
+                            <Flex gap="2" mt="3" justify="end">
+                              <Button
+                                size="2"
+                                variant="soft"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditOpen({
+                                    link: {
+                                      contact_id: r.contact_id,
+                                      role: r.role,
+                                      notes: r.notes,
+                                    },
+                                    contact: r.contact,
+                                  })
+                                }}
+                              >
+                                <Edit width={16} height={16} /> Edit
+                              </Button>
+                              <Button
+                                size="2"
+                                variant="soft"
+                                color="red"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setPendingDeleteContactId(r.contact_id)
+                                  setPendingDeleteContactName(
+                                    r.contact?.name ?? 'contact',
+                                  )
+                                  setDeleteConfirmOpen(true)
+                                }}
+                                disabled={deleteContact.isPending}
+                              >
+                                <Trash width={16} height={16} /> Remove
+                              </Button>
+                            </Flex>
+                          )}
+                        </Box>
+                      </Table.Cell>
+                    </Table.Row>
+                  )}
+                </React.Fragment>
+              )
+            })}
+            {(data?.jobContacts ?? []).length === 0 && (
+              <Table.Row>
+                <Table.Cell colSpan={3}>
+                  <Text color="gray">No job contacts</Text>
+                </Table.Cell>
+              </Table.Row>
+            )}
+          </Table.Body>
+        </Table.Root>
+      </Box>
 
       {/* Delete confirmation dialog */}
       <AlertDialog.Root
@@ -648,74 +650,76 @@ export default function ContactsTab({
       <Heading size="2" mb="2" mt="4">
         Crew involved
       </Heading>
-      <Table.Root variant="surface">
-        <Table.Header>
-          <Table.Row>
-            <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-            <Table.ColumnHeaderCell>Phone</Table.ColumnHeaderCell>
-          </Table.Row>
-        </Table.Header>
-        <Table.Body>
-          {(data?.crew ?? []).map((c, i) => (
-            <Table.Row key={i}>
-              <Table.Cell>{c.name}</Table.Cell>
-              <Table.Cell>
-                {c.categories.length ? (
-                  <Flex gap="1" wrap="wrap">
-                    {c.categories.map((cat) => (
-                      <Badge
-                        key={cat}
-                        size="1"
-                        variant="outline"
-                        color={getCategoryColor(cat)}
-                        style={{ textTransform: 'capitalize' }}
-                      >
-                        {cat}
-                      </Badge>
-                    ))}
-                  </Flex>
-                ) : (
-                  '—'
-                )}
-              </Table.Cell>
-              <Table.Cell>
-                {c.roles.length ? c.roles.join(', ') : '—'}
-              </Table.Cell>
-              <Table.Cell>
-                {c.email && c.email !== '—' ? (
-                  <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>
-                    {c.email}
-                  </a>
-                ) : (
-                  '—'
-                )}
-              </Table.Cell>
-              <Table.Cell>
-                {c.phone ? (
-                  <Flex align="center" gap="2">
-                    <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>
-                      {prettyPhone(c.phone)}
-                    </a>
-                    <CopyIconButton text={c.phone} />
-                  </Flex>
-                ) : (
-                  '—'
-                )}
-              </Table.Cell>
-            </Table.Row>
-          ))}
-          {(data?.crew ?? []).length === 0 && (
+      <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+        <Table.Root variant="surface">
+          <Table.Header>
             <Table.Row>
-              <Table.Cell colSpan={5}>
-                <Text color="gray">No confirmed crew</Text>
-              </Table.Cell>
+              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Category</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Role</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
+              <Table.ColumnHeaderCell>Phone</Table.ColumnHeaderCell>
             </Table.Row>
-          )}
-        </Table.Body>
-      </Table.Root>
+          </Table.Header>
+          <Table.Body>
+            {(data?.crew ?? []).map((c, i) => (
+              <Table.Row key={i}>
+                <Table.Cell>{c.name}</Table.Cell>
+                <Table.Cell>
+                  {c.categories.length ? (
+                    <Flex gap="1" wrap="wrap">
+                      {c.categories.map((cat) => (
+                        <Badge
+                          key={cat}
+                          size="1"
+                          variant="outline"
+                          color={getCategoryColor(cat)}
+                          style={{ textTransform: 'capitalize' }}
+                        >
+                          {cat}
+                        </Badge>
+                      ))}
+                    </Flex>
+                  ) : (
+                    '—'
+                  )}
+                </Table.Cell>
+                <Table.Cell>
+                  {c.roles.length ? c.roles.join(', ') : '—'}
+                </Table.Cell>
+                <Table.Cell>
+                  {c.email && c.email !== '—' ? (
+                    <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>
+                      {c.email}
+                    </a>
+                  ) : (
+                    '—'
+                  )}
+                </Table.Cell>
+                <Table.Cell>
+                  {c.phone ? (
+                    <Flex align="center" gap="2">
+                      <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>
+                        {prettyPhone(c.phone)}
+                      </a>
+                      <CopyIconButton text={c.phone} />
+                    </Flex>
+                  ) : (
+                    '—'
+                  )}
+                </Table.Cell>
+              </Table.Row>
+            ))}
+            {(data?.crew ?? []).length === 0 && (
+              <Table.Row>
+                <Table.Cell colSpan={5}>
+                  <Text color="gray">No confirmed crew</Text>
+                </Table.Cell>
+              </Table.Row>
+            )}
+          </Table.Body>
+        </Table.Root>
+      </Box>
     </Box>
   )
 }

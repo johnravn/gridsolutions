@@ -248,11 +248,33 @@ function MobileSkeleton() {
             }}
           />
         </Box>
-        <Flex gap="3" direction="column">
-          <Card size="2" style={{ height: 52, padding: 0 }} />
+        <Flex direction="column" gap="2">
+          {[0, 1, 2].map((i) => (
+            <Card
+              key={i}
+              size="2"
+              style={{
+                padding: 0,
+                height: 56,
+                background: 'var(--gray-a2)',
+              }}
+            />
+          ))}
         </Flex>
         <HorizontalRowSkeleton />
-        <HorizontalRowSkeleton />
+        <Flex direction="column" gap="2">
+          {[0, 1].map((i) => (
+            <Card
+              key={i}
+              size="2"
+              style={{
+                padding: 0,
+                height: 56,
+                background: 'var(--gray-a2)',
+              }}
+            />
+          ))}
+        </Flex>
       </Flex>
     </Box>
   )

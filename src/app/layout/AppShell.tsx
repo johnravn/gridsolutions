@@ -245,27 +245,8 @@ export default function AppShell() {
               style={{
                 flexShrink: 0,
                 paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
-                ...(!isPublic && isMobile && open
-                  ? { paddingLeft: 'calc(var(--space-4) + 0.75rem)' }
-                  : {}),
               }}
             >
-              {!isPublic && isMobile && (
-                <IconButton
-                  size="3"
-                  variant="ghost"
-                  aria-label={(open ? 'Close' : 'Open') + ' menu'}
-                  aria-expanded={open}
-                  onClick={() => setOpen((o) => !o)}
-                  style={{ minWidth: 44, minHeight: 44 }}
-                >
-                  {open ? (
-                    <Xmark width={22} height={22} />
-                  ) : (
-                    <Menu width={22} height={22} />
-                  )}
-                </IconButton>
-              )}
               {!isPublic && (
                 <Text
                   size="8"
@@ -329,14 +310,20 @@ export default function AppShell() {
           )}
           <Box
             p={isPublic ? undefined : '4'}
-            className={isPublic ? undefined : 'app-main-scroll'}
+            className={
+              isPublic
+                ? undefined
+                : open && isMobile
+                  ? 'app-main-scroll app-main-scroll--locked'
+                  : 'app-main-scroll'
+            }
             style={{
               flex: 1, // <-- grow to fill
               minHeight: 0, // <-- allow scrolling area to shrink
               overflow: isPublic ? 'visible' : 'auto', // <-- scroll here
               paddingBottom: isPublic
                 ? undefined
-                : 'calc(var(--space-4) + var(--app-safe-bottom))',
+                : 'var(--app-main-padding-bottom)',
             }}
           >
             {!isPublic && <OfflineBanner />}
@@ -382,6 +369,32 @@ export default function AppShell() {
           </Box>
         </Flex>
       </Box>
+      {!isPublic && !showNoCompanyMessage && isMobile && (
+        <IconButton
+          size="3"
+          variant="ghost"
+          className="app-menu-fab"
+          data-open={open ? 'true' : undefined}
+          aria-label={open ? 'Close menu' : 'Open menu'}
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="app-menu-fab-icons" aria-hidden>
+            <Menu
+              className="app-menu-fab-icons__menu"
+              width={22}
+              height={22}
+              strokeWidth={2}
+            />
+            <Xmark
+              className="app-menu-fab-icons__close"
+              width={22}
+              height={22}
+              strokeWidth={2}
+            />
+          </span>
+        </IconButton>
+      )}
       {!isPublic && <DemoModeBadge />}
       {isLocal && (
         <Flex
@@ -390,7 +403,9 @@ export default function AppShell() {
           style={{
             position: 'fixed',
             left: 12,
-            bottom: 'calc(12px + var(--app-safe-bottom))',
+            bottom: isMobile
+              ? 'calc(12px + var(--app-safe-bottom) + var(--app-menu-fab-clearance))'
+              : 'calc(12px + var(--app-safe-bottom))',
             zIndex: 50,
           }}
         >
