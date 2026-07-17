@@ -3,10 +3,7 @@
  * No path aliases — safe for Vercel serverless.
  */
 
-import {
-  makeContaFetch,
-  syncCustomersWithContaCore,
-} from './customerSyncCore.js'
+import { makeContaFetch, syncCustomersWithContaCore } from './customerSyncCore.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../types/database.types.js'
 
