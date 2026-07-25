@@ -233,7 +233,12 @@ describe('DateTimeRangePicker', () => {
 
   it('updates closed trigger when controlled props are prefilled after mount', () => {
     const { rerender } = renderWithProviders(
-      <DateTimeRangePicker startAt="" endAt="" onChange={vi.fn()} locale="en" />,
+      <DateTimeRangePicker
+        startAt=""
+        endAt=""
+        onChange={vi.fn()}
+        locale="en"
+      />,
     )
     expect(screen.getByText('Select period')).toBeInTheDocument()
 

@@ -10,7 +10,9 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { Edit, Trash } from 'iconoir-react'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
@@ -73,187 +75,189 @@ export default function UserInspector({
     null
 
   return (
-    <Box>
-      {/* Header */}
-      <Flex align="center" justify="between" gap="3" mb="3" wrap="wrap">
-        <Flex align="center" gap="3">
-          <Avatar
-            src={avatarUrl ?? undefined}
-            fallback={getInitials(fullName ?? user.email)}
-            size="5"
-            style={{ border: '1px solid var(--gray-5)' }}
-          />
-          <div>
-            <Text as="div" size="4" weight="bold">
-              {fullName ?? user.email}
-            </Text>
-            <Text as="div" color="gray" size="2">
-              <a href={`mailto:${user.email}`} style={{ color: 'inherit' }}>
-                {user.email}
-              </a>
-            </Text>
-          </div>
-        </Flex>
-
-        <Flex align="center" gap="2">
-          <Button
-            size="2"
-            variant="soft"
-            onClick={() => {
-              onEdit?.()
-            }}
-          >
-            <Edit />
-          </Button>
-          <Button
-            size="2"
-            variant="surface"
-            color="red"
-            onClick={() => {
-              onDelete?.()
-            }}
-          >
-            <Trash />
-          </Button>
-        </Flex>
-      </Flex>
-
-      <Separator my="2" />
-
-      {/* Primary info */}
-      <DefinitionList>
-        <DT>User ID</DT>
-        <DD>{user.user_id}</DD>
-
-        <DT>Joined</DT>
-        <DD>{formatMonthYear(user.created_at)}</DD>
-
-        <DT>Phone</DT>
-        <DD>
-          {user.phone ? (
-            <a href={`tel:${user.phone}`} style={{ color: 'inherit' }}>
-              {prettyPhone(user.phone)}
-            </a>
-          ) : (
-            '—'
-          )}
-        </DD>
-
-        <DT>First name</DT>
-        <DD>{user.first_name || '—'}</DD>
-
-        <DT>Last name</DT>
-        <DD>{user.last_name || '—'}</DD>
-
-        <DT>Display name</DT>
-        <DD>{user.display_name || '—'}</DD>
-
-        <DT>Superuser</DT>
-        <DD>{user.superuser ? 'Yes' : 'No'}</DD>
-
-        {user.locale && (
-          <>
-            <DT>Locale</DT>
-            <DD>{user.locale}</DD>
-          </>
-        )}
-
-        {user.timezone && (
-          <>
-            <DT>Timezone</DT>
-            <DD>{user.timezone}</DD>
-          </>
-        )}
-      </DefinitionList>
-
-      {/* Bio */}
-      {(user.bio || companies.length > 0) && (
-        <>
-          <Separator my="2" />
-          {user.bio && (
-            <>
-              <SectionTitle>Bio</SectionTitle>
-              <Box mb="3">
-                <Text size="2" color={user.bio ? undefined : 'gray'}>
-                  {user.bio}
-                </Text>
-              </Box>
-            </>
-          )}
-
-          {companies.length > 0 && (
-            <>
-              <SectionTitle>Companies</SectionTitle>
-              <Box mb="3">
-                <Text size="2">
-                  {companies.map((comp) => (
-                    <div key={comp.company_id} style={{ marginBottom: 4 }}>
-                      {comp.company_name} ({comp.role})
-                    </div>
-                  ))}
-                </Text>
-              </Box>
-            </>
-          )}
-        </>
-      )}
-
-      {/* Address */}
-      {user.primary_address && (
-        <>
-          <Separator my="2" />
-          <SectionTitle>Address</SectionTitle>
-          <DefinitionList>
-            <DT>Label</DT>
-            <DD>{user.primary_address.name || '—'}</DD>
-
-            <DT>Street</DT>
-            <DD>{user.primary_address.address_line || '—'}</DD>
-
-            <DT>City</DT>
-            <DD>
-              {user.primary_address
-                ? `${user.primary_address.zip_code} ${user.primary_address.city}`
-                : '—'}
-            </DD>
-
-            <DT>Country</DT>
-            <DD>{user.primary_address.country || '—'}</DD>
-          </DefinitionList>
-        </>
-      )}
-
-      {/* Optional details (preferences) */}
-      {user.preferences && (
-        <>
-          <Separator my="2" />
-          <SectionTitle>Optional details</SectionTitle>
-          <DefinitionList>
-            <DT>Date of birth</DT>
-            <DD>{formatMonthYear(user.preferences.date_of_birth)}</DD>
-
-            <DT>Driver's license</DT>
-            <DD>{user.preferences.drivers_license || '—'}</DD>
-
-            <DT>Other licenses</DT>
-            <DD>{listOrDash(user.preferences.licenses)}</DD>
-
-            <DT>Certificates</DT>
-            <DD>{listOrDash(user.preferences.certificates)}</DD>
-
-            <DT>Notes</DT>
-            <DD>
-              <Text
-                size="2"
-                color={user.preferences.notes ? undefined : 'gray'}
-              >
-                {user.preferences.notes || '—'}
+    <InspectorFadeIn key={id}>
+      <Box>
+        {/* Header */}
+        <Flex align="center" justify="between" gap="3" mb="3" wrap="wrap">
+          <Flex align="center" gap="3">
+            <Avatar
+              src={avatarUrl ?? undefined}
+              fallback={getInitials(fullName ?? user.email)}
+              size="5"
+              style={{ border: '1px solid var(--gray-5)' }}
+            />
+            <div>
+              <Text as="div" size="4" weight="bold">
+                {fullName ?? user.email}
               </Text>
-            </DD>
-          </DefinitionList>
-        </>
-      )}
-    </Box>
+              <Text as="div" color="gray" size="2">
+                <a href={`mailto:${user.email}`} style={{ color: 'inherit' }}>
+                  {user.email}
+                </a>
+              </Text>
+            </div>
+          </Flex>
+
+          <Flex align="center" gap="2">
+            <Button
+              size="2"
+              variant="soft"
+              onClick={() => {
+                onEdit?.()
+              }}
+            >
+              <Edit />
+            </Button>
+            <Button
+              size="2"
+              variant="surface"
+              color="red"
+              onClick={() => {
+                onDelete?.()
+              }}
+            >
+              <Trash />
+            </Button>
+          </Flex>
+        </Flex>
+
+        <Separator my="2" />
+
+        {/* Primary info */}
+        <DefinitionList>
+          <DT>User ID</DT>
+          <DD>{user.user_id}</DD>
+
+          <DT>Joined</DT>
+          <DD>{formatMonthYear(user.created_at)}</DD>
+
+          <DT>Phone</DT>
+          <DD>
+            {user.phone ? (
+              <a href={`tel:${user.phone}`} style={{ color: 'inherit' }}>
+                {prettyPhone(user.phone)}
+              </a>
+            ) : (
+              '—'
+            )}
+          </DD>
+
+          <DT>First name</DT>
+          <DD>{user.first_name || '—'}</DD>
+
+          <DT>Last name</DT>
+          <DD>{user.last_name || '—'}</DD>
+
+          <DT>Display name</DT>
+          <DD>{user.display_name || '—'}</DD>
+
+          <DT>Superuser</DT>
+          <DD>{user.superuser ? 'Yes' : 'No'}</DD>
+
+          {user.locale && (
+            <>
+              <DT>Locale</DT>
+              <DD>{user.locale}</DD>
+            </>
+          )}
+
+          {user.timezone && (
+            <>
+              <DT>Timezone</DT>
+              <DD>{user.timezone}</DD>
+            </>
+          )}
+        </DefinitionList>
+
+        {/* Bio */}
+        {(user.bio || companies.length > 0) && (
+          <>
+            <Separator my="2" />
+            {user.bio && (
+              <>
+                <SectionTitle>Bio</SectionTitle>
+                <Box mb="3">
+                  <Text size="2" color={user.bio ? undefined : 'gray'}>
+                    {user.bio}
+                  </Text>
+                </Box>
+              </>
+            )}
+
+            {companies.length > 0 && (
+              <>
+                <SectionTitle>Companies</SectionTitle>
+                <Box mb="3">
+                  <Text size="2">
+                    {companies.map((comp) => (
+                      <div key={comp.company_id} style={{ marginBottom: 4 }}>
+                        {comp.company_name} ({comp.role})
+                      </div>
+                    ))}
+                  </Text>
+                </Box>
+              </>
+            )}
+          </>
+        )}
+
+        {/* Address */}
+        {user.primary_address && (
+          <>
+            <Separator my="2" />
+            <SectionTitle>Address</SectionTitle>
+            <DefinitionList>
+              <DT>Label</DT>
+              <DD>{user.primary_address.name || '—'}</DD>
+
+              <DT>Street</DT>
+              <DD>{user.primary_address.address_line || '—'}</DD>
+
+              <DT>City</DT>
+              <DD>
+                {user.primary_address
+                  ? `${user.primary_address.zip_code} ${user.primary_address.city}`
+                  : '—'}
+              </DD>
+
+              <DT>Country</DT>
+              <DD>{user.primary_address.country || '—'}</DD>
+            </DefinitionList>
+          </>
+        )}
+
+        {/* Optional details (preferences) */}
+        {user.preferences && (
+          <>
+            <Separator my="2" />
+            <SectionTitle>Optional details</SectionTitle>
+            <DefinitionList>
+              <DT>Date of birth</DT>
+              <DD>{formatMonthYear(user.preferences.date_of_birth)}</DD>
+
+              <DT>Driver's license</DT>
+              <DD>{user.preferences.drivers_license || '—'}</DD>
+
+              <DT>Other licenses</DT>
+              <DD>{listOrDash(user.preferences.licenses)}</DD>
+
+              <DT>Certificates</DT>
+              <DD>{listOrDash(user.preferences.certificates)}</DD>
+
+              <DT>Notes</DT>
+              <DD>
+                <Text
+                  size="2"
+                  color={user.preferences.notes ? undefined : 'gray'}
+                >
+                  {user.preferences.notes || '—'}
+                </Text>
+              </DD>
+            </DefinitionList>
+          </>
+        )}
+      </Box>
+    </InspectorFadeIn>
   )
 }
 

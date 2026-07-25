@@ -20,7 +20,9 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import {
@@ -290,318 +292,333 @@ export default function JobInspector({
   const job = data
 
   return (
-    <Box
-      {...scopeProps}
-      style={{ maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
-    >
+    <InspectorFadeIn key={id}>
       <Box
-        mb="3"
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-        }}
+        {...scopeProps}
+        style={{ maxWidth: '100%', minWidth: 0, overflowX: 'hidden' }}
       >
-        <Flex
-          direction="column"
-          gap="2"
-          style={{ minWidth: 0, flex: '1 1 auto' }}
-        >
-          <Flex
-            align="center"
-            gap="3"
-            wrap="wrap"
-            justify="between"
-            style={{ width: '100%' }}
-          >
-            <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0 }}>
-              <Heading
-                size="4"
-                style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
-              >
-                {job.title}
-              </Heading>
-              {job.jobnr && (
-                <Text size="3" color="gray" weight="medium">
-                  #{String(job.jobnr).padStart(6, '0')}
-                </Text>
-              )}
-            </Flex>
-            {job.recurring_job && (
-              <Tooltip content="Open recurring job series">
-                <Badge
-                  size="1"
-                  variant="outline"
-                  color="violet"
-                  style={{
-                    width: 'fit-content',
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                  }}
-                  onClick={() =>
-                    navigate({
-                      to: '/jobs',
-                      search: {
-                        jobId: undefined,
-                        recurringJobId: job.recurring_job!.id,
-                        tab: undefined,
-                      },
-                    })
-                  }
-                >
-                  Recurring job
-                </Badge>
-              </Tooltip>
-            )}
-          </Flex>
-        </Flex>
-        <div
+        <Box
+          mb="3"
           style={{
             display: 'flex',
-            gap: 8,
-            alignItems: 'center',
             flexWrap: 'wrap',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
           }}
         >
-          {(() => {
-            const displayStatus = getDisplayStatus(job.status, companyRole)
-            return (
-              <Badge
-                color={getJobStatusColor(displayStatus)}
-                radius="full"
-                highContrast
-              >
-                {makeWordPresentable(displayStatus)}
-              </Badge>
-            )
-          })()}
-          {canWrite && (
-            <>
-              <Tooltip content="Edit job">
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ minWidth: 0, flex: '1 1 auto' }}
+          >
+            <Flex
+              align="center"
+              gap="3"
+              wrap="wrap"
+              justify="between"
+              style={{ width: '100%' }}
+            >
+              <Flex align="center" gap="3" wrap="wrap" style={{ minWidth: 0 }}>
+                <Heading
+                  size="4"
+                  style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
+                >
+                  {job.title}
+                </Heading>
+                {job.jobnr && (
+                  <Text size="3" color="gray" weight="medium">
+                    #{String(job.jobnr).padStart(6, '0')}
+                  </Text>
+                )}
+              </Flex>
+              {job.recurring_job && (
+                <Tooltip content="Open recurring job series">
+                  <Badge
+                    size="1"
+                    variant="outline"
+                    color="violet"
+                    style={{
+                      width: 'fit-content',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                    }}
+                    onClick={() =>
+                      navigate({
+                        to: '/jobs',
+                        search: {
+                          jobId: undefined,
+                          recurringJobId: job.recurring_job!.id,
+                          tab: undefined,
+                        },
+                      })
+                    }
+                  >
+                    Recurring job
+                  </Badge>
+                </Tooltip>
+              )}
+            </Flex>
+          </Flex>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              alignItems: 'center',
+              flexWrap: 'wrap',
+            }}
+          >
+            {(() => {
+              const displayStatus = getDisplayStatus(job.status, companyRole)
+              return (
+                <Badge
+                  color={getJobStatusColor(displayStatus)}
+                  radius="full"
+                  highContrast
+                >
+                  {makeWordPresentable(displayStatus)}
+                </Badge>
+              )
+            })()}
+            {canWrite && (
+              <>
+                <Tooltip content="Edit job">
+                  <Button
+                    size="2"
+                    variant="soft"
+                    aria-label="Edit job"
+                    onClick={() => setEditOpen(true)}
+                  >
+                    <Edit width={16} height={16} />
+                  </Button>
+                </Tooltip>
+                <Tooltip content="Copy job">
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => setCopyOpen(true)}
+                  >
+                    <Copy width={16} height={16} />
+                  </Button>
+                </Tooltip>
                 <Button
                   size="2"
                   variant="soft"
-                  aria-label="Edit job"
-                  onClick={() => setEditOpen(true)}
+                  color="red"
+                  onClick={() => setDeleteOpen(true)}
                 >
-                  <Edit width={16} height={16} />
+                  <Trash width={16} height={16} />
                 </Button>
-              </Tooltip>
-              <Tooltip content="Copy job">
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => setCopyOpen(true)}
+                <Tooltip
+                  content={job.archived ? 'Unarchive job' : 'Archive job'}
                 >
-                  <Copy width={16} height={16} />
-                </Button>
-              </Tooltip>
-              <Button
-                size="2"
-                variant="soft"
-                color="red"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash width={16} height={16} />
-              </Button>
-              <Tooltip content={job.archived ? 'Unarchive job' : 'Archive job'}>
-                <Button
-                  size="2"
-                  variant="soft"
-                  color={job.archived ? 'blue' : 'gray'}
-                  onClick={() => setArchiveOpen(true)}
-                  disabled={archiveJob.isPending}
-                >
-                  <Archive width={16} height={16} />
-                </Button>
-              </Tooltip>
-              <JobDialog
-                open={editOpen}
-                onOpenChange={setEditOpen}
-                companyId={job.company_id}
-                mode="edit"
-                initialData={job}
-              />
-              <CopyJobDialog
-                open={copyOpen}
-                onOpenChange={setCopyOpen}
-                initialStartAt={job.start_at}
-                initialEndAt={job.end_at}
-                isCopying={copyJobMutation.isPending}
-                onConfirm={({ startAt, endAt }) =>
-                  copyJobMutation.mutate({ jobId: job.id, startAt, endAt })
-                }
-              />
-              <DeleteJobDialog
-                open={deleteOpen}
-                onOpenChange={setDeleteOpen}
-                job={job}
-                onConfirm={() => deleteJob.mutate(job.id)}
-                isDeleting={deleteJob.isPending}
-              />
-              <ArchiveJobDialog
-                open={archiveOpen}
-                onOpenChange={setArchiveOpen}
-                job={job}
-                onConfirm={() =>
-                  archiveJob.mutate({ jobId: job.id, archived: !job.archived })
-                }
-                isArchiving={archiveJob.isPending}
-              />
-            </>
-          )}
-        </div>
-      </Box>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    color={job.archived ? 'blue' : 'gray'}
+                    onClick={() => setArchiveOpen(true)}
+                    disabled={archiveJob.isPending}
+                  >
+                    <Archive width={16} height={16} />
+                  </Button>
+                </Tooltip>
+                <JobDialog
+                  open={editOpen}
+                  onOpenChange={setEditOpen}
+                  companyId={job.company_id}
+                  mode="edit"
+                  initialData={job}
+                />
+                <CopyJobDialog
+                  open={copyOpen}
+                  onOpenChange={setCopyOpen}
+                  initialStartAt={job.start_at}
+                  initialEndAt={job.end_at}
+                  isCopying={copyJobMutation.isPending}
+                  onConfirm={({ startAt, endAt }) =>
+                    copyJobMutation.mutate({ jobId: job.id, startAt, endAt })
+                  }
+                />
+                <DeleteJobDialog
+                  open={deleteOpen}
+                  onOpenChange={setDeleteOpen}
+                  job={job}
+                  onConfirm={() => deleteJob.mutate(job.id)}
+                  isDeleting={deleteJob.isPending}
+                />
+                <ArchiveJobDialog
+                  open={archiveOpen}
+                  onOpenChange={setArchiveOpen}
+                  job={job}
+                  onConfirm={() =>
+                    archiveJob.mutate({
+                      jobId: job.id,
+                      archived: !job.archived,
+                    })
+                  }
+                  isArchiving={archiveJob.isPending}
+                />
+              </>
+            )}
+          </div>
+        </Box>
 
-      <Tabs.Root
-        defaultValue="overview"
-        value={activeTab}
-        onValueChange={handleTabChange}
-      >
-        {isMobile ? (
-          <Flex direction="column" gap="2" mb="2">
-            <Text size="2" color="gray" weight="medium">
-              Tab
-            </Text>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <Button
-                  variant="soft"
-                  color="gray"
-                  size="3"
+        <Tabs.Root
+          defaultValue="overview"
+          value={activeTab}
+          onValueChange={handleTabChange}
+        >
+          {isMobile ? (
+            <Flex direction="column" gap="2" mb="2">
+              <Text size="2" color="gray" weight="medium">
+                Tab
+              </Text>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <Button
+                    variant="soft"
+                    color="gray"
+                    size="3"
+                    style={{
+                      width: '100%',
+                      minHeight: 44,
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    {tabOptions.find((o) => o.value === activeTab)?.label ??
+                      'Overview'}
+                    <NavArrowDown width={18} height={18} />
+                  </Button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content
+                  align="start"
                   style={{
-                    width: '100%',
-                    minHeight: 44,
-                    justifyContent: 'space-between',
+                    minWidth: 'var(--radix-dropdown-menu-trigger-width)',
+                    maxHeight: 'min(70vh, 400px)',
+                    overflowY: 'auto',
                   }}
                 >
-                  {tabOptions.find((o) => o.value === activeTab)?.label ??
-                    'Overview'}
-                  <NavArrowDown width={18} height={18} />
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content
-                align="start"
-                style={{
-                  minWidth: 'var(--radix-dropdown-menu-trigger-width)',
-                  maxHeight: 'min(70vh, 400px)',
-                  overflowY: 'auto',
-                }}
-              >
-                {tabOptions.map((opt) => (
-                  <DropdownMenu.Item
-                    key={opt.value}
-                    onSelect={() => {
-                      if (!isTabAllowed(opt.value)) return
-                      if (
-                        activeTab === 'files' &&
-                        opt.value !== 'files' &&
-                        filesTabRef.current
-                      ) {
-                        filesTabRef.current.checkUnsavedChanges(() => {
+                  {tabOptions.map((opt) => (
+                    <DropdownMenu.Item
+                      key={opt.value}
+                      onSelect={() => {
+                        if (!isTabAllowed(opt.value)) return
+                        if (
+                          activeTab === 'files' &&
+                          opt.value !== 'files' &&
+                          filesTabRef.current
+                        ) {
+                          filesTabRef.current.checkUnsavedChanges(() => {
+                            handleTabChange(opt.value)
+                          })
+                        } else {
                           handleTabChange(opt.value)
-                        })
-                      } else {
-                        handleTabChange(opt.value)
-                      }
-                    }}
-                    style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
-                  >
-                    {opt.label}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          </Flex>
-        ) : (
-          <AnimatedTabsList wrap="wrap" mb="2">
-            <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
-            <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
-            <Tabs.Trigger value="program">Program</Tabs.Trigger>
-            <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
-            {!isFreelancer && (
-              <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
-            )}
-            {!isFreelancer && (
-              <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
-            )}
-            {!isFreelancer && (
-              <Tabs.Trigger value="subcontractors">Subcontractors</Tabs.Trigger>
-            )}
-            <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
-            {!isFreelancer && (
-              <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
-            )}
-            {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
-            {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
-            <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
-            <Tabs.Trigger value="files">Files</Tabs.Trigger>
-          </AnimatedTabsList>
-        )}
+                        }
+                      }}
+                      style={{
+                        minHeight: 44,
+                        paddingTop: 12,
+                        paddingBottom: 12,
+                      }}
+                    >
+                      {opt.label}
+                    </DropdownMenu.Item>
+                  ))}
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </Flex>
+          ) : (
+            <AnimatedTabsList wrap="wrap" mb="2">
+              <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
+              <Tabs.Trigger value="timeline">Time Periods</Tabs.Trigger>
+              <Tabs.Trigger value="program">Program</Tabs.Trigger>
+              <Tabs.Trigger value="calendar">Calendar</Tabs.Trigger>
+              {!isFreelancer && (
+                <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
+              )}
+              {!isFreelancer && (
+                <Tabs.Trigger value="offers">Offers</Tabs.Trigger>
+              )}
+              {!isFreelancer && (
+                <Tabs.Trigger value="subcontractors">
+                  Subcontractors
+                </Tabs.Trigger>
+              )}
+              <Tabs.Trigger value="packing">Packing</Tabs.Trigger>
+              {!isFreelancer && (
+                <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
+              )}
+              {!isFreelancer && (
+                <Tabs.Trigger value="money">Money</Tabs.Trigger>
+              )}
+              {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
+              <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
+              <Tabs.Trigger value="files">Files</Tabs.Trigger>
+            </AnimatedTabsList>
+          )}
 
-        <Tabs.Content value="overview" mt={'10px'}>
-          <OverviewTab job={job} />
-        </Tabs.Content>
-        <Tabs.Content value="timeline" mt={'10px'}>
-          <TimelineTab jobId={job.id} />
-        </Tabs.Content>
-        <Tabs.Content value="program" mt={'10px'}>
-          <ProgramTab jobId={job.id} />
-        </Tabs.Content>
-        <Tabs.Content value="calendar" mt={'10px'}>
-          <CalendarTab jobId={job.id} />
-        </Tabs.Content>
-        {!isFreelancer && (
-          <Tabs.Content value="bookings" mt={'10px'}>
-            <BookingsTab
-              jobId={job.id}
-              activeSubTab={bookingsSubTab}
-              onSubTabChange={setBookingsSubTab}
-            />
+          <Tabs.Content value="overview" mt={'10px'}>
+            <OverviewTab job={job} />
           </Tabs.Content>
-        )}
-        {!isFreelancer && (
-          <Tabs.Content value="offers" mt={'10px'}>
-            <OffersTab
-              jobId={job.id}
-              companyId={job.company_id}
-              isActive={activeTab === 'offers'}
-            />
+          <Tabs.Content value="timeline" mt={'10px'}>
+            <TimelineTab jobId={job.id} />
           </Tabs.Content>
-        )}
-        {!isFreelancer && (
-          <Tabs.Content value="subcontractors" mt={'10px'}>
-            <SubcontractorsTab jobId={job.id} />
+          <Tabs.Content value="program" mt={'10px'}>
+            <ProgramTab jobId={job.id} />
           </Tabs.Content>
-        )}
-        <Tabs.Content value="packing" mt={'10px'}>
-          <PackingTab jobId={job.id} />
-        </Tabs.Content>
-        {!isFreelancer && (
-          <Tabs.Content value="invoice" mt={'10px'}>
-            <InvoiceTab jobId={job.id} job={job} />
+          <Tabs.Content value="calendar" mt={'10px'}>
+            <CalendarTab jobId={job.id} />
           </Tabs.Content>
-        )}
-        {!isFreelancer && (
-          <Tabs.Content value="money" mt={'10px'}>
-            <MoneyTab jobId={job.id} />
+          {!isFreelancer && (
+            <Tabs.Content value="bookings" mt={'10px'}>
+              <BookingsTab
+                jobId={job.id}
+                activeSubTab={bookingsSubTab}
+                onSubTabChange={setBookingsSubTab}
+              />
+            </Tabs.Content>
+          )}
+          {!isFreelancer && (
+            <Tabs.Content value="offers" mt={'10px'}>
+              <OffersTab
+                jobId={job.id}
+                companyId={job.company_id}
+                isActive={activeTab === 'offers'}
+              />
+            </Tabs.Content>
+          )}
+          {!isFreelancer && (
+            <Tabs.Content value="subcontractors" mt={'10px'}>
+              <SubcontractorsTab jobId={job.id} />
+            </Tabs.Content>
+          )}
+          <Tabs.Content value="packing" mt={'10px'}>
+            <PackingTab jobId={job.id} />
           </Tabs.Content>
-        )}
-        {!isFreelancer && (
-          <Tabs.Content value="todo" mt={'10px'}>
-            <ToDoTab jobId={job.id} job={job} />
+          {!isFreelancer && (
+            <Tabs.Content value="invoice" mt={'10px'}>
+              <InvoiceTab jobId={job.id} job={job} />
+            </Tabs.Content>
+          )}
+          {!isFreelancer && (
+            <Tabs.Content value="money" mt={'10px'}>
+              <MoneyTab jobId={job.id} />
+            </Tabs.Content>
+          )}
+          {!isFreelancer && (
+            <Tabs.Content value="todo" mt={'10px'}>
+              <ToDoTab jobId={job.id} job={job} />
+            </Tabs.Content>
+          )}
+          <Tabs.Content value="contacts" mt={'10px'}>
+            <ContactsTab jobId={job.id} companyId={job.company_id} />
           </Tabs.Content>
-        )}
-        <Tabs.Content value="contacts" mt={'10px'}>
-          <ContactsTab jobId={job.id} companyId={job.company_id} />
-        </Tabs.Content>
-        <Tabs.Content value="files" mt={'10px'}>
-          <FilesTab ref={filesTabRef} job={job} />
-        </Tabs.Content>
-      </Tabs.Root>
-    </Box>
+          <Tabs.Content value="files" mt={'10px'}>
+            <FilesTab ref={filesTabRef} job={job} />
+          </Tabs.Content>
+        </Tabs.Root>
+      </Box>
+    </InspectorFadeIn>
   )
 }
 

@@ -17,7 +17,9 @@ import { useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import { formatDistanceToNow } from 'date-fns'
 import {
@@ -269,6 +271,267 @@ export default function LatestInspector({
     const comments: Array<any> = []
 
     return (
+      <InspectorFadeIn key={activityId}>
+        <Box {...scopeProps}>
+          <Tabs.Root
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
+          >
+            <AnimatedTabsList>
+              <Tabs.Trigger value="details">Details</Tabs.Trigger>
+              <Tabs.Trigger value="comments">
+                Comments ({comments.length})
+              </Tabs.Trigger>
+            </AnimatedTabsList>
+
+            <Box pt="4">
+              <Tabs.Content value="details">
+                {/* Header with author info */}
+                <Flex align="center" gap="3" mb="4">
+                  <Avatar
+                    size="3"
+                    radius="full"
+                    src={authorAvatarUrl ?? undefined}
+                    fallback={getInitials(
+                      groupedActivity.created_by.display_name,
+                      groupedActivity.created_by.email,
+                    )}
+                  />
+                  <Flex direction="column">
+                    <Text size="3" weight="medium">
+                      {authorDisplayName}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {timeAgo}
+                    </Text>
+                  </Flex>
+                </Flex>
+
+                <Separator size="4" mb="4" />
+
+                {/* Grouped activity summary */}
+                <Box mb="4">
+                  <Heading size="4" mb="3">
+                    {getActivityGenericMessage('grouped_inventory')}
+                  </Heading>
+
+                  {/* Generic description */}
+                  <Text size="3" style={{ lineHeight: 1.7 }} mb="3">
+                    {authorDisplayName} has added {parts.join(' and ')} to the
+                    company inventory. These items are now available for booking
+                    and use across all job sites. You can view their details and
+                    manage their availability through the inventory management
+                    system.
+                  </Text>
+
+                  {/* List of individual items and groups */}
+                  <Box
+                    mt="4"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'var(--space-2)',
+                    }}
+                  >
+                    {groupedActivity.items.map((item) => {
+                      const itemTimeAgo = formatDistanceToNow(
+                        new Date(item.created_at),
+                        { addSuffix: true },
+                      )
+                      const metadata = item.metadata
+                      const itemName =
+                        item.activity_type === 'inventory_item_created'
+                          ? metadata.item_name || 'Unknown item'
+                          : metadata.group_name || 'Unknown group'
+                      const itemType =
+                        item.activity_type === 'inventory_item_created'
+                          ? 'item'
+                          : 'group'
+                      // Get the item/group ID from metadata
+                      const itemId =
+                        item.activity_type === 'inventory_item_created'
+                          ? metadata.item_id
+                          : metadata.group_id
+
+                      return (
+                        <Flex
+                          key={item.id}
+                          align="center"
+                          justify="between"
+                          gap="3"
+                          p="3"
+                          style={{
+                            backgroundColor: 'transparent',
+                            borderRadius: 'var(--radius-3)',
+                            cursor: itemId ? 'pointer' : 'default',
+                            transition: 'all 0.2s ease',
+                            border: '1px solid transparent',
+                          }}
+                          onClick={
+                            itemId
+                              ? () => {
+                                  navigate({
+                                    to: '/inventory',
+                                    search: { inventoryId: itemId },
+                                  })
+                                }
+                              : undefined
+                          }
+                          onMouseEnter={(e) => {
+                            if (itemId) {
+                              e.currentTarget.style.backgroundColor =
+                                'var(--gray-2)'
+                              e.currentTarget.style.borderColor =
+                                'var(--gray-a6)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (itemId) {
+                              e.currentTarget.style.backgroundColor =
+                                'transparent'
+                              e.currentTarget.style.borderColor = 'transparent'
+                            }
+                          }}
+                        >
+                          <Flex align="center" gap="3" style={{ flex: 1 }}>
+                            <Flex
+                              align="center"
+                              justify="center"
+                              style={{
+                                width: '32px',
+                                height: '32px',
+                                borderRadius: 'var(--radius-2)',
+                                backgroundColor: 'var(--accent-3)',
+                                flexShrink: 0,
+                              }}
+                            >
+                              <Text size="4">
+                                {itemType === 'item' ? '📦' : '📁'}
+                              </Text>
+                            </Flex>
+                            <Box style={{ flex: 1, minWidth: 0 }}>
+                              <Text
+                                size="2"
+                                weight="medium"
+                                style={{
+                                  display: 'block',
+                                  marginBottom: '2px',
+                                }}
+                              >
+                                {itemName}
+                              </Text>
+                              <Text size="1" color="gray">
+                                {itemType === 'item' ? 'Item' : 'Group'}
+                              </Text>
+                            </Box>
+                          </Flex>
+                          <Text size="1" color="gray" style={{ flexShrink: 0 }}>
+                            {itemTimeAgo}
+                          </Text>
+                        </Flex>
+                      )
+                    })}
+                  </Box>
+                </Box>
+
+                <Separator size="4" mb="4" />
+
+                {/* Like button */}
+                <Flex align="center" justify="between">
+                  <Button
+                    variant={groupedActivity.user_liked ? 'solid' : 'soft'}
+                    color={groupedActivity.user_liked ? 'red' : 'gray'}
+                    size="2"
+                    onClick={() => likeMutation.mutate()}
+                    disabled={likeMutation.isPending}
+                  >
+                    {groupedActivity.user_liked ? (
+                      <HeartSolid width={16} height={16} />
+                    ) : (
+                      <Heart width={16} height={16} />
+                    )}
+                    <Text ml="1">
+                      {groupedActivity.like_count > 0
+                        ? groupedActivity.like_count
+                        : 'Like'}
+                    </Text>
+                  </Button>
+                </Flex>
+              </Tabs.Content>
+
+              <Tabs.Content value="comments">
+                {/* Comment form */}
+                <Box mb="4">
+                  <TextArea
+                    placeholder="Write a comment..."
+                    value={commentText}
+                    onChange={(e) => setCommentText(e.target.value)}
+                    rows={3}
+                    style={{ resize: 'vertical' }}
+                    mb="2"
+                  />
+                  <Flex justify="end">
+                    <Button
+                      size="2"
+                      onClick={() => {
+                        if (commentText.trim()) {
+                          commentMutation.mutate(commentText.trim())
+                        }
+                      }}
+                      disabled={
+                        !commentText.trim() || commentMutation.isPending
+                      }
+                    >
+                      Post
+                    </Button>
+                  </Flex>
+                </Box>
+
+                <Separator size="4" mb="4" />
+
+                {/* Comments list */}
+                {comments.length === 0 ? (
+                  <Box py="6">
+                    <Text color="gray" size="2" align="center">
+                      No comments yet
+                    </Text>
+                  </Box>
+                ) : (
+                  <Box>
+                    {comments.map((comment, idx) => (
+                      <React.Fragment key={comment.id}>
+                        {/* Comment rendering would go here */}
+                        {idx < comments.length - 1 && <Separator my="2" />}
+                      </React.Fragment>
+                    ))}
+                  </Box>
+                )}
+              </Tabs.Content>
+            </Box>
+          </Tabs.Root>
+        </Box>
+      </InspectorFadeIn>
+    )
+  }
+
+  // Regular single activity
+  const { activity, comments } = data as LatestInspectorData
+
+  // Calculate avatar URL without using hooks
+  const authorAvatarUrl = activity.created_by.avatar_url
+    ? supabase.storage
+        .from('avatars')
+        .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
+    : null
+
+  const authorDisplayName =
+    activity.created_by.display_name || activity.created_by.email
+  const timeAgo = formatDistanceToNow(new Date(activity.created_at), {
+    addSuffix: true,
+  })
+
+  return (
+    <InspectorFadeIn key={activityId}>
       <Box {...scopeProps}>
         <Tabs.Root
           value={activeTab}
@@ -290,8 +553,8 @@ export default function LatestInspector({
                   radius="full"
                   src={authorAvatarUrl ?? undefined}
                   fallback={getInitials(
-                    groupedActivity.created_by.display_name,
-                    groupedActivity.created_by.email,
+                    activity.created_by.display_name,
+                    activity.created_by.email,
                   )}
                 />
                 <Flex direction="column">
@@ -306,128 +569,145 @@ export default function LatestInspector({
 
               <Separator size="4" mb="4" />
 
-              {/* Grouped activity summary */}
+              {/* Activity content */}
               <Box mb="4">
+                {/* Title */}
                 <Heading size="4" mb="3">
-                  {getActivityGenericMessage('grouped_inventory')}
+                  {getActivityGenericMessage(activity.activity_type)}
                 </Heading>
 
-                {/* Generic description */}
-                <Text size="3" style={{ lineHeight: 1.7 }} mb="3">
-                  {authorDisplayName} has added {parts.join(' and ')} to the
-                  company inventory. These items are now available for booking
-                  and use across all job sites. You can view their details and
-                  manage their availability through the inventory management
-                  system.
-                </Text>
+                {/* Generic description - skip for announcements as they have their own message box */}
+                {activity.activity_type !== 'announcement' && (
+                  <Text size="3" style={{ lineHeight: 1.7 }} mb="3">
+                    {getActivityGenericDescription(activity, authorDisplayName)}
+                  </Text>
+                )}
 
-                {/* List of individual items and groups */}
-                <Box
-                  mt="4"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 'var(--space-2)',
-                  }}
-                >
-                  {groupedActivity.items.map((item) => {
-                    const itemTimeAgo = formatDistanceToNow(
-                      new Date(item.created_at),
-                      { addSuffix: true },
-                    )
-                    const metadata = item.metadata
-                    const itemName =
-                      item.activity_type === 'inventory_item_created'
-                        ? metadata.item_name || 'Unknown item'
-                        : metadata.group_name || 'Unknown group'
-                    const itemType =
-                      item.activity_type === 'inventory_item_created'
-                        ? 'item'
-                        : 'group'
-                    // Get the item/group ID from metadata
-                    const itemId =
-                      item.activity_type === 'inventory_item_created'
-                        ? metadata.item_id
-                        : metadata.group_id
+                {/* Clickable item button - styled like feed items */}
+                {(() => {
+                  const nav = getActivityNavigation(activity)
+                  const buttonInfo = getActivityButtonInfo(
+                    activity.activity_type,
+                  )
+                  const metadata = activity.metadata
 
-                    return (
-                      <Flex
-                        key={item.id}
-                        align="center"
-                        justify="between"
-                        gap="3"
-                        p="3"
-                        style={{
-                          backgroundColor: 'transparent',
-                          borderRadius: 'var(--radius-3)',
-                          cursor: itemId ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease',
-                          border: '1px solid transparent',
-                        }}
-                        onClick={
-                          itemId
-                            ? () => {
-                                navigate({
-                                  to: '/inventory',
-                                  search: { inventoryId: itemId },
-                                })
-                              }
-                            : undefined
-                        }
-                        onMouseEnter={(e) => {
-                          if (itemId) {
-                            e.currentTarget.style.backgroundColor =
-                              'var(--gray-2)'
-                            e.currentTarget.style.borderColor = 'var(--gray-a6)'
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          if (itemId) {
-                            e.currentTarget.style.backgroundColor =
-                              'transparent'
-                            e.currentTarget.style.borderColor = 'transparent'
-                          }
-                        }}
-                      >
-                        <Flex align="center" gap="3" style={{ flex: 1 }}>
-                          <Flex
-                            align="center"
-                            justify="center"
-                            style={{
-                              width: '32px',
-                              height: '32px',
-                              borderRadius: 'var(--radius-2)',
-                              backgroundColor: 'var(--accent-3)',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <Text size="4">
-                              {itemType === 'item' ? '📦' : '📁'}
-                            </Text>
-                          </Flex>
-                          <Box style={{ flex: 1, minWidth: 0 }}>
-                            <Text
-                              size="2"
-                              weight="medium"
-                              style={{
-                                display: 'block',
-                                marginBottom: '2px',
-                              }}
-                            >
-                              {itemName}
-                            </Text>
-                            <Text size="1" color="gray">
-                              {itemType === 'item' ? 'Item' : 'Group'}
-                            </Text>
-                          </Box>
+                  if (!nav?.id || !buttonInfo) return null
+
+                  // Get item name for the clickable element
+                  let itemName = ''
+                  switch (activity.activity_type) {
+                    case 'inventory_item_created':
+                      itemName = metadata.item_name || 'item'
+                      break
+                    case 'inventory_group_created':
+                      itemName = metadata.group_name || 'group'
+                      break
+                    case 'vehicle_added':
+                      itemName =
+                        metadata.vehicle_name ||
+                        metadata.license_plate ||
+                        'vehicle'
+                      break
+                    case 'customer_added':
+                      itemName = metadata.customer_name || 'customer'
+                      break
+                    case 'crew_added':
+                      itemName =
+                        metadata.user_name || metadata.email || 'crew member'
+                      break
+                    case 'job_created':
+                    case 'job_status_changed':
+                      itemName = metadata.job_title || activity.title || 'job'
+                      break
+                  }
+
+                  // Get emoji based on activity type (matching HomePage.tsx)
+                  const getActivityEmoji = (activityType: string): string => {
+                    switch (activityType) {
+                      case 'inventory_item_created':
+                        return '📦'
+                      case 'inventory_group_created':
+                        return '📁'
+                      case 'vehicle_added':
+                        return '🚗'
+                      case 'customer_added':
+                        return '👤'
+                      case 'crew_added':
+                        return '👷'
+                      case 'job_created':
+                      case 'job_status_changed':
+                        return '📋'
+                      default:
+                        return '📌'
+                    }
+                  }
+
+                  const activityEmoji = getActivityEmoji(activity.activity_type)
+
+                  if (!itemName) return null
+
+                  return (
+                    <Box
+                      mt="3"
+                      onClick={() => {
+                        navigate({
+                          to: nav.route,
+                          search: { [nav.searchParam]: nav.id },
+                        })
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        padding: 'var(--space-3)',
+                        borderRadius: 'var(--radius-3)',
+                        backgroundColor: 'var(--gray-a2)',
+                        border: '1px solid var(--gray-a5)',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-3)'
+                        e.currentTarget.style.borderColor = 'var(--gray-a7)'
+                        e.currentTarget.style.boxShadow =
+                          '0 2px 4px rgba(0, 0, 0, 0.1)'
+                        e.currentTarget.style.transform = 'translateY(-1px)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
+                        e.currentTarget.style.borderColor = 'var(--gray-a5)'
+                        e.currentTarget.style.boxShadow =
+                          '0 1px 2px rgba(0, 0, 0, 0.05)'
+                        e.currentTarget.style.transform = 'translateY(0)'
+                      }}
+                    >
+                      <Flex align="center" gap="3">
+                        <Flex
+                          align="center"
+                          justify="center"
+                          style={{
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: 'var(--radius-2)',
+                            backgroundColor: 'var(--accent-3)',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Text size="4">{activityEmoji}</Text>
                         </Flex>
-                        <Text size="1" color="gray" style={{ flexShrink: 0 }}>
-                          {itemTimeAgo}
+                        <Text size="2" weight="medium">
+                          {itemName}
                         </Text>
                       </Flex>
-                    )
-                  })}
-                </Box>
+                    </Box>
+                  )
+                })()}
+
+                {activity.description && (
+                  <Box mt="3">
+                    <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                      {activity.description}
+                    </Text>
+                  </Box>
+                )}
               </Box>
 
               <Separator size="4" mb="4" />
@@ -435,21 +715,19 @@ export default function LatestInspector({
               {/* Like button */}
               <Flex align="center" justify="between">
                 <Button
-                  variant={groupedActivity.user_liked ? 'solid' : 'soft'}
-                  color={groupedActivity.user_liked ? 'red' : 'gray'}
+                  variant={activity.user_liked ? 'solid' : 'soft'}
+                  color={activity.user_liked ? 'red' : 'gray'}
                   size="2"
                   onClick={() => likeMutation.mutate()}
                   disabled={likeMutation.isPending}
                 >
-                  {groupedActivity.user_liked ? (
+                  {activity.user_liked ? (
                     <HeartSolid width={16} height={16} />
                   ) : (
                     <Heart width={16} height={16} />
                   )}
                   <Text ml="1">
-                    {groupedActivity.like_count > 0
-                      ? groupedActivity.like_count
-                      : 'Like'}
+                    {activity.like_count > 0 ? activity.like_count : 'Like'}
                   </Text>
                 </Button>
               </Flex>
@@ -492,342 +770,76 @@ export default function LatestInspector({
                 </Box>
               ) : (
                 <Box>
-                  {comments.map((comment, idx) => (
-                    <React.Fragment key={comment.id}>
-                      {/* Comment rendering would go here */}
-                      {idx < comments.length - 1 && <Separator my="2" />}
-                    </React.Fragment>
-                  ))}
+                  {comments.map((comment, idx) => {
+                    // Calculate avatar URL without using hooks
+                    const commentAuthorAvatarUrl = comment.created_by.avatar_url
+                      ? supabase.storage
+                          .from('avatars')
+                          .getPublicUrl(comment.created_by.avatar_url).data
+                          .publicUrl
+                      : null
+
+                    const commentAuthorDisplayName =
+                      comment.created_by.display_name ||
+                      comment.created_by.email
+                    const commentTimeAgo = formatDistanceToNow(
+                      new Date(comment.created_at),
+                      { addSuffix: true },
+                    )
+
+                    const isOwner = comment.created_by.user_id === currentUserId
+
+                    return (
+                      <React.Fragment key={comment.id}>
+                        <Flex gap="3" align="start" mb="3">
+                          <Avatar
+                            size="2"
+                            radius="full"
+                            src={commentAuthorAvatarUrl ?? undefined}
+                            fallback={getInitials(
+                              comment.created_by.display_name,
+                              comment.created_by.email,
+                            )}
+                          />
+                          <Box style={{ flex: 1, minWidth: 0 }}>
+                            <Flex align="center" gap="2" mb="1">
+                              <Text size="2" weight="medium">
+                                {commentAuthorDisplayName}
+                              </Text>
+                              <Text size="1" color="gray">
+                                {commentTimeAgo}
+                              </Text>
+                              {isOwner && (
+                                <Button
+                                  size="1"
+                                  variant="ghost"
+                                  color="red"
+                                  onClick={() => {
+                                    deleteCommentMutation.mutate({
+                                      commentId: comment.id,
+                                    })
+                                  }}
+                                  disabled={deleteCommentMutation.isPending}
+                                >
+                                  Delete
+                                </Button>
+                              )}
+                            </Flex>
+                            <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                              {comment.content}
+                            </Text>
+                          </Box>
+                        </Flex>
+                        {idx < comments.length - 1 && <Separator my="2" />}
+                      </React.Fragment>
+                    )
+                  })}
                 </Box>
               )}
             </Tabs.Content>
           </Box>
         </Tabs.Root>
       </Box>
-    )
-  }
-
-  // Regular single activity
-  const { activity, comments } = data as LatestInspectorData
-
-  // Calculate avatar URL without using hooks
-  const authorAvatarUrl = activity.created_by.avatar_url
-    ? supabase.storage
-        .from('avatars')
-        .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
-    : null
-
-  const authorDisplayName =
-    activity.created_by.display_name || activity.created_by.email
-  const timeAgo = formatDistanceToNow(new Date(activity.created_at), {
-    addSuffix: true,
-  })
-
-  return (
-    <Box {...scopeProps}>
-      <Tabs.Root
-        value={activeTab}
-        onValueChange={(v) => setActiveTab(v as 'details' | 'comments')}
-      >
-        <AnimatedTabsList>
-          <Tabs.Trigger value="details">Details</Tabs.Trigger>
-          <Tabs.Trigger value="comments">
-            Comments ({comments.length})
-          </Tabs.Trigger>
-        </AnimatedTabsList>
-
-        <Box pt="4">
-          <Tabs.Content value="details">
-            {/* Header with author info */}
-            <Flex align="center" gap="3" mb="4">
-              <Avatar
-                size="3"
-                radius="full"
-                src={authorAvatarUrl ?? undefined}
-                fallback={getInitials(
-                  activity.created_by.display_name,
-                  activity.created_by.email,
-                )}
-              />
-              <Flex direction="column">
-                <Text size="3" weight="medium">
-                  {authorDisplayName}
-                </Text>
-                <Text size="1" color="gray">
-                  {timeAgo}
-                </Text>
-              </Flex>
-            </Flex>
-
-            <Separator size="4" mb="4" />
-
-            {/* Activity content */}
-            <Box mb="4">
-              {/* Title */}
-              <Heading size="4" mb="3">
-                {getActivityGenericMessage(activity.activity_type)}
-              </Heading>
-
-              {/* Generic description - skip for announcements as they have their own message box */}
-              {activity.activity_type !== 'announcement' && (
-                <Text size="3" style={{ lineHeight: 1.7 }} mb="3">
-                  {getActivityGenericDescription(activity, authorDisplayName)}
-                </Text>
-              )}
-
-              {/* Clickable item button - styled like feed items */}
-              {(() => {
-                const nav = getActivityNavigation(activity)
-                const buttonInfo = getActivityButtonInfo(activity.activity_type)
-                const metadata = activity.metadata
-
-                if (!nav?.id || !buttonInfo) return null
-
-                // Get item name for the clickable element
-                let itemName = ''
-                switch (activity.activity_type) {
-                  case 'inventory_item_created':
-                    itemName = metadata.item_name || 'item'
-                    break
-                  case 'inventory_group_created':
-                    itemName = metadata.group_name || 'group'
-                    break
-                  case 'vehicle_added':
-                    itemName =
-                      metadata.vehicle_name ||
-                      metadata.license_plate ||
-                      'vehicle'
-                    break
-                  case 'customer_added':
-                    itemName = metadata.customer_name || 'customer'
-                    break
-                  case 'crew_added':
-                    itemName =
-                      metadata.user_name || metadata.email || 'crew member'
-                    break
-                  case 'job_created':
-                  case 'job_status_changed':
-                    itemName = metadata.job_title || activity.title || 'job'
-                    break
-                }
-
-                // Get emoji based on activity type (matching HomePage.tsx)
-                const getActivityEmoji = (activityType: string): string => {
-                  switch (activityType) {
-                    case 'inventory_item_created':
-                      return '📦'
-                    case 'inventory_group_created':
-                      return '📁'
-                    case 'vehicle_added':
-                      return '🚗'
-                    case 'customer_added':
-                      return '👤'
-                    case 'crew_added':
-                      return '👷'
-                    case 'job_created':
-                    case 'job_status_changed':
-                      return '📋'
-                    default:
-                      return '📌'
-                  }
-                }
-
-                const activityEmoji = getActivityEmoji(activity.activity_type)
-
-                if (!itemName) return null
-
-                return (
-                  <Box
-                    mt="3"
-                    onClick={() => {
-                      navigate({
-                        to: nav.route,
-                        search: { [nav.searchParam]: nav.id },
-                      })
-                    }}
-                    style={{
-                      cursor: 'pointer',
-                      padding: 'var(--space-3)',
-                      borderRadius: 'var(--radius-3)',
-                      backgroundColor: 'var(--gray-a2)',
-                      border: '1px solid var(--gray-a5)',
-                      transition: 'all 0.2s ease',
-                      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-3)'
-                      e.currentTarget.style.borderColor = 'var(--gray-a7)'
-                      e.currentTarget.style.boxShadow =
-                        '0 2px 4px rgba(0, 0, 0, 0.1)'
-                      e.currentTarget.style.transform = 'translateY(-1px)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.backgroundColor = 'var(--gray-a2)'
-                      e.currentTarget.style.borderColor = 'var(--gray-a5)'
-                      e.currentTarget.style.boxShadow =
-                        '0 1px 2px rgba(0, 0, 0, 0.05)'
-                      e.currentTarget.style.transform = 'translateY(0)'
-                    }}
-                  >
-                    <Flex align="center" gap="3">
-                      <Flex
-                        align="center"
-                        justify="center"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: 'var(--radius-2)',
-                          backgroundColor: 'var(--accent-3)',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Text size="4">{activityEmoji}</Text>
-                      </Flex>
-                      <Text size="2" weight="medium">
-                        {itemName}
-                      </Text>
-                    </Flex>
-                  </Box>
-                )
-              })()}
-
-              {activity.description && (
-                <Box mt="3">
-                  <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
-                    {activity.description}
-                  </Text>
-                </Box>
-              )}
-            </Box>
-
-            <Separator size="4" mb="4" />
-
-            {/* Like button */}
-            <Flex align="center" justify="between">
-              <Button
-                variant={activity.user_liked ? 'solid' : 'soft'}
-                color={activity.user_liked ? 'red' : 'gray'}
-                size="2"
-                onClick={() => likeMutation.mutate()}
-                disabled={likeMutation.isPending}
-              >
-                {activity.user_liked ? (
-                  <HeartSolid width={16} height={16} />
-                ) : (
-                  <Heart width={16} height={16} />
-                )}
-                <Text ml="1">
-                  {activity.like_count > 0 ? activity.like_count : 'Like'}
-                </Text>
-              </Button>
-            </Flex>
-          </Tabs.Content>
-
-          <Tabs.Content value="comments">
-            {/* Comment form */}
-            <Box mb="4">
-              <TextArea
-                placeholder="Write a comment..."
-                value={commentText}
-                onChange={(e) => setCommentText(e.target.value)}
-                rows={3}
-                style={{ resize: 'vertical' }}
-                mb="2"
-              />
-              <Flex justify="end">
-                <Button
-                  size="2"
-                  onClick={() => {
-                    if (commentText.trim()) {
-                      commentMutation.mutate(commentText.trim())
-                    }
-                  }}
-                  disabled={!commentText.trim() || commentMutation.isPending}
-                >
-                  Post
-                </Button>
-              </Flex>
-            </Box>
-
-            <Separator size="4" mb="4" />
-
-            {/* Comments list */}
-            {comments.length === 0 ? (
-              <Box py="6">
-                <Text color="gray" size="2" align="center">
-                  No comments yet
-                </Text>
-              </Box>
-            ) : (
-              <Box>
-                {comments.map((comment, idx) => {
-                  // Calculate avatar URL without using hooks
-                  const commentAuthorAvatarUrl = comment.created_by.avatar_url
-                    ? supabase.storage
-                        .from('avatars')
-                        .getPublicUrl(comment.created_by.avatar_url).data
-                        .publicUrl
-                    : null
-
-                  const commentAuthorDisplayName =
-                    comment.created_by.display_name || comment.created_by.email
-                  const commentTimeAgo = formatDistanceToNow(
-                    new Date(comment.created_at),
-                    { addSuffix: true },
-                  )
-
-                  const isOwner = comment.created_by.user_id === currentUserId
-
-                  return (
-                    <React.Fragment key={comment.id}>
-                      <Flex gap="3" align="start" mb="3">
-                        <Avatar
-                          size="2"
-                          radius="full"
-                          src={commentAuthorAvatarUrl ?? undefined}
-                          fallback={getInitials(
-                            comment.created_by.display_name,
-                            comment.created_by.email,
-                          )}
-                        />
-                        <Box style={{ flex: 1, minWidth: 0 }}>
-                          <Flex align="center" gap="2" mb="1">
-                            <Text size="2" weight="medium">
-                              {commentAuthorDisplayName}
-                            </Text>
-                            <Text size="1" color="gray">
-                              {commentTimeAgo}
-                            </Text>
-                            {isOwner && (
-                              <Button
-                                size="1"
-                                variant="ghost"
-                                color="red"
-                                onClick={() => {
-                                  deleteCommentMutation.mutate({
-                                    commentId: comment.id,
-                                  })
-                                }}
-                                disabled={deleteCommentMutation.isPending}
-                              >
-                                Delete
-                              </Button>
-                            )}
-                          </Flex>
-                          <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
-                            {comment.content}
-                          </Text>
-                        </Box>
-                      </Flex>
-                      {idx < comments.length - 1 && <Separator my="2" />}
-                    </React.Fragment>
-                  )
-                })}
-              </Box>
-            )}
-          </Tabs.Content>
-        </Box>
-      </Tabs.Root>
-    </Box>
+    </InspectorFadeIn>
   )
 }

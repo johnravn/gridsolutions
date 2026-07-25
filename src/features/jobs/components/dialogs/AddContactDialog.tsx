@@ -203,9 +203,7 @@ export default function AddContactDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content
-        maxWidth={mode === 'new' ? '720px' : '520px'}
-      >
+      <Dialog.Content maxWidth={mode === 'new' ? '720px' : '520px'}>
         <Dialog.Title>Add contact</Dialog.Title>
 
         <form

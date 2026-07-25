@@ -15,10 +15,50 @@ import {
   formatShortcut,
   useModKeyShortcut,
 } from '@shared/lib/keyboardShortcuts'
+import {
+  resolvePageNavDirection,
+  takePendingPageNavDirection,
+} from '@shared/lib/pageNavDirection'
 import { useResolvedShortcuts } from '@shared/hotkeys'
+import { NAV } from '../Sidebar'
 import { useSplitLayout, useSplitLayoutChrome } from './SplitLayoutContext'
 import type { SplitSlots } from './SplitLayoutContext'
+import type { PageNavDirection } from '@shared/lib/pageNavDirection'
 import './splitLayout.css'
+
+const SIDEBAR_NAV_ROUTES = NAV.flatMap((group) => group.map((item) => item.to))
+const CONTENT_FADE_OFFSET_Y = 14
+
+const contentFadeVariants = {
+  enter: (direction: PageNavDirection) => ({
+    opacity: 0,
+    y: direction > 0 ? CONTENT_FADE_OFFSET_Y : -CONTENT_FADE_OFFSET_Y,
+  }),
+  center: { opacity: 1, y: 0 },
+  exit: (direction: PageNavDirection) => ({
+    opacity: 0,
+    y: direction > 0 ? -CONTENT_FADE_OFFSET_Y : CONTENT_FADE_OFFSET_Y,
+  }),
+}
+
+function usePageNavDirection(contentKey: string): PageNavDirection {
+  const directionRef = React.useRef<PageNavDirection>(1)
+  const prevKeyRef = React.useRef(contentKey)
+
+  if (prevKeyRef.current !== contentKey) {
+    const pending = takePendingPageNavDirection()
+    directionRef.current =
+      pending ??
+      resolvePageNavDirection(
+        SIDEBAR_NAV_ROUTES,
+        prevKeyRef.current,
+        contentKey,
+      )
+    prevKeyRef.current = contentKey
+  }
+
+  return directionRef.current
+}
 
 function GlowingMinimizeBar({ onExpand }: { onExpand: () => void }) {
   return (
@@ -114,10 +154,12 @@ function TitleNode({
 
 function ContentFade({
   contentKey,
+  direction,
   reducedMotion,
   children,
 }: {
   contentKey: string
+  direction: PageNavDirection
   reducedMotion: boolean
   children: React.ReactNode
 }) {
@@ -126,12 +168,14 @@ function ContentFade({
   }
 
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="wait" initial={false} custom={direction}>
       <motion.div
         key={contentKey}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
+        custom={direction}
+        variants={contentFadeVariants}
+        initial="enter"
+        animate="center"
+        exit="exit"
         transition={{ duration: 0.18, ease: 'easeOut' }}
         style={{
           display: 'flex',
@@ -222,6 +266,8 @@ export function SplitChrome() {
     onTrigger: toggleMinimize,
   })
 
+  const navDirection = usePageNavDirection(slots?.contentKey ?? '')
+
   if (!isLarge || !slots) return null
 
   const widthTransition =
@@ -271,6 +317,7 @@ export function SplitChrome() {
           ) : (
             <ContentFade
               contentKey={slots.contentKey}
+              direction={navDirection}
               reducedMotion={prefersReducedMotion}
             >
               <LeftHeader
@@ -342,6 +389,7 @@ export function SplitChrome() {
         >
           <ContentFade
             contentKey={slots.contentKey}
+            direction={navDirection}
             reducedMotion={prefersReducedMotion}
           >
             <RightHeader slots={slots} />

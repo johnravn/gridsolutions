@@ -11,7 +11,12 @@ import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
@@ -84,8 +89,7 @@ export default function CustomerPage() {
       }
     },
     onError: (e: unknown) => {
-      const message =
-        e instanceof Error ? e.message : 'Please try again.'
+      const message = e instanceof Error ? e.message : 'Please try again.'
       toastError('Sync failed', message)
     },
   })

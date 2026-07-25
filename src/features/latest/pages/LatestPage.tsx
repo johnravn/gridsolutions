@@ -6,7 +6,12 @@ import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import LatestFeed from '../components/LatestFeed'
 import LatestInspector from '../components/LatestInspector'
 import { latestFeedQuery } from '../api/queries'

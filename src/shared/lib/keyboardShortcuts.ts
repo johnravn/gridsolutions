@@ -7,6 +7,12 @@ import { formatForDisplay, useHotkey } from '@tanstack/react-hotkeys'
 import { asRegisterableHotkey } from '@shared/hotkeys/asRegisterableHotkey'
 import { useResolvedShortcuts } from '@shared/hotkeys/ShortcutPreferencesProvider'
 import { isShortcutBound } from '@shared/hotkeys/shortcutRegistry'
+import {
+  findSidebarNavIndex,
+  setPendingPageNavDirection,
+} from '@shared/lib/pageNavDirection'
+
+export { findSidebarNavIndex } from '@shared/lib/pageNavDirection'
 
 export const TAB_KEYBOARD_SCOPE_ATTR = 'data-tab-keyboard-scope'
 
@@ -266,25 +272,6 @@ export function usePanelCollapseShortcut({
   )
 }
 
-export function findSidebarNavIndex(
-  routes: ReadonlyArray<string>,
-  currentPath: string,
-): number {
-  const exact = routes.findIndex((to) => currentPath === to)
-  if (exact !== -1) return exact
-
-  let best = -1
-  let bestLen = -1
-  routes.forEach((to, index) => {
-    if (currentPath.startsWith(`${to}/`) && to.length > bestLen) {
-      best = index
-      bestLen = to.length
-    }
-  })
-  return best
-}
-
-/** Cycles sidebar destinations with remappable Alt+Arrow shortcuts. */
 export function useSidebarNavKeyboardShortcut({
   routes,
   currentPath,
@@ -325,6 +312,7 @@ export function useSidebarNavKeyboardShortcut({
           routesRef.current.length
     const nextRoute = routesRef.current[nextIndex]
     if (!nextRoute) return
+    setPendingPageNavDirection(delta > 0 ? 1 : -1)
     onNavigateRef.current(nextRoute)
   }, [])
 

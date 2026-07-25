@@ -416,7 +416,13 @@ export default function CompanyCalendarPro({
     >
       {/* Controls - only show if hideCreateButton is false (for backward compatibility) */}
       {!hideCreateButton && (
-        <Flex align="center" wrap="wrap" gap="3" mb="2" style={{ flexShrink: 0 }}>
+        <Flex
+          align="center"
+          wrap="wrap"
+          gap="3"
+          mb="2"
+          style={{ flexShrink: 0 }}
+        >
           {/* Kind filter */}
           <Flex align="center" gap="2">
             <Text weight="bold" size="2">

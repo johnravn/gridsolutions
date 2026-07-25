@@ -19,7 +19,9 @@ import { Edit, MessageText, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import CompanyLogoUpload from '@shared/ui/components/CompanyLogoUpload'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import CreateAnnouncementDialog from '@features/latest/components/CreateAnnouncementDialog'
 import { companyDetailQuery, updateCompany } from '../api/queries'
 import EditCompanyDialog from './dialogs/EditCompanyDialog'
@@ -132,222 +134,224 @@ export default function CompanyOverviewTab() {
     .join(', ')
 
   return (
-    <Card
-      size="4"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        minHeight: 0,
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <Flex
-        align="center"
-        justify="between"
-        wrap="wrap"
-        gap="3"
-        mb="4"
-        p="4"
-        pb="0"
-      >
-        <Heading size="4">{data.name}</Heading>
-        <Flex gap="2">
-          {canSendCompanyAnnouncement && (
-            <Button
-              size="2"
-              variant="soft"
-              onClick={() => setAnnouncementOpen(true)}
-            >
-              <MessageText />
-              New Announcement
-            </Button>
-          )}
-          <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-            <Edit />
-            Edit
-          </Button>
-        </Flex>
-      </Flex>
-
-      <EditCompanyDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        initial={data}
-        onSaved={() => {
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'company-detail'],
-          })
-        }}
-      />
-
-      <CreateAnnouncementDialog
-        open={announcementOpen}
-        onOpenChange={setAnnouncementOpen}
-      />
-
-      {/* Main content in columns - scrollable */}
-      <Box
+    <InspectorFadeIn key={companyId ?? 'company-overview'}>
+      <Card
+        size="4"
         style={{
-          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          height: '100%',
           minHeight: 0,
-          overflowY: 'auto',
-          overflowX: 'hidden',
+          overflow: 'hidden',
         }}
       >
-        <Flex direction="column" gap="4" p="4" pt="0">
-          {/* Logo Upload Section */}
-          <Box>
-            <Flex
-              align="center"
-              gap="2"
-              mb="2"
-              style={{
-                cursor: 'pointer',
-                userSelect: 'none',
-              }}
-              onClick={() => setLogoExpanded(!logoExpanded)}
-            >
-              {logoExpanded ? (
-                <NavArrowDown width={16} height={16} />
-              ) : (
-                <NavArrowRight width={16} height={16} />
-              )}
-              <Text as="div" size="2" color="gray">
-                Company Logos
-              </Text>
-              {data.logo_light_path || data.logo_dark_path ? (
-                <Badge variant="soft" color="green" size="1">
-                  Configured
-                </Badge>
-              ) : (
-                <Badge variant="soft" color="red" size="1">
-                  Not configured
-                </Badge>
-              )}
-            </Flex>
-            {logoExpanded && (
-              <CompanyLogoUpload
-                currentLightLogoPath={data.logo_light_path}
-                currentDarkLogoPath={data.logo_dark_path}
-                uploadPathPrefix={`companies/${companyId}`}
-                onUploadComplete={(lightPath, darkPath) => {
-                  updateLogoMutation.mutate({ lightPath, darkPath })
-                }}
-                disabled={updateLogoMutation.isPending}
-              />
-            )}
-          </Box>
-
-          <Separator size="4" />
-
-          <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4">
-            {/* LEFT: Company information */}
-            <Column title="Company information">
-              <Field label="Company name" maxWidth={FIELD_MAX}>
-                <Text size="3" weight="medium">
-                  {data.name}
-                </Text>
-              </Field>
-              <Field label="VAT number" maxWidth={FIELD_MAX}>
-                <Text size="3">{fmtVAT(data.vat_number)}</Text>
-              </Field>
-              <Field label="General email" maxWidth={FIELD_MAX}>
-                {data.general_email ? (
-                  <a
-                    href={`mailto:${data.general_email}`}
-                    style={{ color: 'inherit' }}
-                  >
-                    <Text size="3">{data.general_email}</Text>
-                  </a>
-                ) : (
-                  <Text size="3" color="gray">
-                    —
-                  </Text>
-                )}
-              </Field>
-              <Field label="Created" maxWidth={FIELD_MAX}>
-                <Text size="3">{formatDate(data.created_at)}</Text>
-              </Field>
-            </Column>
-
-            {/* MIDDLE: Address */}
-            <Column title="Address">
-              <Field label="Address line" maxWidth={520}>
-                <Text size="3">{parsedAddress.address_line || '—'}</Text>
-              </Field>
-              <FieldRow>
-                <Flex gap={'2'} width={'100%'}>
-                  <Field label="ZIP" maxWidth={100}>
-                    <Text size="3">{parsedAddress.zip_code || '—'}</Text>
-                  </Field>
-                  <Field label="City" maxWidth={FIELD_MAX}>
-                    <Text size="3">{parsedAddress.city || '—'}</Text>
-                  </Field>
-                </Flex>
-              </FieldRow>
-              <Field label="Country" maxWidth={FIELD_MAX}>
-                <Text size="3">{parsedAddress.country || '—'}</Text>
-              </Field>
-
-              {/* Live map preview (only if we have something to show) */}
-              {mapQuery && (
-                <Box mt="2" style={{ maxWidth: 520 }}>
-                  <MapEmbed query={mapQuery} zoom={15} />
-                </Box>
-              )}
-            </Column>
-
-            {/* RIGHT: Contact person */}
-            <Column title="Contact person">
-              <Field
-                label="For system owner to contact this company"
-                maxWidth={520}
+        {/* Header */}
+        <Flex
+          align="center"
+          justify="between"
+          wrap="wrap"
+          gap="3"
+          mb="4"
+          p="4"
+          pb="0"
+        >
+          <Heading size="4">{data.name}</Heading>
+          <Flex gap="2">
+            {canSendCompanyAnnouncement && (
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => setAnnouncementOpen(true)}
               >
-                {data.contact_person ? (
-                  <Box
-                    style={{
-                      padding: 12,
-                      background: 'var(--gray-a2)',
-                      borderRadius: 6,
-                    }}
-                  >
-                    <Text as="div" size="3" weight="medium" mb="2">
-                      {data.contact_person.display_name || 'No name'}
-                    </Text>
-                    {data.contact_person.email && (
-                      <Text as="div" size="2" color="gray" mb="1">
-                        <a
-                          href={`mailto:${data.contact_person.email}`}
-                          style={{ color: 'inherit' }}
-                        >
-                          {data.contact_person.email}
-                        </a>
-                      </Text>
-                    )}
-                    {data.contact_person.phone && (
-                      <Text as="div" size="2" color="gray">
-                        <a
-                          href={`tel:${data.contact_person.phone}`}
-                          style={{ color: 'inherit' }}
-                        >
-                          {prettyPhone(data.contact_person.phone)}
-                        </a>
-                      </Text>
-                    )}
-                  </Box>
-                ) : (
-                  <Text size="2" color="gray">
-                    No contact person assigned
-                  </Text>
-                )}
-              </Field>
-            </Column>
-          </Grid>
+                <MessageText />
+                New Announcement
+              </Button>
+            )}
+            <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
+              <Edit />
+              Edit
+            </Button>
+          </Flex>
         </Flex>
-      </Box>
-    </Card>
+
+        <EditCompanyDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          initial={data}
+          onSaved={() => {
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'company-detail'],
+            })
+          }}
+        />
+
+        <CreateAnnouncementDialog
+          open={announcementOpen}
+          onOpenChange={setAnnouncementOpen}
+        />
+
+        {/* Main content in columns - scrollable */}
+        <Box
+          style={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: 'auto',
+            overflowX: 'hidden',
+          }}
+        >
+          <Flex direction="column" gap="4" p="4" pt="0">
+            {/* Logo Upload Section */}
+            <Box>
+              <Flex
+                align="center"
+                gap="2"
+                mb="2"
+                style={{
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                }}
+                onClick={() => setLogoExpanded(!logoExpanded)}
+              >
+                {logoExpanded ? (
+                  <NavArrowDown width={16} height={16} />
+                ) : (
+                  <NavArrowRight width={16} height={16} />
+                )}
+                <Text as="div" size="2" color="gray">
+                  Company Logos
+                </Text>
+                {data.logo_light_path || data.logo_dark_path ? (
+                  <Badge variant="soft" color="green" size="1">
+                    Configured
+                  </Badge>
+                ) : (
+                  <Badge variant="soft" color="red" size="1">
+                    Not configured
+                  </Badge>
+                )}
+              </Flex>
+              {logoExpanded && (
+                <CompanyLogoUpload
+                  currentLightLogoPath={data.logo_light_path}
+                  currentDarkLogoPath={data.logo_dark_path}
+                  uploadPathPrefix={`companies/${companyId}`}
+                  onUploadComplete={(lightPath, darkPath) => {
+                    updateLogoMutation.mutate({ lightPath, darkPath })
+                  }}
+                  disabled={updateLogoMutation.isPending}
+                />
+              )}
+            </Box>
+
+            <Separator size="4" />
+
+            <Grid columns={{ initial: '1', md: '2', lg: '3' }} gap="4">
+              {/* LEFT: Company information */}
+              <Column title="Company information">
+                <Field label="Company name" maxWidth={FIELD_MAX}>
+                  <Text size="3" weight="medium">
+                    {data.name}
+                  </Text>
+                </Field>
+                <Field label="VAT number" maxWidth={FIELD_MAX}>
+                  <Text size="3">{fmtVAT(data.vat_number)}</Text>
+                </Field>
+                <Field label="General email" maxWidth={FIELD_MAX}>
+                  {data.general_email ? (
+                    <a
+                      href={`mailto:${data.general_email}`}
+                      style={{ color: 'inherit' }}
+                    >
+                      <Text size="3">{data.general_email}</Text>
+                    </a>
+                  ) : (
+                    <Text size="3" color="gray">
+                      —
+                    </Text>
+                  )}
+                </Field>
+                <Field label="Created" maxWidth={FIELD_MAX}>
+                  <Text size="3">{formatDate(data.created_at)}</Text>
+                </Field>
+              </Column>
+
+              {/* MIDDLE: Address */}
+              <Column title="Address">
+                <Field label="Address line" maxWidth={520}>
+                  <Text size="3">{parsedAddress.address_line || '—'}</Text>
+                </Field>
+                <FieldRow>
+                  <Flex gap={'2'} width={'100%'}>
+                    <Field label="ZIP" maxWidth={100}>
+                      <Text size="3">{parsedAddress.zip_code || '—'}</Text>
+                    </Field>
+                    <Field label="City" maxWidth={FIELD_MAX}>
+                      <Text size="3">{parsedAddress.city || '—'}</Text>
+                    </Field>
+                  </Flex>
+                </FieldRow>
+                <Field label="Country" maxWidth={FIELD_MAX}>
+                  <Text size="3">{parsedAddress.country || '—'}</Text>
+                </Field>
+
+                {/* Live map preview (only if we have something to show) */}
+                {mapQuery && (
+                  <Box mt="2" style={{ maxWidth: 520 }}>
+                    <MapEmbed query={mapQuery} zoom={15} />
+                  </Box>
+                )}
+              </Column>
+
+              {/* RIGHT: Contact person */}
+              <Column title="Contact person">
+                <Field
+                  label="For system owner to contact this company"
+                  maxWidth={520}
+                >
+                  {data.contact_person ? (
+                    <Box
+                      style={{
+                        padding: 12,
+                        background: 'var(--gray-a2)',
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text as="div" size="3" weight="medium" mb="2">
+                        {data.contact_person.display_name || 'No name'}
+                      </Text>
+                      {data.contact_person.email && (
+                        <Text as="div" size="2" color="gray" mb="1">
+                          <a
+                            href={`mailto:${data.contact_person.email}`}
+                            style={{ color: 'inherit' }}
+                          >
+                            {data.contact_person.email}
+                          </a>
+                        </Text>
+                      )}
+                      {data.contact_person.phone && (
+                        <Text as="div" size="2" color="gray">
+                          <a
+                            href={`tel:${data.contact_person.phone}`}
+                            style={{ color: 'inherit' }}
+                          >
+                            {prettyPhone(data.contact_person.phone)}
+                          </a>
+                        </Text>
+                      )}
+                    </Box>
+                  ) : (
+                    <Text size="2" color="gray">
+                      No contact person assigned
+                    </Text>
+                  )}
+                </Field>
+              </Column>
+            </Grid>
+          </Flex>
+        </Box>
+      </Card>
+    </InspectorFadeIn>
   )
 }
 

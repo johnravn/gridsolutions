@@ -44,12 +44,7 @@ export default function CalendarPageSkeleton() {
           </Flex>
         </Flex>
 
-        <Flex
-          align="center"
-          justify="between"
-          mb="3"
-          style={{ flexShrink: 0 }}
-        >
+        <Flex align="center" justify="between" mb="3" style={{ flexShrink: 0 }}>
           <Skeleton>
             <Box style={{ width: 120, height: 24 }} />
           </Skeleton>
@@ -77,7 +72,10 @@ export default function CalendarPageSkeleton() {
           style={{ flex: 1, minHeight: 0, alignContent: 'stretch' }}
         >
           {Array.from({ length: 42 }).map((_, i) => (
-            <Skeleton key={`cell-${i}`} style={{ minHeight: 0, height: '100%' }}>
+            <Skeleton
+              key={`cell-${i}`}
+              style={{ minHeight: 0, height: '100%' }}
+            >
               <Box style={{ height: '100%', minHeight: 48 }} />
             </Skeleton>
           ))}

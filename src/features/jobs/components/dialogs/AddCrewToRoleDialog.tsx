@@ -377,248 +377,254 @@ export default function AddCrewToRoleDialog({
                 direction="column"
                 style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}
               >
-              <Box my="4" style={{ flexShrink: 0 }}>
-                <form.AppField name="search">
-                  {(field) => (
-                    <TextField.Root
-                      placeholder="Search by name or email…"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                  )}
-                </form.AppField>
-                <Flex gap="2" mt="2" width="100%">
-                  <Button
-                    type="button"
-                    size="2"
-                    variant={expandedPanel === 'placeholder' ? 'solid' : 'soft'}
-                    highContrast={expandedPanel === 'placeholder'}
-                    onClick={() =>
-                      setExpandedPanel((prev) =>
-                        prev === 'placeholder' ? null : 'placeholder',
-                      )
-                    }
-                    style={{ flex: 1, justifyContent: 'center' }}
-                  >
-                    <UserPlus width={16} height={16} />
-                    Add placeholder
-                  </Button>
-                  <Button
-                    type="button"
-                    size="2"
-                    variant={expandedPanel === 'invite' ? 'solid' : 'soft'}
-                    highContrast={expandedPanel === 'invite'}
-                    onClick={() =>
-                      setExpandedPanel((prev) =>
-                        prev === 'invite' ? null : 'invite',
-                      )
-                    }
-                    style={{ flex: 1, justifyContent: 'center' }}
-                  >
-                    <Mail width={16} height={16} />
-                    Invite by email
-                  </Button>
-                </Flex>
+                <Box my="4" style={{ flexShrink: 0 }}>
+                  <form.AppField name="search">
+                    {(field) => (
+                      <TextField.Root
+                        placeholder="Search by name or email…"
+                        value={field.state.value}
+                        onBlur={field.handleBlur}
+                        onChange={(e) => field.handleChange(e.target.value)}
+                      />
+                    )}
+                  </form.AppField>
+                  <Flex gap="2" mt="2" width="100%">
+                    <Button
+                      type="button"
+                      size="2"
+                      variant={
+                        expandedPanel === 'placeholder' ? 'solid' : 'soft'
+                      }
+                      highContrast={expandedPanel === 'placeholder'}
+                      onClick={() =>
+                        setExpandedPanel((prev) =>
+                          prev === 'placeholder' ? null : 'placeholder',
+                        )
+                      }
+                      style={{ flex: 1, justifyContent: 'center' }}
+                    >
+                      <UserPlus width={16} height={16} />
+                      Add placeholder
+                    </Button>
+                    <Button
+                      type="button"
+                      size="2"
+                      variant={expandedPanel === 'invite' ? 'solid' : 'soft'}
+                      highContrast={expandedPanel === 'invite'}
+                      onClick={() =>
+                        setExpandedPanel((prev) =>
+                          prev === 'invite' ? null : 'invite',
+                        )
+                      }
+                      style={{ flex: 1, justifyContent: 'center' }}
+                    >
+                      <Mail width={16} height={16} />
+                      Invite by email
+                    </Button>
+                  </Flex>
 
-                {expandedPanel === 'placeholder' && (
-                  <Box mt="3">
-                    <Text as="div" size="1" color="gray" mb="2">
-                      Add a named crew member without a user account
-                    </Text>
-                    <form.AppField name="placeholderName">
-                      {(field) => (
-                        <TextField.Root
-                          placeholder="Placeholder name"
-                          value={field.state.value}
-                          onBlur={field.handleBlur}
-                          onChange={(e) => field.handleChange(e.target.value)}
-                        />
-                      )}
-                    </form.AppField>
-                  </Box>
-                )}
-
-                {expandedPanel === 'invite' && (
-                  <Box mt="3">
-                    <Text as="div" size="1" color="gray" mb="2">
-                      Adds them to the company (or creates a pending invite) and
-                      sends an email to sign up if needed.
-                    </Text>
-                    <Flex gap="2">
+                  {expandedPanel === 'placeholder' && (
+                    <Box mt="3">
+                      <Text as="div" size="1" color="gray" mb="2">
+                        Add a named crew member without a user account
+                      </Text>
                       <form.AppField name="placeholderName">
                         {(field) => (
                           <TextField.Root
-                            placeholder="Name (optional)"
+                            placeholder="Placeholder name"
                             value={field.state.value}
                             onBlur={field.handleBlur}
-                            onChange={(e) =>
-                              field.handleChange(e.target.value)
-                            }
-                            style={{ flex: 1 }}
+                            onChange={(e) => field.handleChange(e.target.value)}
                           />
                         )}
                       </form.AppField>
-                      <form.AppField name="placeholderEmail">
-                        {(field) => (
-                          <TextField.Root
-                            placeholder="Email"
-                            value={field.state.value}
-                            onBlur={field.handleBlur}
-                            onChange={(e) =>
-                              field.handleChange(e.target.value)
-                            }
-                            style={{ flex: 1 }}
-                          />
-                        )}
-                      </form.AppField>
-                    </Flex>
+                    </Box>
+                  )}
+
+                  {expandedPanel === 'invite' && (
+                    <Box mt="3">
+                      <Text as="div" size="1" color="gray" mb="2">
+                        Adds them to the company (or creates a pending invite)
+                        and sends an email to sign up if needed.
+                      </Text>
+                      <Flex gap="2">
+                        <form.AppField name="placeholderName">
+                          {(field) => (
+                            <TextField.Root
+                              placeholder="Name (optional)"
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) =>
+                                field.handleChange(e.target.value)
+                              }
+                              style={{ flex: 1 }}
+                            />
+                          )}
+                        </form.AppField>
+                        <form.AppField name="placeholderEmail">
+                          {(field) => (
+                            <TextField.Root
+                              placeholder="Email"
+                              value={field.state.value}
+                              onBlur={field.handleBlur}
+                              onChange={(e) =>
+                                field.handleChange(e.target.value)
+                              }
+                              style={{ flex: 1 }}
+                            />
+                          )}
+                        </form.AppField>
+                      </Flex>
+                    </Box>
+                  )}
+                </Box>
+
+                {!expandedPanel && (
+                  <Box
+                    style={{
+                      flex: 1,
+                      minHeight: 0,
+                      overflowY: 'auto',
+                      border: '1px solid var(--gray-a6)',
+                      borderRadius: 8,
+                      padding: 8,
+                    }}
+                  >
+                    {isFetching && (
+                      <Text size="2" color="gray">
+                        Searching…
+                      </Text>
+                    )}
+                    {!isFetching && people.length === 0 && (
+                      <Text size="2" color="gray">
+                        No crew members found
+                      </Text>
+                    )}
+                    {!isFetching &&
+                      people.map((p, idx) => {
+                        const internalNote = internalNotesByUserId[p.user_id]
+                        return (
+                          <form.Subscribe
+                            key={p.user_id}
+                            selector={(state) => state.values.selectedIds}
+                          >
+                            {(selectedIds) => {
+                              const isSelected = selectedIds.includes(p.user_id)
+                              return (
+                                <React.Fragment>
+                                  <Box
+                                    p="2"
+                                    style={{
+                                      cursor: 'pointer',
+                                      borderRadius: 6,
+                                      background: isSelected
+                                        ? 'var(--blue-a3)'
+                                        : 'transparent',
+                                    }}
+                                    onClick={() => toggleSelection(p.user_id)}
+                                  >
+                                    <Flex align="center" justify="between">
+                                      <Flex align="center" gap="2">
+                                        {isSelected && (
+                                          <Check
+                                            width={18}
+                                            height={18}
+                                            style={{ color: 'var(--blue-11)' }}
+                                          />
+                                        )}
+                                        <div>
+                                          <Text weight="medium">
+                                            {p.display_name ?? p.email}
+                                          </Text>
+                                          {p.display_name && (
+                                            <Text
+                                              size="1"
+                                              color="gray"
+                                              style={{ marginLeft: 6 }}
+                                            >
+                                              {p.email}
+                                            </Text>
+                                          )}
+                                          {internalNote && (
+                                            <Text
+                                              as="div"
+                                              size="1"
+                                              color="gray"
+                                              mt="1"
+                                            >
+                                              <Text weight="medium">
+                                                Internal:
+                                              </Text>{' '}
+                                              {internalNote}
+                                            </Text>
+                                          )}
+                                        </div>
+                                      </Flex>
+                                      {isSelected && (
+                                        <Text size="1" color="blue">
+                                          Selected
+                                        </Text>
+                                      )}
+                                    </Flex>
+                                  </Box>
+                                  {idx < people.length - 1 && (
+                                    <Separator my="2" />
+                                  )}
+                                </React.Fragment>
+                              )
+                            }}
+                          </form.Subscribe>
+                        )
+                      })}
                   </Box>
                 )}
-              </Box>
 
-              {!expandedPanel && (
-              <Box
-                style={{
-                  flex: 1,
-                  minHeight: 0,
-                  overflowY: 'auto',
-                  border: '1px solid var(--gray-a6)',
-                  borderRadius: 8,
-                  padding: 8,
-                }}
-              >
-                {isFetching && (
-                  <Text size="2" color="gray">
-                    Searching…
-                  </Text>
-                )}
-                {!isFetching && people.length === 0 && (
-                  <Text size="2" color="gray">
-                    No crew members found
-                  </Text>
-                )}
-                {!isFetching &&
-                  people.map((p, idx) => {
-                    const internalNote = internalNotesByUserId[p.user_id]
-                    return (
-                      <form.Subscribe
-                        key={p.user_id}
-                        selector={(state) => state.values.selectedIds}
-                      >
-                        {(selectedIds) => {
-                          const isSelected = selectedIds.includes(p.user_id)
-                          return (
-                            <React.Fragment>
-                              <Box
-                                p="2"
-                                style={{
-                                  cursor: 'pointer',
-                                  borderRadius: 6,
-                                  background: isSelected
-                                    ? 'var(--blue-a3)'
-                                    : 'transparent',
-                                }}
-                                onClick={() => toggleSelection(p.user_id)}
-                              >
-                                <Flex align="center" justify="between">
-                                  <Flex align="center" gap="2">
-                                    {isSelected && (
-                                      <Check
-                                        width={18}
-                                        height={18}
-                                        style={{ color: 'var(--blue-11)' }}
-                                      />
-                                    )}
-                                    <div>
-                                      <Text weight="medium">
-                                        {p.display_name ?? p.email}
-                                      </Text>
-                                      {p.display_name && (
-                                        <Text
-                                          size="1"
-                                          color="gray"
-                                          style={{ marginLeft: 6 }}
-                                        >
-                                          {p.email}
-                                        </Text>
-                                      )}
-                                      {internalNote && (
-                                        <Text
-                                          as="div"
-                                          size="1"
-                                          color="gray"
-                                          mt="1"
-                                        >
-                                          <Text weight="medium">Internal:</Text>{' '}
-                                          {internalNote}
-                                        </Text>
-                                      )}
-                                    </div>
-                                  </Flex>
-                                  {isSelected && (
-                                    <Text size="1" color="blue">
-                                      Selected
-                                    </Text>
-                                  )}
-                                </Flex>
-                              </Box>
-                              {idx < people.length - 1 && <Separator my="2" />}
-                            </React.Fragment>
-                          )
-                        }}
-                      </form.Subscribe>
-                    )
-                  })}
-              </Box>
-              )}
-
-              <form.Subscribe selector={(state) => state.values.selectedIds}>
-                {(selectedIds) => (
-                  <Flex
-                    pt="4"
-                    gap="2"
-                    justify="end"
-                    style={{ flexShrink: 0, marginTop: 'auto' }}
-                  >
-                    <Dialog.Close>
-                      <Button type="button" variant="soft">
-                        Cancel
-                      </Button>
-                    </Dialog.Close>
-                    {expandedPanel === 'placeholder' && (
-                      <Button
-                        type="button"
-                        variant="solid"
-                        onClick={handleAddPlaceholder}
-                        disabled={
-                          addPlaceholder.isPending || !placeholderName.trim()
-                        }
-                      >
-                        {addPlaceholder.isPending ? 'Adding…' : 'Add'}
-                      </Button>
-                    )}
-                    {expandedPanel === 'invite' && (
-                      <Button
-                        type="button"
-                        variant="solid"
-                        onClick={handleInvite}
-                        disabled={
-                          inviteByEmail.isPending || !placeholderEmail.trim()
-                        }
-                      >
-                        {inviteByEmail.isPending ? 'Inviting…' : 'Invite'}
-                      </Button>
-                    )}
-                    {!expandedPanel && (
-                      <form.SubmitButton
-                        label={`Add ${selectedIds.length} crew member${selectedIds.length !== 1 ? 's' : ''}`}
-                        pendingLabel="Adding…"
-                      />
-                    )}
-                  </Flex>
-                )}
-              </form.Subscribe>
+                <form.Subscribe selector={(state) => state.values.selectedIds}>
+                  {(selectedIds) => (
+                    <Flex
+                      pt="4"
+                      gap="2"
+                      justify="end"
+                      style={{ flexShrink: 0, marginTop: 'auto' }}
+                    >
+                      <Dialog.Close>
+                        <Button type="button" variant="soft">
+                          Cancel
+                        </Button>
+                      </Dialog.Close>
+                      {expandedPanel === 'placeholder' && (
+                        <Button
+                          type="button"
+                          variant="solid"
+                          onClick={handleAddPlaceholder}
+                          disabled={
+                            addPlaceholder.isPending || !placeholderName.trim()
+                          }
+                        >
+                          {addPlaceholder.isPending ? 'Adding…' : 'Add'}
+                        </Button>
+                      )}
+                      {expandedPanel === 'invite' && (
+                        <Button
+                          type="button"
+                          variant="solid"
+                          onClick={handleInvite}
+                          disabled={
+                            inviteByEmail.isPending || !placeholderEmail.trim()
+                          }
+                        >
+                          {inviteByEmail.isPending ? 'Inviting…' : 'Invite'}
+                        </Button>
+                      )}
+                      {!expandedPanel && (
+                        <form.SubmitButton
+                          label={`Add ${selectedIds.length} crew member${selectedIds.length !== 1 ? 's' : ''}`}
+                          pendingLabel="Adding…"
+                        />
+                      )}
+                    </Flex>
+                  )}
+                </form.Subscribe>
               </Flex>
             </form.AppForm>
           </form>

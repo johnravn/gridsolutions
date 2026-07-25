@@ -27,7 +27,9 @@ import { prettyPhone } from '@shared/phone/phone'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import MapEmbed from '@shared/maps/MapEmbed'
 import LogoUpload from '@shared/ui/components/LogoUpload'
 import { supabase } from '@shared/api/supabase'
@@ -306,759 +308,764 @@ export default function CustomerInspector({
   const addrParts = parseAddress(c.address)
 
   return (
-    <Box
-      style={{
-        minWidth: 0,
-        maxWidth: '100%',
-        overflowX: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <Flex align="center" justify="between" gap="2" wrap="wrap">
-        <Box style={{ minWidth: 0, flexShrink: 1 }}>
-          <Text as="div" size="4" weight="bold" truncate>
-            {c.name}
-          </Text>
-        </Box>
-        <Flex gap="2" align="center" wrap="wrap" style={{ flexShrink: 0 }}>
-          {c.is_partner ? (
-            <Badge variant="soft" color="green">
-              Partner
-            </Badge>
-          ) : (
-            <Badge variant="soft">Customer</Badge>
-          )}
-          <EditCustomerDialog
-            open={editOpen}
-            onOpenChange={setEditOpen}
-            initial={{
-              id: c.id,
-              name: c.name,
-              address: c.address ?? '',
-              vat_number: c.vat_number ?? '',
-              is_partner: c.is_partner,
-              logo_path: c.logo_path ?? null,
-              accent_color: c.accent_color ?? null,
-              accent_color_custom: c.accent_color_custom ?? null,
-              crew_pricing_level_id: c.crew_pricing_level_id ?? null,
-            }}
-            onSaved={() => {
-              qc.invalidateQueries({
-                queryKey: ['company', companyId, 'customer-detail', id],
-              })
-              qc.invalidateQueries({
-                queryKey: ['company', companyId, 'customers-index'],
-              })
-            }}
-          />
-          <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-            <Edit />
-          </Button>
-          <Button
-            size="2"
-            variant="surface"
-            color="red"
-            onClick={() => setDeleteCustomerOpen(true)}
-          >
-            <Trash />
-          </Button>
+    <InspectorFadeIn key={id}>
+      <Box
+        style={{
+          minWidth: 0,
+          maxWidth: '100%',
+          overflowX: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <Flex align="center" justify="between" gap="2" wrap="wrap">
+          <Box style={{ minWidth: 0, flexShrink: 1 }}>
+            <Text as="div" size="4" weight="bold" truncate>
+              {c.name}
+            </Text>
+          </Box>
+          <Flex gap="2" align="center" wrap="wrap" style={{ flexShrink: 0 }}>
+            {c.is_partner ? (
+              <Badge variant="soft" color="green">
+                Partner
+              </Badge>
+            ) : (
+              <Badge variant="soft">Customer</Badge>
+            )}
+            <EditCustomerDialog
+              open={editOpen}
+              onOpenChange={setEditOpen}
+              initial={{
+                id: c.id,
+                name: c.name,
+                address: c.address ?? '',
+                vat_number: c.vat_number ?? '',
+                is_partner: c.is_partner,
+                logo_path: c.logo_path ?? null,
+                accent_color: c.accent_color ?? null,
+                accent_color_custom: c.accent_color_custom ?? null,
+                crew_pricing_level_id: c.crew_pricing_level_id ?? null,
+              }}
+              onSaved={() => {
+                qc.invalidateQueries({
+                  queryKey: ['company', companyId, 'customer-detail', id],
+                })
+                qc.invalidateQueries({
+                  queryKey: ['company', companyId, 'customers-index'],
+                })
+              }}
+            />
+            <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
+              <Edit />
+            </Button>
+            <Button
+              size="2"
+              variant="surface"
+              color="red"
+              onClick={() => setDeleteCustomerOpen(true)}
+            >
+              <Trash />
+            </Button>
+          </Flex>
         </Flex>
-      </Flex>
 
-      <Separator my="3" />
+        <Separator my="3" />
 
-      {/* Conta — high in the inspector when the company uses Conta */}
-      {accountingConfig?.accounting_software === 'conta' &&
-        accountingConfig.accounting_organization_id && (
-          <>
-            <Box mb="4">
-              <Flex align="center" gap="2" mb="2" wrap="wrap">
-                <Text as="div" size="2" weight="medium">
-                  Conta
-                </Text>
-                {c.conta_customer_id != null ? (
-                  <Tooltip content="Synced with Conta">
-                    <Badge variant="soft" color="green" size="1">
-                      Linked
-                    </Badge>
-                  </Tooltip>
-                ) : (
-                  <Tooltip content="This customer is not yet linked to a Conta contact">
-                    <Badge variant="soft" color="amber" size="1">
-                      Not linked
-                    </Badge>
-                  </Tooltip>
-                )}
-              </Flex>
-              <Text size="1" color="gray" as="p" mb="2">
-                Look up this customer in Conta using their organization number.
-                You can link an existing Conta contact to pull in read-only
-                billing figures, create a new customer in Conta from Subb, or
-                refresh data after changes in Conta.
-              </Text>
-              <Button
-                size="2"
-                variant="soft"
-                onClick={() => setContaCheckOpen(true)}
-              >
-                <Flex align="center" gap="2">
-                  <CloudSync width={18} height={18} />
-                  Look up in Conta
+        {/* Conta — high in the inspector when the company uses Conta */}
+        {accountingConfig?.accounting_software === 'conta' &&
+          accountingConfig.accounting_organization_id && (
+            <>
+              <Box mb="4">
+                <Flex align="center" gap="2" mb="2" wrap="wrap">
+                  <Text as="div" size="2" weight="medium">
+                    Conta
+                  </Text>
+                  {c.conta_customer_id != null ? (
+                    <Tooltip content="Synced with Conta">
+                      <Badge variant="soft" color="green" size="1">
+                        Linked
+                      </Badge>
+                    </Tooltip>
+                  ) : (
+                    <Tooltip content="This customer is not yet linked to a Conta contact">
+                      <Badge variant="soft" color="amber" size="1">
+                        Not linked
+                      </Badge>
+                    </Tooltip>
+                  )}
                 </Flex>
-              </Button>
-              {c.conta_customer_id != null ? (
-                <Text size="1" color="gray" as="p" mt="2" mb="0">
-                  The fields below are synced from Conta. Edit them in Conta
-                  only.
+                <Text size="1" color="gray" as="p" mb="2">
+                  Look up this customer in Conta using their organization
+                  number. You can link an existing Conta contact to pull in
+                  read-only billing figures, create a new customer in Conta from
+                  Subb, or refresh data after changes in Conta.
                 </Text>
-              ) : (
-                <Text size="1" color="gray" as="p" mt="2" mb="0">
-                  To sync many customers at once, use the customer list.
-                </Text>
-              )}
-              <Flex direction="column" gap="2" wrap="wrap" mt="3">
-                {c.conta_customer_id != null && (
-                  <Tooltip content="Edit in Conta only">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Conta ID:
-                      </Text>
-                      <Text size="2">{c.conta_customer_id}</Text>
-                    </Flex>
-                  </Tooltip>
+                <Button
+                  size="2"
+                  variant="soft"
+                  onClick={() => setContaCheckOpen(true)}
+                >
+                  <Flex align="center" gap="2">
+                    <CloudSync width={18} height={18} />
+                    Look up in Conta
+                  </Flex>
+                </Button>
+                {c.conta_customer_id != null ? (
+                  <Text size="1" color="gray" as="p" mt="2" mb="0">
+                    The fields below are synced from Conta. Edit them in Conta
+                    only.
+                  </Text>
+                ) : (
+                  <Text size="1" color="gray" as="p" mt="2" mb="0">
+                    To sync many customers at once, use the customer list.
+                  </Text>
                 )}
-                {c.conta_customer_id != null &&
-                  (c.conta_days_until_payment_reminder != null ||
-                    companyExpansion?.default_invoice_days_until_due !=
-                      null) && (
-                    <Tooltip content="Standard payment terms: days from invoice date to due date. Edit in Conta only.">
+                <Flex direction="column" gap="2" wrap="wrap" mt="3">
+                  {c.conta_customer_id != null && (
+                    <Tooltip content="Edit in Conta only">
                       <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
                         <Text size="1" color="gray">
-                          Standard invoice due (days):
+                          Conta ID:
+                        </Text>
+                        <Text size="2">{c.conta_customer_id}</Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                  {c.conta_customer_id != null &&
+                    (c.conta_days_until_payment_reminder != null ||
+                      companyExpansion?.default_invoice_days_until_due !=
+                        null) && (
+                      <Tooltip content="Standard payment terms: days from invoice date to due date. Edit in Conta only.">
+                        <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                          <Text size="1" color="gray">
+                            Standard invoice due (days):
+                          </Text>
+                          <Text size="2">
+                            {(c.conta_days_until_payment_reminder ??
+                              companyExpansion?.default_invoice_days_until_due) !=
+                            null
+                              ? `${c.conta_days_until_payment_reminder ?? companyExpansion?.default_invoice_days_until_due} days`
+                              : '—'}
+                          </Text>
+                        </Flex>
+                      </Tooltip>
+                    )}
+                  {c.conta_days_until_estimate_overdue != null && (
+                    <Tooltip content="Edit in Conta only">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Days until estimate overdue:
                         </Text>
                         <Text size="2">
-                          {(c.conta_days_until_payment_reminder ??
-                            companyExpansion?.default_invoice_days_until_due) !=
-                          null
-                            ? `${c.conta_days_until_payment_reminder ?? companyExpansion?.default_invoice_days_until_due} days`
-                            : '—'}
+                          {c.conta_days_until_estimate_overdue} days
                         </Text>
                       </Flex>
                     </Tooltip>
                   )}
-                {c.conta_days_until_estimate_overdue != null && (
-                  <Tooltip content="Edit in Conta only">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Days until estimate overdue:
-                      </Text>
-                      <Text size="2">
-                        {c.conta_days_until_estimate_overdue} days
-                      </Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-                {c.conta_invoice_delivery_method != null && (
-                  <Tooltip content="Edit in Conta only">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Invoice delivery:
-                      </Text>
-                      <Text size="2">{c.conta_invoice_delivery_method}</Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-                {c.conta_invoice_count != null && (
-                  <Tooltip content="Synced from Conta">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Invoices sent:
-                      </Text>
-                      <Text size="2">{c.conta_invoice_count}</Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-                {c.conta_total_invoiced != null && (
-                  <Tooltip content="Synced from Conta">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Total invoiced:
-                      </Text>
-                      <Text size="2">
-                        {new Intl.NumberFormat('nb-NO', {
-                          style: 'currency',
-                          currency: 'NOK',
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        }).format(Number(c.conta_total_invoiced))}
-                      </Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-                {c.conta_total_unpaid != null && (
-                  <Tooltip content="Synced from Conta">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Total not paid:
-                      </Text>
-                      <Text
-                        size="2"
-                        color={
-                          Number(c.conta_total_unpaid) > 0 ? 'red' : undefined
-                        }
-                      >
-                        {new Intl.NumberFormat('nb-NO', {
-                          style: 'currency',
-                          currency: 'NOK',
-                          minimumFractionDigits: 0,
-                          maximumFractionDigits: 0,
-                        }).format(Number(c.conta_total_unpaid))}
-                      </Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-                {c.conta_last_synced_at != null && (
-                  <Tooltip content="Synced from Conta">
-                    <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
-                      <Text size="1" color="gray">
-                        Last synced:
-                      </Text>
-                      <Text size="2">
-                        {formatContaDate(c.conta_last_synced_at)}
-                      </Text>
-                    </Flex>
-                  </Tooltip>
-                )}
-              </Flex>
-            </Box>
-            <Separator my="3" />
-          </>
-        )}
-
-      {/* Logo Upload */}
-      <Box mb="4">
-        <Flex
-          align="center"
-          gap="2"
-          mb="2"
-          style={{
-            cursor: 'pointer',
-            userSelect: 'none',
-          }}
-          onClick={() => setLogoExpanded(!logoExpanded)}
-        >
-          {logoExpanded ? (
-            <NavArrowDown width={16} height={16} />
-          ) : (
-            <NavArrowRight width={16} height={16} />
-          )}
-          <Text as="div" size="2" color="gray">
-            Logo
-          </Text>
-          {c.logo_path ? (
-            <Badge variant="soft" color="green" size="1">
-              Configured
-            </Badge>
-          ) : (
-            <Badge variant="soft" color="red" size="1">
-              Not configured
-            </Badge>
-          )}
-        </Flex>
-        {logoExpanded && (
-          <LogoUpload
-            currentLogoPath={c.logo_path}
-            uploadPath={`customers/${companyId}/${c.id}/logo.jpg`}
-            onUploadComplete={(path) => {
-              updateLogoMutation.mutate(path)
-            }}
-            onDelete={() => {
-              updateLogoMutation.mutate(null)
-            }}
-            disabled={updateLogoMutation.isPending}
-          />
-        )}
-      </Box>
-
-      <Separator my="3" />
-
-      <Box mb="4">
-        <Flex
-          align="center"
-          gap="2"
-          mb="2"
-          style={{ cursor: 'pointer' }}
-          onClick={() => setBrandColorsExpanded((v) => !v)}
-        >
-          {brandColorsExpanded ? (
-            <NavArrowDown width={16} height={16} />
-          ) : (
-            <NavArrowRight width={16} height={16} />
-          )}
-          <Text as="div" size="2" color="gray">
-            Brand colors
-          </Text>
-          {c.accent_color_custom || c.accent_color ? (
-            <Badge variant="soft" color="green" size="1">
-              Configured
-            </Badge>
-          ) : (
-            <Badge variant="soft" color="gray" size="1">
-              Default
-            </Badge>
-          )}
-        </Flex>
-        {brandColorsExpanded && (
-          <Box>
-            <CustomerBrandColorsFields
-              accentColor={brandAccentColor}
-              accentColorCustom={brandCustomHex}
-              onAccentColorChange={setBrandAccentColor}
-              onAccentColorCustomChange={setBrandCustomHex}
-            />
-            <Button
-              size="2"
-              variant="soft"
-              mt="3"
-              disabled={updateBrandColorsMutation.isPending}
-              onClick={() => updateBrandColorsMutation.mutate()}
-            >
-              {updateBrandColorsMutation.isPending
-                ? 'Saving…'
-                : 'Save brand colors'}
-            </Button>
-          </Box>
-        )}
-      </Box>
-
-      <Separator my="3" />
-
-      {/* Crew pricing */}
-      <Box mb="4">
-        <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
-          Crew pricing
-        </Text>
-        <Flex direction="column" gap="2">
-          <Flex align="center" gap="2">
-            <Text size="2" weight="medium">
-              Level:
-            </Text>
-            <Badge variant="soft" size="2">
-              {c.crew_pricing_level?.name ?? 'Standard'}
-            </Badge>
-          </Flex>
-          <Flex gap="4" align="center" wrap="wrap">
-            <Text size="1" color="gray">
-              Daily:
-            </Text>
-            <Text size="2">
-              {c.crew_pricing_level?.crew_rate_per_day != null
-                ? new Intl.NumberFormat('nb-NO', {
-                    style: 'currency',
-                    currency: 'NOK',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  }).format(Number(c.crew_pricing_level.crew_rate_per_day))
-                : companyExpansion?.crew_rate_per_day != null
-                  ? new Intl.NumberFormat('nb-NO', {
-                      style: 'currency',
-                      currency: 'NOK',
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    }).format(Number(companyExpansion.crew_rate_per_day))
-                  : '—'}
-            </Text>
-            <Text size="1" color="gray">
-              Hourly:
-            </Text>
-            <Text size="2">
-              {c.crew_pricing_level?.crew_rate_per_hour != null
-                ? new Intl.NumberFormat('nb-NO', {
-                    style: 'currency',
-                    currency: 'NOK',
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 0,
-                  }).format(Number(c.crew_pricing_level.crew_rate_per_hour))
-                : companyExpansion?.crew_rate_per_hour != null
-                  ? new Intl.NumberFormat('nb-NO', {
-                      style: 'currency',
-                      currency: 'NOK',
-                      minimumFractionDigits: 0,
-                      maximumFractionDigits: 0,
-                    }).format(Number(companyExpansion.crew_rate_per_hour))
-                  : '—'}
-            </Text>
-          </Flex>
-        </Flex>
-      </Box>
-
-      <Separator my="3" />
-
-      {/* Two-column layout: Meta info on left, Map on right */}
-      <Grid columns={{ initial: '1', sm: '2' }} gap="4" mb="3">
-        {/* Left column: Meta */}
-        <Flex direction="column" gap="2">
-          <div>
-            <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
-              VAT number
-            </Text>
-            <Flex align="center" gap="2">
-              <Text as="div" size="2">
-                {fmtVAT(c.vat_number)}
-              </Text>
-              {c.vat_number && (
-                <CopyIconButton
-                  text={c.vat_number}
-                  copyLabel="Copy VAT number"
-                />
-              )}
-            </Flex>
-          </div>
-          {addrParts && (
-            <>
-              <div>
-                <Text
-                  as="div"
-                  size="1"
-                  color="gray"
-                  style={{ marginBottom: 4 }}
-                >
-                  Address
-                </Text>
-                <Text as="div" size="2">
-                  {addrParts.address_line || '—'}
-                </Text>
-              </div>
-              <Grid columns="2" gap="4">
-                <div>
-                  <Text
-                    as="div"
-                    size="1"
-                    color="gray"
-                    style={{ marginBottom: 4 }}
-                  >
-                    ZIP
-                  </Text>
-                  <Text as="div" size="2">
-                    {addrParts.zip_code || '—'}
-                  </Text>
-                </div>
-                <div>
-                  <Text
-                    as="div"
-                    size="1"
-                    color="gray"
-                    style={{ marginBottom: 4 }}
-                  >
-                    City
-                  </Text>
-                  <Text as="div" size="2">
-                    {addrParts.city || '—'}
-                  </Text>
-                </div>
-              </Grid>
-              <div>
-                <Text
-                  as="div"
-                  size="1"
-                  color="gray"
-                  style={{ marginBottom: 4 }}
-                >
-                  Country
-                </Text>
-                <Text as="div" size="2">
-                  {addrParts.country || '—'}
-                </Text>
-              </div>
+                  {c.conta_invoice_delivery_method != null && (
+                    <Tooltip content="Edit in Conta only">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Invoice delivery:
+                        </Text>
+                        <Text size="2">{c.conta_invoice_delivery_method}</Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                  {c.conta_invoice_count != null && (
+                    <Tooltip content="Synced from Conta">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Invoices sent:
+                        </Text>
+                        <Text size="2">{c.conta_invoice_count}</Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                  {c.conta_total_invoiced != null && (
+                    <Tooltip content="Synced from Conta">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Total invoiced:
+                        </Text>
+                        <Text size="2">
+                          {new Intl.NumberFormat('nb-NO', {
+                            style: 'currency',
+                            currency: 'NOK',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(Number(c.conta_total_invoiced))}
+                        </Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                  {c.conta_total_unpaid != null && (
+                    <Tooltip content="Synced from Conta">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Total not paid:
+                        </Text>
+                        <Text
+                          size="2"
+                          color={
+                            Number(c.conta_total_unpaid) > 0 ? 'red' : undefined
+                          }
+                        >
+                          {new Intl.NumberFormat('nb-NO', {
+                            style: 'currency',
+                            currency: 'NOK',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          }).format(Number(c.conta_total_unpaid))}
+                        </Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                  {c.conta_last_synced_at != null && (
+                    <Tooltip content="Synced from Conta">
+                      <Flex align="center" gap="2" style={{ opacity: 0.8 }}>
+                        <Text size="1" color="gray">
+                          Last synced:
+                        </Text>
+                        <Text size="2">
+                          {formatContaDate(c.conta_last_synced_at)}
+                        </Text>
+                      </Flex>
+                    </Tooltip>
+                  )}
+                </Flex>
+              </Box>
+              <Separator my="3" />
             </>
           )}
+
+        {/* Logo Upload */}
+        <Box mb="4">
+          <Flex
+            align="center"
+            gap="2"
+            mb="2"
+            style={{
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            onClick={() => setLogoExpanded(!logoExpanded)}
+          >
+            {logoExpanded ? (
+              <NavArrowDown width={16} height={16} />
+            ) : (
+              <NavArrowRight width={16} height={16} />
+            )}
+            <Text as="div" size="2" color="gray">
+              Logo
+            </Text>
+            {c.logo_path ? (
+              <Badge variant="soft" color="green" size="1">
+                Configured
+              </Badge>
+            ) : (
+              <Badge variant="soft" color="red" size="1">
+                Not configured
+              </Badge>
+            )}
+          </Flex>
+          {logoExpanded && (
+            <LogoUpload
+              currentLogoPath={c.logo_path}
+              uploadPath={`customers/${companyId}/${c.id}/logo.jpg`}
+              onUploadComplete={(path) => {
+                updateLogoMutation.mutate(path)
+              }}
+              onDelete={() => {
+                updateLogoMutation.mutate(null)
+              }}
+              disabled={updateLogoMutation.isPending}
+            />
+          )}
+        </Box>
+
+        <Separator my="3" />
+
+        <Box mb="4">
+          <Flex
+            align="center"
+            gap="2"
+            mb="2"
+            style={{ cursor: 'pointer' }}
+            onClick={() => setBrandColorsExpanded((v) => !v)}
+          >
+            {brandColorsExpanded ? (
+              <NavArrowDown width={16} height={16} />
+            ) : (
+              <NavArrowRight width={16} height={16} />
+            )}
+            <Text as="div" size="2" color="gray">
+              Brand colors
+            </Text>
+            {c.accent_color_custom || c.accent_color ? (
+              <Badge variant="soft" color="green" size="1">
+                Configured
+              </Badge>
+            ) : (
+              <Badge variant="soft" color="gray" size="1">
+                Default
+              </Badge>
+            )}
+          </Flex>
+          {brandColorsExpanded && (
+            <Box>
+              <CustomerBrandColorsFields
+                accentColor={brandAccentColor}
+                accentColorCustom={brandCustomHex}
+                onAccentColorChange={setBrandAccentColor}
+                onAccentColorCustomChange={setBrandCustomHex}
+              />
+              <Button
+                size="2"
+                variant="soft"
+                mt="3"
+                disabled={updateBrandColorsMutation.isPending}
+                onClick={() => updateBrandColorsMutation.mutate()}
+              >
+                {updateBrandColorsMutation.isPending
+                  ? 'Saving…'
+                  : 'Save brand colors'}
+              </Button>
+            </Box>
+          )}
+        </Box>
+
+        <Separator my="3" />
+
+        {/* Crew pricing */}
+        <Box mb="4">
+          <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
+            Crew pricing
+          </Text>
+          <Flex direction="column" gap="2">
+            <Flex align="center" gap="2">
+              <Text size="2" weight="medium">
+                Level:
+              </Text>
+              <Badge variant="soft" size="2">
+                {c.crew_pricing_level?.name ?? 'Standard'}
+              </Badge>
+            </Flex>
+            <Flex gap="4" align="center" wrap="wrap">
+              <Text size="1" color="gray">
+                Daily:
+              </Text>
+              <Text size="2">
+                {c.crew_pricing_level?.crew_rate_per_day != null
+                  ? new Intl.NumberFormat('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(Number(c.crew_pricing_level.crew_rate_per_day))
+                  : companyExpansion?.crew_rate_per_day != null
+                    ? new Intl.NumberFormat('nb-NO', {
+                        style: 'currency',
+                        currency: 'NOK',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(Number(companyExpansion.crew_rate_per_day))
+                    : '—'}
+              </Text>
+              <Text size="1" color="gray">
+                Hourly:
+              </Text>
+              <Text size="2">
+                {c.crew_pricing_level?.crew_rate_per_hour != null
+                  ? new Intl.NumberFormat('nb-NO', {
+                      style: 'currency',
+                      currency: 'NOK',
+                      minimumFractionDigits: 0,
+                      maximumFractionDigits: 0,
+                    }).format(Number(c.crew_pricing_level.crew_rate_per_hour))
+                  : companyExpansion?.crew_rate_per_hour != null
+                    ? new Intl.NumberFormat('nb-NO', {
+                        style: 'currency',
+                        currency: 'NOK',
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 0,
+                      }).format(Number(companyExpansion.crew_rate_per_hour))
+                    : '—'}
+              </Text>
+            </Flex>
+          </Flex>
+        </Box>
+
+        <Separator my="3" />
+
+        {/* Two-column layout: Meta info on left, Map on right */}
+        <Grid columns={{ initial: '1', sm: '2' }} gap="4" mb="3">
+          {/* Left column: Meta */}
+          <Flex direction="column" gap="2">
+            <div>
+              <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
+                VAT number
+              </Text>
+              <Flex align="center" gap="2">
+                <Text as="div" size="2">
+                  {fmtVAT(c.vat_number)}
+                </Text>
+                {c.vat_number && (
+                  <CopyIconButton
+                    text={c.vat_number}
+                    copyLabel="Copy VAT number"
+                  />
+                )}
+              </Flex>
+            </div>
+            {addrParts && (
+              <>
+                <div>
+                  <Text
+                    as="div"
+                    size="1"
+                    color="gray"
+                    style={{ marginBottom: 4 }}
+                  >
+                    Address
+                  </Text>
+                  <Text as="div" size="2">
+                    {addrParts.address_line || '—'}
+                  </Text>
+                </div>
+                <Grid columns="2" gap="4">
+                  <div>
+                    <Text
+                      as="div"
+                      size="1"
+                      color="gray"
+                      style={{ marginBottom: 4 }}
+                    >
+                      ZIP
+                    </Text>
+                    <Text as="div" size="2">
+                      {addrParts.zip_code || '—'}
+                    </Text>
+                  </div>
+                  <div>
+                    <Text
+                      as="div"
+                      size="1"
+                      color="gray"
+                      style={{ marginBottom: 4 }}
+                    >
+                      City
+                    </Text>
+                    <Text as="div" size="2">
+                      {addrParts.city || '—'}
+                    </Text>
+                  </div>
+                </Grid>
+                <div>
+                  <Text
+                    as="div"
+                    size="1"
+                    color="gray"
+                    style={{ marginBottom: 4 }}
+                  >
+                    Country
+                  </Text>
+                  <Text as="div" size="2">
+                    {addrParts.country || '—'}
+                  </Text>
+                </div>
+              </>
+            )}
+          </Flex>
+
+          {/* Right column: Map */}
+          {c.address && (
+            <Box>
+              <Text as="div" size="2" color="gray" mb="2">
+                Location
+              </Text>
+              <MapEmbed
+                query={c.address}
+                zoom={15}
+                style={{ maxWidth: '100%' }}
+              />
+            </Box>
+          )}
+        </Grid>
+
+        {/* Contacts */}
+        <Flex align="baseline" justify="between" mb="2">
+          <Text as="div" size="2" color="gray">
+            Contacts
+          </Text>
+          <Button size="2" variant="solid" onClick={() => setAddOpen(true)}>
+            Add contact
+          </Button>
         </Flex>
 
-        {/* Right column: Map */}
-        {c.address && (
-          <Box>
-            <Text as="div" size="2" color="gray" mb="2">
-              Location
-            </Text>
-            <MapEmbed
-              query={c.address}
-              zoom={15}
-              style={{ maxWidth: '100%' }}
-            />
-          </Box>
-        )}
-      </Grid>
-
-      {/* Contacts */}
-      <Flex align="baseline" justify="between" mb="2">
-        <Text as="div" size="2" color="gray">
-          Contacts
-        </Text>
-        <Button size="2" variant="solid" onClick={() => setAddOpen(true)}>
-          Add contact
-        </Button>
-      </Flex>
-
-      <Box
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          minWidth: 0,
-          border: '1px solid var(--gray-a6)',
-          borderRadius: 8,
-          overflowX: 'auto',
-        }}
-      >
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Phone</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell style={{ width: 160 }} />
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {c.contacts.length === 0 ? (
+        <Box
+          style={{
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 8,
+            overflowX: 'auto',
+          }}
+        >
+          <Table.Root variant="surface">
+            <Table.Header>
               <Table.Row>
-                <Table.Cell colSpan={5}>No contacts yet.</Table.Cell>
+                <Table.ColumnHeaderCell>Name</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Email</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Phone</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell style={{ width: 160 }} />
               </Table.Row>
-            ) : (
-              c.contacts.map((p) => (
-                <Table.Row key={p.id}>
-                  <Table.Cell>{p.name}</Table.Cell>
-                  <Table.Cell>
-                    <a href={`mailto:${p.email}`} style={{ color: 'inherit' }}>
-                      {p.email}
-                    </a>
-                  </Table.Cell>
-                  <Table.Cell>
-                    {p.phone ? (
-                      <a href={`tel:${p.phone}`} style={{ color: 'inherit' }}>
-                        {prettyPhone(p.phone)}
-                      </a>
-                    ) : (
-                      '—'
-                    )}
-                  </Table.Cell>
-                  <Table.Cell>{p.title || '—'}</Table.Cell>
-                  <Table.Cell>
-                    <Flex gap="2" justify="end">
-                      <Button
-                        size="1"
-                        variant="soft"
-                        onClick={() => {
-                          setEditTarget(p)
-                          setEditContactOpen(true)
-                        }}
-                      >
-                        <Edit width={14} height={14} />
-                      </Button>
-                      <Button
-                        size="1"
-                        color="red"
-                        variant="soft"
-                        onClick={() => {
-                          setPendingDeleteId(p.id)
-                          setConfirmOpen(true)
-                        }}
-                      >
-                        <Trash width={14} height={14} />
-                      </Button>
-                    </Flex>
-                  </Table.Cell>
+            </Table.Header>
+            <Table.Body>
+              {c.contacts.length === 0 ? (
+                <Table.Row>
+                  <Table.Cell colSpan={5}>No contacts yet.</Table.Cell>
                 </Table.Row>
-              ))
-            )}
-          </Table.Body>
-        </Table.Root>
-      </Box>
+              ) : (
+                c.contacts.map((p) => (
+                  <Table.Row key={p.id}>
+                    <Table.Cell>{p.name}</Table.Cell>
+                    <Table.Cell>
+                      <a
+                        href={`mailto:${p.email}`}
+                        style={{ color: 'inherit' }}
+                      >
+                        {p.email}
+                      </a>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {p.phone ? (
+                        <a href={`tel:${p.phone}`} style={{ color: 'inherit' }}>
+                          {prettyPhone(p.phone)}
+                        </a>
+                      ) : (
+                        '—'
+                      )}
+                    </Table.Cell>
+                    <Table.Cell>{p.title || '—'}</Table.Cell>
+                    <Table.Cell>
+                      <Flex gap="2" justify="end">
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => {
+                            setEditTarget(p)
+                            setEditContactOpen(true)
+                          }}
+                        >
+                          <Edit width={14} height={14} />
+                        </Button>
+                        <Button
+                          size="1"
+                          color="red"
+                          variant="soft"
+                          onClick={() => {
+                            setPendingDeleteId(p.id)
+                            setConfirmOpen(true)
+                          }}
+                        >
+                          <Trash width={14} height={14} />
+                        </Button>
+                      </Flex>
+                    </Table.Cell>
+                  </Table.Row>
+                ))
+              )}
+            </Table.Body>
+          </Table.Root>
+        </Box>
 
-      {/* Recent Jobs */}
-      <Flex align="baseline" justify="between" mb="2" mt="4">
-        <Text as="div" size="2" color="gray">
-          Recent Jobs
-        </Text>
-      </Flex>
+        {/* Recent Jobs */}
+        <Flex align="baseline" justify="between" mb="2" mt="4">
+          <Text as="div" size="2" color="gray">
+            Recent Jobs
+          </Text>
+        </Flex>
 
-      <Box
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          minWidth: 0,
-          border: '1px solid var(--gray-a6)',
-          borderRadius: 8,
-          overflowX: 'auto',
-        }}
-      >
-        <Table.Root variant="surface">
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>Start Date</Table.ColumnHeaderCell>
-              <Table.ColumnHeaderCell>End Date</Table.ColumnHeaderCell>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {!recentJobs || recentJobs.length === 0 ? (
+        <Box
+          style={{
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 8,
+            overflowX: 'auto',
+          }}
+        >
+          <Table.Root variant="surface">
+            <Table.Header>
               <Table.Row>
-                <Table.Cell colSpan={4}>No jobs yet.</Table.Cell>
+                <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>Start Date</Table.ColumnHeaderCell>
+                <Table.ColumnHeaderCell>End Date</Table.ColumnHeaderCell>
               </Table.Row>
-            ) : (
-              recentJobs.map((job) => (
-                <Table.Row
-                  key={job.id}
+            </Table.Header>
+            <Table.Body>
+              {!recentJobs || recentJobs.length === 0 ? (
+                <Table.Row>
+                  <Table.Cell colSpan={4}>No jobs yet.</Table.Cell>
+                </Table.Row>
+              ) : (
+                recentJobs.map((job) => (
+                  <Table.Row
+                    key={job.id}
+                    onClick={() => {
+                      navigate({
+                        to: '/jobs',
+                        search: { jobId: job.id, tab: undefined },
+                      })
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Table.Cell>
+                      <Text size="2">{job.title}</Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Badge variant="soft">{job.status}</Badge>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">
+                        {job.start_at ? formatDisplayDate(job.start_at) : '—'}
+                      </Text>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Text size="2">
+                        {job.end_at ? formatDisplayDate(job.end_at) : '—'}
+                      </Text>
+                    </Table.Cell>
+                  </Table.Row>
+                ))
+              )}
+            </Table.Body>
+          </Table.Root>
+        </Box>
+
+        {/* Dialogs */}
+        <AddContactDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          companyId={c.company_id}
+          customerId={c.id}
+          onSaved={() =>
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customer-detail', id],
+            })
+          }
+        />
+
+        <EditContactDialog
+          open={editContactOpen}
+          onOpenChange={setEditContactOpen}
+          contact={editTarget}
+          onSaved={() =>
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customer-detail', id],
+            })
+          }
+        />
+
+        <AlertDialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Delete contact?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              This will permanently remove this contact from <b>{c.name}</b>.
+              This action cannot be undone.
+            </AlertDialog.Description>
+
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button variant="soft" disabled={deleteContactMut.isPending}>
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action>
+                <Button
+                  color="red"
+                  variant="solid"
+                  disabled={deleteContactMut.isPending || !pendingDeleteId}
                   onClick={() => {
-                    navigate({
-                      to: '/jobs',
-                      search: { jobId: job.id, tab: undefined },
-                    })
-                  }}
-                  style={{
-                    cursor: 'pointer',
+                    if (pendingDeleteId) {
+                      deleteContactMut.mutate({ id: pendingDeleteId })
+                    }
                   }}
                 >
-                  <Table.Cell>
-                    <Text size="2">{job.title}</Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Badge variant="soft">{job.status}</Badge>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2">
-                      {job.start_at ? formatDisplayDate(job.start_at) : '—'}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Text size="2">
-                      {job.end_at ? formatDisplayDate(job.end_at) : '—'}
-                    </Text>
-                  </Table.Cell>
-                </Table.Row>
-              ))
-            )}
-          </Table.Body>
-        </Table.Root>
+                  {deleteContactMut.isPending ? 'Deleting…' : 'Yes, delete'}
+                </Button>
+              </AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+
+        {/* Delete customer confirm */}
+        <AlertDialog.Root
+          open={deleteCustomerOpen}
+          onOpenChange={setDeleteCustomerOpen}
+        >
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Delete customer?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              This will mark <b>{c.name}</b> as deleted. The customer will be
+              hidden from all views. This action cannot be undone.
+            </AlertDialog.Description>
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button variant="soft" disabled={deleteCustomerMut.isPending}>
+                  Cancel
+                </Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action>
+                <Button
+                  color="red"
+                  variant="solid"
+                  onClick={() => deleteCustomerMut.mutate()}
+                  disabled={deleteCustomerMut.isPending}
+                >
+                  {deleteCustomerMut.isPending ? 'Deleting…' : 'Yes, delete'}
+                </Button>
+              </AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+
+        <ContaCustomerCheckDialog
+          open={contaCheckOpen}
+          onOpenChange={setContaCheckOpen}
+          companyId={companyId}
+          customer={{
+            id: c.id,
+            name: c.name,
+            vat_number: c.vat_number,
+            address: c.address,
+            email: c.email,
+            phone: c.phone,
+          }}
+          onCreatedInConta={() => {
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customer-detail', id],
+            })
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customers-index'],
+            })
+          }}
+          onFetchedFromConta={() => {
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customer-detail', id],
+            })
+            qc.invalidateQueries({
+              queryKey: ['company', companyId, 'customers-index'],
+            })
+          }}
+        />
       </Box>
-
-      {/* Dialogs */}
-      <AddContactDialog
-        open={addOpen}
-        onOpenChange={setAddOpen}
-        companyId={c.company_id}
-        customerId={c.id}
-        onSaved={() =>
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customer-detail', id],
-          })
-        }
-      />
-
-      <EditContactDialog
-        open={editContactOpen}
-        onOpenChange={setEditContactOpen}
-        contact={editTarget}
-        onSaved={() =>
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customer-detail', id],
-          })
-        }
-      />
-
-      <AlertDialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <AlertDialog.Content maxWidth="480px">
-          <AlertDialog.Title>Delete contact?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            This will permanently remove this contact from <b>{c.name}</b>. This
-            action cannot be undone.
-          </AlertDialog.Description>
-
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft" disabled={deleteContactMut.isPending}>
-                Cancel
-              </Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
-              <Button
-                color="red"
-                variant="solid"
-                disabled={deleteContactMut.isPending || !pendingDeleteId}
-                onClick={() => {
-                  if (pendingDeleteId) {
-                    deleteContactMut.mutate({ id: pendingDeleteId })
-                  }
-                }}
-              >
-                {deleteContactMut.isPending ? 'Deleting…' : 'Yes, delete'}
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-
-      {/* Delete customer confirm */}
-      <AlertDialog.Root
-        open={deleteCustomerOpen}
-        onOpenChange={setDeleteCustomerOpen}
-      >
-        <AlertDialog.Content maxWidth="480px">
-          <AlertDialog.Title>Delete customer?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            This will mark <b>{c.name}</b> as deleted. The customer will be
-            hidden from all views. This action cannot be undone.
-          </AlertDialog.Description>
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft" disabled={deleteCustomerMut.isPending}>
-                Cancel
-              </Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
-              <Button
-                color="red"
-                variant="solid"
-                onClick={() => deleteCustomerMut.mutate()}
-                disabled={deleteCustomerMut.isPending}
-              >
-                {deleteCustomerMut.isPending ? 'Deleting…' : 'Yes, delete'}
-              </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-
-      <ContaCustomerCheckDialog
-        open={contaCheckOpen}
-        onOpenChange={setContaCheckOpen}
-        companyId={companyId}
-        customer={{
-          id: c.id,
-          name: c.name,
-          vat_number: c.vat_number,
-          address: c.address,
-          email: c.email,
-          phone: c.phone,
-        }}
-        onCreatedInConta={() => {
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customer-detail', id],
-          })
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customers-index'],
-          })
-        }}
-        onFetchedFromConta={() => {
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customer-detail', id],
-          })
-          qc.invalidateQueries({
-            queryKey: ['company', companyId, 'customers-index'],
-          })
-        }}
-      />
-    </Box>
+    </InspectorFadeIn>
   )
 }

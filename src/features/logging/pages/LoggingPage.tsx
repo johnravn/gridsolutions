@@ -23,7 +23,11 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+} from '@app/layout/split'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import {
   createTimeEntry,

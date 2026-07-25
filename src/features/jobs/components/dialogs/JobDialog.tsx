@@ -197,13 +197,7 @@ export default function JobDialog({
     }
     // Use stable job id — full initialData identity churn would wipe in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [
-    open,
-    mode,
-    initialData?.id,
-    recurringJobIdProp,
-    recurringJobDefaults,
-  ])
+  }, [open, mode, initialData?.id, recurringJobIdProp, recurringJobDefaults])
 
   React.useEffect(() => {
     if (!open || mode !== 'create') return
@@ -982,7 +976,8 @@ export default function JobDialog({
                                 onValueChange={(v) => {
                                   form.setFieldValue('contactId', '')
                                   pendingAutofillContactIndexRef.current = null
-                                  if (v) form.setFieldValue('customerUserId', '')
+                                  if (v)
+                                    form.setFieldValue('customerUserId', '')
                                   form.setFieldValue('customerId', v)
                                 }}
                                 disabled={isCompanyCustomer}

@@ -1,7 +1,13 @@
 import * as React from 'react'
 import { Box, Flex, Grid, Separator, Skeleton } from '@radix-ui/themes'
+import { motion, useReducedMotion } from 'framer-motion'
 
-export default function InspectorSkeleton() {
+/** Wait before showing skeleton so fast/cached loads never flash. */
+const SKELETON_DELAY_MS = 140
+const ENTER_OFFSET_Y = 10
+const ENTER_TRANSITION = { duration: 0.22, ease: 'easeOut' as const }
+
+function SkeletonMarkup() {
   return (
     <Box>
       {/* Header */}
@@ -111,5 +117,69 @@ export default function InspectorSkeleton() {
         </Skeleton>
       </Box>
     </Box>
+  )
+}
+
+function useDelayedShow(delayMs: number) {
+  const [show, setShow] = React.useState(delayMs <= 0)
+
+  React.useEffect(() => {
+    if (delayMs <= 0) {
+      setShow(true)
+      return
+    }
+    const timer = window.setTimeout(() => setShow(true), delayMs)
+    return () => window.clearTimeout(timer)
+  }, [delayMs])
+
+  return show
+}
+
+/** Soft enter for loaded inspector content — remount with `key` when selection changes. */
+export function InspectorFadeIn({ children }: { children: React.ReactNode }) {
+  const reducedMotion = useReducedMotion()
+
+  if (reducedMotion) {
+    return <>{children}</>
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: ENTER_OFFSET_Y }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={ENTER_TRANSITION}
+      style={{ minWidth: 0 }}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+export default function InspectorSkeleton({
+  /** Skip delay (e.g. Storybook). */
+  instant = false,
+}: {
+  instant?: boolean
+} = {}) {
+  const reducedMotion = useReducedMotion()
+  const show = useDelayedShow(instant || reducedMotion ? 0 : SKELETON_DELAY_MS)
+
+  if (!show) {
+    return <Box aria-hidden style={{ minHeight: 1 }} />
+  }
+
+  if (reducedMotion) {
+    return <SkeletonMarkup />
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: ENTER_OFFSET_Y }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={ENTER_TRANSITION}
+      style={{ minWidth: 0 }}
+    >
+      <SkeletonMarkup />
+    </motion.div>
   )
 }

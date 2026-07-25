@@ -16,7 +16,9 @@ import {
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import { supabase } from '@shared/api/supabase'
 import { Edit, Trash } from 'iconoir-react'
 import { toEventInputs } from '@features/calendar/components/domain'
@@ -202,442 +204,444 @@ export default function InventoryInspector({ id }: { id: string | null }) {
       : undefined
 
   return (
-    <Box>
-      {/* Header */}
-      <Flex align="center" justify="between" gap="2">
-        <div>
-          <Text as="div" size="4" weight="bold">
-            {entry.name}
-          </Text>
-          <Text as="div" color="gray" size="2">
-            {entry.type}
-            {entry.type === 'item' && entry.category_name
-              ? ` · ${entry.category_name.toUpperCase()}`
-              : ''}
-            {entry.type === 'item' && entry.brand_name
-              ? ` · ${entry.brand_name}`
-              : ''}
-            {entry.type === 'group' && entry.category_name
-              ? ` · ${entry.category_name.toUpperCase()}`
-              : ''}
-          </Text>
-        </div>
-        <Flex gap="2">
-          <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-            <Edit />
-          </Button>
-
-          <Button
-            size="2"
-            variant="surface"
-            color="red"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash />
-          </Button>
-        </Flex>
-      </Flex>
-
-      <Separator my="3" />
-
-      {/* ITEM DETAILS */}
-      {entry.type === 'item' ? (
-        <Flex direction="column" gap="3">
-          {/* Quick stats */}
-          <Grid columns={{ initial: '1', sm: '3' }} gap="3">
-            <Stat label="On hand" value={<b>{entry.on_hand ?? 0}</b>} />
-            <Stat
-              label="Current price"
-              value={
-                entry.current_price != null ? (
-                  <b>{fmtCurrency.format(Number(entry.current_price))}</b>
-                ) : (
-                  <Text color="gray">—</Text>
-                )
-              }
-            />
-            <Stat
-              label="Booking"
-              value={
-                <Badge
-                  color={entry.allow_individual_booking ? 'green' : 'gray'}
-                  variant="soft"
-                >
-                  {entry.allow_individual_booking
-                    ? 'Individual allowed'
-                    : 'Group-only'}
-                </Badge>
-              }
-            />
-          </Grid>
-
-          {/* Meta */}
-          <Grid columns={{ initial: '1', sm: '2' }} gap="3">
-            <Field
-              label="Category"
-              value={
-                entry.category_name ? entry.category_name.toUpperCase() : '—'
-              }
-            />
-            <Field label="Brand" value={entry.brand_name ?? '—'} />
-            <Field
-              label="Type"
-              value={
-                entry.item_kind === 'stock' ? (
-                  <Badge size="1" variant="soft" color="indigo">
-                    Stock
-                  </Badge>
-                ) : (
-                  <Badge size="1" variant="soft" color="amber">
-                    Subrental
-                  </Badge>
-                )
-              }
-            />
-            <Field
-              label="Status"
-              value={
-                <Badge color={entry.active ? 'green' : 'red'} variant="soft">
-                  {entry.active ? 'Active' : 'Inactive'}
-                </Badge>
-              }
-            />
-            <Field label="Model" value={entry.model ?? '—'} />
-          </Grid>
-
-          {/* Notes */}
+    <InspectorFadeIn key={id}>
+      <Box>
+        {/* Header */}
+        <Flex align="center" justify="between" gap="2">
           <div>
-            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-              Notes
+            <Text as="div" size="4" weight="bold">
+              {entry.name}
             </Text>
-            <Box
-              p="2"
-              style={{
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 8,
-                minHeight: 40,
-              }}
+            <Text as="div" color="gray" size="2">
+              {entry.type}
+              {entry.type === 'item' && entry.category_name
+                ? ` · ${entry.category_name.toUpperCase()}`
+                : ''}
+              {entry.type === 'item' && entry.brand_name
+                ? ` · ${entry.brand_name}`
+                : ''}
+              {entry.type === 'group' && entry.category_name
+                ? ` · ${entry.category_name.toUpperCase()}`
+                : ''}
+            </Text>
+          </div>
+          <Flex gap="2">
+            <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
+              <Edit />
+            </Button>
+
+            <Button
+              size="2"
+              variant="surface"
+              color="red"
+              onClick={() => setDeleteOpen(true)}
             >
-              <Text size="2" color={entry.notes ? undefined : 'gray'}>
-                {entry.notes || 'No notes'}
-              </Text>
-            </Box>
-          </div>
-
-          {/* Nicknames */}
-          <div>
-            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-              Nicknames
-            </Text>
-            <Box
-              p="2"
-              style={{
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 8,
-                minHeight: 40,
-              }}
-            >
-              <Text size="2" color={entry.nicknames ? undefined : 'gray'}>
-                {entry.nicknames || 'No nicknames'}
-              </Text>
-            </Box>
-          </div>
-
-          {/* Price history */}
-          <div>
-            <Flex align="baseline" justify="between" mb="2">
-              <Text size="2" color="gray">
-                Price history
-              </Text>
-              <Text size="1" color="gray">
-                Most recent first
-              </Text>
-            </Flex>
-
-            {entry.price_history.length === 0 ? (
-              <Text size="2" color="gray">
-                No price records yet.
-              </Text>
-            ) : (
-              <Box
-                style={{
-                  maxHeight: 196, // ~3 rows + header (tweak if you use a different table size)
-                  overflowY: 'auto',
-                  border: '1px solid var(--gray-a6)',
-                  borderRadius: 8,
-                }}
-              >
-                <Table.Root variant="surface">
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Edited</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Set by</Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {entry.price_history.map((p) => (
-                      <Table.Row key={p.id}>
-                        <Table.Cell>
-                          {fmtCurrency.format(Number(p.amount))}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Code>{fmtDate(p.effective_from)}</Code>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {p.set_by_name || p.set_by || '—'}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              </Box>
-            )}
-          </div>
-
-          {/* Calendar */}
-          <InspectorCalendar
-            events={events}
-            onCreate={(e) => {}}
-            onUpdate={(id, patch) => {}}
-            onDelete={(id) => {}}
-          />
-        </Flex>
-      ) : null}
-
-      {/* GROUP DETAILS */}
-      {entry.type === 'group' ? (
-        <Flex direction="column" gap="3">
-          {/* Quick stats */}
-          <Grid columns={{ initial: '1', sm: '3' }} gap="3">
-            <Stat label="On hand" value={<b>{entry.on_hand ?? 0}</b>} />
-            <Stat
-              label="Current price"
-              value={
-                entry.current_price != null ? (
-                  <b>{fmtCurrency.format(Number(entry.current_price))}</b>
-                ) : (
-                  <Text color="gray">—</Text>
-                )
-              }
-            />
-            <div />
-          </Grid>
-
-          {/* Meta */}
-          <Grid columns={{ initial: '1', sm: '2' }} gap="3">
-            <Field
-              label="Category"
-              value={
-                entry.category_name ? entry.category_name.toUpperCase() : '—'
-              }
-            />
-            <Field
-              label="Type"
-              value={
-                entry.item_kind === 'stock' ? (
-                  <Badge size="1" variant="soft" color="indigo">
-                    Stock
-                  </Badge>
-                ) : (
-                  <Badge size="1" variant="soft" color="amber">
-                    Subrental
-                  </Badge>
-                )
-              }
-            />
-            <Field
-              label="Status"
-              value={
-                <Badge color={entry.active ? 'green' : 'red'} variant="soft">
-                  {entry.active ? 'Active' : 'Inactive'}
-                </Badge>
-              }
-            />
-          </Grid>
-
-          {/* Description */}
-          <div>
-            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-              Description
-            </Text>
-            <Box
-              p="2"
-              style={{
-                border: '1px solid var(--gray-a6)',
-                borderRadius: 8,
-                minHeight: 40,
-              }}
-            >
-              <Text size="2" color={entry.description ? undefined : 'gray'}>
-                {entry.description || 'No description'}
-              </Text>
-            </Box>
-          </div>
-
-          {/* Parts */}
-          <div>
-            <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
-              Bundle contents
-            </Text>
-
-            {entry.parts.length ? (
-              <Table.Root variant="surface">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Unit</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {entry.parts.map((p) => {
-                    const unit = p.item_current_price ?? null
-                    const total =
-                      unit != null ? Number(unit) * Number(p.quantity) : null
-                    return (
-                      <Table.Row key={p.item_id}>
-                        <Table.Cell>{p.item_name}</Table.Cell>
-                        <Table.Cell>{p.quantity}</Table.Cell>
-                        <Table.Cell>
-                          {unit != null
-                            ? fmtCurrency.format(Number(unit))
-                            : '—'}
-                        </Table.Cell>
-                        <Table.Cell>
-                          {total != null ? fmtCurrency.format(total) : '—'}
-                        </Table.Cell>
-                      </Table.Row>
-                    )
-                  })}
-                  <Table.Row>
-                    <Table.Cell />
-                    <Table.Cell />
-                    <Table.Cell style={{ fontWeight: 600 }}>
-                      Parts total
-                    </Table.Cell>
-                    <Table.Cell style={{ fontWeight: 600 }}>
-                      {fmtCurrency.format(
-                        entry.parts.reduce((sum, p) => {
-                          const up = Number(p.item_current_price ?? 0)
-                          return sum + up * p.quantity
-                        }, 0),
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                </Table.Body>
-              </Table.Root>
-            ) : (
-              <Text size="2" color="gray">
-                No parts
-              </Text>
-            )}
-          </div>
-
-          {/* Group price history */}
-          <div>
-            <Flex align="baseline" justify="between" mb="2">
-              <Text size="2" color="gray">
-                Price history
-              </Text>
-              <Text size="1" color="gray">
-                Most recent first
-              </Text>
-            </Flex>
-
-            {entry.price_history.length ? (
-              <Box
-                style={{
-                  maxHeight: 196, // ~3 rows + header (tweak if you use a different table size)
-                  overflowY: 'auto',
-                  border: '1px solid var(--gray-a6)',
-                  borderRadius: 8,
-                }}
-              >
-                <Table.Root variant="surface">
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Edited</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Set by</Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {entry.price_history.map((p) => (
-                      <Table.Row key={p.id}>
-                        <Table.Cell>
-                          {fmtCurrency.format(Number(p.amount))}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Code>{fmtDate(p.effective_from)}</Code>
-                        </Table.Cell>
-                        <Table.Cell>
-                          {p.set_by_name || p.set_by || '—'}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              </Box>
-            ) : (
-              <Text size="2" color="gray">
-                No price records yet.
-              </Text>
-            )}
-          </div>
-        </Flex>
-      ) : null}
-
-      {/* --- Edit dialogs (shown when clicking Edit) --- */}
-      {entry.type === 'item' && (
-        <AddItemDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          companyId={companyId ?? ''}
-          mode="edit"
-          initialData={initialItemData}
-          onSaved={() => setEditOpen(false)}
-        />
-      )}
-
-      {entry.type === 'group' && (
-        <AddGroupDialog
-          open={editOpen}
-          onOpenChange={setEditOpen}
-          companyId={companyId ?? ''}
-          mode="edit"
-          initialData={initialGroupData}
-          onSaved={() => setEditOpen(false)}
-        />
-      )}
-
-      <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialog.Content maxWidth="480px">
-          <AlertDialog.Title>Delete {entry.type}?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            This will mark the {entry.type} <b>{entry.name}</b> as deleted. It
-            won’t be removed permanently, but it will no longer show in the
-            list.
-          </AlertDialog.Description>
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft">Cancel</Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
-              <Button
-                variant="solid"
-                color="red"
-                onClick={() => deleteMutation.mutate()}
-                disabled={deleteMutation.isPending}
-              >
-                {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
-              </Button>
-            </AlertDialog.Action>
+              <Trash />
+            </Button>
           </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-    </Box>
+        </Flex>
+
+        <Separator my="3" />
+
+        {/* ITEM DETAILS */}
+        {entry.type === 'item' ? (
+          <Flex direction="column" gap="3">
+            {/* Quick stats */}
+            <Grid columns={{ initial: '1', sm: '3' }} gap="3">
+              <Stat label="On hand" value={<b>{entry.on_hand ?? 0}</b>} />
+              <Stat
+                label="Current price"
+                value={
+                  entry.current_price != null ? (
+                    <b>{fmtCurrency.format(Number(entry.current_price))}</b>
+                  ) : (
+                    <Text color="gray">—</Text>
+                  )
+                }
+              />
+              <Stat
+                label="Booking"
+                value={
+                  <Badge
+                    color={entry.allow_individual_booking ? 'green' : 'gray'}
+                    variant="soft"
+                  >
+                    {entry.allow_individual_booking
+                      ? 'Individual allowed'
+                      : 'Group-only'}
+                  </Badge>
+                }
+              />
+            </Grid>
+
+            {/* Meta */}
+            <Grid columns={{ initial: '1', sm: '2' }} gap="3">
+              <Field
+                label="Category"
+                value={
+                  entry.category_name ? entry.category_name.toUpperCase() : '—'
+                }
+              />
+              <Field label="Brand" value={entry.brand_name ?? '—'} />
+              <Field
+                label="Type"
+                value={
+                  entry.item_kind === 'stock' ? (
+                    <Badge size="1" variant="soft" color="indigo">
+                      Stock
+                    </Badge>
+                  ) : (
+                    <Badge size="1" variant="soft" color="amber">
+                      Subrental
+                    </Badge>
+                  )
+                }
+              />
+              <Field
+                label="Status"
+                value={
+                  <Badge color={entry.active ? 'green' : 'red'} variant="soft">
+                    {entry.active ? 'Active' : 'Inactive'}
+                  </Badge>
+                }
+              />
+              <Field label="Model" value={entry.model ?? '—'} />
+            </Grid>
+
+            {/* Notes */}
+            <div>
+              <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+                Notes
+              </Text>
+              <Box
+                p="2"
+                style={{
+                  border: '1px solid var(--gray-a6)',
+                  borderRadius: 8,
+                  minHeight: 40,
+                }}
+              >
+                <Text size="2" color={entry.notes ? undefined : 'gray'}>
+                  {entry.notes || 'No notes'}
+                </Text>
+              </Box>
+            </div>
+
+            {/* Nicknames */}
+            <div>
+              <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+                Nicknames
+              </Text>
+              <Box
+                p="2"
+                style={{
+                  border: '1px solid var(--gray-a6)',
+                  borderRadius: 8,
+                  minHeight: 40,
+                }}
+              >
+                <Text size="2" color={entry.nicknames ? undefined : 'gray'}>
+                  {entry.nicknames || 'No nicknames'}
+                </Text>
+              </Box>
+            </div>
+
+            {/* Price history */}
+            <div>
+              <Flex align="baseline" justify="between" mb="2">
+                <Text size="2" color="gray">
+                  Price history
+                </Text>
+                <Text size="1" color="gray">
+                  Most recent first
+                </Text>
+              </Flex>
+
+              {entry.price_history.length === 0 ? (
+                <Text size="2" color="gray">
+                  No price records yet.
+                </Text>
+              ) : (
+                <Box
+                  style={{
+                    maxHeight: 196, // ~3 rows + header (tweak if you use a different table size)
+                    overflowY: 'auto',
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Edited</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Set by</Table.ColumnHeaderCell>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {entry.price_history.map((p) => (
+                        <Table.Row key={p.id}>
+                          <Table.Cell>
+                            {fmtCurrency.format(Number(p.amount))}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Code>{fmtDate(p.effective_from)}</Code>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {p.set_by_name || p.set_by || '—'}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
+              )}
+            </div>
+
+            {/* Calendar */}
+            <InspectorCalendar
+              events={events}
+              onCreate={(e) => {}}
+              onUpdate={(id, patch) => {}}
+              onDelete={(id) => {}}
+            />
+          </Flex>
+        ) : null}
+
+        {/* GROUP DETAILS */}
+        {entry.type === 'group' ? (
+          <Flex direction="column" gap="3">
+            {/* Quick stats */}
+            <Grid columns={{ initial: '1', sm: '3' }} gap="3">
+              <Stat label="On hand" value={<b>{entry.on_hand ?? 0}</b>} />
+              <Stat
+                label="Current price"
+                value={
+                  entry.current_price != null ? (
+                    <b>{fmtCurrency.format(Number(entry.current_price))}</b>
+                  ) : (
+                    <Text color="gray">—</Text>
+                  )
+                }
+              />
+              <div />
+            </Grid>
+
+            {/* Meta */}
+            <Grid columns={{ initial: '1', sm: '2' }} gap="3">
+              <Field
+                label="Category"
+                value={
+                  entry.category_name ? entry.category_name.toUpperCase() : '—'
+                }
+              />
+              <Field
+                label="Type"
+                value={
+                  entry.item_kind === 'stock' ? (
+                    <Badge size="1" variant="soft" color="indigo">
+                      Stock
+                    </Badge>
+                  ) : (
+                    <Badge size="1" variant="soft" color="amber">
+                      Subrental
+                    </Badge>
+                  )
+                }
+              />
+              <Field
+                label="Status"
+                value={
+                  <Badge color={entry.active ? 'green' : 'red'} variant="soft">
+                    {entry.active ? 'Active' : 'Inactive'}
+                  </Badge>
+                }
+              />
+            </Grid>
+
+            {/* Description */}
+            <div>
+              <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+                Description
+              </Text>
+              <Box
+                p="2"
+                style={{
+                  border: '1px solid var(--gray-a6)',
+                  borderRadius: 8,
+                  minHeight: 40,
+                }}
+              >
+                <Text size="2" color={entry.description ? undefined : 'gray'}>
+                  {entry.description || 'No description'}
+                </Text>
+              </Box>
+            </div>
+
+            {/* Parts */}
+            <div>
+              <Text as="div" size="2" color="gray" style={{ marginBottom: 6 }}>
+                Bundle contents
+              </Text>
+
+              {entry.parts.length ? (
+                <Table.Root variant="surface">
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Unit</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Total</Table.ColumnHeaderCell>
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {entry.parts.map((p) => {
+                      const unit = p.item_current_price ?? null
+                      const total =
+                        unit != null ? Number(unit) * Number(p.quantity) : null
+                      return (
+                        <Table.Row key={p.item_id}>
+                          <Table.Cell>{p.item_name}</Table.Cell>
+                          <Table.Cell>{p.quantity}</Table.Cell>
+                          <Table.Cell>
+                            {unit != null
+                              ? fmtCurrency.format(Number(unit))
+                              : '—'}
+                          </Table.Cell>
+                          <Table.Cell>
+                            {total != null ? fmtCurrency.format(total) : '—'}
+                          </Table.Cell>
+                        </Table.Row>
+                      )
+                    })}
+                    <Table.Row>
+                      <Table.Cell />
+                      <Table.Cell />
+                      <Table.Cell style={{ fontWeight: 600 }}>
+                        Parts total
+                      </Table.Cell>
+                      <Table.Cell style={{ fontWeight: 600 }}>
+                        {fmtCurrency.format(
+                          entry.parts.reduce((sum, p) => {
+                            const up = Number(p.item_current_price ?? 0)
+                            return sum + up * p.quantity
+                          }, 0),
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  </Table.Body>
+                </Table.Root>
+              ) : (
+                <Text size="2" color="gray">
+                  No parts
+                </Text>
+              )}
+            </div>
+
+            {/* Group price history */}
+            <div>
+              <Flex align="baseline" justify="between" mb="2">
+                <Text size="2" color="gray">
+                  Price history
+                </Text>
+                <Text size="1" color="gray">
+                  Most recent first
+                </Text>
+              </Flex>
+
+              {entry.price_history.length ? (
+                <Box
+                  style={{
+                    maxHeight: 196, // ~3 rows + header (tweak if you use a different table size)
+                    overflowY: 'auto',
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 8,
+                  }}
+                >
+                  <Table.Root variant="surface">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Amount</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Edited</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Set by</Table.ColumnHeaderCell>
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {entry.price_history.map((p) => (
+                        <Table.Row key={p.id}>
+                          <Table.Cell>
+                            {fmtCurrency.format(Number(p.amount))}
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Code>{fmtDate(p.effective_from)}</Code>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {p.set_by_name || p.set_by || '—'}
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
+                </Box>
+              ) : (
+                <Text size="2" color="gray">
+                  No price records yet.
+                </Text>
+              )}
+            </div>
+          </Flex>
+        ) : null}
+
+        {/* --- Edit dialogs (shown when clicking Edit) --- */}
+        {entry.type === 'item' && (
+          <AddItemDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            companyId={companyId ?? ''}
+            mode="edit"
+            initialData={initialItemData}
+            onSaved={() => setEditOpen(false)}
+          />
+        )}
+
+        {entry.type === 'group' && (
+          <AddGroupDialog
+            open={editOpen}
+            onOpenChange={setEditOpen}
+            companyId={companyId ?? ''}
+            mode="edit"
+            initialData={initialGroupData}
+            onSaved={() => setEditOpen(false)}
+          />
+        )}
+
+        <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Delete {entry.type}?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              This will mark the {entry.type} <b>{entry.name}</b> as deleted. It
+              won’t be removed permanently, but it will no longer show in the
+              list.
+            </AlertDialog.Description>
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button variant="soft">Cancel</Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action>
+                <Button
+                  variant="solid"
+                  color="red"
+                  onClick={() => deleteMutation.mutate()}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? 'Deleting…' : 'Yes, delete'}
+                </Button>
+              </AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      </Box>
+    </InspectorFadeIn>
   )
 }
 

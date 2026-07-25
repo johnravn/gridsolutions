@@ -90,7 +90,13 @@ export function WhatsNewPopover({
           overflow: 'hidden',
         }}
       >
-        <Flex align="start" justify="between" gap="3" mb="2" style={{ flexShrink: 0 }}>
+        <Flex
+          align="start"
+          justify="between"
+          gap="3"
+          mb="2"
+          style={{ flexShrink: 0 }}
+        >
           <Box style={{ minWidth: 0 }}>
             <Text size="3" weight="bold" as="div">
               {RELEASE_NOTES.title}

@@ -17,7 +17,12 @@ import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
 import {

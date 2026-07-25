@@ -530,87 +530,85 @@ function SidebarContent({
           }}
         >
           <Flex direction="column" gap="1" {...navListProps}>
-          {NAV[0]
-            .filter((n) => allowed(n.label))
-            .map((n) => (
-              <NavItem
-                key={n.to}
-                to={n.to}
-                icon={n.icon}
-                label={n.label}
-                open={open}
-                currentPath={currentPath}
-                isMobile={isMobile}
-                onCloseMobile={() => onToggle(false)}
-                badge={
-                  n.label === 'Jobs' && readyToInvoiceCount > 0 ? (
-                    <Badge
-                      size={isMobile ? '2' : '1'}
-                      radius="full"
-                      style={navCountBadgeStyle}
-                    >
-                      {readyToInvoiceCount > 99
-                        ? '99+'
-                        : readyToInvoiceCount}
-                    </Badge>
-                  ) : undefined
-                }
-              />
-            ))}
-          {(() => {
-            const items = NAV[1].filter((n) => allowed(n.label))
-            if (items.length === 0) return null
-            return (
-              <>
-                <Separator size="4" />
-                {items.map((n) => (
-                  <NavItem
-                    key={n.to}
-                    to={n.to}
-                    icon={n.icon}
-                    label={n.label}
-                    open={open}
-                    currentPath={currentPath}
-                    isMobile={isMobile}
-                    onCloseMobile={() => onToggle(false)}
-                    badge={
-                      n.label === 'Matters' && unreadMatters > 0 ? (
-                        <Badge
-                          size={isMobile ? '2' : '1'}
-                          radius="full"
-                          style={navCountBadgeStyle}
-                        >
-                          {unreadMatters > 99 ? '99+' : unreadMatters}
-                        </Badge>
-                      ) : undefined
-                    }
-                  />
-                ))}
-              </>
-            )
-          })()}
-          {(() => {
-            const items = NAV[2].filter((n) => allowed(n.label))
-            if (items.length === 0) return null
-            return (
-              <>
-                <Separator size="4" />
-                {items.map((n) => (
-                  <NavItem
-                    key={n.to}
-                    to={n.to}
-                    icon={n.icon}
-                    label={n.label}
-                    open={open}
-                    currentPath={currentPath}
-                    isMobile={isMobile}
-                    onCloseMobile={() => onToggle(false)}
-                  />
-                ))}
-              </>
-            )
-          })()}
-        </Flex>
+            {NAV[0]
+              .filter((n) => allowed(n.label))
+              .map((n) => (
+                <NavItem
+                  key={n.to}
+                  to={n.to}
+                  icon={n.icon}
+                  label={n.label}
+                  open={open}
+                  currentPath={currentPath}
+                  isMobile={isMobile}
+                  onCloseMobile={() => onToggle(false)}
+                  badge={
+                    n.label === 'Jobs' && readyToInvoiceCount > 0 ? (
+                      <Badge
+                        size={isMobile ? '2' : '1'}
+                        radius="full"
+                        style={navCountBadgeStyle}
+                      >
+                        {readyToInvoiceCount > 99 ? '99+' : readyToInvoiceCount}
+                      </Badge>
+                    ) : undefined
+                  }
+                />
+              ))}
+            {(() => {
+              const items = NAV[1].filter((n) => allowed(n.label))
+              if (items.length === 0) return null
+              return (
+                <>
+                  <Separator size="4" />
+                  {items.map((n) => (
+                    <NavItem
+                      key={n.to}
+                      to={n.to}
+                      icon={n.icon}
+                      label={n.label}
+                      open={open}
+                      currentPath={currentPath}
+                      isMobile={isMobile}
+                      onCloseMobile={() => onToggle(false)}
+                      badge={
+                        n.label === 'Matters' && unreadMatters > 0 ? (
+                          <Badge
+                            size={isMobile ? '2' : '1'}
+                            radius="full"
+                            style={navCountBadgeStyle}
+                          >
+                            {unreadMatters > 99 ? '99+' : unreadMatters}
+                          </Badge>
+                        ) : undefined
+                      }
+                    />
+                  ))}
+                </>
+              )
+            })()}
+            {(() => {
+              const items = NAV[2].filter((n) => allowed(n.label))
+              if (items.length === 0) return null
+              return (
+                <>
+                  <Separator size="4" />
+                  {items.map((n) => (
+                    <NavItem
+                      key={n.to}
+                      to={n.to}
+                      icon={n.icon}
+                      label={n.label}
+                      open={open}
+                      currentPath={currentPath}
+                      isMobile={isMobile}
+                      onCloseMobile={() => onToggle(false)}
+                    />
+                  ))}
+                </>
+              )
+            })()}
+          </Flex>
         </Box>
       </Box>
 

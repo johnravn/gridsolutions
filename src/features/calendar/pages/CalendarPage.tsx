@@ -288,7 +288,13 @@ export default function CalendarPage() {
         }}
       >
         {/* Filters - on same line */}
-        <Flex align="center" gap="3" mb="4" wrap="wrap" style={{ flexShrink: 0 }}>
+        <Flex
+          align="center"
+          gap="3"
+          mb="4"
+          wrap="wrap"
+          style={{ flexShrink: 0 }}
+        >
           {/* Category Dropdown */}
           <Flex align="center" gap="2">
             <Text weight="bold" size="2">

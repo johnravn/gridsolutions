@@ -185,9 +185,7 @@ export function ConflictScrollCard({
   return (
     <HorizontalScrollCard
       minWidth={minWidth}
-      style={
-        fillHeight ? { height: '100%', alignSelf: 'stretch' } : undefined
-      }
+      style={fillHeight ? { height: '100%', alignSelf: 'stretch' } : undefined}
     >
       <Card
         size="2"

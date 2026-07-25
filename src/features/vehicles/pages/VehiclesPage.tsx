@@ -4,7 +4,12 @@ import { useQuery } from '@tanstack/react-query'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useRegisterShortcutAction } from '@shared/hotkeys'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import VehiclesView from '../components/VehiclesView'
 import VehicleInspector from '../components/VehicleInspector'
 import VehiclesFilter from '../components/VehiclesFilter'

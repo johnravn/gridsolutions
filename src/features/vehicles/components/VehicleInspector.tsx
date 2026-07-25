@@ -17,7 +17,9 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import LazyImage from '@shared/ui/components/LazyImage'
-import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
+import InspectorSkeleton, {
+  InspectorFadeIn,
+} from '@shared/ui/components/InspectorSkeleton'
 import { toEventInputs } from '@features/calendar/components/domain'
 import InspectorCalendar from '@features/calendar/components/InspectorCalendar'
 import {
@@ -377,257 +379,259 @@ export default function VehicleInspector({ id }: { id: string | null }) {
   const ownerBadge = vehicleOwnerBadge(v)
 
   return (
-    <Box>
-      {/* Header */}
-      <Flex align="center" justify="between" gap="2">
-        <div>
-          <Text as="div" size="4" weight="bold">
-            {v.name}
-          </Text>
-          <Text as="div" size="2" color="gray">
-            {v.registration_no ?? '—'}
-            {' · '}
-            <Badge variant="soft" color={fuelColor}>
-              {v.fuel ?? '—'}
-            </Badge>
-            {' · '}
-            <Badge variant="soft" color={ownerBadge.color}>
-              {ownerBadge.label}
-            </Badge>
-          </Text>
-        </div>
-        <Flex gap="2">
-          <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-            <Edit />
-          </Button>
-          <Button
-            size="2"
-            variant="surface"
-            color="red"
-            onClick={() => setDeleteOpen(true)}
-          >
-            <Trash />
-          </Button>
+    <InspectorFadeIn key={id}>
+      <Box>
+        {/* Header */}
+        <Flex align="center" justify="between" gap="2">
+          <div>
+            <Text as="div" size="4" weight="bold">
+              {v.name}
+            </Text>
+            <Text as="div" size="2" color="gray">
+              {v.registration_no ?? '—'}
+              {' · '}
+              <Badge variant="soft" color={fuelColor}>
+                {v.fuel ?? '—'}
+              </Badge>
+              {' · '}
+              <Badge variant="soft" color={ownerBadge.color}>
+                {ownerBadge.label}
+              </Badge>
+            </Text>
+          </div>
+          <Flex gap="2">
+            <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
+              <Edit />
+            </Button>
+            <Button
+              size="2"
+              variant="surface"
+              color="red"
+              onClick={() => setDeleteOpen(true)}
+            >
+              <Trash />
+            </Button>
+          </Flex>
         </Flex>
-      </Flex>
 
-      <Separator my="3" />
+        <Separator my="3" />
 
-      {/* Image */}
-      <div
-        style={{
-          border: '1px solid var(--gray-a6)',
-          borderRadius: 8,
-          overflow: 'hidden',
-          marginBottom: 12,
-          padding: 10,
-          maxWidth: 300,
-        }}
-      >
-        {imageUrl ? (
-          <LazyImage
-            src={imageUrl}
-            alt={v.name}
-            eager
-            style={{
-              width: '100%',
-              minHeight: 160,
-              aspectRatio: '16 / 9',
-              // maxHeight: 280,
-              // maxWidth: 280,
-              objectFit: 'cover',
+        {/* Image */}
+        <div
+          style={{
+            border: '1px solid var(--gray-a6)',
+            borderRadius: 8,
+            overflow: 'hidden',
+            marginBottom: 12,
+            padding: 10,
+            maxWidth: 300,
+          }}
+        >
+          {imageUrl ? (
+            <LazyImage
+              src={imageUrl}
+              alt={v.name}
+              eager
+              style={{
+                width: '100%',
+                minHeight: 160,
+                aspectRatio: '16 / 9',
+                // maxHeight: 280,
+                // maxWidth: 280,
+                objectFit: 'cover',
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                height: 160,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--gray-10)',
+              }}
+            >
+              No image
+            </div>
+          )}
+        </div>
+
+        {/* Meta */}
+        <Flex direction="column" gap="2">
+          <Field label="Owner" value={vehicleOwnerLabel(v)} />
+          <Field
+            label="Vehicle Category"
+            value={
+              v.vehicle_category
+                ? (() => {
+                    const map: Record<string, string> = {
+                      passenger_car_small: 'Passenger Car - Small',
+                      passenger_car_medium: 'Passenger Car - Medium',
+                      passenger_car_big: 'Passenger Car - Big',
+                      van_small: 'Van - Small',
+                      van_medium: 'Van - Medium',
+                      van_big: 'Van - Big',
+                      C1: 'C1',
+                      C1E: 'C1E',
+                      C: 'C',
+                      CE: 'CE',
+                    }
+                    return map[v.vehicle_category] || v.vehicle_category
+                  })()
+                : '—'
+            }
+          />
+          <Field
+            label="Created"
+            value={new Date(v.created_at).toLocaleString(undefined, {
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}
+          />
+          <Field label="Notes" value={v.notes || '—'} />
+        </Flex>
+
+        <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
+          <SegmentedControl.Root
+            value={viewMode}
+            onValueChange={(mode) => {
+              if (mode === 'calendar' || mode === 'bookings') {
+                setViewMode(mode)
+                if (mode === 'calendar') setShowPastBookings(false)
+              }
             }}
+            size="2"
+          >
+            <SegmentedControl.Item value="calendar">
+              Schedule
+            </SegmentedControl.Item>
+            <SegmentedControl.Item value="bookings">
+              Bookings
+            </SegmentedControl.Item>
+          </SegmentedControl.Root>
+          {viewMode === 'bookings' && (
+            <Button size="2" variant="soft" onClick={handleBook}>
+              <Plus />
+              Book vehicle
+            </Button>
+          )}
+        </Flex>
+
+        {viewMode === 'calendar' ? (
+          <InspectorCalendar
+            events={accumulatedEvents}
+            hasMore={hasMoreEvents}
+            onLoadNext={handleLoadNext}
+            showPagination={true}
           />
         ) : (
-          <div
-            style={{
-              height: 160,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--gray-10)',
-            }}
-          >
-            No image
-          </div>
+          <VehicleBookingsList
+            events={futureEvents}
+            pastEvents={pastEvents}
+            listMode={showPastBookings ? 'past' : 'future'}
+            onListModeChange={(mode) => setShowPastBookings(mode === 'past')}
+            onEdit={handleEditBooking}
+            onDelete={handleDeleteBooking}
+            isLoading={isLoadingFuture}
+            isLoadingPast={isLoadingPast}
+          />
         )}
-      </div>
 
-      {/* Meta */}
-      <Flex direction="column" gap="2">
-        <Field label="Owner" value={vehicleOwnerLabel(v)} />
-        <Field
-          label="Vehicle Category"
-          value={
-            v.vehicle_category
-              ? (() => {
-                  const map: Record<string, string> = {
-                    passenger_car_small: 'Passenger Car - Small',
-                    passenger_car_medium: 'Passenger Car - Medium',
-                    passenger_car_big: 'Passenger Car - Big',
-                    van_small: 'Van - Small',
-                    van_medium: 'Van - Medium',
-                    van_big: 'Van - Big',
-                    C1: 'C1',
-                    C1E: 'C1E',
-                    C: 'C',
-                    CE: 'CE',
-                  }
-                  return map[v.vehicle_category] || v.vehicle_category
-                })()
-              : '—'
-          }
-        />
-        <Field
-          label="Created"
-          value={new Date(v.created_at).toLocaleString(undefined, {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-          })}
-        />
-        <Field label="Notes" value={v.notes || '—'} />
-      </Flex>
-
-      <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
-        <SegmentedControl.Root
-          value={viewMode}
-          onValueChange={(mode) => {
-            if (mode === 'calendar' || mode === 'bookings') {
-              setViewMode(mode)
-              if (mode === 'calendar') setShowPastBookings(false)
-            }
+        {/* Edit vehicle dialog */}
+        <AddEditVehicleDialog
+          open={editOpen}
+          onOpenChange={setEditOpen}
+          mode="edit"
+          initial={{
+            id: v.id,
+            name: v.name,
+            registration_no: v.registration_no ?? '',
+            fuel: v.fuel ?? null,
+            vehicle_category: v.vehicle_category ?? null,
+            internally_owned: v.internally_owned,
+            external_owner_id: v.external_owner_id,
+            owner_user_id: v.owner_user_id,
+            image_path: v.image_path ?? null,
+            notes: v.notes ?? '',
           }}
-          size="2"
-        >
-          <SegmentedControl.Item value="calendar">
-            Schedule
-          </SegmentedControl.Item>
-          <SegmentedControl.Item value="bookings">
-            Bookings
-          </SegmentedControl.Item>
-        </SegmentedControl.Root>
-        {viewMode === 'bookings' && (
-          <Button size="2" variant="soft" onClick={handleBook}>
-            <Plus />
-            Book vehicle
-          </Button>
-        )}
-      </Flex>
-
-      {viewMode === 'calendar' ? (
-        <InspectorCalendar
-          events={accumulatedEvents}
-          hasMore={hasMoreEvents}
-          onLoadNext={handleLoadNext}
-          showPagination={true}
-        />
-      ) : (
-        <VehicleBookingsList
-          events={futureEvents}
-          pastEvents={pastEvents}
-          listMode={showPastBookings ? 'past' : 'future'}
-          onListModeChange={(mode) => setShowPastBookings(mode === 'past')}
-          onEdit={handleEditBooking}
-          onDelete={handleDeleteBooking}
-          isLoading={isLoadingFuture}
-          isLoadingPast={isLoadingPast}
-        />
-      )}
-
-      {/* Edit vehicle dialog */}
-      <AddEditVehicleDialog
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        mode="edit"
-        initial={{
-          id: v.id,
-          name: v.name,
-          registration_no: v.registration_no ?? '',
-          fuel: v.fuel ?? null,
-          vehicle_category: v.vehicle_category ?? null,
-          internally_owned: v.internally_owned,
-          external_owner_id: v.external_owner_id,
-          owner_user_id: v.owner_user_id,
-          image_path: v.image_path ?? null,
-          notes: v.notes ?? '',
-        }}
-        onSaved={() => {
-          // invalidate done in dialog
-        }}
-      />
-
-      {/* Book personal vehicle dialog */}
-      {companyId && (
-        <BookPersonalVehicleDialog
-          open={bookDialogOpen}
-          onOpenChange={setBookDialogOpen}
-          mode={bookDialogMode}
-          companyId={companyId}
-          vehicleId={id}
-          initial={bookDialogInitial ?? undefined}
           onSaved={() => {
             // invalidate done in dialog
           }}
         />
-      )}
 
-      {/* Delete personal booking confirm */}
-      <AlertDialog.Root
-        open={deleteBookingId != null}
-        onOpenChange={(open) => !open && setDeleteBookingId(null)}
-      >
-        <AlertDialog.Content maxWidth="400px">
-          <AlertDialog.Title>Delete booking?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            This will remove the personal booking. This cannot be undone.
-          </AlertDialog.Description>
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft">Cancel</Button>
-            </AlertDialog.Cancel>
-            <Button
-              color="red"
-              variant="solid"
-              disabled={deleteBooking.isPending}
-              onClick={() => {
-                if (deleteBookingId) deleteBooking.mutate(deleteBookingId)
-              }}
-            >
-              {deleteBooking.isPending ? 'Deleting…' : 'Delete'}
-            </Button>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
+        {/* Book personal vehicle dialog */}
+        {companyId && (
+          <BookPersonalVehicleDialog
+            open={bookDialogOpen}
+            onOpenChange={setBookDialogOpen}
+            mode={bookDialogMode}
+            companyId={companyId}
+            vehicleId={id}
+            initial={bookDialogInitial ?? undefined}
+            onSaved={() => {
+              // invalidate done in dialog
+            }}
+          />
+        )}
 
-      {/* Delete vehicle confirm */}
-      <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialog.Content maxWidth="480px">
-          <AlertDialog.Title>Delete vehicle?</AlertDialog.Title>
-          <AlertDialog.Description size="2">
-            This will mark <b>{v.name}</b> as deleted. You can restore in the DB
-            if needed.
-          </AlertDialog.Description>
-          <Flex gap="3" justify="end" mt="4">
-            <AlertDialog.Cancel>
-              <Button variant="soft">Cancel</Button>
-            </AlertDialog.Cancel>
-            <AlertDialog.Action>
+        {/* Delete personal booking confirm */}
+        <AlertDialog.Root
+          open={deleteBookingId != null}
+          onOpenChange={(open) => !open && setDeleteBookingId(null)}
+        >
+          <AlertDialog.Content maxWidth="400px">
+            <AlertDialog.Title>Delete booking?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              This will remove the personal booking. This cannot be undone.
+            </AlertDialog.Description>
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button variant="soft">Cancel</Button>
+              </AlertDialog.Cancel>
               <Button
                 color="red"
                 variant="solid"
-                onClick={() => del.mutate()}
-                disabled={del.isPending}
+                disabled={deleteBooking.isPending}
+                onClick={() => {
+                  if (deleteBookingId) deleteBooking.mutate(deleteBookingId)
+                }}
               >
-                {del.isPending ? 'Deleting…' : 'Yes, delete'}
+                {deleteBooking.isPending ? 'Deleting…' : 'Delete'}
               </Button>
-            </AlertDialog.Action>
-          </Flex>
-        </AlertDialog.Content>
-      </AlertDialog.Root>
-    </Box>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+
+        {/* Delete vehicle confirm */}
+        <AlertDialog.Root open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialog.Content maxWidth="480px">
+            <AlertDialog.Title>Delete vehicle?</AlertDialog.Title>
+            <AlertDialog.Description size="2">
+              This will mark <b>{v.name}</b> as deleted. You can restore in the
+              DB if needed.
+            </AlertDialog.Description>
+            <Flex gap="3" justify="end" mt="4">
+              <AlertDialog.Cancel>
+                <Button variant="soft">Cancel</Button>
+              </AlertDialog.Cancel>
+              <AlertDialog.Action>
+                <Button
+                  color="red"
+                  variant="solid"
+                  onClick={() => del.mutate()}
+                  disabled={del.isPending}
+                >
+                  {del.isPending ? 'Deleting…' : 'Yes, delete'}
+                </Button>
+              </AlertDialog.Action>
+            </Flex>
+          </AlertDialog.Content>
+        </AlertDialog.Root>
+      </Box>
+    </InspectorFadeIn>
   )
 }
 

@@ -36,8 +36,8 @@
   );
   /* Top bar + main padding (top + bottom). Used for split card / chrome height. */
   --app-chrome-height: calc(
-    var(--app-topbar-height) + var(--app-safe-top) + var(--app-content-padding) +
-      var(--app-main-padding-bottom)
+    var(--app-topbar-height) + var(--app-safe-top) +
+      var(--app-content-padding) + var(--app-main-padding-bottom)
   );
   /* Split panels / mobile stacked cards — fills the main scroll content area */
   --app-split-height: calc(100svh - var(--app-chrome-height));
@@ -312,7 +312,11 @@ button:not(:disabled),
   margin: 0;
   border-radius: 9999px;
   color: var(--gray-12);
-  background: color-mix(in srgb, var(--color-panel-solid) 72%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--color-panel-solid) 72%,
+    transparent
+  ) !important;
   border: 1px solid var(--gray-a5);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06),
@@ -393,7 +397,11 @@ button:not(:disabled),
 
 .app-menu-fab.rt-IconButton:hover,
 .app-scroll-fab.rt-IconButton:hover {
-  background: color-mix(in srgb, var(--color-panel-solid) 82%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--color-panel-solid) 82%,
+    transparent
+  ) !important;
 }
 
 .app-menu-fab.rt-IconButton:active,
@@ -635,10 +643,7 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   width: var(--sidebar-indicator-width);
   height: var(--sidebar-indicator-height);
   opacity: var(--sidebar-indicator-opacity);
-  transform: translate(
-    var(--sidebar-indicator-x),
-    var(--sidebar-indicator-y)
-  );
+  transform: translate(var(--sidebar-indicator-x), var(--sidebar-indicator-y));
 }
 
 .sidebar-nav-list .sidebar-nav-slot {

@@ -15,21 +15,21 @@ describe('getAdjacentSelectionIndex', () => {
   })
 
   it('moves to the next and previous index', () => {
-    expect(
-      getAdjacentSelectionIndex({ ids, selectedId: 'a', delta: 1 }),
-    ).toBe(1)
-    expect(
-      getAdjacentSelectionIndex({ ids, selectedId: 'b', delta: -1 }),
-    ).toBe(0)
+    expect(getAdjacentSelectionIndex({ ids, selectedId: 'a', delta: 1 })).toBe(
+      1,
+    )
+    expect(getAdjacentSelectionIndex({ ids, selectedId: 'b', delta: -1 })).toBe(
+      0,
+    )
   })
 
   it('returns null at the list boundary', () => {
-    expect(
-      getAdjacentSelectionIndex({ ids, selectedId: 'c', delta: 1 }),
-    ).toBe(null)
-    expect(
-      getAdjacentSelectionIndex({ ids, selectedId: 'a', delta: -1 }),
-    ).toBe(null)
+    expect(getAdjacentSelectionIndex({ ids, selectedId: 'c', delta: 1 })).toBe(
+      null,
+    )
+    expect(getAdjacentSelectionIndex({ ids, selectedId: 'a', delta: -1 })).toBe(
+      null,
+    )
   })
 
   it('skips non-selectable rows', () => {
