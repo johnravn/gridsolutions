@@ -94,18 +94,22 @@ function EquipmentItemRows({
               {item.custom_line_description?.trim() || 'Custom line'}
             </Text>
           ) : isGroup ? (
-            <Flex align="center" gap="2">
+            <Flex
+              align="center"
+              gap="2"
+              style={hasContents ? { cursor: 'pointer' } : undefined}
+              onClick={
+                hasContents ? () => onToggleExpanded(baseKey) : undefined
+              }
+              role={hasContents ? 'button' : undefined}
+              aria-expanded={hasContents ? isExpanded : undefined}
+            >
               {hasContents ? (
-                <Box
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => onToggleExpanded(baseKey)}
-                >
-                  {isExpanded ? (
-                    <NavArrowDown width={16} height={16} />
-                  ) : (
-                    <NavArrowRight width={16} height={16} />
-                  )}
-                </Box>
+                isExpanded ? (
+                  <NavArrowDown width={16} height={16} />
+                ) : (
+                  <NavArrowRight width={16} height={16} />
+                )
               ) : null}
               <Text color={hasContents ? undefined : 'gray'}>
                 {item.group?.name ?? 'Group'} (Group)
@@ -225,20 +229,27 @@ function GroupContentsRows({
           <React.Fragment key={key}>
             <Table.Row style={{ background: 'var(--gray-a2)' }}>
               <Table.Cell>
-                <Flex align="center" gap="2">
+                <Flex
+                  align="center"
+                  gap="2"
+                  style={{
+                    paddingLeft,
+                    ...(hasNested ? { cursor: 'pointer' } : {}),
+                  }}
+                  onClick={
+                    hasNested ? () => onToggleExpanded(key) : undefined
+                  }
+                  role={hasNested ? 'button' : undefined}
+                  aria-expanded={hasNested ? isNestedExpanded : undefined}
+                >
                   {hasNested ? (
-                    <Box
-                      style={{ cursor: 'pointer', paddingLeft }}
-                      onClick={() => onToggleExpanded(key)}
-                    >
-                      {isNestedExpanded ? (
-                        <NavArrowDown width={14} height={14} />
-                      ) : (
-                        <NavArrowRight width={14} height={14} />
-                      )}
-                    </Box>
+                    isNestedExpanded ? (
+                      <NavArrowDown width={14} height={14} />
+                    ) : (
+                      <NavArrowRight width={14} height={14} />
+                    )
                   ) : (
-                    <Text size="1" color="gray" style={{ paddingLeft }}>
+                    <Text size="1" color="gray">
                       —
                     </Text>
                   )}
