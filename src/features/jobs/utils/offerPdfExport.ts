@@ -1,6 +1,5 @@
 // src/features/jobs/utils/offerPdfExport.ts
 import jsPDF from 'jspdf'
-import { calculateRentalFactor } from './offerCalculations'
 import { formatOfferNumberDisplay } from './offerNumber'
 import { parseOptionsGroups } from './optionsBlockStorage'
 import {
@@ -9,7 +8,6 @@ import {
   collectOfferOptions,
 } from './prettyOfferOptions'
 import { normalizeTransportGroups } from './transportGroups'
-import type { RentalFactorConfig } from './offerCalculations'
 import type { OfferDetail } from '../types'
 
 export type OfferPdfExportOptions = {
@@ -174,22 +172,6 @@ export async function exportOfferAsPDF(
     unit: 'mm',
     format: 'a4',
   })
-
-  let rentalFactorConfig: RentalFactorConfig | null = null
-  try {
-    const raw = offer.company_expansion?.rental_factor_config
-    if (typeof raw === 'string' && raw.trim()) {
-      rentalFactorConfig = JSON.parse(raw) as RentalFactorConfig
-    } else if (raw && typeof raw === 'object') {
-      rentalFactorConfig = raw as RentalFactorConfig
-    }
-  } catch {
-    rentalFactorConfig = null
-  }
-  const equipmentRentalFactor = calculateRentalFactor(
-    offer.days_of_use ?? 1,
-    rentalFactorConfig,
-  )
 
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
@@ -465,11 +447,10 @@ export async function exportOfferAsPDF(
     for (const group of [...offer.groups].sort(
       (a, b) => a.sort_order - b.sort_order,
     )) {
-      const groupTotal = (group.items || []).reduce((sum, item) => {
-        const lineTotal =
-          item.unit_price * item.quantity * equipmentRentalFactor
-        return sum + lineTotal
-      }, 0)
+      const groupTotal = (group.items || []).reduce(
+        (sum, item) => sum + item.total_price,
+        0,
+      )
       ensureSpace(10, () => drawTableHeader(equipmentColumns, true))
       doc.setFontSize(9)
       doc.setFont('helvetica', 'bold')
@@ -506,9 +487,7 @@ export async function exportOfferAsPDF(
           const itemName = meta ? `${baseName} (${meta})` : baseName
           const qty = `${item.quantity}`
           const unitPrice = formatCurrency(item.unit_price)
-          const total = formatCurrency(
-            item.unit_price * item.quantity * equipmentRentalFactor,
-          )
+          const total = formatCurrency(item.total_price)
 
           if (offer.show_price_per_line) {
             drawTableRow(
@@ -938,12 +917,16 @@ export async function exportOfferAsPDF(
     (selectedOptionIds.length > 0
       ? calculateOptionsSubtotal(selectedOptionIds, allOfferOptions)
       : 0)
+  // Match the public offer page: use stored offer totals unless the customer
+  // is actively selecting pretty-offer options that are not yet baked in.
+  // Technical offers discount equipment only; applyOptionsToOfferTotals would
+  // incorrectly discount crew/transport as well.
   const baseSubtotal =
     offer.status === 'accepted' && (offer.accepted_options_subtotal ?? 0) > 0
       ? offer.total_before_discount - (offer.accepted_options_subtotal ?? 0)
       : offer.total_before_discount
   const displayTotals =
-    offer.status === 'accepted' && (offer.accepted_options_subtotal ?? 0) > 0
+    offer.status === 'accepted' || optionsSubtotal === 0
       ? {
           totalBeforeDiscount: offer.total_before_discount,
           discountAmount:
