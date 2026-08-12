@@ -6,7 +6,10 @@ import {
   forcedBookingFields,
 } from '@features/conflicts/api/forceBooking'
 import { calculateHoursPerDay } from '../components/dialogs/technical-offer-editor/utils'
-import { calculateRentalFactor } from '../utils/offerCalculations'
+import {
+  calculateRentalFactor,
+  calculateTransportLineTotal,
+} from '../utils/offerCalculations'
 import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
 import {
   basisImportWouldWriteLines,
@@ -1320,26 +1323,13 @@ export async function saveOfferBasis({
 
       for (const item of group.items) {
         const isExistingItem = !item.id.startsWith('temp-')
-        const days = Math.ceil(
-          (new Date(item.end_date).getTime() -
-            new Date(item.start_date).getTime()) /
-            (1000 * 60 * 60 * 24),
-        )
-        const derivedDays = Math.max(1, days)
-        const daysUsed = item.days_used ?? derivedDays
         const effectiveDailyRate =
           item.daily_rate ?? companyExpansion?.vehicle_daily_rate ?? 0
-        const effectiveDistanceRate =
-          item.distance_rate ?? companyExpansion?.vehicle_distance_rate ?? null
-        const distanceIncrements = item.distance_km
-          ? Math.ceil(item.distance_km / distanceIncrementSave)
-          : 0
-        const distanceCost =
-          effectiveDistanceRate && distanceIncrements > 0
-            ? effectiveDistanceRate * distanceIncrements
-            : 0
-        const dailyCost = effectiveDailyRate * Math.max(0, daysUsed)
-        const totalPrice = dailyCost + distanceCost
+        const totalPrice = calculateTransportLineTotal(item, {
+          vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
+          vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
+          vehicleDistanceIncrement: distanceIncrementSave,
+        })
 
         const transportPayload = {
           offer_basis_id: basisId,
@@ -1392,6 +1382,22 @@ export async function saveOfferBasis({
       }
     }
   })
+
+  // Keep linked unlocked technical/pretty offer cached totals in sync with the basis.
+  const { data: linkedOffers, error: linkedOffersError } = await supabase
+    .from('job_offers')
+    .select('id')
+    .eq('offer_basis_id', basisId)
+    .eq('locked', false)
+
+  if (linkedOffersError) throw linkedOffersError
+
+  if (linkedOffers && linkedOffers.length > 0) {
+    const { recalculateOfferTotals } = await import('./offerQueries')
+    for (const offer of linkedOffers) {
+      await recalculateOfferTotals(offer.id)
+    }
+  }
 }
 
 /**

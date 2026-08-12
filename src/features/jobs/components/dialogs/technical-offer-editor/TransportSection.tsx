@@ -29,6 +29,7 @@ import { DatePicker } from '@shared/ui/components/pickers'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { formatVehicleCategory } from './utils'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
+import { calculateTransportLineTotal } from '../../../utils/offerCalculations'
 import type { LocalTransportGroup, LocalTransportItem } from './types'
 
 export function TransportSection({
@@ -266,35 +267,15 @@ export function TransportSection({
                   const itemIds = sortedItems.map((it) => it.id)
 
                   const groupTotal = sortedItems.reduce((sum, item) => {
-                    const companyDailyRate = vehicleDailyRate ?? null
-                    const companyDistanceRate = vehicleDistanceRate ?? null
-                    const distanceIncrement = Math.max(
-                      1,
-                      vehicleDistanceIncrement ?? 150,
+                    return (
+                      sum +
+                      calculateTransportLineTotal(item, {
+                        vehicleDailyRate: vehicleDailyRate ?? null,
+                        vehicleDistanceRate: vehicleDistanceRate ?? null,
+                        vehicleDistanceIncrement:
+                          vehicleDistanceIncrement ?? 150,
+                      })
                     )
-                    const dailyRateValue = item.daily_rate ?? companyDailyRate
-                    const distanceRateValue =
-                      item.distance_rate ?? companyDistanceRate
-                    const days = Math.ceil(
-                      (new Date(item.end_date).getTime() -
-                        new Date(item.start_date).getTime()) /
-                        (1000 * 60 * 60 * 24),
-                    )
-                    const derivedDays = Math.max(1, days)
-                    const daysUsed = item.days_used ?? derivedDays
-                    const dailyRates = daysUsed
-                    const effectiveDailyRate = dailyRateValue ?? 0
-                    const dailyCost =
-                      effectiveDailyRate * Math.max(0, dailyRates)
-                    const effectiveDistanceRate = distanceRateValue
-                    const distanceIncrements = item.distance_km
-                      ? Math.ceil(item.distance_km / distanceIncrement)
-                      : 0
-                    const distanceCost =
-                      effectiveDistanceRate && distanceIncrements > 0
-                        ? effectiveDistanceRate * distanceIncrements
-                        : 0
-                    return sum + dailyCost + distanceCost
                   }, 0)
 
                   const table = (
@@ -340,10 +321,6 @@ export function TransportSection({
                                 1,
                                 vehicleDistanceIncrement ?? 150,
                               )
-                              const dailyRateValue =
-                                item.daily_rate ?? companyDailyRate
-                              const distanceRateValue =
-                                item.distance_rate ?? companyDistanceRate
                               const adjustDistance = (delta: number) => {
                                 const step = distanceIncrement
                                 const current = item.distance_km ?? step
@@ -367,24 +344,11 @@ export function TransportSection({
                                   (1000 * 60 * 60 * 24),
                               )
                               const derivedDays = Math.max(1, days)
-                              const daysUsed = item.days_used ?? derivedDays
-                              const dailyRates = daysUsed
-
-                              const effectiveDailyRate = dailyRateValue ?? 0
-                              const dailyCost =
-                                effectiveDailyRate * Math.max(0, dailyRates)
-
-                              const effectiveDistanceRate = distanceRateValue
-                              const distanceIncrements = item.distance_km
-                                ? Math.ceil(
-                                    item.distance_km / distanceIncrement,
-                                  )
-                                : 0
-                              const distanceCost =
-                                effectiveDistanceRate && distanceIncrements > 0
-                                  ? effectiveDistanceRate * distanceIncrements
-                                  : 0
-                              const total = dailyCost + distanceCost
+                              const total = calculateTransportLineTotal(item, {
+                                vehicleDailyRate: companyDailyRate,
+                                vehicleDistanceRate: companyDistanceRate,
+                                vehicleDistanceIncrement: distanceIncrement,
+                              })
                               const isUsingDefaultDistanceRate =
                                 companyDistanceRate !== null &&
                                 (item.distance_rate === null ||

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   calculateOfferTotals,
   calculateRentalFactor,
+  calculateTransportLineTotal,
 } from './offerCalculations'
 import type {
   OfferCrewItem,
@@ -36,6 +37,54 @@ describe('calculateRentalFactor', () => {
     expect(calculateRentalFactor(5, custom)).toBe(3.0)
     expect(calculateRentalFactor(3, custom)).toBeGreaterThan(1.0)
     expect(calculateRentalFactor(3, custom)).toBeLessThan(3.0)
+  })
+})
+
+describe('calculateTransportLineTotal', () => {
+  it('uses date span when days_used is null', () => {
+    // 2026-06-01 → 2026-06-04 = 3 days
+    const total = calculateTransportLineTotal({
+      start_date: '2026-06-01',
+      end_date: '2026-06-04',
+      days_used: null,
+      daily_rate: 300,
+      distance_km: null,
+    })
+    expect(total).toBe(900)
+  })
+
+  it('uses days_used instead of date span when set', () => {
+    // Date span would be 5 days, but days_used is 2
+    const total = calculateTransportLineTotal({
+      start_date: '2026-06-01',
+      end_date: '2026-06-06',
+      days_used: 2,
+      daily_rate: 300,
+      distance_km: 200,
+      distance_rate: 50,
+    })
+    // daily: 300 * 2 = 600; distance: ceil(200/150)=2 * 50 = 100
+    expect(total).toBe(700)
+  })
+
+  it('falls back to company daily/distance rates', () => {
+    const total = calculateTransportLineTotal(
+      {
+        start_date: '2026-06-01',
+        end_date: '2026-06-02',
+        days_used: null,
+        daily_rate: null,
+        distance_km: 200,
+        distance_rate: null,
+      },
+      {
+        vehicleDailyRate: 400,
+        vehicleDistanceRate: 50,
+        vehicleDistanceIncrement: 150,
+      },
+    )
+    // daily: 400 * 1 = 400; distance: 2 * 50 = 100
+    expect(total).toBe(500)
   })
 })
 
@@ -120,5 +169,31 @@ describe('calculateOfferTotals', () => {
     // daily: 300 * 1 day = 300
     // distance: ceil(200/150)=2 increments * 50 = 100
     expect(totals.transportSubtotal).toBe(400)
+  })
+
+  it('uses transport days_used for subtotal instead of date span', () => {
+    const transportWithDaysUsed: Array<OfferTransportItem> = [
+      {
+        ...transport[0],
+        start_date: '2026-06-01',
+        end_date: '2026-06-06', // 5-day span
+        days_used: 2,
+        distance_km: null,
+      },
+    ]
+    const totals = calculateOfferTotals(
+      [],
+      [],
+      transportWithDaysUsed,
+      1,
+      0,
+      0,
+      null,
+      null,
+      150,
+      null,
+    )
+    // Must bill 2 days, not 5: 300 * 2 = 600
+    expect(totals.transportSubtotal).toBe(600)
   })
 })

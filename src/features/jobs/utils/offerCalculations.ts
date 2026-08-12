@@ -94,10 +94,66 @@ export function calculateRentalFactor(
   return lowerFactor + (upperFactor - lowerFactor) * ratio
 }
 
+export type TransportLineCalcInput = {
+  start_date: string
+  end_date: string
+  days_used?: number | null
+  daily_rate?: number | null
+  distance_km?: number | null
+  distance_rate?: number | null
+}
+
+/**
+ * Transport line total: daily_rate × billing days + distance increments.
+ * Billing days: days_used when set, otherwise date span (min 1).
+ * Matches TransportSection so Totals stay in sync with the editor.
+ */
+export function calculateTransportLineTotal(
+  item: TransportLineCalcInput,
+  defaults?: {
+    vehicleDailyRate?: number | null
+    vehicleDistanceRate?: number | null
+    vehicleDistanceIncrement?: number | null
+  },
+): number {
+  const days = Math.ceil(
+    (new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) /
+      (1000 * 60 * 60 * 24),
+  )
+  const derivedDays = Math.max(1, days)
+  const billingDays = item.days_used ?? derivedDays
+
+  const effectiveDailyRate = item.daily_rate ?? defaults?.vehicleDailyRate ?? 0
+  const dailyCost = effectiveDailyRate * Math.max(0, billingDays)
+
+  const increment = Math.max(1, defaults?.vehicleDistanceIncrement ?? 150)
+  const distanceIncrements = item.distance_km
+    ? Math.ceil(item.distance_km / increment)
+    : 0
+  const effectiveDistanceRate =
+    item.distance_rate ?? defaults?.vehicleDistanceRate ?? null
+  const distanceCost =
+    effectiveDistanceRate && distanceIncrements > 0
+      ? effectiveDistanceRate * distanceIncrements
+      : 0
+
+  return dailyCost + distanceCost
+}
+
 export function calculateOfferTotals(
   equipmentItems: Array<OfferEquipmentItem>,
   crewItems: Array<OfferCrewItem>,
-  transportItems: Array<OfferTransportItem>,
+  transportItems: Array<
+    Pick<
+      OfferTransportItem,
+      | 'start_date'
+      | 'end_date'
+      | 'daily_rate'
+      | 'distance_km'
+      | 'distance_rate'
+    > &
+      Partial<Pick<OfferTransportItem, 'days_used'>>
+  >,
   daysOfUse: number,
   discountPercent: number,
   vatPercent: number,
@@ -129,31 +185,15 @@ export function calculateOfferTotals(
     return sum + dailyTotal * Math.max(1, days)
   }, 0)
 
-  // Calculate transport subtotal: daily_rate * days + distance_rate * (distance rounded up to increment)
-  // Use per-item daily_rate and distance_rate when set, otherwise company defaults (matches Technical offer dialog)
-  const transportSubtotal = transportItems.reduce((sum, item) => {
-    const days = Math.ceil(
-      (new Date(item.end_date).getTime() -
-        new Date(item.start_date).getTime()) /
-        (1000 * 60 * 60 * 24),
-    )
-    const effectiveDailyRate = item.daily_rate ?? vehicleDailyRate ?? 0
-    const dailyCost = effectiveDailyRate * Math.max(1, days)
-
-    const increment = vehicleDistanceIncrement ?? 150
-    const distanceIncrements = item.distance_km
-      ? Math.ceil(item.distance_km / increment)
-      : 0
-    // Per-item distance_rate overrides company vehicleDistanceRate (same logic as Technical offer dialog)
-    const effectiveDistanceRate =
-      item.distance_rate ?? vehicleDistanceRate ?? null
-    const distanceCost =
-      effectiveDistanceRate && distanceIncrements > 0
-        ? effectiveDistanceRate * distanceIncrements
-        : 0
-
-    return sum + dailyCost + distanceCost
-  }, 0)
+  const transportDefaults = {
+    vehicleDailyRate,
+    vehicleDistanceRate,
+    vehicleDistanceIncrement,
+  }
+  const transportSubtotal = transportItems.reduce(
+    (sum, item) => sum + calculateTransportLineTotal(item, transportDefaults),
+    0,
+  )
 
   // Total before discount
   const totalBeforeDiscount =
