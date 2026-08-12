@@ -177,6 +177,7 @@ export function lineItemsFromLocalEditorState(
     group.items.map((item) => ({
       start_date: item.start_date,
       end_date: item.end_date,
+      days_used: item.days_used,
       daily_rate: item.daily_rate,
       distance_km: item.distance_km,
       distance_rate: item.distance_rate,
