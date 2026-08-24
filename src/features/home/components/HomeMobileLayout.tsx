@@ -5,6 +5,7 @@ import { DailyInspirationSection } from './DailyInspirationSection'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
@@ -42,6 +43,7 @@ type HomeMobileLayoutProps = {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   homeLayout: HomeDashboardLayoutPreferences
 }
 
@@ -69,6 +71,7 @@ export function HomeMobileLayout({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   homeLayout,
 }: HomeMobileLayoutProps) {
   return (
@@ -99,6 +102,7 @@ export function HomeMobileLayout({
           crewConflicts={crewConflicts}
           vehicleConflicts={vehicleConflicts}
           equipmentConflicts={equipmentConflicts}
+          groupConflicts={groupConflicts}
           jobsReadyToInvoice={jobsReadyToInvoice}
           jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
           getInitials={getInitials}

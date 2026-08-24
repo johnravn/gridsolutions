@@ -4,14 +4,17 @@ import { Link as RouterLink } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import {
+  groupConflictDisplayName,
   splitCrewConflicts,
   splitEquipmentConflicts,
+  splitGroupConflicts,
   splitVehicleConflicts,
 } from '@features/conflicts/utils/conflictCategories'
 import { HorizontalScrollCard } from './HorizontalCardScroller'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 
@@ -25,17 +28,21 @@ export function countConflictItems(
   crewConflicts: Array<CrewConflictRow>,
   vehicleConflicts: Array<VehicleConflictRow>,
   equipmentConflicts: Array<EquipmentConflictRow>,
+  groupConflicts: Array<GroupConflictRow> = [],
 ) {
   const crew = splitCrewConflicts(crewConflicts)
   const vehicles = splitVehicleConflicts(vehicleConflicts)
   const equipment = splitEquipmentConflicts(equipmentConflicts)
+  const groups = splitGroupConflicts(groupConflicts)
   return (
     crew.unresolved.length +
     crew.forced.length +
     vehicles.unresolved.length +
     vehicles.forced.length +
     equipment.unresolved.length +
-    equipment.forced.length
+    equipment.forced.length +
+    groups.unresolved.length +
+    groups.forced.length
   )
 }
 
@@ -111,15 +118,23 @@ export type ConflictCardItem =
       tone: 'red' | 'amber'
       row: EquipmentConflictRow
     }
+  | {
+      kind: 'group'
+      key: string
+      tone: 'red' | 'amber'
+      row: GroupConflictRow
+    }
 
 export function buildConflictCards(
   crewConflicts: Array<CrewConflictRow>,
   vehicleConflicts: Array<VehicleConflictRow>,
   equipmentConflicts: Array<EquipmentConflictRow>,
+  groupConflicts: Array<GroupConflictRow> = [],
 ): Array<ConflictCardItem> {
   const crew = splitCrewConflicts(crewConflicts)
   const vehicles = splitVehicleConflicts(vehicleConflicts)
   const equipment = splitEquipmentConflicts(equipmentConflicts)
+  const groups = splitGroupConflicts(groupConflicts)
   const items: Array<ConflictCardItem> = []
 
   const pushCrew = (rows: Array<CrewConflictRow>, tone: 'red' | 'amber') => {
@@ -159,13 +174,25 @@ export function buildConflictCards(
       })
     })
   }
+  const pushGroup = (rows: Array<GroupConflictRow>, tone: 'red' | 'amber') => {
+    rows.forEach((row, i) => {
+      items.push({
+        kind: 'group',
+        key: `group-${tone}-${row.group_id_1}-${row.group_id_2}-${row.period_id_1}-${row.period_id_2}-${i}`,
+        tone,
+        row,
+      })
+    })
+  }
 
   pushCrew(crew.unresolved, 'red')
   pushVehicle(vehicles.unresolved, 'red')
   pushEquipment(equipment.unresolved, 'red')
+  pushGroup(groups.unresolved, 'red')
   pushCrew(crew.forced, 'amber')
   pushVehicle(vehicles.forced, 'amber')
   pushEquipment(equipment.forced, 'amber')
+  pushGroup(groups.forced, 'amber')
 
   return items
 }
@@ -215,6 +242,17 @@ export function ConflictScrollCard({
               </Text>
               <Text size="2" weight="bold" as="div">
                 {item.row.vehicle_name ?? 'Unknown'}
+              </Text>
+              <JobPairLinks row={item.row} />
+            </>
+          )}
+          {item.kind === 'group' && (
+            <>
+              <Text size="1" weight="medium" color={labelColor} as="div">
+                {item.tone === 'red' ? 'Unresolved' : 'Forced'} · Group
+              </Text>
+              <Text size="2" weight="bold" as="div">
+                {groupConflictDisplayName(item.row)}
               </Text>
               <JobPairLinks row={item.row} />
             </>

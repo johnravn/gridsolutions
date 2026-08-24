@@ -31,6 +31,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
 import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
@@ -123,26 +124,10 @@ export default function EquipmentTab({ jobId }: { jobId: string }) {
         }
       }
 
-      const groupItemsByGroupId = new Map<
-        string,
-        Array<{ item_id: string; quantity: number }>
-      >()
-      if (groupIdsForTemplate.size > 0) {
-        const { data: groupItemsRows, error: giErr } = await supabase
-          .from('group_items')
-          .select('group_id, item_id, quantity')
-          .in('group_id', Array.from(groupIdsForTemplate))
-        if (giErr) throw giErr
-        for (const row of groupItemsRows) {
-          if (!row.group_id || !row.item_id) continue
-          const list = groupItemsByGroupId.get(row.group_id) ?? []
-          list.push({
-            item_id: row.item_id,
-            quantity: row.quantity,
-          })
-          groupItemsByGroupId.set(row.group_id, list)
-        }
-      }
+      const groupItemsByGroupId =
+        groupIdsForTemplate.size > 0
+          ? await flattenGroupLeafItems(Array.from(groupIdsForTemplate))
+          : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
       return {
         stock,

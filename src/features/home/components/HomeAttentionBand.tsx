@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
@@ -171,6 +172,7 @@ export function HomeAttentionBand({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   conflictsSettled,
   getInitials,
   getAvatarUrl,
@@ -185,19 +187,30 @@ export function HomeAttentionBand({
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   conflictsSettled: boolean
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
 }) {
   const conflictCards = React.useMemo(
     () =>
-      buildConflictCards(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      buildConflictCards(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
   const conflictCount = React.useMemo(
     () =>
-      countConflictItems(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      countConflictItems(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
   const mattersCount = unreadMatters.filter((m) =>

@@ -20,6 +20,7 @@ import { MattersScrollContent } from './MattersSection'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
@@ -62,6 +63,7 @@ export function HomeAttentionSummary({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
   getInitials,
@@ -76,6 +78,7 @@ export function HomeAttentionSummary({
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
   getInitials: (name: string | null, email: string) => string
@@ -86,8 +89,13 @@ export function HomeAttentionSummary({
 
   const conflictCount = React.useMemo(
     () =>
-      countConflictItems(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      countConflictItems(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
   const mattersCount = unreadMatters.filter((m) =>
@@ -100,8 +108,13 @@ export function HomeAttentionSummary({
 
   const conflictCards = React.useMemo(
     () =>
-      buildConflictCards(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      buildConflictCards(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
   if (!showMattersRow && !showConflictsRow && !showInvoiceRow) {

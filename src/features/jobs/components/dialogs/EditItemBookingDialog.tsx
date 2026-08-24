@@ -11,6 +11,7 @@ import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingD
 import {
   forcedBookingFields,
   isEquipmentCapacityError,
+  isGroupOverlapError,
 } from '@features/conflicts/api/forceBooking'
 import type { ExternalReqStatus, ReservedItemRow } from '../../types'
 
@@ -122,7 +123,10 @@ export default function EditItemBookingDialog({
     },
     onError: (e: any) => {
       const msg = e?.hint || e?.message || 'Please try again.'
-      if (isEquipmentCapacityError(msg) && !forceDialogOpen) {
+      if (
+        (isEquipmentCapacityError(msg) || isGroupOverlapError(msg)) &&
+        !forceDialogOpen
+      ) {
         setForceWarnings([msg])
         setForceDialogOpen(true)
       }
