@@ -305,7 +305,7 @@ function SidebarContent({
   const { userId } = useAuthz()
 
   const { data: unreadMatters = 0 } = useQuery({
-    ...unreadMattersCountQueryAll(),
+    ...unreadMattersCountQueryAll(userId),
     enabled: !!user?.id,
   })
 

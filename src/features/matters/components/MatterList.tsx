@@ -187,7 +187,7 @@ export default function MatterList({
   companies: Array<{ id: string; name: string }>
   onCreateMatter?: () => void
 }) {
-  const { companyRole, isGlobalSuperuser } = useAuthz()
+  const { companyRole, isGlobalSuperuser, userId } = useAuthz()
   const { canWrite } = useCompanyWriteAccess()
   const canCreateAnnouncement =
     canWrite &&
@@ -204,7 +204,7 @@ export default function MatterList({
     isLoading,
     isFetching,
   } = useQuery({
-    ...mattersIndexQueryAll(),
+    ...mattersIndexQueryAll(userId),
   })
 
   const filteredBySearch = useClientTableFilter(

@@ -195,7 +195,7 @@ export default function HomePage() {
   )
 
   const { data: mattersData, isLoading: mattersLoading } = useQuery({
-    ...mattersIndexQueryAll(),
+    ...mattersIndexQueryAll(userId),
   })
 
   const unreadMatters = React.useMemo((): Array<HomeMatter> => {

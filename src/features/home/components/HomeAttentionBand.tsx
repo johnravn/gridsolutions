@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Badge, Box, Card, Flex, Heading, Text } from '@radix-ui/themes'
 import { CalendarCheck, LotOfCash, Message } from 'iconoir-react'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
+import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import {
   ConflictScrollCard,
   buildConflictCards,
@@ -10,12 +11,12 @@ import {
 import { HorizontalCardScroller } from './HorizontalCardScroller'
 import { InvoiceScrollContent } from './JobsReadyToInvoiceSection'
 import { MattersScrollContent } from './MattersSection'
+import type { ReactNode } from 'react'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { ReactNode } from 'react'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
 
 function AccentIconBadge({ children }: { children: ReactNode }) {
@@ -199,7 +200,9 @@ export function HomeAttentionBand({
     [crewConflicts, vehicleConflicts, equipmentConflicts],
   )
 
-  const mattersCount = unreadMatters.filter((m) => m.created_by).length
+  const mattersCount = unreadMatters.filter((m) =>
+    resolveMatterCardAuthor(m),
+  ).length
   const invoiceCount = jobsReadyToInvoice.length
 
   type ColumnKey = 'matters' | 'invoices' | 'conflicts'
