@@ -6,10 +6,8 @@ import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { jobBookingConflictsQuery } from '../api/queries'
 import {
-  groupConflictDisplayName,
   splitCrewConflicts,
   splitEquipmentConflicts,
-  splitGroupConflicts,
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
 import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
@@ -38,19 +36,16 @@ export function JobBookingConflictsBanner({
     const crew = splitCrewConflicts(data?.crew ?? [])
     const vehicles = splitVehicleConflicts(data?.vehicles ?? [])
     const equipment = splitEquipmentConflicts(data?.equipment ?? [])
-    const groups = splitGroupConflicts(data?.groups ?? [])
     return {
       unresolved: {
         crew: crew.unresolved,
         vehicles: vehicles.unresolved,
         equipment: equipment.unresolved,
-        groups: groups.unresolved,
       },
       forced: {
         crew: crew.forced,
         vehicles: vehicles.forced,
         equipment: equipment.forced,
-        groups: groups.forced,
       },
     }
   }, [data])
@@ -58,13 +53,9 @@ export function JobBookingConflictsBanner({
   const unresolvedCount =
     unresolved.crew.length +
     unresolved.vehicles.length +
-    unresolved.equipment.length +
-    unresolved.groups.length
+    unresolved.equipment.length
   const forcedCount =
-    forced.crew.length +
-    forced.vehicles.length +
-    forced.equipment.length +
-    forced.groups.length
+    forced.crew.length + forced.vehicles.length + forced.equipment.length
 
   if (isLoading || (unresolvedCount === 0 && forcedCount === 0)) {
     return null
@@ -88,6 +79,7 @@ export function JobBookingConflictsBanner({
           crew={unresolved.crew}
           vehicles={unresolved.vehicles}
           equipment={unresolved.equipment}
+          groups={unresolved.groups}
         />
       )}
 
@@ -99,6 +91,7 @@ export function JobBookingConflictsBanner({
           crew={forced.crew}
           vehicles={forced.vehicles}
           equipment={forced.equipment}
+          groups={forced.groups}
         />
       )}
     </Flex>
@@ -112,6 +105,7 @@ function ConflictCallout({
   crew,
   vehicles,
   equipment,
+  groups,
 }: {
   tone: 'red' | 'amber'
   label: string
@@ -142,6 +136,16 @@ function ConflictCallout({
     end_at: string
     job_ids?: Array<string> | null
     job_titles?: Array<string> | null
+  }>
+  groups: Array<{
+    group_name_1: string | null
+    group_name_2: string | null
+    job_title_1: string | null
+    job_title_2: string | null
+    start_1: string
+    end_1: string
+    start_2: string
+    end_2: string
   }>
 }) {
   const bg = tone === 'red' ? 'var(--red-a2)' : 'var(--amber-a2)'
@@ -199,6 +203,27 @@ function ConflictCallout({
             {vehicles.slice(0, 3).map((row, i) => (
               <Text key={i} size="1" color="gray" as="div">
                 {row.vehicle_name ?? 'Vehicle'}: {row.job_title_1 ?? 'Job'} (
+                {formatPeriod(row.start_1, row.end_1)}) and{' '}
+                {row.job_title_2 ?? 'Job'} (
+                {formatPeriod(row.start_2, row.end_2)})
+              </Text>
+            ))}
+          </Box>
+        )}
+
+        {groups.length > 0 && (
+          <Box>
+            <Text
+              size="1"
+              color="blue"
+              style={{ cursor: onNavigateSubTab ? 'pointer' : undefined }}
+              onClick={() => onNavigateSubTab?.('equipment')}
+            >
+              Groups ({groups.length})
+            </Text>
+            {groups.slice(0, 3).map((row, i) => (
+              <Text key={i} size="1" color="gray" as="div">
+                {groupConflictDisplayName(row)}: {row.job_title_1 ?? 'Job'} (
                 {formatPeriod(row.start_1, row.end_1)}) and{' '}
                 {row.job_title_2 ?? 'Job'} (
                 {formatPeriod(row.start_2, row.end_2)})

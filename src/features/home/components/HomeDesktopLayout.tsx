@@ -5,6 +5,7 @@ import { HomeAttentionBand } from './HomeAttentionBand'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 import type { WeekJobBookingSummary } from '../api/companyWeekJobsBookingsQuery'
@@ -40,6 +41,7 @@ type HomeDesktopLayoutProps = {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   homeLayout: HomeDashboardLayoutPreferences
 }
 
@@ -66,6 +68,7 @@ export function HomeDesktopLayout({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   homeLayout,
 }: HomeDesktopLayoutProps) {
   const showInspiration = homeLayout.showDailyInspiration
@@ -148,6 +151,7 @@ export function HomeDesktopLayout({
                   crewConflicts={crewConflicts}
                   vehicleConflicts={vehicleConflicts}
                   equipmentConflicts={equipmentConflicts}
+                  groupConflicts={groupConflicts}
                   conflictsSettled={conflictsSettled}
                   getInitials={getInitials}
                   getAvatarUrl={getAvatarUrl}

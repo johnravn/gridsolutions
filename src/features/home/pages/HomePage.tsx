@@ -25,11 +25,13 @@ import { resolveMyJobRole } from '@features/home/utils/resolveMyJobRole'
 import {
   crewConflictsQuery,
   equipmentConflictsQuery,
+  groupConflictsQuery,
   vehicleConflictsQuery,
 } from '@features/conflicts/api/queries'
 import {
   filterCrewConflictsByProjectLead,
   filterEquipmentConflictsByProjectLead,
+  filterGroupConflictsByProjectLead,
   filterVehicleConflictsByProjectLead,
 } from '@features/conflicts/utils/filterConflictsByProjectLead'
 import type { JobListRow } from '@features/jobs/types'
@@ -262,6 +264,18 @@ export default function HomePage() {
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
   })
+  const { data: groupConflicts = [], isLoading: groupConflictsLoading } =
+    useQuery({
+      ...groupConflictsQuery({
+        companyId: companyId ?? '',
+        from: conflictFrom,
+        to: conflictTo,
+      }),
+      enabled: shouldFetchConflicts,
+      staleTime: 5 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+    })
 
   const filteredCrewConflicts = React.useMemo(
     () => filterCrewConflictsByProjectLead(crewConflicts, projectLeadJobIds),
@@ -280,12 +294,18 @@ export default function HomePage() {
       ),
     [equipmentConflicts, projectLeadJobIds],
   )
+  const filteredGroupConflicts = React.useMemo(
+    () =>
+      filterGroupConflictsByProjectLead(groupConflicts, projectLeadJobIds),
+    [groupConflicts, projectLeadJobIds],
+  )
 
   const conflictsLoading =
     shouldFetchConflicts &&
     (crewConflictsLoading ||
       vehicleConflictsLoading ||
-      equipmentConflictsLoading)
+      equipmentConflictsLoading ||
+      groupConflictsLoading)
 
   const getInitials = getInitialsFromNameOrEmail
 
@@ -340,6 +360,7 @@ export default function HomePage() {
         crewConflicts={filteredCrewConflicts}
         vehicleConflicts={filteredVehicleConflicts}
         equipmentConflicts={filteredEquipmentConflicts}
+        groupConflicts={filteredGroupConflicts}
         homeLayout={homeLayout}
       />
     )
@@ -369,6 +390,7 @@ export default function HomePage() {
       crewConflicts={filteredCrewConflicts}
       vehicleConflicts={filteredVehicleConflicts}
       equipmentConflicts={filteredEquipmentConflicts}
+      groupConflicts={filteredGroupConflicts}
       homeLayout={homeLayout}
     />
   )
