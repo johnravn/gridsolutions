@@ -273,7 +273,6 @@ export type ReservedItemRow = {
   quantity: number
   source_group_id: UUID | null
   source_kind: 'direct' | 'group'
-  status: BookingStatus
   external_status: ExternalReqStatus | null
   external_note: string | null
   forced: boolean
@@ -352,7 +351,6 @@ export type ReservedVehicleRow = {
   id: UUID
   time_period_id: UUID
   vehicle_id: UUID
-  status: BookingStatus
   forced?: boolean
   external_status: ExternalReqStatus | null
   external_note: string | null

@@ -168,13 +168,11 @@ export function companyWeekJobsBookingsQuery({
             source_group_id,
             item_id,
             quantity,
-            status,
             item:item_id ( category:category_id ( name ) ),
             source_group:source_group_id ( category:category_id ( name ) )
           `,
           )
           .in('time_period_id', allTpIds)
-          .neq('status', 'canceled')
 
         if (itemErr) throw itemErr
 
@@ -251,12 +249,10 @@ export function companyWeekJobsBookingsQuery({
           .select(
             `
             time_period_id,
-            status,
             vehicle:vehicle_id ( id, name, deleted )
           `,
           )
           .in('time_period_id', transportTpIds)
-          .neq('status', 'canceled')
 
         if (vehErr) throw vehErr
 

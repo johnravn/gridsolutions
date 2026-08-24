@@ -9,7 +9,6 @@ import {
   Flex,
   Heading,
   IconButton,
-  SegmentedControl,
   Text,
   TextField,
 } from '@radix-ui/themes'
@@ -23,11 +22,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
 import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
-import type {
-  BookingStatus,
-  ExternalReqStatus,
-  ReservedVehicleRow,
-} from '../../types'
+import type { ExternalReqStatus, ReservedVehicleRow } from '../../types'
 
 type TransportQueryResult = {
   bookings: Array<ReservedVehicleRow>
@@ -84,7 +79,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         .from('reserved_vehicles')
         .select(
           `
-          id, time_period_id, vehicle_id, status, forced, external_status, external_note,
+          id, time_period_id, vehicle_id, forced, external_status, external_note,
           vehicle:vehicle_id (
             id, name, image_path, internally_owned, external_owner_id, owner_user_id, deleted,
             external_owner:external_owner_id ( id, name ),
@@ -134,7 +129,6 @@ export default function TransportTab({ jobId }: { jobId: string }) {
   const handleUpdateBooking = async (
     bookingId: string,
     updates: {
-      status?: BookingStatus
       external_status?: ExternalReqStatus
       external_note?: string
     },
@@ -320,11 +314,6 @@ export default function TransportTab({ jobId }: { jobId: string }) {
                     external_note: editedNote,
                   })
                 }}
-                onStatusChange={(status) => {
-                  handleUpdateBooking(row.id, {
-                    status: status,
-                  })
-                }}
                 onDelete={() => setDeletingBooking(row.id)}
               />
             )
@@ -408,7 +397,6 @@ function VehicleBookingCard({
   onToggleExpand,
   onNoteChange,
   onSaveNote,
-  onStatusChange,
   onDelete,
 }: {
   row: ReservedVehicleRow
@@ -423,11 +411,9 @@ function VehicleBookingCard({
   onToggleExpand: () => void
   onNoteChange: (note: string) => void
   onSaveNote: () => void
-  onStatusChange: (status: BookingStatus) => void
   onDelete: () => void
 }) {
   const vehicleName = vehicle?.name ?? '—'
-  const currentStatus = row.status ?? 'planned'
 
   const imageUrl = React.useMemo(() => {
     if (!vehicle?.image_path) return null
@@ -525,29 +511,6 @@ function VehicleBookingCard({
                 Forced
               </Badge>
             )}
-
-            <Box onClick={(e) => e.stopPropagation()}>
-              {isReadOnly ? (
-                <Badge
-                  radius="full"
-                  highContrast
-                  color={
-                    currentStatus === 'confirmed'
-                      ? 'green'
-                      : currentStatus === 'canceled'
-                        ? 'red'
-                        : 'gray'
-                  }
-                >
-                  {currentStatus}
-                </Badge>
-              ) : (
-                <BookingStatusControl
-                  value={currentStatus}
-                  onChange={onStatusChange}
-                />
-              )}
-            </Box>
           </Flex>
         </Flex>
       </Flex>
@@ -618,39 +581,5 @@ function VehicleBookingCard({
         </Box>
       )}
     </Card>
-  )
-}
-
-function BookingStatusControl({
-  value,
-  onChange,
-}: {
-  value: BookingStatus
-  onChange: (v: BookingStatus) => void
-}) {
-  const all: Array<BookingStatus> = ['planned', 'confirmed', 'canceled']
-  return (
-    <SegmentedControl.Root
-      value={value}
-      onValueChange={(v) => onChange(v as BookingStatus)}
-      size="1"
-    >
-      {all.map((s) => (
-        <SegmentedControl.Item
-          key={s}
-          value={s}
-          style={{
-            color:
-              s === 'confirmed'
-                ? 'var(--green-9)'
-                : s === 'canceled'
-                  ? 'var(--red-9)'
-                  : undefined,
-          }}
-        >
-          {s}
-        </SegmentedControl.Item>
-      ))}
-    </SegmentedControl.Root>
   )
 }

@@ -748,7 +748,6 @@ export default function BookItemsDialog({
             item_id,
             quantity,
             time_period_id,
-            status,
             time_period:time_period_id (
               start_at,
               end_at,
@@ -804,15 +803,9 @@ export default function BookItemsDialog({
       // Calculate total reserved per item (only from overlapping time periods)
       // Note: This includes updated quantities from the booking periods (after updates executed above)
       const existingReservedMap = new Map<string, number>()
-      const plannedReservedMap = new Map<string, number>()
       for (const res of overlappingReservations || []) {
-        if (res.status === 'canceled') continue
         const current = existingReservedMap.get(res.item_id) ?? 0
         existingReservedMap.set(res.item_id, current + res.quantity)
-        if (res.status === 'planned') {
-          const plannedCurrent = plannedReservedMap.get(res.item_id) ?? 0
-          plannedReservedMap.set(res.item_id, plannedCurrent + res.quantity)
-        }
       }
 
       for (const update of toUpdate) {
@@ -839,31 +832,20 @@ export default function BookItemsDialog({
         const newQty = newBookingMap.get(itemId) ?? 0
         const finalTotal = existingQty + newQty
         const hasCapacityConflict = onHand > 0 && finalTotal > onHand
-        const plannedQty = plannedReservedMap.get(itemId) ?? 0
-        const hasPlannedConflict =
-          plannedQty > 0 && newQty > 0 && !hasCapacityConflict
 
-        if (!hasCapacityConflict && !hasPlannedConflict) continue
+        if (!hasCapacityConflict) continue
 
         const itemName = itemNameMap.get(itemId) ?? 'Item'
 
-        if (hasCapacityConflict) {
-          const existingPart =
-            existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-          bookingWarnings.push(
-            `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-          )
-        } else {
-          bookingWarnings.push(
-            `${itemName}: ${plannedQty} already planned in overlapping period`,
-          )
-        }
+        const existingPart =
+          existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+        bookingWarnings.push(
+          `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+        )
 
         const itemReservations = (overlappingReservations ?? []).filter(
           (res) =>
-            res.item_id === itemId &&
-            res.status !== 'canceled' &&
-            !updatingReservationIds.has(res.id),
+            res.item_id === itemId && !updatingReservationIds.has(res.id),
         )
 
         const otherJobReservations = itemReservations.filter((res) => {

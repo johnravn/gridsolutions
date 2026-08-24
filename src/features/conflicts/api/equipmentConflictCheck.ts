@@ -152,7 +152,6 @@ export async function getEquipmentConflictsForOfferBooking({
         id,
         item_id,
         quantity,
-        status,
         time_period:time_period_id (
           start_at,
           end_at,
@@ -206,15 +205,9 @@ export async function getEquipmentConflictsForOfferBooking({
   }
 
   const existingReservedMap = new Map<string, number>()
-  const plannedReservedMap = new Map<string, number>()
   for (const res of overlappingReservations ?? []) {
-    if (res.status === 'canceled') continue
     const current = existingReservedMap.get(res.item_id) ?? 0
     existingReservedMap.set(res.item_id, current + res.quantity)
-    if (res.status === 'planned') {
-      const plannedCurrent = plannedReservedMap.get(res.item_id) ?? 0
-      plannedReservedMap.set(res.item_id, plannedCurrent + res.quantity)
-    }
   }
 
   const summaryLines: Array<string> = []
@@ -226,29 +219,20 @@ export async function getEquipmentConflictsForOfferBooking({
     const existingQty = existingReservedMap.get(itemId) ?? 0
     const finalTotal = existingQty + newQty
     const hasCapacityConflict = onHand > 0 && finalTotal > onHand
-    const plannedQty = plannedReservedMap.get(itemId) ?? 0
-    const hasPlannedConflict =
-      plannedQty > 0 && newQty > 0 && !hasCapacityConflict
 
-    if (!hasCapacityConflict && !hasPlannedConflict) continue
+    if (!hasCapacityConflict) continue
 
     conflictingItemIds.push(itemId)
     const itemName = itemNameMap.get(itemId) ?? 'Item'
 
-    if (hasCapacityConflict) {
-      const existingPart =
-        existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-      summaryLines.push(
-        `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-      )
-    } else {
-      summaryLines.push(
-        `${itemName}: ${plannedQty} already planned in overlapping period`,
-      )
-    }
+    const existingPart =
+      existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+    summaryLines.push(
+      `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+    )
 
     const itemReservations = (overlappingReservations ?? []).filter(
-      (res) => res.item_id === itemId && res.status !== 'canceled',
+      (res) => res.item_id === itemId,
     )
 
     for (const res of itemReservations) {
