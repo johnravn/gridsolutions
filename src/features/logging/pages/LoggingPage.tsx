@@ -25,13 +25,13 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton } from '@app/layout/split'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
+import { previouslyLoggedJobsQuery } from '../api/loggedJobs'
+import { loggingPeriodsQuery } from '../api/loggingPeriods'
 import {
   createTimeEntry,
   deleteTimeEntry,
   timeEntriesQuery,
 } from '../api/timeEntries'
-import { previouslyLoggedJobsQuery } from '../api/loggedJobs'
-import { loggingPeriodsQuery } from '../api/loggingPeriods'
 import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
 import TimeEntriesTable from '../components/TimeEntriesTable'
 import { buildLoggingJobPickerList } from '../lib/jobPicker'
