@@ -30,9 +30,11 @@ import {
   deleteTimeEntry,
   timeEntriesQuery,
 } from '../api/timeEntries'
+import { previouslyLoggedJobsQuery } from '../api/loggedJobs'
 import { loggingPeriodsQuery } from '../api/loggingPeriods'
 import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
 import TimeEntriesTable from '../components/TimeEntriesTable'
+import { buildLoggingJobPickerList } from '../lib/jobPicker'
 import {
   formatLoggingDate,
   formatMonthInput,
@@ -149,26 +151,29 @@ export default function LoggingPage() {
     enabled: enabled && entryMode === 'job',
   })
 
-  // Show newest first; only jobs that start on or before end of "today + 2 days" (today + next 2 days = 3 days total)
-  const jobsForPicker = React.useMemo(() => {
-    const now = new Date()
-    const endOfWindow = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate() + 2,
-      23,
-      59,
-      59,
-      999,
-    )
-    return jobsData
-      .filter(
-        (job) =>
-          !job.start_at ||
-          new Date(job.start_at).getTime() <= endOfWindow.getTime(),
-      )
-      .slice(0, 50)
-  }, [jobsData])
+  const { data: previouslyLoggedJobs = [] } = useQuery({
+    ...previouslyLoggedJobsQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: enabled && entryMode === 'job',
+  })
+
+  const previouslyLoggedJobIds = React.useMemo(
+    () => new Set(previouslyLoggedJobs.map((job) => job.id)),
+    [previouslyLoggedJobs],
+  )
+
+  const jobsForPicker = React.useMemo(
+    () =>
+      buildLoggingJobPickerList({
+        jobs: jobsData,
+        previouslyLoggedJobs,
+        search: jobSearch,
+        now: new Date(),
+      }),
+    [jobSearch, jobsData, previouslyLoggedJobs],
+  )
 
   const entryStartYear = React.useMemo(
     () => getYearFromIso(startAt) ?? new Date().getFullYear(),
@@ -261,7 +266,10 @@ export default function LoggingPage() {
       },
     ) => {
       setSelectedJobId(jobId)
-      const resolved = job ?? jobsData.find((item) => item.id === jobId)
+      const resolved =
+        job ??
+        jobsData.find((item) => item.id === jobId) ??
+        previouslyLoggedJobs.find((item) => item.id === jobId)
       if (!resolved) return
 
       setTitle(resolved.title || '')
@@ -279,7 +287,7 @@ export default function LoggingPage() {
       setJobSearchOpen(false)
       setJobSearch('')
     },
-    [jobsData],
+    [jobsData, previouslyLoggedJobs],
   )
 
   const createEntry = useMutation({
@@ -317,13 +325,17 @@ export default function LoggingPage() {
     onSuccess: async () => {
       await invalidateEntries()
       const { startAt: resetStart, endAt: resetEnd } = getDefaultTimes()
-      setTitle('')
-      setJobNumber('')
       setNote('')
       setStartAt(resetStart)
       setEndAt(resetEnd)
-      setEntryMode('manual')
+      if (entryMode === 'job' && selectedJobId) {
+        success('Saved', 'Time entry added. You can add another for this job.')
+        return
+      }
+      setTitle('')
+      setJobNumber('')
       setSelectedJobId(null)
+      setEntryMode('manual')
       success('Saved', 'Time entry added')
     },
     onError: (e: any) => {
@@ -361,6 +373,9 @@ export default function LoggingPage() {
     })
     await qc.invalidateQueries({
       queryKey: ['time_entries', companyId, 'all', from, to],
+    })
+    await qc.invalidateQueries({
+      queryKey: ['logging', 'previously-logged-jobs', companyId, userId],
     })
   }, [companyId, from, qc, to, userId])
 
@@ -429,7 +444,9 @@ export default function LoggingPage() {
               <Flex align="center" gap="2">
                 <Text size="2" style={{ flex: 1 }}>
                   {(() => {
-                    const job = jobsData.find((j) => j.id === selectedJobId)
+                    const job =
+                      jobsData.find((j) => j.id === selectedJobId) ??
+                      previouslyLoggedJobs.find((j) => j.id === selectedJobId)
                     return job ? formatJobOption(job) : selectedJobId
                   })()}
                 </Text>
@@ -470,7 +487,7 @@ export default function LoggingPage() {
                       onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
                     />
                     <Text size="2">Show all jobs</Text>
-                    <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range.">
+                    <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range. Jobs you've already logged time on always appear so you can add another entry.">
                       <IconButton
                         size="1"
                         variant="ghost"
@@ -483,7 +500,7 @@ export default function LoggingPage() {
                     </Tooltip>
                   </Flex>
                 </Flex>
-                {jobSearchOpen && jobSearch.trim().length > 0 && (
+                {jobSearchOpen && (
                   <Box
                     style={{
                       position: 'absolute',
@@ -500,17 +517,12 @@ export default function LoggingPage() {
                       boxShadow: 'var(--shadow-4)',
                     }}
                   >
-                    {jobsLoading ? (
+                    {jobsForPicker.length === 0 ? (
                       <Box p="3">
                         <Text size="2" color="gray">
-                          Loading jobs…
-                        </Text>
-                      </Box>
-                    ) : jobsForPicker.length === 0 ? (
-                      <Box p="3">
-                        <Text size="2" color="gray">
-                          No jobs found. Try a different search or turn on
-                          &quot;Show all jobs&quot;.
+                          {jobsLoading
+                            ? 'Loading jobs…'
+                            : 'No jobs found. Try a different search or turn on "Show all jobs".'}
                         </Text>
                       </Box>
                     ) : (
@@ -528,6 +540,11 @@ export default function LoggingPage() {
                           <div>
                             <Flex align="center" gap="2" wrap="wrap">
                               <Text size="2">{formatJobOption(job)}</Text>
+                              {previouslyLoggedJobIds.has(job.id) && (
+                                <Badge size="1" color="green" variant="soft">
+                                  Logged
+                                </Badge>
+                              )}
                               {isJobOnToday(job) && (
                                 <Badge size="1" color="blue" variant="soft">
                                   Today
