@@ -42,11 +42,16 @@ export type HomeMatter = {
   matter_type: MatterType
   created_at: string
   is_unread?: boolean
+  created_as_company?: boolean
   created_by?: {
     user_id: string
     display_name: string | null
     email: string
     avatar_url: string | null
+  } | null
+  company?: {
+    id: string
+    name: string
   } | null
 }
 

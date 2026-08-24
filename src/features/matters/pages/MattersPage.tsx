@@ -11,7 +11,12 @@ import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
 import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import MatterList from '../components/MatterList'
 import MatterDetail from '../components/MatterDetail'
 import CreateMatterDialog from '../components/CreateMatterDialog'
@@ -21,7 +26,7 @@ import type { MatterType } from '../types'
 
 export default function MattersPage() {
   const { companyId } = useCompany()
-  const { companyRole, isGlobalSuperuser } = useAuthz()
+  const { companyRole, isGlobalSuperuser, userId } = useAuthz()
   const { canWrite } = useCompanyWriteAccess()
   const { isLarge, hasSlots } = useSplitLayout()
   const canCreateAnnouncement =
@@ -101,7 +106,7 @@ export default function MattersPage() {
   useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
   const { isLoading: mattersIndexLoading } = useQuery({
-    ...mattersIndexQueryAll(),
+    ...mattersIndexQueryAll(userId),
   })
   const showInitialSkeleton = useInitialPageLoad(mattersIndexLoading)
 
@@ -116,10 +121,7 @@ export default function MattersPage() {
   }
 
   const detail = selectedId ? (
-    <MatterDetail
-      matterId={selectedId}
-      onDeleted={() => setSelectedId(null)}
-    />
+    <MatterDetail matterId={selectedId} onDeleted={() => setSelectedId(null)} />
   ) : (
     <Box p="4">
       <Box style={{ textAlign: 'center' }}>

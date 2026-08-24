@@ -15,6 +15,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { formatDistanceToNow } from 'date-fns'
 import { markMatterAsViewed } from '@features/matters/api/queries'
+import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
@@ -78,12 +79,10 @@ function MatterCard({
 }) {
   const [hovered, setHovered] = React.useState(false)
 
-  if (!matter.created_by) return null
-  const avatarUrl = getAvatarUrl(matter.created_by.avatar_url)
-  const initials = getInitials(
-    matter.created_by.display_name,
-    matter.created_by.email,
-  )
+  const author = resolveMatterCardAuthor(matter)
+  if (!author) return null
+  const avatarUrl = getAvatarUrl(author.avatarPath)
+  const initials = getInitials(author.name, author.email || author.name)
 
   return (
     <Card
@@ -126,7 +125,7 @@ function MatterCard({
             </Badge>
           </Flex>
           <Text size="1" color="gray" mt="1" as="div">
-            {matter.created_by.display_name || matter.created_by.email}
+            {author.name}
             {' · '}
             {formatDistanceToNow(new Date(matter.created_at), {
               addSuffix: true,
@@ -197,7 +196,7 @@ export function MattersScrollContent({
 }) {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const visibleMatters = matters.filter((m) => m.created_by)
+  const visibleMatters = matters.filter((m) => resolveMatterCardAuthor(m))
   const [markingId, setMarkingId] = React.useState<string | null>(null)
 
   const invalidateMatters = React.useCallback(async () => {
@@ -274,7 +273,7 @@ export function MattersSection({
 }) {
   const qc = useQueryClient()
   const isMobile = presentation === 'mobile'
-  const visibleMatters = matters.filter((m) => m.created_by)
+  const visibleMatters = matters.filter((m) => resolveMatterCardAuthor(m))
 
   const invalidateMatters = React.useCallback(async () => {
     await Promise.all([

@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { LotOfCash, Message, WarningTriangle } from 'iconoir-react'
+import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import {
   ConflictScrollCard,
   buildConflictCards,
@@ -89,7 +90,9 @@ export function HomeAttentionSummary({
     [crewConflicts, vehicleConflicts, equipmentConflicts],
   )
 
-  const mattersCount = unreadMatters.filter((m) => m.created_by).length
+  const mattersCount = unreadMatters.filter((m) =>
+    resolveMatterCardAuthor(m),
+  ).length
   const invoiceCount = jobsReadyToInvoice.length
   const showMattersRow = showMatters
   const showConflictsRow = showConflicts
