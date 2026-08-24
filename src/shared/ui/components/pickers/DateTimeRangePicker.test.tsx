@@ -233,7 +233,12 @@ describe('DateTimeRangePicker', () => {
 
   it('updates closed trigger when controlled props are prefilled after mount', () => {
     const { rerender } = renderWithProviders(
-      <DateTimeRangePicker startAt="" endAt="" onChange={vi.fn()} locale="en" />,
+      <DateTimeRangePicker
+        startAt=""
+        endAt=""
+        onChange={vi.fn()}
+        locale="en"
+      />,
     )
     expect(screen.getByText('Select period')).toBeInTheDocument()
 
@@ -392,5 +397,112 @@ describe('DateTimeRangePicker', () => {
         pressed: true,
       }),
     ).toBeInTheDocument()
+  })
+
+  function openFilledPicker() {
+    fireEvent.click(screen.getByRole('button', { name: /Start / }))
+  }
+
+  function clickEndField() {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^End (?:\d|All day|Open-ended)/,
+      }),
+    )
+  }
+
+  it('lets the user change only the end hour after opening and clicking End', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-10', 17)}
+        onChange={onChange}
+      />,
+    )
+    openFilledPicker()
+    clickEndField()
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(
+      dialog.getByRole('button', { name: 'End hour 17:00' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(dialog.getByRole('button', { name: 'End hour 18:00' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 9),
+      endAt: atHour('2026-06-10', 18),
+    })
+  })
+
+  it('lets the user set only the end hour on an all-day range', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={startOfDay('2026-06-10')}
+        endAt={endOfDay('2026-06-10')}
+        onChange={onChange}
+      />,
+    )
+    openFilledPicker()
+    clickEndField()
+
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: 'End hour 17:00' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: atHour('2026-06-10', 17),
+    })
+  })
+
+  it('changes only the end date in dateOnly mode when End is targeted', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        dateOnly
+        startAt={startOfDay('2026-06-10')}
+        endAt={endOfDay('2026-06-15')}
+        onChange={onChange}
+      />,
+    )
+    openFilledPicker()
+    clickEndField()
+
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-20' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-20'),
+    })
+  })
+
+  it('keeps an optional end empty until the user picks one', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        dateOnly
+        optionalEnd
+        startAt={startOfDay('2026-06-10')}
+        endAt=""
+        onChange={onChange}
+      />,
+    )
+    expect(screen.getByText('Open-ended')).toBeInTheDocument()
+
+    openFilledPicker()
+    clickEndField()
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: '2026-06-20',
+      }),
+    )
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-20'),
+    })
   })
 })
