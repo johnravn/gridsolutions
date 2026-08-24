@@ -6,8 +6,10 @@ import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { jobBookingConflictsQuery } from '../api/queries'
 import {
+  groupConflictDisplayName,
   splitCrewConflicts,
   splitEquipmentConflicts,
+  splitGroupConflicts,
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
 import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
@@ -36,16 +38,19 @@ export function JobBookingConflictsBanner({
     const crew = splitCrewConflicts(data?.crew ?? [])
     const vehicles = splitVehicleConflicts(data?.vehicles ?? [])
     const equipment = splitEquipmentConflicts(data?.equipment ?? [])
+    const groups = splitGroupConflicts(data?.groups ?? [])
     return {
       unresolved: {
         crew: crew.unresolved,
         vehicles: vehicles.unresolved,
         equipment: equipment.unresolved,
+        groups: groups.unresolved,
       },
       forced: {
         crew: crew.forced,
         vehicles: vehicles.forced,
         equipment: equipment.forced,
+        groups: groups.forced,
       },
     }
   }, [data])
@@ -53,9 +58,13 @@ export function JobBookingConflictsBanner({
   const unresolvedCount =
     unresolved.crew.length +
     unresolved.vehicles.length +
-    unresolved.equipment.length
+    unresolved.equipment.length +
+    unresolved.groups.length
   const forcedCount =
-    forced.crew.length + forced.vehicles.length + forced.equipment.length
+    forced.crew.length +
+    forced.vehicles.length +
+    forced.equipment.length +
+    forced.groups.length
 
   if (isLoading || (unresolvedCount === 0 && forcedCount === 0)) {
     return null

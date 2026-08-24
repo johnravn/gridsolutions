@@ -1,6 +1,7 @@
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '../api/queries'
 
@@ -41,18 +42,31 @@ export function filterEquipmentConflictsByProjectLead(
   )
 }
 
+export function filterGroupConflictsByProjectLead(
+  rows: Array<GroupConflictRow>,
+  projectLeadJobIds: ReadonlyArray<string>,
+): Array<GroupConflictRow> {
+  const ids = new Set(projectLeadJobIds)
+  return rows.filter((row) =>
+    involvesProjectLeadJob(ids, row.job_id_1, row.job_id_2),
+  )
+}
+
 export function hasAnyConflicts({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts = [],
 }: {
   crewConflicts: ReadonlyArray<CrewConflictRow>
   vehicleConflicts: ReadonlyArray<VehicleConflictRow>
   equipmentConflicts: ReadonlyArray<EquipmentConflictRow>
+  groupConflicts?: ReadonlyArray<GroupConflictRow>
 }): boolean {
   return (
     crewConflicts.length > 0 ||
     vehicleConflicts.length > 0 ||
-    equipmentConflicts.length > 0
+    equipmentConflicts.length > 0 ||
+    groupConflicts.length > 0
   )
 }

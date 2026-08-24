@@ -6,6 +6,7 @@ import {
   isBookingOverlapError,
   isCrewOverlapError,
   isEquipmentCapacityError,
+  isGroupOverlapError,
   isVehicleOverlapError,
 } from '@features/conflicts/api/forceBooking'
 import { makeOverlapConflict } from '@test/fixtures/conflicts'
@@ -99,5 +100,20 @@ describe('isEquipmentCapacityError', () => {
   it('returns false for empty or unrelated messages', () => {
     expect(isEquipmentCapacityError(null)).toBe(false)
     expect(isEquipmentCapacityError('overlap')).toBe(false)
+  })
+})
+
+describe('isGroupOverlapError', () => {
+  it('detects group overlap message', () => {
+    expect(
+      isGroupOverlapError(
+        'Group is already booked in an overlapping time period',
+      ),
+    ).toBe(true)
+  })
+
+  it('returns false for empty or unrelated messages', () => {
+    expect(isGroupOverlapError(null)).toBe(false)
+    expect(isGroupOverlapError('vehicle overlap')).toBe(false)
   })
 })

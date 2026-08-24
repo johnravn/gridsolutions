@@ -4919,6 +4919,27 @@ export type Database = {
           total_reserved: number
         }[]
       }
+      get_conflicts_groups: {
+        Args: { p_company_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          end_1: string
+          end_2: string
+          forced_1: boolean
+          forced_2: boolean
+          group_id_1: string
+          group_id_2: string
+          group_name_1: string
+          group_name_2: string
+          job_id_1: string
+          job_id_2: string
+          job_title_1: string
+          job_title_2: string
+          period_id_1: string
+          period_id_2: string
+          start_1: string
+          start_2: string
+        }[]
+      }
       get_conflicts_vehicle: {
         Args: { p_company_id: string; p_from?: string; p_to?: string }
         Returns: {
@@ -4955,6 +4976,7 @@ export type Database = {
         Returns: Json
       }
       get_system_monitor_snapshot: { Args: never; Returns: Json }
+      group_lineage_ids: { Args: { p_group_id: string }; Returns: string[] }
       is_superuser: { Args: { p_user_id: string }; Returns: boolean }
       item_available_qty: {
         Args: {

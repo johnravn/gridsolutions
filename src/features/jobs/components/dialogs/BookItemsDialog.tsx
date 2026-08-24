@@ -21,12 +21,17 @@ import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import {
   forcedBookingFields,
   isEquipmentCapacityError,
+  isGroupOverlapError,
 } from '@features/conflicts/api/forceBooking'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
-import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
+import {
+  dedupeOverlapConflicts,
+  findGroupOverlaps,
+} from '@features/conflicts/api/overlapChecks'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import type { InventoryItemKind } from '@features/inventory/api/queries'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
@@ -470,22 +475,6 @@ export default function BookItemsDialog({
 
       const itemKindMap = new Map<string, InventoryItemKind>()
 
-      if (itemRows.length > 0) {
-        const itemIds = itemRows.map((r) => r.item_id)
-        const { data: itemDetails, error: itemErr } = await supabase
-          .from('items')
-          .select('id, item_kind')
-          .in('id', itemIds)
-        if (itemErr) throw itemErr
-
-        for (const item of itemDetails ?? []) {
-          itemKindMap.set(
-            item.id,
-            (item.item_kind ?? 'stock') as InventoryItemKind,
-          )
-        }
-      }
-
       const equipmentPeriodTitle = 'Equipment period'
       let equipmentPeriod = existingTimePeriods.find(
         (t) => t.title === equipmentPeriodTitle,
@@ -565,8 +554,31 @@ export default function BookItemsDialog({
         existingMap.set(key, { id: res.id, quantity: res.quantity })
       }
 
-      // 2) build payload for items - use owner-specific time periods for external items
-      // Use "Equipment period" for internal items
+      // 2) Flatten groups and look up item kinds for loose items and members
+      const byGroup =
+        groupRows.length > 0
+          ? await flattenGroupLeafItems(groupRows.map((g) => g.group_id))
+          : new Map<string, Array<{ item_id: string; quantity: number }>>()
+
+      const kindLookupIds = new Set(itemRows.map((r) => r.item_id))
+      for (const members of byGroup.values()) {
+        for (const member of members) kindLookupIds.add(member.item_id)
+      }
+      if (kindLookupIds.size > 0) {
+        const { data: itemDetails, error: itemErr } = await supabase
+          .from('items')
+          .select('id, item_kind')
+          .in('id', Array.from(kindLookupIds))
+        if (itemErr) throw itemErr
+
+        for (const item of itemDetails ?? []) {
+          itemKindMap.set(
+            item.id,
+            (item.item_kind ?? 'stock') as InventoryItemKind,
+          )
+        }
+      }
+
       const itemPayload = itemRows.map((r) => {
         const kind = itemKindMap.get(r.item_id) ?? 'stock'
         return {
@@ -578,44 +590,28 @@ export default function BookItemsDialog({
           external_status: kind === 'subrental' ? ('planned' as const) : null,
         }
       })
-      const groupPayload: Array<any> = []
-      if (groupRows.length > 0) {
-        // fetch group members in one round trip
-        const { data: groupMembers, error: gmErr } = await supabase
-          .from('group_items')
-          .select('group_id, item_id, quantity')
-          .in(
-            'group_id',
-            groupRows.map((g) => g.group_id),
-          )
-        if (gmErr) throw gmErr
-
-        const byGroup = new Map<
-          string,
-          Array<{ item_id: string; quantity: number }>
-        >()
-        for (const m of groupMembers) {
-          if (!m.item_id) continue
-          const arr = byGroup.get(m.group_id) ?? []
-          arr.push({ item_id: m.item_id, quantity: m.quantity })
-          byGroup.set(m.group_id, arr)
-        }
-
-        for (const g of groupRows) {
-          const groupItems = byGroup.get(g.group_id) ?? []
-          for (const m of groupItems) {
-            groupPayload.push({
-              time_period_id: defaultTimePeriodId,
-              item_id: m.item_id,
-              quantity: m.quantity * g.quantity,
-              source_kind: 'group' as const,
-              source_group_id: g.group_id,
-              external_status:
-                itemKindMap.get(m.item_id) === 'subrental'
-                  ? ('planned' as const)
-                  : null,
-            })
-          }
+      const groupPayload: Array<{
+        time_period_id: string
+        item_id: string
+        quantity: number
+        source_kind: 'group'
+        source_group_id: string
+        external_status: 'planned' | null
+      }> = []
+      for (const g of groupRows) {
+        const groupItems = byGroup.get(g.group_id) ?? []
+        for (const m of groupItems) {
+          groupPayload.push({
+            time_period_id: defaultTimePeriodId,
+            item_id: m.item_id,
+            quantity: m.quantity * g.quantity,
+            source_kind: 'group' as const,
+            source_group_id: g.group_id,
+            external_status:
+              itemKindMap.get(m.item_id) === 'subrental'
+                ? ('planned' as const)
+                : null,
+          })
         }
       }
 
@@ -804,15 +800,10 @@ export default function BookItemsDialog({
       // Calculate total reserved per item (only from overlapping time periods)
       // Note: This includes updated quantities from the booking periods (after updates executed above)
       const existingReservedMap = new Map<string, number>()
-      const plannedReservedMap = new Map<string, number>()
       for (const res of overlappingReservations || []) {
         if (res.status === 'canceled') continue
         const current = existingReservedMap.get(res.item_id) ?? 0
         existingReservedMap.set(res.item_id, current + res.quantity)
-        if (res.status === 'planned') {
-          const plannedCurrent = plannedReservedMap.get(res.item_id) ?? 0
-          plannedReservedMap.set(res.item_id, plannedCurrent + res.quantity)
-        }
       }
 
       for (const update of toUpdate) {
@@ -839,25 +830,15 @@ export default function BookItemsDialog({
         const newQty = newBookingMap.get(itemId) ?? 0
         const finalTotal = existingQty + newQty
         const hasCapacityConflict = onHand > 0 && finalTotal > onHand
-        const plannedQty = plannedReservedMap.get(itemId) ?? 0
-        const hasPlannedConflict =
-          plannedQty > 0 && newQty > 0 && !hasCapacityConflict
 
-        if (!hasCapacityConflict && !hasPlannedConflict) continue
+        if (!hasCapacityConflict) continue
 
         const itemName = itemNameMap.get(itemId) ?? 'Item'
-
-        if (hasCapacityConflict) {
-          const existingPart =
-            existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-          bookingWarnings.push(
-            `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-          )
-        } else {
-          bookingWarnings.push(
-            `${itemName}: ${plannedQty} already planned in overlapping period`,
-          )
-        }
+        const existingPart =
+          existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+        bookingWarnings.push(
+          `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+        )
 
         const itemReservations = (overlappingReservations ?? []).filter(
           (res) =>
@@ -897,6 +878,26 @@ export default function BookItemsDialog({
             customerName: conflictJob?.customerName ?? null,
             projectLeadName: conflictJob?.projectLeadName ?? null,
           })
+        }
+      }
+
+      if (groupRows.length > 0) {
+        const window = bookingTimePeriods[0]
+        if (window?.start_at && window.end_at) {
+          const groupOverlaps = await findGroupOverlaps({
+            groupIds: groupRows.map((g) => g.group_id),
+            startAt: window.start_at,
+            endAt: window.end_at,
+            excludePeriodId: defaultTimePeriodId,
+          })
+          for (const [groupId, overlaps] of groupOverlaps) {
+            const groupName =
+              groupRows.find((g) => g.group_id === groupId)?.name ?? 'Group'
+            bookingWarnings.push(
+              `${groupName}: already booked in an overlapping period`,
+            )
+            bookingConflicts.push(...overlaps)
+          }
         }
       }
 
@@ -973,7 +974,11 @@ export default function BookItemsDialog({
             })
           : rawMessage
 
-      if (isEquipmentCapacityError(rawMessage) && !forceDialogOpen) {
+      if (
+        (isEquipmentCapacityError(rawMessage) ||
+          isGroupOverlapError(rawMessage)) &&
+        !forceDialogOpen
+      ) {
         setForceSummaryLines([friendlyMessage])
         setForceConflicts([])
         setForceDialogOpen(true)

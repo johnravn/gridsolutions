@@ -60,3 +60,12 @@ export function isEquipmentCapacityError(
   if (!message) return false
   return message.includes('Not enough quantity for item')
 }
+
+export function isGroupOverlapError(
+  message: string | undefined | null,
+): boolean {
+  if (!message) return false
+  return message.includes(
+    'Group is already booked in an overlapping time period',
+  )
+}

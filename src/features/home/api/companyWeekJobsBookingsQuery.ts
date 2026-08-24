@@ -1,3 +1,4 @@
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { impliedBookedGroupCount } from '@features/jobs/utils/groupBookingQuantity'
 import { supabase } from '@shared/api/supabase'
 import type { CompanyJobsWeekOffset } from './companyJobsWeekQuery'
@@ -203,26 +204,10 @@ export function companyWeekJobsBookingsQuery({
           bump(jobId, equipmentCategoryFromRow(row), qty)
         }
 
-        const groupItemsByGroupId = new Map<
-          string,
-          Array<{ item_id: string; quantity: number }>
-        >()
-        if (groupIdsForTemplate.size > 0) {
-          const { data: groupItemsRows, error: giErr } = await supabase
-            .from('group_items')
-            .select('group_id, item_id, quantity')
-            .in('group_id', Array.from(groupIdsForTemplate))
-          if (giErr) throw giErr
-          for (const row of groupItemsRows) {
-            if (!row.group_id || !row.item_id) continue
-            const list = groupItemsByGroupId.get(row.group_id) ?? []
-            list.push({
-              item_id: row.item_id,
-              quantity: row.quantity,
-            })
-            groupItemsByGroupId.set(row.group_id, list)
-          }
-        }
+        const groupItemsByGroupId =
+          groupIdsForTemplate.size > 0
+            ? await flattenGroupLeafItems(Array.from(groupIdsForTemplate))
+            : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
         for (const [chunkKey, chunkRows] of groupChunkMap) {
           const jobId = chunkKey.split(':')[0]
