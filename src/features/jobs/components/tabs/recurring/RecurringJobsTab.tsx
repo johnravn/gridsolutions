@@ -53,7 +53,7 @@ import {
   buildJobDefaultsFromTemplate,
   formatTemplateStartTimeLabel,
 } from '../../../utils/recurringJobCreateDefaults'
-import { ALL_STATUSES, DEFAULT_STATUS_FILTER } from '../../JobsFilter'
+import { ALL_STATUSES, ACTIVE_STATUS_FILTER } from '../../JobsFilter'
 import { getJobStatusColor } from '../../../utils/statusColors'
 import type { RecurringJobCreateDefaults } from '../../../utils/recurringJobCreateDefaults'
 import type {
@@ -594,12 +594,12 @@ function AssignJobDialog({
   const { success, error: showError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [statusFilter, setStatusFilter] = React.useState<Array<JobStatus>>([
-    ...DEFAULT_STATUS_FILTER,
+    ...ACTIVE_STATUS_FILTER,
   ])
 
   React.useEffect(() => {
     if (open) {
-      setStatusFilter([...DEFAULT_STATUS_FILTER])
+      setStatusFilter([...ACTIVE_STATUS_FILTER])
     }
   }, [open])
 
