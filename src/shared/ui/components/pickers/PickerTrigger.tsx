@@ -233,6 +233,9 @@ function FieldSlot({
           e.stopPropagation()
           onClick()
         }}
+        onPointerDown={(e) => {
+          e.stopPropagation()
+        }}
         style={{
           ...slotStyle,
           cursor: disabled ? 'not-allowed' : 'pointer',

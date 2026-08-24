@@ -7,7 +7,12 @@ import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import {
+  DateTimeRangePicker,
+  endOfDay,
+  startOfDay,
+  toLocalDate,
+} from '@shared/ui/components/pickers'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
@@ -31,15 +36,10 @@ function todayIsoDate(): string {
   return format(new Date(), 'yyyy-MM-dd')
 }
 
-function dateOnlyToPickerValue(dateOnly: string): string {
-  if (!dateOnly) return ''
-  return `${dateOnly}T12:00:00`
-}
-
 function pickerValueToDateOnly(value: string): string {
   if (!value) return ''
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value
-  return format(new Date(value), 'yyyy-MM-dd')
+  return toLocalDate(value)
 }
 
 const defaultValues = {
@@ -329,52 +329,54 @@ export default function RecurringJobDialog({
                 )}
               </form.AppField>
 
-              <Flex gap="3" wrap="wrap">
-                <form.AppField name="periodStart">
-                  {(field) => (
-                    <Box style={{ flex: '1 1 160px', minWidth: 0 }}>
-                      <DateTimePicker
-                        dateOnly
-                        label="Period start"
-                        value={dateOnlyToPickerValue(field.state.value)}
-                        onChange={(v) =>
-                          field.handleChange(pickerValueToDateOnly(v))
-                        }
-                        invalid={field.state.meta.errors.length > 0}
-                        locale="nb"
-                      />
-                      {field.state.meta.errors[0] != null && (
-                        <Text size="1" color="red" mt="1" as="div">
-                          {String(field.state.meta.errors[0])}
-                        </Text>
-                      )}
-                    </Box>
-                  )}
-                </form.AppField>
-
-                <form.AppField name="periodEnd">
-                  {(field) => (
-                    <Box style={{ flex: '1 1 160px', minWidth: 0 }}>
-                      <DateTimePicker
-                        dateOnly
-                        label="Period end (optional)"
-                        placeholder="Open-ended"
-                        value={dateOnlyToPickerValue(field.state.value)}
-                        onChange={(v) =>
-                          field.handleChange(pickerValueToDateOnly(v))
-                        }
-                        invalid={field.state.meta.errors.length > 0}
-                        locale="nb"
-                      />
-                      {field.state.meta.errors[0] != null && (
-                        <Text size="1" color="red" mt="1" as="div">
-                          {String(field.state.meta.errors[0])}
-                        </Text>
-                      )}
-                    </Box>
-                  )}
-                </form.AppField>
-              </Flex>
+              <form.AppField name="periodStart">
+                {(startField) => (
+                  <form.AppField name="periodEnd">
+                    {(endField) => {
+                      const periodError =
+                        startField.state.meta.errors[0] ??
+                        endField.state.meta.errors[0]
+                      return (
+                        <Box>
+                          <DateTimeRangePicker
+                            dateOnly
+                            optionalEnd
+                            label="Period"
+                            startAt={
+                              startField.state.value
+                                ? startOfDay(startField.state.value)
+                                : ''
+                            }
+                            endAt={
+                              endField.state.value
+                                ? endOfDay(endField.state.value)
+                                : ''
+                            }
+                            onChange={({ startAt, endAt }) => {
+                              startField.handleChange(
+                                startAt ? pickerValueToDateOnly(startAt) : '',
+                              )
+                              endField.handleChange(
+                                endAt ? pickerValueToDateOnly(endAt) : '',
+                              )
+                            }}
+                            invalid={
+                              startField.state.meta.errors.length > 0 ||
+                              endField.state.meta.errors.length > 0
+                            }
+                            locale="nb"
+                          />
+                          {periodError != null && (
+                            <Text size="1" color="red" mt="1" as="div">
+                              {String(periodError)}
+                            </Text>
+                          )}
+                        </Box>
+                      )
+                    }}
+                  </form.AppField>
+                )}
+              </form.AppField>
 
               <form.AppField name="projectLead">
                 {(field) => (
