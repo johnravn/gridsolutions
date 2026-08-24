@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Button, Flex, Text, Tooltip } from '@radix-ui/themes'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { LotOfCash, Sparks } from 'iconoir-react'
 import { DateRangePicker } from '@shared/ui/components/pickers'
@@ -28,7 +28,7 @@ import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
-import { jobsIndexQuery } from '../api/queries'
+import { jobsIndexInfiniteQuery } from '../api/queries'
 import type { JobStatus, JobsPageSelection } from '../types'
 
 function JobInspectorTabShortcutTip() {
@@ -191,15 +191,23 @@ export default function JobsPage() {
 
   useMobileDetailBack(!isLarge, selection != null, clearSelection)
 
-  const { isLoading: jobsIndexLoading } = useQuery({
-    ...jobsIndexQuery({
+  const { isLoading: jobsIndexLoading } = useInfiniteQuery({
+    ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
       search: '',
       sortBy: 'start_at',
-      sortDir: 'asc',
+      sortDir: 'desc',
       userId,
       companyRole,
-      showOnlyArchived: false,
+      showOnlyArchived,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      projectLeadUserId: readyToInvoiceFilter ? userId : null,
+      statuses: readyToInvoiceFilter
+        ? ['completed']
+        : statusFilter.length > 0
+          ? statusFilter
+          : null,
     }),
     enabled: !!companyId,
   })

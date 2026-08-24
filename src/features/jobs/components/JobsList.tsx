@@ -1,6 +1,9 @@
 import * as React from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Avatar,
   Badge,
@@ -26,13 +29,14 @@ import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
 import {
   IndexTableBodySkeleton,
   useIndexTableSelectionKeyboard,
+  useVirtualIndexTable,
 } from '@shared/ui/index-table'
 import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
 import { supabase } from '@shared/api/supabase'
-import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
+import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
 import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { getJobStatusColor } from '../utils/statusColors'
@@ -40,6 +44,8 @@ import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringJobListRow from './RecurringJobListRow'
+import type { JobsIndexPageResult } from '../api/queries'
+import type { InfiniteData } from '@tanstack/react-query'
 import type { JobListRow, JobStatus, JobsPageSelection } from '../types'
 
 function getDisplayStatus(
@@ -94,7 +100,7 @@ export default function JobsList({
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
-  const [sortDir, setSortDir] = React.useState<SortDir>('asc')
+  const [sortDir, setSortDir] = React.useState<SortDir>('desc')
   const [createOpen, setCreateOpen] = React.useState(false)
   React.useEffect(() => {
     if (!createShortcutRef) return
@@ -112,15 +118,8 @@ export default function JobsList({
   const selectedRecurringJobId =
     selection?.kind === 'recurring_job' ? selection.id : null
 
-  const scrollRef = React.useRef<HTMLDivElement>(null)
-
-  const {
-    data: allData = [],
-    isLoading,
-    isFetching,
-    refetch,
-  } = useQuery({
-    ...jobsIndexQuery({
+  const jobsQuery = useInfiniteQuery({
+    ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
       search: debouncedSearch,
       dateFrom: dateFrom || undefined,
@@ -131,11 +130,27 @@ export default function JobsList({
       companyRole,
       showOnlyArchived,
       projectLeadUserId: readyToInvoiceFilter ? userId : null,
-      statuses: readyToInvoiceFilter ? ['completed'] : null,
-      maxRows: 150,
+      statuses: readyToInvoiceFilter
+        ? ['completed']
+        : statusFilter.length > 0
+          ? statusFilter
+          : null,
     }),
     enabled: !!companyId,
   })
+  const {
+    isLoading,
+    isFetching,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = jobsQuery
+  const allData = React.useMemo(
+    () => jobsQuery.data?.pages.flatMap((page) => page.rows) ?? [],
+    [jobsQuery.data],
+  )
+  const totalCount = jobsQuery.data?.pages[0]?.count ?? 0
 
   useAutoUpdateJobsListJobStatuses(allData, !!companyId)
 
@@ -201,6 +216,21 @@ export default function JobsList({
         }
       },
     )
+    qc.setQueriesData<InfiniteData<JobsIndexPageResult>>(
+      { queryKey: ['company', companyId, 'jobs-index-infinite'], exact: false },
+      (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map((r) =>
+              r.id === selectedJobId ? { ...r, status: nextStatus } : r,
+            ),
+          })),
+        }
+      },
+    )
   }, [
     allData,
     companyId,
@@ -210,16 +240,7 @@ export default function JobsList({
     selectedJobDetail.dataUpdatedAt,
   ])
 
-  const rows = React.useMemo(() => {
-    let filtered = allData
-    if (statusFilter.length > 0) {
-      filtered = filtered.filter((j) => statusFilter.includes(j.status))
-    }
-    if (readyToInvoiceFilter && userId) {
-      filtered = filtered.filter((j) => j.project_lead?.user_id === userId)
-    }
-    return filtered
-  }, [allData, statusFilter, readyToInvoiceFilter, userId])
+  const rows = allData
 
   const crewJobIdSet = useJobCrewRoleIds({
     companyId,
@@ -238,13 +259,19 @@ export default function JobsList({
   const showRecurringHide =
     recurringJobsOpen && (isSmallScreen || compact || recurringHeaderHovered)
 
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => (compact ? 88 : 64),
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows,
+    getRowId: (r) => r.id,
+    estimateRowSize: compact ? 88 : 64,
     overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0 || isFetching,
+    isFetching,
+    infinite: {
+      hasNextPage,
+      isFetchingNextPage,
+      onLoadMore: () => {
+        void fetchNextPage()
+      },
+    },
   })
 
   React.useLayoutEffect(() => {
@@ -303,13 +330,16 @@ export default function JobsList({
   return (
     <div
       style={{
+        flex: 1,
         height: '100%',
         minHeight: 0,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
-      <Flex gap="2" align="center" wrap="wrap" mb="2">
+      <Flex gap="2" align="center" wrap="wrap" mb="2" style={{ flexShrink: 0 }}>
         <TextField.Root
           placeholder="Search"
           value={search}
@@ -393,7 +423,7 @@ export default function JobsList({
       />
 
       {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
-        <Box mb="2">
+        <Box mb="2" style={{ flexShrink: 0 }}>
           <Flex
             align="center"
             justify="between"
@@ -567,6 +597,7 @@ export default function JobsList({
                 <IndexTableBodySkeleton rowCount={8} />
               </Box>
             ) : rows.length === 0 &&
+              !hasNextPage &&
               (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
@@ -584,6 +615,32 @@ export default function JobsList({
                 }}
               >
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const isLoaderRow = virtualRow.index >= rows.length
+                  if (isLoaderRow) {
+                    return (
+                      <div
+                        key={`loader-${virtualRow.index}`}
+                        style={{
+                          position: 'absolute',
+                          top: `${virtualRow.start}px`,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualRow.size}px`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0 var(--space-3)',
+                          color: 'var(--gray-10)',
+                        }}
+                      >
+                        <Text size="2" color="gray">
+                          {isFetchingNextPage
+                            ? 'Loading more…'
+                            : 'Scroll to load more…'}
+                        </Text>
+                      </div>
+                    )
+                  }
+
                   const job = rows[virtualRow.index]
                   const isSelected = job.id === selectedJobId
                   const displayStatus = getDisplayStatus(
@@ -896,9 +953,11 @@ export default function JobsList({
       </div>
 
       {rows.length > 0 && (
-        <Flex align="center" mt="2">
+        <Flex align="center" mt="2" style={{ flexShrink: 0 }}>
           <Text size="2" color="gray">
-            {rows.length} job{rows.length !== 1 ? 's' : ''}
+            {totalCount > rows.length
+              ? `${rows.length} of ${totalCount} jobs`
+              : `${rows.length} job${rows.length !== 1 ? 's' : ''}`}
           </Text>
         </Flex>
       )}

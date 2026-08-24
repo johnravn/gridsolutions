@@ -26,8 +26,8 @@ export const ALL_STATUSES: Array<JobStatus> = [
   'paid',
 ]
 
-/** Default: show all statuses except invoiced, canceled, paid */
-export const DEFAULT_STATUS_FILTER: Array<JobStatus> = [
+/** "Active only" preset: hide invoiced, canceled, and paid. */
+export const ACTIVE_STATUS_FILTER: Array<JobStatus> = [
   'draft',
   'planned',
   'requested',
@@ -35,6 +35,9 @@ export const DEFAULT_STATUS_FILTER: Array<JobStatus> = [
   'in_progress',
   'completed',
 ]
+
+/** Jobs list default: every status, including invoiced / paid history. */
+export const DEFAULT_STATUS_FILTER: Array<JobStatus> = []
 
 type Props = {
   statusFilter: Array<JobStatus>
@@ -73,13 +76,13 @@ export default function JobsFilter({
     onStatusFilterChange([status])
   }
 
-  const selectDefault = () => {
-    onStatusFilterChange([...DEFAULT_STATUS_FILTER])
+  const selectActiveOnly = () => {
+    onStatusFilterChange([...ACTIVE_STATUS_FILTER])
   }
 
-  const isDefault =
-    statusFilter.length === DEFAULT_STATUS_FILTER.length &&
-    DEFAULT_STATUS_FILTER.every((s) => statusFilter.includes(s))
+  const isActiveOnly =
+    statusFilter.length === ACTIVE_STATUS_FILTER.length &&
+    ACTIVE_STATUS_FILTER.every((s) => statusFilter.includes(s))
 
   const showAllStatuses = statusFilter.length === 0
   const [hoveredStatus, setHoveredStatus] = React.useState<JobStatus | null>(
@@ -162,11 +165,11 @@ export default function JobsFilter({
         <DropdownMenu.Item
           onSelect={(e) => {
             e.preventDefault()
-            selectDefault()
+            selectActiveOnly()
           }}
         >
           <Flex align="center" gap="2">
-            <Checkbox checked={isDefault} />
+            <Checkbox checked={isActiveOnly} />
             <Text>Active only (excl. invoiced, canceled, paid)</Text>
           </Flex>
         </DropdownMenu.Item>
