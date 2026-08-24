@@ -23,7 +23,6 @@ type UUID = string
 type TransportBooking = {
   id: UUID
   time_period_id: UUID
-  status: 'planned' | 'confirmed' | 'canceled'
   vehicle_id: UUID
   vehicle: {
     id: UUID
@@ -42,7 +41,6 @@ type TransportBooking = {
 type EquipmentBooking = {
   id: UUID
   time_period_id: UUID
-  status: 'planned' | 'confirmed' | 'canceled'
   item_id: UUID
   quantity: number
   source_group_id: UUID | null
@@ -191,7 +189,7 @@ export default function PackingTab({ jobId }: { jobId: string }) {
           .from('reserved_items')
           .select(
             `
-            id, time_period_id, status, item_id, quantity, start_at, end_at,
+            id, time_period_id, item_id, quantity, start_at, end_at,
             source_group_id, source_kind,
             item:item_id ( id, name, model, brand:brand_id ( name ), category:category_id ( name ) ),
             source_group:source_group_id ( id, name, category:category_id ( name ) ),
@@ -199,7 +197,6 @@ export default function PackingTab({ jobId }: { jobId: string }) {
           `,
           )
           .in('time_period_id', allTpIds)
-          .neq('status', 'canceled')
         if (eqErr) throw eqErr
         equipment.push(...(rows as unknown as Array<EquipmentBooking>))
       }
@@ -210,13 +207,12 @@ export default function PackingTab({ jobId }: { jobId: string }) {
           .from('reserved_vehicles')
           .select(
             `
-            id, time_period_id, status, vehicle_id,
+            id, time_period_id, vehicle_id,
             vehicle:vehicle_id ( id, name, registration_no, deleted ),
             time_period:time_period_id ( id, title, start_at, end_at )
           `,
           )
           .in('time_period_id', transportTpIds)
-          .neq('status', 'canceled')
         if (trErr) throw trErr
         const filtered = rows.filter((row: any) => {
           const vehicle = normalizeMaybeArray<any>(row.vehicle)

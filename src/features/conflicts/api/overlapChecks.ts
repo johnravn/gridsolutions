@@ -198,7 +198,6 @@ export async function findVehicleOverlaps({
     `,
     )
     .eq('vehicle_id', vehicleId)
-    .neq('status', 'canceled')
 
   if (error) throw error
 

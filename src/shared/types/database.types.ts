@@ -3719,7 +3719,6 @@ export type Database = {
           source_group_id: string | null
           source_kind: Database["public"]["Enums"]["reservation_source_kind"]
           start_at: string | null
-          status: Database["public"]["Enums"]["booking_status"]
           subcontractor_id: string | null
           time_period_id: string
         }
@@ -3738,7 +3737,6 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id: string
         }
@@ -3757,7 +3755,6 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id?: string
         }
@@ -3841,7 +3838,6 @@ export type Database = {
           forced_by_user_id: string | null
           id: string
           start_at: string | null
-          status: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3858,7 +3854,6 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3875,7 +3870,6 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id?: string
           vehicle_id?: string
         }

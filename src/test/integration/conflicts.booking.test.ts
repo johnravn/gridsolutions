@@ -52,7 +52,7 @@ describeIntegration('booking conflicts access', () => {
     const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
     const { data, error } = await client
       .from('reserved_items')
-      .select('id, item_id, quantity, status, time_period_id')
+      .select('id, item_id, quantity, time_period_id')
       .limit(10)
 
     expect(error).toBeNull()
@@ -168,7 +168,6 @@ describeIntegration('force-book write path', () => {
         time_period_id: ephemeralTimePeriodId!,
         item_id: TEST_ITEM_ID,
         quantity: 1,
-        status: 'planned',
         source_kind: 'direct',
         start_at: TEST_CONFLICT_BOOKING.startAt,
         end_at: TEST_CONFLICT_BOOKING.endAt,
@@ -209,7 +208,6 @@ describeIntegration('force-book write path', () => {
         time_period_id: tempTpId,
         item_id: TEST_ITEM_ID,
         quantity: 1,
-        status: 'planned',
         source_kind: 'direct',
         start_at: NON_OVERLAP.startAt,
         end_at: NON_OVERLAP.endAt,
@@ -263,7 +261,6 @@ describeIntegration('force-book write path', () => {
         time_period_id: tempTpId,
         item_id: TEST_ITEM_ID,
         quantity: 1,
-        status: 'planned',
         source_kind: 'direct',
         start_at: NON_OVERLAP.startAt,
         end_at: NON_OVERLAP.endAt,
