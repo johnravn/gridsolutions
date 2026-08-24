@@ -1,0 +1,110 @@
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@shared/api/supabase', () => ({
+  supabase: {},
+}))
+
+import {
+  getJobsIndexNextPageParam,
+  jobsIndexInfiniteQuery,
+  jobsIndexSearchOrFilter,
+} from './queries'
+import type { JobsIndexPageResult } from './queries'
+
+function page(
+  partial: Partial<JobsIndexPageResult> &
+    Pick<JobsIndexPageResult, 'fetched' | 'page'>,
+): JobsIndexPageResult {
+  return {
+    rows: [],
+    count: 0,
+    ...partial,
+  }
+}
+
+describe('getJobsIndexNextPageParam', () => {
+  it('returns the next page while the last fetch filled the page size', () => {
+    const first = page({ fetched: 50, page: 1, count: 120 })
+    expect(getJobsIndexNextPageParam(first, [first], 50)).toBe(2)
+  })
+
+  it('stops on a short page even if the reported count is higher', () => {
+    const first = page({ fetched: 22, page: 1, count: 1000 })
+    expect(getJobsIndexNextPageParam(first, [first], 50)).toBeUndefined()
+  })
+
+  it('keeps paging when estimated count under-reports a full page', () => {
+    const first = page({ fetched: 50, page: 1, count: 22 })
+    expect(getJobsIndexNextPageParam(first, [first], 50)).toBe(2)
+  })
+
+  it('stops when the database returns an empty page', () => {
+    const first = page({ fetched: 50, page: 1, count: 200 })
+    const empty = page({ fetched: 0, page: 2, count: 200 })
+    expect(getJobsIndexNextPageParam(empty, [first, empty], 50)).toBeUndefined()
+  })
+
+  it('keeps paging when freelancer filtering shrinks visible rows', () => {
+    const first = page({ fetched: 50, page: 1, count: 80 })
+    expect(getJobsIndexNextPageParam(first, [first], 50)).toBe(2)
+  })
+})
+
+describe('jobsIndexSearchOrFilter', () => {
+  it('returns null for empty search', () => {
+    expect(jobsIndexSearchOrFilter({ search: '   ' })).toBeNull()
+  })
+
+  it('matches title and numeric job numbers', () => {
+    expect(jobsIndexSearchOrFilter({ search: '42' })).toBe(
+      'title.ilike.%42%,jobnr.eq.42',
+    )
+  })
+
+  it('includes customer and customer-user ids so name search pages correctly', () => {
+    expect(
+      jobsIndexSearchOrFilter({
+        search: 'Acme',
+        customerIds: ['cust-1', 'cust-2'],
+        customerUserIds: ['user-1'],
+      }),
+    ).toBe(
+      'title.ilike.%Acme%,customer_id.in.(cust-1,cust-2),customer_user_id.in.(user-1)',
+    )
+  })
+
+  it('strips PostgREST separators from the search term', () => {
+    expect(jobsIndexSearchOrFilter({ search: 'Foo, (Bar)' })).toBe(
+      'title.ilike.%Foo Bar%',
+    )
+  })
+})
+
+describe('jobsIndexInfiniteQuery', () => {
+  it('includes list filters in the query key so pages reset on search and status', () => {
+    const q = jobsIndexInfiniteQuery({
+      companyId: 'company-1',
+      search: 'nordic',
+      sortBy: 'start_at',
+      sortDir: 'asc',
+      statuses: ['completed'],
+    })
+
+    expect(q.queryKey).toEqual([
+      'company',
+      'company-1',
+      'jobs-index-infinite',
+      'nordic',
+      undefined,
+      undefined,
+      'start_at',
+      'asc',
+      undefined,
+      undefined,
+      false,
+      null,
+      ['completed'],
+      50,
+    ])
+  })
+})
