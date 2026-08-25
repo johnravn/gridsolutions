@@ -26,6 +26,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { DotsGrid3x3, Plus, Xmark } from 'iconoir-react'
+import { DropdownMenuTrigger } from '@shared/ui/radixAsChild'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   applyTemplatesToLines,
@@ -193,11 +194,11 @@ function SortableTokenRow({
       </IconButton>
 
       <DropdownMenu.Root>
-        <DropdownMenu.Trigger asChild>
+        <DropdownMenuTrigger asChild>
           <button type="button" style={tokenChipStyle()}>
             {tokenLabel(token)}
           </button>
-        </DropdownMenu.Trigger>
+        </DropdownMenuTrigger>
         <DropdownMenu.Content style={{ zIndex: OVERLAY_Z_INDEX }}>
           {TOKEN_OPTIONS.map((opt) => (
             <DropdownMenu.Item
@@ -471,12 +472,12 @@ export default function InvoiceDescriptionTemplateEditor({
             ))}
 
             <DropdownMenu.Root>
-              <DropdownMenu.Trigger asChild>
+              <DropdownMenuTrigger asChild>
                 <button type="button" style={addChipStyle()}>
                   <Plus width={12} height={12} />
                   Add
                 </button>
-              </DropdownMenu.Trigger>
+              </DropdownMenuTrigger>
               <DropdownMenu.Content style={{ zIndex: OVERLAY_Z_INDEX }}>
                 {TOKEN_OPTIONS.map((opt) => (
                   <DropdownMenu.Item

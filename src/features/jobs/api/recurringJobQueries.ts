@@ -442,8 +442,9 @@ export function recurringJobInvoicesOverviewQuery({
         result.push({
           id: inv.id,
           created_at: inv.created_at,
-          status: inv.status,
-          invoice_basis: inv.invoice_basis,
+          status: inv.status as RecurringSeriesInvoice['status'],
+          invoice_basis:
+            inv.invoice_basis as RecurringSeriesInvoice['invoice_basis'],
           conta_invoice_id: inv.conta_invoice_id,
           organization_id: inv.organization_id,
           conta_response: inv.conta_response,

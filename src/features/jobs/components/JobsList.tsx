@@ -83,7 +83,7 @@ const GRID_COLUMNS = 'minmax(0, 1fr) minmax(90px, auto) auto'
 
 /** Radix ghost uses content-box + negative margins; neutralize so padding
  *  isn't clipped by the jobs list's overflow:hidden. */
-const recurringHideButtonStyle: React.CSSProperties = {
+const recurringHideButtonStyle = {
   flexShrink: 0,
   boxSizing: 'border-box',
   '--margin-top-override': '0px',
@@ -91,7 +91,7 @@ const recurringHideButtonStyle: React.CSSProperties = {
   '--margin-bottom-override': '0px',
   '--margin-left-override': '0px',
   margin: 0,
-}
+} as React.CSSProperties
 
 export default function JobsList({
   createShortcutRef,
