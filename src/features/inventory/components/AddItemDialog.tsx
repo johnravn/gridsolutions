@@ -418,19 +418,22 @@ export default function AddItemDialog({
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
 
-    form.reset({
-      name: sample.name,
-      categoryId: randomCategory?.id ?? null,
-      brandId: null,
-      model: sample.model,
-      allow_individual_booking: sample.allowIndividualBooking,
-      total_quantity: sample.totalQuantity,
-      active: sample.active,
-      notes: sample.notes,
-      nicknames: sample.nicknames,
-      price: sample.price,
-      item_kind: sample.itemKind,
-    })
+    // Use setFieldValue (not form.reset) so AppField UIs update reliably —
+    // brand is separate React state, which is why it appeared to "only fill brand".
+    form.setFieldValue('name', sample.name)
+    form.setFieldValue('categoryId', randomCategory?.id ?? null)
+    form.setFieldValue('brandId', null)
+    form.setFieldValue('model', sample.model)
+    form.setFieldValue(
+      'allow_individual_booking',
+      sample.allowIndividualBooking,
+    )
+    form.setFieldValue('total_quantity', sample.totalQuantity)
+    form.setFieldValue('active', sample.active)
+    form.setFieldValue('notes', sample.notes)
+    form.setFieldValue('nicknames', sample.nicknames)
+    form.setFieldValue('price', sample.price)
+    form.setFieldValue('item_kind', sample.itemKind)
     setBrandName(sample.brandName)
     setTotalQuantityDraft(null)
   }
