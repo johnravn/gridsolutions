@@ -12,6 +12,7 @@ import type {
   RecurringJobInvoiceEntry,
   RecurringJobListRow,
   RecurringJobTemplate,
+  RecurringSeriesInvoice,
   UUID,
 } from '../types'
 
@@ -257,27 +258,71 @@ export function recurringJobInvoiceSummaryQuery({
 
       const jobIds = jobs.map((j) => j.id)
 
-      const { data: invoices, error: invError } = await supabase
-        .from('job_invoices')
-        .select('job_id, created_at')
+      const { data: junctionRows, error: junctionError } = await supabase
+        .from('job_invoice_jobs')
+        .select('invoice_id, job_id')
         .in('job_id', jobIds)
 
+      if (junctionError) throw junctionError
+
+      const junctionInvoiceIds = [
+        ...new Set((junctionRows ?? []).map((r) => r.invoice_id)),
+      ]
+
+      let invoicesQuery = supabase
+        .from('job_invoices')
+        .select('id, job_id, created_at')
+      if (junctionInvoiceIds.length > 0) {
+        invoicesQuery = invoicesQuery.or(
+          `job_id.in.(${jobIds.join(',')}),id.in.(${junctionInvoiceIds.join(',')})`,
+        )
+      } else {
+        invoicesQuery = invoicesQuery.in('job_id', jobIds)
+      }
+
+      const { data: invoices, error: invError } = await invoicesQuery
       if (invError) throw invError
+
+      const jobsByInvoice = new Map<string, Set<string>>()
+      for (const row of junctionRows ?? []) {
+        const set = jobsByInvoice.get(row.invoice_id) ?? new Set<string>()
+        set.add(row.job_id)
+        jobsByInvoice.set(row.invoice_id, set)
+      }
 
       const invoiceMap = new Map<
         string,
-        { count: number; last_at: string | null }
+        { count: number; last_at: string | null; invoiceIds: Set<string> }
       >()
-      for (const inv of invoices ?? []) {
-        const existing = invoiceMap.get(inv.job_id) ?? {
+
+      const bump = (jobId: string, invoiceId: string, createdAt: string) => {
+        if (!jobIds.includes(jobId)) return
+        const existing = invoiceMap.get(jobId) ?? {
           count: 0,
           last_at: null,
+          invoiceIds: new Set<string>(),
         }
+        if (existing.invoiceIds.has(invoiceId)) {
+          invoiceMap.set(jobId, existing)
+          return
+        }
+        existing.invoiceIds.add(invoiceId)
         existing.count += 1
-        if (!existing.last_at || inv.created_at > existing.last_at) {
-          existing.last_at = inv.created_at
+        if (!existing.last_at || createdAt > existing.last_at) {
+          existing.last_at = createdAt
         }
-        invoiceMap.set(inv.job_id, existing)
+        invoiceMap.set(jobId, existing)
+      }
+
+      for (const inv of invoices ?? []) {
+        const linked = jobsByInvoice.get(inv.id)
+        if (linked && linked.size > 0) {
+          for (const jobId of linked) {
+            bump(jobId, inv.id, inv.created_at)
+          }
+        } else {
+          bump(inv.job_id, inv.id, inv.created_at)
+        }
       }
 
       return jobs.map((job) => {
@@ -291,6 +336,125 @@ export function recurringJobInvoiceSummaryQuery({
           last_invoice_at: inv?.last_at ?? null,
         }
       })
+    },
+  }
+}
+
+export function recurringJobInvoicesOverviewQuery({
+  recurringJobId,
+}: {
+  recurringJobId: string
+}) {
+  return {
+    queryKey: ['recurring-jobs-invoices-overview', recurringJobId],
+    queryFn: async (): Promise<Array<RecurringSeriesInvoice>> => {
+      const { data: jobs, error: jobsError } = await supabase
+        .from('jobs')
+        .select('id, title, jobnr')
+        .eq('recurring_job_id', recurringJobId)
+        .order('start_at', { ascending: true })
+
+      if (jobsError) throw jobsError
+      if (!jobs?.length) return []
+
+      const jobIds = jobs.map((j) => j.id)
+      const jobById = new Map(
+        jobs.map((j) => [
+          j.id,
+          { id: j.id, title: j.title, jobnr: j.jobnr } as const,
+        ]),
+      )
+
+      const { data: junctionRows, error: junctionError } = await supabase
+        .from('job_invoice_jobs')
+        .select('invoice_id, job_id')
+        .in('job_id', jobIds)
+
+      if (junctionError) throw junctionError
+
+      const junctionInvoiceIds = [
+        ...new Set((junctionRows ?? []).map((r) => r.invoice_id)),
+      ]
+
+      let invoicesQuery = supabase.from('job_invoices').select('*')
+      if (junctionInvoiceIds.length > 0) {
+        invoicesQuery = invoicesQuery.or(
+          `job_id.in.(${jobIds.join(',')}),id.in.(${junctionInvoiceIds.join(',')})`,
+        )
+      } else {
+        invoicesQuery = invoicesQuery.in('job_id', jobIds)
+      }
+
+      const { data: invoices, error: invError } = await invoicesQuery.order(
+        'created_at',
+        { ascending: false },
+      )
+
+      if (invError) throw invError
+      if (!invoices?.length) return []
+
+      const jobsByInvoice = new Map<string, Set<string>>()
+      for (const row of junctionRows ?? []) {
+        const set = jobsByInvoice.get(row.invoice_id) ?? new Set<string>()
+        set.add(row.job_id)
+        jobsByInvoice.set(row.invoice_id, set)
+      }
+
+      const seen = new Set<string>()
+      const result: Array<RecurringSeriesInvoice> = []
+
+      for (const inv of invoices) {
+        if (seen.has(inv.id)) continue
+        seen.add(inv.id)
+
+        const linkedIds = jobsByInvoice.get(inv.id) ?? new Set<string>()
+        linkedIds.add(inv.job_id)
+
+        const linkedMeta = (
+          inv.invoice_data as {
+            linkedJobMeta?: Array<{
+              id: string
+              title: string
+              jobnr: number | null
+            }>
+          } | null
+        )?.linkedJobMeta
+
+        if (Array.isArray(linkedMeta)) {
+          for (const meta of linkedMeta) {
+            if (meta?.id) linkedIds.add(meta.id)
+          }
+        }
+
+        const coveredJobs = [...linkedIds]
+          .map((id) => {
+            const fromSeries = jobById.get(id)
+            if (fromSeries) return fromSeries
+            const meta = linkedMeta?.find((m) => m.id === id)
+            if (meta) {
+              return { id: meta.id, title: meta.title, jobnr: meta.jobnr }
+            }
+            return null
+          })
+          .filter((j): j is NonNullable<typeof j> => j != null)
+          .sort((a, b) => a.title.localeCompare(b.title))
+
+        result.push({
+          id: inv.id,
+          created_at: inv.created_at,
+          status: inv.status as RecurringSeriesInvoice['status'],
+          invoice_basis:
+            inv.invoice_basis as RecurringSeriesInvoice['invoice_basis'],
+          conta_invoice_id: inv.conta_invoice_id,
+          organization_id: inv.organization_id,
+          conta_response: inv.conta_response,
+          error_message: inv.error_message,
+          invoice_data: inv.invoice_data,
+          jobs: coveredJobs,
+        })
+      }
+
+      return result
     },
   }
 }

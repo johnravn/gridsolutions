@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.1'
+export const APP_VERSION = '1.13.2'
 
 export type ReleaseHighlight = {
   title: string
@@ -18,6 +18,11 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Multi-job invoicing',
+      description:
+        'Invoice several jobs from a recurring series on one Conta invoice, with linked history and editable line-description templates.',
+    },
     {
       title: 'Daily verse fix',
       description:

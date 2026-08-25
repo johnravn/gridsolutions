@@ -1,6 +1,7 @@
 // src/features/jobs/components/tabs/InvoiceTab.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import {
   Box,
   Button,
@@ -20,17 +21,18 @@ import {
   contaClient,
   getEffectiveContaApiEnvironment,
 } from '@shared/api/conta/client'
-import {
-  addLocalCalendarDays,
-  formatLocalYmd,
-  makeWordPresentable,
-} from '@shared/lib/generalFunctions'
+import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { companyDetailQuery } from '@features/company/api/queries'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
-import InvoiceHistory from '../invoice/InvoiceHistory'
+import InvoiceDescriptionTemplateEditor, {
+  trackManualDescriptionEdit,
+} from '../invoice/InvoiceDescriptionTemplateEditor'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
-import { ensureContaProjectId } from '../../utils/contaProjects'
+import {
+  createContaInvoiceFromBookings,
+  markJobsInvoiced,
+} from '../../api/createContaInvoice'
 import { acceptedOfferInvoiceLineDescription } from '../../utils/offerNumber'
 import type {
   BookingInvoiceLine,
@@ -172,6 +174,7 @@ export default function InvoiceTab({
     'idle' | 'sending' | 'success'
   >('idle')
   const invoiceSendInFlightRef = React.useRef(false)
+  const bookingsPreviewSyncRef = React.useRef<string | null>(null)
 
   const beginInvoiceSend = (): boolean => {
     if (invoiceSendInFlightRef.current) return false
@@ -190,6 +193,8 @@ export default function InvoiceTab({
     setPreviewBookings(null)
     setPreviewSourceOffer(null)
     setEhfStatus(null)
+    bookingsPreviewSyncRef.current = null
+    setHighlightedLineIds(new Set())
   }
 
   const closeManualSendDialog = () => {
@@ -265,6 +270,11 @@ export default function InvoiceTab({
   const [editedInvoiceLines, setEditedInvoiceLines] = React.useState<
     Array<BookingsForInvoice['all'][0]>
   >([])
+  const [manualDescriptionOverrides, setManualDescriptionOverrides] =
+    React.useState<Set<string>>(new Set())
+  const [highlightedLineIds, setHighlightedLineIds] = React.useState<
+    ReadonlySet<string>
+  >(new Set())
 
   // Company detail for invoice preview (sender info)
   const { data: companyDetail } = useQuery({
@@ -313,14 +323,14 @@ export default function InvoiceTab({
 
   // Sync preview from query only when in bookings mode (not from offer)
   React.useEffect(() => {
-    if (
-      !previewSourceOffer &&
-      previewBookings &&
-      bookings &&
-      bookings.all.length > 0
-    ) {
-      setPreviewBookings(bookings)
+    if (previewSourceOffer || !previewBookings || !bookings?.all.length) {
+      return
     }
+    const signature = bookings.all.map((l) => l.id).join('|')
+    if (bookingsPreviewSyncRef.current === signature) return
+    bookingsPreviewSyncRef.current = signature
+    setPreviewBookings(bookings)
+    setEditedInvoiceLines(bookings.all)
   }, [bookings, previewSourceOffer, previewBookings])
 
   // Get accounting config and invoice defaults from company_expansions
@@ -521,16 +531,6 @@ export default function InvoiceTab({
     return id
   }
 
-  // Helper to map VAT percent to Conta VAT code
-  const getVatCode = (vatPercent: number): string => {
-    // Map VAT percentages to Conta VAT codes
-    if (vatPercent === 0) return 'no.vat'
-    if (vatPercent >= 20) return 'high' // 25% in Norway
-    if (vatPercent >= 10) return 'medium' // 15% in Norway
-    if (vatPercent > 0) return 'low' // 10% in Norway
-    return 'high' // Default to high
-  }
-
   // Create invoice mutation for bookings basis (also used for "from accepted offer" preview lines)
   const createInvoiceFromBookingsMutation = useMutation({
     mutationFn: async ({
@@ -557,60 +557,25 @@ export default function InvoiceTab({
       offerId?: string | null
     }) => {
       const contaCustomerId = getContaCustomerId()
-
-      const contaProjectId = await ensureContaProjectId(organizationId, {
-        jobTitle: job.title,
-        jobnr: job.jobnr,
-        jobId,
-        customerId: contaCustomerId,
-      })
-      if (contaProjectId == null) {
-        throw new Error(
-          'Could not resolve a Conta project for this job (no id returned). Check Conta and try again.',
-        )
-      }
-
-      if (bookingsData.all.length === 0) {
-        throw new Error('No bookings available to invoice')
-      }
-
-      // Per-line VAT matches the preview table; "Invoice with VAT: No" forces no-vat codes.
-      const invoiceLines = bookingsData.all.map((line, index) => ({
-        description: line.description,
-        quantity: line.quantity,
-        price: line.unitPrice, // Price ex VAT per unit
-        discount: lineDiscountOverridesParam[line.id] ?? 0,
-        vatCode: getVatCode(includeVat ? line.vatPercent : 0),
-        lineNo: index + 1,
-      }))
-
       const daysUntilDue = getDaysUntilDue()
-      const invoiceDateLocal = new Date()
-      const invoiceDueDateLocal = addLocalCalendarDays(
-        invoiceDateLocal,
-        daysUntilDue,
-      )
       const shouldSendEhf =
         invoiceRecipients[0] && invoiceRecipients[0].type === 'EHF'
       const orgRef = orgReferenceOverride?.trim()
         ? orgReferenceOverride.trim()
         : getOrgReference()
-      const invoiceData = {
-        customerId: contaCustomerId,
-        invoiceDate: formatLocalYmd(invoiceDateLocal),
-        invoiceDueDate: formatLocalYmd(invoiceDueDateLocal),
-        invoiceCurrency: 'NOK',
-        projectId: contaProjectId,
-        ...(shouldSendEhf ? { invoiceRecipients } : {}),
-        ...(shouldSendEhf ? { ehfOrderReference: getEhfOrderReference() } : {}),
-        ...(orgRef ? { orgReference: orgRef } : {}),
-        ...((theirRefOverride?.trim() ?? getCustomerContactReference())
-          ? {
-              customerReference:
-                theirRefOverride?.trim() || getCustomerContactReference() || '',
-            }
-          : {}),
-        personalMessage:
+      const theirRef =
+        theirRefOverride?.trim() ?? getCustomerContactReference() ?? ''
+
+      return createContaInvoiceFromBookings({
+        primaryJobId: jobId,
+        linkedJobIds: [jobId],
+        jobTitle: job.title,
+        jobnr: job.jobnr,
+        contaCustomerId,
+        bookingsData,
+        organizationId,
+        invoiceRecipients,
+        invoiceMessage:
           invoiceMessage?.trim() ||
           (offerId
             ? getDefaultPersonalMessage({ type: 'offer' })
@@ -618,82 +583,16 @@ export default function InvoiceTab({
                 type: 'bookings',
                 bookingsCount: bookingsData.all.length,
               })),
-        invoiceLines,
-      }
-
-      // Create invoice record in database first (pending status)
-      const { data: invoiceRecord, error: recordError } = await supabase
-        .from('job_invoices')
-        .insert({
-          job_id: jobId,
-          offer_id: offerId ?? null,
-          organization_id: organizationId,
-          conta_customer_id: contaCustomerId,
-          invoice_basis: offerId ? 'offer' : 'bookings',
-          invoice_data: invoiceData as any,
-          status: 'pending',
-          created_by_user_id: authUser?.id ?? null,
-        })
-        .select()
-        .single()
-
-      if (recordError) {
-        console.error('Failed to create invoice record:', recordError)
-      }
-
-      let response: any
-      let errorMessage: string | null = null
-
-      try {
-        const logPayload =
-          import.meta.env.DEV ||
-          import.meta.env.VITE_LOG_CONTA_INVOICE_PAYLOAD === 'true'
-        if (logPayload) {
-          console.info(
-            '[Conta invoice create] POST',
-            `/invoice/organizations/${organizationId}/invoices`,
-            '\nBody (JSON):\n',
-            JSON.stringify(invoiceData, null, 2),
-          )
-        }
-        response = await contaClient.post(
-          `/invoice/organizations/${organizationId}/invoices`,
-          invoiceData,
-        )
-
-        // Update invoice record with success
-        if (invoiceRecord) {
-          await supabase
-            .from('job_invoices')
-            .update({
-              status: 'created',
-              conta_invoice_id:
-                response?.invoiceNo?.toString() ||
-                response?.id?.toString() ||
-                response?.invoiceId?.toString() ||
-                null,
-              conta_response: response,
-            })
-            .eq('id', invoiceRecord.id)
-        }
-      } catch (error: any) {
-        errorMessage = error?.message || 'Unknown error'
-
-        // Update invoice record with failure
-        if (invoiceRecord) {
-          await supabase
-            .from('job_invoices')
-            .update({
-              status: 'failed',
-              error_message: errorMessage,
-            })
-            .eq('id', invoiceRecord.id)
-        }
-
-        throw error
-      }
-
-      return { response, invoiceRecord }
+        orgReference: orgRef,
+        customerReference: theirRef || undefined,
+        ehfOrderReference: shouldSendEhf ? getEhfOrderReference() : undefined,
+        lineDiscountOverrides: lineDiscountOverridesParam,
+        invoiceWithVat: includeVat,
+        offerId,
+        createdByUserId: authUser?.id ?? null,
+        daysUntilDue,
+        linkedJobMeta: [{ id: jobId, title: job.title, jobnr: job.jobnr }],
+      })
     },
     onSuccess: async (data, variables) => {
       setInvoiceSendPhase('success')
@@ -705,29 +604,18 @@ export default function InvoiceTab({
       )
 
       // Update job status to 'invoiced' if not already
-      if (job.status !== 'invoiced' && job.status !== 'paid') {
-        const { error: updateError } = await supabase
-          .from('jobs')
-          .update({ status: 'invoiced' })
-          .eq('id', jobId)
-
-        if (!updateError) {
-          // Update the detail cache immediately (JobInspector renders from this)
-          qc.setQueryData<JobDetail | null>(['jobs-detail', jobId], (old) =>
-            old ? { ...old, status: 'invoiced' } : old,
-          )
-          // Ensure we refetch from server too
-          qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
-          // Refresh list views that may show "ready to invoice" or status badges
-          if (companyId) {
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'jobs-index'],
-            })
-            qc.invalidateQueries({
-              queryKey: ['company', companyId, 'jobs-index-page'],
-            })
-          }
-        }
+      await markJobsInvoiced([jobId])
+      qc.setQueryData<JobDetail | null>(['jobs-detail', jobId], (old) =>
+        old && old.status !== 'paid' ? { ...old, status: 'invoiced' } : old,
+      )
+      qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+      if (companyId) {
+        qc.invalidateQueries({
+          queryKey: ['company', companyId, 'jobs-index'],
+        })
+        qc.invalidateQueries({
+          queryKey: ['company', companyId, 'jobs-index-page'],
+        })
       }
 
       // Refresh bookings and invoice history
@@ -946,6 +834,10 @@ export default function InvoiceTab({
       quantity?: number
     },
   ) => {
+    if (updates.description !== undefined)
+      setManualDescriptionOverrides((prev) =>
+        trackManualDescriptionEdit(prev, lineId),
+      )
     setEditedInvoiceLines((prev) => {
       const base = prev.length > 0 ? prev : (previewBookings?.all ?? [])
       const idx = base.findIndex((l) => l.id === lineId)
@@ -1036,6 +928,7 @@ export default function InvoiceTab({
   // Check if job has been invoiced (status is 'invoiced' or 'paid')
   const isInvoiced = job.status === 'invoiced' || job.status === 'paid'
   const isCompleted = job.status === 'completed'
+  const isRecurringMember = Boolean(job.recurring_job_id)
 
   const hasAcceptedOffers = acceptedOffers.length > 0
 
@@ -1052,6 +945,56 @@ export default function InvoiceTab({
     )
   }
 
+  const fromOfferButton = (
+    <Tooltip
+      content={
+        !hasAcceptedOffers
+          ? 'No accepted offers. Accept an offer first.'
+          : !canSendInvoice
+            ? 'Customer must be linked to Conta before sending invoices.'
+            : undefined
+      }
+    >
+      <span style={{ display: 'inline-block' }}>
+        <Button
+          size="3"
+          variant="soft"
+          onClick={handleCreateInvoiceFromOffer}
+          disabled={!hasAcceptedOffers || !canSendInvoice || isSendingInvoice}
+        >
+          <Eye width={16} height={16} />
+          From accepted offer
+        </Button>
+      </span>
+    </Tooltip>
+  )
+
+  const fromBookingsButton = (
+    <Tooltip
+      content={
+        !bookings?.all.length
+          ? 'No bookings on this job. Add equipment, crew or transport first.'
+          : !canSendInvoice
+            ? 'Customer must be linked to Conta before sending invoices.'
+            : undefined
+      }
+    >
+      <span style={{ display: 'inline-block' }}>
+        <Button
+          size="3"
+          variant={isRecurringMember ? 'solid' : 'soft'}
+          onClick={() => handleCreateInvoiceFromBookings()}
+          disabled={
+            !bookings?.all.length || !canSendInvoice || isSendingInvoice
+          }
+        >
+          <Eye width={16} height={16} />
+          From bookings
+        </Button>
+      </span>
+    </Tooltip>
+  )
+
   return (
     <Box style={{ overflowX: 'hidden', maxWidth: '100%' }}>
       <Flex justify="between" align="center" mb="4">
@@ -1059,113 +1002,92 @@ export default function InvoiceTab({
       </Flex>
 
       {/* Job Invoice Status */}
-      <Card mb="4">
-        <Flex justify="between" align="center" mb="3">
-          <Box>
-            <Heading size="4" mb="1">
-              Job Invoice Status
-            </Heading>
-            <Text size="2" color="gray">
-              Current status: {makeWordPresentable(job.status)}
-            </Text>
-          </Box>
-          <Box>
-            {isInvoiced ? (
-              <Flex align="center" gap="2">
-                <CheckCircle width={24} height={24} color="var(--green-9)" />
-                <Text size="3" weight="medium" color="green">
-                  {job.status === 'paid' ? 'Paid' : 'Invoiced'}
-                </Text>
-              </Flex>
-            ) : (
-              <Flex align="center" gap="2">
-                <XmarkCircle width={24} height={24} color="var(--orange-9)" />
-                <Text size="3" weight="medium" color="orange">
-                  Not Invoiced
-                </Text>
-              </Flex>
-            )}
-          </Box>
-        </Flex>
-        {!isInvoiced && isCompleted && (
-          <Box
-            p="3"
-            style={{
-              background: 'var(--orange-a2)',
-              borderRadius: 8,
-              border: '1px solid var(--orange-a6)',
-            }}
-          >
-            <Text size="2" color="gray">
-              This job is completed and ready to be invoiced.
-            </Text>
-          </Box>
-        )}
-      </Card>
-
-      {/* Create invoice: unified flow (offer or bookings) */}
-      {!isInvoiced && (
+      {isInvoiced ? (
         <Card mb="4">
-          <Heading size="4" mb="2">
-            Create invoice
-          </Heading>
-          <Text size="2" color="gray" mb="3">
-            Choose to invoice from the accepted offer (one line with the offer
-            total) or from bookings on the job (one line per booking).
-          </Text>
-          <Flex gap="3" wrap="wrap">
-            <Tooltip
-              content={
-                !hasAcceptedOffers
-                  ? 'No accepted offers. Accept an offer first.'
-                  : !canSendInvoice
-                    ? 'Customer must be linked to Conta before sending invoices.'
-                    : undefined
-              }
-            >
-              <span style={{ display: 'inline-block' }}>
-                <Button
-                  size="3"
-                  variant="soft"
-                  onClick={handleCreateInvoiceFromOffer}
-                  disabled={
-                    !hasAcceptedOffers || !canSendInvoice || isSendingInvoice
-                  }
-                >
-                  <Eye width={16} height={16} />
-                  From accepted offer
-                </Button>
-              </span>
-            </Tooltip>
-            <Tooltip
-              content={
-                !bookings?.all.length
-                  ? 'No bookings on this job. Add equipment, crew or transport first.'
-                  : !canSendInvoice
-                    ? 'Customer must be linked to Conta before sending invoices.'
-                    : undefined
-              }
-            >
-              <span style={{ display: 'inline-block' }}>
-                <Button
-                  size="3"
-                  variant="soft"
-                  onClick={() => handleCreateInvoiceFromBookings()}
-                  disabled={
-                    !bookings?.all.length || !canSendInvoice || isSendingInvoice
-                  }
-                >
-                  <Eye width={16} height={16} />
-                  From bookings
-                </Button>
-              </span>
-            </Tooltip>
+          <Flex justify="between" align="center" gap="3" wrap="wrap">
+            <Box>
+              <Heading size="4" mb="1">
+                Already invoiced
+              </Heading>
+              <Text size="2" color="gray">
+                This job is marked as{' '}
+                {job.status === 'paid' ? 'paid' : 'invoiced'}. View invoice
+                history and Conta status in the Invoices tab.
+              </Text>
+            </Box>
+            <Button size="2" variant="soft" asChild>
+              <Link
+                to="/jobs"
+                search={{ jobId, recurringJobId: undefined, tab: 'invoices' }}
+              >
+                View invoices
+              </Link>
+            </Button>
           </Flex>
         </Card>
-      )}
+      ) : (
+        <>
+          <Card mb="4">
+            <Flex justify="between" align="center" mb="3">
+              <Box>
+                <Heading size="4" mb="1">
+                  Job invoice status
+                </Heading>
+                <Text size="2" color="gray">
+                  Current status: {makeWordPresentable(job.status)}
+                </Text>
+              </Box>
+              <Box>
+                <Flex align="center" gap="2">
+                  <XmarkCircle width={24} height={24} color="var(--orange-9)" />
+                  <Text size="3" weight="medium" color="orange">
+                    Not invoiced
+                  </Text>
+                </Flex>
+              </Box>
+            </Flex>
+            {isCompleted && (
+              <Box
+                p="3"
+                style={{
+                  background: 'var(--orange-a2)',
+                  borderRadius: 8,
+                  border: '1px solid var(--orange-a6)',
+                }}
+              >
+                <Text size="2" color="gray">
+                  This job is completed and ready to be invoiced.
+                </Text>
+              </Box>
+            )}
+          </Card>
 
-      {/* Invoice History */}
-      <InvoiceHistory jobId={jobId} />
+          {/* Create invoice: unified flow (offer or bookings) */}
+          <Card mb="4">
+            <Heading size="4" mb="2">
+              Create invoice
+            </Heading>
+            <Text size="2" color="gray" mb="3">
+              {isRecurringMember
+                ? 'This job is part of a recurring series. Invoice from bookings on this job (one line per booking), or optionally from an accepted offer.'
+                : 'Choose to invoice from the accepted offer (one line with the offer total) or from bookings on the job (one line per booking).'}
+            </Text>
+            <Flex gap="3" wrap="wrap">
+              {isRecurringMember ? (
+                <>
+                  {fromBookingsButton}
+                  {fromOfferButton}
+                </>
+              ) : (
+                <>
+                  {fromOfferButton}
+                  {fromBookingsButton}
+                </>
+              )}
+            </Flex>
+          </Card>
+        </>
+      )}
 
       {/* Test Mode Indicator */}
       {isSandboxConta && (
@@ -1314,6 +1236,19 @@ export default function InvoiceTab({
                     ) : null}
                   </Box>
                 )}
+                {companyId && (
+                  <InvoiceDescriptionTemplateEditor
+                    companyId={companyId}
+                    lines={
+                      editedInvoiceLines.length > 0
+                        ? editedInvoiceLines
+                        : displayBookings.all
+                    }
+                    manualOverrides={manualDescriptionOverrides}
+                    onApply={(updated) => setEditedInvoiceLines(updated)}
+                    onHighlightChange={setHighlightedLineIds}
+                  />
+                )}
                 <InvoicePreview
                   basis="bookings"
                   bookings={displayBookings}
@@ -1344,6 +1279,7 @@ export default function InvoiceTab({
                   onLineChange={handleLineChange}
                   onAddLine={handleAddInvoiceLine}
                   onRemoveLine={handleRemoveInvoiceLine}
+                  highlightedLineIds={highlightedLineIds}
                 />
               </>
             )}

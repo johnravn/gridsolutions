@@ -22,7 +22,14 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { MoreHoriz, NavArrowRight, Plus, Search } from 'iconoir-react'
+import {
+  ArrowLeft,
+  MoreHoriz,
+  NavArrowRight,
+  Plus,
+  Repeat,
+  Search,
+} from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
@@ -38,7 +45,10 @@ import {
 } from '@shared/ui/index-table/indexTableStyles'
 import { supabase } from '@shared/api/supabase'
 import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
-import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
+import {
+  recurringJobDetailQuery,
+  recurringJobsIndexQuery,
+} from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { getJobStatusColor } from '../utils/statusColors'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
@@ -47,7 +57,12 @@ import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringJobListRow from './RecurringJobListRow'
 import type { JobsIndexPageResult } from '../api/queries'
 import type { InfiniteData } from '@tanstack/react-query'
-import type { JobListRow, JobStatus, JobsPageSelection } from '../types'
+import type {
+  JobListRow,
+  JobStatus,
+  JobsListScope,
+  JobsPageSelection,
+} from '../types'
 
 function getDisplayStatus(
   status: JobStatus,
@@ -66,6 +81,18 @@ type MyJobRole = 'crew' | 'project_lead' | 'both' | null
 
 const GRID_COLUMNS = 'minmax(0, 1fr) minmax(90px, auto) auto'
 
+/** Radix ghost uses content-box + negative margins; neutralize so padding
+ *  isn't clipped by the jobs list's overflow:hidden. */
+const recurringHideButtonStyle = {
+  flexShrink: 0,
+  boxSizing: 'border-box',
+  '--margin-top-override': '0px',
+  '--margin-right-override': '0px',
+  '--margin-bottom-override': '0px',
+  '--margin-left-override': '0px',
+  margin: 0,
+} as React.CSSProperties
+
 export default function JobsList({
   createShortcutRef,
   selection,
@@ -78,12 +105,14 @@ export default function JobsList({
   readyToInvoiceFilter = false,
   compact = false,
   toolbarExtra,
+  listScope = null,
+  onExitListScope,
 }: {
   /** Binds the page-level create shortcut to this list's create dialog. */
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
   selection: JobsPageSelection
   onSelectJob: (id: string | null) => void
-  onSelectRecurringJob: (id: string | null) => void
+  onSelectRecurringJob: (id: string | null, title?: string) => void
   statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
   /** Local calendar YYYY-MM-DD — jobs starting in this period. */
@@ -94,6 +123,9 @@ export default function JobsList({
   /** When true, use a stacked card layout for better mobile display */
   compact?: boolean
   toolbarExtra?: React.ReactNode
+  /** When set, show only member jobs for this recurring series */
+  listScope?: JobsListScope
+  onExitListScope?: () => void
 }) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
@@ -139,8 +171,16 @@ export default function JobsList({
           ? statusFilter
           : null,
     }),
-    enabled: !!companyId,
+    enabled: !!companyId && !listScope,
   })
+
+  const { data: scopedRecurringDetail, isLoading: scopedLoading } = useQuery({
+    ...recurringJobDetailQuery({
+      recurringJobId: listScope?.id ?? '__none__',
+    }),
+    enabled: !!listScope?.id,
+  })
+
   const {
     isLoading,
     isFetching,
@@ -428,6 +468,209 @@ export default function JobsList({
     </>
   )
 
+  const scopedMemberRows = React.useMemo(() => {
+    if (!listScope) return []
+    const scopedMemberJobs = scopedRecurringDetail?.jobs ?? []
+    const q = debouncedSearch.trim().toLowerCase()
+    if (!q) return scopedMemberJobs
+    return scopedMemberJobs.filter(
+      (j) =>
+        j.title.toLowerCase().includes(q) ||
+        (j.jobnr != null && String(j.jobnr).includes(q)),
+    )
+  }, [listScope, scopedRecurringDetail, debouncedSearch])
+
+  const scopedHeader = listScope ? (
+    <Flex
+      direction="column"
+      gap="1"
+      mb="2"
+      width="100%"
+      style={{ minWidth: 0 }}
+    >
+      <Flex align="center" justify="between" gap="2" width="100%">
+        <Button
+          size="3"
+          variant="soft"
+          style={{ flexShrink: 0 }}
+          onClick={() => onExitListScope?.()}
+        >
+          <ArrowLeft width={16} height={16} />
+          All jobs
+        </Button>
+        <Button
+          size="3"
+          variant="soft"
+          color="violet"
+          style={{ flexShrink: 0 }}
+          onClick={() => onSelectRecurringJob(listScope.id, listScope.title)}
+        >
+          <Repeat width={16} height={16} />
+          Series overview
+          <NavArrowRight width={16} height={16} />
+        </Button>
+      </Flex>
+      <Text size="2" weight="bold" truncate title={listScope.title}>
+        {listScope.title}
+      </Text>
+    </Flex>
+  ) : null
+
+  if (listScope) {
+    if (compact) {
+      return (
+        <MobilePageList toolbar={toolbar}>
+          {dialogs}
+          {scopedHeader}
+          {scopedLoading ? (
+            <IndexTableBodySkeleton rowCount={6} rowHeight={88} />
+          ) : scopedMemberRows.length === 0 ? (
+            <Text size="2" color="gray">
+              No jobs in this series
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {scopedMemberRows.map((job) => (
+                <JobIndexRow
+                  key={job.id}
+                  job={job}
+                  compact
+                  isSelected={job.id === selectedJobId}
+                  companyRole={companyRole}
+                  myRole={getMyJobRole(job)}
+                  onSelect={() => onSelectJob(job.id)}
+                  getAvatarUrl={getAvatarUrl}
+                />
+              ))}
+            </Flex>
+          )}
+        </MobilePageList>
+      )
+    }
+
+    return (
+      <div
+        style={{
+          flex: 1,
+          height: '100%',
+          minHeight: 0,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <Box mb="2" style={{ flexShrink: 0 }}>
+          {toolbar}
+        </Box>
+        {dialogs}
+        {scopedHeader}
+        <div
+          style={{
+            flex: 1,
+            minHeight: 0,
+            minWidth: 0,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              minWidth: 'max-content',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+            }}
+          >
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: GRID_COLUMNS,
+                gap: 'var(--space-2)',
+                padding: 'var(--space-2) var(--space-3)',
+                backgroundColor: 'var(--gray-a2)',
+                borderRadius: 'var(--radius-2)',
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                }}
+              >
+                General
+              </div>
+              <div
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                  justifySelf: 'start',
+                }}
+                aria-hidden
+              />
+              <div
+                style={{
+                  fontSize: 'var(--font-size-1)',
+                  fontWeight: 600,
+                  justifySelf: 'start',
+                }}
+              >
+                Lead
+              </div>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                overflow: 'auto',
+                marginTop: 8,
+              }}
+            >
+              {scopedLoading ? (
+                <Box p="3">
+                  <IndexTableBodySkeleton rowCount={8} />
+                </Box>
+              ) : scopedMemberRows.length === 0 ? (
+                <Flex align="center" justify="center" py="6">
+                  <Text size="2" color="gray">
+                    No jobs in this series
+                  </Text>
+                </Flex>
+              ) : (
+                <Flex direction="column" gap="1">
+                  {scopedMemberRows.map((job) => (
+                    <JobIndexRow
+                      key={job.id}
+                      job={job}
+                      isSelected={job.id === selectedJobId}
+                      companyRole={companyRole}
+                      myRole={getMyJobRole(job)}
+                      onSelect={() => onSelectJob(job.id)}
+                      getAvatarUrl={getAvatarUrl}
+                    />
+                  ))}
+                </Flex>
+              )}
+            </div>
+          </div>
+        </div>
+        {scopedMemberRows.length > 0 && (
+          <Flex align="center" mt="2" style={{ flexShrink: 0 }}>
+            <Text size="2" color="gray">
+              {scopedMemberRows.length} job
+              {scopedMemberRows.length !== 1 ? 's' : ''}
+            </Text>
+          </Flex>
+        )}
+      </div>
+    )
+  }
+
   if (compact) {
     return (
       <MobilePageList toolbar={toolbar}>
@@ -461,8 +704,8 @@ export default function JobsList({
                 minHeight: 24,
                 cursor: !recurringJobsOpen ? 'pointer' : undefined,
                 borderRadius: 'var(--radius-2)',
-                padding: '2px 4px',
-                margin: '-2px -4px',
+                padding: '2px 0',
+                margin: '-2px 0',
               }}
             >
               <Flex align="center" gap="1" style={{ minWidth: 0 }}>
@@ -492,6 +735,7 @@ export default function JobsList({
                     e.stopPropagation()
                     setRecurringJobsOpen(false)
                   }}
+                  style={recurringHideButtonStyle}
                 >
                   Hide
                 </Button>
@@ -504,7 +748,7 @@ export default function JobsList({
                   row={row}
                   compact
                   isSelected={selectedRecurringJobId === row.id}
-                  onClick={() => onSelectRecurringJob(row.id)}
+                  onClick={() => onSelectRecurringJob(row.id, row.title)}
                 />
               ))}
           </Box>
@@ -517,7 +761,7 @@ export default function JobsList({
                 row={row}
                 compact
                 isSelected={selectedRecurringJobId === row.id}
-                onClick={() => onSelectRecurringJob(row.id)}
+                onClick={() => onSelectRecurringJob(row.id, row.title)}
               />
             ))}
           </Box>
@@ -539,9 +783,10 @@ export default function JobsList({
             style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
           >
             {rows.map((job) => (
-              <JobCompactCard
+              <JobIndexRow
                 key={job.id}
                 job={job}
+                compact
                 isSelected={job.id === selectedJobId}
                 companyRole={companyRole}
                 myRole={getMyJobRole(job)}
@@ -617,8 +862,8 @@ export default function JobsList({
               minHeight: 24,
               cursor: !recurringJobsOpen ? 'pointer' : undefined,
               borderRadius: 'var(--radius-2)',
-              padding: '2px 4px',
-              margin: '-2px -4px',
+              padding: '2px 0',
+              margin: '-2px 0',
             }}
           >
             <Flex align="center" gap="1" style={{ minWidth: 0 }}>
@@ -645,7 +890,7 @@ export default function JobsList({
                   setRecurringJobsOpen(false)
                 }}
                 style={{
-                  flexShrink: 0,
+                  ...recurringHideButtonStyle,
                   opacity: showRecurringHide ? 1 : 0,
                   pointerEvents: showRecurringHide ? 'auto' : 'none',
                   transition: motionRevealTransition(['opacity'], {
@@ -664,7 +909,7 @@ export default function JobsList({
                 row={row}
                 compact={compact}
                 isSelected={selectedRecurringJobId === row.id}
-                onClick={() => onSelectRecurringJob(row.id)}
+                onClick={() => onSelectRecurringJob(row.id, row.title)}
               />
             ))}
         </Box>
@@ -753,7 +998,7 @@ export default function JobsList({
                     row={row}
                     compact={compact}
                     isSelected={selectedRecurringJobId === row.id}
-                    onClick={() => onSelectRecurringJob(row.id)}
+                    onClick={() => onSelectRecurringJob(row.id, row.title)}
                   />
                 ))}
               </Box>
@@ -1129,13 +1374,14 @@ export default function JobsList({
   )
 }
 
-function JobCompactCard({
+function JobIndexRow({
   job,
   isSelected,
   companyRole,
   myRole,
   onSelect,
   getAvatarUrl,
+  compact = false,
 }: {
   job: JobListRow
   isSelected: boolean
@@ -1143,6 +1389,7 @@ function JobCompactCard({
   myRole: MyJobRole
   onSelect: () => void
   getAvatarUrl: (avatarPath: string | null) => string | null
+  compact?: boolean
 }) {
   const displayStatus = getDisplayStatus(job.status, companyRole)
   const isCanceled = job.status === 'canceled'
@@ -1152,6 +1399,8 @@ function JobCompactCard({
     job.customer_user?.display_name ??
     job.customer_user?.email ??
     '—'
+  const leadName =
+    job.project_lead?.display_name || job.project_lead?.email || 'Unassigned'
   const initials = getInitials(
     job.project_lead?.display_name ?? job.project_lead?.email ?? '',
   )
@@ -1161,7 +1410,11 @@ function JobCompactCard({
     <div
       className={[
         INDEX_TABLE_ROW_CLASS,
-        isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : 'index-table-row--muted',
+        isSelected
+          ? INDEX_TABLE_ROW_SELECTED_CLASS
+          : compact
+            ? 'index-table-row--muted'
+            : undefined,
       ]
         .filter(Boolean)
         .join(' ')}
@@ -1175,51 +1428,196 @@ function JobCompactCard({
         }
       }}
       style={{
-        padding: 'var(--space-3)',
+        display: compact ? 'block' : 'grid',
+        gridTemplateColumns: compact ? undefined : GRID_COLUMNS,
+        gap: compact ? undefined : 'var(--space-2)',
+        alignItems: 'center',
+        padding: compact ? 'var(--space-3)' : '0 var(--space-3)',
+        minHeight: compact ? undefined : 64,
         cursor: 'pointer',
-        borderRadius: 'var(--radius-3)',
+        borderRadius: compact ? 'var(--radius-3)' : 'var(--radius-2)',
       }}
     >
-      <Flex
-        justify="between"
-        align="start"
-        gap="3"
-        style={{ width: '100%', minWidth: 0 }}
-      >
-        <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
-          <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
-            {job.recurring_job && (
-              <Tooltip content="Recurring job" delayDuration={300}>
-                <Box
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--violet-9)',
-                    flexShrink: 0,
-                  }}
-                />
-              </Tooltip>
-            )}
-            <Text
-              weight={isSelected ? 'bold' : 'medium'}
+      {compact ? (
+        <Flex
+          justify="between"
+          align="start"
+          gap="3"
+          style={{ width: '100%', minWidth: 0 }}
+        >
+          <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
+            <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+              {job.recurring_job && (
+                <Tooltip content="Recurring job" delayDuration={300}>
+                  <Box
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--violet-9)',
+                      flexShrink: 0,
+                    }}
+                  />
+                </Tooltip>
+              )}
+              <Text
+                weight={isSelected ? 'bold' : 'medium'}
+                size="2"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+              >
+                {job.title}
+              </Text>
+              {showCrewBadge && (
+                <Badge size="1" color="orange" variant="soft">
+                  You are crew
+                </Badge>
+              )}
+            </Flex>
+            <Flex gap="2" align="center" style={{ minWidth: 0 }}>
+              <Text
+                size="1"
+                color="gray"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+              >
+                {customerName}
+              </Text>
+              <Text size="1" color="gray">
+                •
+              </Text>
+              <Text size="1" color="gray">
+                {job.start_at
+                  ? format(new Date(job.start_at), 'd. MMM yyyy', {
+                      locale: nb,
+                    })
+                  : '—'}
+              </Text>
+            </Flex>
+          </Flex>
+          <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
+            <Badge
+              color={getJobStatusColor(displayStatus)}
+              radius="full"
               size="2"
+              highContrast
+              style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
+            >
+              {makeWordPresentable(displayStatus)}
+            </Badge>
+            <Avatar
+              size="2"
+              src={avatarUrl ?? undefined}
+              fallback={initials}
+              radius="full"
+              style={{ flexShrink: 0 }}
+            />
+          </Flex>
+        </Flex>
+      ) : (
+        <>
+          <Box style={{ minWidth: 0 }}>
+            <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+              {job.recurring_job && (
+                <Tooltip content="Recurring job" delayDuration={300}>
+                  <Box
+                    style={{
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      backgroundColor: 'var(--violet-9)',
+                      flexShrink: 0,
+                    }}
+                  />
+                </Tooltip>
+              )}
+              <Tooltip content={job.title} delayDuration={300}>
+                <Text
+                  weight={isSelected ? 'bold' : 'medium'}
+                  size="2"
+                  style={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    minWidth: 0,
+                  }}
+                >
+                  {job.title}
+                </Text>
+              </Tooltip>
+              {showCrewBadge && (
+                <Badge size="1" color="orange" variant="soft">
+                  You are crew
+                </Badge>
+              )}
+            </Flex>
+            <Flex
+              gap="2"
+              align="center"
               style={{
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
                 minWidth: 0,
+                marginTop: 'var(--space-1)',
               }}
             >
-              {job.title}
-            </Text>
-            {showCrewBadge && (
-              <Badge size="1" color="orange" variant="soft">
-                You are crew
-              </Badge>
-            )}
-          </Flex>
-          <Flex gap="2" align="center" style={{ minWidth: 0 }}>
+              <Text
+                size="1"
+                color="gray"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  minWidth: 0,
+                }}
+              >
+                {customerName}
+              </Text>
+              <Text size="1" color="gray">
+                •
+              </Text>
+              <Text size="1" color="gray">
+                {job.start_at
+                  ? format(new Date(job.start_at), 'd. MMM yyyy', {
+                      locale: nb,
+                    })
+                  : '—'}
+              </Text>
+            </Flex>
+          </Box>
+          <Box
+            style={{
+              minWidth: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-start',
+              justifySelf: 'start',
+            }}
+          >
+            <Badge
+              color={getJobStatusColor(displayStatus)}
+              radius="full"
+              size="2"
+              highContrast
+              style={{
+                width: 'fit-content',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {makeWordPresentable(displayStatus)}
+            </Badge>
+          </Box>
+          <Flex
+            gap="2"
+            align="center"
+            style={{ minWidth: 0, justifySelf: 'start' }}
+          >
             <Text
               size="1"
               color="gray"
@@ -1230,37 +1628,18 @@ function JobCompactCard({
                 minWidth: 0,
               }}
             >
-              {customerName}
+              {leadName}
             </Text>
-            <Text size="1" color="gray">
-              •
-            </Text>
-            <Text size="1" color="gray">
-              {job.start_at
-                ? format(new Date(job.start_at), 'd. MMM yyyy', { locale: nb })
-                : '—'}
-            </Text>
+            <Avatar
+              size="2"
+              src={avatarUrl ?? undefined}
+              fallback={initials}
+              radius="full"
+              style={{ flexShrink: 0 }}
+            />
           </Flex>
-        </Flex>
-        <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
-          <Badge
-            color={getJobStatusColor(displayStatus)}
-            radius="full"
-            size="2"
-            highContrast
-            style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
-          >
-            {makeWordPresentable(displayStatus)}
-          </Badge>
-          <Avatar
-            size="2"
-            src={avatarUrl ?? undefined}
-            fallback={initials}
-            radius="full"
-            style={{ flexShrink: 0 }}
-          />
-        </Flex>
-      </Flex>
+        </>
+      )}
     </div>
   )
 }

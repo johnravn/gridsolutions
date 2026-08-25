@@ -32,11 +32,25 @@ import {
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringOverviewTab from './tabs/recurring/RecurringOverviewTab'
 import RecurringJobsTab from './tabs/recurring/RecurringJobsTab'
+import RecurringInvoicesTab from './tabs/recurring/RecurringInvoicesTab'
 import RecurringCrewTab from './tabs/recurring/RecurringCrewTab'
 import RecurringBookingsTab from './tabs/recurring/RecurringBookingsTab'
 import type { DeleteRecurringJobMode } from '../api/recurringJobQueries'
 
-const RECURRING_JOB_TABS = ['overview', 'jobs', 'crew', 'bookings'] as const
+const RECURRING_JOB_TABS = [
+  'overview',
+  'jobs',
+  'invoice',
+  'crew',
+  'bookings',
+] as const
+
+const RECURRING_JOB_TABS_FREELANCER = [
+  'overview',
+  'jobs',
+  'crew',
+  'bookings',
+] as const
 
 export default function RecurringJobInspector({
   id,
@@ -62,11 +76,17 @@ export default function RecurringJobInspector({
   const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
   useTabKeyboardShortcuts({
     scopeRef,
-    tabs: RECURRING_JOB_TABS,
+    tabs: isFreelancer ? RECURRING_JOB_TABS_FREELANCER : RECURRING_JOB_TABS,
     activeTab,
     onTabChange: setActiveTab,
     enabled: !!id,
   })
+
+  React.useEffect(() => {
+    if (isFreelancer && activeTab === 'invoice') {
+      setActiveTab('overview')
+    }
+  }, [isFreelancer, activeTab])
 
   const { data, isLoading } = useQuery({
     ...recurringJobDetailQuery({ recurringJobId: id ?? '__none__' }),
@@ -219,6 +239,9 @@ export default function RecurringJobInspector({
         <AnimatedTabsList mb="3" wrap="wrap">
           <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
           <Tabs.Trigger value="jobs">Jobs</Tabs.Trigger>
+          {!isFreelancer && (
+            <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
+          )}
           <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
           <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
         </AnimatedTabsList>
@@ -233,6 +256,11 @@ export default function RecurringJobInspector({
             <RecurringOverviewTab detail={data} onSelectJob={onSelectJob} />
           )}
         </Tabs.Content>
+        {!isFreelancer && (
+          <Tabs.Content value="invoice">
+            <RecurringInvoicesTab detail={data} onSelectJob={onSelectJob} />
+          </Tabs.Content>
+        )}
         <Tabs.Content value="crew">
           <RecurringCrewTab
             recurringJobId={data.id}

@@ -136,6 +136,25 @@ export type RecurringJobInvoiceEntry = {
   last_invoice_at: string | null
 }
 
+export type RecurringSeriesInvoiceJob = {
+  id: UUID
+  title: string
+  jobnr: number | null
+}
+
+export type RecurringSeriesInvoice = {
+  id: UUID
+  created_at: string
+  status: 'pending' | 'created' | 'failed'
+  invoice_basis: 'offer' | 'bookings'
+  conta_invoice_id: string | null
+  organization_id: string
+  conta_response: unknown
+  error_message: string | null
+  invoice_data: unknown
+  jobs: Array<RecurringSeriesInvoiceJob>
+}
+
 export type RecurringJobBookingSummary = {
   job_id: UUID
   job_title: string
@@ -149,6 +168,12 @@ export type JobsPageSelection =
   | { kind: 'job'; id: UUID }
   | { kind: 'recurring_job'; id: UUID }
   | null
+
+export type JobsListScope = {
+  kind: 'recurring'
+  id: UUID
+  title: string
+} | null
 
 export type AddressListRow = {
   id: UUID

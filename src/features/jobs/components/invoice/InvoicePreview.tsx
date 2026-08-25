@@ -91,6 +91,8 @@ type InvoicePreviewProps =
       ) => void
       onAddLine?: () => void
       onRemoveLine?: (lineId: string) => void
+      /** Line ids to visually highlight (e.g. pattern apply targets). */
+      highlightedLineIds?: ReadonlySet<string>
     }
 
 export default function InvoicePreview(props: InvoicePreviewProps) {
@@ -282,6 +284,7 @@ function BookingsInvoicePreview({
     onLineChange,
     onAddLine,
     onRemoveLine,
+    highlightedLineIds,
   } = props
 
   const displayLines = editedLines ?? bookings.all
@@ -592,8 +595,20 @@ function BookingsInvoicePreview({
                   ? (discountedPrice * line.vatPercent) / 100
                   : 0
                 const lineTotal = discountedPrice + lineVat
+                const isHighlighted = highlightedLineIds?.has(line.id) ?? false
                 return (
-                  <Table.Row key={line.id}>
+                  <Table.Row
+                    key={line.id}
+                    style={
+                      isHighlighted
+                        ? {
+                            background: 'var(--amber-a3)',
+                            boxShadow: 'inset 3px 0 0 var(--amber-9)',
+                            transition: 'background 160ms ease',
+                          }
+                        : { transition: 'background 160ms ease' }
+                    }
+                  >
                     {onRemoveLine && (
                       <Table.Cell
                         style={{
