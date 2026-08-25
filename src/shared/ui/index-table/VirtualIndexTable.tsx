@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { ArrowDown, ArrowUp } from 'iconoir-react'
 import { Flex, Spinner, Text } from '@radix-ui/themes'
 import {

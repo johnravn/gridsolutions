@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Box, Button, Dialog, Flex, Spinner, Text } from '@radix-ui/themes'
 import { Download, Plus, Refresh } from 'iconoir-react'
@@ -156,7 +155,7 @@ export default function ContaCustomerCheckDialog({
     checkResult &&
     !checkResult.exists &&
     !checkResult.error &&
-    customer.vat_number?.replace(/\D/g, '').trim().length >= 6
+    (customer?.vat_number?.replace(/\D/g, '') ?? '').trim().length >= 6
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

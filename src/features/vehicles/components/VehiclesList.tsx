@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Badge, Table, Text } from '@radix-ui/themes'
 import { vehicleOwnerBadge } from '../lib/ownership'
 import type { VehicleIndexRow } from '../api/queries'

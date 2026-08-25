@@ -913,7 +913,11 @@ export default function CustomerInspector({
                   onClick={() => {
                     navigate({
                       to: '/jobs',
-                      search: { jobId: job.id, tab: undefined },
+                      search: {
+                        jobId: job.id,
+                        recurringJobId: undefined,
+                        tab: undefined,
+                      },
                     })
                   }}
                   style={{

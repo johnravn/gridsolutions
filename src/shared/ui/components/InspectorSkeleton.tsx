@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box, Flex, Grid, Separator, Skeleton } from '@radix-ui/themes'
 
 export default function InspectorSkeleton() {

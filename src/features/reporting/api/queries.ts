@@ -49,10 +49,8 @@ export function reportJobProfitabilityQuery({
     queryFn: async (): Promise<Array<JobProfitabilityRow>> => {
       const from = new Date(fromDate)
       const to = new Date(toDate)
-      const fromISO = from.toISOString()
       const toEnd = new Date(to)
       toEnd.setHours(23, 59, 59, 999)
-      const toEndISO = toEnd.toISOString()
 
       const { data: jobs, error: jobsError } = await supabase
         .from('jobs')

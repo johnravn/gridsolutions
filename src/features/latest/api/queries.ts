@@ -353,7 +353,7 @@ export function latestInspectorQuery({
 }
 
 export async function toggleActivityLike({
-  companyId,
+  companyId: _companyId,
   activityId,
 }: {
   companyId: string
@@ -394,7 +394,7 @@ export async function toggleActivityLike({
 }
 
 export async function createActivityComment({
-  companyId,
+  companyId: _companyId,
   activityId,
   content,
 }: {

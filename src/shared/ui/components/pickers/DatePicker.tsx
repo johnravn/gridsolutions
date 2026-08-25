@@ -10,6 +10,7 @@ import {
   parseIso,
 } from './dateTimeUtils'
 import { SinglePickerTrigger } from './PickerTrigger'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import type { PickerLocale } from './dateTimeUtils'
 
 type Props = {
@@ -100,7 +101,7 @@ export default function DatePicker({
           setOpen(newOpen)
         }}
       >
-        <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
         <Popover.Content
           side="bottom"
           align="start"

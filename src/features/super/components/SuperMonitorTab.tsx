@@ -136,7 +136,7 @@ function RecentRunRow({ run }: { run: MonitorRecentRun }) {
           <Table.Cell colSpan={6}>
             <Text
               size="1"
-              as="pre"
+              as="div"
               style={{
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',

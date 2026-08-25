@@ -201,6 +201,7 @@ export const BLOCK_TYPE_LABELS: Record<PrettyModuleBlockType, string> = {
   column_layout: 'Column layout',
   file_upload: 'File upload',
   options: 'Options',
+  timeline: 'Program timeline',
 }
 
 export const MODULE_TYPE_LABELS: Record<PrettyModuleType, string> = {

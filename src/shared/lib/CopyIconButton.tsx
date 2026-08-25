@@ -24,9 +24,12 @@ export const CopyIconButton: React.FC<CopyIconButtonProps> = ({
   copiedLabel = 'Copied!',
   copyLabel = 'Copy',
   timeoutMs = 1200,
-  className,
+  className: _className,
   onCopy,
 }) => {
+  void _className
+  void copyLabel
+  void copiedLabel
   const [copied, setCopied] = React.useState(false)
   const timerRef = React.useRef<number | null>(null)
   const { success } = useToast()

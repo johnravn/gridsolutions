@@ -1,16 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AUTOFILL_MIN_VARIATIONS,
+  generateGroupAutofill,
+  generateItemAutofill,
+  generateVehicleAutofill,
+} from '@shared/testing/autofill'
+import {
   JOB_AUTOFILL_SEEDS,
   pickBySeedIndex,
   pickRandomJobAutofillSeedId,
 } from './jobAutofillSeeds'
 
 describe('jobAutofillSeeds', () => {
-  it('defines 20 seeds with unique ids 1–20', () => {
-    expect(JOB_AUTOFILL_SEEDS).toHaveLength(20)
-    expect(JOB_AUTOFILL_SEEDS.map((s) => s.id)).toEqual(
-      Array.from({ length: 20 }, (_, i) => i + 1),
+  it(`defines at least ${AUTOFILL_MIN_VARIATIONS} seeds with unique ids`, () => {
+    expect(JOB_AUTOFILL_SEEDS.length).toBeGreaterThanOrEqual(
+      AUTOFILL_MIN_VARIATIONS,
     )
+    const ids = JOB_AUTOFILL_SEEDS.map((s) => s.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids[0]).toBe(1)
+    expect(ids[ids.length - 1]).toBe(ids.length)
+  })
+
+  it('includes company-member customer seeds', () => {
+    expect(
+      JOB_AUTOFILL_SEEDS.some((seed) => seed.isCompanyCustomer),
+    ).toBe(true)
   })
 
   it('pickBySeedIndex wraps with modulo and treats -1 as none', () => {
@@ -30,5 +45,42 @@ describe('jobAutofillSeeds', () => {
     }
     expect(ids.has(1)).toBe(false)
     expect(ids.size).toBeGreaterThan(1)
+  })
+})
+
+describe('shared autofill generators', () => {
+  it('item autofill produces many unique combinations', () => {
+    const names = new Set<string>()
+    for (let i = 0; i < 300; i += 1) {
+      names.add(generateItemAutofill().name)
+    }
+    expect(names.size).toBeGreaterThanOrEqual(AUTOFILL_MIN_VARIATIONS)
+  })
+
+  it('item autofill always includes nicknames', () => {
+    for (let i = 0; i < 20; i += 1) {
+      expect(generateItemAutofill().nicknames.trim().length).toBeGreaterThan(0)
+    }
+  })
+
+  it('group autofill produces many unique combinations', () => {
+    const names = new Set<string>()
+    for (let i = 0; i < 300; i += 1) {
+      names.add(generateGroupAutofill().name)
+    }
+    expect(names.size).toBeGreaterThanOrEqual(AUTOFILL_MIN_VARIATIONS)
+  })
+
+  it('vehicle autofill produces many unique registration numbers', () => {
+    const regs = new Set<string>()
+    for (let i = 0; i < 300; i += 1) {
+      regs.add(
+        generateVehicleAutofill({
+          partners: [{ id: 'p1' }, { id: 'p2' }],
+          crew: [{ user_id: 'u1' }, { user_id: 'u2' }],
+        }).registrationNo,
+      )
+    }
+    expect(regs.size).toBeGreaterThanOrEqual(AUTOFILL_MIN_VARIATIONS)
   })
 })

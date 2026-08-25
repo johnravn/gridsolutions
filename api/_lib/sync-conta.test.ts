@@ -39,14 +39,14 @@ describe('sync-conta cron handler', () => {
   })
 
   it('returns 405 for non-GET methods', async () => {
-    const handler = (await import('./sync-conta')).default
+    const handler = (await import('../cron/sync-conta')).default
     const res = createMockRes()
     await handler({ method: 'POST', headers: {} }, res)
     expect(res.getStatus()).toBe(405)
   })
 
   it('returns 401 without valid cron secret', async () => {
-    const handler = (await import('./sync-conta')).default
+    const handler = (await import('../cron/sync-conta')).default
     const res = createMockRes()
     await handler(
       { method: 'GET', headers: { authorization: 'Bearer wrong' } },
@@ -66,7 +66,7 @@ describe('sync-conta cron handler', () => {
       error: null,
     })
 
-    const handler = (await import('./sync-conta')).default
+    const handler = (await import('../cron/sync-conta')).default
     const res = createMockRes()
     await handler(
       {

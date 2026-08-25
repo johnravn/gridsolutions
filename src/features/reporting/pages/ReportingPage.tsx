@@ -7,7 +7,6 @@ import {
   Button,
   Card,
   Flex,
-  Heading,
   SegmentedControl,
   Table,
   Text,
@@ -249,16 +248,16 @@ export default function ReportingPage() {
                       <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Dates</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Income
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Expenses
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Profit
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Margin %
                       </Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
@@ -273,16 +272,16 @@ export default function ReportingPage() {
                         <Table.Cell>
                           {formatDate(row.start_at)} – {formatDate(row.end_at)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.income)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.expenses)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.profit)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
                         </Table.Cell>
                         <Table.Cell>
@@ -292,7 +291,11 @@ export default function ReportingPage() {
                             onClick={() =>
                               navigate({
                                 to: '/jobs',
-                                search: { jobId: row.job_id },
+                                search: {
+                                  jobId: row.job_id,
+                                  recurringJobId: undefined,
+                                  tab: undefined,
+                                },
                               })
                             }
                           >
@@ -367,16 +370,16 @@ export default function ReportingPage() {
                     <Table.Row>
                       <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Jobs</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Income
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Expenses
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Profit
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Margin %
                       </Table.ColumnHeaderCell>
                     </Table.Row>
@@ -386,16 +389,16 @@ export default function ReportingPage() {
                       <Table.Row key={row.customer_id ?? `no-customer-${i}`}>
                         <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
                         <Table.Cell>{row.job_count}</Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.income)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.expenses)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.profit)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
                         </Table.Cell>
                       </Table.Row>
@@ -418,7 +421,7 @@ export default function ReportingPage() {
                 <Table.Header>
                   <Table.Row>
                     <Table.ColumnHeaderCell>Person</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell align="end">
+                    <Table.ColumnHeaderCell align="right">
                       Booked hours
                     </Table.ColumnHeaderCell>
                   </Table.Row>
@@ -432,7 +435,7 @@ export default function ReportingPage() {
                         <Table.Cell>
                           {row.display_name ?? row.user_id}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {row.booked_hours.toFixed(1)} h
                         </Table.Cell>
                       </Table.Row>
@@ -509,16 +512,16 @@ export default function ReportingPage() {
                       <Table.ColumnHeaderCell>Job #</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Income
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Expenses
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Profit
                       </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="end">
+                      <Table.ColumnHeaderCell align="right">
                         Margin %
                       </Table.ColumnHeaderCell>
                       <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
@@ -530,16 +533,16 @@ export default function ReportingPage() {
                         <Table.Cell>#{row.job_number}</Table.Cell>
                         <Table.Cell>{row.title}</Table.Cell>
                         <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.income)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.expenses)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {formatCurrency(row.profit)}
                         </Table.Cell>
-                        <Table.Cell align="end">
+                        <Table.Cell align="right">
                           {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
                         </Table.Cell>
                         <Table.Cell>
@@ -549,7 +552,11 @@ export default function ReportingPage() {
                             onClick={() =>
                               navigate({
                                 to: '/jobs',
-                                search: { jobId: row.job_id },
+                                search: {
+                                  jobId: row.job_id,
+                                  recurringJobId: undefined,
+                                  tab: undefined,
+                                },
                               })
                             }
                           >

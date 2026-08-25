@@ -4,7 +4,6 @@ import {
   Avatar,
   Badge,
   Box,
-  Button,
   Flex,
   HoverCard,
   IconButton,
@@ -57,9 +56,9 @@ type Props = {
 
 export default function CompanyCalendarPro({
   events,
-  onCreate,
-  onUpdate,
-  onDelete,
+  onCreate: _onCreate,
+  onUpdate: _onUpdate,
+  onDelete: _onDelete,
   defaultKinds = ['job'],
   initialScope,
   hideCreateButton = false,
@@ -162,7 +161,7 @@ export default function CompanyCalendarPro({
       const tab = getTabForCategory(category)
       navigate({
         to: '/jobs',
-        search: { jobId, tab },
+        search: { jobId, recurringJobId: undefined, tab },
       })
     }
   }

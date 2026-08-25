@@ -645,6 +645,7 @@ export type PrettyModuleBlockType =
   | 'column_layout'
   | 'file_upload'
   | 'options'
+  | 'timeline'
 
 export type PrettyOfferModuleTimelineItem = {
   id: UUID

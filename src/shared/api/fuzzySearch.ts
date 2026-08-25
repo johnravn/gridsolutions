@@ -3,8 +3,6 @@
  * Uses PostgreSQL pg_trgm extension for database-level fuzzy matching
  */
 
-import { supabase } from './supabase'
-
 /**
  * Helper to create fuzzy search conditions for PostgREST
  * Since PostgREST doesn't directly support pg_trgm operators,
@@ -56,9 +54,9 @@ export function applyFuzzySearch(
  * This uses PostgreSQL's pg_trgm extension for true fuzzy matching
  */
 export async function fuzzySearchRPC<T>(
-  table: string,
+  _table: string,
   searchTerm: string,
-  searchColumns: Array<string>,
+  _searchColumns: Array<string>,
   baseQuery?: any,
 ): Promise<Array<T>> {
   if (!searchTerm || !searchTerm.trim()) {

@@ -1,4 +1,6 @@
-/** Keep in sync with `api/_lib/bibleVersion.ts` (serverless cannot import from `src/`). */
+/** Shared with the client via mirrored constants in `src/shared/lib/bibleVersion.ts`.
+ * Lives under `api/_lib/` so Vercel does not count it as a Serverless Function.
+ */
 export const BIBLE_VERSIONS = ['bm11', 'nn11', 'msg'] as const
 
 export type BibleVersion = (typeof BIBLE_VERSIONS)[number]
