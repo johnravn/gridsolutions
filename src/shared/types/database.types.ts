@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "13.0.5"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -3719,7 +3724,6 @@ export type Database = {
           source_group_id: string | null
           source_kind: Database["public"]["Enums"]["reservation_source_kind"]
           start_at: string | null
-          status: Database["public"]["Enums"]["booking_status"]
           subcontractor_id: string | null
           time_period_id: string
         }
@@ -3738,7 +3742,6 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id: string
         }
@@ -3757,7 +3760,6 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id?: string
         }
@@ -3841,7 +3843,6 @@ export type Database = {
           forced_by_user_id: string | null
           id: string
           start_at: string | null
-          status: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3858,7 +3859,6 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3875,7 +3875,6 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
-          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id?: string
           vehicle_id?: string
         }
@@ -5461,4 +5460,3 @@ export const Constants = {
     },
   },
 } as const
-
