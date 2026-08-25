@@ -4,16 +4,27 @@ import { useMutation } from '@tanstack/react-query'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { updateTimeEntry } from '../api/timeEntries'
+import {
+  formatHoursBetween,
+  formatHoursInput,
+  hoursToRange,
+  isValidLoggedHours,
+  looksLikeHoursOnlyEntry,
+  parseHoursInput,
+  rangeToHours,
+} from '../lib/timeEntryHours'
+import TimeEntryWhenFields from './TimeEntryWhenFields'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
+import type { TimeInputMode } from '../lib/timeEntryHours'
 
 const defaultValues = {
   title: '',
-  jobNumber: '',
   note: '',
   startAt: '',
   endAt: '',
+  timeMode: 'range' as TimeInputMode,
+  hoursInput: '1',
 }
 
 function hasInvalidTimeRange(startAt: string, endAt: string) {
@@ -24,14 +35,30 @@ function hasInvalidTimeRange(startAt: string, endAt: string) {
 const schema = z
   .object({
     title: z.string().trim().min(1, 'Title is required'),
-    jobNumber: z.string(),
     note: z.string(),
     startAt: z.string().min(1, 'Start time is required'),
     endAt: z.string().min(1, 'End time is required'),
+    timeMode: z.enum(['range', 'hours']),
+    hoursInput: z.string(),
   })
-  .refine((v) => !hasInvalidTimeRange(v.startAt, v.endAt), {
-    message: 'End time must be after start time',
-    path: ['endAt'],
+  .superRefine((v, ctx) => {
+    if (v.timeMode === 'hours') {
+      if (!isValidLoggedHours(parseHoursInput(v.hoursInput))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Enter hours greater than 0, up to 24',
+          path: ['hoursInput'],
+        })
+      }
+      return
+    }
+    if (hasInvalidTimeRange(v.startAt, v.endAt)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'End time must be after start time',
+        path: ['endAt'],
+      })
+    }
   })
 
 export default function EditTimeEntryDialog({
@@ -61,13 +88,17 @@ export default function EditTimeEntryDialog({
 
   React.useEffect(() => {
     if (!open || !entry) return
+    const hours = rangeToHours(entry.start_at, entry.end_at)
     form.reset(
       {
         title: entry.title ?? '',
-        jobNumber: entry.job_number ?? '',
         note: entry.note ?? '',
         startAt: entry.start_at ?? '',
         endAt: entry.end_at ?? '',
+        timeMode: looksLikeHoursOnlyEntry(entry.start_at, entry.end_at)
+          ? 'hours'
+          : 'range',
+        hoursInput: formatHoursInput(hours > 0 ? hours : 1),
       },
       { keepDefaultValues: true },
     )
@@ -78,14 +109,25 @@ export default function EditTimeEntryDialog({
     mutationFn: async (value: typeof defaultValues) => {
       if (!entry) throw new Error('Missing entry')
 
+      let startAt = value.startAt
+      let endAt = value.endAt
+      if (value.timeMode === 'hours') {
+        const hours = parseHoursInput(value.hoursInput)
+        if (!isValidLoggedHours(hours)) {
+          throw new Error('Enter hours greater than 0, up to 24')
+        }
+        const range = hoursToRange(value.startAt, hours)
+        startAt = range.startAt
+        endAt = range.endAt
+      }
+
       await updateTimeEntry({
         id: entry.id,
         changes: {
           title: value.title.trim(),
-          job_number: value.jobNumber.trim() || null,
           note: value.note.trim() || null,
-          start_at: value.startAt,
-          end_at: value.endAt,
+          start_at: startAt,
+          end_at: endAt,
         },
       })
     },
@@ -126,43 +168,35 @@ export default function EditTimeEntryDialog({
                 )}
               </form.AppField>
 
-              <form.AppField name="jobNumber">
-                {(field) => (
-                  <field.TextField
-                    label="Job number"
-                    placeholder="Optional"
+              <form.Subscribe
+                selector={(state): [TimeInputMode, string, string, string] => [
+                  state.values.timeMode,
+                  state.values.startAt,
+                  state.values.endAt,
+                  state.values.hoursInput,
+                ]}
+              >
+                {([timeMode, startAt, endAt, hoursInput]) => (
+                  <TimeEntryWhenFields
+                    mode={timeMode}
+                    onModeChange={(mode) =>
+                      form.setFieldValue('timeMode', mode)
+                    }
+                    startAt={startAt}
+                    endAt={endAt}
+                    onRangeChange={({ startAt: nextStart, endAt: nextEnd }) => {
+                      form.setFieldValue('startAt', nextStart)
+                      form.setFieldValue('endAt', nextEnd)
+                    }}
+                    hoursInput={hoursInput}
+                    onHoursInputChange={(value) =>
+                      form.setFieldValue('hoursInput', value)
+                    }
+                    rangeInvalid={hasInvalidTimeRange(startAt, endAt)}
                     disabled={disabled}
                   />
                 )}
-              </form.AppField>
-
-              <form.AppField name="startAt">
-                {(startField) => (
-                  <form.AppField name="endAt">
-                    {(endField) => (
-                      <label>
-                        <Text as="div" size="2" mb="1" weight="medium">
-                          Time period
-                        </Text>
-                        <DateTimeRangePicker
-                          startAt={startField.state.value}
-                          endAt={endField.state.value}
-                          onChange={({ startAt, endAt }) => {
-                            startField.handleChange(startAt)
-                            endField.handleChange(endAt)
-                          }}
-                          invalid={hasInvalidTimeRange(
-                            startField.state.value,
-                            endField.state.value,
-                          )}
-                          disabled={disabled}
-                          locale="nb"
-                        />
-                      </label>
-                    )}
-                  </form.AppField>
-                )}
-              </form.AppField>
+              </form.Subscribe>
 
               <form.AppField name="note">
                 {(field) => (
@@ -177,31 +211,41 @@ export default function EditTimeEntryDialog({
               </form.AppField>
 
               <form.Subscribe
-                selector={(state) => [state.values.startAt, state.values.endAt]}
+                selector={(state) => [
+                  state.values.startAt,
+                  state.values.endAt,
+                  state.values.timeMode,
+                  state.values.hoursInput,
+                ]}
               >
-                {([startAt, endAt]) => (
-                  <Flex justify="between" align="center" mt="2">
-                    <Text size="3" weight="medium">
-                      {formatHoursBetween(startAt, endAt)}
-                    </Text>
-                    <Flex gap="2">
-                      <Dialog.Close>
-                        <Button
-                          type="button"
-                          variant="soft"
-                          disabled={updateMutation.isPending}
-                        >
-                          Cancel
-                        </Button>
-                      </Dialog.Close>
-                      <form.SubmitButton
-                        label="Save"
-                        pendingLabel="Saving…"
-                        disabled={disabled}
-                      />
+                {([startAt, endAt, timeMode, hoursInput]) => {
+                  const hoursInvalid =
+                    timeMode === 'hours' &&
+                    !isValidLoggedHours(parseHoursInput(hoursInput))
+                  return (
+                    <Flex justify="between" align="center" mt="2">
+                      <Text size="3" weight="medium">
+                        {formatHoursBetween(startAt, endAt)}
+                      </Text>
+                      <Flex gap="2">
+                        <Dialog.Close>
+                          <Button
+                            type="button"
+                            variant="soft"
+                            disabled={updateMutation.isPending}
+                          >
+                            Cancel
+                          </Button>
+                        </Dialog.Close>
+                        <form.SubmitButton
+                          label="Save"
+                          pendingLabel="Saving…"
+                          disabled={disabled || hoursInvalid}
+                        />
+                      </Flex>
                     </Flex>
-                  </Flex>
-                )}
+                  )
+                }}
               </form.Subscribe>
             </Flex>
           </form.AppForm>
@@ -209,13 +253,4 @@ export default function EditTimeEntryDialog({
       </Dialog.Content>
     </Dialog.Root>
   )
-}
-
-function formatHoursBetween(startAt: string, endAt: string) {
-  if (!startAt || !endAt) return '--'
-  const start = new Date(startAt)
-  const end = new Date(endAt)
-  const durationMs = Math.max(0, end.getTime() - start.getTime())
-  const hours = durationMs / (1000 * 60 * 60)
-  return `${hours.toFixed(2)} hours`
 }

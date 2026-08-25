@@ -89,10 +89,7 @@ function normalizeHotkey(hotkey: string): string {
 }
 
 const NORMALIZED_LOOKUP = new Map(
-  COMMON_SYSTEM_SHORTCUTS.map((entry) => [
-    normalizeHotkey(entry.match),
-    entry,
-  ]),
+  COMMON_SYSTEM_SHORTCUTS.map((entry) => [normalizeHotkey(entry.match), entry]),
 )
 
 /** Returns a warning when the hotkey is commonly reserved by the browser or OS. */

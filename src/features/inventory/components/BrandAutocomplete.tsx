@@ -39,9 +39,7 @@ export default function BrandAutocomplete({
 
   // Update input value when prop changes (e.g., when editing existing item)
   React.useEffect(() => {
-    if (value !== inputValue) {
-      setInputValue(value || '')
-    }
+    setInputValue(value || '')
   }, [value])
 
   // Fetch brands with fuzzy search using PostgreSQL similarity

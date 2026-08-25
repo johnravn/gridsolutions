@@ -1,6 +1,9 @@
 import * as React from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useVirtualizer } from '@tanstack/react-virtual'
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Avatar,
   Badge,
@@ -17,6 +20,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { MoreHoriz, NavArrowRight, Plus, Search } from 'iconoir-react'
 import { format } from 'date-fns'
@@ -26,13 +30,14 @@ import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
 import {
   IndexTableBodySkeleton,
   useIndexTableSelectionKeyboard,
+  useVirtualIndexTable,
 } from '@shared/ui/index-table'
 import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
 import { supabase } from '@shared/api/supabase'
-import { jobDetailQuery, jobsIndexQuery } from '../api/queries'
+import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
 import { recurringJobsIndexQuery } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { getJobStatusColor } from '../utils/statusColors'
@@ -40,6 +45,8 @@ import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringJobListRow from './RecurringJobListRow'
+import type { JobsIndexPageResult } from '../api/queries'
+import type { InfiniteData } from '@tanstack/react-query'
 import type { JobListRow, JobStatus, JobsPageSelection } from '../types'
 
 function getDisplayStatus(
@@ -70,6 +77,7 @@ export default function JobsList({
   dateTo,
   readyToInvoiceFilter = false,
   compact = false,
+  toolbarExtra,
 }: {
   /** Binds the page-level create shortcut to this list's create dialog. */
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
@@ -85,6 +93,7 @@ export default function JobsList({
   readyToInvoiceFilter?: boolean
   /** When true, use a stacked card layout for better mobile display */
   compact?: boolean
+  toolbarExtra?: React.ReactNode
 }) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
@@ -112,15 +121,8 @@ export default function JobsList({
   const selectedRecurringJobId =
     selection?.kind === 'recurring_job' ? selection.id : null
 
-  const scrollRef = React.useRef<HTMLDivElement>(null)
-
-  const {
-    data: allData = [],
-    isLoading,
-    isFetching,
-    refetch,
-  } = useQuery({
-    ...jobsIndexQuery({
+  const jobsQuery = useInfiniteQuery({
+    ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
       search: debouncedSearch,
       dateFrom: dateFrom || undefined,
@@ -131,11 +133,27 @@ export default function JobsList({
       companyRole,
       showOnlyArchived,
       projectLeadUserId: readyToInvoiceFilter ? userId : null,
-      statuses: readyToInvoiceFilter ? ['completed'] : null,
-      maxRows: 150,
+      statuses: readyToInvoiceFilter
+        ? ['completed']
+        : statusFilter.length > 0
+          ? statusFilter
+          : null,
     }),
     enabled: !!companyId,
   })
+  const {
+    isLoading,
+    isFetching,
+    refetch,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = jobsQuery
+  const allData = React.useMemo(
+    () => jobsQuery.data?.pages.flatMap((page) => page.rows) ?? [],
+    [jobsQuery.data],
+  )
+  const totalCount = jobsQuery.data?.pages[0]?.count ?? 0
 
   useAutoUpdateJobsListJobStatuses(allData, !!companyId)
 
@@ -201,6 +219,21 @@ export default function JobsList({
         }
       },
     )
+    qc.setQueriesData<InfiniteData<JobsIndexPageResult>>(
+      { queryKey: ['company', companyId, 'jobs-index-infinite'], exact: false },
+      (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          pages: old.pages.map((page) => ({
+            ...page,
+            rows: page.rows.map((r) =>
+              r.id === selectedJobId ? { ...r, status: nextStatus } : r,
+            ),
+          })),
+        }
+      },
+    )
   }, [
     allData,
     companyId,
@@ -210,16 +243,7 @@ export default function JobsList({
     selectedJobDetail.dataUpdatedAt,
   ])
 
-  const rows = React.useMemo(() => {
-    let filtered = allData
-    if (statusFilter.length > 0) {
-      filtered = filtered.filter((j) => statusFilter.includes(j.status))
-    }
-    if (readyToInvoiceFilter && userId) {
-      filtered = filtered.filter((j) => j.project_lead?.user_id === userId)
-    }
-    return filtered
-  }, [allData, statusFilter, readyToInvoiceFilter, userId])
+  const rows = allData
 
   const crewJobIdSet = useJobCrewRoleIds({
     companyId,
@@ -238,13 +262,19 @@ export default function JobsList({
   const showRecurringHide =
     recurringJobsOpen && (isSmallScreen || compact || recurringHeaderHovered)
 
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => (compact ? 88 : 64),
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows,
+    getRowId: (r) => r.id,
+    estimateRowSize: compact ? 88 : 64,
     overscan: 10,
-    getItemKey: (index) => rows[index]?.id ?? index,
-    enabled: rows.length > 0 || isFetching,
+    isFetching,
+    infinite: {
+      hasNextPage,
+      isFetchingNextPage,
+      onLoadMore: () => {
+        void fetchNextPage()
+      },
+    },
   })
 
   React.useLayoutEffect(() => {
@@ -300,77 +330,82 @@ export default function JobsList({
     return data.publicUrl
   }
 
-  return (
-    <div
-      style={{
-        height: '100%',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
+  const toolbar = (
+    <Flex
+      gap={compact ? '4' : '2'}
+      align="center"
+      wrap="wrap"
+      direction={compact ? 'column' : 'row'}
     >
-      <Flex gap="2" align="center" wrap="wrap" mb="2">
+      <Flex
+        gap="3"
+        align="center"
+        wrap="wrap"
+        style={{ width: compact ? '100%' : undefined, flex: 1, minWidth: 0 }}
+      >
         <TextField.Root
           placeholder="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          size={compact ? '3' : '2'}
+          size="3"
           style={
-            compact ? { width: '100%' } : { flex: '1 1 200px', minWidth: 140 }
+            compact
+              ? { flex: 1, width: '100%', minWidth: 0 }
+              : { flex: '1 1 200px', minWidth: 140 }
           }
         >
           <TextField.Slot side="left">
-            <Search width={compact ? 20 : 16} height={compact ? 20 : 16} />
+            <Search width={20} height={20} />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {isFetching && <Spinner size={compact ? '3' : '2'} />}
+            {isFetching && <Spinner size="3" />}
           </TextField.Slot>
         </TextField.Root>
-        {canWrite && (
-          <Flex
-            gap="2"
-            align="center"
-            style={compact ? { width: '100%' } : undefined}
-          >
-            <Button
-              variant="solid"
-              size={compact ? '3' : '2'}
-              onClick={() => setCreateOpen(true)}
-              style={compact ? { flex: 1 } : undefined}
-            >
-              <Plus width={compact ? 18 : 16} height={compact ? 18 : 16} />
-              New job
-            </Button>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <Button
-                  variant="soft"
-                  size={compact ? '3' : '2'}
-                  aria-label="More job actions"
-                  style={{
-                    padding: 0,
-                    width: 'var(--base-button-height)',
-                    minWidth: 'var(--base-button-height)',
-                  }}
-                >
-                  <MoreHoriz
-                    width={compact ? 18 : 16}
-                    height={compact ? 18 : 16}
-                  />
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="end">
-                <DropdownMenu.Item
-                  onSelect={() => setCreateRecurringOpen(true)}
-                >
-                  New recurring job
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          </Flex>
-        )}
+        {compact ? toolbarExtra : null}
       </Flex>
+      {canWrite && (
+        <Flex
+          gap="2"
+          align="center"
+          style={compact ? { width: '100%' } : undefined}
+        >
+          <Button
+            variant="solid"
+            size="3"
+            onClick={() => setCreateOpen(true)}
+            style={compact ? { flex: 1 } : undefined}
+          >
+            <Plus width={18} height={18} />
+            New job
+          </Button>
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <Button
+                variant="soft"
+                size="3"
+                aria-label="More job actions"
+                style={{
+                  padding: 0,
+                  width: 'var(--base-button-height)',
+                  minWidth: 'var(--base-button-height)',
+                }}
+              >
+                <MoreHoriz width={18} height={18} />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end">
+              <DropdownMenu.Item onSelect={() => setCreateRecurringOpen(true)}>
+                New recurring job
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </Flex>
+      )}
+    </Flex>
+  )
 
+  const dialogs = (
+    <>
       <JobDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
@@ -381,7 +416,6 @@ export default function JobsList({
           refetch()
         }}
       />
-
       <RecurringJobDialog
         open={createRecurringOpen}
         onOpenChange={setCreateRecurringOpen}
@@ -391,9 +425,171 @@ export default function JobsList({
           onSelectRecurringJob(id)
         }}
       />
+    </>
+  )
+
+  if (compact) {
+    return (
+      <MobilePageList toolbar={toolbar}>
+        {dialogs}
+        {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
+          <Box>
+            <Flex
+              align="center"
+              justify="between"
+              gap="2"
+              mb={recurringJobsOpen ? '1' : '0'}
+              onClick={
+                !recurringJobsOpen
+                  ? () => setRecurringJobsOpen(true)
+                  : undefined
+              }
+              onKeyDown={
+                !recurringJobsOpen
+                  ? (e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        setRecurringJobsOpen(true)
+                      }
+                    }
+                  : undefined
+              }
+              role={!recurringJobsOpen ? 'button' : undefined}
+              tabIndex={!recurringJobsOpen ? 0 : undefined}
+              aria-expanded={recurringJobsOpen}
+              style={{
+                minHeight: 24,
+                cursor: !recurringJobsOpen ? 'pointer' : undefined,
+                borderRadius: 'var(--radius-2)',
+                padding: '2px 4px',
+                margin: '-2px -4px',
+              }}
+            >
+              <Flex align="center" gap="1" style={{ minWidth: 0 }}>
+                {!recurringJobsOpen && (
+                  <NavArrowRight
+                    width={14}
+                    height={14}
+                    color="var(--gray-11)"
+                  />
+                )}
+                <Text size="1" weight="medium" color="gray">
+                  Your recurring jobs
+                </Text>
+                {!recurringJobsOpen && (
+                  <Badge variant="soft" color="gray" size="1">
+                    {pinnedRecurringJobs.length}
+                  </Badge>
+                )}
+              </Flex>
+              {recurringJobsOpen && (
+                <Button
+                  size="1"
+                  variant="ghost"
+                  color="gray"
+                  aria-label="Hide recurring jobs"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setRecurringJobsOpen(false)
+                  }}
+                >
+                  Hide
+                </Button>
+              )}
+            </Flex>
+            {recurringJobsOpen &&
+              pinnedRecurringJobs.map((row) => (
+                <RecurringJobListRow
+                  key={row.id}
+                  row={row}
+                  compact
+                  isSelected={selectedRecurringJobId === row.id}
+                  onClick={() => onSelectRecurringJob(row.id)}
+                />
+              ))}
+          </Box>
+        )}
+        {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
+          <Box>
+            {searchRecurringHits.map((row) => (
+              <RecurringJobListRow
+                key={row.id}
+                row={row}
+                compact
+                isSelected={selectedRecurringJobId === row.id}
+                onClick={() => onSelectRecurringJob(row.id)}
+              />
+            ))}
+          </Box>
+        )}
+        {isLoading ? (
+          <IndexTableBodySkeleton rowCount={8} rowHeight={88} />
+        ) : rows.length === 0 &&
+          !hasNextPage &&
+          (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
+          <Text size="2" color="gray">
+            {allData.length === 0
+              ? 'No jobs yet'
+              : 'No jobs match your filters'}
+          </Text>
+        ) : (
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+          >
+            {rows.map((job) => (
+              <JobCompactCard
+                key={job.id}
+                job={job}
+                isSelected={job.id === selectedJobId}
+                companyRole={companyRole}
+                myRole={getMyJobRole(job)}
+                onSelect={() => onSelectJob(job.id)}
+                getAvatarUrl={getAvatarUrl}
+              />
+            ))}
+            {hasNextPage && (
+              <Button
+                variant="soft"
+                onClick={() => {
+                  void fetchNextPage()
+                }}
+                disabled={isFetchingNextPage}
+              >
+                {isFetchingNextPage ? 'Loading more…' : 'Load more'}
+              </Button>
+            )}
+          </Flex>
+        )}
+        {rows.length > 0 && (
+          <Text size="2" color="gray">
+            {totalCount} job{totalCount !== 1 ? 's' : ''}
+          </Text>
+        )}
+      </MobilePageList>
+    )
+  }
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        height: '100%',
+        minHeight: 0,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <Box mb="2" style={{ flexShrink: 0 }}>
+        {toolbar}
+      </Box>
+      {dialogs}
 
       {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
-        <Box mb="2">
+        <Box mb="2" style={{ flexShrink: 0 }}>
           <Flex
             align="center"
             justify="between"
@@ -567,6 +763,7 @@ export default function JobsList({
                 <IndexTableBodySkeleton rowCount={8} />
               </Box>
             ) : rows.length === 0 &&
+              !hasNextPage &&
               (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
@@ -584,6 +781,32 @@ export default function JobsList({
                 }}
               >
                 {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                  const isLoaderRow = virtualRow.index >= rows.length
+                  if (isLoaderRow) {
+                    return (
+                      <div
+                        key={`loader-${virtualRow.index}`}
+                        style={{
+                          position: 'absolute',
+                          top: `${virtualRow.start}px`,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualRow.size}px`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '0 var(--space-3)',
+                          color: 'var(--gray-10)',
+                        }}
+                      >
+                        <Text size="2" color="gray">
+                          {isFetchingNextPage
+                            ? 'Loading more…'
+                            : 'Scroll to load more…'}
+                        </Text>
+                      </div>
+                    )
+                  }
+
                   const job = rows[virtualRow.index]
                   const isSelected = job.id === selectedJobId
                   const displayStatus = getDisplayStatus(
@@ -896,12 +1119,148 @@ export default function JobsList({
       </div>
 
       {rows.length > 0 && (
-        <Flex align="center" mt="2">
+        <Flex align="center" mt="2" style={{ flexShrink: 0 }}>
           <Text size="2" color="gray">
-            {rows.length} job{rows.length !== 1 ? 's' : ''}
+            {totalCount} job{totalCount !== 1 ? 's' : ''}
           </Text>
         </Flex>
       )}
+    </div>
+  )
+}
+
+function JobCompactCard({
+  job,
+  isSelected,
+  companyRole,
+  myRole,
+  onSelect,
+  getAvatarUrl,
+}: {
+  job: JobListRow
+  isSelected: boolean
+  companyRole: string | null
+  myRole: MyJobRole
+  onSelect: () => void
+  getAvatarUrl: (avatarPath: string | null) => string | null
+}) {
+  const displayStatus = getDisplayStatus(job.status, companyRole)
+  const isCanceled = job.status === 'canceled'
+  const showCrewBadge = !isCanceled && (myRole === 'crew' || myRole === 'both')
+  const customerName =
+    job.customer?.name ??
+    job.customer_user?.display_name ??
+    job.customer_user?.email ??
+    '—'
+  const initials = getInitials(
+    job.project_lead?.display_name ?? job.project_lead?.email ?? '',
+  )
+  const avatarUrl = getAvatarUrl(job.project_lead?.avatar_url ?? null)
+
+  return (
+    <div
+      className={[
+        INDEX_TABLE_ROW_CLASS,
+        isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : 'index-table-row--muted',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      style={{
+        padding: 'var(--space-3)',
+        cursor: 'pointer',
+        borderRadius: 'var(--radius-3)',
+      }}
+    >
+      <Flex
+        justify="between"
+        align="start"
+        gap="3"
+        style={{ width: '100%', minWidth: 0 }}
+      >
+        <Flex direction="column" gap="1" style={{ minWidth: 0, flex: 1 }}>
+          <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
+            {job.recurring_job && (
+              <Tooltip content="Recurring job" delayDuration={300}>
+                <Box
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    backgroundColor: 'var(--violet-9)',
+                    flexShrink: 0,
+                  }}
+                />
+              </Tooltip>
+            )}
+            <Text
+              weight={isSelected ? 'bold' : 'medium'}
+              size="2"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {job.title}
+            </Text>
+            {showCrewBadge && (
+              <Badge size="1" color="orange" variant="soft">
+                You are crew
+              </Badge>
+            )}
+          </Flex>
+          <Flex gap="2" align="center" style={{ minWidth: 0 }}>
+            <Text
+              size="1"
+              color="gray"
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+              }}
+            >
+              {customerName}
+            </Text>
+            <Text size="1" color="gray">
+              •
+            </Text>
+            <Text size="1" color="gray">
+              {job.start_at
+                ? format(new Date(job.start_at), 'd. MMM yyyy', { locale: nb })
+                : '—'}
+            </Text>
+          </Flex>
+        </Flex>
+        <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
+          <Badge
+            color={getJobStatusColor(displayStatus)}
+            radius="full"
+            size="2"
+            highContrast
+            style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
+          >
+            {makeWordPresentable(displayStatus)}
+          </Badge>
+          <Avatar
+            size="2"
+            src={avatarUrl ?? undefined}
+            fallback={initials}
+            radius="full"
+            style={{ flexShrink: 0 }}
+          />
+        </Flex>
+      </Flex>
     </div>
   )
 }

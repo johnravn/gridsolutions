@@ -1,26 +1,37 @@
 import { expect, type Page } from '@playwright/test'
 
+function navLinkName(name: string): RegExp {
+  return new RegExp(`^${name}(?:\\s+\\d+)?$`)
+}
+
 async function clickNavLink(page: Page, name: string) {
-  await expect(async () => {
-    const link = page.getByRole('link', { name, exact: true })
-    if (await link.isVisible().catch(() => false)) {
-      await link.click()
-      return
-    }
+  const openButton = page.getByRole('button', { name: 'Open menu' })
+  const closeButton = page.getByRole('button', { name: 'Close menu' })
+  const drawer = page.getByRole('complementary', { name: 'Navigation' })
+  const linkName = navLinkName(name)
+  const inspectorBackdrop = page.locator(
+    '.app-inspector-backdrop[data-open="true"]',
+  )
 
-    const openButton = page.getByRole('button', { name: 'Open menu' })
-    if (await openButton.isVisible().catch(() => false)) {
-      await openButton.click()
-      const navDialog = page.getByRole('dialog', { name: 'Navigation' })
-      await expect(navDialog).toBeVisible()
-      await navDialog.getByRole('link', { name, exact: true }).click()
-      return
-    }
+  if (await inspectorBackdrop.isVisible().catch(() => false)) {
+    await inspectorBackdrop.click({ force: true })
+  }
 
-    // Desktop sidebar still loading — retry until the link appears.
-    await expect(link).toBeVisible()
-    await link.click()
-  }).toPass({ timeout: 15_000 })
+  if (await openButton.isVisible().catch(() => false)) {
+    await openButton.click({ force: true })
+    await expect(closeButton).toBeVisible({ timeout: 5_000 })
+  }
+
+  const drawerLink = drawer.getByRole('link', { name: linkName })
+  if ((await drawerLink.count()) > 0) {
+    await drawerLink.first().evaluate((el) => {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    })
+    await drawerLink.first().click({ force: true })
+    return
+  }
+
+  await page.getByRole('link', { name: linkName }).first().click()
 }
 
 function jobTabNameMatcher(tabName: string): string | RegExp {
@@ -35,12 +46,36 @@ function jobTabLocatorOptions(tabName: string) {
   }
 }
 
+async function ensureMobileInspectorOpen(page: Page) {
+  const openInspector = page.getByRole('button', { name: 'Open inspector' })
+  if (!(await openInspector.isVisible().catch(() => false))) return
+
+  const tabLabel = page.getByText('Tab', { exact: true })
+  const box = await tabLabel.boundingBox().catch(() => null)
+  const viewport = page.viewportSize()
+  const inViewport =
+    !!box &&
+    !!viewport &&
+    box.x + box.width > 0 &&
+    box.x < viewport.width &&
+    box.y + box.height > 0 &&
+    box.y < viewport.height
+
+  if (!inViewport) {
+    await openInspector.click({ force: true })
+  }
+}
+
 export async function clickJobTab(page: Page, tabName: string) {
   const tabOptions = jobTabLocatorOptions(tabName)
 
+  await ensureMobileInspectorOpen(page)
+
   const mobilePicker = page.getByText('Tab', { exact: true })
   if (await mobilePicker.isVisible().catch(() => false)) {
-    await mobilePicker.locator('..').getByRole('button').click()
+    const pickerButton = mobilePicker.locator('..').getByRole('button')
+    await pickerButton.scrollIntoViewIfNeeded()
+    await pickerButton.click({ force: true })
     await page.getByRole('menuitem', tabOptions).click()
     return
   }
@@ -70,10 +105,23 @@ function tabSectionButton(page: Page) {
 }
 
 export async function openJobsPage(page: Page) {
-  await clickNavLink(page, 'Jobs')
-  await expect(page).toHaveURL(/\/jobs/)
+  const inspectorBackdrop = page.locator(
+    '.app-inspector-backdrop[data-open="true"]',
+  )
+  if (await inspectorBackdrop.isVisible().catch(() => false)) {
+    await inspectorBackdrop.click({ force: true })
+  }
+
+  if (!/\/jobs(?:\?|$)/.test(new URL(page.url()).pathname)) {
+    await clickNavLink(page, 'Jobs')
+  }
+
+  await expect(page).toHaveURL(/\/jobs/, { timeout: 15_000 })
   await expect(
-    page.getByRole('heading', { name: 'Jobs', exact: true }),
+    page
+      .getByRole('button', { name: 'New job' })
+      .or(page.getByPlaceholder('Search'))
+      .first(),
   ).toBeVisible({
     timeout: 15_000,
   })
@@ -81,59 +129,59 @@ export async function openJobsPage(page: Page) {
 
 export async function openInventoryPage(page: Page) {
   await clickNavLink(page, 'Inventory')
-  await expect(page).toHaveURL(/\/inventory/)
-  await expect(page.getByRole('heading', { name: 'Overview' })).toBeVisible({
-    timeout: 15_000,
-  })
+  await expect(page).toHaveURL(/\/inventory/, { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: 'Add item' }).first()).toBeVisible(
+    {
+      timeout: 15_000,
+    },
+  )
 }
 
 export async function openCustomersPage(page: Page) {
   await clickNavLink(page, 'Customers')
-  await expect(page).toHaveURL(/\/customers/)
-  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({
+  await expect(page).toHaveURL(/\/customers/, { timeout: 15_000 })
+  await expect(
+    page.getByRole('button', { name: 'Add customer' }).first(),
+  ).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openCalendarPage(page: Page) {
   await clickNavLink(page, 'Calendar')
-  await expect(page).toHaveURL(/\/calendar/)
-  await expect(page.getByRole('heading', { level: 2 })).toBeVisible({
+  await expect(page).toHaveURL(/\/calendar/, { timeout: 15_000 })
+  await expect(page.getByText('Category:', { exact: true })).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openLoggingPage(page: Page) {
   await clickNavLink(page, 'Logging')
-  await expect(page).toHaveURL(/\/logging/)
-  await expect(page.getByText('Entry type')).toBeVisible({
+  await expect(page).toHaveURL(/\/logging/, { timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: /Entries for/ })).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openVehiclesPage(page: Page) {
   await clickNavLink(page, 'Vehicles')
-  await expect(page).toHaveURL(/\/vehicles/)
-  await expect(
-    page.getByRole('heading', { name: 'Vehicles', exact: true }),
-  ).toBeVisible({
+  await expect(page).toHaveURL(/\/vehicles/, { timeout: 15_000 })
+  await expect(page.getByPlaceholder('Search vehicles…')).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openCrewPage(page: Page) {
   await clickNavLink(page, 'Crew')
-  await expect(page).toHaveURL(/\/crew/)
-  await expect(
-    page.getByRole('heading', { name: 'Crew', exact: true }),
-  ).toBeVisible({
+  await expect(page).toHaveURL(/\/crew/, { timeout: 15_000 })
+  await expect(page.getByPlaceholder('Search crew…')).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openCompanyPage(page: Page) {
   await clickNavLink(page, 'Company')
-  await expect(page).toHaveURL(/\/company/)
+  await expect(page).toHaveURL(/\/company/, { timeout: 15_000 })
   await expect(
     page.getByRole('heading', { name: 'Grid Test Company' }),
   ).toBeVisible({
@@ -143,15 +191,15 @@ export async function openCompanyPage(page: Page) {
 
 export async function openMattersPage(page: Page) {
   await clickNavLink(page, 'Matters')
-  await expect(page).toHaveURL(/\/matters/)
-  await expect(page.getByRole('heading', { name: 'Matters' })).toBeVisible({
+  await expect(page).toHaveURL(/\/matters/, { timeout: 15_000 })
+  await expect(page.getByPlaceholder('Search matters…')).toBeVisible({
     timeout: 15_000,
   })
 }
 
 export async function openProfilePage(page: Page) {
   await clickNavLink(page, 'Profile')
-  await expect(page).toHaveURL(/\/profile/)
+  await expect(page).toHaveURL(/\/profile/, { timeout: 15_000 })
   await expect(page.getByText('owner@test.grid.local')).toBeVisible({
     timeout: 15_000,
   })
@@ -159,23 +207,22 @@ export async function openProfilePage(page: Page) {
 
 export async function openLatestPage(page: Page) {
   await clickNavLink(page, 'Latest')
-  await expect(page).toHaveURL(/\/latest/)
-  await expect(page.getByRole('heading', { name: 'Latest' })).toBeVisible({
-    timeout: 15_000,
-  })
+  await expect(page).toHaveURL(/\/latest/, { timeout: 15_000 })
 }
 
 export async function openHomePage(page: Page) {
   await clickNavLink(page, 'Home')
-  await expect(page).toHaveURL(/\/dashboard/)
+  await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 })
 }
 
 export async function createDraftJob(page: Page, title?: string) {
   await openJobsPage(page)
   await page.getByRole('button', { name: 'New job' }).first().click()
 
-  const dialog = page.getByRole('dialog')
-  await expect(dialog.getByText('New job')).toBeVisible()
+  const dialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'New job' }),
+  })
+  await expect(dialog).toBeVisible()
 
   const jobTitle = title ?? `E2E Job ${Date.now()}`
   const createButton = dialog.getByRole('button', { name: 'Create' })
@@ -190,13 +237,25 @@ export async function createDraftJob(page: Page, title?: string) {
   await createButton.click()
   await expect(dialog).toBeHidden({ timeout: 20_000 })
 
+  const closeMenu = page.getByRole('button', { name: 'Close menu' })
+  if (await closeMenu.isVisible().catch(() => false)) {
+    await closeMenu.click()
+  }
+
   await expect(async () => {
     const heading = page.getByRole('heading', { name: jobTitle })
     if (await heading.isVisible().catch(() => false)) return
 
+    const openInspector = page.getByRole('button', { name: 'Open inspector' })
+    if (await openInspector.isVisible().catch(() => false)) {
+      await openInspector.click({ force: true })
+      await expect(heading).toBeVisible({ timeout: 10_000 })
+      return
+    }
+
     const row = page.getByText(jobTitle, { exact: true }).first()
     await expect(row).toBeVisible({ timeout: 5_000 })
-    await row.click()
+    await row.click({ force: true })
     await expect(heading).toBeVisible({ timeout: 10_000 })
   }).toPass({ timeout: 20_000 })
 
@@ -266,7 +325,7 @@ export function bookEquipmentDialog(page: Page) {
   })
 }
 
-/** Pick a local date twice in the DateTimeRangePicker (full-day range). */
+/** Pick a local date in the DateTimeRangePicker (sets a full-day range on that day). */
 async function pickDateRangeInDialog(
   page: Page,
   dialog: ReturnType<typeof bookEquipmentDialog>,
@@ -279,49 +338,66 @@ async function pickDateRangeInDialog(
     await dialog.getByRole('button', { name: /Start/ }).first().click()
   }
 
-  const picker = page.getByRole('dialog').filter({
-    has: page.getByRole('button', { name: 'Dates' }),
-  })
+  const datesTab = page.getByRole('button', { name: 'Dates', exact: true })
+  await expect(datesTab).toBeVisible({ timeout: 10_000 })
+
+  const picker = page
+    .locator('[data-radix-popper-content-wrapper], [role="dialog"]')
+    .filter({ has: datesTab })
+    .first()
   await expect(picker).toBeVisible({ timeout: 10_000 })
 
   const targetMs = new Date(`${localDate}T12:00:00`).getTime()
 
-  for (let i = 0; i < 24; i++) {
+  const clickTargetDay = async () => {
+    for (let i = 0; i < 24; i++) {
+      const dayButton = picker.getByRole('button', { name: localDate }).last()
+      if (await dayButton.isVisible().catch(() => false)) {
+        await dayButton.click()
+        return
+      }
+
+      const labels = await picker
+        .locator('button[aria-label^="20"]')
+        .evaluateAll((buttons) =>
+          buttons
+            .map((btn) => btn.getAttribute('aria-label'))
+            .filter((label): label is string => Boolean(label)),
+        )
+
+      if (labels.length === 0) {
+        await picker.locator('button', { hasText: '→' }).click()
+        continue
+      }
+
+      labels.sort()
+      const firstMs = new Date(`${labels[0]}T12:00:00`).getTime()
+      const lastMs = new Date(`${labels.at(-1)!}T12:00:00`).getTime()
+
+      if (targetMs < firstMs) {
+        await picker.locator('button', { hasText: '←' }).click()
+      } else {
+        await picker.locator('button', { hasText: '→' }).click()
+      }
+    }
+
     const dayButton = picker.getByRole('button', { name: localDate }).last()
-    if (await dayButton.isVisible().catch(() => false)) {
-      await dayButton.click()
-      await dayButton.click()
-      return
-    }
-
-    const labels = await picker
-      .locator('button[aria-label^="20"]')
-      .evaluateAll((buttons) =>
-        buttons
-          .map((btn) => btn.getAttribute('aria-label'))
-          .filter((label): label is string => Boolean(label)),
-      )
-
-    if (labels.length === 0) {
-      await picker.locator('button', { hasText: '→' }).click()
-      continue
-    }
-
-    labels.sort()
-    const firstMs = new Date(`${labels[0]}T12:00:00`).getTime()
-    const lastMs = new Date(`${labels.at(-1)!}T12:00:00`).getTime()
-
-    if (targetMs < firstMs) {
-      await picker.locator('button', { hasText: '←' }).click()
-    } else {
-      await picker.locator('button', { hasText: '→' }).click()
-    }
+    await expect(dayButton).toBeVisible({ timeout: 5_000 })
+    await dayButton.click()
   }
 
-  const dayButton = picker.getByRole('button', { name: localDate }).last()
-  await expect(dayButton).toBeVisible({ timeout: 5_000 })
-  await dayButton.click()
-  await dayButton.click()
+  // First click may expand from the job's existing single day into a multi-day
+  // span; second click on the same day collapses to that full day only.
+  await clickTargetDay()
+  await clickTargetDay()
+  await page.keyboard.press('Escape')
+
+  const [year, , day] = localDate.split('-').map(Number)
+  const dayNum = String(day)
+  // Trigger shows e.g. "1. jul 2026" / "1. July 2026" — require day + year.
+  await expect(
+    dialog.getByRole('button', { name: new RegExp(`${dayNum}\\..*${year}`) }),
+  ).toBeVisible({ timeout: 5_000 })
 }
 
 export async function bookSeededItemOnJob(

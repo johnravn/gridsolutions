@@ -231,7 +231,34 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
     )
   }
 
-  // Bookings basis – invoice-like layout
+  return (
+    <BookingsInvoicePreview
+      {...props}
+      formatCurrency={formatCurrency}
+      invoiceDateStr={invoiceDateStr}
+      dueDateStr={dueDateStr}
+      deliveryDateStr={deliveryDateStr}
+    />
+  )
+}
+
+type BookingsInvoicePreviewProps = Extract<
+  InvoicePreviewProps,
+  { basis: 'bookings' }
+> & {
+  formatCurrency: (amount: number) => string
+  invoiceDateStr: string
+  dueDateStr: string
+  deliveryDateStr: string
+}
+
+function BookingsInvoicePreview({
+  formatCurrency,
+  invoiceDateStr,
+  dueDateStr,
+  deliveryDateStr,
+  ...props
+}: BookingsInvoicePreviewProps) {
   const {
     bookings,
     customerName,
@@ -315,10 +342,13 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
     return <Text color="gray">{discount}%</Text>
   }
 
-  const getLineTotalPrice = (line: BookingInvoiceLine) => {
-    const discount = lineDiscountOverrides[line.id] ?? 0
-    return line.unitPrice * line.quantity * (1 - discount / 100)
-  }
+  const getLineTotalPrice = React.useCallback(
+    (line: BookingInvoiceLine) => {
+      const discount = lineDiscountOverrides[line.id] ?? 0
+      return line.unitPrice * line.quantity * (1 - discount / 100)
+    },
+    [lineDiscountOverrides],
+  )
 
   const { subtotal, vatAmount, total } = React.useMemo(() => {
     let exVat = 0
@@ -337,7 +367,7 @@ export default function InvoicePreview(props: InvoicePreviewProps) {
       vatAmount: vat,
       total: exVat + vat,
     }
-  }, [displayLines, lineDiscountOverrides, vatIncluded])
+  }, [displayLines, vatIncluded, getLineTotalPrice])
 
   const vatSummaryLabel = React.useMemo(() => {
     if (!vatIncluded) return '0%'

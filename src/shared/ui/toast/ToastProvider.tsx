@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import * as Toast from '@radix-ui/react-toast'
-import { Button, Flex, IconButton, Text } from '@radix-ui/themes'
+import { Button, IconButton, Text } from '@radix-ui/themes'
 import {
   CheckCircleSolid,
   InfoCircle,
@@ -10,6 +10,7 @@ import {
   WarningTriangle,
   Xmark,
 } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { wasDemoBlockRecently } from '@features/demo/lib/demoModeState'
 
 type ToastKind = 'success' | 'error' | 'info'
@@ -38,201 +39,135 @@ type ToastContextValue = {
 
 const ToastCtx = React.createContext<ToastContextValue | null>(null)
 
+const DEFAULT_DURATION: Record<ToastKind, number> = {
+  success: 1800,
+  info: 2200,
+  error: 4000,
+}
+const UNDO_DURATION = 4000
+/** Keep in sync with `--app-toast-exit-ms` in styles.css */
+const TOAST_EXIT_MS = 120
+
 export function useToast() {
   const ctx = React.useContext(ToastCtx)
   if (!ctx) throw new Error('useToast must be used within <AppToastProvider>')
   return ctx
 }
 
-// Separate component for each toast to manage its own timer state
-function ToastItem({
+function resolveDuration(t: ToastItem): number {
+  if (t.duration === 0) return Infinity
+  if (t.duration != null) return t.duration
+  if (t.onUndo) return UNDO_DURATION
+  return DEFAULT_DURATION[t.kind]
+}
+
+function ToastItemView({
   toast: t,
   onRemove,
 }: {
   toast: ToastItem
   onRemove: (id: string) => void
 }) {
-  const duration = t.duration ?? 3000
-  const [timeRemaining, setTimeRemaining] = React.useState(duration)
+  const [open, setOpen] = React.useState(true)
+  const removedRef = React.useRef(false)
+  const duration = resolveDuration(t)
 
-  // Timer effect
-  React.useEffect(() => {
-    if (duration <= 0) return
+  const finish = React.useCallback(() => {
+    if (removedRef.current) return
+    removedRef.current = true
+    onRemove(t.id)
+  }, [onRemove, t.id])
 
-    const startTime = Date.now()
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime
-      const remaining = Math.max(0, duration - elapsed)
-      setTimeRemaining(remaining)
-
-      if (remaining === 0) {
-        clearInterval(interval)
-        // Auto-dismiss when countdown reaches 0
-        onRemove(t.id)
-      }
-    }, 100)
-
-    return () => clearInterval(interval)
-  }, [duration, t.id, onRemove])
+  const dismiss = () => setOpen(false)
 
   const handleUndo = () => {
-    if (t.onUndo) {
-      t.onUndo()
-    }
-    onRemove(t.id)
+    t.onUndo?.()
+    dismiss()
   }
-
-  // Get border color based on toast kind
-  const borderColor =
-    t.kind === 'success'
-      ? 'var(--green-9)'
-      : t.kind === 'error'
-        ? 'var(--red-9)'
-        : 'var(--blue-9)'
-
-  // Get icon color - using darker, more readable colors
-  const iconColor =
-    t.kind === 'success'
-      ? 'var(--green-11)'
-      : t.kind === 'error'
-        ? 'var(--red-11)'
-        : 'var(--blue-11)'
-
-  // Get subtle background tint based on toast kind
-  const backgroundTint =
-    t.kind === 'success'
-      ? 'rgba(46, 160, 67, 0.08)'
-      : t.kind === 'error'
-        ? 'rgba(231, 72, 74, 0.08)'
-        : 'rgba(49, 130, 206, 0.08)'
 
   return (
     <Toast.Root
-      open
-      onOpenChange={(open) => {
-        if (!open) onRemove(t.id)
+      className="app-toast"
+      data-kind={t.kind}
+      open={open}
+      onOpenChange={(next) => {
+        if (next) return
+        setOpen(false)
+        window.setTimeout(finish, TOAST_EXIT_MS)
       }}
       duration={duration}
-      style={{
-        background: backgroundTint,
-        backdropFilter: 'blur(16px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-        border: `1.5px solid ${borderColor}`,
-        borderRadius: 12,
-        padding: 14,
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.15)',
-        display: 'flex',
-        gap: 10,
-        alignItems: 'flex-start',
-        maxWidth: 420,
-        zIndex: 2147483647, // Maximum z-index to appear above dialogs
-        position: 'relative',
-      }}
     >
-      {/* Dismiss (always), optional countdown + undo */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 6,
-          right: 6,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'flex-end',
-          gap: 4,
-          zIndex: 1,
-        }}
-      >
-        <Toast.Close asChild>
-          <IconButton
-            size="1"
-            variant="ghost"
-            color="gray"
-            aria-label="Dismiss notification"
-          >
-            <Xmark width={18} height={18} strokeWidth={1.75} />
-          </IconButton>
-        </Toast.Close>
-        {(t.onUndo || t.kind === 'error') && duration > 0 && (
-          <Text size="1" color="gray" style={{ fontWeight: 500 }}>
-            {Math.ceil(timeRemaining / 1000)}s
-          </Text>
-        )}
-        {t.onUndo && (
-          <Button
-            size="2"
-            variant="ghost"
-            color="gray"
-            onClick={handleUndo}
-            style={{
-              fontWeight: 500,
-            }}
-          >
-            <Undo width={14} height={14} />
-            {t.undoLabel || 'Undo'}
-          </Button>
+      <div className="app-toast-icon" aria-hidden>
+        {t.kind === 'success' ? (
+          <CheckCircleSolid width={14} height={14} />
+        ) : t.kind === 'error' ? (
+          <WarningTriangle width={14} height={14} />
+        ) : (
+          <InfoCircle width={14} height={14} />
         )}
       </div>
 
-      <div
-        style={{
-          lineHeight: 0,
-          marginTop: 2,
-          color: iconColor,
-          flexShrink: 0,
-        }}
-      >
-        {t.kind === 'success' ? (
-          <CheckCircleSolid width={20} height={20} />
-        ) : t.kind === 'error' ? (
-          <WarningTriangle width={20} height={20} />
-        ) : (
-          <InfoCircle width={20} height={20} />
+      <div className="app-toast-body">
+        <Toast.Title asChild>
+          <Text size="2" weight="medium" className="app-toast-title">
+            {t.title}
+          </Text>
+        </Toast.Title>
+        {t.description && (
+          <Toast.Description asChild>
+            <Text size="1" color="gray" className="app-toast-desc">
+              {t.description}
+            </Text>
+          </Toast.Description>
         )}
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <Flex direction="column" gap="2">
-          <div>
-            <Toast.Title
-              style={{
-                fontWeight: 600,
-                color: 'var(--gray-12)',
-                fontSize: 14,
-                lineHeight: '20px',
-                marginBottom: t.description ? 4 : 0,
-                paddingRight: t.onUndo || t.kind === 'error' ? 100 : 44,
-              }}
-            >
-              {t.title}
-            </Toast.Title>
-            {t.description && (
-              <Toast.Description asChild>
-                <Text
-                  size="2"
-                  style={{
-                    color: 'var(--gray-11)',
-                    lineHeight: '18px',
-                  }}
-                >
-                  {t.description}
-                </Text>
-              </Toast.Description>
-            )}
-          </div>
-        </Flex>
-      </div>
+
+      {t.onUndo && (
+        <Button
+          size="1"
+          variant="ghost"
+          color="gray"
+          highContrast
+          onClick={handleUndo}
+          className="app-toast-action"
+        >
+          <Undo width={12} height={12} />
+          {t.undoLabel || 'Undo'}
+        </Button>
+      )}
+
+      <Toast.Close asChild>
+        <IconButton
+          size="1"
+          variant="ghost"
+          color="gray"
+          aria-label="Dismiss notification"
+          className="app-toast-close"
+        >
+          <Xmark width={12} height={12} strokeWidth={2} />
+        </IconButton>
+      </Toast.Close>
     </Toast.Root>
   )
 }
 
+function toastPortalHost(): HTMLElement {
+  return document.querySelector<HTMLElement>('.radix-themes') ?? document.body
+}
+
 export function AppToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Array<ToastItem>>([])
-  const [mounted, setMounted] = React.useState(false)
+  const [host, setHost] = React.useState<HTMLElement | null>(null)
+  const isPhone = useMediaQuery('(max-width: 768px)')
 
   React.useEffect(() => {
-    setMounted(true)
+    setHost(toastPortalHost())
   }, [])
 
-  const remove = (id: string) => setToasts((t) => t.filter((x) => x.id !== id))
+  const remove = React.useCallback(
+    (id: string) => setToasts((t) => t.filter((x) => x.id !== id)),
+    [],
+  )
 
   const push = React.useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = crypto.randomUUID()
@@ -241,7 +176,6 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
 
   const api: ToastContextValue = {
     show: ({ kind = 'info', ...rest }) => {
-      // Log error to console for debugging when kind is 'error'
       if (kind === 'error') {
         console.error('[Toast Error]', {
           title: rest.title,
@@ -264,7 +198,6 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
       }),
     error: (title, description, duration) => {
       if (wasDemoBlockRecently()) return
-      // Log error to console for debugging
       console.error('[Toast Error]', {
         title,
         description,
@@ -280,34 +213,23 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
 
   const viewport = (
     <Toast.Viewport
-      // Fixed viewport so toasts appear above dialogs, not inside them
-      style={{
-        position: 'fixed',
-        bottom: 'calc(16px + var(--app-safe-bottom))',
-        right: 'calc(16px + var(--app-safe-right))',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 10,
-        width: 'min(420px, calc(100vw - 32px))',
-        zIndex: 2147483647, // Maximum z-index to appear above dialogs
-        outline: 'none',
-        pointerEvents: 'auto',
-      }}
+      className="app-toast-viewport"
+      data-placement={isPhone ? 'top' : 'bottom'}
     />
   )
 
   return (
     <ToastCtx.Provider value={api}>
-      <Toast.Provider swipeDirection="right">
+      <Toast.Provider
+        swipeDirection={isPhone ? 'up' : 'right'}
+        duration={DEFAULT_DURATION.info}
+      >
         {children}
 
-        {/* Register viewport before toast roots so portals resolve immediately */}
-        {mounted && typeof document !== 'undefined'
-          ? createPortal(viewport, document.body)
-          : viewport}
+        {host ? createPortal(viewport, host) : viewport}
 
         {toasts.map((t) => (
-          <ToastItem key={t.id} toast={t} onRemove={remove} />
+          <ToastItemView key={t.id} toast={t} onRemove={remove} />
         ))}
       </Toast.Provider>
     </ToastCtx.Provider>

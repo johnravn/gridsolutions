@@ -48,10 +48,30 @@ export type EquipmentConflictRow = {
   has_forced: boolean
 }
 
+export type GroupConflictRow = {
+  group_id_1: string
+  group_id_2: string
+  group_name_1: string | null
+  group_name_2: string | null
+  period_id_1: string
+  period_id_2: string
+  job_id_1: string | null
+  job_id_2: string | null
+  job_title_1: string | null
+  job_title_2: string | null
+  start_1: string
+  end_1: string
+  start_2: string
+  end_2: string
+  forced_1: boolean
+  forced_2: boolean
+}
+
 export type JobBookingConflicts = {
   crew: Array<CrewConflictRow>
   vehicles: Array<VehicleConflictRow>
   equipment: Array<EquipmentConflictRow>
+  groups: Array<GroupConflictRow>
 }
 
 export function crewConflictsQuery({
@@ -137,6 +157,33 @@ export function equipmentConflictsQuery({
   })
 }
 
+export function groupConflictsQuery({
+  companyId,
+  from,
+  to,
+}: {
+  companyId: string
+  from?: string | null
+  to?: string | null
+}) {
+  return queryOptions<Array<GroupConflictRow>>({
+    queryKey: ['conflicts', 'groups', companyId, from ?? null, to ?? null],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_conflicts_groups', {
+        p_company_id: companyId,
+        p_from: from ?? undefined,
+        p_to: to ?? undefined,
+      })
+      if (error) throw error
+      return (data ?? []) as Array<GroupConflictRow>
+    },
+    enabled: !!companyId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  })
+}
+
 export function jobBookingConflictsQuery({
   jobId,
   from,
@@ -159,11 +206,13 @@ export function jobBookingConflictsQuery({
         crew: [],
         vehicles: [],
         equipment: [],
+        groups: [],
       }) as JobBookingConflicts
       return {
         crew: parsed.crew ?? [],
         vehicles: parsed.vehicles ?? [],
         equipment: mergeEquipmentConflicts(parsed.equipment ?? []),
+        groups: parsed.groups ?? [],
       }
     },
     enabled: !!jobId,

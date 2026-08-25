@@ -322,36 +322,39 @@ export function EquipmentSection({
     })
   }
 
-  const applyGroupItems = (
-    groupId: string,
-    groupItemId: string,
-    groupItems: Array<{
-      id: string
-      name: string
-      brand_name: string | null
-      model: string | null
-      quantity: number
-    }>,
-  ) => {
-    const currentGroups = groupsRef.current
-    const group = currentGroups.find((g) => g.id === groupId)
-    if (!group) return
+  const applyGroupItems = React.useCallback(
+    (
+      groupId: string,
+      groupItemId: string,
+      groupItems: Array<{
+        id: string
+        name: string
+        brand_name: string | null
+        model: string | null
+        quantity: number
+      }>,
+    ) => {
+      const currentGroups = groupsRef.current
+      const group = currentGroups.find((g) => g.id === groupId)
+      if (!group) return
 
-    onGroupsChange(
-      currentGroups.map((g) =>
-        g.id !== groupId
-          ? g
-          : {
-              ...g,
-              items: g.items.map((item) =>
-                item.id === groupItemId
-                  ? { ...item, group_items: groupItems }
-                  : item,
-              ),
-            },
-      ),
-    )
-  }
+      onGroupsChange(
+        currentGroups.map((g) =>
+          g.id !== groupId
+            ? g
+            : {
+                ...g,
+                items: g.items.map((item) =>
+                  item.id === groupItemId
+                    ? { ...item, group_items: groupItems }
+                    : item,
+                ),
+              },
+        ),
+      )
+    },
+    [onGroupsChange],
+  )
 
   const loadGroupItems = React.useCallback(
     async (groupId: string, targetGroupId: string, groupItemId: string) => {
@@ -398,7 +401,7 @@ export function EquipmentSection({
       groupItemsCacheRef.current.set(groupId, groupItems)
       applyGroupItems(targetGroupId, groupItemId, groupItems)
     },
-    [],
+    [applyGroupItems],
   )
 
   const toggleGroupItems = (itemId: string) => {

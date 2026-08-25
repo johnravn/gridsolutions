@@ -80,6 +80,28 @@ export const PerMinutePrecision: Story = {
   ),
 }
 
+export const DateOnly: Story = {
+  render: () => (
+    <ControlledRangePicker
+      label="Period"
+      dateOnly
+      initialStart="2026-07-01T00:00:00.000Z"
+      initialEnd="2026-07-15T23:59:59.999Z"
+    />
+  ),
+}
+
+export const DateOnlyOptionalEnd: Story = {
+  render: () => (
+    <ControlledRangePicker
+      label="Period"
+      dateOnly
+      optionalEnd
+      initialStart="2026-07-01T00:00:00.000Z"
+    />
+  ),
+}
+
 export const Invalid: Story = {
   render: () => <ControlledRangePicker label="Period" invalid />,
 }

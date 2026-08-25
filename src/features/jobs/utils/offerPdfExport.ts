@@ -163,7 +163,7 @@ const tintColor = (
 /**
  * Export an offer as PDF
  */
-export async function exportOfferAsPDF(
+export function exportOfferAsPDF(
   offer: OfferDetail,
   exportOptions?: OfferPdfExportOptions,
 ): Promise<void> {
@@ -1045,4 +1045,5 @@ export async function exportOfferAsPDF(
     ? `${safeTitle}_${numPart}_v${offer.version_number}.pdf`
     : `${safeTitle}_v${offer.version_number}.pdf`
   doc.save(filename)
+  return Promise.resolve()
 }

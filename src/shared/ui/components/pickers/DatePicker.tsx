@@ -47,7 +47,7 @@ export default function DatePicker({
         new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1),
       )
     }
-  }, [parsedDate?.getTime()])
+  }, [parsedDate])
 
   const displayValue = parsedDate
     ? formatDateLabel(parsedDate, locale)

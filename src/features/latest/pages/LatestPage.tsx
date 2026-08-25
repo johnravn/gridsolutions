@@ -3,10 +3,17 @@ import { useLocation } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useQuery } from '@tanstack/react-query'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
-import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
-import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
-import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  MobileSplitSkeleton,
+  MobileSplitView,
+  useMobileInspectorDrawer,
+} from '@app/layout/mobile'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import LatestFeed from '../components/LatestFeed'
 import LatestInspector from '../components/LatestInspector'
 import { latestFeedQuery } from '../api/queries'
@@ -22,11 +29,11 @@ export default function LatestPage() {
   const [selectedId, setSelectedId] = React.useState<string | null>(
     activityId || null,
   )
+  const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
+    useMobileInspectorDrawer(isLarge)
   const [activityTypes, setActivityTypes] = React.useState<Array<ActivityType>>(
     [],
   )
-  const inspectorRef = React.useRef<HTMLDivElement>(null)
-  const listRef = React.useRef<HTMLElement>(null)
 
   React.useEffect(() => {
     if (activityId) {
@@ -34,20 +41,21 @@ export default function LatestPage() {
     }
   }, [activityId])
 
+  const openedFromUrlRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }
-  }, [isLarge, selectedId])
+    if (!activityId || isLarge) return
+    if (openedFromUrlRef.current === activityId) return
+    openedFromUrlRef.current = activityId
+    openDrawer()
+  }, [activityId, isLarge, openDrawer])
 
-  const clearSelection = React.useCallback(() => {
-    setSelectedId(null)
-  }, [])
-
-  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+  const handleSelect = React.useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      openDrawer()
+    },
+    [openDrawer],
+  )
 
   const { isLoading: latestFeedLoading } = useQuery({
     ...latestFeedQuery({
@@ -58,7 +66,8 @@ export default function LatestPage() {
   })
   const showInitialSkeleton = useInitialPageLoad(latestFeedLoading)
 
-  if (!companyId || (showInitialSkeleton && !hasSlots)) {
+  if (!companyId) {
+    if (!isLarge) return <MobileSplitSkeleton />
     return (
       <SplitPageSkeleton
         defaultLeftWidth={SPLIT_LEFT_WIDTH.latest}
@@ -68,66 +77,63 @@ export default function LatestPage() {
     )
   }
 
+  if (showInitialSkeleton && !isLarge) return <MobileSplitSkeleton />
+
+  if (showInitialSkeleton && !hasSlots) {
+    return (
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.latest}
+        title="Latest"
+        rightTitle="Details"
+      />
+    )
+  }
+
+  const filter = (
+    <ActivityFilter
+      selectedTypes={activityTypes}
+      onTypesChange={setActivityTypes}
+    />
+  )
+
+  const feed = (
+    <LatestFeed
+      selectedId={selectedId}
+      onSelect={isLarge ? setSelectedId : handleSelect}
+      activityTypes={activityTypes.length > 0 ? activityTypes : undefined}
+      toolbarExtra={isLarge ? undefined : filter}
+    />
+  )
+
+  const inspector = <LatestInspector activityId={selectedId} />
+
+  if (!isLarge) {
+    return (
+      <MobileSplitView
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onToggle={toggleDrawer}
+        drawerTitle="Details"
+        inspector={inspector}
+      >
+        {feed}
+      </MobileSplitView>
+    )
+  }
+
   return (
     <SplitPage
       defaultLeftWidth={SPLIT_LEFT_WIDTH.latest}
       title="Latest"
-      leftToolbar={
-        <ActivityFilter
-          selectedTypes={activityTypes}
-          onTypesChange={setActivityTypes}
-        />
-      }
-      left={
-        <LatestFeed
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          activityTypes={activityTypes.length > 0 ? activityTypes : undefined}
-        />
-      }
+      leftToolbar={filter}
+      left={feed}
       leftBodyStyle={{
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}
-      mobileLeftBodyStyle={{
-        flex: 1,
-        minHeight: 0,
-        minWidth: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
       rightTitle="Details"
-      right={<LatestInspector activityId={selectedId} />}
-      mobileLeftCardStyle={{ height: MOBILE_CARD_HEIGHT, minWidth: 0 }}
-      mobileRightCardStyle={{
-        height: MOBILE_CARD_HEIGHT,
-        overflow: 'hidden',
-        maxWidth: '100%',
-      }}
-      mobileSectionRef={listRef}
-      mobileRightWrapper={(card) => (
-        <div
-          ref={inspectorRef}
-          style={{
-            minHeight: 0,
-            maxWidth: '100%',
-            width: '100%',
-            height: MOBILE_CARD_HEIGHT,
-          }}
-        >
-          {card}
-        </div>
-      )}
-      mobileFooter={
-        <ScrollToTopButton
-          listRef={listRef}
-          inspectorRef={inspectorRef}
-          visible={!isLarge && selectedId != null}
-        />
-      }
+      right={inspector}
     />
   )
 }

@@ -20,6 +20,8 @@ export function useVirtualIndexTable<TRow>({
   isFetching = false,
 }: UseVirtualIndexTableOptions<TRow>) {
   const scrollRef = React.useRef<HTMLDivElement>(null)
+  const onLoadMoreRef = React.useRef(infinite?.onLoadMore)
+  onLoadMoreRef.current = infinite?.onLoadMore
 
   const hasLoaderRow = infinite?.hasNextPage ?? false
   const virtualCount = rows.length + (hasLoaderRow ? 1 : 0)
@@ -34,25 +36,28 @@ export function useVirtualIndexTable<TRow>({
       if (row) return getRowId(row)
       return `loader-${index}`
     },
-    enabled: rows.length > 0 || isFetching,
+    enabled: rows.length > 0 || isFetching || hasLoaderRow,
   })
 
+  const lastVirtualIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
+
   React.useEffect(() => {
-    if (!infinite) return
-    const virtualItems = rowVirtualizer.getVirtualItems()
-    if (virtualItems.length === 0) return
+    if (infinite?.isFetchingNextPage) return
+    if (!infinite?.hasNextPage) return
 
-    const last = virtualItems[virtualItems.length - 1]
-    const isAtLoader = last.index >= rows.length - 1
-    if (!isAtLoader) return
-    if (infinite.isFetchingNextPage) return
-    if (!infinite.hasNextPage) return
+    const el = scrollRef.current
+    const sawLastRow =
+      lastVirtualIndex >= 0 && lastVirtualIndex >= rows.length - 1
+    // If the first page does not overflow, the user cannot scroll to the
+    // loader row — fetch the next page until the list becomes scrollable.
+    const canMeasure = !!el && el.clientHeight > 0
+    const notOverflowing = canMeasure && el.scrollHeight <= el.clientHeight + 1
 
-    infinite.onLoadMore()
+    if (!sawLastRow && !notOverflowing) return
+    onLoadMoreRef.current?.()
   }, [
-    infinite,
+    lastVirtualIndex,
     rows.length,
-    rowVirtualizer,
     infinite?.hasNextPage,
     infinite?.isFetchingNextPage,
   ])

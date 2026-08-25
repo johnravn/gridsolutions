@@ -341,14 +341,22 @@ export default function PrettyOfferEditor({
   )
   const modulesReadyToLock = moduleValidationIssues.length === 0
 
-  const expansionContext = {
-    rentalFactorConfig: (companyExpansion?.rental_factor_config ??
-      null) as RentalFactorConfig | null,
-    vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
-    vehicleDistanceIncrement:
-      companyExpansion?.vehicle_distance_increment ?? null,
-    vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
-  }
+  const expansionContext = React.useMemo(
+    () => ({
+      rentalFactorConfig: (companyExpansion?.rental_factor_config ??
+        null) as RentalFactorConfig | null,
+      vehicleDistanceRate: companyExpansion?.vehicle_distance_rate ?? null,
+      vehicleDistanceIncrement:
+        companyExpansion?.vehicle_distance_increment ?? null,
+      vehicleDailyRate: companyExpansion?.vehicle_daily_rate ?? null,
+    }),
+    [
+      companyExpansion?.rental_factor_config,
+      companyExpansion?.vehicle_distance_rate,
+      companyExpansion?.vehicle_distance_increment,
+      companyExpansion?.vehicle_daily_rate,
+    ],
+  )
 
   const subcontractorMarkupPercent = resolveSubcontractorMarkupPercent(
     prettySubcontractorMarkupPercent,
@@ -390,16 +398,26 @@ export default function PrettyOfferEditor({
     },
   })
 
+  const {
+    mutate: bootstrapPrettyOffer,
+    isPending: isBootstrappingPrettyOffer,
+    isSuccess: didBootstrapPrettyOffer,
+  } = createMutation
   const shouldBootstrap = open && !offerId && !activeOfferId
   React.useEffect(() => {
     if (
       shouldBootstrap &&
-      !createMutation.isPending &&
-      !createMutation.isSuccess
+      !isBootstrappingPrettyOffer &&
+      !didBootstrapPrettyOffer
     ) {
-      createMutation.mutate()
+      bootstrapPrettyOffer()
     }
-  }, [shouldBootstrap, createMutation.isPending, createMutation.isSuccess])
+  }, [
+    shouldBootstrap,
+    isBootstrappingPrettyOffer,
+    didBootstrapPrettyOffer,
+    bootstrapPrettyOffer,
+  ])
 
   const persistOffer = async () => {
     if (!activeOfferId) throw new Error('No offer to save')
@@ -447,17 +465,7 @@ export default function PrettyOfferEditor({
         pricingBases: current.pricingBases,
       }) !== baselineSerialized
     )
-  }, [
-    open,
-    readOnly,
-    baselineSerialized,
-    title,
-    prettyIntroText,
-    showPricePerLine,
-    prettyUseCustomerBrandColors,
-    modules,
-    pricingBases,
-  ])
+  }, [open, readOnly, baselineSerialized])
 
   const isDirty = hasUnsavedChanges()
 

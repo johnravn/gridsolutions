@@ -41,6 +41,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { CopyIconButton } from '@shared/lib/CopyIconButton'
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import {
   OVERLAP_NEEDS_FORCE,
@@ -144,12 +145,6 @@ function getLatestOfferOnBasis(offers: Array<JobOffer>): JobOffer | null {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })[0] ?? null
   )
-}
-
-type GroupItemRow = {
-  group_id: string
-  item_id: string
-  quantity: number | null
 }
 
 export default function OffersTab({
@@ -648,30 +643,7 @@ export default function OffersTab({
     refetchOnMount: false,
     queryFn: async (): Promise<
       Map<string, Array<{ item_id: string; quantity: number }>>
-    > => {
-      const { data, error } = await supabase
-        .from('group_items')
-        .select('group_id, item_id, quantity')
-        .in('group_id', groupIdsUsedByBases)
-
-      if (error) throw error
-
-      const map = new Map<
-        string,
-        Array<{ item_id: string; quantity: number }>
-      >()
-      for (const row of (data as Array<GroupItemRow> | null | undefined) ??
-        []) {
-        if (!row.group_id || !row.item_id) continue
-        const list = map.get(row.group_id) ?? []
-        list.push({
-          item_id: row.item_id,
-          quantity: row.quantity ?? 1,
-        })
-        map.set(row.group_id, list)
-      }
-      return map
-    },
+    > => flattenGroupLeafItems(groupIdsUsedByBases),
   })
 
   const getBasisDiff = React.useCallback(
@@ -1294,31 +1266,7 @@ export default function OffersTab({
   )
 
   const fetchGroupItemsMap = React.useCallback(
-    async (groupIds: Array<string>) => {
-      const ids = Array.from(new Set(groupIds)).filter(Boolean)
-      if (ids.length === 0)
-        return new Map<string, Array<{ item_id: string; quantity: number }>>()
-
-      const { data, error } = await supabase
-        .from('group_items')
-        .select('group_id, item_id, quantity')
-        .in('group_id', ids)
-
-      if (error) throw error
-
-      const map = new Map<
-        string,
-        Array<{ item_id: string; quantity: number }>
-      >()
-      for (const row of (data as Array<GroupItemRow> | null | undefined) ??
-        []) {
-        if (!row.group_id || !row.item_id) continue
-        const list = map.get(row.group_id) ?? []
-        list.push({ item_id: row.item_id, quantity: row.quantity ?? 1 })
-        map.set(row.group_id, list)
-      }
-      return map
-    },
+    async (groupIds: Array<string>) => flattenGroupLeafItems(groupIds),
     [],
   )
 

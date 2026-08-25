@@ -146,11 +146,7 @@ export function calculateOfferTotals(
   transportItems: Array<
     Pick<
       OfferTransportItem,
-      | 'start_date'
-      | 'end_date'
-      | 'daily_rate'
-      | 'distance_km'
-      | 'distance_rate'
+      'start_date' | 'end_date' | 'daily_rate' | 'distance_km' | 'distance_rate'
     > &
       Partial<Pick<OfferTransportItem, 'days_used'>>
   >,

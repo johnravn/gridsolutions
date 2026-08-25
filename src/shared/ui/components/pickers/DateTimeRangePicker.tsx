@@ -7,7 +7,9 @@ import { PickerTrigger } from './PickerTrigger'
 import { SegmentedControl } from './SegmentedControl'
 import {
   buildRangeIso,
+  compareLocalDates,
   dateToLocalDate,
+  endOfDay,
   ensurePositiveSameDayTimes,
   extractRangeTimes,
   formatDateLabel,
@@ -43,9 +45,14 @@ type Props = {
   disabled?: boolean
   /** Minute picker step. Defaults to 5; use 1 for per-minute precision. */
   minuteStep?: 1 | 5
+  /** Hide hours/minutes and treat the value as calendar dates. */
+  dateOnly?: boolean
+  /** Allow an empty end (open-ended). Used with dateOnly. */
+  optionalEnd?: boolean
 }
 
 type Phase = 'dates' | 'hours' | 'minutes'
+type BoundTarget = 'range' | 'start' | 'end'
 
 const MULTI_DAY_END_TAB_DELAY_MS = 300
 
@@ -77,6 +84,8 @@ export default function DateTimeRangePicker({
   locale = 'en',
   disabled = false,
   minuteStep = 5,
+  dateOnly = false,
+  optionalEnd = false,
 }: Props) {
   const [open, setOpen] = React.useState(false)
   const [phase, setPhase] = React.useState<Phase>('dates')
@@ -89,6 +98,7 @@ export default function DateTimeRangePicker({
   const [activeTimeTab, setActiveTimeTab] = React.useState<'start' | 'end'>(
     'start',
   )
+  const [boundTarget, setBoundTarget] = React.useState<BoundTarget>('range')
 
   const parsedStart = React.useMemo(() => parseIso(startAt), [startAt])
   const parsedEnd = React.useMemo(() => parseIso(endAt), [endAt])
@@ -102,21 +112,25 @@ export default function DateTimeRangePicker({
     if (anchor) {
       setCurrentMonth(new Date(anchor.getFullYear(), anchor.getMonth(), 1))
     }
-  }, [parsedStart?.getTime(), parsedEnd?.getTime()])
+  }, [parsedStart, parsedEnd])
 
   const syncFromProps = React.useCallback(() => {
     if (parsedStart) {
       const startDate = toLocalDate(parsedStart.toISOString())
       const endDate = parsedEnd
         ? toLocalDate(parsedEnd.toISOString())
-        : startDate
+        : optionalEnd
+          ? null
+          : startDate
       setDateSelection({ start: startDate, end: endDate })
-      setTimeSelection(extractRangeTimes(startAt, endAt))
+      setTimeSelection(
+        dateOnly ? EMPTY_TIME_SELECTION : extractRangeTimes(startAt, endAt),
+      )
     } else {
       setDateSelection({ start: null, end: null })
       setTimeSelection(EMPTY_TIME_SELECTION)
     }
-  }, [parsedStart, parsedEnd, startAt, endAt])
+  }, [parsedStart, parsedEnd, startAt, endAt, optionalEnd, dateOnly])
 
   const wasOpenRef = React.useRef(false)
   const advanceToEndTabTimeoutRef = React.useRef<ReturnType<
@@ -140,6 +154,7 @@ export default function DateTimeRangePicker({
     syncFromProps()
     setPhase('dates')
     setActiveTimeTab('start')
+    setBoundTarget('range')
   }, [open, syncFromProps])
 
   // Keep the closed trigger in sync when the parent form resets/prefills
@@ -180,34 +195,91 @@ export default function DateTimeRangePicker({
   }
 
   const commitRange = (
-    dates: { start: string; end: string },
+    dates: { start: string; end: string | null },
     times: RangeTimeSelection,
   ) => {
+    if (dateOnly) {
+      if (optionalEnd && dates.end == null) {
+        onChange({ startAt: startOfDay(dates.start), endAt: '' })
+        return
+      }
+      const end = dates.end ?? dates.start
+      onChange({
+        startAt: startOfDay(dates.start),
+        endAt: endOfDay(end),
+      })
+      return
+    }
+    const end = dates.end ?? dates.start
     const { startAt: newStart, endAt: newEnd } = buildRangeIso(
       dates.start,
-      dates.end,
+      end,
       times,
       minDurationMs,
     )
     onChange({ startAt: newStart, endAt: newEnd })
   }
 
+  const applyDateSelection = (
+    dates: { start: string; end: string | null },
+    times: RangeTimeSelection,
+  ) => {
+    setDateSelection(dates)
+    setTimeSelection(times)
+    commitRange(dates, times)
+  }
+
   const handleDateClick = (date: Date) => {
     if (disabled) return
     const localDate = dateToLocalDate(date)
+
+    if (boundTarget === 'start' && dateSelection.start) {
+      const currentEnd = dateSelection.end
+      let start = localDate
+      if (currentEnd != null && compareLocalDates(start, currentEnd) > 0) {
+        start = currentEnd
+      }
+      applyDateSelection(
+        { start, end: currentEnd },
+        dateOnly ? EMPTY_TIME_SELECTION : timeSelection,
+      )
+      return
+    }
+
+    if (boundTarget === 'end' && dateSelection.start) {
+      const start = dateSelection.start
+      let end = localDate
+      if (compareLocalDates(end, start) < 0) {
+        end = start
+      }
+      applyDateSelection(
+        { start, end },
+        dateOnly ? EMPTY_TIME_SELECTION : timeSelection,
+      )
+      return
+    }
+
+    if (
+      optionalEnd &&
+      dateSelection.start &&
+      dateSelection.end == null &&
+      localDate === dateSelection.start
+    ) {
+      return
+    }
+
     const next = handleRangeDateClick(dateSelection, localDate)
 
     if (!next.start) return
 
-    const end = next.end ?? next.start
+    const end =
+      optionalEnd && next.end == null ? null : (next.end ?? next.start)
     const dates = { start: next.start, end }
     const datesChanged =
       dates.start !== dateSelection.start || dates.end !== dateSelection.end
     const times = datesChanged ? EMPTY_TIME_SELECTION : timeSelection
 
-    setDateSelection(dates)
-    setTimeSelection(times)
-    commitRange(dates, times)
+    applyDateSelection(dates, times)
   }
 
   const handleSameDayHourClick = (hour: number) => {
@@ -288,21 +360,46 @@ export default function DateTimeRangePicker({
     commitRange({ start: dateSelection.start, end: endDate }, times)
   }
 
-  const buildTriggerFields = () => {
+  const buildTriggerFields = React.useCallback(() => {
     const displayStart =
       dateSelection.start ??
       (parsedStart ? toLocalDate(parsedStart.toISOString()) : null)
 
     if (!displayStart) return []
 
-    const displayEnd =
-      dateSelection.end ??
-      (parsedEnd ? toLocalDate(parsedEnd.toISOString()) : displayStart)
-
     const startDateObj = parseIso(startOfDay(displayStart))
     if (!startDateObj) return []
 
     const startDateLabel = formatDateLabel(startDateObj, locale)
+    const displayEnd =
+      dateSelection.end ??
+      (parsedEnd
+        ? toLocalDate(parsedEnd.toISOString())
+        : optionalEnd
+          ? null
+          : displayStart)
+
+    if (dateOnly) {
+      if (!displayEnd) {
+        return [
+          { label: 'Start', primary: startDateLabel },
+          { label: 'End', primary: 'Open-ended', muted: true },
+        ]
+      }
+      const endDateObj = parseIso(startOfDay(displayEnd))
+      return [
+        { label: 'Start', primary: startDateLabel },
+        {
+          label: 'End',
+          primary: endDateObj
+            ? formatDateLabel(endDateObj, locale)
+            : displayEnd,
+        },
+      ]
+    }
+
+    if (!displayEnd) return []
+
     const startTime =
       formatSelectionTime(timeSelection.startHour, timeSelection.startMinute) ??
       (startAt ? formatIsoTime(startAt, false) : undefined)
@@ -328,46 +425,58 @@ export default function DateTimeRangePicker({
         secondary: sameDay ? endDateLabel : endTime,
       },
     ]
-  }
+  }, [
+    dateSelection.start,
+    dateSelection.end,
+    parsedStart,
+    parsedEnd,
+    optionalEnd,
+    dateOnly,
+    locale,
+    timeSelection.startHour,
+    timeSelection.startMinute,
+    timeSelection.endHour,
+    timeSelection.endMinute,
+    startAt,
+    endAt,
+  ])
 
-  const rangeInvalid = invalid || isInvalidTimeRange(startAt, endAt)
+  const rangeInvalid =
+    invalid || (!dateOnly && isInvalidTimeRange(startAt, endAt))
 
-  const fieldInteraction =
-    open &&
-    (phase === 'hours' || phase === 'minutes') &&
-    dateSelection.start != null
+  const fieldInteraction = open && dateSelection.start != null
 
   const triggerFields = React.useMemo(() => {
     const fields = buildTriggerFields()
     if (!fieldInteraction) return fields
-    return fields.map((field) => ({
-      ...field,
-      active:
-        (field.label === 'Start' && activeTimeTab === 'start') ||
-        (field.label === 'End' && activeTimeTab === 'end'),
-    }))
-  }, [
-    startAt,
-    endAt,
-    dateSelection,
-    timeSelection,
-    parsedStart,
-    parsedEnd,
-    locale,
-    fieldInteraction,
-    activeTimeTab,
-  ])
+    return fields.map((field) => {
+      const isStart = field.label === 'Start'
+      const isEnd = field.label === 'End'
+      const active =
+        phase === 'dates'
+          ? (isStart && boundTarget === 'start') ||
+            (isEnd && boundTarget === 'end')
+          : (isStart && activeTimeTab === 'start') ||
+            (isEnd && activeTimeTab === 'end')
+      return { ...field, active }
+    })
+  }, [buildTriggerFields, fieldInteraction, phase, boundTarget, activeTimeTab])
 
   const handleFieldClick = (field: 'start' | 'end') => {
     if (advanceToEndTabTimeoutRef.current) {
       clearTimeout(advanceToEndTabTimeoutRef.current)
       advanceToEndTabTimeoutRef.current = null
     }
+    setBoundTarget(field)
     setActiveTimeTab(field)
+    if (!dateOnly && phase === 'dates') {
+      setPhase('hours')
+    }
   }
 
   const hasHourSelection =
     timeSelection.startHour != null || timeSelection.endHour != null
+  const useRangeHourGrid = isSameDay && boundTarget === 'range'
 
   return (
     <Box style={{ minWidth: 0 }}>
@@ -407,23 +516,30 @@ export default function DateTimeRangePicker({
             zIndex: 10001,
           }}
         >
-          <Flex align="center" mb="3">
-            <SegmentedControl
-              segments={[
-                { id: 'dates', label: 'Dates' },
-                { id: 'hours', label: 'Hours' },
-                { id: 'minutes', label: 'Minutes' },
-              ]}
-              activeId={phase}
-              onChange={(id) => {
-                const nextPhase = id as Phase
-                setPhase(nextPhase)
-                if (nextPhase === 'minutes') {
-                  setActiveTimeTab('start')
-                }
-              }}
-            />
-          </Flex>
+          {!dateOnly && (
+            <Flex align="center" mb="3">
+              <SegmentedControl
+                segments={[
+                  { id: 'dates', label: 'Dates' },
+                  { id: 'hours', label: 'Hours' },
+                  { id: 'minutes', label: 'Minutes' },
+                ]}
+                activeId={phase}
+                onChange={(id) => {
+                  const nextPhase = id as Phase
+                  setPhase(nextPhase)
+                  if (nextPhase === 'dates') {
+                    setBoundTarget('range')
+                  } else if (nextPhase === 'hours' && phase !== 'hours') {
+                    setBoundTarget('range')
+                  }
+                  if (nextPhase === 'minutes' && boundTarget === 'range') {
+                    setActiveTimeTab('start')
+                  }
+                }}
+              />
+            </Flex>
+          )}
 
           {phase === 'dates' && (
             <CalendarGrid
@@ -435,9 +551,9 @@ export default function DateTimeRangePicker({
             />
           )}
 
-          {phase === 'hours' && dateSelection.start && (
+          {!dateOnly && phase === 'hours' && dateSelection.start && (
             <Box>
-              {isSameDay ? (
+              {useRangeHourGrid ? (
                 <Flex direction="column" gap="3">
                   <HourGrid
                     label="Select start and end hour"
@@ -478,7 +594,7 @@ export default function DateTimeRangePicker({
             </Box>
           )}
 
-          {phase === 'minutes' && dateSelection.start && (
+          {!dateOnly && phase === 'minutes' && dateSelection.start && (
             <Box>
               {!hasHourSelection ? (
                 <Text size="2" color="gray">
@@ -518,7 +634,8 @@ export default function DateTimeRangePicker({
             </Box>
           )}
 
-          {(phase === 'hours' || phase === 'minutes') &&
+          {!dateOnly &&
+            (phase === 'hours' || phase === 'minutes') &&
             !dateSelection.start && (
               <Text size="2" color="gray">
                 Select a date first.

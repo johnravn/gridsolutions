@@ -281,7 +281,7 @@ export function SearchableSelect({
     } else if (!open) {
       setInputValue('')
     }
-  }, [value, selectedOption?.label, open])
+  }, [value, selectedOption, open])
 
   React.useEffect(() => {
     setHighlightedIndex(null)

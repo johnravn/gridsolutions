@@ -1,23 +1,27 @@
 import { Box, Flex, Quote, Text } from '@radix-ui/themes'
 import { Quote as QuoteIcon } from 'iconoir-react'
 import { useQuery } from '@tanstack/react-query'
+import { normalizeBibleVersion } from '@shared/lib/bibleVersion'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
+import type { BibleVersion } from '@shared/lib/bibleVersion'
 
 export function BibleVerseSection({
   presentation = 'desktop',
+  bibleVersion = 'bm11',
 }: {
   presentation?: 'desktop' | 'mobile'
+  bibleVersion?: BibleVersion
 }) {
   const isMobile = presentation === 'mobile'
   const todayKey = new Date().toISOString().slice(0, 10)
-  const langPreference = 'en'
+  const selectedVersion = normalizeBibleVersion(bibleVersion)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['youversion', 'verse-of-the-day', todayKey, langPreference],
+    queryKey: ['youversion', 'verse-of-the-day', todayKey, selectedVersion],
     queryFn: async () => {
       const res = await fetch(
-        `/api/verse-of-the-day?lang=${encodeURIComponent(langPreference)}`,
+        `/api/verse-of-the-day?version=${encodeURIComponent(selectedVersion)}`,
       )
       const json = await res.json().catch(() => null)
       if (!res.ok) {

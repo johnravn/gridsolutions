@@ -70,12 +70,12 @@ export default function EditBrandsDialog({
     queryKey: brandsQueryKey,
     enabled: !!companyId && open,
     queryFn: async (): Promise<Array<ItemBrand>> => {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('item_brands')
         .select('id, company_id, name')
         .eq('company_id', companyId)
         .order('name', { ascending: true })
-      if (error) throw error
+      if (fetchError) throw fetchError
       return data
     },
     staleTime: 5_000,
@@ -85,11 +85,11 @@ export default function EditBrandsDialog({
   const createMutation = useMutation({
     mutationFn: async (f: typeof defaultValues) => {
       if (!companyId) throw new Error('No company selected')
-      const { error } = await supabase.from('item_brands').insert({
+      const { error: insertError } = await supabase.from('item_brands').insert({
         company_id: companyId,
         name: f.name.trim(),
       })
-      if (error) throw error
+      if (insertError) throw insertError
     },
     onSuccess: async (_, variables) => {
       const brandName = variables.name.trim()
@@ -106,12 +106,12 @@ export default function EditBrandsDialog({
   /* ---------- Update (rename) ---------- */
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; name: string }) => {
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('item_brands')
         .update({ name: payload.name.trim() })
         .eq('id', payload.id)
         .eq('company_id', companyId)
-      if (error) throw error
+      if (updateError) throw updateError
     },
     onSuccess: async (_, variables) => {
       setEditingId(null)
@@ -128,12 +128,12 @@ export default function EditBrandsDialog({
   /* ---------- Delete ---------- */
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('item_brands')
         .delete()
         .eq('id', id)
         .eq('company_id', companyId)
-      if (error) throw error
+      if (deleteError) throw deleteError
     },
     onSuccess: async (_, id) => {
       const deletedBrand = brands?.find((b) => b.id === id)

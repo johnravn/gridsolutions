@@ -10,7 +10,9 @@ import {
   Switch,
   Text,
 } from '@radix-ui/themes'
+import { BIBLE_VERSION_OPTIONS } from '@shared/lib/bibleVersion'
 import ThemeToggle from '@shared/theme/ThemeToggle'
+import type { BibleVersion } from '@shared/lib/bibleVersion'
 
 export type ProfilePersonalizationFormSlice = {
   animatedBackground: boolean
@@ -18,6 +20,7 @@ export type ProfilePersonalizationFormSlice = {
   backgroundShapeType: 'circles' | 'triangles' | 'rectangles'
   backgroundSpeed: number
   dailyInspirationType: 'quote' | 'bibleverse'
+  bibleVersion: BibleVersion
 }
 
 export default function ProfilePersonalizationTab({
@@ -28,7 +31,9 @@ export default function ProfilePersonalizationTab({
 }: {
   form: ProfilePersonalizationFormSlice
   patchForm: (patch: Partial<ProfilePersonalizationFormSlice>) => void
-  saveProfile: () => Promise<unknown>
+  saveProfile: (
+    patch?: Partial<ProfilePersonalizationFormSlice>,
+  ) => Promise<unknown>
   isSaving: boolean
 }) {
   const motionOn = form.animatedBackground
@@ -260,11 +265,10 @@ export default function ProfilePersonalizationTab({
               value={form.dailyInspirationType}
               onValueChange={async (v) => {
                 if (isSaving) return
-                patchForm({
-                  dailyInspirationType: v as 'quote' | 'bibleverse',
-                })
+                const dailyInspirationType = v as 'quote' | 'bibleverse'
+                patchForm({ dailyInspirationType })
                 try {
-                  await saveProfile()
+                  await saveProfile({ dailyInspirationType })
                 } catch {
                   /* mutation onError */
                 }
@@ -281,6 +285,38 @@ export default function ProfilePersonalizationTab({
                 </Select.Item>
               </Select.Content>
             </Select.Root>
+            {form.dailyInspirationType === 'bibleverse' && (
+              <Box mt="3">
+                <Text size="2" color="gray" mb="2" style={{ display: 'block' }}>
+                  Bible translation for the verse of the day.
+                </Text>
+                <Select.Root
+                  value={form.bibleVersion}
+                  onValueChange={async (v) => {
+                    if (isSaving) return
+                    const bibleVersion = v as BibleVersion
+                    patchForm({ bibleVersion })
+                    try {
+                      await saveProfile({ bibleVersion })
+                    } catch {
+                      /* mutation onError */
+                    }
+                  }}
+                >
+                  <Select.Trigger
+                    placeholder="Select translation…"
+                    style={{ maxWidth: 360, width: '100%' }}
+                  />
+                  <Select.Content>
+                    {BIBLE_VERSION_OPTIONS.map((option) => (
+                      <Select.Item key={option.value} value={option.value}>
+                        {option.label}
+                      </Select.Item>
+                    ))}
+                  </Select.Content>
+                </Select.Root>
+              </Box>
+            )}
           </Box>
         </Flex>
       </Box>

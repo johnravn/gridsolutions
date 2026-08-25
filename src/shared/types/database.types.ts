@@ -4762,40 +4762,23 @@ export type Database = {
         }
         Returns: undefined
       }
-      create_item_with_price:
-        | {
-            Args: {
-              p_active?: boolean
-              p_allow_individual_booking?: boolean
-              p_brand_id?: string
-              p_category_id?: string
-              p_company_id: string
-              p_effective_from?: string
-              p_model?: string
-              p_name: string
-              p_nicknames?: string
-              p_notes?: string
-              p_price?: number
-              p_total_quantity?: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_active?: boolean
-              p_allow_individual_booking?: boolean
-              p_brand_id?: string
-              p_category_id?: string
-              p_company_id: string
-              p_currency?: string
-              p_model?: string
-              p_name: string
-              p_notes?: string
-              p_price?: number
-              p_total_quantity?: number
-            }
-            Returns: string
-          }
+      create_item_with_price: {
+        Args: {
+          p_active?: boolean
+          p_allow_individual_booking?: boolean
+          p_brand_id?: string
+          p_category_id?: string
+          p_company_id: string
+          p_effective_from?: string
+          p_model?: string
+          p_name: string
+          p_nicknames?: string
+          p_notes?: string
+          p_price?: number
+          p_total_quantity?: number
+        }
+        Returns: string
+      }
       current_company_id: { Args: never; Returns: string }
       decrypt_api_key:
         | {
@@ -4919,6 +4902,27 @@ export type Database = {
           total_reserved: number
         }[]
       }
+      get_conflicts_groups: {
+        Args: { p_company_id: string; p_from?: string; p_to?: string }
+        Returns: {
+          end_1: string
+          end_2: string
+          forced_1: boolean
+          forced_2: boolean
+          group_id_1: string
+          group_id_2: string
+          group_name_1: string
+          group_name_2: string
+          job_id_1: string
+          job_id_2: string
+          job_title_1: string
+          job_title_2: string
+          period_id_1: string
+          period_id_2: string
+          start_1: string
+          start_2: string
+        }[]
+      }
       get_conflicts_vehicle: {
         Args: { p_company_id: string; p_from?: string; p_to?: string }
         Returns: {
@@ -4955,6 +4959,7 @@ export type Database = {
         Returns: Json
       }
       get_system_monitor_snapshot: { Args: never; Returns: Json }
+      group_lineage_ids: { Args: { p_group_id: string }; Returns: string[] }
       is_superuser: { Args: { p_user_id: string }; Returns: boolean }
       item_available_qty: {
         Args: {
@@ -4989,26 +4994,16 @@ export type Database = {
         Args: { p_company_id: string; p_recipient_user_id: string }
         Returns: boolean
       }
-      public_offer_accept:
-        | {
-            Args: {
-              p_access_token: string
-              p_first_name: string
-              p_last_name: string
-              p_phone: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_access_token: string
-              p_first_name: string
-              p_last_name: string
-              p_phone: string
-              p_selected_option_ids?: Json
-            }
-            Returns: undefined
-          }
+      public_offer_accept: {
+        Args: {
+          p_access_token: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+          p_selected_option_ids?: Json
+        }
+        Returns: undefined
+      }
       public_offer_get: { Args: { p_access_token: string }; Returns: Json }
       public_offer_mark_viewed: {
         Args: { p_access_token: string }

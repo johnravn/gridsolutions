@@ -109,7 +109,6 @@ export const jobSubrentalBookingsQuery = ({ jobId }: { jobId: string }) =>
         `,
         )
         .in('time_period_id', periodIds)
-        .neq('status', 'canceled')
       if (riErr) throw riErr
 
       return (reservations ?? [])

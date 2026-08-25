@@ -30,7 +30,7 @@ export default function CompanyInspector() {
       ? companyDetailQuery({ companyId })
       : {
           queryKey: ['company', 'none', 'company-detail'] as const,
-          queryFn: async () => null,
+          queryFn: () => null,
         }),
     enabled: !!companyId,
   })

@@ -50,6 +50,10 @@ export function WhatsNewPopover({
     if (!nextOpen) dismiss()
   }
 
+  function closeAndDismiss() {
+    handleOpenChange(false)
+  }
+
   return (
     <Popover.Root open={open} onOpenChange={handleOpenChange}>
       <Popover.Trigger>
@@ -90,7 +94,13 @@ export function WhatsNewPopover({
           overflow: 'hidden',
         }}
       >
-        <Flex align="start" justify="between" gap="3" mb="2" style={{ flexShrink: 0 }}>
+        <Flex
+          align="start"
+          justify="between"
+          gap="3"
+          mb="2"
+          style={{ flexShrink: 0 }}
+        >
           <Box style={{ minWidth: 0 }}>
             <Text size="3" weight="bold" as="div">
               {RELEASE_NOTES.title}
@@ -104,7 +114,7 @@ export function WhatsNewPopover({
             variant="ghost"
             color="gray"
             aria-label="Close"
-            onClick={() => setOpen(false)}
+            onClick={closeAndDismiss}
             disabled={isDismissing}
           >
             <Xmark width={16} height={16} />
@@ -140,7 +150,7 @@ export function WhatsNewPopover({
         <Flex justify="end" style={{ flexShrink: 0 }}>
           <Button
             size="2"
-            onClick={() => setOpen(false)}
+            onClick={closeAndDismiss}
             disabled={isDismissing}
           >
             Got it

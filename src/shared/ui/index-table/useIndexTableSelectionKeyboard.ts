@@ -1,9 +1,6 @@
 import * as React from 'react'
 import { useHotkey } from '@tanstack/react-hotkeys'
-import {
-  hasOpenDialog,
-  isEditableTarget,
-} from '@shared/lib/keyboardShortcuts'
+import { hasOpenDialog, isEditableTarget } from '@shared/lib/keyboardShortcuts'
 import { getAdjacentSelectionIndex } from './getAdjacentSelectionIndex'
 
 /**

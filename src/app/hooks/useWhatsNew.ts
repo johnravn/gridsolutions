@@ -1,6 +1,26 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { myProfileQueryKey } from '@shared/api/myProfileQuery'
 import { APP_VERSION } from '@app/config/releaseNotes'
+import type { MyProfile } from '@shared/api/myProfileQuery'
+
+export function shouldShowWhatsNew({
+  userId,
+  profileLoaded,
+  lastSeenReleaseVersion,
+  appVersion,
+}: {
+  userId: string | undefined
+  profileLoaded: boolean
+  lastSeenReleaseVersion: string | null | undefined
+  appVersion: string
+}) {
+  if (!userId || !profileLoaded) return false
+  // `undefined` means the cached profile row is missing this field (usually a
+  // query-key collision with a narrower select). Don't treat that as unseen.
+  if (lastSeenReleaseVersion === undefined) return false
+  return lastSeenReleaseVersion !== appVersion
+}
 
 export function useWhatsNew({
   userId,
@@ -13,10 +33,12 @@ export function useWhatsNew({
 }) {
   const queryClient = useQueryClient()
 
-  const shouldShow =
-    !!userId &&
-    profileLoaded &&
-    (lastSeenReleaseVersion ?? null) !== APP_VERSION
+  const shouldShow = shouldShowWhatsNew({
+    userId,
+    profileLoaded,
+    lastSeenReleaseVersion,
+    appVersion: APP_VERSION,
+  })
 
   const dismissMutation = useMutation({
     mutationFn: async () => {
@@ -29,22 +51,23 @@ export function useWhatsNew({
     },
     onMutate: async () => {
       if (!userId) return
-      await queryClient.cancelQueries({ queryKey: ['my-profile', userId] })
-      const previous = queryClient.getQueryData(['my-profile', userId] as const)
-      queryClient.setQueryData(
-        ['my-profile', userId],
-        (old: { last_seen_release_version?: string | null } | undefined) =>
-          old ? { ...old, last_seen_release_version: APP_VERSION } : old,
+      const queryKey = myProfileQueryKey(userId)
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData(queryKey)
+      queryClient.setQueryData(queryKey, (old: MyProfile | null | undefined) =>
+        old ? { ...old, last_seen_release_version: APP_VERSION } : old,
       )
       return { previous }
     },
     onError: (_err, _vars, context) => {
       if (!userId || !context?.previous) return
-      queryClient.setQueryData(['my-profile', userId], context.previous)
+      queryClient.setQueryData(myProfileQueryKey(userId), context.previous)
     },
     onSettled: () => {
       if (!userId) return
-      void queryClient.invalidateQueries({ queryKey: ['my-profile', userId] })
+      void queryClient.invalidateQueries({
+        queryKey: myProfileQueryKey(userId),
+      })
     },
   })
 

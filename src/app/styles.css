@@ -30,17 +30,23 @@
     var(--app-menu-fab-size) + var(--app-menu-fab-inset)
   );
   --app-sidebar-drawer-width: min(320px, 85vw);
+  /* Right inspector drawer — leave room for the left menu FAB */
+  --app-inspector-drawer-width: min(
+    480px,
+    calc(100vw - var(--app-menu-fab-clearance) - var(--app-safe-left))
+  );
   /* Main scroll bottom padding — keep in sync with AppShell */
   --app-main-padding-bottom: calc(
     var(--app-content-padding) + var(--app-safe-bottom)
   );
   /* Top bar + main padding (top + bottom). Used for split card / chrome height. */
   --app-chrome-height: calc(
-    var(--app-topbar-height) + var(--app-safe-top) + var(--app-content-padding) +
-      var(--app-main-padding-bottom)
+    var(--app-topbar-height) + var(--app-safe-top) +
+      var(--app-content-padding) + var(--app-main-padding-bottom)
   );
   /* Split panels / mobile stacked cards — fills the main scroll content area */
   --app-split-height: calc(100svh - var(--app-chrome-height));
+  --app-toast-exit-ms: 120ms;
 }
 
 @media (max-width: 1023px) {
@@ -98,6 +104,18 @@ button:not(:disabled),
   overscroll-behavior-y: contain;
 }
 
+/* Calendar page — fill the AppShell content box without a wrapping Card */
+.calendar-page {
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Phone / tablet: hide vertical scrollbar (iOS-style; scroll still works) */
 @media (max-width: 1023px) {
   .app-main-scroll {
@@ -108,6 +126,30 @@ button:not(:disabled),
   .app-main-scroll::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* Covers the main-scroll padding gap so list rows can't peek above a sticky toolbar. */
+.app-mobile-sticky-toolbar {
+  position: sticky;
+  top: calc(-1 * var(--space-4));
+  z-index: 2;
+  margin-top: calc(-1 * var(--space-4));
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  padding: var(--space-4);
+  background: var(--color-background);
+  min-width: 0;
+}
+
+.app-mobile-sticky-toolbar::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: calc(var(--space-4) + var(--space-3));
+  background: var(--color-background);
+  pointer-events: none;
 }
 
 /* iOS Safari zooms when focusing inputs with font-size < 16px */
@@ -122,12 +164,36 @@ button:not(:disabled),
 }
 
 /*
+ * Size 3 text fields and buttons both use --space-7 (40px), but Radix surface
+ * TextFields add 1px padding + background-clip: content-box so the visible
+ * field is 38px while the button fill is 40px. Drop the padding so they match;
+ * the inset box-shadow still draws the border.
+ */
+.rt-TextFieldRoot:where(.rt-r-size-3) {
+  padding: 0;
+}
+
+.rt-TextFieldRoot:where(.rt-r-size-3)
+  .rt-TextFieldSlot:where(:not([data-side='right'])) {
+  margin-left: 0;
+}
+
+.rt-TextFieldRoot:where(.rt-r-size-3)
+  .rt-TextFieldSlot:where([data-side='right']),
+.rt-TextFieldRoot:where(.rt-r-size-3)
+  .rt-TextFieldSlot:where(:not([data-side='right']))
+  ~ .rt-TextFieldSlot:where(:not([data-side='left'])) {
+  margin-right: 0;
+}
+
+/*
  * iOS-sized hit targets on small screens (≥44px).
- * Bumps Radix size 1–2 controls; size 3+ already near this.
+ * Bumps Radix size 1–3 controls to a 44px hit target.
  */
 @media (max-width: 1023px) {
   .rt-BaseButton:where(.rt-r-size-1),
-  .rt-BaseButton:where(.rt-r-size-2) {
+  .rt-BaseButton:where(.rt-r-size-2),
+  .rt-BaseButton:where(.rt-r-size-3) {
     --base-button-height: 44px;
     min-height: 44px;
   }
@@ -197,15 +263,59 @@ button:not(:disabled),
   pointer-events: auto;
 }
 
+.app-inspector-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 103;
+  background: var(--color-overlay);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms var(--motion-ease-ios);
+}
+
+.app-inspector-backdrop[data-open] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.app-inspector-drawer {
+  z-index: 104;
+  box-sizing: border-box;
+  transform: translateX(100%);
+  pointer-events: none;
+  transition: transform 380ms var(--motion-ease-ios);
+  padding-top: calc(20px + var(--app-safe-top)) !important;
+  padding-right: 20px !important;
+  padding-bottom: calc(20px + var(--app-safe-bottom)) !important;
+  padding-left: 16px !important;
+}
+
+.app-inspector-drawer-body {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  padding: 0 !important;
+  padding-bottom: var(--app-menu-fab-clearance) !important;
+}
+
+.app-inspector-drawer[data-open] {
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-sidebar-backdrop,
-  .app-sidebar-drawer {
+  .app-sidebar-drawer,
+  .app-inspector-backdrop,
+  .app-inspector-drawer {
     transition: none;
   }
 }
 
 /* Lock page scroll while the drawer is open (no body margin gap). */
-.app-main-scroll--locked {
+.app-main-scroll--locked,
+.app-main-scroll--inspector-locked {
   overflow: hidden !important;
   overscroll-behavior: none;
   touch-action: none;
@@ -290,9 +400,10 @@ button:not(:disabled),
   }
 }
 
-/* Floating glass FABs — shared look for menu (left) and scroll-to-top (right). */
+/* Floating glass FABs — shared look for menu (left), inspector (right), and scroll. */
 .app-menu-fab.rt-IconButton,
-.app-scroll-fab.rt-IconButton {
+.app-scroll-fab.rt-IconButton,
+.app-inspector-fab.rt-IconButton {
   position: fixed;
   bottom: calc(var(--app-menu-fab-inset) + var(--app-safe-bottom));
   box-sizing: border-box;
@@ -312,7 +423,11 @@ button:not(:disabled),
   margin: 0;
   border-radius: 9999px;
   color: var(--gray-12);
-  background: color-mix(in srgb, var(--color-panel-solid) 72%, transparent) !important;
+  background: color-mix(
+    in srgb,
+    var(--color-panel-solid) 72%,
+    transparent
+  ) !important;
   border: 1px solid var(--gray-a5);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.06),
@@ -354,6 +469,72 @@ button:not(:disabled),
     background-color 220ms ease;
 }
 
+/*
+ * Page-level bottom action (e.g. Logging "New entry") — sits between the
+ * menu FAB (left) and inspector FAB (right) so neither overlaps it.
+ * Hidden at desktop split breakpoint; hide in markup when the inspector is open.
+ */
+.app-mobile-bottom-action-bar {
+  position: fixed;
+  z-index: 99;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  bottom: calc(var(--app-menu-fab-inset) + var(--app-safe-bottom));
+  left: calc(
+    var(--app-menu-fab-inset) + var(--app-safe-left) +
+      var(--app-menu-fab-size) + var(--app-menu-fab-inset)
+  );
+  right: calc(
+    var(--app-menu-fab-inset) + var(--app-safe-right) +
+      var(--app-menu-fab-size) + var(--app-menu-fab-inset)
+  );
+  height: var(--app-menu-fab-size);
+  pointer-events: none;
+}
+
+.app-mobile-bottom-action-bar > .rt-BaseButton {
+  pointer-events: auto;
+  flex: 1;
+  height: var(--app-menu-fab-size);
+  min-height: var(--app-menu-fab-size);
+  border-radius: 9999px;
+  touch-action: manipulation;
+}
+
+/* Tablet: no menu FAB; static sidebar is 200px (Sidebar SIDEBAR_WIDTH). */
+@media (min-width: 769px) {
+  .app-mobile-bottom-action-bar {
+    left: calc(200px + var(--app-content-padding) + var(--app-safe-left));
+  }
+}
+
+@media (min-width: 1024px) {
+  .app-mobile-bottom-action-bar {
+    display: none;
+  }
+}
+
+/* Stays bottom-right, including when the drawer is open (sits on top of it). */
+.app-inspector-fab.rt-IconButton {
+  right: calc(var(--app-menu-fab-inset) + var(--app-safe-right));
+  z-index: 105;
+  transition:
+    transform 220ms var(--motion-ease-ios),
+    box-shadow 220ms var(--motion-ease-ios),
+    background-color 220ms ease;
+}
+
+.app-inspector-fab.rt-IconButton[data-open] .app-menu-fab-icons__menu {
+  opacity: 0;
+  transform: rotate(90deg);
+}
+
+.app-inspector-fab.rt-IconButton[data-open] .app-menu-fab-icons__close {
+  opacity: 1;
+  transform: rotate(0deg);
+}
+
 .app-menu-fab-icons {
   position: relative;
   display: block;
@@ -392,12 +573,18 @@ button:not(:disabled),
 }
 
 .app-menu-fab.rt-IconButton:hover,
-.app-scroll-fab.rt-IconButton:hover {
-  background: color-mix(in srgb, var(--color-panel-solid) 82%, transparent) !important;
+.app-scroll-fab.rt-IconButton:hover,
+.app-inspector-fab.rt-IconButton:hover {
+  background: color-mix(
+    in srgb,
+    var(--color-panel-solid) 82%,
+    transparent
+  ) !important;
 }
 
 .app-menu-fab.rt-IconButton:active,
-.app-scroll-fab.rt-IconButton:active {
+.app-scroll-fab.rt-IconButton:active,
+.app-inspector-fab.rt-IconButton:active {
   transform: scale(0.9);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.08),
@@ -406,12 +593,14 @@ button:not(:disabled),
 
 @media (prefers-reduced-motion: reduce) {
   .app-menu-fab.rt-IconButton,
-  .app-scroll-fab.rt-IconButton {
+  .app-scroll-fab.rt-IconButton,
+  .app-inspector-fab.rt-IconButton {
     transition: none;
   }
 
   .app-menu-fab.rt-IconButton:active,
-  .app-scroll-fab.rt-IconButton:active {
+  .app-scroll-fab.rt-IconButton:active,
+  .app-inspector-fab.rt-IconButton:active {
     transform: none;
   }
 
@@ -443,6 +632,31 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
 /* Mobile home: hide horizontal scroller chrome (iOS-style) */
 .home-horizontal-scroller::-webkit-scrollbar {
   display: none;
+}
+
+/* Logging month row — keep labels readable and scroll on small screens */
+.logging-month-scroller {
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.logging-month-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.logging-month-scroller .rt-SegmentedControlRoot {
+  display: inline-grid;
+  width: max-content;
+  min-width: max-content;
+}
+
+.logging-month-scroller .rt-SegmentedControlItem {
+  white-space: nowrap;
 }
 
 /* Override for cards that explicitly set background via inline styles in light mode */
@@ -477,33 +691,273 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   -webkit-backdrop-filter: none !important;
 }
 
-/* Ensure toasts appear above dialogs */
-/* Target Radix UI Toast elements */
-[data-radix-toast-viewport] {
-  z-index: 2147483647 !important; /* Maximum z-index value */
-  bottom: calc(16px + var(--app-safe-bottom)) !important;
-  right: calc(16px + var(--app-safe-right)) !important;
+.public-offer-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
 }
 
+.public-offer-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: 16px 12px;
+  border-radius: var(--radius-3);
+}
+
+.public-offer-line--toggle {
+  cursor: pointer;
+}
+
+.public-offer-line--total {
+  font-weight: 600;
+}
+
+/* Compact toasts — sit above dialogs */
+.app-toast-viewport,
+[data-radix-toast-viewport] {
+  position: fixed;
+  z-index: 2147483647 !important;
+  bottom: calc(12px + var(--app-safe-bottom)) !important;
+  right: calc(12px + var(--app-safe-right)) !important;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  width: min(280px, calc(100vw - 24px));
+  outline: none;
+  pointer-events: none;
+}
+
+.app-toast,
 [data-radix-toast-root] {
   z-index: 2147483647 !important;
+  pointer-events: auto;
 }
 
-/* Radix Toast: swipe-to-dismiss visual feedback (variables set by @radix-ui/react-toast) */
+.app-toast {
+  --app-toast-accent: var(--gray-9);
+  --app-toast-icon: var(--gray-11);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 4px 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-6);
+  border-left: 2px solid var(--app-toast-accent);
+  background: color-mix(in srgb, var(--color-panel-solid) 92%, transparent);
+  backdrop-filter: blur(12px) saturate(160%);
+  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  color: var(--gray-12);
+}
+
+.app-toast[data-kind='success'] {
+  --app-toast-accent: var(--green-9);
+  --app-toast-icon: var(--green-11);
+}
+
+.app-toast[data-kind='error'] {
+  --app-toast-accent: var(--red-9);
+  --app-toast-icon: var(--red-11);
+}
+
+.app-toast[data-kind='info'] {
+  --app-toast-accent: var(--blue-9);
+  --app-toast-icon: var(--blue-11);
+}
+
+.app-toast-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--app-toast-icon);
+  line-height: 0;
+}
+
+.app-toast-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-right: 2px;
+}
+
+.app-toast .app-toast-title {
+  display: block;
+  color: var(--gray-12);
+  font-weight: 600;
+}
+
+.app-toast .app-toast-desc {
+  display: block;
+  margin-top: 1px;
+}
+
+.app-toast-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.app-toast-action.rt-Button {
+  flex-shrink: 0;
+  height: 22px;
+  padding-inline: 6px;
+  font-size: var(--font-size-1);
+  font-weight: 600;
+}
+
+.app-toast-close.rt-IconButton {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+/* Tablet: inspector FAB stays through the split breakpoint. */
+@media (max-width: 1023px) {
+  .app-toast-viewport,
+  [data-radix-toast-viewport] {
+    bottom: calc(
+      8px + var(--app-menu-fab-inset) + var(--app-safe-bottom) +
+        var(--app-menu-fab-clearance)
+    ) !important;
+    width: min(320px, calc(100vw - 24px));
+  }
+}
+
+/* Phone: top banner, iOS density (body 17 / subhead 15). */
+@media (max-width: 768px) {
+  .app-toast-viewport,
+  [data-radix-toast-viewport] {
+    top: calc(8px + var(--app-safe-top)) !important;
+    bottom: auto !important;
+    left: var(--app-content-padding) !important;
+    right: var(--app-content-padding) !important;
+    width: auto !important;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .app-toast {
+    width: 100%;
+    max-width: none;
+    gap: 10px;
+    padding: 12px 10px 12px 14px;
+    border-radius: 12px;
+  }
+
+  .app-toast .app-toast-title {
+    font-size: var(--font-size-3) !important;
+    line-height: var(--line-height-3) !important;
+  }
+
+  .app-toast .app-toast-desc {
+    font-size: var(--font-size-2) !important;
+    line-height: var(--line-height-2) !important;
+  }
+
+  .app-toast-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .app-toast-close.rt-IconButton {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .app-toast-action.rt-Button {
+    height: 36px;
+    min-height: 36px;
+    padding-inline: 10px;
+    font-size: var(--font-size-2);
+  }
+}
+
+@media (pointer: coarse) {
+  .app-toast-close.rt-IconButton {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
+  }
+
+  .app-toast-action.rt-Button {
+    height: 32px;
+    min-height: 32px;
+    padding-inline: 8px;
+  }
+}
+
+@media (max-width: 768px) and (pointer: coarse) {
+  .app-toast-close.rt-IconButton {
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .app-toast-action.rt-Button {
+    height: 36px;
+    min-height: 36px;
+    padding-inline: 10px;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
+  .app-toast[data-state='open'] {
+    animation: app-toast-in 160ms var(--motion-ease-ios);
+  }
+
+  .app-toast[data-state='closed']:not([data-swipe='end']) {
+    animation: app-toast-out var(--app-toast-exit-ms) var(--motion-ease-ios)
+      forwards;
+  }
+
+  .app-toast[data-swipe='move'],
   [data-radix-toast-root][data-swipe='move'] {
+    animation: none;
     transform: translateX(var(--radix-toast-swipe-move-x))
       translateY(var(--radix-toast-swipe-move-y));
   }
 
+  .app-toast[data-swipe='cancel'],
   [data-radix-toast-root][data-swipe='cancel'] {
     transform: translateX(0) translateY(0);
     transition: transform var(--motion-duration-reveal)
       var(--motion-ease-reveal-out);
   }
 
+  .app-toast[data-swipe='end'],
   [data-radix-toast-root][data-swipe='end'] {
-    animation: radix-toast-swipe-end 0.15s ease-out forwards;
+    animation: radix-toast-swipe-end 0.12s ease-out forwards;
+  }
+
+  @keyframes app-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes app-toast-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(6px) scale(0.98);
+    }
   }
 
   @keyframes radix-toast-swipe-end {
@@ -512,20 +966,75 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
         translateY(var(--radix-toast-swipe-end-y));
     }
     to {
-      transform: translateX(calc(100% + 24px));
+      transform: translateX(calc(100% + 16px));
+    }
+  }
+
+  @media (max-width: 768px) {
+    .app-toast[data-state='open'] {
+      animation-name: app-toast-in-top;
+    }
+
+    .app-toast[data-state='closed']:not([data-swipe='end']) {
+      animation-name: app-toast-out-top;
+    }
+
+    .app-toast[data-swipe='end'],
+    [data-radix-toast-root][data-swipe='end'] {
+      animation-name: app-toast-swipe-end-up;
+    }
+  }
+
+  @keyframes app-toast-in-top {
+    from {
+      opacity: 0;
+      transform: translateY(-10px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes app-toast-out-top {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.98);
+    }
+  }
+
+  @keyframes app-toast-swipe-end-up {
+    from {
+      transform: translateX(var(--radix-toast-swipe-end-x))
+        translateY(var(--radix-toast-swipe-end-y));
+    }
+    to {
+      transform: translateY(calc(-100% - 16px));
     }
   }
 }
 
-/* Ensure Radix UI Dialog overlays/backdrops are below toasts */
+/*
+ * Dialogs sit above mobile FABs (102/105) and the inspector drawer (104),
+ * and still below toasts (max).
+ */
 [data-radix-dialog-overlay],
 [class*='rt-DialogOverlay'] {
-  z-index: 100 !important;
+  z-index: 200 !important;
 }
 
 [data-radix-dialog-content],
 [class*='rt-DialogContent'] {
-  z-index: 101 !important;
+  z-index: 201 !important;
+}
+
+body:has([data-state='open'].rt-DialogContent) .app-menu-fab,
+body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
+  pointer-events: none;
 }
 
 /* Large offer editors: sizing only (Radix Dialog align="center" handles vertical centering) */
@@ -539,15 +1048,15 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   max-width: min(1280px, calc(100vw - 2rem));
 }
 
-/* Ensure AlertDialog is also below toasts */
+/* AlertDialog matches dialog stacking (above FABs, below toasts) */
 [data-radix-alert-dialog-overlay],
 [class*='rt-AlertDialogOverlay'] {
-  z-index: 100 !important;
+  z-index: 200 !important;
 }
 
 [data-radix-alert-dialog-content],
 [class*='rt-AlertDialogContent'] {
-  z-index: 101 !important;
+  z-index: 201 !important;
 }
 
 /* Invoice line number inputs - hide spin buttons, fix clipping */
@@ -635,10 +1144,7 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   width: var(--sidebar-indicator-width);
   height: var(--sidebar-indicator-height);
   opacity: var(--sidebar-indicator-opacity);
-  transform: translate(
-    var(--sidebar-indicator-x),
-    var(--sidebar-indicator-y)
-  );
+  transform: translate(var(--sidebar-indicator-x), var(--sidebar-indicator-y));
 }
 
 .sidebar-nav-list .sidebar-nav-slot {

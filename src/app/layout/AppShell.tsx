@@ -16,9 +16,9 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { Menu, Xmark } from 'iconoir-react'
-import { supabase } from '@shared/api/supabase'
-// add
 import { useQuery } from '@tanstack/react-query'
+import { supabase } from '@shared/api/supabase'
+import { myProfileQuery } from '@shared/api/myProfileQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
@@ -98,25 +98,8 @@ export default function AppShell() {
 
   // Load my profile row
   const { data: myProfile, isSuccess: profileLoaded } = useQuery({
-    queryKey: ['my-profile', authUser?.id],
+    ...myProfileQuery(authUser?.id ?? '__none__'),
     enabled: !!authUser?.id,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select(
-          'user_id,email,display_name,avatar_url,last_seen_release_version',
-        )
-        .eq('user_id', authUser!.id)
-        .maybeSingle()
-      if (error) throw error
-      return data as {
-        user_id: string
-        email: string
-        display_name: string | null
-        avatar_url: string | null
-        last_seen_release_version: string | null
-      }
-    },
   })
 
   // Build a public avatar URL from storage path (if any)

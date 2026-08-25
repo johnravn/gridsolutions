@@ -197,13 +197,7 @@ export default function JobDialog({
     }
     // Use stable job id — full initialData identity churn would wipe in-progress edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [
-    open,
-    mode,
-    initialData?.id,
-    recurringJobIdProp,
-    recurringJobDefaults,
-  ])
+  }, [open, mode, initialData?.id, recurringJobIdProp, recurringJobDefaults])
 
   React.useEffect(() => {
     if (!open || mode !== 'create') return
@@ -339,26 +333,12 @@ export default function JobDialog({
     const timePeriodIds = timePeriods.map((tp) => tp.id)
     if (!timePeriodIds.length) return
 
-    const { error: itemsErr } = await supabase
-      .from('reserved_items')
-      .update({ status: nextStatus })
-      .in('time_period_id', timePeriodIds)
-      .eq('status', 'planned')
-    if (itemsErr) throw itemsErr
-
     const { error: crewErr } = await supabase
       .from('reserved_crew')
       .update({ status: nextStatus })
       .in('time_period_id', timePeriodIds)
       .eq('status', 'planned')
     if (crewErr) throw crewErr
-
-    const { error: vehicleErr } = await supabase
-      .from('reserved_vehicles')
-      .update({ status: nextStatus })
-      .in('time_period_id', timePeriodIds)
-      .eq('status', 'planned')
-    if (vehicleErr) throw vehicleErr
 
     if (nextStatus === 'confirmed') {
       const { error: itemsExternalErr } = await supabase
@@ -689,13 +669,13 @@ export default function JobDialog({
     },
     onError: (e: any) => {
       const errorMessage = String(e?.message ?? '')
-      const isInvalidTimeRange =
+      const isRangeBoundError =
         errorMessage.includes(
           'range lower bound must be less than or equal to range upper bound',
         ) ||
         errorMessage.includes('range lower bound must be less than or equal')
 
-      if (isInvalidTimeRange) {
+      if (isRangeBoundError) {
         showError('Invalid time range', 'End time is before the start time.')
         return
       }
@@ -982,7 +962,8 @@ export default function JobDialog({
                                 onValueChange={(v) => {
                                   form.setFieldValue('contactId', '')
                                   pendingAutofillContactIndexRef.current = null
-                                  if (v) form.setFieldValue('customerUserId', '')
+                                  if (v)
+                                    form.setFieldValue('customerUserId', '')
                                   form.setFieldValue('customerId', v)
                                 }}
                                 disabled={isCompanyCustomer}

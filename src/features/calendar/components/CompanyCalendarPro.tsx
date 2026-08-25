@@ -405,18 +405,24 @@ export default function CompanyCalendarPro({
   return (
     <Box
       className="companyCalendar"
-      p="3"
       style={{
         background: 'transparent',
         flex: 1,
         minHeight: 0,
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
       }}
     >
       {/* Controls - only show if hideCreateButton is false (for backward compatibility) */}
       {!hideCreateButton && (
-        <Flex align="center" wrap="wrap" gap="3" mb="2" style={{ flexShrink: 0 }}>
+        <Flex
+          align="center"
+          wrap="wrap"
+          gap="3"
+          mb="2"
+          style={{ flexShrink: 0 }}
+        >
           {/* Kind filter */}
           <Flex align="center" gap="2">
             <Text weight="bold" size="2">
@@ -512,7 +518,15 @@ export default function CompanyCalendarPro({
       )}
 
       {/* Calendar or List */}
-      <Box style={{ flex: 1, minHeight: 0 }}>
+      <Box
+        style={{
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
         {!listMode ? (
           <FullCalendar
             key="calendar"

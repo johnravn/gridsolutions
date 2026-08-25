@@ -1,5 +1,9 @@
 import { supabase } from '@shared/api/supabase'
-import { dedupeOverlapConflicts } from '@features/conflicts/api/overlapChecks'
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
+import {
+  dedupeOverlapConflicts,
+  findGroupOverlaps,
+} from '@features/conflicts/api/overlapChecks'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { OfferDetail } from '@features/jobs/types'
 
@@ -50,26 +54,7 @@ export async function buildOfferItemQuantityMap(
 
   if (groupIds.size === 0) return itemQuantityMap
 
-  const { data: groupItems, error: groupItemsError } = await supabase
-    .from('group_items')
-    .select('group_id, item_id, quantity')
-    .in('group_id', Array.from(groupIds))
-
-  if (groupItemsError) throw groupItemsError
-
-  const groupItemsMap = new Map<
-    string,
-    Array<{ item_id: string; quantity: number }>
-  >()
-  for (const row of groupItems ?? []) {
-    if (!row.item_id) continue
-    const list = groupItemsMap.get(row.group_id) ?? []
-    list.push({
-      item_id: row.item_id,
-      quantity: row.quantity ?? 1,
-    })
-    groupItemsMap.set(row.group_id, list)
-  }
+  const groupItemsMap = await flattenGroupLeafItems(Array.from(groupIds))
 
   for (const entry of groupEntries) {
     const members = groupItemsMap.get(entry.group_id) ?? []
@@ -99,8 +84,41 @@ export async function getEquipmentConflictsForOfferBooking({
   endAt: string
 }): Promise<EquipmentConflictPreview> {
   const itemQuantityMap = await buildOfferItemQuantityMap(offer)
+  const offerGroupIds = Array.from(
+    new Set(
+      (offer.groups ?? []).flatMap((group) =>
+        group.items
+          .map((item) => item.group_id)
+          .filter((id): id is string => !!id),
+      ),
+    ),
+  )
+
+  const summaryLines: Array<string> = []
+  const conflicts: Array<OverlapConflict> = []
+  const conflictingItemIds: Array<string> = []
+
+  if (offerGroupIds.length > 0) {
+    const groupOverlaps = await findGroupOverlaps({
+      groupIds: offerGroupIds,
+      startAt,
+      endAt,
+      excludeJobId: jobId,
+    })
+    for (const overlaps of groupOverlaps.values()) {
+      if (overlaps.length === 0) continue
+      const groupName = overlaps[0]?.itemName ?? 'Group'
+      summaryLines.push(`${groupName}: already booked in an overlapping period`)
+      conflicts.push(...overlaps)
+    }
+  }
+
   if (itemQuantityMap.size === 0) {
-    return { summaryLines: [], conflicts: [], conflictingItemIds: [] }
+    return {
+      summaryLines,
+      conflicts: dedupeOverlapConflicts(conflicts),
+      conflictingItemIds,
+    }
   }
 
   const allItemIds = Array.from(itemQuantityMap.keys())
@@ -141,7 +159,11 @@ export async function getEquipmentConflictsForOfferBooking({
   }
 
   if (overlappingPeriodIds.size === 0) {
-    return { summaryLines: [], conflicts: [], conflictingItemIds: [] }
+    return {
+      summaryLines,
+      conflicts: dedupeOverlapConflicts(conflicts),
+      conflictingItemIds,
+    }
   }
 
   const { data: overlappingReservations, error: reservationsErr } =
@@ -152,7 +174,6 @@ export async function getEquipmentConflictsForOfferBooking({
         id,
         item_id,
         quantity,
-        status,
         time_period:time_period_id (
           start_at,
           end_at,
@@ -206,49 +227,29 @@ export async function getEquipmentConflictsForOfferBooking({
   }
 
   const existingReservedMap = new Map<string, number>()
-  const plannedReservedMap = new Map<string, number>()
   for (const res of overlappingReservations ?? []) {
-    if (res.status === 'canceled') continue
     const current = existingReservedMap.get(res.item_id) ?? 0
     existingReservedMap.set(res.item_id, current + res.quantity)
-    if (res.status === 'planned') {
-      const plannedCurrent = plannedReservedMap.get(res.item_id) ?? 0
-      plannedReservedMap.set(res.item_id, plannedCurrent + res.quantity)
-    }
   }
-
-  const summaryLines: Array<string> = []
-  const conflicts: Array<OverlapConflict> = []
-  const conflictingItemIds: Array<string> = []
 
   for (const [itemId, newQty] of itemQuantityMap.entries()) {
     const onHand = itemOnHandMap.get(itemId) ?? 0
     const existingQty = existingReservedMap.get(itemId) ?? 0
     const finalTotal = existingQty + newQty
     const hasCapacityConflict = onHand > 0 && finalTotal > onHand
-    const plannedQty = plannedReservedMap.get(itemId) ?? 0
-    const hasPlannedConflict =
-      plannedQty > 0 && newQty > 0 && !hasCapacityConflict
 
-    if (!hasCapacityConflict && !hasPlannedConflict) continue
+    if (!hasCapacityConflict) continue
 
     conflictingItemIds.push(itemId)
     const itemName = itemNameMap.get(itemId) ?? 'Item'
-
-    if (hasCapacityConflict) {
-      const existingPart =
-        existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-      summaryLines.push(
-        `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-      )
-    } else {
-      summaryLines.push(
-        `${itemName}: ${plannedQty} already planned in overlapping period`,
-      )
-    }
+    const existingPart =
+      existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+    summaryLines.push(
+      `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+    )
 
     const itemReservations = (overlappingReservations ?? []).filter(
-      (res) => res.item_id === itemId && res.status !== 'canceled',
+      (res) => res.item_id === itemId,
     )
 
     for (const res of itemReservations) {

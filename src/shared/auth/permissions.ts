@@ -88,7 +88,6 @@ export function capabilitiesFor({
     return caps
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (companyRole === 'freelancer') {
     // blocked: inventory, vehicles, crew
     // (calendar, matters, profile, home, jobs already allowed)

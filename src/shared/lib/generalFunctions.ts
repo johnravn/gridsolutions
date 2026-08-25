@@ -141,8 +141,7 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
   // Also check reverse: how many target chars match search
   // This helps when search is shorter than target
   let reverseMatches = 0
-  for (let i = 0; i < target.length; i++) {
-    const char = target[i]
+  for (const char of target) {
     if (search.includes(char)) {
       reverseMatches++
     }

@@ -1,4 +1,5 @@
 import { supabase } from '@shared/api/supabase'
+import { fetchGroupLineageIds } from '@features/inventory/api/flattenGroupItems'
 
 export type OverlapConflict = {
   jobId?: string | null
@@ -54,6 +55,7 @@ export function dedupeOverlapConflicts(
 }
 
 type JobJoin = {
+  id?: string | null
   title: string | null
   customer: { name: string | null } | null
   project_lead: { display_name: string | null; email: string | null } | null
@@ -62,6 +64,7 @@ type JobJoin = {
 type TimePeriodJoin = {
   start_at: string
   end_at: string
+  job_id?: string | null
   job: JobJoin
 } | null
 
@@ -69,6 +72,7 @@ function conflictFromTimePeriod(tp: TimePeriodJoin): OverlapConflict | null {
   if (!tp?.start_at || !tp.end_at) return null
   const job = tp.job
   return {
+    jobId: tp.job_id ?? job?.id ?? null,
     jobTitle: job?.title ?? null,
     startAt: tp.start_at,
     endAt: tp.end_at,
@@ -198,7 +202,6 @@ export async function findVehicleOverlaps({
     `,
     )
     .eq('vehicle_id', vehicleId)
-    .neq('status', 'canceled')
 
   if (error) throw error
 
@@ -213,6 +216,136 @@ export async function findVehicleOverlaps({
   }
 
   return conflicts
+}
+
+export type GroupOverlapRow = {
+  source_group_id: string | null
+  time_period_id: string | null
+  time_period: TimePeriodJoin
+}
+
+export function collectGroupOverlapConflicts({
+  bookedGroupIds,
+  lineageByGroupId,
+  groupNameById,
+  rows,
+  startAt,
+  endAt,
+  excludePeriodId,
+  excludeJobId,
+}: {
+  bookedGroupIds: Array<string>
+  lineageByGroupId: Map<string, Array<string>>
+  groupNameById: Map<string, string>
+  rows: Array<GroupOverlapRow>
+  startAt: string
+  endAt: string
+  excludePeriodId?: string
+  excludeJobId?: string
+}): Map<string, Array<OverlapConflict>> {
+  const result = new Map<string, Array<OverlapConflict>>()
+
+  for (const groupId of bookedGroupIds) {
+    const related = new Set(lineageByGroupId.get(groupId) ?? [groupId])
+    const groupName = groupNameById.get(groupId) ?? 'Group'
+    const conflicts: Array<OverlapConflict> = []
+
+    for (const row of rows) {
+      if (!row.source_group_id || !related.has(row.source_group_id)) continue
+      if (excludePeriodId && row.time_period_id === excludePeriodId) continue
+      const tp = row.time_period
+      if (!tp?.start_at || !tp.end_at) continue
+      const jobId = tp.job_id ?? tp.job?.id ?? null
+      if (excludeJobId && jobId === excludeJobId) continue
+      if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
+      const conflict = conflictFromTimePeriod(tp)
+      if (!conflict) continue
+      conflicts.push({
+        ...conflict,
+        itemName: groupName,
+      })
+    }
+
+    if (conflicts.length > 0) {
+      result.set(groupId, dedupeOverlapConflicts(conflicts))
+    }
+  }
+
+  return result
+}
+
+export async function findGroupOverlaps({
+  groupIds,
+  startAt,
+  endAt,
+  excludePeriodId,
+  excludeJobId,
+}: {
+  groupIds: Array<string>
+  startAt: string
+  endAt: string
+  excludePeriodId?: string
+  excludeJobId?: string
+}): Promise<Map<string, Array<OverlapConflict>>> {
+  const uniqueIds = Array.from(new Set(groupIds.filter(Boolean)))
+  if (uniqueIds.length === 0) return new Map()
+
+  const lineageByGroupId = await fetchGroupLineageIds(uniqueIds)
+  const relatedIds = new Set<string>()
+  for (const groupId of uniqueIds) {
+    const lineage = lineageByGroupId.get(groupId) ?? [groupId]
+    lineageByGroupId.set(groupId, lineage)
+    for (const id of lineage) relatedIds.add(id)
+  }
+
+  const { data, error } = await supabase
+    .from('reserved_items')
+    .select(
+      `
+      source_group_id,
+      time_period_id,
+      time_period:time_period_id (
+        start_at,
+        end_at,
+        job_id,
+        job:job_id (
+          id,
+          title,
+          customer:customer_id ( name ),
+          project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
+        )
+      )
+    `,
+    )
+    .eq('source_kind', 'group')
+    .in('source_group_id', Array.from(relatedIds))
+    .neq('status', 'canceled')
+
+  if (error) throw error
+
+  const { data: groupRows, error: groupErr } = await supabase
+    .from('item_groups')
+    .select('id, name')
+    .in('id', uniqueIds)
+
+  if (groupErr) throw groupErr
+
+  const groupNameById = new Map<string, string>()
+  for (const row of groupRows ?? []) {
+    if (!row.id) continue
+    groupNameById.set(row.id, row.name?.trim() || 'Group')
+  }
+
+  return collectGroupOverlapConflicts({
+    bookedGroupIds: uniqueIds,
+    lineageByGroupId,
+    groupNameById,
+    rows: (data ?? []) as Array<GroupOverlapRow>,
+    startAt,
+    endAt,
+    excludePeriodId,
+    excludeJobId,
+  })
 }
 
 export async function getTimePeriodWindow(

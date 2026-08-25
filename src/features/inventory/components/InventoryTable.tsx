@@ -11,11 +11,20 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Package, Packages, Search } from 'iconoir-react'
-import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
+import {
+  IndexTableBodySkeleton,
+  VirtualIndexTable,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
@@ -63,6 +72,7 @@ type Props = {
   showGroups: boolean
   showItems: boolean
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
+  toolbarExtra?: React.ReactNode
 }
 
 export default function InventoryTable({
@@ -76,6 +86,7 @@ export default function InventoryTable({
   showGroups,
   showItems,
   createShortcutRef,
+  toolbarExtra,
 }: Props) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -99,6 +110,7 @@ export default function InventoryTable({
   }, [createShortcutRef])
 
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
+  const isMobile = useMediaQuery('(max-width: 1023px)')
 
   const PAGE_SIZE = 200
 
@@ -259,6 +271,182 @@ export default function InventoryTable({
     }
   }
 
+  const toolbar = (
+    <Flex
+      gap={isMobile ? '4' : '2'}
+      align="center"
+      wrap="wrap"
+      style={{ minWidth: 0 }}
+    >
+      <Flex
+        gap="3"
+        align="center"
+        wrap="wrap"
+        style={{ width: isMobile ? '100%' : undefined, flex: 1, minWidth: 0 }}
+      >
+        <TextField.Root
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search items, groups…"
+          size="3"
+          style={{ flex: '1 1 min(260px, 100%)', minWidth: 0 }}
+        >
+          <TextField.Slot side="left">
+            <Search />
+          </TextField.Slot>
+          <TextField.Slot side="right">
+            {(inventoryQuery.isFetching ||
+              inventoryQuery.isFetchingNextPage) && <Spinner />}
+          </TextField.Slot>
+        </TextField.Root>
+        {isMobile ? toolbarExtra : null}
+      </Flex>
+
+      {!isSmallScreen && (
+        <Select.Root
+          value={categoryFilter ?? ''}
+          size="3"
+          onValueChange={(val) => setCategoryFilter(val === '' ? null : val)}
+        >
+          <Select.Trigger
+            placeholder="Filter category…"
+            style={{ minHeight: 'var(--space-7)' }}
+          />
+          <Select.Content>
+            <Select.Item value="all">All</Select.Item>
+            {categories.map((name) => (
+              <Select.Item key={name} value={name}>
+                {name.toUpperCase()}
+              </Select.Item>
+            ))}
+          </Select.Content>
+        </Select.Root>
+      )}
+
+      {canWrite && (
+        <Flex
+          gap="2"
+          style={{
+            width: isSmallScreen ? '100%' : undefined,
+            flex: isSmallScreen ? '1 1 100%' : undefined,
+          }}
+        >
+          <Button
+            size="3"
+            variant="outline"
+            onClick={() => setAddGroupDialog(true)}
+            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+          >
+            <Packages width={20} height={20} /> Add group
+          </Button>
+          <Button
+            size="3"
+            variant="solid"
+            onClick={() => setAddItemOpen(true)}
+            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
+          >
+            <Package width={20} height={20} /> Add item
+          </Button>
+        </Flex>
+      )}
+    </Flex>
+  )
+
+  const dialogs = (
+    <>
+      <AddItemDialog
+        open={addItemOpen}
+        onOpenChange={setAddItemOpen}
+        companyId={companyId ?? ''}
+        showTrigger={false}
+      />
+      <AddGroupDialog
+        open={addGroupDialog}
+        onOpenChange={setAddGroupDialog}
+        companyId={companyId ?? ''}
+        showTrigger={false}
+      />
+    </>
+  )
+
+  if (isMobile) {
+    return (
+      <>
+        <MobilePageList toolbar={toolbar}>
+          {inventoryQuery.isLoading ? (
+            <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+          ) : rows.length === 0 ? (
+            <Text size="2" color="gray">
+              No results
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {rows.map((row) => {
+                const isSelected = row.id === selectedId
+                return (
+                  <div
+                    key={row.id}
+                    className={[
+                      INDEX_TABLE_ROW_CLASS,
+                      isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelect(row.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect(row.id)
+                      }
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'minmax(0, 1fr) auto',
+                      gap: 'var(--space-3)',
+                      alignItems: 'center',
+                      padding: '16px 12px',
+                      minHeight: 64,
+                      cursor: 'pointer',
+                      borderRadius: 'var(--radius-3)',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>{renderCell(row, 'name')}</div>
+                    {renderCell(row, 'item_kind')}
+                  </div>
+                )
+              })}
+              {inventoryQuery.hasNextPage && (
+                <Button
+                  variant="soft"
+                  onClick={() => {
+                    void inventoryQuery.fetchNextPage()
+                  }}
+                  disabled={inventoryQuery.isFetchingNextPage}
+                >
+                  {inventoryQuery.isFetchingNextPage
+                    ? 'Loading more…'
+                    : 'Load more'}
+                </Button>
+              )}
+            </Flex>
+          )}
+          {rows.length > 0 && (
+            <Text size="2" color="gray">
+              {totalCount} item{totalCount !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </MobilePageList>
+        {dialogs}
+      </>
+    )
+  }
+
   return (
     <>
       <VirtualIndexTable
@@ -288,97 +476,9 @@ export default function InventoryTable({
             void inventoryQuery.fetchNextPage()
           },
         }}
-        toolbar={
-          <Flex gap="2" align="center" wrap="wrap" style={{ minWidth: 0 }}>
-            <TextField.Root
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search items, groups…"
-              size="3"
-              style={{ flex: '1 1 min(260px, 100%)', minWidth: 0 }}
-            >
-              <TextField.Slot side="left">
-                <Search />
-              </TextField.Slot>
-              <TextField.Slot side="right">
-                {(inventoryQuery.isFetching ||
-                  inventoryQuery.isFetchingNextPage) && <Spinner />}
-              </TextField.Slot>
-            </TextField.Root>
-
-            {!isSmallScreen && (
-              <Select.Root
-                value={categoryFilter ?? ''}
-                size="3"
-                onValueChange={(val) =>
-                  setCategoryFilter(val === '' ? null : val)
-                }
-              >
-                <Select.Trigger
-                  placeholder="Filter category…"
-                  style={{ minHeight: 'var(--space-7)' }}
-                />
-                <Select.Content>
-                  <Select.Item value="all">All</Select.Item>
-                  {categories.map((name) => (
-                    <Select.Item key={name} value={name}>
-                      {name.toUpperCase()}
-                    </Select.Item>
-                  ))}
-                </Select.Content>
-              </Select.Root>
-            )}
-
-            {canWrite && (
-              <Flex
-                gap="2"
-                style={{
-                  width: isSmallScreen ? '100%' : undefined,
-                  flex: isSmallScreen ? '1 1 100%' : undefined,
-                }}
-              >
-                <Button
-                  size={isSmallScreen ? '3' : '2'}
-                  variant="outline"
-                  onClick={() => setAddGroupDialog(true)}
-                  style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-                >
-                  <Packages
-                    width={isSmallScreen ? 20 : 16}
-                    height={isSmallScreen ? 20 : 16}
-                  />{' '}
-                  Add group
-                </Button>
-                <Button
-                  size={isSmallScreen ? '3' : '2'}
-                  variant="solid"
-                  onClick={() => setAddItemOpen(true)}
-                  style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-                >
-                  <Package
-                    width={isSmallScreen ? 20 : 16}
-                    height={isSmallScreen ? 20 : 16}
-                  />{' '}
-                  Add item
-                </Button>
-              </Flex>
-            )}
-          </Flex>
-        }
+        toolbar={toolbar}
       />
-
-      <AddItemDialog
-        open={addItemOpen}
-        onOpenChange={setAddItemOpen}
-        companyId={companyId ?? ''}
-        showTrigger={false}
-      />
-      <AddGroupDialog
-        open={addGroupDialog}
-        onOpenChange={setAddGroupDialog}
-        companyId={companyId ?? ''}
-        showTrigger={false}
-      />
+      {dialogs}
     </>
   )
 }

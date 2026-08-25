@@ -263,7 +263,7 @@ export default function CustomerInspector({
     if (!data) return
     setBrandAccentColor(normalizeAccentColor(data.accent_color))
     setBrandCustomHex(normalizeCustomHex(data.accent_color_custom))
-  }, [data?.id, data?.accent_color, data?.accent_color_custom])
+  }, [data])
 
   // If query returns no data (customer was deleted), clear selection
   React.useEffect(() => {

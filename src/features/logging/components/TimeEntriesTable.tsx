@@ -6,16 +6,21 @@ import {
   Flex,
   IconButton,
   Text,
+  Tooltip,
 } from '@radix-ui/themes'
-import { Edit, Trash } from 'iconoir-react'
+import { Edit, Link as LinkIcon, Trash } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import {
+  IndexTableBodySkeleton,
   VirtualIndexTable,
   applySortDir,
   useClientSort,
   useVirtualIndexTable,
 } from '@shared/ui/index-table'
+import { INDEX_TABLE_ROW_CLASS } from '@shared/ui/index-table/indexTableStyles'
+import { looksLikeHoursOnlyEntry } from '../lib/timeEntryHours'
 import { formatLoggingDate } from '../lib/timeEntryRange'
 import type { IndexColumn } from '@shared/ui/index-table'
 import type { TimeEntryWithProfile } from '../api/timeEntries'
@@ -214,6 +219,190 @@ export default function TimeEntriesTable({
     getRowId: (e) => e.id,
     estimateRowSize: 48,
   })
+  const isMobile = useMediaQuery('(max-width: 1023px)')
+
+  const renderCell = (entry: TimeEntryWithProfile, colId: string) => {
+    const canEdit = onEditEntry && (!canEditEntry || canEditEntry(entry))
+    const canDelete =
+      onDeleteEntry && (!canDeleteEntry || canDeleteEntry(entry))
+
+    switch (colId) {
+      case 'employee':
+        return (
+          <Flex align="center" gap="2">
+            <Avatar
+              size="2"
+              radius="full"
+              fallback={getInitialsFromNameOrEmail(
+                entry.profile?.display_name ??
+                  [entry.profile?.first_name, entry.profile?.last_name]
+                    .filter(Boolean)
+                    .join(' ') ??
+                  null,
+                entry.profile?.email ?? '??',
+              )}
+              src={getAvatarUrl(entry.profile?.avatar_url) ?? undefined}
+              style={{ border: '1px solid var(--gray-5)' }}
+            />
+            <Text size="2">{getDisplayName(entry.profile) ?? 'Unknown'}</Text>
+          </Flex>
+        )
+      case 'date':
+        return (
+          <Text size="2" color="gray">
+            {formatDate(entry.start_at)}
+          </Text>
+        )
+      case 'start':
+        return (
+          <Text size="2" color="gray">
+            {looksLikeHoursOnlyEntry(entry.start_at, entry.end_at)
+              ? '—'
+              : formatTime(entry.start_at)}
+          </Text>
+        )
+      case 'end':
+        return (
+          <Text size="2" color="gray">
+            {looksLikeHoursOnlyEntry(entry.start_at, entry.end_at)
+              ? '—'
+              : formatTime(entry.end_at)}
+          </Text>
+        )
+      case 'title':
+        return (
+          <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+            {entry.job_id ? (
+              <Tooltip content="Linked to a job">
+                <span
+                  aria-label="Linked to a job"
+                  style={{
+                    display: 'inline-flex',
+                    flexShrink: 0,
+                    color: 'var(--accent-11)',
+                  }}
+                >
+                  <LinkIcon width={14} height={14} />
+                </span>
+              </Tooltip>
+            ) : null}
+            <Text size="2" weight="medium" trim="end" truncate>
+              {entry.title}
+            </Text>
+          </Flex>
+        )
+      case 'job_number':
+        return (
+          <Text size="2" color="gray">
+            {entry.job_number ?? '—'}
+          </Text>
+        )
+      case 'duration':
+        return (
+          <Text size="2" color="gray">
+            {formatDuration(entry.start_at, entry.end_at)}
+          </Text>
+        )
+      case 'note':
+        return isBlankNote(entry.note) ? (
+          <Text size="2" color="gray">
+            —
+          </Text>
+        ) : (
+          <Dialog.Root>
+            <Dialog.Trigger asChild>
+              <Button variant="soft" size="1">
+                Show
+              </Button>
+            </Dialog.Trigger>
+            <Dialog.Content size="2" style={{ maxWidth: 520 }}>
+              <Dialog.Title>Note</Dialog.Title>
+              <Dialog.Description size="2" color="gray" mb="3">
+                Details for this time entry.
+              </Dialog.Description>
+              <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
+                {entry.note}
+              </Text>
+            </Dialog.Content>
+          </Dialog.Root>
+        )
+      case 'actions':
+        return (
+          <Flex align="center" gap="1" justify="end">
+            {onEditEntry && (
+              <IconButton
+                variant="ghost"
+                size="1"
+                onClick={() => onEditEntry(entry)}
+                disabled={!canEdit}
+                aria-label="Edit time entry"
+              >
+                <Edit width={14} height={14} />
+              </IconButton>
+            )}
+            {onDeleteEntry && (
+              <IconButton
+                variant="ghost"
+                size="1"
+                color="red"
+                onClick={() => onDeleteEntry(entry)}
+                disabled={!canDelete}
+                aria-label="Delete time entry"
+              >
+                <Trash width={14} height={14} />
+              </IconButton>
+            )}
+          </Flex>
+        )
+      default:
+        return null
+    }
+  }
+
+  if (isMobile) {
+    return (
+      <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
+        {isLoading ? (
+          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+        ) : rows.length === 0 ? (
+          <Text size="2" color="gray">
+            {emptyLabel}
+          </Text>
+        ) : (
+          rows.map((entry) => (
+            <div
+              key={entry.id}
+              className={INDEX_TABLE_ROW_CLASS}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+                gap: 'var(--space-3)',
+                alignItems: 'center',
+                padding: '16px 12px',
+                minHeight: 64,
+                borderRadius: 'var(--radius-3)',
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                {renderCell(entry, 'title')}
+                <Text as="div" size="1" color="gray">
+                  {formatDate(entry.start_at)} ·{' '}
+                  {formatDuration(entry.start_at, entry.end_at)}
+                </Text>
+              </div>
+              {renderCell(entry, 'note')}
+              {renderCell(entry, 'actions')}
+            </div>
+          ))
+        )}
+        {rows.length > 0 && (
+          <Text size="2" color="gray">
+            {rows.length} entr{rows.length !== 1 ? 'ies' : 'y'}
+          </Text>
+        )}
+      </Flex>
+    )
+  }
 
   return (
     <VirtualIndexTable
@@ -222,125 +411,7 @@ export default function TimeEntriesTable({
       gridTemplateColumns={gridColumns}
       getRowId={(e) => e.id}
       selectable={false}
-      renderCell={(entry, colId) => {
-        const canEdit = onEditEntry && (!canEditEntry || canEditEntry(entry))
-        const canDelete =
-          onDeleteEntry && (!canDeleteEntry || canDeleteEntry(entry))
-
-        switch (colId) {
-          case 'employee':
-            return (
-              <Flex align="center" gap="2">
-                <Avatar
-                  size="2"
-                  radius="full"
-                  fallback={getInitialsFromNameOrEmail(
-                    entry.profile?.display_name ??
-                      [entry.profile?.first_name, entry.profile?.last_name]
-                        .filter(Boolean)
-                        .join(' ') ??
-                      null,
-                    entry.profile?.email ?? '??',
-                  )}
-                  src={getAvatarUrl(entry.profile?.avatar_url) ?? undefined}
-                  style={{ border: '1px solid var(--gray-5)' }}
-                />
-                <Text size="2">
-                  {getDisplayName(entry.profile) ?? 'Unknown'}
-                </Text>
-              </Flex>
-            )
-          case 'date':
-            return (
-              <Text size="2" color="gray">
-                {formatDate(entry.start_at)}
-              </Text>
-            )
-          case 'start':
-            return (
-              <Text size="2" color="gray">
-                {formatTime(entry.start_at)}
-              </Text>
-            )
-          case 'end':
-            return (
-              <Text size="2" color="gray">
-                {formatTime(entry.end_at)}
-              </Text>
-            )
-          case 'title':
-            return (
-              <Text size="2" weight="medium" trim="end">
-                {entry.title}
-              </Text>
-            )
-          case 'job_number':
-            return (
-              <Text size="2" color="gray">
-                {entry.job_number ?? '—'}
-              </Text>
-            )
-          case 'duration':
-            return (
-              <Text size="2" color="gray">
-                {formatDuration(entry.start_at, entry.end_at)}
-              </Text>
-            )
-          case 'note':
-            return isBlankNote(entry.note) ? (
-              <Text size="2" color="gray">
-                —
-              </Text>
-            ) : (
-              <Dialog.Root>
-                <Dialog.Trigger asChild>
-                  <Button variant="soft" size="1">
-                    Show
-                  </Button>
-                </Dialog.Trigger>
-                <Dialog.Content size="2" style={{ maxWidth: 520 }}>
-                  <Dialog.Title>Note</Dialog.Title>
-                  <Dialog.Description size="2" color="gray" mb="3">
-                    Details for this time entry.
-                  </Dialog.Description>
-                  <Text size="2" style={{ whiteSpace: 'pre-wrap' }}>
-                    {entry.note}
-                  </Text>
-                </Dialog.Content>
-              </Dialog.Root>
-            )
-          case 'actions':
-            return (
-              <Flex align="center" gap="1" justify="end">
-                {onEditEntry && (
-                  <IconButton
-                    variant="ghost"
-                    size="1"
-                    onClick={() => onEditEntry(entry)}
-                    disabled={!canEdit}
-                    aria-label="Edit time entry"
-                  >
-                    <Edit width={14} height={14} />
-                  </IconButton>
-                )}
-                {onDeleteEntry && (
-                  <IconButton
-                    variant="ghost"
-                    size="1"
-                    color="red"
-                    onClick={() => onDeleteEntry(entry)}
-                    disabled={!canDelete}
-                    aria-label="Delete time entry"
-                  >
-                    <Trash width={14} height={14} />
-                  </IconButton>
-                )}
-              </Flex>
-            )
-          default:
-            return null
-        }
-      }}
+      renderCell={renderCell}
       sortBy={sortBy}
       sortDir={sortDir}
       onSort={handleSort}

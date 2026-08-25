@@ -34,7 +34,7 @@ export function parseTstzRange(
   const s = during.trim()
   if (!s) return null
 
-  const m = s.match(/^[\[(]\s*"?([^,"]+)"?\s*,\s*"?([^)\]"]+)"?\s*[\])]\s*$/)
+  const m = s.match(/^[[(]\s*"?([^,"]+)"?\s*,\s*"?([^)\]"]+)"?\s*[\])]\s*$/)
   if (!m) return null
 
   const startRaw = m[1].trim()

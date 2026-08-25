@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { getEquipmentConflictsForOfferBooking } from '@features/conflicts/api/equipmentConflictCheck'
 import {
   BookingOverlapError,
@@ -10,7 +11,7 @@ import {
   calculateRentalFactor,
   calculateTransportLineTotal,
 } from '../utils/offerCalculations'
-import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
+import { bookedGroupQuantitiesByGroupId } from '../utils/groupBookingQuantity'
 import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
@@ -650,10 +651,13 @@ export async function createOfferBasisFromBookings({
     }
   }
 
-  const groupIds =
-    equipmentGroupBookings
-      .map((booking) => booking.source_group_id)
-      .filter((id): id is string => !!id) ?? []
+  const groupIds = [
+    ...new Set(
+      equipmentGroupBookings
+        .map((booking) => booking.source_group_id)
+        .filter((id): id is string => !!id),
+    ),
+  ]
 
   const groupInfoMap = new Map<
     string,
@@ -682,49 +686,15 @@ export async function createOfferBasisFromBookings({
     }
   }
 
-  const groupItemsMap = new Map<
-    string,
-    Array<{ item_id: string; quantity: number }>
-  >()
-  if (groupIds.length > 0) {
-    const { data: groupItems, error: groupItemsError } = await supabase
-      .from('group_items')
-      .select('group_id, item_id, quantity')
-      .in('group_id', groupIds)
+  const groupItemsMap =
+    groupIds.length > 0
+      ? await flattenGroupLeafItems(groupIds)
+      : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
-    if (groupItemsError) throw groupItemsError
-
-    for (const row of groupItems || []) {
-      if (!row.item_id) continue
-      const list = groupItemsMap.get(row.group_id) ?? []
-      list.push({ item_id: row.item_id, quantity: row.quantity ?? 1 })
-      groupItemsMap.set(row.group_id, list)
-    }
-  }
-
-  const groupBookingQuantities = new Map<string, Map<string, number>>()
-  for (const booking of equipmentGroupBookings) {
-    if (!booking.source_group_id || !booking.item_id) continue
-    const byItem =
-      groupBookingQuantities.get(booking.source_group_id) ?? new Map()
-    const currentQty = byItem.get(booking.item_id) ?? 0
-    byItem.set(booking.item_id, currentQty + (booking.quantity ?? 0))
-    groupBookingQuantities.set(booking.source_group_id, byItem)
-  }
-
-  const groupQuantityMap = new Map<string, number>()
-  for (const groupId of groupIds) {
-    const groupItems = groupItemsMap.get(groupId) ?? []
-    if (groupItems.length === 0) continue
-    const byItem = groupBookingQuantities.get(groupId) ?? new Map()
-    const bookedLines = Array.from(byItem.entries()).map(
-      ([item_id, quantity]) => ({ item_id, quantity }),
-    )
-    groupQuantityMap.set(
-      groupId,
-      impliedBookedGroupCount(groupItems, bookedLines),
-    )
-  }
+  const groupQuantityMap = bookedGroupQuantitiesByGroupId(
+    equipmentGroupBookings,
+    groupItemsMap,
+  )
 
   const equipmentByCategory = new Map<
     string,
@@ -756,8 +726,7 @@ export async function createOfferBasisFromBookings({
     const categoryName = info.category_name ?? 'Uncategorized'
     const quantity = groupQuantityMap.get(groupId) ?? 1
     const category = ensureCategory(categoryName)
-    const currentQty = category.groups.get(groupId) ?? 0
-    category.groups.set(groupId, currentQty + quantity)
+    category.groups.set(groupId, quantity)
   }
 
   const sortedCategoryNames = Array.from(equipmentByCategory.keys()).sort(
@@ -1739,28 +1708,10 @@ export async function createBookingsFromOfferBasis(
       }
     }
 
-    const groupItemsMap = new Map<
-      string,
-      Array<{ item_id: string; quantity: number }>
-    >()
-    if (groupIds.size > 0) {
-      const { data: groupItems, error: groupItemsError } = await supabase
-        .from('group_items')
-        .select('group_id, item_id, quantity')
-        .in('group_id', Array.from(groupIds))
-
-      if (groupItemsError) throw groupItemsError
-
-      for (const row of groupItems || []) {
-        if (!row.item_id) continue
-        const list = groupItemsMap.get(row.group_id) ?? []
-        list.push({
-          item_id: row.item_id,
-          quantity: row.quantity ?? 1,
-        })
-        groupItemsMap.set(row.group_id, list)
-      }
-    }
+    const groupItemsMap =
+      groupIds.size > 0
+        ? await flattenGroupLeafItems(Array.from(groupIds))
+        : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
     const timePeriodId = await getOrCreateTimePeriod(
       'Equipment period',

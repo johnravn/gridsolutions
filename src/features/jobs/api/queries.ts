@@ -13,6 +13,107 @@ function escapeForPostgrestOr(value: string) {
   return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+const JOBS_LIST_SELECT = `
+  id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
+  customer:customer_id ( id, name ),
+  customer_user:customer_user_id ( user_id, display_name, email ),
+  project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
+  recurring_job:recurring_job_id ( id, title )
+`
+
+type JobsIndexSortBy = 'title' | 'start_at' | 'status' | 'customer_name'
+type JobsIndexSortDir = 'asc' | 'desc'
+
+export const JOBS_INDEX_INFINITE_PAGE_SIZE = 50
+
+export type JobsIndexPageResult = {
+  rows: Array<JobListRow>
+  count: number
+  /** Rows returned by PostgREST before freelancer visibility filtering. */
+  fetched: number
+  page: number
+}
+
+/**
+ * Freelancers should see jobs they are invited to, accepted on, or canceled from.
+ * Applied after paging so RLS-visible rows can still be narrowed per page.
+ */
+async function restrictJobsIndexToFreelancer(
+  results: Array<JobListRow>,
+  userId: string,
+): Promise<Array<JobListRow>> {
+  const jobIds = results.map((j) => j.id)
+  if (jobIds.length === 0) return []
+
+  const { data: timePeriods, error: tpError } = await supabase
+    .from('time_periods')
+    .select('id, job_id')
+    .in('job_id', jobIds)
+    .eq('category', 'crew')
+
+  if (tpError) throw tpError
+  if (timePeriods.length === 0) return []
+
+  const timePeriodIds = timePeriods.map((tp) => tp.id)
+
+  const { data: crewRes, error: crewError } = await supabase
+    .from('reserved_crew')
+    .select('time_period_id, status')
+    .eq('user_id', userId)
+    .in('time_period_id', timePeriodIds)
+
+  if (crewError) throw crewError
+
+  const tpJobById = new Map<string, string>()
+  timePeriods.forEach((tp) => {
+    if (tp.job_id) tpJobById.set(tp.id, tp.job_id)
+  })
+
+  const { data: inviteMatters, error: inviteError } = await supabase
+    .from('matters' as any)
+    .select('time_period_id, matter_recipients!inner(user_id)')
+    .eq('matter_type', 'crew_invite')
+    .in('time_period_id', timePeriodIds)
+    .eq('matter_recipients.user_id', userId)
+
+  if (inviteError) throw inviteError
+
+  const invitedTpIds = new Set<string>()
+  ;(
+    inviteMatters as unknown as Array<{ time_period_id: string | null }>
+  ).forEach((m) => {
+    if (m.time_period_id) invitedTpIds.add(m.time_period_id)
+  })
+
+  const visibleJobIds = new Set<string>()
+
+  ;(
+    crewRes as unknown as Array<{
+      time_period_id: string
+      status: 'planned' | 'confirmed' | 'canceled'
+    }>
+  ).forEach((c) => {
+    const jobId = tpJobById.get(c.time_period_id)
+    if (!jobId) return
+
+    if (c.status === 'confirmed' || c.status === 'canceled') {
+      visibleJobIds.add(jobId)
+      return
+    }
+
+    if (invitedTpIds.has(c.time_period_id)) {
+      visibleJobIds.add(jobId)
+    }
+  })
+
+  invitedTpIds.forEach((tpId) => {
+    const jobId = tpJobById.get(tpId)
+    if (jobId) visibleJobIds.add(jobId)
+  })
+
+  return results.filter((job) => visibleJobIds.has(job.id))
+}
+
 export function jobsIndexQuery({
   companyId,
   search,
@@ -78,15 +179,7 @@ export function jobsIndexQuery({
     queryFn: async (): Promise<Array<JobListRow>> => {
       let q = supabase
         .from('jobs')
-        .select(
-          `
-          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
-          customer:customer_id ( id, name ),
-          customer_user:customer_user_id ( user_id, display_name, email ),
-          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
-          recurring_job:recurring_job_id ( id, title )
-        `,
-        )
+        .select(JOBS_LIST_SELECT)
         .eq('company_id', companyId)
 
       // Visibility: show only archived, or only non-archived
@@ -114,10 +207,19 @@ export function jobsIndexQuery({
           .lte('start_at', endOfDay(dateTo))
       }
 
-      // Narrow server-side on title when possible; customer name still filtered client-side.
-      if (search.trim()) {
-        const safe = escapePgLike(search.trim())
-        q = q.ilike('title', `%${safe}%`)
+      // Match the infinite jobs index: title, numeric jobnr, and customer/lead ids.
+      const fuzzyTerm = search.trim().replace(/^#/, '')
+      if (fuzzyTerm) {
+        const [customerIds, customerUserIds] = await Promise.all([
+          findCustomerIdsByName(companyId, fuzzyTerm),
+          findCustomerUserIdsBySearch(fuzzyTerm),
+        ])
+        const orFilter = jobsIndexSearchOrFilter({
+          search: fuzzyTerm,
+          customerIds,
+          customerUserIds,
+        })
+        if (orFilter) q = q.or(orFilter)
       }
 
       if (upcomingFrom) {
@@ -144,18 +246,17 @@ export function jobsIndexQuery({
       const { data, error } = await q
       if (error) throw error
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       let results = (data || []) as unknown as Array<JobListRow>
 
       // Client-side fuzzy filtering across title, customer name, customer user name, project lead name, status, and date
       // (PostgREST doesn't support filtering on joined columns like customer.name)
-      if (search.trim()) {
+      if (fuzzyTerm) {
         const { fuzzySearch, makeWordPresentable } = await import(
           '@shared/lib/generalFunctions'
         )
         results = fuzzySearch(
           results,
-          search,
+          fuzzyTerm,
           [
             (job) => job.title,
             (job) => (job.jobnr != null ? String(job.jobnr) : null),
@@ -191,92 +292,8 @@ export function jobsIndexQuery({
         })
       }
 
-      // Filter for freelancers to only show jobs they're part of (active crew bookings)
       if (companyRole === 'freelancer' && userId) {
-        // Freelancers should see jobs they are:
-        // - invited to (crew_invite matter)
-        // - accepted (reserved_crew.status = confirmed)
-        // - canceled (reserved_crew.status = canceled)
-        //
-        // "Invited" is modeled as a crew_invite matter on a crew time_period,
-        // and typically corresponds to reserved_crew.status = planned.
-        const jobIds = results.map((j) => j.id)
-        if (jobIds.length === 0) return []
-
-        // 1) Get crew time periods for these jobs (reserved_crew links to time_periods)
-        const { data: timePeriods, error: tpError } = await supabase
-          .from('time_periods')
-          .select('id, job_id')
-          .in('job_id', jobIds)
-          .eq('category', 'crew')
-
-        if (tpError) throw tpError
-        if (timePeriods.length === 0) return []
-
-        const timePeriodIds = timePeriods.map((tp) => tp.id)
-
-        // 2) Get this user's crew reservations across those time periods
-        const { data: crewRes, error: crewError } = await supabase
-          .from('reserved_crew')
-          .select('time_period_id, status')
-          .eq('user_id', userId)
-          .in('time_period_id', timePeriodIds)
-
-        if (crewError) throw crewError
-
-        // Map time_period_id -> job_id
-        const tpJobById = new Map<string, string>()
-        timePeriods.forEach((tp) => {
-          if (tp.job_id) tpJobById.set(tp.id, tp.job_id)
-        })
-
-        // 3) Fetch crew_invite matters where this user is a recipient for these tps
-        const { data: inviteMatters, error: inviteError } = await supabase
-          .from('matters' as any)
-          .select('time_period_id, matter_recipients!inner(user_id)')
-          .eq('matter_type', 'crew_invite')
-          .in('time_period_id', timePeriodIds)
-          .eq('matter_recipients.user_id', userId)
-
-        if (inviteError) throw inviteError
-
-        const invitedTpIds = new Set<string>()
-        ;(
-          inviteMatters as unknown as Array<{ time_period_id: string | null }>
-        ).forEach((m) => {
-          if (m.time_period_id) invitedTpIds.add(m.time_period_id)
-        })
-
-        const visibleJobIds = new Set<string>()
-
-        // - accepted/canceled jobs (based on reserved_crew status)
-        ;(
-          crewRes as unknown as Array<{
-            time_period_id: string
-            status: 'planned' | 'confirmed' | 'canceled'
-          }>
-        ).forEach((c) => {
-          const jobId = tpJobById.get(c.time_period_id)
-          if (!jobId) return
-
-          if (c.status === 'confirmed' || c.status === 'canceled') {
-            visibleJobIds.add(jobId)
-            return
-          }
-
-          // - invited jobs: planned + has crew_invite matter for that tp
-          if (invitedTpIds.has(c.time_period_id)) {
-            visibleJobIds.add(jobId)
-          }
-        })
-
-        // Also include any invite matters that might exist without a reserved_crew row yet
-        invitedTpIds.forEach((tpId) => {
-          const jobId = tpJobById.get(tpId)
-          if (jobId) visibleJobIds.add(jobId)
-        })
-
-        results = results.filter((job) => visibleJobIds.has(job.id))
+        results = await restrictJobsIndexToFreelancer(results, userId)
       }
 
       // Filter to jobs where onlyCrewForUserId is on crew (any status) for crew time periods
@@ -320,6 +337,161 @@ export function jobsIndexQuery({
   }
 }
 
+const JOBS_INDEX_SEARCH_ID_LIMIT = 100
+
+/**
+ * PostgREST `.or()` filter for the jobs index: title, numeric jobnr,
+ * matching customer IDs, and matching customer-user IDs.
+ */
+export function jobsIndexSearchOrFilter({
+  search,
+  customerIds = [],
+  customerUserIds = [],
+}: {
+  search: string
+  customerIds?: Array<string>
+  customerUserIds?: Array<string>
+}): string | null {
+  const trimmed = search.trim().replace(/^#/, '')
+  if (!trimmed) return null
+
+  const orSafe = escapeForPostgrestOr(escapePgLike(trimmed))
+  const parts = [`title.ilike.%${orSafe}%`]
+  if (/^\d+$/.test(trimmed)) {
+    parts.push(`jobnr.eq.${trimmed}`)
+  }
+  if (customerIds.length > 0) {
+    parts.push(`customer_id.in.(${customerIds.join(',')})`)
+  }
+  if (customerUserIds.length > 0) {
+    parts.push(`customer_user_id.in.(${customerUserIds.join(',')})`)
+  }
+  return parts.join(',')
+}
+
+async function findCustomerIdsByName(
+  companyId: string,
+  search: string,
+): Promise<Array<string>> {
+  const orSafe = escapeForPostgrestOr(escapePgLike(search.trim()))
+  const { data, error } = await supabase
+    .from('customers')
+    .select('id')
+    .eq('company_id', companyId)
+    .or('deleted.is.null,deleted.eq.false')
+    .ilike('name', `%${orSafe}%`)
+    .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
+  if (error) throw error
+  return data.map((row) => row.id)
+}
+
+async function findCustomerUserIdsBySearch(
+  search: string,
+): Promise<Array<string>> {
+  const orSafe = escapeForPostgrestOr(escapePgLike(search.trim()))
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id')
+    .or(`display_name.ilike.%${orSafe}%,email.ilike.%${orSafe}%`)
+    .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
+  if (error) throw error
+  return data.map((row) => row.user_id)
+}
+
+type JobsIndexListParams = {
+  companyId: string
+  page: number
+  pageSize: number
+  search: string
+  dateFrom?: string
+  dateTo?: string
+  sortBy?: JobsIndexSortBy
+  sortDir?: JobsIndexSortDir
+  userId?: string | null
+  companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
+  includeArchived?: boolean
+  showOnlyArchived?: boolean
+  projectLeadUserId?: string | null
+  statuses?: Array<JobListRow['status']> | null
+}
+
+async function fetchJobsIndexPage({
+  companyId,
+  page,
+  pageSize,
+  search,
+  dateFrom,
+  dateTo,
+  sortBy = 'start_at',
+  sortDir = 'desc',
+  userId,
+  companyRole,
+  includeArchived = false,
+  showOnlyArchived = false,
+  projectLeadUserId = null,
+  statuses = null,
+}: JobsIndexListParams): Promise<JobsIndexPageResult> {
+  const from = Math.max(0, (page - 1) * pageSize)
+  const to = Math.max(from, from + pageSize - 1)
+
+  let q = supabase
+    .from('jobs')
+    .select(JOBS_LIST_SELECT, { count: 'exact' })
+    .eq('company_id', companyId)
+
+  if (showOnlyArchived) {
+    q = q.eq('archived', true)
+  } else if (!includeArchived) {
+    q = q.eq('archived', false)
+  }
+
+  if (projectLeadUserId) {
+    q = q.eq('project_lead_user_id', projectLeadUserId)
+  }
+
+  if (statuses && statuses.length > 0) {
+    q = q.in('status', statuses)
+  }
+
+  if (dateFrom && dateTo) {
+    q = q
+      .gte('start_at', startOfDay(dateFrom))
+      .lte('start_at', endOfDay(dateTo))
+  }
+
+  const indexSearch = search.trim().replace(/^#/, '')
+  if (indexSearch) {
+    const [customerIds, customerUserIds] = await Promise.all([
+      findCustomerIdsByName(companyId, indexSearch),
+      findCustomerUserIdsBySearch(indexSearch),
+    ])
+    const orFilter = jobsIndexSearchOrFilter({
+      search: indexSearch,
+      customerIds,
+      customerUserIds,
+    })
+    if (orFilter) q = q.or(orFilter)
+  }
+
+  if (sortBy === 'customer_name') {
+    q = q.order('start_at', { ascending: sortDir === 'asc' })
+  } else {
+    q = q.order(sortBy, { ascending: sortDir === 'asc' })
+  }
+
+  const { data, error, count } = await q.range(from, to)
+  if (error) throw error
+
+  let rows = data as unknown as Array<JobListRow>
+  const fetched = rows.length
+
+  if (companyRole === 'freelancer' && userId) {
+    rows = await restrictJobsIndexToFreelancer(rows, userId)
+  }
+
+  return { rows, count: count ?? 0, fetched, page }
+}
+
 export function jobsIndexPageQuery({
   companyId,
   page,
@@ -334,6 +506,8 @@ export function jobsIndexPageQuery({
   includeArchived = false,
   showOnlyArchived = false,
   onlyCrewForUserId = null,
+  projectLeadUserId = null,
+  statuses = null,
 }: {
   companyId: string
   page: number
@@ -343,13 +517,15 @@ export function jobsIndexPageQuery({
   dateFrom?: string
   /** Local calendar date YYYY-MM-DD — inclusive end of period filter on job start_at. */
   dateTo?: string
-  sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
-  sortDir?: 'asc' | 'desc'
+  sortBy?: JobsIndexSortBy
+  sortDir?: JobsIndexSortDir
   userId?: string | null
   companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
   includeArchived?: boolean
   showOnlyArchived?: boolean
   onlyCrewForUserId?: string | null
+  projectLeadUserId?: string | null
+  statuses?: Array<JobListRow['status']> | null
 }) {
   return {
     queryKey: [
@@ -368,70 +544,68 @@ export function jobsIndexPageQuery({
       includeArchived,
       showOnlyArchived,
       onlyCrewForUserId,
+      projectLeadUserId,
+      statuses,
     ] as const,
-    queryFn: async (): Promise<{ rows: Array<JobListRow>; count: number }> => {
-      const from = Math.max(0, (page - 1) * pageSize)
-      const to = Math.max(from, from + pageSize - 1)
-
-      let q = supabase
-        .from('jobs')
-        .select(
-          `
-          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
-          customer:customer_id ( id, name ),
-          customer_user:customer_user_id ( user_id, display_name, email ),
-          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
-          recurring_job:recurring_job_id ( id, title )
-        `,
-          { count: 'estimated' },
-        )
-        .eq('company_id', companyId)
-
-      if (showOnlyArchived) {
-        q = q.eq('archived', true)
-      } else {
-        if (!includeArchived) q = q.eq('archived', false)
-      }
-
-      if (dateFrom && dateTo) {
-        q = q
-          .gte('start_at', startOfDay(dateFrom))
-          .lte('start_at', endOfDay(dateTo))
-      }
-
-      // Narrow server-side when possible (title only); customer name still requires client-side fuzzy search elsewhere.
-      if (search.trim()) {
-        const safe = escapePgLike(search.trim())
-        q = q.ilike('title', `%${safe}%`)
-      }
-
-      if (sortBy === 'customer_name') {
-        q = q.order('start_at', { ascending: sortDir === 'asc' })
-      } else {
-        q = q.order(sortBy, { ascending: sortDir === 'asc' })
-      }
-
-      const { data, error, count } = await q.range(from, to)
-      if (error) throw error
-      return { rows: data as unknown as Array<JobListRow>, count: count ?? 0 }
-    },
+    queryFn: () =>
+      fetchJobsIndexPage({
+        companyId,
+        page,
+        pageSize,
+        search,
+        dateFrom,
+        dateTo,
+        sortBy,
+        sortDir,
+        userId,
+        companyRole,
+        includeArchived,
+        showOnlyArchived,
+        projectLeadUserId,
+        statuses,
+      }),
     staleTime: 10_000,
   }
 }
 
-const JOBS_INDEX_INFINITE_PAGE_SIZE = 50
+export function getJobsIndexNextPageParam(
+  lastPage: JobsIndexPageResult,
+  _allPages: Array<JobsIndexPageResult>,
+  pageSize: number = JOBS_INDEX_INFINITE_PAGE_SIZE,
+): number | undefined {
+  // Page while this response filled the requested range. Do not trust
+  // PostgREST counts for hasNextPage — estimated counts can under-report
+  // and would stop infinite scroll early.
+  if (lastPage.fetched === 0) return undefined
+  if (lastPage.fetched < pageSize) return undefined
+  return lastPage.page + 1
+}
 
 export function jobsIndexInfiniteQuery({
   companyId,
+  search = '',
+  dateFrom,
+  dateTo,
   sortBy = 'start_at',
   sortDir = 'desc',
+  userId,
+  companyRole,
   showOnlyArchived = false,
+  projectLeadUserId = null,
+  statuses = null,
   pageSize = JOBS_INDEX_INFINITE_PAGE_SIZE,
 }: {
   companyId: string
-  sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
-  sortDir?: 'asc' | 'desc'
+  search?: string
+  dateFrom?: string
+  dateTo?: string
+  sortBy?: JobsIndexSortBy
+  sortDir?: JobsIndexSortDir
+  userId?: string | null
+  companyRole?: 'owner' | 'employee' | 'freelancer' | 'super_user' | null
   showOnlyArchived?: boolean
+  projectLeadUserId?: string | null
+  statuses?: Array<JobListRow['status']> | null
   pageSize?: number
 }) {
   return {
@@ -439,63 +613,39 @@ export function jobsIndexInfiniteQuery({
       'company',
       companyId,
       'jobs-index-infinite',
+      search,
+      dateFrom,
+      dateTo,
       sortBy,
       sortDir,
+      userId,
+      companyRole,
       showOnlyArchived,
+      projectLeadUserId,
+      statuses,
       pageSize,
     ] as const,
     initialPageParam: 1,
-    queryFn: async ({
-      pageParam,
-    }: {
-      pageParam: number
-    }): Promise<{ rows: Array<JobListRow>; count: number; page: number }> => {
-      const page = pageParam
-      const from = Math.max(0, (page - 1) * pageSize)
-      const to = Math.max(from, from + pageSize - 1)
-
-      let q = supabase
-        .from('jobs')
-        .select(
-          `
-          id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
-          customer:customer_id ( id, name ),
-          customer_user:customer_user_id ( user_id, display_name, email ),
-          project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
-          recurring_job:recurring_job_id ( id, title )
-        `,
-          { count: 'estimated' },
-        )
-        .eq('company_id', companyId)
-
-      if (showOnlyArchived) {
-        q = q.eq('archived', true)
-      } else {
-        q = q.eq('archived', false)
-      }
-
-      if (sortBy === 'customer_name') {
-        q = q.order('start_at', { ascending: sortDir === 'asc' })
-      } else {
-        q = q.order(sortBy, { ascending: sortDir === 'asc' })
-      }
-
-      const { data, error, count } = await q.range(from, to)
-      if (error) throw error
-      return {
-        rows: data as unknown as Array<JobListRow>,
-        count: count ?? 0,
-        page,
-      }
-    },
+    queryFn: ({ pageParam }: { pageParam: number }) =>
+      fetchJobsIndexPage({
+        companyId,
+        page: pageParam,
+        pageSize,
+        search,
+        dateFrom,
+        dateTo,
+        sortBy,
+        sortDir,
+        userId,
+        companyRole,
+        showOnlyArchived,
+        projectLeadUserId,
+        statuses,
+      }),
     getNextPageParam: (
-      lastPage: { rows: Array<JobListRow>; count: number; page: number },
-      allPages: Array<{ rows: Array<JobListRow>; count: number; page: number }>,
-    ) => {
-      const loaded = allPages.reduce((n, p) => n + p.rows.length, 0)
-      if (loaded >= lastPage.count) return undefined
-      return lastPage.page + 1
-    },
+      lastPage: JobsIndexPageResult,
+      allPages: Array<JobsIndexPageResult>,
+    ) => getJobsIndexNextPageParam(lastPage, allPages, pageSize),
     staleTime: 10_000,
   }
 }

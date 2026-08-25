@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import handler from './verse-of-the-day'
 
-vi.mock('@glowstudent/youversion', () => ({
-  getVerseOfTheDay: vi.fn(async (lang: string) => ({
-    reference: 'John 3:16',
-    lang,
+vi.mock('./verseOfTheDay', () => ({
+  fetchVerseOfTheDay: vi.fn(async (version: string) => ({
+    citation: 'John 3:16',
+    passage: 'For God so loved the world.',
+    version: version === 'msg' ? 'MSG' : 'BM11',
   })),
 }))
 
@@ -39,30 +40,30 @@ function createMockRes() {
 describe('verse-of-the-day handler', () => {
   it('returns verse JSON with cache headers', async () => {
     const { res, getBody, getStatus, getHeaders } = createMockRes()
-    await handler({ query: { lang: 'no' } }, res)
+    await handler({ query: { version: 'nn11' } }, res)
 
     expect(getStatus()).toBe(200)
     const parsed = JSON.parse(getBody())
-    expect(parsed.reference).toBe('John 3:16')
-    expect(parsed.lang).toBe('no')
+    expect(parsed.citation).toBe('John 3:16')
     expect(getHeaders()['Cache-Control']).toContain('s-maxage=3600')
   })
 
-  it('defaults lang to en', async () => {
-    const { getVerseOfTheDay } = await import('@glowstudent/youversion')
-    const { res, getBody } = createMockRes()
+  it('defaults version to bm11', async () => {
+    const { fetchVerseOfTheDay } = await import('./verseOfTheDay')
+    const { res } = createMockRes()
     await handler({ query: {} }, res)
 
-    expect(getVerseOfTheDay).toHaveBeenCalledWith('en')
-    expect(JSON.parse(getBody()).lang).toBe('en')
+    expect(fetchVerseOfTheDay).toHaveBeenCalledWith('bm11')
   })
 
   it('returns 500 on upstream failure', async () => {
-    const { getVerseOfTheDay } = await import('@glowstudent/youversion')
-    vi.mocked(getVerseOfTheDay).mockRejectedValueOnce(new Error('network down'))
+    const { fetchVerseOfTheDay } = await import('./verseOfTheDay')
+    vi.mocked(fetchVerseOfTheDay).mockRejectedValueOnce(
+      new Error('network down'),
+    )
 
     const { res, getBody, getStatus } = createMockRes()
-    await handler({ query: { lang: 'en' } }, res)
+    await handler({ query: { version: 'bm11' } }, res)
 
     expect(getStatus()).toBe(500)
     expect(JSON.parse(getBody()).error).toBe('Failed to load verse of the day')

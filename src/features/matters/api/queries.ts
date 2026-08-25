@@ -4,18 +4,69 @@ import {
   createNotificationAndSendEmail,
   markNotificationReadByEntity,
 } from '@features/notifications/api/queries'
+import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
 import type {
   CreateMatterInput,
   Matter,
+  MatterFile,
   MatterMessage,
   MatterRecipient,
   MatterResponse,
 } from '../types'
 
-// Fetch matters from all companies the user is a member of
-export function mattersIndexQueryAll() {
+const MATTER_SELECT = `
+  id,
+  company_id,
+  created_by_user_id,
+  matter_type,
+  title,
+  content,
+  job_id,
+  time_period_id,
+  is_anonymous,
+  allow_custom_responses,
+  created_as_company,
+  created_at,
+  updated_at,
+  metadata,
+  created_by:profiles!matters_created_by_user_id_fkey ( user_id, display_name, email, avatar_url ),
+  company:company_id ( id, name ),
+  job:jobs!matters_job_id_fkey (
+    id,
+    title,
+    project_lead_user_id,
+    project_lead:profiles!jobs_project_lead_user_id_fkey ( user_id, display_name, email, avatar_url )
+  ),
+  time_period:time_period_id ( id, title )
+`
+
+function mapMatterRow(row: Record<string, unknown>): Matter {
+  const createdByUserId = row.created_by_user_id as string
+  const jobRaw = unwrapOne<Record<string, unknown>>(row.job)
+  const company = unwrapOne<Matter['company']>(row.company)
+  const timePeriod = unwrapOne<Matter['time_period']>(row.time_period)
+  const projectLeadUserId =
+    (jobRaw?.project_lead_user_id as string | null | undefined) ?? null
+
   return {
-    queryKey: ['matters', 'index', 'all'],
+    ...(row as unknown as Matter),
+    created_by: unwrapProfile(row.created_by, createdByUserId),
+    company,
+    job: jobRaw
+      ? {
+          id: jobRaw.id as string,
+          title: jobRaw.title as string,
+          project_lead: unwrapProfile(jobRaw.project_lead, projectLeadUserId),
+        }
+      : null,
+    time_period: timePeriod,
+  }
+}
+
+// Fetch matters from all companies the user is a member of
+export function mattersIndexQueryAll(userId?: string | null) {
+  return {
+    queryKey: ['matters', 'index', 'all', userId ?? 'anon'],
     queryFn: async (): Promise<Array<Matter>> => {
       // Get current user ID
       const {
@@ -74,28 +125,7 @@ export function mattersIndexQueryAll() {
       // User must be either creator OR recipient
       const q = supabase
         .from('matters' as any)
-        .select(
-          `
-          id,
-          company_id,
-          created_by_user_id,
-          matter_type,
-          title,
-          content,
-          job_id,
-          time_period_id,
-          is_anonymous,
-          allow_custom_responses,
-          created_as_company,
-          created_at,
-          updated_at,
-          metadata,
-          created_by:created_by_user_id ( user_id, display_name, email, avatar_url ),
-          company:company_id ( id, name ),
-          job:job_id ( id, title, project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ) ),
-          time_period:time_period_id ( id, title )
-        `,
-        )
+        .select(MATTER_SELECT)
         .in('company_id', companyIds)
         .order('created_at', { ascending: false })
 
@@ -171,12 +201,12 @@ export function mattersIndexQueryAll() {
       }
 
       return filteredMatters.map((m) => ({
-        ...m,
+        ...mapMatterRow(m as Record<string, unknown>),
         recipient_count: recipientCounts.get(m.id) || 0,
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
         is_unread: unreadMatterIds.has(m.id),
-      })) as Array<Matter>
+      }))
     },
   }
 }
@@ -216,28 +246,7 @@ export function mattersIndexQuery(companyId: string) {
       // 2. User is either creator OR recipient
       const q = supabase
         .from('matters' as any)
-        .select(
-          `
-          id,
-          company_id,
-          created_by_user_id,
-          matter_type,
-          title,
-          content,
-          job_id,
-          time_period_id,
-          is_anonymous,
-          allow_custom_responses,
-          created_as_company,
-          created_at,
-          updated_at,
-          metadata,
-          created_by:created_by_user_id ( user_id, display_name, email, avatar_url ),
-          company:company_id ( id, name ),
-          job:job_id ( id, title, project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ) ),
-          time_period:time_period_id ( id, title )
-        `,
-        )
+        .select(MATTER_SELECT)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
 
@@ -313,12 +322,12 @@ export function mattersIndexQuery(companyId: string) {
       }
 
       return filteredMatters.map((m) => ({
-        ...m,
+        ...mapMatterRow(m as Record<string, unknown>),
         recipient_count: recipientCounts.get(m.id) || 0,
         response_count: responseCounts.get(m.id) || 0,
         my_response: myResponseMap.get(m.id) || null,
         is_unread: unreadMatterIds.has(m.id),
-      })) as Array<Matter>
+      }))
     },
   }
 }
@@ -329,28 +338,7 @@ export function matterDetailQuery(matterId: string) {
     queryFn: async (): Promise<Matter | null> => {
       const { data, error } = await supabase
         .from('matters' as any)
-        .select(
-          `
-          id,
-          company_id,
-          created_by_user_id,
-          matter_type,
-          title,
-          content,
-          job_id,
-          time_period_id,
-          is_anonymous,
-          allow_custom_responses,
-          created_as_company,
-          created_at,
-          updated_at,
-          metadata,
-          created_by:created_by_user_id ( user_id, display_name, email, avatar_url ),
-          company:company_id ( id, name ),
-          job:job_id ( id, title, project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ) ),
-          time_period:time_period_id ( id, title )
-        `,
-        )
+        .select(MATTER_SELECT)
         .eq('id', matterId)
         .single()
 
@@ -391,9 +379,9 @@ export function matterDetailQuery(matterId: string) {
       }
 
       return {
-        ...(data as any),
+        ...mapMatterRow(data as Record<string, unknown>),
         my_response: myResponse,
-      } as Matter
+      }
     },
   }
 }
@@ -1107,15 +1095,15 @@ export function matterFilesQuery(matterId: string) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return (data || []) as unknown as Array<import('../types').MatterFile>
+      return (data || []) as unknown as Array<MatterFile>
     },
   }
 }
 
 // Count unread matters from all companies the user is a member of
-export function unreadMattersCountQueryAll() {
+export function unreadMattersCountQueryAll(userId?: string | null) {
   return {
-    queryKey: ['matters', 'unread-count', 'all'],
+    queryKey: ['matters', 'unread-count', 'all', userId ?? 'anon'],
     queryFn: async (): Promise<number> => {
       const {
         data: { user },

@@ -30,6 +30,7 @@ import {
   matterRecipientsQuery,
   respondToMatter,
 } from '../api/queries'
+import { resolveMatterCardAuthor } from '../utils/matterAuthor'
 
 export default function MatterDetail({
   matterId,
@@ -293,7 +294,6 @@ export default function MatterDetail({
   const mapQuery = React.useMemo(() => {
     if (!crewInviteDetails) return null
     const job = crewInviteDetails.job
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!job?.address) return null
     const addr = job.address as any
     const parts = [
@@ -315,7 +315,9 @@ export default function MatterDetail({
     return data.publicUrl
   }, [projectLead?.avatar_url])
 
-  // Using shared getInitials from generalFunctions
+  const author = matter ? resolveMatterCardAuthor(matter) : null
+  const showProjectLead =
+    !!projectLead && projectLead.user_id !== author?.userId
 
   const leadName = projectLead?.display_name || projectLead?.email || null
   const leadInitials = leadName ? getInitials(leadName) : ''
@@ -386,23 +388,17 @@ export default function MatterDetail({
         </Flex>
         <Flex align="center" justify="between" gap="4">
           <Box>
-            {matter.created_as_company && matter.company ? (
+            {author && (
               <Text size="2" color="gray">
-                Created by {matter.company.name} on{' '}
-                {formatDate(matter.created_at)}
+                Created by {author.name} on {formatDate(matter.created_at)}
               </Text>
-            ) : (
-              matter.created_by && (
-                <Text size="2" color="gray">
-                  Created by{' '}
-                  {matter.created_by.display_name || matter.created_by.email} on{' '}
-                  {formatDate(matter.created_at)}
-                </Text>
-              )
             )}
           </Box>
-          {projectLead && (
+          {showProjectLead && (
             <Flex align="center" gap="2">
+              <Text size="1" color="gray">
+                Project lead
+              </Text>
               <Text size="2" weight="medium">
                 {leadName}
               </Text>

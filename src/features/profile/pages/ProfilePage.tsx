@@ -16,6 +16,10 @@ import {
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import {
+  DEFAULT_BIBLE_VERSION,
+  normalizeBibleVersion,
+} from '@shared/lib/bibleVersion'
 import { getInitials } from '@shared/lib/generalFunctions'
 import {
   useTabKeyboardScopeProps,
@@ -65,6 +69,7 @@ type OptionalFields = {
   notes?: string | null
   animated_background_intensity?: number | null
   daily_inspiration_type?: 'quote' | 'bibleverse' | null
+  bible_version?: 'bm11' | 'nn11' | 'msg' | null
 }
 
 type AddressForm = {
@@ -183,7 +188,10 @@ export default function ProfilePage() {
     backgroundShapeType: 'circles' as 'circles' | 'triangles' | 'rectangles',
     backgroundSpeed: 1.0,
     dailyInspirationType: 'quote' as 'quote' | 'bibleverse',
+    bibleVersion: DEFAULT_BIBLE_VERSION,
   })
+  const formRef = React.useRef(form)
+  formRef.current = form
 
   const [addr, setAddr] = React.useState<AddressForm>({
     id: null,
@@ -233,6 +241,9 @@ export default function ProfilePage() {
           ?.daily_inspiration_type === 'bibleverse'
           ? 'bibleverse'
           : 'quote',
+      bibleVersion: normalizeBibleVersion(
+        (data.preferences as Record<string, any> | null)?.bible_version,
+      ),
     }))
 
     const a = data.addresses
@@ -264,13 +275,14 @@ export default function ProfilePage() {
   const mut = useMutation({
     mutationFn: async () => {
       if (!authUser?.id) throw new Error('Not authenticated')
+      const currentForm = formRef.current
 
       // CSV -> arrays
-      const licenses = form.licensesCsv
+      const licenses = currentForm.licensesCsv
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-      const certificates = form.certificatesCsv
+      const certificates = currentForm.certificatesCsv
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
@@ -329,28 +341,29 @@ export default function ProfilePage() {
           : {}
       const preferences: Record<string, unknown> = {
         ...prevPrefs,
-        date_of_birth: form.date_of_birth || null,
-        drivers_license: form.drivers_license || null,
+        date_of_birth: currentForm.date_of_birth || null,
+        drivers_license: currentForm.drivers_license || null,
         licenses: licenses.length ? licenses : null,
         certificates: certificates.length ? certificates : null,
-        notes: form.notes || null,
-        animated_background_enabled: form.animatedBackground,
-        animated_background_intensity: form.backgroundIntensity,
-        animated_background_shape_type: form.backgroundShapeType,
-        animated_background_speed: form.backgroundSpeed,
-        daily_inspiration_type: form.dailyInspirationType,
+        notes: currentForm.notes || null,
+        animated_background_enabled: currentForm.animatedBackground,
+        animated_background_intensity: currentForm.backgroundIntensity,
+        animated_background_shape_type: currentForm.backgroundShapeType,
+        animated_background_speed: currentForm.backgroundSpeed,
+        daily_inspiration_type: currentForm.dailyInspirationType,
+        bible_version: currentForm.bibleVersion,
       }
       delete preferences.prefer_reduced_motion
       delete preferences.daily_inspiration_show_attribution
       delete preferences.daily_inspiration_large_text
 
       const { error: rpcErr } = await supabase.rpc('update_my_profile', {
-        p_display_name: form.display_name || null,
-        p_first_name: form.first_name || null,
-        p_last_name: form.last_name || null,
-        p_phone: form.phone || null,
-        p_bio: form.bio || null,
-        p_avatar_path: form.avatarPath || null,
+        p_display_name: currentForm.display_name || null,
+        p_first_name: currentForm.first_name || null,
+        p_last_name: currentForm.last_name || null,
+        p_phone: currentForm.phone || null,
+        p_bio: currentForm.bio || null,
+        p_avatar_path: currentForm.avatarPath || null,
         p_preferences: preferences,
       } as any)
       if (rpcErr) throw rpcErr
@@ -366,6 +379,9 @@ export default function ProfilePage() {
       await qc.refetchQueries({
         queryKey: ['profile', authUser?.id, 'daily-inspiration-type'],
         exact: false,
+      })
+      await qc.invalidateQueries({
+        queryKey: ['youversion', 'verse-of-the-day'],
       })
       // Also invalidate any queries that might use this preference
       await qc.invalidateQueries({
@@ -783,12 +799,24 @@ export default function ProfilePage() {
                   backgroundShapeType: form.backgroundShapeType,
                   backgroundSpeed: form.backgroundSpeed,
                   dailyInspirationType: form.dailyInspirationType,
+                  bibleVersion: form.bibleVersion,
                 } satisfies ProfilePersonalizationFormSlice
               }
               patchForm={(patch: Partial<ProfilePersonalizationFormSlice>) =>
-                setForm((s) => ({ ...s, ...patch }))
+                setForm((s) => {
+                  const next = { ...s, ...patch }
+                  formRef.current = next
+                  return next
+                })
               }
-              saveProfile={() => mut.mutateAsync()}
+              saveProfile={(patch) => {
+                if (patch) {
+                  const next = { ...formRef.current, ...patch }
+                  formRef.current = next
+                  setForm(next)
+                }
+                return mut.mutateAsync()
+              }}
               isSaving={mut.isPending}
             />
           </Tabs.Content>

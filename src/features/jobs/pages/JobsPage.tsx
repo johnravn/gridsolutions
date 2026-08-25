@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Button, Flex, Text, Tooltip } from '@radix-ui/themes'
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { LotOfCash, Sparks } from 'iconoir-react'
 import { DateRangePicker } from '@shared/ui/components/pickers'
@@ -15,9 +15,11 @@ import {
 } from '@shared/hotkeys'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { getTabNavShortcutLabels } from '@shared/lib/keyboardShortcuts'
-import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
-import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
-import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
+import {
+  MobileSplitSkeleton,
+  MobileSplitView,
+  useMobileInspectorDrawer,
+} from '@app/layout/mobile'
 import {
   SPLIT_LEFT_WIDTH,
   SplitPage,
@@ -28,7 +30,7 @@ import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
-import { jobsIndexQuery } from '../api/queries'
+import { jobsIndexInfiniteQuery } from '../api/queries'
 import type { JobStatus, JobsPageSelection } from '../types'
 
 function JobInspectorTabShortcutTip() {
@@ -85,13 +87,15 @@ export default function JobsPage() {
     if (jobId) return { kind: 'job', id: jobId }
     return null
   })
-  const [statusFilter, setStatusFilter] = React.useState(DEFAULT_STATUS_FILTER)
+  const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
+    useMobileInspectorDrawer(isLarge)
+  const [statusFilter, setStatusFilter] = React.useState([
+    ...DEFAULT_STATUS_FILTER,
+  ])
   const [showOnlyArchived, setShowOnlyArchived] = React.useState(false)
   const [dateFrom, setDateFrom] = React.useState('')
   const [dateTo, setDateTo] = React.useState('')
   const [readyToInvoiceFilter, setReadyToInvoiceFilter] = React.useState(false)
-  const inspectorRef = React.useRef<HTMLDivElement>(null)
-  const listRef = React.useRef<HTMLElement>(null)
 
   const { data: jobsReadyToInvoice = [] } = useQuery({
     ...jobsReadyToInvoiceQuery({
@@ -164,48 +168,75 @@ export default function JobsPage() {
     }
   }, [jobId, recurringJobId])
 
-  const handleSelectJob = React.useCallback((id: string | null) => {
-    setSelection(id ? { kind: 'job', id } : null)
-  }, [])
-
-  const handleSelectRecurringJob = React.useCallback((id: string | null) => {
-    setSelection(id ? { kind: 'recurring_job', id } : null)
-  }, [])
-
-  const handleSelectJobFromRecurring = React.useCallback((id: string) => {
-    setSelection({ kind: 'job', id })
-  }, [])
-
+  const openedFromUrlRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!isLarge && selection != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }
-  }, [isLarge, selection])
+    const urlId = recurringJobId ?? jobId
+    if (!urlId || isLarge) return
+    if (openedFromUrlRef.current === urlId) return
+    openedFromUrlRef.current = urlId
+    openDrawer()
+  }, [jobId, recurringJobId, isLarge, openDrawer])
 
-  const clearSelection = React.useCallback(() => {
-    setSelection(null)
-  }, [])
+  const handleSelectJob = React.useCallback(
+    (id: string | null) => {
+      setSelection(id ? { kind: 'job', id } : null)
+      if (id && !isLarge) openDrawer()
+    },
+    [isLarge, openDrawer],
+  )
 
-  useMobileDetailBack(!isLarge, selection != null, clearSelection)
+  const handleSelectRecurringJob = React.useCallback(
+    (id: string | null) => {
+      setSelection(id ? { kind: 'recurring_job', id } : null)
+      if (id && !isLarge) openDrawer()
+    },
+    [isLarge, openDrawer],
+  )
 
-  const { isLoading: jobsIndexLoading } = useQuery({
-    ...jobsIndexQuery({
+  const handleSelectJobFromRecurring = React.useCallback(
+    (id: string) => {
+      setSelection({ kind: 'job', id })
+      if (!isLarge) openDrawer()
+    },
+    [isLarge, openDrawer],
+  )
+
+  const { isLoading: jobsIndexLoading } = useInfiniteQuery({
+    ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
       search: '',
       sortBy: 'start_at',
       sortDir: 'asc',
       userId,
       companyRole,
-      showOnlyArchived: false,
+      showOnlyArchived,
+      dateFrom: dateFrom || undefined,
+      dateTo: dateTo || undefined,
+      projectLeadUserId: readyToInvoiceFilter ? userId : null,
+      statuses: readyToInvoiceFilter
+        ? ['completed']
+        : statusFilter.length > 0
+          ? statusFilter
+          : null,
     }),
     enabled: !!companyId,
   })
   const showInitialSkeleton = useInitialPageLoad(jobsIndexLoading)
 
-  if (!companyId || (showInitialSkeleton && !hasSlots)) {
+  if (!companyId) {
+    if (!isLarge) return <MobileSplitSkeleton />
+    return (
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.jobs}
+        minWidthPercent={15}
+        title="Jobs"
+      />
+    )
+  }
+
+  if (showInitialSkeleton && !isLarge) return <MobileSplitSkeleton />
+
+  if (showInitialSkeleton && !hasSlots) {
     return (
       <SplitPageSkeleton
         defaultLeftWidth={SPLIT_LEFT_WIDTH.jobs}
@@ -263,71 +294,49 @@ export default function JobsPage() {
       />
     )
 
+  const list = (
+    <JobsList
+      createShortcutRef={createJobShortcutRef}
+      selection={selection}
+      onSelectJob={handleSelectJob}
+      onSelectRecurringJob={handleSelectRecurringJob}
+      statusFilter={statusFilter}
+      showOnlyArchived={showOnlyArchived}
+      dateFrom={dateFrom}
+      dateTo={dateTo}
+      readyToInvoiceFilter={readyToInvoiceFilter}
+      compact={!isLarge}
+      toolbarExtra={isLarge ? undefined : leftToolbar}
+    />
+  )
+
+  if (!isLarge) {
+    return (
+      <MobileSplitView
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onToggle={toggleDrawer}
+        inspector={inspector}
+      >
+        {list}
+      </MobileSplitView>
+    )
+  }
+
   return (
     <SplitPage
       defaultLeftWidth={SPLIT_LEFT_WIDTH.jobs}
       minWidthPercent={15}
       title="Jobs"
       leftToolbar={leftToolbar}
-      left={
-        <JobsList
-          createShortcutRef={createJobShortcutRef}
-          selection={selection}
-          onSelectJob={handleSelectJob}
-          onSelectRecurringJob={handleSelectRecurringJob}
-          statusFilter={statusFilter}
-          showOnlyArchived={showOnlyArchived}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          readyToInvoiceFilter={readyToInvoiceFilter}
-          compact={!isLarge}
-        />
-      }
+      left={list}
       leftBodyStyle={{
-        overflow: isLarge ? 'hidden' : undefined,
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      rightToolbar={
-        isLarge && selection ? <JobInspectorTabShortcutTip /> : null
-      }
-      right={inspector}
-      mobileLeftCardStyle={{ height: MOBILE_CARD_HEIGHT, minWidth: 0 }}
-      mobileLeftBodyStyle={{
-        flex: 1,
-        minHeight: 0,
-        minWidth: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      mobileRightCardStyle={{
-        height: MOBILE_CARD_HEIGHT,
         overflow: 'hidden',
-        maxWidth: '100%',
+        display: 'flex',
+        flexDirection: 'column',
       }}
-      mobileSectionRef={listRef}
-      mobileRightWrapper={(card) => (
-        <div
-          ref={inspectorRef}
-          style={{
-            minHeight: 0,
-            maxWidth: '100%',
-            width: '100%',
-            height: MOBILE_CARD_HEIGHT,
-          }}
-        >
-          {card}
-        </div>
-      )}
-      mobileFooter={
-        <ScrollToTopButton
-          listRef={listRef}
-          inspectorRef={inspectorRef}
-          visible={!isLarge && selection != null}
-        />
-      }
+      rightToolbar={selection ? <JobInspectorTabShortcutTip /> : null}
+      right={inspector}
     />
   )
 }

@@ -83,7 +83,7 @@ export default function UserDialog({
         superuser: initialData.superuser || false,
       })
     }
-  }, [open, initialData?.user_id])
+  }, [open, initialData])
 
   const editMutation = useMutation({
     mutationFn: async (f: FormState) => {

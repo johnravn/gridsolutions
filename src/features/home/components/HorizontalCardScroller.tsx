@@ -71,7 +71,9 @@ export function HorizontalCardScroller({
         style={{
           width: 'max-content',
           minWidth: '100%',
-          ...(fillHeight ? { flex: 1, minHeight: 0, height: '100%' } : undefined),
+          ...(fillHeight
+            ? { flex: 1, minHeight: 0, height: '100%' }
+            : undefined),
           ...(bleed
             ? {
                 paddingLeft: 'var(--space-4)',

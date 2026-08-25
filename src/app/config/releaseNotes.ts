@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.12.2'
+export const APP_VERSION = '1.13.0'
 
 export type ReleaseHighlight = {
   title: string
@@ -19,44 +19,44 @@ export const RELEASE_NOTES = {
   title: "What's new in Grid",
   highlights: [
     {
-      title: 'Redesigned home dashboard',
+      title: 'Mobile list + inspector',
       description:
-        'Attention band for conflicts, invoices, and matters; multi-week job spans; active recurring series; and a clearer week overview.',
+        'List pages open details in a slide-over drawer with a floating action button and sticky bottom actions — built for phones without losing the split-view desktop layout.',
     },
     {
-      title: 'Keyboard shortcuts',
+      title: 'Jobs list that keeps going',
       description:
-        'Navigate, switch tabs, collapse panels, and create records from the keyboard. Customize bindings in Profile → Shortcuts.',
+        'Jobs load as you scroll, and the status filter defaults to all statuses so you can find older work without hunting.',
     },
     {
-      title: 'Unified list + inspector layout',
+      title: 'Flexible time logging',
       description:
-        'Jobs, customers, inventory, and other list pages share a consistent resizable split view with smoother mobile stacking.',
+        'Log hours against more than the job you are currently on, with a clearer month scroller and when/hours fields when creating or editing entries.',
     },
     {
-      title: 'Offer options block',
+      title: 'Group booking conflicts',
       description:
-        'Add optional packages and add-ons to pretty offers. Customers choose on the public offer page and totals update live.',
+        'Booked equipment groups are checked as units. Overlaps show up on home conflict cards and in attention counts alongside item-level conflicts.',
     },
     {
-      title: 'Sync basis to bookings',
+      title: 'Simpler equipment bookings',
       description:
-        'When applying an offer basis to a job, preview what will change and review equipment conflicts before confirming.',
+        'Equipment and vehicle bookings are treated as booked when they exist — less status noise when planning and packing a job.',
     },
     {
-      title: 'Smarter conflicts',
+      title: 'Recurring job times',
       description:
-        'Home conflict alerts focus on jobs where you are project lead, with clearer overlap duration and period context.',
+        'Edit recurring job windows with the range picker, including adjusting the end time directly without redoing the whole period.',
     },
     {
-      title: 'Recurring job periods',
+      title: 'Bible version preference',
       description:
-        'Set an active start and optional end date on recurring series so they only generate within that window.',
+        'Choose BM11, NN11, or The Message for the daily verse from Profile → Personalization.',
     },
     {
-      title: 'Polish throughout',
+      title: 'Polish and fixes',
       description:
-        'Animated tab indicators, improved date range pickers, denser UI chrome, and unsaved-change guards when closing offer editors.',
+        'Matter cards show the correct author, offer PDF totals line up, public technical offer groups expand again, and toast/tab interactions feel smoother.',
     },
   ],
 } as const satisfies {

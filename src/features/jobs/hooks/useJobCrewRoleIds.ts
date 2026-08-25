@@ -22,7 +22,9 @@ export function useJobCrewRoleIds({
       'crew-role-ids',
       companyId,
       userId,
-      jobIds.length ? jobIds.slice(0, 50).join(',') : '',
+      jobIds.length
+        ? `${jobIds.length}:${jobIds[0]}:${jobIds[jobIds.length - 1]}`
+        : '',
     ],
     queryFn: async (): Promise<Array<string>> => {
       if (!userId || jobIds.length === 0) return []
@@ -33,7 +35,7 @@ export function useJobCrewRoleIds({
         .in('job_id', jobIds)
 
       if (tpError) throw tpError
-      const timePeriodIds = (timePeriods ?? []).map((tp) => tp.id)
+      const timePeriodIds = timePeriods.map((tp) => tp.id)
       if (timePeriodIds.length === 0) return []
 
       const { data: crewRes, error: crewError } = await supabase
@@ -46,12 +48,12 @@ export function useJobCrewRoleIds({
       if (crewError) throw crewError
 
       const tpToJob = new Map<string, string>()
-      ;(timePeriods ?? []).forEach((tp) => {
+      timePeriods.forEach((tp) => {
         if (tp.job_id) tpToJob.set(tp.id, tp.job_id)
       })
 
       const out: Array<string> = []
-      ;(crewRes ?? []).forEach((c) => {
+      crewRes.forEach((c) => {
         const jobId = tpToJob.get(c.time_period_id)
         if (jobId) out.push(jobId)
       })

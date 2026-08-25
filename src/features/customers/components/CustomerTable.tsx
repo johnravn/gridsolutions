@@ -10,16 +10,26 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { InfoCircle, Plus, Search } from 'iconoir-react'
-import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
+import {
+  IndexTableBodySkeleton,
+  VirtualIndexTable,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
 import type { IndexColumn } from '@shared/ui/index-table'
 
 const GRID_COLUMNS = 'minmax(180px, 2fr) 100px 100px'
+const PAGE_GRID_COLUMNS = 'minmax(0, 1fr) auto'
 
 const COLUMNS: Array<IndexColumn> = [
   { id: 'name', header: 'Name' },
@@ -43,12 +53,14 @@ export default function CustomerTable({
   onSelect,
   showRegular,
   showPartner,
+  toolbarExtra,
 }: {
   selectedId: string | null
   onSelect: (id: string) => void
   showRegular: boolean
   showPartner: boolean
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
+  toolbarExtra?: React.ReactNode
 }) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -86,6 +98,141 @@ export default function CustomerTable({
     estimateRowSize: 52,
   })
 
+  const toolbar = (
+    <Flex
+      gap={isMobile ? '4' : '2'}
+      align="center"
+      wrap="wrap"
+      direction={isMobile ? 'column' : 'row'}
+    >
+      <Flex
+        gap="3"
+        align="center"
+        style={{ width: isMobile ? '100%' : undefined, flex: 1, minWidth: 0 }}
+      >
+        <TextField.Root
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search customers…"
+          size="3"
+          style={{
+            flex: isMobile ? 1 : '1 1 260px',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          <TextField.Slot side="left">
+            <Search />
+          </TextField.Slot>
+          <TextField.Slot side="right">
+            {(isFetching || isLoading) && (
+              <Flex align="center" gap="1">
+                <Text>Thinking</Text>
+                <Spinner size="2" />
+              </Flex>
+            )}
+          </TextField.Slot>
+        </TextField.Root>
+        {isMobile ? toolbarExtra : null}
+      </Flex>
+
+      {canWrite && (
+        <Button
+          variant="solid"
+          onClick={() => setAddOpen(true)}
+          style={isMobile ? { width: '100%' } : undefined}
+          size="3"
+        >
+          <Plus width={18} height={18} />
+          Add customer
+        </Button>
+      )}
+
+      <AddCustomerDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        onAdded={() =>
+          qc.invalidateQueries({
+            queryKey: ['company', companyId, 'customers-index'],
+          })
+        }
+      />
+    </Flex>
+  )
+
+  const renderType = (r: (typeof rows)[number]) =>
+    r.is_partner ? (
+      <Badge variant="soft" color="green">
+        Partner
+      </Badge>
+    ) : (
+      <Badge variant="soft">Customer</Badge>
+    )
+
+  if (isMobile) {
+    return (
+      <MobilePageList toolbar={toolbar}>
+        {isLoading ? (
+          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+        ) : rows.length === 0 ? (
+          <Text size="2" color="gray">
+            No results
+          </Text>
+        ) : (
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+          >
+            {rows.map((r) => {
+              const isSelected = r.id === selectedId
+              return (
+                <div
+                  key={r.id}
+                  className={[
+                    INDEX_TABLE_ROW_CLASS,
+                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelect(r.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(r.id)
+                    }
+                  }}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: PAGE_GRID_COLUMNS,
+                    gap: 'var(--space-3)',
+                    alignItems: 'center',
+                    padding: '16px 12px',
+                    minHeight: 64,
+                    cursor: 'pointer',
+                    borderRadius: 'var(--radius-3)',
+                  }}
+                >
+                  <Text size="2" weight="medium">
+                    {r.name}
+                  </Text>
+                  {renderType(r)}
+                </div>
+              )
+            })}
+          </Flex>
+        )}
+        {rows.length > 0 && (
+          <Text size="2" color="gray">
+            {rows.length} customer{rows.length !== 1 ? 's' : ''}
+          </Text>
+        )}
+      </MobilePageList>
+    )
+  }
+
   return (
     <VirtualIndexTable
       rows={rows}
@@ -101,13 +248,7 @@ export default function CustomerTable({
               </Text>
             )
           case 'type':
-            return r.is_partner ? (
-              <Badge variant="soft" color="green">
-                Partner
-              </Badge>
-            ) : (
-              <Badge variant="soft">Customer</Badge>
-            )
+            return renderType(r)
           case 'crew_rate':
             return (
               <Text size="1" color="gray">
@@ -129,56 +270,7 @@ export default function CustomerTable({
         shown: rows.length,
         label: (n) => `${n} customer${n !== 1 ? 's' : ''}`,
       }}
-      toolbar={
-        <Flex
-          gap="2"
-          align="center"
-          wrap="wrap"
-          direction={isMobile ? 'column' : 'row'}
-        >
-          <TextField.Root
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search customers…"
-            size="3"
-            style={{ flex: isMobile ? undefined : '1 1 260px', width: '100%' }}
-          >
-            <TextField.Slot side="left">
-              <Search />
-            </TextField.Slot>
-            <TextField.Slot side="right">
-              {(isFetching || isLoading) && (
-                <Flex align="center" gap="1">
-                  <Text>Thinking</Text>
-                  <Spinner size="2" />
-                </Flex>
-              )}
-            </TextField.Slot>
-          </TextField.Root>
-
-          {canWrite && (
-            <Button
-              variant="solid"
-              onClick={() => setAddOpen(true)}
-              style={isMobile ? { width: '100%' } : undefined}
-              size={isMobile ? '3' : '2'}
-            >
-              <Plus width={18} height={18} />
-              Add customer
-            </Button>
-          )}
-
-          <AddCustomerDialog
-            open={addOpen}
-            onOpenChange={setAddOpen}
-            onAdded={() =>
-              qc.invalidateQueries({
-                queryKey: ['company', companyId, 'customers-index'],
-              })
-            }
-          />
-        </Flex>
-      }
+      toolbar={toolbar}
     />
   )
 }

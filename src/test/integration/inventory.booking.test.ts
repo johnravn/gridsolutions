@@ -76,7 +76,7 @@ describeIntegration('inventory booking access', () => {
     const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
     const { data, error } = await client
       .from('reserved_items')
-      .select('id, item_id, quantity, status')
+      .select('id, item_id, quantity')
       .limit(10)
 
     expect(error).toBeNull()
@@ -154,7 +154,6 @@ describeIntegration('reserve item golden path', () => {
         time_period_id: throwawayTimePeriodId!,
         item_id: TEST_ITEM_ID,
         quantity: reserveQty,
-        status: 'planned',
         source_kind: 'direct',
         start_at: RESERVE_WINDOW.startAt,
         end_at: RESERVE_WINDOW.endAt,

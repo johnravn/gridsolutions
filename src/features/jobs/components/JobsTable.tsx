@@ -320,11 +320,11 @@ export default function JobsTable({
           </TextField.Root>
 
           <Button
-            size="2"
+            size="3"
             variant={includeArchived ? 'classic' : 'soft'}
             onClick={() => setIncludeArchived(!includeArchived)}
           >
-            <Archive width={16} height={16} />
+            <Archive width={18} height={18} />
             {includeArchived ? 'Hide archived' : 'Show archived'}
           </Button>
 
@@ -340,17 +340,17 @@ export default function JobsTable({
               setDateTo('')
             }}
             iconButton
-            iconButtonSize="2"
+            iconButtonSize="3"
           />
 
           {canWrite && (
             <Button
-              size="2"
+              size="3"
               variant="solid"
               onClick={() => setCreateOpen(true)}
               style={{ gap: '4px' }}
             >
-              <Plus width={16} height={16} />
+              <Plus width={18} height={18} />
               New job
             </Button>
           )}

@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { LotOfCash, Message, WarningTriangle } from 'iconoir-react'
+import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import {
   ConflictScrollCard,
   buildConflictCards,
@@ -19,6 +20,7 @@ import { MattersScrollContent } from './MattersSection'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
@@ -61,6 +63,7 @@ export function HomeAttentionSummary({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
   getInitials,
@@ -75,6 +78,7 @@ export function HomeAttentionSummary({
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
   getInitials: (name: string | null, email: string) => string
@@ -85,11 +89,18 @@ export function HomeAttentionSummary({
 
   const conflictCount = React.useMemo(
     () =>
-      countConflictItems(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      countConflictItems(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
-  const mattersCount = unreadMatters.filter((m) => m.created_by).length
+  const mattersCount = unreadMatters.filter((m) =>
+    resolveMatterCardAuthor(m),
+  ).length
   const invoiceCount = jobsReadyToInvoice.length
   const showMattersRow = showMatters
   const showConflictsRow = showConflicts
@@ -97,8 +108,13 @@ export function HomeAttentionSummary({
 
   const conflictCards = React.useMemo(
     () =>
-      buildConflictCards(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      buildConflictCards(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
   if (!showMattersRow && !showConflictsRow && !showInvoiceRow) {

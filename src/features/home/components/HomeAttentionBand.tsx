@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Badge, Box, Card, Flex, Heading, Text } from '@radix-ui/themes'
 import { CalendarCheck, LotOfCash, Message } from 'iconoir-react'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
+import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import {
   ConflictScrollCard,
   buildConflictCards,
@@ -10,12 +11,13 @@ import {
 import { HorizontalCardScroller } from './HorizontalCardScroller'
 import { InvoiceScrollContent } from './JobsReadyToInvoiceSection'
 import { MattersScrollContent } from './MattersSection'
+import type { ReactNode } from 'react'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '@features/conflicts/api/queries'
-import type { ReactNode } from 'react'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
 
 function AccentIconBadge({ children }: { children: ReactNode }) {
@@ -170,6 +172,7 @@ export function HomeAttentionBand({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts,
   conflictsSettled,
   getInitials,
   getAvatarUrl,
@@ -184,22 +187,35 @@ export function HomeAttentionBand({
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts: Array<GroupConflictRow>
   conflictsSettled: boolean
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
 }) {
   const conflictCards = React.useMemo(
     () =>
-      buildConflictCards(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      buildConflictCards(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
   const conflictCount = React.useMemo(
     () =>
-      countConflictItems(crewConflicts, vehicleConflicts, equipmentConflicts),
-    [crewConflicts, vehicleConflicts, equipmentConflicts],
+      countConflictItems(
+        crewConflicts,
+        vehicleConflicts,
+        equipmentConflicts,
+        groupConflicts,
+      ),
+    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
-  const mattersCount = unreadMatters.filter((m) => m.created_by).length
+  const mattersCount = unreadMatters.filter((m) =>
+    resolveMatterCardAuthor(m),
+  ).length
   const invoiceCount = jobsReadyToInvoice.length
 
   type ColumnKey = 'matters' | 'invoices' | 'conflicts'

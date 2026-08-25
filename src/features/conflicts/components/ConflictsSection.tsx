@@ -7,13 +7,16 @@ import { WarningTriangle } from 'iconoir-react'
 import { DashboardCard } from '@features/home/components/DashboardCard'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import {
+  groupConflictDisplayName,
   splitCrewConflicts,
   splitEquipmentConflicts,
+  splitGroupConflicts,
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
+  GroupConflictRow,
   VehicleConflictRow,
 } from '../api/queries'
 
@@ -27,12 +30,14 @@ export function ConflictsSection({
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
+  groupConflicts = [],
   loading,
   rangeLabel,
 }: {
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
+  groupConflicts?: Array<GroupConflictRow>
   loading: boolean
   rangeLabel?: string
 }) {
@@ -40,26 +45,33 @@ export function ConflictsSection({
     const crew = splitCrewConflicts(crewConflicts)
     const vehicles = splitVehicleConflicts(vehicleConflicts)
     const equipment = splitEquipmentConflicts(equipmentConflicts)
+    const groups = splitGroupConflicts(groupConflicts)
     return {
       unresolved: {
         crew: crew.unresolved,
         vehicles: vehicles.unresolved,
         equipment: equipment.unresolved,
+        groups: groups.unresolved,
       },
       forced: {
         crew: crew.forced,
         vehicles: vehicles.forced,
         equipment: equipment.forced,
+        groups: groups.forced,
       },
     }
-  }, [crewConflicts, vehicleConflicts, equipmentConflicts])
+  }, [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts])
 
   const unresolvedCount =
     unresolved.crew.length +
     unresolved.vehicles.length +
-    unresolved.equipment.length
+    unresolved.equipment.length +
+    unresolved.groups.length
   const forcedCount =
-    forced.crew.length + forced.vehicles.length + forced.equipment.length
+    forced.crew.length +
+    forced.vehicles.length +
+    forced.equipment.length +
+    forced.groups.length
   const totalCount = unresolvedCount + forcedCount
 
   return (
@@ -84,6 +96,7 @@ export function ConflictsSection({
               crew={unresolved.crew}
               vehicles={unresolved.vehicles}
               equipment={unresolved.equipment}
+              groups={unresolved.groups}
             />
           )}
           {forcedCount > 0 && (
@@ -93,6 +106,7 @@ export function ConflictsSection({
               crew={forced.crew}
               vehicles={forced.vehicles}
               equipment={forced.equipment}
+              groups={forced.groups}
             />
           )}
         </Flex>
@@ -107,12 +121,14 @@ function ConflictGroup({
   crew,
   vehicles,
   equipment,
+  groups,
 }: {
   title: string
   tone: 'red' | 'amber'
   crew: Array<CrewConflictRow>
   vehicles: Array<VehicleConflictRow>
   equipment: Array<EquipmentConflictRow>
+  groups: Array<GroupConflictRow>
 }) {
   const bg = tone === 'red' ? 'var(--red-a2)' : 'var(--amber-a2)'
   const border = tone === 'red' ? 'var(--red-a4)' : 'var(--amber-a4)'
@@ -152,6 +168,22 @@ function ConflictGroup({
           >
             <Text size="2" weight="medium" as="div">
               Vehicle: {row.vehicle_name ?? 'Unknown'}
+            </Text>
+            <JobPairLinks row={row} />
+          </Box>
+        ))}
+        {groups.map((row, i) => (
+          <Box
+            key={`group-${row.group_id_1}-${row.group_id_2}-${row.period_id_1}-${row.period_id_2}-${i}`}
+            p="2"
+            style={{
+              borderRadius: 8,
+              backgroundColor: bg,
+              border: `1px solid ${border}`,
+            }}
+          >
+            <Text size="2" weight="medium" as="div">
+              Group: {groupConflictDisplayName(row)}
             </Text>
             <JobPairLinks row={row} />
           </Box>
