@@ -34,14 +34,35 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['jobs', jobId, 'invoices'],
     queryFn: async (): Promise<Array<InvoiceRecord>> => {
-      const { data, error } = await supabase
-        .from('job_invoices')
-        .select('*')
+      const { data: junctionRows, error: junctionError } = await supabase
+        .from('job_invoice_jobs')
+        .select('invoice_id')
         .eq('job_id', jobId)
-        .order('created_at', { ascending: false })
+
+      if (junctionError) throw junctionError
+
+      const junctionInvoiceIds = (junctionRows ?? []).map((r) => r.invoice_id)
+      const uniqueIds = [...new Set(junctionInvoiceIds)]
+
+      let query = supabase.from('job_invoices').select('*')
+      if (uniqueIds.length > 0) {
+        query = query.or(`job_id.eq.${jobId},id.in.(${uniqueIds.join(',')})`)
+      } else {
+        query = query.eq('job_id', jobId)
+      }
+
+      const { data, error } = await query.order('created_at', {
+        ascending: false,
+      })
 
       if (error) throw error
-      return data as Array<InvoiceRecord>
+
+      const seen = new Set<string>()
+      return (data as Array<InvoiceRecord>).filter((inv) => {
+        if (seen.has(inv.id)) return false
+        seen.add(inv.id)
+        return true
+      })
     },
   })
   const syncInFlightRef = React.useRef(false)
@@ -371,6 +392,12 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
                     >
                       {invoice.invoice_basis === 'offer' ? 'Offer' : 'Bookings'}
                     </Badge>
+                    {Array.isArray(invoice.invoice_data?.linkedJobMeta) &&
+                      invoice.invoice_data.linkedJobMeta.length > 1 && (
+                        <Text size="1" color="gray" as="p" mt="1">
+                          {invoice.invoice_data.linkedJobMeta.length} jobs
+                        </Text>
+                      )}
                   </Table.Cell>
                   <Table.Cell>
                     {(() => {

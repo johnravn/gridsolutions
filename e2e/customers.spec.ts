@@ -20,12 +20,24 @@ test.describe('Customers', () => {
 
     const customerName = `E2E Customer ${Date.now()}`
     await dialog.getByPlaceholder('Company or customer name').fill(customerName)
-    await dialog.getByRole('button', { name: 'Create' }).click()
 
+    const createButton = dialog.getByRole('button', { name: 'Create' })
+    const createResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes('/rest/v1/customers') &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+      { timeout: 20_000 },
+    )
+    await createButton.click()
+    await createResponse
     await expect(dialog).toBeHidden({ timeout: 20_000 })
-    await page.getByText(customerName, { exact: true }).click()
-    await expect(
-      page.getByText(customerName, { exact: true }).first(),
-    ).toBeVisible({ timeout: 15_000 })
+
+    const searchInput = page.getByPlaceholder('Search customers…')
+    await searchInput.fill(customerName)
+    const customerRow = page.getByText(customerName, { exact: true })
+    await expect(customerRow).toBeVisible({ timeout: 20_000 })
+    await customerRow.click()
+    await expect(customerRow.first()).toBeVisible({ timeout: 15_000 })
   })
 })

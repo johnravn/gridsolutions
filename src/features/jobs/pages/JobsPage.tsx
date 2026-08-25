@@ -31,7 +31,7 @@ import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
 import { jobsIndexInfiniteQuery } from '../api/queries'
-import type { JobStatus, JobsPageSelection } from '../types'
+import type { JobStatus, JobsListScope, JobsPageSelection } from '../types'
 
 function JobInspectorTabShortcutTip() {
   const resolved = useResolvedShortcuts()
@@ -87,6 +87,11 @@ export default function JobsPage() {
     if (jobId) return { kind: 'job', id: jobId }
     return null
   })
+  const [listScope, setListScope] = React.useState<JobsListScope>(() =>
+    recurringJobId
+      ? { kind: 'recurring', id: recurringJobId, title: 'Recurring job' }
+      : null,
+  )
   const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
     useMobileInspectorDrawer(isLarge)
   const [statusFilter, setStatusFilter] = React.useState([
@@ -163,6 +168,11 @@ export default function JobsPage() {
   React.useEffect(() => {
     if (recurringJobId) {
       setSelection({ kind: 'recurring_job', id: recurringJobId })
+      setListScope((prev) =>
+        prev?.id === recurringJobId
+          ? prev
+          : { kind: 'recurring', id: recurringJobId, title: 'Recurring job' },
+      )
     } else if (jobId) {
       setSelection({ kind: 'job', id: jobId })
     }
@@ -186,8 +196,20 @@ export default function JobsPage() {
   )
 
   const handleSelectRecurringJob = React.useCallback(
-    (id: string | null) => {
+    (id: string | null, title?: string) => {
       setSelection(id ? { kind: 'recurring_job', id } : null)
+      if (id) {
+        setListScope((prev) => ({
+          kind: 'recurring',
+          id,
+          title:
+            title ??
+            (prev?.id === id ? prev.title : undefined) ??
+            'Recurring job',
+        }))
+      } else {
+        setListScope(null)
+      }
       if (id && !isLarge) openDrawer()
     },
     [isLarge, openDrawer],
@@ -199,6 +221,21 @@ export default function JobsPage() {
       if (!isLarge) openDrawer()
     },
     [isLarge, openDrawer],
+  )
+
+  const handleExitListScope = React.useCallback(() => {
+    if (listScope) {
+      setSelection({ kind: 'recurring_job', id: listScope.id })
+    }
+    setListScope(null)
+  }, [listScope])
+
+  const handleOpenRecurringSeries = React.useCallback(
+    (recurringId: string, title: string) => {
+      setListScope({ kind: 'recurring', id: recurringId, title })
+      setSelection({ kind: 'recurring_job', id: recurringId })
+    },
+    [],
   )
 
   const { isLoading: jobsIndexLoading } = useInfiniteQuery({
@@ -291,6 +328,7 @@ export default function JobsPage() {
         id={selection?.kind === 'job' ? selection.id : null}
         onDeleted={() => setSelection(null)}
         initialTab={tab}
+        onOpenRecurringSeries={handleOpenRecurringSeries}
       />
     )
 
@@ -300,6 +338,8 @@ export default function JobsPage() {
       selection={selection}
       onSelectJob={handleSelectJob}
       onSelectRecurringJob={handleSelectRecurringJob}
+      listScope={listScope}
+      onExitListScope={handleExitListScope}
       statusFilter={statusFilter}
       showOnlyArchived={showOnlyArchived}
       dateFrom={dateFrom}

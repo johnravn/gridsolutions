@@ -148,11 +148,7 @@ export function WhatsNewPopover({
         </Box>
 
         <Flex justify="end" style={{ flexShrink: 0 }}>
-          <Button
-            size="2"
-            onClick={closeAndDismiss}
-            disabled={isDismissing}
-          >
+          <Button size="2" onClick={closeAndDismiss} disabled={isDismissing}>
             Got it
           </Button>
         </Flex>

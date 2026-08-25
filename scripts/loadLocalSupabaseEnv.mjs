@@ -58,22 +58,44 @@ export function readSupabaseStatusEnv() {
   }
 }
 
+function readProcessEnvSupabaseConfig() {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const anonKey =
+    process.env.VITE_SUPABASE_ANON_KEY ?? process.env.SUPABASE_ANON_KEY
+
+  if (!url || !serviceRoleKey || !anonKey) return null
+
+  return { url, serviceRoleKey, anonKey }
+}
+
+function applySupabaseEnv(config) {
+  process.env.SUPABASE_URL = config.url
+  process.env.VITE_SUPABASE_URL = config.url
+  process.env.SUPABASE_SERVICE_ROLE_KEY = config.serviceRoleKey
+  process.env.VITE_SUPABASE_ANON_KEY = config.anonKey
+  return config
+}
+
 export function loadLocalSupabaseEnv() {
   const status = readSupabaseStatusEnv()
-  if (!status) return null
+  if (!status) {
+    const fromEnv = readProcessEnvSupabaseConfig()
+    return fromEnv ? applySupabaseEnv(fromEnv) : null
+  }
 
   const isLocal = LOCAL_HOSTS.some((host) => status.url.includes(host))
   const alg = decodeJwtAlg(status.serviceRoleKey)
   if (isLocal && alg === 'HS256') {
+    // CI exports keys from `supabase status` before seed; fresh local stacks may
+    // still use legacy HS256 JWTs that work fine with the running containers.
+    const fromEnv = readProcessEnvSupabaseConfig()
+    if (fromEnv) return applySupabaseEnv(fromEnv)
+
     throw new Error(
       'Local Supabase returned a legacy HS256 service role key. Run `supabase stop && supabase start` with the system CLI and retry.',
     )
   }
 
-  process.env.SUPABASE_URL = status.url
-  process.env.VITE_SUPABASE_URL = status.url
-  process.env.SUPABASE_SERVICE_ROLE_KEY = status.serviceRoleKey
-  process.env.VITE_SUPABASE_ANON_KEY = status.anonKey
-
-  return status
+  return applySupabaseEnv(status)
 }

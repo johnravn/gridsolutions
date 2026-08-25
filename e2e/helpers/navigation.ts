@@ -4,6 +4,26 @@ function navLinkName(name: string): RegExp {
   return new RegExp(`^${name}(?:\\s+\\d+)?$`)
 }
 
+function isJobCreateResponse(response: {
+  url: () => string
+  request: () => { method: () => string }
+  ok: () => boolean
+}) {
+  return (
+    response.url().includes('/rest/v1/jobs') &&
+    response.request().method() === 'POST' &&
+    response.ok()
+  )
+}
+
+async function closeMobileMenuIfOpen(page: Page) {
+  const closeMenu = page.getByRole('button', { name: 'Close menu' })
+  if (await closeMenu.isVisible().catch(() => false)) {
+    await closeMenu.click({ force: true })
+    await expect(closeMenu).toBeHidden({ timeout: 5_000 })
+  }
+}
+
 async function clickNavLink(page: Page, name: string) {
   const openButton = page.getByRole('button', { name: 'Open menu' })
   const closeButton = page.getByRole('button', { name: 'Close menu' })
@@ -130,11 +150,11 @@ export async function openJobsPage(page: Page) {
 export async function openInventoryPage(page: Page) {
   await clickNavLink(page, 'Inventory')
   await expect(page).toHaveURL(/\/inventory/, { timeout: 15_000 })
-  await expect(page.getByRole('button', { name: 'Add item' }).first()).toBeVisible(
-    {
-      timeout: 15_000,
-    },
-  )
+  await expect(
+    page.getByRole('button', { name: 'Add item' }).first(),
+  ).toBeVisible({
+    timeout: 15_000,
+  })
 }
 
 export async function openCustomersPage(page: Page) {
@@ -200,7 +220,12 @@ export async function openMattersPage(page: Page) {
 export async function openProfilePage(page: Page) {
   await clickNavLink(page, 'Profile')
   await expect(page).toHaveURL(/\/profile/, { timeout: 15_000 })
-  await expect(page.getByText('owner@test.grid.local')).toBeVisible({
+  await expect(page.getByRole('tab', { name: 'General' })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(
+    page.getByRole('tabpanel').getByText('owner@test.grid.local'),
+  ).toBeVisible({
     timeout: 15_000,
   })
 }
@@ -217,6 +242,7 @@ export async function openHomePage(page: Page) {
 
 export async function createDraftJob(page: Page, title?: string) {
   await openJobsPage(page)
+  await closeMobileMenuIfOpen(page)
   await page.getByRole('button', { name: 'New job' }).first().click()
 
   const dialog = page.getByRole('dialog').filter({
@@ -226,21 +252,30 @@ export async function createDraftJob(page: Page, title?: string) {
 
   const jobTitle = title ?? `E2E Job ${Date.now()}`
   const createButton = dialog.getByRole('button', { name: 'Create' })
+  const titleInput = dialog.getByPlaceholder('Enter job title')
 
   await dialog.getByRole('button', { name: 'Auto-fill' }).click()
   // Create stays disabled until Auto-fill has populated the required date range.
   await expect(createButton).toBeEnabled({ timeout: 10_000 })
 
-  await dialog.getByPlaceholder('Enter job title').fill(jobTitle)
+  await titleInput.fill(jobTitle)
+  await expect(titleInput).toHaveValue(jobTitle)
   await expect(createButton).toBeEnabled()
 
-  await createButton.click()
-  await expect(dialog).toBeHidden({ timeout: 20_000 })
+  await createButton.scrollIntoViewIfNeeded()
+  await expect(async () => {
+    if (!(await dialog.isVisible().catch(() => false))) return
 
-  const closeMenu = page.getByRole('button', { name: 'Close menu' })
-  if (await closeMenu.isVisible().catch(() => false)) {
-    await closeMenu.click()
-  }
+    await expect(createButton).toBeEnabled()
+    const createResponse = page.waitForResponse(isJobCreateResponse, {
+      timeout: 15_000,
+    })
+    await createButton.click({ force: true })
+    await createResponse
+    await expect(dialog).toBeHidden({ timeout: 5_000 })
+  }).toPass({ timeout: 30_000 })
+
+  await closeMobileMenuIfOpen(page)
 
   await expect(async () => {
     const heading = page.getByRole('heading', { name: jobTitle })

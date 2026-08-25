@@ -44,6 +44,7 @@ import ProgramTab from './tabs/ProgramTab'
 import FilesTab from './tabs/FilesTab'
 import OffersTab from './tabs/OffersTab'
 import InvoiceTab from './tabs/InvoiceTab'
+import InvoicesTab from './tabs/InvoicesTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
 import PackingTab from './tabs/PackingTab'
@@ -71,10 +72,12 @@ export default function JobInspector({
   id,
   onDeleted,
   initialTab,
+  onOpenRecurringSeries,
 }: {
   id: string | null
   onDeleted?: () => void
   initialTab?: string
+  onOpenRecurringSeries?: (recurringId: string, title: string) => void
 }) {
   // ✅ hooks first
   const { companyRole } = useAuthz()
@@ -98,6 +101,7 @@ export default function JobInspector({
         'subcontractors',
         'offers',
         'invoice',
+        'invoices',
         'money',
         'todo',
       ]),
@@ -137,6 +141,7 @@ export default function JobInspector({
       { value: 'subcontractors', label: 'Subcontractors' },
       { value: 'packing', label: 'Packing' },
       { value: 'invoice', label: 'Invoice' },
+      { value: 'invoices', label: 'Invoices' },
       { value: 'money', label: 'Money' },
       { value: 'todo', label: 'To Do' },
       { value: 'contacts', label: 'Contacts' },
@@ -340,16 +345,21 @@ export default function JobInspector({
                     cursor: 'pointer',
                     flexShrink: 0,
                   }}
-                  onClick={() =>
+                  onClick={() => {
+                    const series = job.recurring_job!
+                    if (onOpenRecurringSeries) {
+                      onOpenRecurringSeries(series.id, series.title)
+                      return
+                    }
                     navigate({
                       to: '/jobs',
                       search: {
                         jobId: undefined,
-                        recurringJobId: job.recurring_job!.id,
+                        recurringJobId: series.id,
                         tab: undefined,
                       },
                     })
-                  }
+                  }}
                 >
                   Recurring job
                 </Badge>
@@ -534,6 +544,9 @@ export default function JobInspector({
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
+            {!isFreelancer && (
+              <Tabs.Trigger value="invoices">Invoices</Tabs.Trigger>
+            )}
             {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
             {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
             <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
@@ -582,6 +595,11 @@ export default function JobInspector({
         {!isFreelancer && (
           <Tabs.Content value="invoice" mt={'10px'}>
             <InvoiceTab jobId={job.id} job={job} />
+          </Tabs.Content>
+        )}
+        {!isFreelancer && (
+          <Tabs.Content value="invoices" mt={'10px'}>
+            <InvoicesTab jobId={job.id} job={job} />
           </Tabs.Content>
         )}
         {!isFreelancer && (
