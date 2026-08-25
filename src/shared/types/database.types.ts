@@ -3719,6 +3719,7 @@ export type Database = {
           source_group_id: string | null
           source_kind: Database["public"]["Enums"]["reservation_source_kind"]
           start_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
           subcontractor_id: string | null
           time_period_id: string
         }
@@ -3737,6 +3738,7 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
+          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id: string
         }
@@ -3755,6 +3757,7 @@ export type Database = {
           source_group_id?: string | null
           source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
+          status?: Database["public"]["Enums"]["booking_status"]
           subcontractor_id?: string | null
           time_period_id?: string
         }
@@ -3838,6 +3841,7 @@ export type Database = {
           forced_by_user_id: string | null
           id: string
           start_at: string | null
+          status: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3854,6 +3858,7 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
+          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           vehicle_id: string
         }
@@ -3870,6 +3875,7 @@ export type Database = {
           forced_by_user_id?: string | null
           id?: string
           start_at?: string | null
+          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id?: string
           vehicle_id?: string
         }
@@ -4756,40 +4762,23 @@ export type Database = {
         }
         Returns: undefined
       }
-      create_item_with_price:
-        | {
-            Args: {
-              p_active?: boolean
-              p_allow_individual_booking?: boolean
-              p_brand_id?: string
-              p_category_id?: string
-              p_company_id: string
-              p_effective_from?: string
-              p_model?: string
-              p_name: string
-              p_nicknames?: string
-              p_notes?: string
-              p_price?: number
-              p_total_quantity?: number
-            }
-            Returns: string
-          }
-        | {
-            Args: {
-              p_active?: boolean
-              p_allow_individual_booking?: boolean
-              p_brand_id?: string
-              p_category_id?: string
-              p_company_id: string
-              p_currency?: string
-              p_model?: string
-              p_name: string
-              p_notes?: string
-              p_price?: number
-              p_total_quantity?: number
-            }
-            Returns: string
-          }
+      create_item_with_price: {
+        Args: {
+          p_active?: boolean
+          p_allow_individual_booking?: boolean
+          p_brand_id?: string
+          p_category_id?: string
+          p_company_id: string
+          p_effective_from?: string
+          p_model?: string
+          p_name: string
+          p_nicknames?: string
+          p_notes?: string
+          p_price?: number
+          p_total_quantity?: number
+        }
+        Returns: string
+      }
       current_company_id: { Args: never; Returns: string }
       decrypt_api_key:
         | {
@@ -5005,26 +4994,16 @@ export type Database = {
         Args: { p_company_id: string; p_recipient_user_id: string }
         Returns: boolean
       }
-      public_offer_accept:
-        | {
-            Args: {
-              p_access_token: string
-              p_first_name: string
-              p_last_name: string
-              p_phone: string
-            }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              p_access_token: string
-              p_first_name: string
-              p_last_name: string
-              p_phone: string
-              p_selected_option_ids?: Json
-            }
-            Returns: undefined
-          }
+      public_offer_accept: {
+        Args: {
+          p_access_token: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+          p_selected_option_ids?: Json
+        }
+        Returns: undefined
+      }
       public_offer_get: { Args: { p_access_token: string }; Returns: Json }
       public_offer_mark_viewed: {
         Args: { p_access_token: string }

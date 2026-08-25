@@ -1,6 +1,6 @@
 import { Box, Skeleton } from '@radix-ui/themes'
-import { SplitPage  } from './SplitPage'
-import type {SplitPageProps} from './SplitPage';
+import { SplitPage } from './SplitPage'
+import type { SplitPageProps } from './SplitPage'
 
 export function SplitListBodySkeleton({ rows = 8 }: { rows?: number }) {
   return (
@@ -65,7 +65,11 @@ export function SplitPageSkeleton({
       left={<SplitListBodySkeleton rows={rows} />}
       leftBodyStyle={{ overflowY: 'auto' }}
       right={
-        showInspector ? <SplitInspectorBodySkeleton /> : <SplitListBodySkeleton />
+        showInspector ? (
+          <SplitInspectorBodySkeleton />
+        ) : (
+          <SplitListBodySkeleton />
+        )
       }
     />
   )

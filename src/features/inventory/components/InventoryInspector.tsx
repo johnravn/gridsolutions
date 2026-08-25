@@ -398,9 +398,9 @@ export default function InventoryInspector({ id }: { id: string | null }) {
           {/* Calendar */}
           <InspectorCalendar
             events={events}
-            onCreate={(e) => {}}
-            onUpdate={(id, patch) => {}}
-            onDelete={(id) => {}}
+            onCreate={(_event) => {}}
+            onUpdate={(_eventId, _patch) => {}}
+            onDelete={(_eventId) => {}}
           />
         </Flex>
       ) : null}

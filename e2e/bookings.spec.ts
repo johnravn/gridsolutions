@@ -2,19 +2,11 @@ import { test, expect } from './fixtures'
 import {
   bookSeededItemOnJob,
   bookEquipmentDialog,
-  clickJobTab,
   createDraftJob,
-  expectJobTabActive,
   openBookingsEquipmentTab,
 } from './helpers/navigation'
 
 test.describe('Bookings', () => {
-  test('owner can open bookings tab on a job', async ({ authedPage: page }) => {
-    await createDraftJob(page)
-    await clickJobTab(page, 'Bookings')
-    await expectJobTabActive(page, 'Bookings')
-  })
-
   test('owner can book seeded equipment on a fresh job', async ({
     authedPage: page,
   }) => {

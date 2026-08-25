@@ -91,11 +91,7 @@ async function copyAuth() {
   // Filter to only include INSERT statements for users and identities.
   // Newer dumps quote identifiers: INSERT INTO "auth"."users" (...)
   const normalizeInsertTarget = (line) =>
-    line
-      .toUpperCase()
-      .replace(/"/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
+    line.toUpperCase().replace(/"/g, '').replace(/\s+/g, ' ').trim()
 
   const lines = dumpContent.split('\n')
   const filteredLines = []
@@ -211,7 +207,10 @@ async function copyAuth() {
     )
   } catch (error) {
     log('❌ Failed to restore auth users to local database.', 'red')
-    log(`   Error: ${error instanceof Error ? error.message : String(error)}`, 'red')
+    log(
+      `   Error: ${error instanceof Error ? error.message : String(error)}`,
+      'red',
+    )
     if (existsSync(tempFile)) unlinkSync(tempFile)
     if (existsSync(filteredFile)) unlinkSync(filteredFile)
     process.exit(1)
@@ -225,7 +224,10 @@ async function copyAuth() {
     normalizeInsertTarget(l).startsWith('INSERT INTO AUTH.USERS'),
   ).length
 
-  log(`✅ Copied auth users successfully (${userInsertLines} INSERT block(s))!`, 'green')
+  log(
+    `✅ Copied auth users successfully (${userInsertLines} INSERT block(s))!`,
+    'green',
+  )
   console.log('')
   log('💡 Note:', 'blue')
   log('   - Users can now log in locally with their remote passwords', 'cyan')

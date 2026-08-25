@@ -112,7 +112,9 @@ describe('flattenGroupItemsFromRows', () => {
     const { rowsByGroupId } = indexGroupItemRows(chain)
     const result = flattenGroupItemsFromRows(['g0'], rowsByGroupId)
     expect(
-      result.leafItemsByGroupId.get('g0')?.some((row) => row.item_id === 'leaf'),
+      result.leafItemsByGroupId
+        .get('g0')
+        ?.some((row) => row.item_id === 'leaf'),
     ).toBe(false)
   })
 

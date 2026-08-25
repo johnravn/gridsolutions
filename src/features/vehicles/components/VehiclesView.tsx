@@ -3,14 +3,20 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, Search } from 'iconoir-react'
 import { Badge, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
+  IndexTableBodySkeleton,
   VirtualIndexTable,
   applySortDir,
   useClientSort,
   useVirtualIndexTable,
 } from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { vehiclesIndexQuery } from '../api/queries'
 import { vehicleOwnerBadge, vehicleOwnerLabel } from '../lib/ownership'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
@@ -19,6 +25,7 @@ import type { VehicleIndexRow } from '../api/queries'
 
 const GRID_COLUMNS =
   'minmax(140px, 2fr) minmax(80px, 1fr) minmax(80px, 1fr) minmax(100px, 1fr)'
+const PAGE_GRID_COLUMNS = 'minmax(0, 1fr) auto auto'
 
 type SortBy = 'name' | 'registration_no' | 'fuel' | 'owner'
 
@@ -75,6 +82,7 @@ type Props = {
   search: string
   onSearch: (v: string) => void
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
+  toolbarExtra?: React.ReactNode
 }
 
 export default function VehiclesView({
@@ -84,6 +92,7 @@ export default function VehiclesView({
   search,
   onSearch,
   createShortcutRef,
+  toolbarExtra,
 }: Props) {
   const { companyId } = useCompany()
   const { canWrite } = useCompanyWriteAccess()
@@ -122,6 +131,157 @@ export default function VehiclesView({
     estimateRowSize: 44,
   })
 
+  const renderOwner = (row: VehicleIndexRow) => {
+    const ownerBadge = vehicleOwnerBadge(row)
+    return (
+      <Badge variant="soft" color={ownerBadge.color}>
+        {ownerBadge.label}
+      </Badge>
+    )
+  }
+
+  const renderFuel = (row: VehicleIndexRow) =>
+    row.fuel ? (
+      <Badge
+        variant="soft"
+        color={
+          row.fuel === 'electric'
+            ? 'green'
+            : row.fuel === 'diesel'
+              ? 'orange'
+              : 'blue'
+        }
+      >
+        {row.fuel}
+      </Badge>
+    ) : (
+      '—'
+    )
+
+  const toolbar = (
+    <Flex
+      gap={isMobile ? '4' : '2'}
+      align="center"
+      wrap="wrap"
+      direction={isMobile ? 'column' : 'row'}
+    >
+      <Flex
+        gap="3"
+        align="center"
+        style={{ width: isMobile ? '100%' : undefined, flex: 1, minWidth: 0 }}
+      >
+        <TextField.Root
+          value={search}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="Search vehicles…"
+          size="3"
+          style={{
+            flex: isMobile ? 1 : '1 1 260px',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          <TextField.Slot side="left">
+            <Search />
+          </TextField.Slot>
+          <TextField.Slot side="right">
+            {(isLoading || isFetching) && <Spinner />}
+          </TextField.Slot>
+        </TextField.Root>
+        {isMobile ? toolbarExtra : null}
+      </Flex>
+
+      {canWrite && (
+        <Button
+          variant="solid"
+          onClick={() => setAddOpen(true)}
+          style={isMobile ? { width: '100%' } : undefined}
+          size="3"
+        >
+          <Plus width={18} height={18} />
+          Add vehicle
+        </Button>
+      )}
+
+      <AddEditVehicleDialog
+        open={addOpen}
+        onOpenChange={setAddOpen}
+        mode="create"
+        onSaved={() => {}}
+      />
+    </Flex>
+  )
+
+  if (isMobile) {
+    return (
+      <MobilePageList toolbar={toolbar}>
+        {isLoading ? (
+          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+        ) : rows.length === 0 ? (
+          <Text size="2" color="gray">
+            No vehicles
+          </Text>
+        ) : (
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+          >
+            {rows.map((row) => {
+              const isSelected = row.id === selectedId
+              return (
+                <div
+                  key={row.id}
+                  className={[
+                    INDEX_TABLE_ROW_CLASS,
+                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelect(row.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(row.id)
+                    }
+                  }}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: PAGE_GRID_COLUMNS,
+                    gap: 'var(--space-3)',
+                    alignItems: 'center',
+                    padding: '16px 12px',
+                    minHeight: 64,
+                    cursor: 'pointer',
+                    borderRadius: 'var(--radius-3)',
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <Text size="2" weight="medium">
+                      {row.name}
+                    </Text>
+                    <Text as="div" size="1" color="gray">
+                      {row.registration_no ?? '—'}
+                    </Text>
+                  </div>
+                  {renderFuel(row)}
+                  {renderOwner(row)}
+                </div>
+              )
+            })}
+          </Flex>
+        )}
+        {rows.length > 0 && (
+          <Text size="2" color="gray">
+            {rows.length} vehicle{rows.length !== 1 ? 's' : ''}
+          </Text>
+        )}
+      </MobilePageList>
+    )
+  }
+
   return (
     <VirtualIndexTable
       rows={rows}
@@ -143,30 +303,9 @@ export default function VehiclesView({
               </Text>
             )
           case 'fuel':
-            return row.fuel ? (
-              <Badge
-                variant="soft"
-                color={
-                  row.fuel === 'electric'
-                    ? 'green'
-                    : row.fuel === 'diesel'
-                      ? 'orange'
-                      : 'blue'
-                }
-              >
-                {row.fuel}
-              </Badge>
-            ) : (
-              '—'
-            )
-          case 'owner': {
-            const ownerBadge = vehicleOwnerBadge(row)
-            return (
-              <Badge variant="soft" color={ownerBadge.color}>
-                {ownerBadge.label}
-              </Badge>
-            )
-          }
+            return renderFuel(row)
+          case 'owner':
+            return renderOwner(row)
           default:
             return null
         }
@@ -185,48 +324,7 @@ export default function VehiclesView({
         shown: rows.length,
         label: (n) => `${n} vehicle${n !== 1 ? 's' : ''}`,
       }}
-      toolbar={
-        <Flex
-          gap="2"
-          align="center"
-          wrap="wrap"
-          direction={isMobile ? 'column' : 'row'}
-        >
-          <TextField.Root
-            value={search}
-            onChange={(e) => onSearch(e.target.value)}
-            placeholder="Search vehicles…"
-            size="3"
-            style={{ flex: isMobile ? undefined : '1 1 260px', width: '100%' }}
-          >
-            <TextField.Slot side="left">
-              <Search />
-            </TextField.Slot>
-            <TextField.Slot side="right">
-              {(isLoading || isFetching) && <Spinner />}
-            </TextField.Slot>
-          </TextField.Root>
-
-          {canWrite && (
-            <Button
-              variant="solid"
-              onClick={() => setAddOpen(true)}
-              style={isMobile ? { width: '100%' } : undefined}
-              size={isMobile ? '3' : '2'}
-            >
-              <Plus width={18} height={18} />
-              Add vehicle
-            </Button>
-          )}
-
-          <AddEditVehicleDialog
-            open={addOpen}
-            onOpenChange={setAddOpen}
-            mode="create"
-            onSaved={() => {}}
-          />
-        </Flex>
-      }
+      toolbar={toolbar}
     />
   )
 }

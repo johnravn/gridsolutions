@@ -294,7 +294,6 @@ export default function MatterDetail({
   const mapQuery = React.useMemo(() => {
     if (!crewInviteDetails) return null
     const job = crewInviteDetails.job
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (!job?.address) return null
     const addr = job.address as any
     const parts = [

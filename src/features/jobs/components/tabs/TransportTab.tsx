@@ -93,7 +93,6 @@ export default function TransportTab({ jobId }: { jobId: string }) {
       if (error) throw error
 
       // Filter out rows where vehicle is deleted
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       const filteredRows = (rows || []).filter((row: any) => {
         const vehicle = row.vehicle
         // Handle both array and object formats from Supabase
@@ -180,7 +179,6 @@ export default function TransportTab({ jobId }: { jobId: string }) {
       if (deleteErr) throw deleteErr
 
       // If no other bookings use this time period, delete it
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (!otherBookings || otherBookings.length === 0) {
         const { error: tpDeleteErr } = await supabase
           .from('time_periods')

@@ -199,7 +199,7 @@ export default function ProfileShortcutsTab() {
       }
     }
     recorder.stopRecording()
-  }, [recordingId, pendingHotkey]) // recorder methods are stable enough
+  }, [recordingId, pendingHotkey, recorder])
 
   const { assigned, unassigned } = React.useMemo(() => {
     const assignedItems: Array<ShortcutDefinition> = []

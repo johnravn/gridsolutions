@@ -5,7 +5,6 @@ import {
   Card,
   Flex,
   Heading,
-  SegmentedControl,
   Select,
   Separator,
   Text,
@@ -21,6 +20,7 @@ import {
 } from '../../logging/api/loggingPeriods'
 import { timeEntriesQuery } from '../../logging/api/timeEntries'
 import TimeEntriesTable from '../../logging/components/TimeEntriesTable'
+import LoggingMonthScroller from '../../logging/components/LoggingMonthScroller'
 import {
   formatMonthInput,
   getMonthOptions,
@@ -60,7 +60,7 @@ export default function CompanyLoggingTab() {
       ? crewIndexQuery({ companyId, kind: 'all' })
       : {
           queryKey: ['company', 'none', 'crew-index', 'all'] as const,
-          queryFn: async () => [],
+          queryFn: () => [],
         }),
     enabled: !!companyId,
   })
@@ -183,69 +183,50 @@ export default function CompanyLoggingTab() {
           </Text>
           <Separator size="4" mb="3" />
 
-          <Flex align="center" gap="3" wrap="wrap" mb="3">
-            <Text size="2" color="gray">
-              {entries.length} total
-            </Text>
-            <Select.Root
-              value={String(selectedYear)}
-              onValueChange={(value) => {
-                const monthPart = selectedMonth.split('-')[1] ?? '01'
-                setSelectedMonth(`${value}-${monthPart}`)
-              }}
-            >
-              <Select.Trigger />
-              <Select.Content>
-                {yearOptions.map((year) => (
-                  <Select.Item key={year} value={String(year)}>
-                    {year}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-            <SegmentedControl.Root
-              value={selectedMonth}
-              onValueChange={(value) => setSelectedMonth(value)}
-            >
-              {monthOptions.map((month) => {
-                const isLocked = lockedMonthSet.has(month.value)
-                return (
-                  <SegmentedControl.Item
-                    key={month.value}
-                    value={month.value}
-                    style={
-                      isLocked
-                        ? {
-                            backgroundColor: 'var(--green-3)',
-                            color: 'var(--green-11)',
-                          }
-                        : undefined
-                    }
+          <Flex direction="column" gap="3" mb="3" style={{ minWidth: 0 }}>
+            <Flex align="center" gap="3" wrap="wrap">
+              <Text size="2" color="gray">
+                {entries.length} total
+              </Text>
+              <Select.Root
+                value={String(selectedYear)}
+                onValueChange={(value) => {
+                  const monthPart = selectedMonth.split('-')[1] ?? '01'
+                  setSelectedMonth(`${value}-${monthPart}`)
+                }}
+              >
+                <Select.Trigger />
+                <Select.Content>
+                  {yearOptions.map((year) => (
+                    <Select.Item key={year} value={String(year)}>
+                      {year}
+                    </Select.Item>
+                  ))}
+                </Select.Content>
+              </Select.Root>
+              {canManageLocks && (
+                <Flex align="center" gap="2">
+                  <Text size="2" color={isPeriodLocked ? 'green' : 'gray'}>
+                    {isPeriodLocked ? 'Period locked' : 'Period open'}
+                  </Text>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => toggleLockMutation.mutate()}
+                    disabled={toggleLockMutation.isPending}
                   >
-                    <Flex align="center" gap="1">
-                      <Text size="1">{month.label}</Text>
-                      {isLocked && <Lock width={12} height={12} />}
-                    </Flex>
-                  </SegmentedControl.Item>
-                )
-              })}
-            </SegmentedControl.Root>
-            {canManageLocks && (
-              <Flex align="center" gap="2">
-                <Text size="2" color={isPeriodLocked ? 'green' : 'gray'}>
-                  {isPeriodLocked ? 'Period locked' : 'Period open'}
-                </Text>
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={() => toggleLockMutation.mutate()}
-                  disabled={toggleLockMutation.isPending}
-                >
-                  <Lock width={14} height={14} />
-                  {isPeriodLocked ? 'Unlock period' : 'Lock period'}
-                </Button>
-              </Flex>
-            )}
+                    <Lock width={14} height={14} />
+                    {isPeriodLocked ? 'Unlock period' : 'Lock period'}
+                  </Button>
+                </Flex>
+              )}
+            </Flex>
+            <LoggingMonthScroller
+              value={selectedMonth}
+              onValueChange={setSelectedMonth}
+              months={monthOptions}
+              lockedMonthSet={lockedMonthSet}
+            />
           </Flex>
 
           <Box style={{ overflowX: 'auto' }}>

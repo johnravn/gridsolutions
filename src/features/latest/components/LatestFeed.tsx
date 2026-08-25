@@ -3,6 +3,8 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Avatar, Box, Flex, Text } from '@radix-ui/themes'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { IndexTableBodySkeleton } from '@shared/ui/index-table'
 import { supabase } from '@shared/api/supabase'
@@ -54,12 +56,15 @@ export default function LatestFeed({
   selectedId,
   onSelect,
   activityTypes,
+  toolbarExtra,
 }: {
   selectedId: string | null
   onSelect: (id: string) => void
   activityTypes?: Array<ActivityType>
+  toolbarExtra?: React.ReactNode
 }) {
   const { companyId } = useCompany()
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const [hoveredId, setHoveredId] = React.useState<string | null>(null)
 
   const { data, isLoading, isError } = useQuery({
@@ -83,32 +88,171 @@ export default function LatestFeed({
     estimateSize: () => 80,
     overscan: 5,
     getItemKey: (index) => groupedActivities[index]?.id ?? index,
-    enabled: groupedActivities.length > 0,
+    enabled: groupedActivities.length > 0 && !isMobile,
   })
 
-  if (isLoading) {
+  const renderActivity = (
+    activity: (typeof groupedActivities)[number],
+    opts?: { fillHeight?: boolean },
+  ) => {
+    const avatarUrl = activity.created_by.avatar_url
+      ? supabase.storage
+          .from('avatars')
+          .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
+      : null
+
+    const displayName =
+      activity.created_by.display_name || activity.created_by.email
+    const timeLabel = formatActivityDate(activity.created_at)
+    const isSelected = selectedId === activity.id
+    const isHovered = hoveredId === activity.id
+
     return (
-      <Box p="3">
-        <IndexTableBodySkeleton rowCount={6} rowHeight={80} />
+      <Box
+        style={{
+          cursor: 'pointer',
+          padding: 'var(--space-3)',
+          borderRadius: 'var(--radius-3)',
+          backgroundColor: isSelected
+            ? 'var(--accent-3)'
+            : isHovered
+              ? 'var(--gray-2)'
+              : 'transparent',
+          border: isSelected
+            ? '1px solid transparent'
+            : isHovered
+              ? '1px solid var(--gray-a6)'
+              : '1px solid transparent',
+          transition: 'background-color 0.15s ease, border-color 0.15s ease',
+          height: opts?.fillHeight ? '100%' : undefined,
+        }}
+        onClick={() => onSelect(activity.id)}
+        onMouseEnter={() => setHoveredId(activity.id)}
+        onMouseLeave={() => setHoveredId(null)}
+      >
+        <Flex gap="3" align="start" justify="between">
+          <Flex gap="3" align="start" style={{ flex: 1, minWidth: 0 }}>
+            <Flex
+              align="center"
+              justify="center"
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: 'var(--radius-2)',
+                backgroundColor: 'var(--accent-3)',
+                flexShrink: 0,
+              }}
+            >
+              <Text size="4">{getActivityIcon(activity.activity_type)}</Text>
+            </Flex>
+
+            <Box style={{ flex: 1, minWidth: 0 }}>
+              <Text size="2" style={{ lineHeight: 1.5 }} mb="1">
+                {getActivityGenericMessage(
+                  'isGrouped' in activity
+                    ? 'grouped_inventory'
+                    : activity.activity_type,
+                )}
+              </Text>
+
+              <Flex align="center" gap="3" mt="2">
+                <Text size="1" color="gray">
+                  {timeLabel}
+                </Text>
+                {activity.like_count > 0 && (
+                  <Text size="1" color="gray">
+                    ❤️ {activity.like_count}
+                  </Text>
+                )}
+                {activity.comment_count > 0 && (
+                  <Text size="1" color="gray">
+                    💬 {activity.comment_count}
+                  </Text>
+                )}
+              </Flex>
+            </Box>
+          </Flex>
+
+          <Flex
+            align="center"
+            gap="2"
+            style={{ flexShrink: 0, marginLeft: 'var(--space-2)' }}
+          >
+            <Text size="2" weight="medium">
+              {displayName}
+            </Text>
+            <Avatar
+              size="1"
+              radius="full"
+              src={avatarUrl ?? undefined}
+              fallback={getInitials(
+                activity.created_by.display_name,
+                activity.created_by.email,
+              )}
+            />
+          </Flex>
+        </Flex>
       </Box>
     )
   }
 
+  const loadingBody = (
+    <Box p="3">
+      <IndexTableBodySkeleton rowCount={6} rowHeight={80} />
+    </Box>
+  )
+
+  if (isLoading) {
+    return isMobile ? (
+      <MobilePageList toolbar={toolbarExtra}>{loadingBody}</MobilePageList>
+    ) : (
+      loadingBody
+    )
+  }
+
   if (isError) {
-    return (
+    const err = (
       <Text color="red" size="2">
         Failed to load feed
       </Text>
     )
+    return isMobile ? (
+      <MobilePageList toolbar={toolbarExtra}>{err}</MobilePageList>
+    ) : (
+      err
+    )
   }
 
   if (!data || data.items.length === 0) {
-    return (
+    const empty = (
       <Box py="6">
         <Text color="gray" size="2" align="center">
           No activity yet
         </Text>
       </Box>
+    )
+    return isMobile ? (
+      <MobilePageList toolbar={toolbarExtra}>{empty}</MobilePageList>
+    ) : (
+      empty
+    )
+  }
+
+  if (isMobile) {
+    return (
+      <MobilePageList toolbar={toolbarExtra}>
+        <Flex
+          direction="column"
+          gap="2"
+          style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+        >
+          {groupedActivities.map((activity) => (
+            <React.Fragment key={activity.id}>
+              {renderActivity(activity)}
+            </React.Fragment>
+          ))}
+        </Flex>
+      </MobilePageList>
     )
   }
 
@@ -138,19 +282,7 @@ export default function LatestFeed({
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const activity = groupedActivities[virtualRow.index]
-            const avatarUrl = activity.created_by.avatar_url
-              ? supabase.storage
-                  .from('avatars')
-                  .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
-              : null
-
-            const displayName =
-              activity.created_by.display_name || activity.created_by.email
-            const timeLabel = formatActivityDate(activity.created_at)
-
-            const isSelected = selectedId === activity.id
-            const isHovered = hoveredId === activity.id
-
+            if (!activity) return null
             return (
               <div
                 key={activity.id}
@@ -164,98 +296,7 @@ export default function LatestFeed({
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <Box
-                  style={{
-                    cursor: 'pointer',
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-3)',
-                    backgroundColor: isSelected
-                      ? 'var(--accent-3)'
-                      : isHovered
-                        ? 'var(--gray-2)'
-                        : 'transparent',
-                    border: isSelected
-                      ? '1px solid transparent'
-                      : isHovered
-                        ? '1px solid var(--gray-a6)'
-                        : '1px solid transparent',
-                    transition:
-                      'background-color 0.15s ease, border-color 0.15s ease',
-                    height: '100%',
-                  }}
-                  onClick={() => onSelect(activity.id)}
-                  onMouseEnter={() => setHoveredId(activity.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                >
-                  <Flex gap="3" align="start" justify="between">
-                    <Flex
-                      gap="3"
-                      align="start"
-                      style={{ flex: 1, minWidth: 0 }}
-                    >
-                      <Flex
-                        align="center"
-                        justify="center"
-                        style={{
-                          width: '32px',
-                          height: '32px',
-                          borderRadius: 'var(--radius-2)',
-                          backgroundColor: 'var(--accent-3)',
-                          flexShrink: 0,
-                        }}
-                      >
-                        <Text size="4">
-                          {getActivityIcon(activity.activity_type)}
-                        </Text>
-                      </Flex>
-
-                      <Box style={{ flex: 1, minWidth: 0 }}>
-                        <Text size="2" style={{ lineHeight: 1.5 }} mb="1">
-                          {getActivityGenericMessage(
-                            'isGrouped' in activity
-                              ? 'grouped_inventory'
-                              : activity.activity_type,
-                          )}
-                        </Text>
-
-                        <Flex align="center" gap="3" mt="2">
-                          <Text size="1" color="gray">
-                            {timeLabel}
-                          </Text>
-                          {activity.like_count > 0 && (
-                            <Text size="1" color="gray">
-                              ❤️ {activity.like_count}
-                            </Text>
-                          )}
-                          {activity.comment_count > 0 && (
-                            <Text size="1" color="gray">
-                              💬 {activity.comment_count}
-                            </Text>
-                          )}
-                        </Flex>
-                      </Box>
-                    </Flex>
-
-                    <Flex
-                      align="center"
-                      gap="2"
-                      style={{ flexShrink: 0, marginLeft: 'var(--space-2)' }}
-                    >
-                      <Text size="2" weight="medium">
-                        {displayName}
-                      </Text>
-                      <Avatar
-                        size="1"
-                        radius="full"
-                        src={avatarUrl ?? undefined}
-                        fallback={getInitials(
-                          activity.created_by.display_name,
-                          activity.created_by.email,
-                        )}
-                      />
-                    </Flex>
-                  </Flex>
-                </Box>
+                {renderActivity(activity, { fillHeight: true })}
               </div>
             )
           })}

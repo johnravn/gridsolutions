@@ -321,7 +321,7 @@ export default function InvoiceTab({
     ) {
       setPreviewBookings(bookings)
     }
-  }, [bookings, previewSourceOffer])
+  }, [bookings, previewSourceOffer, previewBookings])
 
   // Get accounting config and invoice defaults from company_expansions
   const { data: accountingConfig } = useQuery({
@@ -807,7 +807,6 @@ export default function InvoiceTab({
   /** Open the unified invoice preview from the accepted offer (one line = offer total). */
   const handleCreateInvoiceFromOffer = async () => {
     const offer = acceptedOffers[0]
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- guard for type safety when button is enabled
     if (!offer) return
     if (!accountingConfig?.accounting_organization_id) {
       info(

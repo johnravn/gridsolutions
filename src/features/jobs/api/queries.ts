@@ -207,10 +207,19 @@ export function jobsIndexQuery({
           .lte('start_at', endOfDay(dateTo))
       }
 
-      // Narrow server-side on title when possible; customer name still filtered client-side.
-      if (search.trim()) {
-        const safe = escapePgLike(search.trim())
-        q = q.ilike('title', `%${safe}%`)
+      // Match the infinite jobs index: title, numeric jobnr, and customer/lead ids.
+      const fuzzyTerm = search.trim().replace(/^#/, '')
+      if (fuzzyTerm) {
+        const [customerIds, customerUserIds] = await Promise.all([
+          findCustomerIdsByName(companyId, fuzzyTerm),
+          findCustomerUserIdsBySearch(fuzzyTerm),
+        ])
+        const orFilter = jobsIndexSearchOrFilter({
+          search: fuzzyTerm,
+          customerIds,
+          customerUserIds,
+        })
+        if (orFilter) q = q.or(orFilter)
       }
 
       if (upcomingFrom) {
@@ -237,18 +246,17 @@ export function jobsIndexQuery({
       const { data, error } = await q
       if (error) throw error
 
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       let results = (data || []) as unknown as Array<JobListRow>
 
       // Client-side fuzzy filtering across title, customer name, customer user name, project lead name, status, and date
       // (PostgREST doesn't support filtering on joined columns like customer.name)
-      if (search.trim()) {
+      if (fuzzyTerm) {
         const { fuzzySearch, makeWordPresentable } = await import(
           '@shared/lib/generalFunctions'
         )
         results = fuzzySearch(
           results,
-          search,
+          fuzzyTerm,
           [
             (job) => job.title,
             (job) => (job.jobnr != null ? String(job.jobnr) : null),
@@ -344,7 +352,7 @@ export function jobsIndexSearchOrFilter({
   customerIds?: Array<string>
   customerUserIds?: Array<string>
 }): string | null {
-  const trimmed = search.trim()
+  const trimmed = search.trim().replace(/^#/, '')
   if (!trimmed) return null
 
   const orSafe = escapeForPostgrestOr(escapePgLike(trimmed))
@@ -451,13 +459,14 @@ async function fetchJobsIndexPage({
       .lte('start_at', endOfDay(dateTo))
   }
 
-  if (search.trim()) {
+  const indexSearch = search.trim().replace(/^#/, '')
+  if (indexSearch) {
     const [customerIds, customerUserIds] = await Promise.all([
-      findCustomerIdsByName(companyId, search),
-      findCustomerUserIdsBySearch(search),
+      findCustomerIdsByName(companyId, indexSearch),
+      findCustomerUserIdsBySearch(indexSearch),
     ])
     const orFilter = jobsIndexSearchOrFilter({
-      search,
+      search: indexSearch,
       customerIds,
       customerUserIds,
     })

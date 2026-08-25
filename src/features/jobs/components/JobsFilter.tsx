@@ -36,8 +36,8 @@ export const ACTIVE_STATUS_FILTER: Array<JobStatus> = [
   'completed',
 ]
 
-/** Jobs list default: every status, including invoiced / paid history. */
-export const DEFAULT_STATUS_FILTER: Array<JobStatus> = []
+/** Jobs list default: same as Active only (excl. invoiced, canceled, paid). */
+export const DEFAULT_STATUS_FILTER: Array<JobStatus> = ACTIVE_STATUS_FILTER
 
 type Props = {
   statusFilter: Array<JobStatus>

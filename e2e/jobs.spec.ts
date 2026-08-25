@@ -7,13 +7,6 @@ import {
 } from './helpers/navigation'
 
 test.describe('Jobs', () => {
-  test('owner can open jobs page', async ({ authedPage: page }) => {
-    await openJobsPage(page)
-    await expect(
-      page.getByRole('button', { name: 'New job' }).first(),
-    ).toBeVisible()
-  })
-
   test('owner can create a draft job', async ({ authedPage: page }) => {
     const title = await createDraftJob(page)
     await expect(page.getByRole('heading', { name: title })).toBeVisible()

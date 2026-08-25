@@ -96,5 +96,5 @@ export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
         updateIntervalRef.current = null
       }
     }
-  }, [job?.id, job?.status, job?.start_at, job?.end_at, qc, updateStatus])
+  }, [job, qc, updateStatus])
 }

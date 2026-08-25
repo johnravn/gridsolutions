@@ -19,6 +19,7 @@ import { jobSubcontractorQuotesQuery } from './subcontractorQueries'
 import type { TechnicalLineItemSource } from '../utils/prettyOfferCalculations'
 import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
+  JobOffer,
   JobSubcontractorQuote,
   OfferBasisDetail,
   OfferDetail,
@@ -120,7 +121,7 @@ async function loadPrettyOfferPricingContext(detail: PrettyOfferDetail) {
 }
 
 export function jobPrettyOffersQuery(jobId: string) {
-  return queryOptions<Array<import('../types').JobOffer>>({
+  return queryOptions<Array<JobOffer>>({
     queryKey: ['job-pretty-offers', jobId] as const,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -131,13 +132,13 @@ export function jobPrettyOffersQuery(jobId: string) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return (data || []) as Array<import('../types').JobOffer>
+      return (data || []) as Array<JobOffer>
     },
   })
 }
 
 export function jobTechnicalOffersQuery(jobId: string) {
-  return queryOptions<Array<import('../types').JobOffer>>({
+  return queryOptions<Array<JobOffer>>({
     queryKey: ['job-technical-offers', jobId] as const,
     queryFn: async () => {
       const { data, error } = await supabase
@@ -148,7 +149,7 @@ export function jobTechnicalOffersQuery(jobId: string) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return (data || []) as Array<import('../types').JobOffer>
+      return (data || []) as Array<JobOffer>
     },
   })
 }

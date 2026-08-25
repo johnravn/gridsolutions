@@ -58,12 +58,12 @@ function CategoriesDialogContent({
     queryKey: categoriesQueryKey,
     enabled: !!companyId && open,
     queryFn: async (): Promise<Array<ItemCategory>> => {
-      const { data, error } = await supabase
+      const { data, error: fetchError } = await supabase
         .from('item_categories')
         .select('id, company_id, name')
         .eq('company_id', companyId)
         .order('name', { ascending: true })
-      if (error) throw error
+      if (fetchError) throw fetchError
       return data
     },
     staleTime: 5_000,
@@ -72,11 +72,13 @@ function CategoriesDialogContent({
   const createMutation = useMutation({
     mutationFn: async (f: { name: string }) => {
       if (!companyId) throw new Error('No company selected')
-      const { error } = await supabase.from('item_categories').insert({
-        company_id: companyId,
-        name: f.name.trim(),
-      })
-      if (error) throw error
+      const { error: insertError } = await supabase
+        .from('item_categories')
+        .insert({
+          company_id: companyId,
+          name: f.name.trim(),
+        })
+      if (insertError) throw insertError
     },
     onSuccess: async () => {
       setForm({ name: '' })
@@ -90,12 +92,12 @@ function CategoriesDialogContent({
 
   const updateMutation = useMutation({
     mutationFn: async (payload: { id: string; name: string }) => {
-      const { error } = await supabase
+      const { error: updateError } = await supabase
         .from('item_categories')
         .update({ name: payload.name.trim() })
         .eq('id', payload.id)
         .eq('company_id', companyId)
-      if (error) throw error
+      if (updateError) throw updateError
     },
     onSuccess: async () => {
       setEditingId(null)
@@ -110,12 +112,12 @@ function CategoriesDialogContent({
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from('item_categories')
         .delete()
         .eq('id', id)
         .eq('company_id', companyId)
-      if (error) throw error
+      if (deleteError) throw deleteError
     },
     onSuccess: async () => {
       await qc.invalidateQueries({ queryKey: categoriesQueryKey })

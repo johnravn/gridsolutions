@@ -207,6 +207,7 @@ export default function HomePage() {
 
   // IMPORTANT: make range stable so queryKey doesn't change every render
   const { conflictFrom, conflictTo } = React.useMemo(() => {
+    void companyId
     const now = startOfMinute(new Date())
     return {
       conflictFrom: now.toISOString(),
@@ -295,8 +296,7 @@ export default function HomePage() {
     [equipmentConflicts, projectLeadJobIds],
   )
   const filteredGroupConflicts = React.useMemo(
-    () =>
-      filterGroupConflictsByProjectLead(groupConflicts, projectLeadJobIds),
+    () => filterGroupConflictsByProjectLead(groupConflicts, projectLeadJobIds),
     [groupConflicts, projectLeadJobIds],
   )
 

@@ -1,5 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import {
+  DEFAULT_BIBLE_VERSION,
+  normalizeBibleVersion,
+} from '@shared/lib/bibleVersion'
 import { normalizeDailyInspirationType } from '../utils/dailyInspiration'
 import { BibleVerseSection } from './BibleVerseSection'
 import { QuoteSection } from './QuoteSection'
@@ -11,11 +15,16 @@ export function DailyInspirationSection({
   userId: string | null
   presentation?: 'desktop' | 'mobile'
 }) {
-  const { data: inspirationType } = useQuery({
+  const { data: inspiration } = useQuery({
     queryKey: ['profile', userId ?? '__none__', 'daily-inspiration-type'],
     enabled: !!userId,
     queryFn: async () => {
-      if (!userId) return 'quote' as const
+      if (!userId) {
+        return {
+          type: 'quote' as const,
+          bibleVersion: DEFAULT_BIBLE_VERSION,
+        }
+      }
       const { data, error } = await supabase
         .from('profiles')
         .select('preferences')
@@ -25,16 +34,23 @@ export function DailyInspirationSection({
       const prefs = (data as { preferences?: unknown } | null)?.preferences as
         | Record<string, unknown>
         | undefined
-      const raw = prefs?.daily_inspiration_type
-      return normalizeDailyInspirationType(raw)
+      return {
+        type: normalizeDailyInspirationType(prefs?.daily_inspiration_type),
+        bibleVersion: normalizeBibleVersion(prefs?.bible_version),
+      }
     },
     staleTime: 1000 * 60 * 60 * 12,
     gcTime: 1000 * 60 * 60 * 48,
   })
 
-  const resolved = normalizeDailyInspirationType(inspirationType)
+  const resolved = normalizeDailyInspirationType(inspiration?.type)
 
   if (resolved === 'bibleverse')
-    return <BibleVerseSection presentation={presentation} />
+    return (
+      <BibleVerseSection
+        presentation={presentation}
+        bibleVersion={normalizeBibleVersion(inspiration?.bibleVersion)}
+      />
+    )
   return <QuoteSection presentation={presentation} />
 }

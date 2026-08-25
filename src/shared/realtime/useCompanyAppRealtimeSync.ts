@@ -291,6 +291,8 @@ export function useCompanyAppRealtimeSync(
   React.useEffect(() => {
     if (!userId || disableAppRealtime) return
 
+    const pendingTpIds = pendingTpIdsRef.current
+
     const invalidateMatters = () => {
       void queryClient.invalidateQueries({
         queryKey: ['matters'],
@@ -434,7 +436,7 @@ export function useCompanyAppRealtimeSync(
         clearTimeout(debounceTimerRef.current)
         debounceTimerRef.current = null
       }
-      pendingTpIdsRef.current.clear()
+      pendingTpIds.clear()
       unsubscribe()
     }
   }, [userId, companyId, queryClient, scheduleReservedFlush])

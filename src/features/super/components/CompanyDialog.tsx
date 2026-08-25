@@ -195,7 +195,7 @@ export default function CompanyDialog({
       })
       setSearchTerm('')
     }
-  }, [open, mode, initialData?.id])
+  }, [open, mode, initialData])
 
   const createMutation = useMutation({
     mutationFn: async (f: FormState) => {

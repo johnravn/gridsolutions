@@ -329,7 +329,7 @@ export default function TechnicalOfferEditor({
         showPricePerLine: editorFormRef.current.showPricePerLine,
       }) !== baselineSerialized
     )
-  }, [open, isReadOnly, baselineSerialized, title, showPricePerLine])
+  }, [open, isReadOnly, baselineSerialized])
 
   const isDirty = hasUnsavedChanges()
 
@@ -414,12 +414,7 @@ export default function TechnicalOfferEditor({
     if (value === null) return null
     const numeric = Number(value)
     return Number.isFinite(numeric) ? numeric : null
-  }, [
-    job.customer?.crew_pricing_level?.crew_rate_per_day,
-    job.customer,
-    firstCompanyCrewLevel?.crew_rate_per_day,
-    companyExpansion?.crew_rate_per_day,
-  ])
+  }, [job.customer, firstCompanyCrewLevel, companyExpansion?.crew_rate_per_day])
 
   const defaultCrewRatePerHour = React.useMemo(() => {
     const level =
@@ -433,9 +428,8 @@ export default function TechnicalOfferEditor({
     const numeric = Number(value)
     return Number.isFinite(numeric) ? numeric : null
   }, [
-    job.customer?.crew_pricing_level?.crew_rate_per_hour,
     job.customer,
-    firstCompanyCrewLevel?.crew_rate_per_hour,
+    firstCompanyCrewLevel,
     companyExpansion?.crew_rate_per_hour,
   ])
 
@@ -445,11 +439,7 @@ export default function TechnicalOfferEditor({
       (job.customer ? firstCompanyCrewLevel : null)
     const unit = level?.default_crew_billing_unit
     return unit === 'hour' ? 'hour' : 'day'
-  }, [
-    job.customer?.crew_pricing_level?.default_crew_billing_unit,
-    job.customer,
-    firstCompanyCrewLevel?.default_crew_billing_unit,
-  ])
+  }, [job.customer, firstCompanyCrewLevel])
 
   const equipmentRentalFactor = React.useMemo(
     () => calculateRentalFactor(basisPricing.daysOfUse, rentalFactorConfig),

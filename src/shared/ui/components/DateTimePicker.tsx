@@ -101,7 +101,7 @@ export default function DateTimePicker({
         new Date(parsedDate.getFullYear(), parsedDate.getMonth(), 1),
       )
     }
-  }, [parsedDate?.getTime()])
+  }, [parsedDate])
 
   // Get calendar days for current month
   const calendarDays = React.useMemo(() => {

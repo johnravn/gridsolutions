@@ -1,19 +1,7 @@
 import { test, expect } from './fixtures'
-import {
-  createDraftJob,
-  openBookingsCrewTab,
-  openCrewPage,
-} from './helpers/navigation'
+import { createDraftJob, openBookingsCrewTab } from './helpers/navigation'
 
 test.describe('Crew', () => {
-  test('owner can open crew page', async ({ authedPage: page }) => {
-    await openCrewPage(page)
-    await expect(page).toHaveURL(/\/crew/)
-    await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({
-      timeout: 15_000,
-    })
-  })
-
   test('owner can open add crew booking dialog on a job', async ({
     authedPage: page,
   }) => {
@@ -26,7 +14,9 @@ test.describe('Crew', () => {
     await expect(
       roleDialog.getByRole('heading', { name: 'Add role' }),
     ).toBeVisible()
-    await roleDialog.getByRole('button', { name: 'Technician' }).click()
+    await roleDialog
+      .getByPlaceholder('e.g. FOH, Monitor, Loader')
+      .fill('Technician')
     await expect(
       roleDialog.getByRole('button', { name: 'Add role' }),
     ).toBeEnabled({

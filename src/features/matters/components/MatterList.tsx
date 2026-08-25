@@ -19,15 +19,21 @@ import {
   Xmark,
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
+  IndexTableBodySkeleton,
   VirtualIndexTable,
   applySortDir,
   useClientSort,
   useClientTableFilter,
   useVirtualIndexTable,
 } from '@shared/ui/index-table'
+import {
+  INDEX_TABLE_ROW_CLASS,
+  INDEX_TABLE_ROW_SELECTED_CLASS,
+} from '@shared/ui/index-table/indexTableStyles'
 import { mattersIndexQueryAll } from '../api/queries'
 import type { IndexColumn } from '@shared/ui/index-table'
 import type { Matter, MatterType } from '../types'
@@ -178,6 +184,7 @@ export default function MatterList({
   typeFilter,
   companies: _companies,
   onCreateMatter,
+  toolbarExtra,
 }: {
   selectedId: string | null
   onSelect: (id: string | null) => void
@@ -186,6 +193,7 @@ export default function MatterList({
   typeFilter: Array<MatterType>
   companies: Array<{ id: string; name: string }>
   onCreateMatter?: () => void
+  toolbarExtra?: React.ReactNode
 }) {
   const { companyRole, isGlobalSuperuser, userId } = useAuthz()
   const { canWrite } = useCompanyWriteAccess()
@@ -242,6 +250,201 @@ export default function MatterList({
     estimateRowSize: 52,
   })
 
+  const emptyMessage =
+    allMatters.length === 0 ? 'No matters yet' : 'No matters match your filters'
+
+  const toolbar = (
+    <Flex
+      gap={isMobile ? '4' : '2'}
+      align="center"
+      wrap="wrap"
+      mb={isMobile ? undefined : '2'}
+      direction={
+        isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'
+      }
+      justify={isMobile ? 'start' : 'between'}
+    >
+      <Flex
+        gap="3"
+        align="center"
+        style={{ width: isMobile ? '100%' : undefined, flex: 1, minWidth: 0 }}
+      >
+        <TextField.Root
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search matters…"
+          size="3"
+          style={{
+            flex:
+              isMobile && onCreateMatter && canCreateAnnouncement
+                ? 1
+                : '1 1 260px',
+            width: '100%',
+            minWidth: 0,
+          }}
+        >
+          <TextField.Slot side="left">
+            <Search />
+          </TextField.Slot>
+          <TextField.Slot side="right">
+            {isFetching && <Spinner size="2" />}
+          </TextField.Slot>
+        </TextField.Root>
+        {isMobile ? toolbarExtra : null}
+      </Flex>
+      {onCreateMatter && canCreateAnnouncement && (
+        <Tooltip content="Send a manual announcement to selected people (uncommon)">
+          <Button
+            type="button"
+            variant="ghost"
+            size="3"
+            color="gray"
+            onClick={onCreateMatter}
+            style={{
+              ...(isMobile
+                ? { width: '100%' }
+                : { flexShrink: 0, alignSelf: 'center' }),
+              height: 'var(--space-7)',
+              minHeight: 'var(--space-7)',
+              maxHeight: 'var(--space-7)',
+              paddingTop: 0,
+              paddingBottom: 0,
+              boxSizing: 'border-box',
+            }}
+          >
+            <Plus width={18} height={18} />
+            New announcement
+          </Button>
+        </Tooltip>
+      )}
+    </Flex>
+  )
+
+  const renderTitle = (matter: Matter) => {
+    const isSelected = matter.id === selectedId
+    return (
+      <Box style={{ minWidth: 0 }}>
+        <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+          {matter.is_unread && (
+            <Box
+              aria-hidden
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: 'var(--blue-9)',
+                flexShrink: 0,
+              }}
+            />
+          )}
+          <Tooltip content={matter.title} delayDuration={300}>
+            <Box
+              style={{
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                minWidth: 0,
+                flex: 1,
+              }}
+            >
+              <Text
+                weight={isSelected || matter.is_unread ? 'bold' : 'medium'}
+                size="2"
+                style={{
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {matter.title}
+              </Text>
+            </Box>
+          </Tooltip>
+        </Flex>
+        {matter.job && (
+          <Text
+            size="1"
+            color="gray"
+            style={{
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Job: {matter.job.title}
+          </Text>
+        )}
+      </Box>
+    )
+  }
+
+  if (isMobile) {
+    return (
+      <MobilePageList toolbar={toolbar}>
+        {isLoading ? (
+          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+        ) : rows.length === 0 ? (
+          <Text size="2" color="gray">
+            {emptyMessage}
+          </Text>
+        ) : (
+          <Flex
+            direction="column"
+            gap="2"
+            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+          >
+            {rows.map((matter) => {
+              const isSelected = matter.id === selectedId
+              return (
+                <div
+                  key={matter.id}
+                  className={[
+                    INDEX_TABLE_ROW_CLASS,
+                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                    matter.is_unread ? 'index-table-row--unread' : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onSelect(matter.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      onSelect(matter.id)
+                    }
+                  }}
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                    gap: 'var(--space-3)',
+                    alignItems: 'center',
+                    padding: '16px 12px',
+                    minHeight: 64,
+                    cursor: 'pointer',
+                    borderRadius: 'var(--radius-3)',
+                  }}
+                >
+                  {getTypeBadge(matter.matter_type)}
+                  {renderTitle(matter)}
+                  <Text size="1" color="gray">
+                    {formatMatterDate(matter.created_at)}
+                  </Text>
+                </div>
+              )
+            })}
+          </Flex>
+        )}
+        {rows.length > 0 && (
+          <Text size="2" color="gray">
+            {rows.length} matter{rows.length !== 1 ? 's' : ''}
+          </Text>
+        )}
+      </MobilePageList>
+    )
+  }
+
   return (
     <VirtualIndexTable
       rows={rows}
@@ -249,7 +452,6 @@ export default function MatterList({
       gridTemplateColumns={GRID_COLUMNS}
       getRowId={(m) => m.id}
       renderCell={(matter, colId) => {
-        const isSelected = matter.id === selectedId
         switch (colId) {
           case 'type':
             return (
@@ -258,63 +460,7 @@ export default function MatterList({
               </Flex>
             )
           case 'title':
-            return (
-              <Box style={{ minWidth: 0 }}>
-                <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                  {matter.is_unread && (
-                    <Box
-                      aria-hidden
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: '50%',
-                        backgroundColor: 'var(--blue-9)',
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-                  <Tooltip content={matter.title} delayDuration={300}>
-                    <Box
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        minWidth: 0,
-                        flex: 1,
-                      }}
-                    >
-                      <Text
-                        weight={
-                          isSelected || matter.is_unread ? 'bold' : 'medium'
-                        }
-                        size="2"
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                      >
-                        {matter.title}
-                      </Text>
-                    </Box>
-                  </Tooltip>
-                </Flex>
-                {matter.job && (
-                  <Text
-                    size="1"
-                    color="gray"
-                    style={{
-                      display: 'block',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Job: {matter.job.title}
-                  </Text>
-                )}
-              </Box>
-            )
+            return renderTitle(matter)
           case 'created':
             return (
               <Text size="2" color="gray">
@@ -361,69 +507,12 @@ export default function MatterList({
       scrollRef={scrollRef}
       rowVirtualizer={rowVirtualizer}
       isLoading={isLoading}
-      emptyMessage={
-        allMatters.length === 0
-          ? 'No matters yet'
-          : 'No matters match your filters'
-      }
+      emptyMessage={emptyMessage}
       footerCount={{
         shown: rows.length,
         label: (n) => `${n} matter${n !== 1 ? 's' : ''}`,
       }}
-      toolbar={
-        <Flex
-          gap="2"
-          align="center"
-          wrap="wrap"
-          mb="2"
-          direction={
-            isMobile && onCreateMatter && canCreateAnnouncement
-              ? 'column'
-              : 'row'
-          }
-          justify={isMobile ? 'start' : 'between'}
-        >
-          <TextField.Root
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search matters…"
-            size="3"
-            style={{
-              flex:
-                isMobile && onCreateMatter && canCreateAnnouncement
-                  ? undefined
-                  : '1 1 260px',
-              width: '100%',
-            }}
-          >
-            <TextField.Slot side="left">
-              <Search />
-            </TextField.Slot>
-            <TextField.Slot side="right">
-              {isFetching && <Spinner size="2" />}
-            </TextField.Slot>
-          </TextField.Root>
-          {onCreateMatter && canCreateAnnouncement && (
-            <Tooltip content="Send a manual announcement to selected people (uncommon)">
-              <Button
-                type="button"
-                variant="ghost"
-                size="1"
-                color="gray"
-                onClick={onCreateMatter}
-                style={
-                  isMobile
-                    ? { alignSelf: 'flex-end' }
-                    : { flexShrink: 0, alignSelf: 'center' }
-                }
-              >
-                <Plus width={14} height={14} />
-                New announcement
-              </Button>
-            </Tooltip>
-          )}
-        </Flex>
-      }
+      toolbar={toolbar}
     />
   )
 }

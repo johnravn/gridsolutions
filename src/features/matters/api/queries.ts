@@ -8,6 +8,7 @@ import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
 import type {
   CreateMatterInput,
   Matter,
+  MatterFile,
   MatterMessage,
   MatterRecipient,
   MatterResponse,
@@ -1094,7 +1095,7 @@ export function matterFilesQuery(matterId: string) {
         .order('created_at', { ascending: false })
 
       if (error) throw error
-      return (data || []) as unknown as Array<import('../types').MatterFile>
+      return (data || []) as unknown as Array<MatterFile>
     },
   }
 }

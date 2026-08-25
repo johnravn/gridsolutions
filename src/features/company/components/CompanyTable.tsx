@@ -293,10 +293,18 @@ export default function CompanyTable({
                 )}
               </TextField.Slot>
             </TextField.Root>
-            <Button variant="solid" onClick={() => setAddEmployeeOpen(true)}>
+            <Button
+              size="3"
+              variant="solid"
+              onClick={() => setAddEmployeeOpen(true)}
+            >
               Add employee
             </Button>
-            <Button variant="soft" onClick={() => setAddFreelancerOpen(true)}>
+            <Button
+              size="3"
+              variant="soft"
+              onClick={() => setAddFreelancerOpen(true)}
+            >
               Add freelancer
             </Button>
           </Flex>

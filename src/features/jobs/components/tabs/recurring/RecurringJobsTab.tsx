@@ -53,7 +53,7 @@ import {
   buildJobDefaultsFromTemplate,
   formatTemplateStartTimeLabel,
 } from '../../../utils/recurringJobCreateDefaults'
-import { ALL_STATUSES, ACTIVE_STATUS_FILTER } from '../../JobsFilter'
+import { ACTIVE_STATUS_FILTER, ALL_STATUSES } from '../../JobsFilter'
 import { getJobStatusColor } from '../../../utils/statusColors'
 import type { RecurringJobCreateDefaults } from '../../../utils/recurringJobCreateDefaults'
 import type {
@@ -635,7 +635,6 @@ function AssignJobDialog({
         queryKey: ['company', companyId, 'unassigned-jobs'],
       })
       success('Job assigned')
-      onOpenChange(false)
     },
     onError: (err: Error) => showError('Failed to assign', err.message),
   })

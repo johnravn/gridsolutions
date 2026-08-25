@@ -106,17 +106,26 @@ function TimePeriodsManager({
     },
   })
 
+  const createJobDurationPeriod = createJobDuration.mutate
+  const isCreatingJobDuration = createJobDuration.isPending
+
   // Auto-create "Job duration" when component mounts if it's missing
   React.useEffect(() => {
     if (
       !isReadOnly &&
       !jobDuration &&
       timePeriods.length > 0 && // Only create if we've loaded time periods (avoid race condition)
-      !createJobDuration.isPending
+      !isCreatingJobDuration
     ) {
-      createJobDuration.mutate()
+      createJobDurationPeriod()
     }
-  }, [isReadOnly, jobDuration, timePeriods.length, createJobDuration.isPending])
+  }, [
+    isReadOnly,
+    jobDuration,
+    timePeriods.length,
+    isCreatingJobDuration,
+    createJobDurationPeriod,
+  ])
 
   // Group other time periods by category
   const groupedPeriods = React.useMemo(() => {

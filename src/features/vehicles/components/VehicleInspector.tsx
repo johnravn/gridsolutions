@@ -151,7 +151,10 @@ export default function VehicleInspector({ id }: { id: string | null }) {
   )
 
   // Stable fromDate for query key - only changes when switching to booking view
-  const fromDate = React.useMemo(() => new Date().toISOString(), [viewMode])
+  const fromDate = React.useMemo(() => {
+    void viewMode
+    return new Date().toISOString()
+  }, [viewMode])
 
   // Fetch future bookings for booking view (no limit - all future, including in-progress)
   const { data: futureRecords = [], isLoading: isLoadingFuture } = useQuery({
@@ -173,7 +176,10 @@ export default function VehicleInspector({ id }: { id: string | null }) {
     )
   }, [viewMode, futureRecords])
 
-  const toDate = React.useMemo(() => new Date().toISOString(), [viewMode])
+  const toDate = React.useMemo(() => {
+    void viewMode
+    return new Date().toISOString()
+  }, [viewMode])
 
   const { data: pastRecords = [], isLoading: isLoadingPast } = useQuery({
     ...vehiclePastCalendarQuery({

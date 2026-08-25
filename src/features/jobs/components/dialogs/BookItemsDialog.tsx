@@ -154,7 +154,9 @@ export default function BookItemsDialog({
   // Subrental-only filter (catalog items to source externally)
   const [subrentalOnly, setSubrentalOnly] = React.useState(subrentalOnlyInitial)
 
-  // Initialize custom times from job duration when dialog opens and no equipment period exists
+  // Initialize custom times from job duration when dialog opens and no equipment period exists.
+  // Do not overwrite after the user edits the picker (timePeriods/job refetch would wipe July
+  // conflict windows and book against the job duration instead).
   React.useEffect(() => {
     if (!open) {
       // Reset state when dialog closes
@@ -164,6 +166,8 @@ export default function BookItemsDialog({
       return
     }
 
+    if (timesTouched) return
+
     // Only initialize if no equipment period is selected and job has times
     if (!selectedTimePeriodId && job && job.start_at && job.end_at) {
       // Check for equipment periods - different logic for external vs internal
@@ -172,7 +176,6 @@ export default function BookItemsDialog({
         // Just set default times
         setCustomStartTime(job.start_at)
         setCustomEndTime(job.end_at)
-        setTimesTouched(false)
       } else {
         // For internal items, check for exact "Equipment period" match
         const equipmentPeriod = timePeriods.find(
@@ -184,11 +187,17 @@ export default function BookItemsDialog({
         if (!equipmentPeriod) {
           setCustomStartTime(job.start_at)
           setCustomEndTime(job.end_at)
-          setTimesTouched(false)
         }
       }
     }
-  }, [open, job, timePeriods, selectedTimePeriodId, subrentalOnly])
+  }, [
+    open,
+    job,
+    timePeriods,
+    selectedTimePeriodId,
+    subrentalOnly,
+    timesTouched,
+  ])
 
   // Set default time period when dialog opens - only use equipment periods
   React.useEffect(() => {
@@ -332,7 +341,10 @@ export default function BookItemsDialog({
     }
     return Array.from(groups.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([category, rows]) => ({ category, rows }))
+      .map(([category, categoryRows]) => ({
+        category,
+        rows: categoryRows,
+      }))
   }, [picker])
 
   // const add = (it: PickerItem) => {
@@ -911,11 +923,13 @@ export default function BookItemsDialog({
         force && authUserId ? forcedBookingFields(authUserId) : {}
 
       for (const update of toUpdate) {
-        const payload: Record<string, unknown> = { quantity: update.quantity }
-        if (force) Object.assign(payload, forcedFields)
+        const updatePayload: Record<string, unknown> = {
+          quantity: update.quantity,
+        }
+        if (force) Object.assign(updatePayload, forcedFields)
         const { error: updateErr } = await supabase
           .from('reserved_items')
-          .update(payload)
+          .update(updatePayload)
           .eq('id', update.id)
         if (updateErr) throw updateErr
       }

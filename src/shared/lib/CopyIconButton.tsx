@@ -39,7 +39,6 @@ export const CopyIconButton: React.FC<CopyIconButtonProps> = ({
 
   const copyToClipboard = async () => {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text)
       } else {

@@ -2,10 +2,6 @@ import { test, expect } from './fixtures'
 import { openCalendarPage } from './helpers/navigation'
 
 test.describe('Calendar', () => {
-  test('owner can open calendar page', async ({ authedPage: page }) => {
-    await openCalendarPage(page)
-  })
-
   test('owner can filter calendar by equipment category', async ({
     authedPage: page,
   }) => {

@@ -8,9 +8,11 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useRegisterShortcutAction } from '@shared/hotkeys'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
-import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
-import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
-import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
+import {
+  MobileSplitSkeleton,
+  MobileSplitView,
+  useMobileInspectorDrawer,
+} from '@app/layout/mobile'
 import {
   SPLIT_LEFT_WIDTH,
   SplitPage,
@@ -34,6 +36,8 @@ export default function MattersPage() {
     (companyRole === 'owner' || companyRole === 'employee' || isGlobalSuperuser)
   const search = useSearch({ strict: false })
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
+  const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
+    useMobileInspectorDrawer(isLarge)
   const [createMatterOpen, setCreateMatterOpen] = React.useState(false)
   useRegisterShortcutAction(
     'create.matter',
@@ -43,8 +47,6 @@ export default function MattersPage() {
   const [unreadFilter, setUnreadFilter] = React.useState(false)
   const [companyFilter, setCompanyFilter] = React.useState<Array<string>>([])
   const [typeFilter, setTypeFilter] = React.useState<Array<MatterType>>([])
-  const inspectorRef = React.useRef<HTMLDivElement>(null)
-  const listRef = React.useRef<HTMLElement>(null)
 
   const { data: user } = useQuery({
     queryKey: ['auth', 'user'],
@@ -90,27 +92,41 @@ export default function MattersPage() {
     }
   }, [search.matterId])
 
+  const openedFromUrlRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }
-  }, [isLarge, selectedId])
+    if (!search.matterId || isLarge) return
+    if (openedFromUrlRef.current === search.matterId) return
+    openedFromUrlRef.current = search.matterId
+    openDrawer()
+  }, [search.matterId, isLarge, openDrawer])
 
-  const clearSelection = React.useCallback(() => {
-    setSelectedId(null)
-  }, [])
-
-  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
+  const handleSelect = React.useCallback(
+    (id: string | null) => {
+      setSelectedId(id)
+      if (id) openDrawer()
+    },
+    [openDrawer],
+  )
 
   const { isLoading: mattersIndexLoading } = useQuery({
     ...mattersIndexQueryAll(userId),
   })
   const showInitialSkeleton = useInitialPageLoad(mattersIndexLoading)
 
-  if (!companyId || (showInitialSkeleton && !hasSlots)) {
+  if (!companyId) {
+    if (!isLarge) return <MobileSplitSkeleton />
+    return (
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.matters}
+        title="Matters"
+        rightTitle="Detail"
+      />
+    )
+  }
+
+  if (showInitialSkeleton && !isLarge) return <MobileSplitSkeleton />
+
+  if (showInitialSkeleton && !hasSlots) {
     return (
       <SplitPageSkeleton
         defaultLeftWidth={SPLIT_LEFT_WIDTH.matters}
@@ -136,77 +152,58 @@ export default function MattersPage() {
     </Box>
   )
 
+  const filter = (
+    <MattersFilter
+      unreadFilter={unreadFilter}
+      onUnreadFilterChange={setUnreadFilter}
+      companyFilter={companyFilter}
+      onCompanyFilterChange={setCompanyFilter}
+      typeFilter={typeFilter}
+      onTypeFilterChange={setTypeFilter}
+      companies={companies || []}
+    />
+  )
+
+  const list = (
+    <MatterList
+      selectedId={selectedId}
+      onSelect={isLarge ? setSelectedId : handleSelect}
+      unreadFilter={unreadFilter}
+      companyFilter={companyFilter}
+      typeFilter={typeFilter}
+      companies={companies || []}
+      onCreateMatter={() => setCreateMatterOpen(true)}
+      toolbarExtra={isLarge ? undefined : filter}
+    />
+  )
+
   return (
     <>
-      <SplitPage
-        defaultLeftWidth={SPLIT_LEFT_WIDTH.matters}
-        title="Matters"
-        leftToolbar={
-          <MattersFilter
-            unreadFilter={unreadFilter}
-            onUnreadFilterChange={setUnreadFilter}
-            companyFilter={companyFilter}
-            onCompanyFilterChange={setCompanyFilter}
-            typeFilter={typeFilter}
-            onTypeFilterChange={setTypeFilter}
-            companies={companies || []}
-          />
-        }
-        left={
-          <MatterList
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            unreadFilter={unreadFilter}
-            companyFilter={companyFilter}
-            typeFilter={typeFilter}
-            companies={companies || []}
-            onCreateMatter={() => setCreateMatterOpen(true)}
-          />
-        }
-        leftBodyStyle={{
-          overflow: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        rightTitle="Detail"
-        right={detail}
-        mobileLeftCardStyle={{ height: MOBILE_CARD_HEIGHT, minWidth: 0 }}
-        mobileLeftBodyStyle={{
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-        mobileRightCardStyle={{
-          height: MOBILE_CARD_HEIGHT,
-          overflow: 'hidden',
-          maxWidth: '100%',
-        }}
-        mobileSectionRef={listRef}
-        mobileRightWrapper={(card) => (
-          <div
-            ref={inspectorRef}
-            style={{
-              minHeight: 0,
-              maxWidth: '100%',
-              width: '100%',
-              height: MOBILE_CARD_HEIGHT,
-            }}
-          >
-            {card}
-          </div>
-        )}
-        mobileFooter={
-          <ScrollToTopButton
-            listRef={listRef}
-            inspectorRef={inspectorRef}
-            visible={!isLarge && selectedId != null}
-          />
-        }
-      />
+      {isLarge ? (
+        <SplitPage
+          defaultLeftWidth={SPLIT_LEFT_WIDTH.matters}
+          title="Matters"
+          leftToolbar={filter}
+          left={list}
+          leftBodyStyle={{
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+          rightTitle="Detail"
+          right={detail}
+        />
+      ) : (
+        <MobileSplitView
+          open={drawerOpen}
+          onOpenChange={setDrawerOpen}
+          onToggle={toggleDrawer}
+          drawerTitle="Detail"
+          inspector={detail}
+        >
+          {list}
+        </MobileSplitView>
+      )}
       <CreateMatterDialog
         open={createMatterOpen}
         onOpenChange={setCreateMatterOpen}

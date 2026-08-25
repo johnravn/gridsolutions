@@ -70,20 +70,19 @@ export default defineConfig(({ mode }) => {
           server.middlewares.use(
             '/api/verse-of-the-day',
             async (req, res, next) => {
-              if (!req || !res) return next()
               if (req.method && req.method !== 'GET') return next()
 
               try {
                 const url = new URL(req.url ?? '/', 'http://localhost')
-                const lang = url.searchParams.get('lang') || 'en'
-                const { getVerseOfTheDay } = await import(
-                  '@glowstudent/youversion'
+                const version = url.searchParams.get('version') || 'bm11'
+                const { fetchVerseOfTheDay } = await import(
+                  './api/verseOfTheDay'
                 )
-                const data = await getVerseOfTheDay(lang)
+                const data = await fetchVerseOfTheDay(version)
 
                 res.statusCode = 200
                 res.setHeader('Content-Type', 'application/json; charset=utf-8')
-                res.end(JSON.stringify(data ?? null))
+                res.end(JSON.stringify(data))
               } catch (e: any) {
                 res.statusCode = 500
                 res.setHeader('Content-Type', 'application/json; charset=utf-8')

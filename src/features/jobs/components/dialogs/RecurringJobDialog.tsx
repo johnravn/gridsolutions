@@ -156,7 +156,7 @@ export default function RecurringJobDialog({
     }
     void setCurrentUserAsLead()
     // Set lead on create open
-  }, [open, mode, companyId])
+  }, [open, mode, companyId, form])
 
   const customerId = useStore(
     form.store,

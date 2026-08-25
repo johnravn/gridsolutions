@@ -210,17 +210,21 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
     },
   })
 
-  const setCompanyId = (id: string) => {
-    if (!companies.some((c) => c.id === id)) return // ignore invalid
-    // update local fast path
-    setCompanyIdState(id)
-    if (lsKey) safeSetLS(lsKey, id)
-    // optimistic cache so resolution stays on the new id while saving
-    if (userId) {
-      qc.setQueryData(['profile', userId, 'selected-company-id'], id)
-      savePref.mutate(id)
-    }
-  }
+  const persistSelectedCompany = savePref.mutate
+  const setCompanyId = React.useCallback(
+    (id: string) => {
+      if (!companies.some((c) => c.id === id)) return // ignore invalid
+      // update local fast path
+      setCompanyIdState(id)
+      if (lsKey) safeSetLS(lsKey, id)
+      // optimistic cache so resolution stays on the new id while saving
+      if (userId) {
+        qc.setQueryData(['profile', userId, 'selected-company-id'], id)
+        persistSelectedCompany(id)
+      }
+    },
+    [companies, lsKey, userId, qc, persistSelectedCompany],
+  )
 
   const company = companies.find((c) => c.id === resolvedCompanyId) ?? null
   const loading =
@@ -236,7 +240,7 @@ export function CompanyProvider({ children }: { children: React.ReactNode }) {
       setCompanyId,
       loading,
     }),
-    [companies, resolvedCompanyId, company, loading],
+    [companies, resolvedCompanyId, company, loading, setCompanyId],
   )
 
   return <CompanyCtx.Provider value={value}>{children}</CompanyCtx.Provider>

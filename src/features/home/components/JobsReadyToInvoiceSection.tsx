@@ -56,8 +56,7 @@ export function InvoiceScrollContent({
       fadeRight={fadeRight}
     >
       {jobs.map((job) => {
-        const customerLabel =
-          job.customer?.name?.trim() || 'No customer linked'
+        const customerLabel = job.customer?.name?.trim() || 'No customer linked'
         return (
           <HorizontalScrollCard
             key={job.id}

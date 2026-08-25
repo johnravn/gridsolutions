@@ -7,7 +7,6 @@ import {
   Flex,
   Heading,
   IconButton,
-  SegmentedControl,
   Select,
   Separator,
   Switch,
@@ -16,14 +15,26 @@ import {
   TextField,
   Tooltip,
 } from '@radix-ui/themes'
-import { InfoCircle, Lock } from 'iconoir-react'
+import { InfoCircle, Link as LinkIcon, Plus, Search } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@shared/api/supabase'
+import { myProfileQuery } from '@shared/api/myProfileQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { DateTimeRangePicker } from '@shared/ui/components/pickers'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton } from '@app/layout/split'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+  MobileSplitSkeleton,
+  MobileSplitView,
+  useMobileInspectorDrawer,
+} from '@app/layout/mobile'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { previouslyLoggedJobsQuery } from '../api/loggedJobs'
 import { loggingPeriodsQuery } from '../api/loggingPeriods'
@@ -33,20 +44,34 @@ import {
   timeEntriesQuery,
 } from '../api/timeEntries'
 import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
+import LoggingMonthScroller from '../components/LoggingMonthScroller'
 import TimeEntriesTable from '../components/TimeEntriesTable'
-import { buildLoggingJobPickerList } from '../lib/jobPicker'
+import TimeEntryWhenFields from '../components/TimeEntryWhenFields'
+import { buildLoggingJobPickerList, loggingSearchTerm } from '../lib/jobPicker'
+import {
+  formatHoursBetween,
+  formatHoursInput,
+  hoursFromRangeOrDefault,
+  hoursToRange,
+  isValidLoggedHours,
+  parseHoursInput,
+} from '../lib/timeEntryHours'
 import {
   formatLoggingDate,
   formatMonthInput,
   getMonthOptions,
   getRange,
 } from '../lib/timeEntryRange'
+import type { TimeInputMode } from '../lib/timeEntryHours'
 import type { LoggingPeriod } from '../api/loggingPeriods'
 import type { TimeEntryInsert, TimeEntryWithProfile } from '../api/timeEntries'
 
 export default function LoggingPage() {
   const { companyId } = useCompany()
   const { userId, isGlobalSuperuser, companyRole } = useAuthz()
+  const { isLarge } = useSplitLayout()
+  const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
+    useMobileInspectorDrawer(isLarge)
   const qc = useQueryClient()
   const { success, error } = useToast()
 
@@ -73,7 +98,6 @@ export default function LoggingPage() {
     () => getDefaultTimes(),
     [],
   )
-  const [entryMode, setEntryMode] = React.useState<'manual' | 'job'>('job')
   const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
   const [showAllJobs, setShowAllJobs] = React.useState(false)
   const [jobSearch, setJobSearch] = React.useState('')
@@ -84,39 +108,38 @@ export default function LoggingPage() {
   const [note, setNote] = React.useState('')
   const [startAt, setStartAt] = React.useState(defaultStartAt)
   const [endAt, setEndAt] = React.useState(defaultEndAt)
+  const [timeMode, setTimeMode] = React.useState<TimeInputMode>('range')
+  const [hoursInput, setHoursInput] = React.useState('1')
   const hasInvalidTimeRange = React.useMemo(() => {
+    if (timeMode === 'hours') return false
     if (!startAt || !endAt) return false
     return new Date(endAt).getTime() <= new Date(startAt).getTime()
-  }, [endAt, startAt])
-  const pickedHours = React.useMemo(
-    () => formatHoursBetween(startAt, endAt),
-    [startAt, endAt],
+  }, [endAt, startAt, timeMode])
+  const parsedHours = React.useMemo(
+    () => parseHoursInput(hoursInput),
+    [hoursInput],
   )
+  const hasInvalidHours =
+    timeMode === 'hours' && !isValidLoggedHours(parsedHours)
+  const pickedHours = React.useMemo(() => {
+    if (hasInvalidHours) return '--'
+    return formatHoursBetween(startAt, endAt)
+  }, [hasInvalidHours, startAt, endAt])
+  const resolvedTitle = (selectedJobId ? title : jobSearch).trim()
 
   const enabled = Boolean(companyId && userId)
 
-  // Default focus: when in "Link to job" mode with no job selected, focus the job search field
   React.useEffect(() => {
-    if (entryMode === 'job' && !selectedJobId) {
-      const input = jobSearchInputRef.current?.querySelector('input')
-      if (input instanceof HTMLInputElement) {
-        input.focus()
-      }
+    if (selectedJobId) return
+    const input = jobSearchInputRef.current?.querySelector('input')
+    if (input instanceof HTMLInputElement) {
+      input.focus()
     }
-  }, [entryMode, selectedJobId])
+  }, [selectedJobId])
 
   const { data: myProfile } = useQuery({
-    queryKey: ['my-profile', userId],
+    ...myProfileQuery(userId ?? '__none__'),
     enabled: !!userId,
-    queryFn: async () => {
-      const { data, error: err } = await supabase
-        .from('profiles')
-        .select('user_id, email, display_name, first_name, last_name')
-        .eq('user_id', userId!)
-        .maybeSingle()
-      if (err) throw err
-      return data
-    },
   })
   const userDisplayName = React.useMemo(() => {
     if (!myProfile) return null
@@ -140,7 +163,7 @@ export default function LoggingPage() {
   const { data: jobsData = [], isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: jobSearch.trim(),
+      search: loggingSearchTerm(jobSearch),
       sortBy: 'start_at',
       sortDir: 'desc',
       userId: userId ?? null,
@@ -148,7 +171,7 @@ export default function LoggingPage() {
       includeArchived: false,
       onlyCrewForUserId: showAllJobs ? null : (userId ?? null),
     }),
-    enabled: enabled && entryMode === 'job',
+    enabled,
   })
 
   const { data: previouslyLoggedJobs = [] } = useQuery({
@@ -156,7 +179,7 @@ export default function LoggingPage() {
       companyId: companyId ?? '',
       userId: userId ?? '',
     }),
-    enabled: enabled && entryMode === 'job',
+    enabled,
   })
 
   const previouslyLoggedJobIds = React.useMemo(
@@ -276,7 +299,16 @@ export default function LoggingPage() {
       setJobNumber(resolved.jobnr != null ? String(resolved.jobnr) : '')
 
       const nextStart = resolved.start_at ?? ''
-      if (nextStart) {
+      if (timeMode === 'hours') {
+        const hours = hoursFromRangeOrDefault(startAt, endAt)
+        const dateIso = nextStart || startAt
+        if (dateIso) {
+          const range = hoursToRange(dateIso, hours)
+          setStartAt(range.startAt)
+          setEndAt(range.endAt)
+          setHoursInput(formatHoursInput(hours))
+        }
+      } else if (nextStart) {
         setStartAt(nextStart)
         if (resolved.end_at) {
           setEndAt(resolved.end_at)
@@ -287,7 +319,7 @@ export default function LoggingPage() {
       setJobSearchOpen(false)
       setJobSearch('')
     },
-    [jobsData, previouslyLoggedJobs],
+    [jobsData, previouslyLoggedJobs, startAt, endAt, timeMode],
   )
 
   const createEntry = useMutation({
@@ -296,46 +328,63 @@ export default function LoggingPage() {
       if (isEntryInLockedPeriod) {
         throw new Error('You cannot add an entry in a locked logging period')
       }
-      if (!title.trim()) {
+      if (!resolvedTitle) {
         throw new Error('Title is required')
       }
-      if (entryMode === 'job' && !selectedJobId) {
-        throw new Error('Select a job to link')
-      }
-      if (!startAt || !endAt) {
-        throw new Error('Start and end time are required')
-      }
-      if (hasInvalidTimeRange) {
-        throw new Error('End time must be after start time')
+      let nextStartAt = startAt
+      let nextEndAt = endAt
+      if (timeMode === 'hours') {
+        if (!isValidLoggedHours(parsedHours)) {
+          throw new Error('Enter hours greater than 0, up to 24')
+        }
+        if (!startAt) {
+          throw new Error('Date is required')
+        }
+        const range = hoursToRange(startAt, parsedHours)
+        nextStartAt = range.startAt
+        nextEndAt = range.endAt
+      } else {
+        if (!startAt || !endAt) {
+          throw new Error('Start and end time are required')
+        }
+        if (hasInvalidTimeRange) {
+          throw new Error('End time must be after start time')
+        }
       }
 
       await createTimeEntry({
         company_id: companyId,
         user_id: userId,
-        title: title.trim(),
-        job_number: jobNumber.trim() || null,
+        title: resolvedTitle,
+        job_number: selectedJobId ? jobNumber.trim() || null : null,
         note: note.trim() || null,
-        start_at: startAt,
-        end_at: endAt,
-        ...(entryMode === 'job' && selectedJobId
-          ? { job_id: selectedJobId }
-          : {}),
+        start_at: nextStartAt,
+        end_at: nextEndAt,
+        job_id: selectedJobId,
       } as TimeEntryInsert)
     },
     onSuccess: async () => {
       await invalidateEntries()
       const { startAt: resetStart, endAt: resetEnd } = getDefaultTimes()
       setNote('')
-      setStartAt(resetStart)
-      setEndAt(resetEnd)
-      if (entryMode === 'job' && selectedJobId) {
+      if (timeMode === 'hours') {
+        const hours = isValidLoggedHours(parsedHours) ? parsedHours : 1
+        const range = hoursToRange(resetStart, hours)
+        setStartAt(range.startAt)
+        setEndAt(range.endAt)
+        setHoursInput(formatHoursInput(hours))
+      } else {
+        setStartAt(resetStart)
+        setEndAt(resetEnd)
+      }
+      if (selectedJobId) {
         success('Saved', 'Time entry added. You can add another for this job.')
         return
       }
       setTitle('')
       setJobNumber('')
+      setJobSearch('')
       setSelectedJobId(null)
-      setEntryMode('manual')
       success('Saved', 'Time entry added')
     },
     onError: (e: any) => {
@@ -398,12 +447,38 @@ export default function LoggingPage() {
   const [deleteCandidate, setDeleteCandidate] =
     React.useState<TimeEntryWithProfile | null>(null)
 
+  const openNewEntry = React.useCallback(() => {
+    const { startAt: resetStart, endAt: resetEnd } = getDefaultTimes()
+    const shifted = shiftRangeToMonth({
+      startAt: resetStart,
+      endAt: resetEnd,
+      monthKey: selectedMonth,
+    })
+    setSelectedJobId(null)
+    setShowAllJobs(false)
+    setJobSearch('')
+    setJobSearchOpen(false)
+    setTitle('')
+    setJobNumber('')
+    setNote('')
+    setTimeMode('range')
+    setHoursInput('1')
+    setStartAt(shifted?.startAt ?? resetStart)
+    setEndAt(shifted?.endAt ?? resetEnd)
+    setEditingEntry(null)
+    openDrawer()
+  }, [openDrawer, selectedMonth])
+
   const entryForm = (
     <>
-      <Flex align="center" justify="between" gap="3" wrap="wrap" mb="3">
-        <Heading size="5">Logging</Heading>
-      </Flex>
-      <Separator size="4" mb="4" />
+      {isLarge && (
+        <>
+          <Flex align="center" justify="between" gap="3" wrap="wrap" mb="3">
+            <Heading size="5">Logging</Heading>
+          </Flex>
+          <Separator size="4" mb="4" />
+        </>
+      )}
 
       <Box
         style={{
@@ -412,201 +487,185 @@ export default function LoggingPage() {
           gap: 16,
         }}
       >
-        <label style={{ gridColumn: '1 / -1' }}>
+        <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
           <Text as="div" size="2" mb="1" weight="medium">
-            Entry type
+            Title
           </Text>
-          <SegmentedControl.Root
-            value={entryMode}
-            onValueChange={(value) => {
-              setEntryMode(value as 'manual' | 'job')
-              if (value === 'manual') {
-                setSelectedJobId(null)
-                setJobSearchOpen(false)
-              } else {
-                setJobSearchOpen(true)
-              }
-            }}
-            style={{ width: '100%' }}
-          >
-            <SegmentedControl.Item value="job">
-              Link to job
-            </SegmentedControl.Item>
-            <SegmentedControl.Item value="manual">Manual</SegmentedControl.Item>
-          </SegmentedControl.Root>
-        </label>
-        {entryMode === 'job' && (
-          <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
-            <Text as="div" size="2" mb="1" weight="medium">
-              Job
-            </Text>
-            {selectedJobId ? (
-              <Flex align="center" gap="2">
-                <Text size="2" style={{ flex: 1 }}>
+          {selectedJobId ? (
+            <Flex align="center" gap="2">
+              <Flex
+                align="center"
+                gap="2"
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  height: 'var(--space-6)',
+                  padding: '0 var(--space-2)',
+                  borderRadius: 'max(var(--radius-2), var(--radius-full))',
+                  boxShadow: 'inset 0 0 0 1px var(--gray-a7)',
+                  background: 'var(--color-surface)',
+                }}
+              >
+                <Tooltip content="Linked to a job">
+                  <span
+                    aria-label="Linked to a job"
+                    style={{
+                      display: 'inline-flex',
+                      flexShrink: 0,
+                      color: 'var(--accent-11)',
+                    }}
+                  >
+                    <LinkIcon width={16} height={16} />
+                  </span>
+                </Tooltip>
+                <Text size="2" style={{ flex: 1, minWidth: 0 }} truncate>
                   {(() => {
                     const job =
                       jobsData.find((j) => j.id === selectedJobId) ??
                       previouslyLoggedJobs.find((j) => j.id === selectedJobId)
-                    return job ? formatJobOption(job) : selectedJobId
+                    return job ? formatJobOption(job) : title || selectedJobId
                   })()}
                 </Text>
-                <Button
-                  size="1"
-                  variant="soft"
-                  onClick={() => {
-                    setSelectedJobId(null)
-                    setJobSearchOpen(true)
-                  }}
-                >
-                  Change
-                </Button>
               </Flex>
-            ) : (
-              <>
-                <Flex align="center" gap="3" wrap="wrap">
-                  <Box
-                    ref={jobSearchInputRef}
-                    style={{ flex: 1, minWidth: 240 }}
-                  >
-                    <TextField.Root
-                      placeholder="Search by title, project lead, date, customer, job number"
-                      value={jobSearch}
-                      onChange={(e) => {
-                        setJobSearch(e.target.value)
-                        setJobSearchOpen(true)
-                      }}
-                      onFocus={() => setJobSearchOpen(true)}
-                      onBlur={() => {
-                        setTimeout(() => setJobSearchOpen(false), 150)
-                      }}
-                    />
-                  </Box>
-                  <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
-                    <Switch
-                      checked={showAllJobs}
-                      onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
-                    />
-                    <Text size="2">Show all jobs</Text>
-                    <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range. Jobs you've already logged time on always appear so you can add another entry.">
-                      <IconButton
-                        size="1"
-                        variant="ghost"
-                        color="gray"
-                        style={{ cursor: 'help' }}
-                        aria-label="Explain job list options"
-                      >
-                        <InfoCircle width={16} height={16} />
-                      </IconButton>
-                    </Tooltip>
-                  </Flex>
-                </Flex>
-                {jobSearchOpen && (
-                  <Box
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      right: 0,
-                      top: '100%',
-                      marginTop: 4,
-                      zIndex: 10,
-                      maxHeight: 280,
-                      overflow: 'auto',
-                      background: 'var(--color-background)',
-                      border: '1px solid var(--gray-a6)',
-                      borderRadius: 'var(--radius-3)',
-                      boxShadow: 'var(--shadow-4)',
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => {
+                  setSelectedJobId(null)
+                  setJobSearch(title)
+                  setJobNumber('')
+                  setJobSearchOpen(true)
+                }}
+              >
+                Change
+              </Button>
+            </Flex>
+          ) : (
+            <>
+              <Flex align="center" gap="3" wrap="wrap">
+                <Box ref={jobSearchInputRef} style={{ flex: 1, minWidth: 240 }}>
+                  <TextField.Root
+                    placeholder="Search a job or type a title"
+                    value={jobSearch}
+                    onChange={(e) => {
+                      setJobSearch(e.target.value)
+                      setJobSearchOpen(true)
+                    }}
+                    onFocus={() => setJobSearchOpen(true)}
+                    onBlur={() => {
+                      setTimeout(() => setJobSearchOpen(false), 150)
                     }}
                   >
-                    {jobsForPicker.length === 0 ? (
-                      <Box p="3">
-                        <Text size="2" color="gray">
-                          {jobsLoading
-                            ? 'Loading jobs…'
+                    <TextField.Slot side="left">
+                      <Search width={16} height={16} />
+                    </TextField.Slot>
+                  </TextField.Root>
+                </Box>
+                <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                  <Switch
+                    checked={showAllJobs}
+                    onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
+                  />
+                  <Text size="2">Show all jobs</Text>
+                  <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range. Jobs you've already logged time on always appear so you can add another entry.">
+                    <IconButton
+                      size="1"
+                      variant="ghost"
+                      color="gray"
+                      style={{ cursor: 'help' }}
+                      aria-label="Explain job list options"
+                    >
+                      <InfoCircle width={16} height={16} />
+                    </IconButton>
+                  </Tooltip>
+                </Flex>
+              </Flex>
+              {jobSearchOpen && (
+                <Box
+                  style={{
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: '100%',
+                    marginTop: 4,
+                    zIndex: 10,
+                    maxHeight: 280,
+                    overflow: 'auto',
+                    background: 'var(--color-background)',
+                    border: '1px solid var(--gray-a6)',
+                    borderRadius: 'var(--radius-3)',
+                    boxShadow: 'var(--shadow-4)',
+                  }}
+                >
+                  {jobsForPicker.length === 0 ? (
+                    <Box p="3">
+                      <Text size="2" color="gray">
+                        {jobsLoading
+                          ? 'Loading jobs…'
+                          : jobSearch.trim()
+                            ? 'No matching jobs. Keep this text as the title, or turn on "Show all jobs".'
                             : 'No jobs found. Try a different search or turn on "Show all jobs".'}
-                        </Text>
-                      </Box>
-                    ) : (
-                      jobsForPicker.map((job) => (
-                        <Box
-                          key={job.id}
-                          asChild
-                          p="2"
-                          style={{
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => handleJobSelect(job.id, job)}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          <div>
-                            <Flex align="center" gap="2" wrap="wrap">
-                              <Text size="2">{formatJobOption(job)}</Text>
-                              {previouslyLoggedJobIds.has(job.id) && (
-                                <Badge size="1" color="green" variant="soft">
-                                  Logged
-                                </Badge>
-                              )}
-                              {isJobOnToday(job) && (
-                                <Badge size="1" color="blue" variant="soft">
-                                  Today
-                                </Badge>
-                              )}
-                            </Flex>
-                            {(job.customer?.name ??
-                              job.project_lead?.display_name) && (
-                              <Text size="1" color="gray" as="div">
-                                {[
-                                  job.customer?.name,
-                                  job.project_lead?.display_name,
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </Text>
+                      </Text>
+                    </Box>
+                  ) : (
+                    jobsForPicker.map((job) => (
+                      <Box
+                        key={job.id}
+                        asChild
+                        p="2"
+                        style={{
+                          cursor: 'pointer',
+                        }}
+                        onClick={() => handleJobSelect(job.id, job)}
+                        onMouseDown={(e) => e.preventDefault()}
+                      >
+                        <div>
+                          <Flex align="center" gap="2" wrap="wrap">
+                            <Text size="2">{formatJobOption(job)}</Text>
+                            {previouslyLoggedJobIds.has(job.id) && (
+                              <Badge size="1" color="green" variant="soft">
+                                Logged
+                              </Badge>
                             )}
-                          </div>
-                        </Box>
-                      ))
-                    )}
-                  </Box>
-                )}
-              </>
-            )}
-          </Box>
-        )}
-        <label>
-          <Text as="div" size="2" mb="1" weight="medium">
-            Title
-          </Text>
-          <TextField.Root
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Time entry title"
-            disabled={false}
-          />
-        </label>
-        <label>
-          <Text as="div" size="2" mb="1" weight="medium">
-            Job number
-          </Text>
-          <TextField.Root
-            value={jobNumber}
-            onChange={(e) => setJobNumber(e.target.value)}
-            placeholder="Optional"
-            disabled={entryMode === 'job'}
-          />
-        </label>
+                            {isJobOnToday(job) && (
+                              <Badge size="1" color="blue" variant="soft">
+                                Today
+                              </Badge>
+                            )}
+                          </Flex>
+                          {(job.customer?.name ??
+                            job.project_lead?.display_name) && (
+                            <Text size="1" color="gray" as="div">
+                              {[
+                                job.customer?.name,
+                                job.project_lead?.display_name,
+                              ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            </Text>
+                          )}
+                        </div>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              )}
+            </>
+          )}
+        </Box>
         <Box style={{ gridColumn: '1 / -1' }}>
-          <Text as="div" size="2" mb="1" weight="medium">
-            Time period
-          </Text>
-          <DateTimeRangePicker
+          <TimeEntryWhenFields
+            mode={timeMode}
+            onModeChange={setTimeMode}
             startAt={startAt}
             endAt={endAt}
-            onChange={({ startAt: s, endAt: e }) => {
+            onRangeChange={({ startAt: s, endAt: e }) => {
               setStartAt(s)
               setEndAt(e)
             }}
-            invalid={hasInvalidTimeRange}
-            locale="nb"
+            hoursInput={hoursInput}
+            onHoursInputChange={setHoursInput}
+            rangeInvalid={hasInvalidTimeRange}
           />
         </Box>
       </Box>
@@ -633,10 +692,10 @@ export default function LoggingPage() {
           onClick={() => createEntry.mutate()}
           disabled={
             createEntry.isPending ||
-            !title.trim() ||
+            !resolvedTitle ||
             hasInvalidTimeRange ||
-            isEntryInLockedPeriod ||
-            (entryMode === 'job' && !selectedJobId)
+            hasInvalidHours ||
+            isEntryInLockedPeriod
           }
         >
           {createEntry.isPending ? 'Saving…' : 'Add entry'}
@@ -660,6 +719,43 @@ export default function LoggingPage() {
     return total / (1000 * 60 * 60)
   }, [entries])
 
+  const monthToolbar = (
+    <Flex direction="column" gap="3" style={{ width: '100%', minWidth: 0 }}>
+      <Flex align="center" justify="between" gap="3" wrap="wrap">
+        <Heading size="4">
+          Entries for {userDisplayName ?? 'you'} – {label}
+        </Heading>
+        <Flex align="center" gap="3">
+          <Text size="2" color="gray">
+            {entries.length} total
+          </Text>
+          <Select.Root
+            value={String(selectedYear)}
+            onValueChange={(value: string) => {
+              const monthPart = selectedMonth.split('-')[1] ?? '01'
+              setSelectedMonth(`${value}-${monthPart}`)
+            }}
+          >
+            <Select.Trigger />
+            <Select.Content>
+              {yearOptions.map((year) => (
+                <Select.Item key={year} value={String(year)}>
+                  {year}
+                </Select.Item>
+              ))}
+            </Select.Content>
+          </Select.Root>
+        </Flex>
+      </Flex>
+      <LoggingMonthScroller
+        value={selectedMonth}
+        onValueChange={setSelectedMonth}
+        months={monthOptions}
+        lockedMonthSet={lockedMonthSetForView}
+      />
+    </Flex>
+  )
+
   const entriesTable = (
     <>
       <Box
@@ -671,69 +767,9 @@ export default function LoggingPage() {
           overflow: 'hidden',
         }}
       >
-        <Flex
-          align="center"
-          justify="between"
-          gap="3"
-          mb="2"
-          wrap="wrap"
-          style={{ flexShrink: 0 }}
-        >
-          <Heading size="4">
-            Entries for {userDisplayName ?? 'you'} – {label}
-          </Heading>
-          <Flex align="center" gap="3" wrap="wrap">
-            <Text size="2" color="gray">
-              {entries.length} total
-            </Text>
-            <Select.Root
-              value={String(selectedYear)}
-              onValueChange={(value: string) => {
-                const monthPart = selectedMonth.split('-')[1] ?? '01'
-                setSelectedMonth(`${value}-${monthPart}`)
-              }}
-            >
-              <Select.Trigger />
-              <Select.Content>
-                {yearOptions.map((year) => (
-                  <Select.Item key={year} value={String(year)}>
-                    {year}
-                  </Select.Item>
-                ))}
-              </Select.Content>
-            </Select.Root>
-            <Box style={{ maxWidth: '100%', overflowX: 'auto' }}>
-              <SegmentedControl.Root
-                value={selectedMonth}
-                onValueChange={(value) => setSelectedMonth(value)}
-                style={{ minWidth: 'max-content' }}
-              >
-                {monthOptions.map((month) => {
-                  const isLocked = lockedMonthSetForView.has(month.value)
-                  return (
-                    <SegmentedControl.Item
-                      key={month.value}
-                      value={month.value}
-                      style={
-                        isLocked
-                          ? {
-                              backgroundColor: 'var(--green-3)',
-                              color: 'var(--green-11)',
-                            }
-                          : undefined
-                      }
-                    >
-                      <Flex align="center" gap="1">
-                        <Text size="1">{month.label}</Text>
-                        {isLocked && <Lock width={12} height={12} />}
-                      </Flex>
-                    </SegmentedControl.Item>
-                  )
-                })}
-              </SegmentedControl.Root>
-            </Box>
-          </Flex>
-        </Flex>
+        <Box mb="2" style={{ flexShrink: 0 }}>
+          {monthToolbar}
+        </Box>
         <Separator size="4" mb="3" style={{ flexShrink: 0 }} />
 
         <Box
@@ -786,6 +822,11 @@ export default function LoggingPage() {
           </Text>
         </Flex>
       </Box>
+    </>
+  )
+
+  const entryDialogs = (
+    <>
       <EditTimeEntryDialog
         open={Boolean(editingEntry)}
         onOpenChange={(open) => {
@@ -843,6 +884,7 @@ export default function LoggingPage() {
   )
 
   if (!companyId) {
+    if (!isLarge) return <MobileSplitSkeleton />
     return (
       <SplitPageSkeleton
         defaultLeftWidth={SPLIT_LEFT_WIDTH.logging}
@@ -855,6 +897,74 @@ export default function LoggingPage() {
     )
   }
 
+  if (!isLarge) {
+    return (
+      <MobileSplitView
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onToggle={toggleDrawer}
+        drawerTitle="New entry"
+        inspector={entryForm}
+      >
+        <MobilePageList toolbar={monthToolbar}>
+          <Flex
+            direction="column"
+            gap="3"
+            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+          >
+            <TimeEntriesTable
+              entries={entries}
+              isLoading={isLoading}
+              showEmployeeColumn={false}
+              onEditEntry={(entry) => setEditingEntry(entry)}
+              canEditEntry={(entry) => {
+                if (
+                  isRangeOverlappingLockedPeriod({
+                    startAt: entry.start_at,
+                    endAt: entry.end_at,
+                    lockedMonthSet: lockedMonthSetForView,
+                  })
+                )
+                  return false
+                if (!userId) return false
+                if (isGlobalSuperuser) return true
+                return entry.user_id === userId
+              }}
+              onDeleteEntry={(entry) => {
+                setDeleteCandidate(entry)
+              }}
+              canDeleteEntry={(entry) => {
+                if (
+                  isRangeOverlappingLockedPeriod({
+                    startAt: entry.start_at,
+                    endAt: entry.end_at,
+                    lockedMonthSet: lockedMonthSetForView,
+                  })
+                )
+                  return false
+                if (!userId) return false
+                if (isGlobalSuperuser) return true
+                return entry.user_id === userId && !deleteEntry.isPending
+              }}
+            />
+            <Flex justify="end">
+              <Text size="4" weight="bold">
+                Total: {totalHours.toFixed(2)} hours
+              </Text>
+            </Flex>
+          </Flex>
+        </MobilePageList>
+        <MobileBottomActionBar hidden={drawerOpen}>
+          <Button variant="solid" size="3" onClick={openNewEntry}>
+            <Plus width={18} height={18} />
+            New entry
+          </Button>
+        </MobileBottomActionBar>
+        {entryDialogs}
+      </MobileSplitView>
+    )
+  }
+
   return (
     <SplitPage
       defaultLeftWidth={SPLIT_LEFT_WIDTH.logging}
@@ -864,13 +974,17 @@ export default function LoggingPage() {
       showRightHeader={false}
       left={entryForm}
       leftBodyStyle={{ overflowY: 'auto' }}
-      right={entriesTable}
+      right={
+        <>
+          {entriesTable}
+          {entryDialogs}
+        </>
+      }
       rightBodyStyle={{
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}
-      mobileRightCardStyle={{ overflowX: 'auto' }}
     />
   )
 }
@@ -884,15 +998,6 @@ function getDefaultTimes() {
   }
   const end = new Date(start.getTime() + 60 * 60 * 1000)
   return { startAt: start.toISOString(), endAt: end.toISOString() }
-}
-
-function formatHoursBetween(startAt: string, endAt: string) {
-  if (!startAt || !endAt) return '--'
-  const start = new Date(startAt)
-  const end = new Date(endAt)
-  const durationMs = Math.max(0, end.getTime() - start.getTime())
-  const hours = durationMs / (1000 * 60 * 60)
-  return `${hours.toFixed(2)} hours`
 }
 
 function getYearFromIso(value: string | null | undefined) {

@@ -2,15 +2,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import {
-  Box,
-  Button,
-  Card,
-  Flex,
-  IconButton,
-  Select,
-  Text,
-} from '@radix-ui/themes'
+import { Button, Flex, IconButton, Select, Text } from '@radix-ui/themes'
 import { Calendar, List, ShareAndroid } from 'iconoir-react'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -115,7 +107,7 @@ export default function CalendarPage() {
     }),
     enabled: shouldFetchSuggestions && category === 'equipment',
   })
-  const items = itemsData?.rows || []
+  const items = React.useMemo(() => itemsData?.rows || [], [itemsData?.rows])
 
   // Crew for crew
   const { data: crew = [] } = useQuery({
@@ -269,133 +261,109 @@ export default function CalendarPage() {
   }
 
   return (
-    <Card
-      style={{
-        height: '100%',
-        minHeight: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-      }}
-    >
-      <Box
-        p="4"
-        style={{
-          flex: 1,
-          minHeight: 0,
-          display: 'flex',
-          flexDirection: 'column',
-        }}
-      >
-        {/* Filters - on same line */}
-        <Flex align="center" gap="3" mb="4" wrap="wrap" style={{ flexShrink: 0 }}>
-          {/* Category Dropdown */}
-          <Flex align="center" gap="2">
-            <Text weight="bold" size="2">
-              Category:
-            </Text>
-            <Select.Root value={category} onValueChange={handleCategoryChange}>
-              <Select.Trigger style={{ minWidth: 150 }} />
-              <Select.Content>
-                {!isFreelancer && <Select.Item value="all">All</Select.Item>}
-                <Select.Item value="jobDuration">Jobs</Select.Item>
-                {!isFreelancer && (
-                  <>
-                    <Select.Item value="equipment">Equipment</Select.Item>
-                    <Select.Item value="transport">Transport</Select.Item>
-                  </>
-                )}
-                <Select.Item value="crew">Crew</Select.Item>
-              </Select.Content>
-            </Select.Root>
-          </Flex>
-
-          {/* Search with Autocomplete — hidden for freelancers (data is already scoped to them) */}
-          {!isFreelancer && category !== 'all' && (
-            <Flex
-              align="center"
-              gap="2"
-              style={{ flex: '1 1 300px', position: 'relative' }}
-            >
-              <Text weight="bold" size="2">
-                Search:
-              </Text>
-              <SearchableSelect
-                options={entityOptions}
-                value={selectedEntityId ?? ''}
-                onValueChange={(v) => setSelectedEntityId(v || null)}
-                onInputChange={(v) => {
-                  setSearchInput(v)
-                  if (!v) setSelectedEntityId(null)
-                }}
-                onOpenChange={setSuggestionsOpen}
-                filterLocally={false}
-                placeholder={entitySearchPlaceholder}
-                dropdownMaxHeight={300}
-                style={{ flex: 1, maxWidth: 'none' }}
-              />
-            </Flex>
-          )}
-
-          {/* Subscribe to calendar */}
-          <Button
-            type="button"
-            variant="soft"
-            size="2"
-            onClick={() => setSubscribeDialogOpen(true)}
-            title="Subscribe to calendar"
-          >
-            <ShareAndroid /> Subscribe to calendar
-          </Button>
-
-          {/* View Toggle */}
-          <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
-            <IconButton
-              type="button"
-              variant={listMode ? 'soft' : 'solid'}
-              onClick={() => setListMode(false)}
-              title="Calendar view"
-            >
-              <Calendar />
-            </IconButton>
-            <IconButton
-              type="button"
-              variant={listMode ? 'solid' : 'soft'}
-              onClick={() => setListMode(true)}
-              title="List view"
-            >
-              <List />
-            </IconButton>
-          </Flex>
+    <Flex className="calendar-page" direction="column" gap="2">
+      <Flex align="center" gap="3" wrap="wrap" style={{ flexShrink: 0 }}>
+        <Flex align="center" gap="2">
+          <Text weight="bold" size="2">
+            Category:
+          </Text>
+          <Select.Root value={category} onValueChange={handleCategoryChange}>
+            <Select.Trigger style={{ minWidth: 150 }} />
+            <Select.Content>
+              {!isFreelancer && <Select.Item value="all">All</Select.Item>}
+              <Select.Item value="jobDuration">Jobs</Select.Item>
+              {!isFreelancer && (
+                <>
+                  <Select.Item value="equipment">Equipment</Select.Item>
+                  <Select.Item value="transport">Transport</Select.Item>
+                </>
+              )}
+              <Select.Item value="crew">Crew</Select.Item>
+            </Select.Content>
+          </Select.Root>
         </Flex>
 
-        <SubscribeToCalendarDialog
-          open={subscribeDialogOpen}
-          onOpenChange={setSubscribeDialogOpen}
-        />
+        {!isFreelancer && category !== 'all' && (
+          <Flex
+            align="center"
+            gap="2"
+            style={{ flex: '1 1 300px', position: 'relative' }}
+          >
+            <Text weight="bold" size="2">
+              Search:
+            </Text>
+            <SearchableSelect
+              options={entityOptions}
+              value={selectedEntityId ?? ''}
+              onValueChange={(v) => setSelectedEntityId(v || null)}
+              onInputChange={(v) => {
+                setSearchInput(v)
+                if (!v) setSelectedEntityId(null)
+              }}
+              onOpenChange={setSuggestionsOpen}
+              filterLocally={false}
+              placeholder={entitySearchPlaceholder}
+              dropdownMaxHeight={300}
+              style={{ flex: 1, maxWidth: 'none' }}
+            />
+          </Flex>
+        )}
 
-        {/* Calendar */}
-        <CompanyCalendarPro
-          events={events}
-          onCreate={() => {}}
-          onUpdate={() => {}}
-          onDelete={() => {}}
-          defaultKinds={
-            category === 'all'
-              ? ['job', 'item', 'vehicle', 'crew']
-              : category === 'jobDuration'
-                ? ['job']
-                : category === 'equipment'
-                  ? ['item']
-                  : category === 'transport'
-                    ? ['vehicle']
-                    : ['crew']
-          }
-          hideCreateButton
-          initialListMode={listMode}
-          onListModeChange={setListMode}
-        />
-      </Box>
-    </Card>
+        <Button
+          type="button"
+          variant="soft"
+          size="2"
+          onClick={() => setSubscribeDialogOpen(true)}
+          title="Subscribe to calendar"
+        >
+          <ShareAndroid /> Subscribe to calendar
+        </Button>
+
+        <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
+          <IconButton
+            type="button"
+            variant={listMode ? 'soft' : 'solid'}
+            onClick={() => setListMode(false)}
+            title="Calendar view"
+          >
+            <Calendar />
+          </IconButton>
+          <IconButton
+            type="button"
+            variant={listMode ? 'solid' : 'soft'}
+            onClick={() => setListMode(true)}
+            title="List view"
+          >
+            <List />
+          </IconButton>
+        </Flex>
+      </Flex>
+
+      <SubscribeToCalendarDialog
+        open={subscribeDialogOpen}
+        onOpenChange={setSubscribeDialogOpen}
+      />
+
+      <CompanyCalendarPro
+        events={events}
+        onCreate={() => {}}
+        onUpdate={() => {}}
+        onDelete={() => {}}
+        defaultKinds={
+          category === 'all'
+            ? ['job', 'item', 'vehicle', 'crew']
+            : category === 'jobDuration'
+              ? ['job']
+              : category === 'equipment'
+                ? ['item']
+                : category === 'transport'
+                  ? ['vehicle']
+                  : ['crew']
+        }
+        hideCreateButton
+        initialListMode={listMode}
+        onListModeChange={setListMode}
+      />
+    </Flex>
   )
 }

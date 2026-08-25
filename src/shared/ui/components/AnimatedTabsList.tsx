@@ -27,16 +27,32 @@ function sameIndicator(a: Indicator, b: Indicator) {
   )
 }
 
+/** Convert a visible rect into the list's scrolling content-box coordinates. */
+export function toContentBox(
+  list: HTMLElement,
+  target: HTMLElement,
+): { x: number; y: number; width: number; height: number } {
+  const listRect = list.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  return {
+    x: targetRect.left - listRect.left + list.scrollLeft,
+    y: targetRect.top - listRect.top + list.scrollTop,
+    width: targetRect.width,
+    height: targetRect.height,
+  }
+}
+
 function measureActive(list: HTMLElement): Indicator {
   const active = list.querySelector<HTMLElement>(
     '.rt-BaseTabListTrigger[data-state="active"], .rt-TabNavLink[data-active]',
   )
   if (!active) return HIDDEN
 
+  const box = toContentBox(list, active)
   return {
-    x: active.offsetLeft - list.scrollLeft,
-    y: active.offsetTop + active.offsetHeight - 2 - list.scrollTop,
-    width: active.offsetWidth,
+    x: box.x,
+    y: box.y + box.height - 2,
+    width: box.width,
     height: 2,
     ready: true,
   }
@@ -47,16 +63,7 @@ function measureHover(list: HTMLElement, trigger: HTMLElement): Indicator {
     '.rt-BaseTabListTriggerInner, .rt-TabsTriggerInner',
   )
   const target = inner ?? trigger
-  const listRect = list.getBoundingClientRect()
-  const targetRect = target.getBoundingClientRect()
-
-  return {
-    x: targetRect.left - listRect.left,
-    y: targetRect.top - listRect.top,
-    width: targetRect.width,
-    height: targetRect.height,
-    ready: true,
-  }
+  return { ...toContentBox(list, target), ready: true }
 }
 
 /**
@@ -164,17 +171,12 @@ export function AnimatedTabsList({
       childList: true,
     })
 
-    let scrollEndTimer = 0
     const onScroll = () => {
-      // Keep indicators pinned while scrolling (no laggy transition).
-      clearWrapAnimation()
-      setCanAnimate(false)
-      updateActive()
+      // Indicator uses content-box coords, so it scrolls with the tabs.
+      // Only dismiss hover — remeasuring during scroll causes subpixel jitter.
       isHoveringRef.current = false
       setHoverScale(0)
       setHover((prev) => (prev.ready ? { ...prev, ready: false } : prev))
-      window.clearTimeout(scrollEndTimer)
-      scrollEndTimer = window.setTimeout(() => setCanAnimate(true), 80)
     }
 
     const onPointerOver = (event: PointerEvent) => {
@@ -226,7 +228,6 @@ export function AnimatedTabsList({
       list.removeEventListener('scroll', onScroll)
       list.removeEventListener('pointerover', onPointerOver)
       list.removeEventListener('pointerleave', onPointerLeave)
-      window.clearTimeout(scrollEndTimer)
       clearWrapAnimation()
       cancelAnimationFrame(hoverEnterRafRef.current)
     }

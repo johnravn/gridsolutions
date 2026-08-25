@@ -203,9 +203,7 @@ export default function AddContactDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content
-        maxWidth={mode === 'new' ? '720px' : '520px'}
-      >
+      <Dialog.Content maxWidth={mode === 'new' ? '720px' : '520px'}>
         <Dialog.Title>Add contact</Dialog.Title>
 
         <form
@@ -240,8 +238,8 @@ export default function AddContactDialog({
               </form.AppField>
 
               <form.Subscribe selector={(state) => state.values.mode}>
-                {(mode) =>
-                  mode === 'existing' ? (
+                {(contactMode) =>
+                  contactMode === 'existing' ? (
                     <form.AppField name="searchQuery">
                       {(field) => (
                         <Field label="Search contact">

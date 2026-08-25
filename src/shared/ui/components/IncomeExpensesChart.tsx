@@ -200,6 +200,14 @@ export function IncomeExpensesChart({
     )
   }
 
+  // Calculate result (net profit) for each data point
+  const dataWithResult = React.useMemo(() => {
+    return data.map((item) => ({
+      ...item,
+      result: item.income - item.expenses,
+    }))
+  }, [data])
+
   if (data.length === 0) {
     return (
       <Box
@@ -216,14 +224,6 @@ export function IncomeExpensesChart({
       </Box>
     )
   }
-
-  // Calculate result (net profit) for each data point
-  const dataWithResult = React.useMemo(() => {
-    return data.map((item) => ({
-      ...item,
-      result: item.income - item.expenses,
-    }))
-  }, [data])
 
   const renderChart = () => {
     const commonProps = {

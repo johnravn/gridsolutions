@@ -239,9 +239,15 @@ export default function PackingTab({ jobId }: { jobId: string }) {
     staleTime: 10_000,
   })
 
-  const equipment = data?.equipment ?? []
-  const transport = data?.transport ?? []
-  const sessions = data?.sessions ?? []
+  const equipment = React.useMemo(
+    () => data?.equipment ?? [],
+    [data?.equipment],
+  )
+  const transport = React.useMemo(
+    () => data?.transport ?? [],
+    [data?.transport],
+  )
+  const sessions = React.useMemo(() => data?.sessions ?? [], [data?.sessions])
 
   const sessionsByVehicle = React.useMemo(() => {
     const m = new Map<string, Array<PackingSessionRow>>()

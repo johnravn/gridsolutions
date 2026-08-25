@@ -14,10 +14,17 @@ import { Filter } from 'iconoir-react'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useRegisterShortcutAction } from '@shared/hotkeys'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
-import ScrollToTopButton from '@shared/ui/components/ScrollToTopButton'
-import { MOBILE_CARD_HEIGHT } from '@app/layout/mobileLayout'
-import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
-import { SPLIT_LEFT_WIDTH, SplitPage, SplitPageSkeleton, useSplitLayout } from '@app/layout/split'
+import {
+  MobileSplitSkeleton,
+  MobileSplitView,
+  useMobileInspectorDrawer,
+} from '@app/layout/mobile'
+import {
+  SPLIT_LEFT_WIDTH,
+  SplitPage,
+  SplitPageSkeleton,
+  useSplitLayout,
+} from '@app/layout/split'
 import InventoryTable from '../components/InventoryTable'
 import InventoryInspector from '../components/InventoryInspector'
 import { inventoryIndexQuery } from '../api/queries'
@@ -40,12 +47,30 @@ export default function InventoryPage() {
   const [selectedId, setSelectedId] = React.useState<string | null>(
     inventoryId || null,
   )
+  const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
+    useMobileInspectorDrawer(isLarge)
 
   React.useEffect(() => {
     if (inventoryId) {
       setSelectedId(inventoryId)
     }
   }, [inventoryId])
+
+  const openedFromUrlRef = React.useRef<string | null>(null)
+  React.useEffect(() => {
+    if (!inventoryId || isLarge) return
+    if (openedFromUrlRef.current === inventoryId) return
+    openedFromUrlRef.current = inventoryId
+    openDrawer()
+  }, [inventoryId, isLarge, openDrawer])
+
+  const handleSelect = React.useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      openDrawer()
+    },
+    [openDrawer],
+  )
 
   const [showActive, setShowActive] = React.useState(true)
   const [showInactive, setShowInactive] = React.useState(false)
@@ -54,24 +79,6 @@ export default function InventoryPage() {
   const [showGroupOnlyItems, setShowGroupOnlyItems] = React.useState(false)
   const [showGroups, setShowGroups] = React.useState(true)
   const [showItems, setShowItems] = React.useState(true)
-
-  const inspectorRef = React.useRef<HTMLDivElement>(null)
-  const listRef = React.useRef<HTMLElement>(null)
-
-  React.useEffect(() => {
-    if (!isLarge && selectedId != null && inspectorRef.current) {
-      inspectorRef.current.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      })
-    }
-  }, [isLarge, selectedId])
-
-  const clearSelection = React.useCallback(() => {
-    setSelectedId(null)
-  }, [])
-
-  useMobileDetailBack(!isLarge, selectedId != null, clearSelection)
 
   const { isLoading: inventoryIndexLoading } = useQuery({
     ...inventoryIndexQuery({
@@ -82,7 +89,19 @@ export default function InventoryPage() {
   })
   const showInitialSkeleton = useInitialPageLoad(inventoryIndexLoading)
 
-  if (!companyId || (showInitialSkeleton && !hasSlots)) {
+  if (!companyId) {
+    if (!isLarge) return <MobileSplitSkeleton />
+    return (
+      <SplitPageSkeleton
+        defaultLeftWidth={SPLIT_LEFT_WIDTH.inventory}
+        title="Overview"
+      />
+    )
+  }
+
+  if (showInitialSkeleton && !isLarge) return <MobileSplitSkeleton />
+
+  if (showInitialSkeleton && !hasSlots) {
     return (
       <SplitPageSkeleton
         defaultLeftWidth={SPLIT_LEFT_WIDTH.inventory}
@@ -114,7 +133,7 @@ export default function InventoryPage() {
     <InventoryTable
       createShortcutRef={createInventoryItemShortcutRef}
       selectedId={selectedId}
-      onSelect={setSelectedId}
+      onSelect={isLarge ? setSelectedId : handleSelect}
       showActive={showActive}
       showInactive={showInactive}
       showStock={showStock}
@@ -122,54 +141,33 @@ export default function InventoryPage() {
       showGroupOnlyItems={showGroupOnlyItems}
       showGroups={showGroups}
       showItems={showItems}
+      toolbarExtra={isLarge ? undefined : filter}
     />
   )
+
+  const inspector = <InventoryInspector id={selectedId} />
+
+  if (!isLarge) {
+    return (
+      <MobileSplitView
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        onToggle={toggleDrawer}
+        inspector={inspector}
+      >
+        {table}
+      </MobileSplitView>
+    )
+  }
 
   return (
     <SplitPage
       defaultLeftWidth={SPLIT_LEFT_WIDTH.inventory}
       title="Overview"
       leftToolbar={filter}
-      mobileLeftToolbar={null}
       left={table}
       leftBodyStyle={{ overflowY: 'auto' }}
-      right={<InventoryInspector id={selectedId} />}
-      mobileLeftCardStyle={{ height: MOBILE_CARD_HEIGHT, minWidth: 0 }}
-      mobileLeftBodyStyle={{
-        flex: 1,
-        minHeight: 0,
-        minWidth: 0,
-        overflowY: 'auto',
-        overflowX: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-      }}
-      mobileRightCardStyle={{
-        height: MOBILE_CARD_HEIGHT,
-        overflow: 'hidden',
-        maxWidth: '100%',
-      }}
-      mobileSectionRef={listRef}
-      mobileRightWrapper={(card) => (
-        <div
-          ref={inspectorRef}
-          style={{
-            minHeight: 0,
-            maxWidth: '100%',
-            width: '100%',
-            height: MOBILE_CARD_HEIGHT,
-          }}
-        >
-          {card}
-        </div>
-      )}
-      mobileFooter={
-        <ScrollToTopButton
-          listRef={listRef}
-          inspectorRef={inspectorRef}
-          visible={!isLarge && selectedId != null}
-        />
-      }
+      right={inspector}
     />
   )
 }

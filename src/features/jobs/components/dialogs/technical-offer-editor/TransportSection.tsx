@@ -27,9 +27,9 @@ import {
 import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
 import { DatePicker } from '@shared/ui/components/pickers'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
+import { calculateTransportLineTotal } from '../../../utils/offerCalculations'
 import { formatVehicleCategory } from './utils'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
-import { calculateTransportLineTotal } from '../../../utils/offerCalculations'
 import type { LocalTransportGroup, LocalTransportItem } from './types'
 
 export function TransportSection({

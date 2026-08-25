@@ -61,6 +61,12 @@ describe('jobsIndexSearchOrFilter', () => {
     )
   })
 
+  it('strips a leading # so job-number searches match', () => {
+    expect(jobsIndexSearchOrFilter({ search: '#42' })).toBe(
+      'title.ilike.%42%,jobnr.eq.42',
+    )
+  })
+
   it('includes customer and customer-user ids so name search pages correctly', () => {
     expect(
       jobsIndexSearchOrFilter({

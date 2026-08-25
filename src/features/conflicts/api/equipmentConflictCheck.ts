@@ -108,9 +108,7 @@ export async function getEquipmentConflictsForOfferBooking({
     for (const overlaps of groupOverlaps.values()) {
       if (overlaps.length === 0) continue
       const groupName = overlaps[0]?.itemName ?? 'Group'
-      summaryLines.push(
-        `${groupName}: already booked in an overlapping period`,
-      )
+      summaryLines.push(`${groupName}: already booked in an overlapping period`)
       conflicts.push(...overlaps)
     }
   }
@@ -281,4 +279,3 @@ export async function getEquipmentConflictsForOfferBooking({
     conflictingItemIds,
   }
 }
-

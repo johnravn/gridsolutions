@@ -112,7 +112,7 @@ export default function DateTimeRangePicker({
     if (anchor) {
       setCurrentMonth(new Date(anchor.getFullYear(), anchor.getMonth(), 1))
     }
-  }, [parsedStart?.getTime(), parsedEnd?.getTime()])
+  }, [parsedStart, parsedEnd])
 
   const syncFromProps = React.useCallback(() => {
     if (parsedStart) {
@@ -360,7 +360,7 @@ export default function DateTimeRangePicker({
     commitRange({ start: dateSelection.start, end: endDate }, times)
   }
 
-  const buildTriggerFields = () => {
+  const buildTriggerFields = React.useCallback(() => {
     const displayStart =
       dateSelection.start ??
       (parsedStart ? toLocalDate(parsedStart.toISOString()) : null)
@@ -425,7 +425,21 @@ export default function DateTimeRangePicker({
         secondary: sameDay ? endDateLabel : endTime,
       },
     ]
-  }
+  }, [
+    dateSelection.start,
+    dateSelection.end,
+    parsedStart,
+    parsedEnd,
+    optionalEnd,
+    dateOnly,
+    locale,
+    timeSelection.startHour,
+    timeSelection.startMinute,
+    timeSelection.endHour,
+    timeSelection.endMinute,
+    startAt,
+    endAt,
+  ])
 
   const rangeInvalid =
     invalid || (!dateOnly && isInvalidTimeRange(startAt, endAt))
@@ -446,21 +460,7 @@ export default function DateTimeRangePicker({
             (isEnd && activeTimeTab === 'end')
       return { ...field, active }
     })
-  }, [
-    startAt,
-    endAt,
-    dateSelection,
-    timeSelection,
-    parsedStart,
-    parsedEnd,
-    locale,
-    fieldInteraction,
-    activeTimeTab,
-    boundTarget,
-    phase,
-    dateOnly,
-    optionalEnd,
-  ])
+  }, [buildTriggerFields, fieldInteraction, phase, boundTarget, activeTimeTab])
 
   const handleFieldClick = (field: 'start' | 'end') => {
     if (advanceToEndTabTimeoutRef.current) {

@@ -54,8 +54,8 @@ function ScrollDemo() {
           Inspector section
         </Text>
         <Text size="2" color="gray">
-          The floating button toggles: arrow down scrolls here, arrow up
-          scrolls back to the list.
+          The floating button toggles: arrow down scrolls here, arrow up scrolls
+          back to the list.
         </Text>
       </Box>
       <ScrollToTopButton

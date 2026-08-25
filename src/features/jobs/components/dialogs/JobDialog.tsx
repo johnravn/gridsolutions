@@ -669,13 +669,13 @@ export default function JobDialog({
     },
     onError: (e: any) => {
       const errorMessage = String(e?.message ?? '')
-      const isInvalidTimeRange =
+      const isRangeBoundError =
         errorMessage.includes(
           'range lower bound must be less than or equal to range upper bound',
         ) ||
         errorMessage.includes('range lower bound must be less than or equal')
 
-      if (isInvalidTimeRange) {
+      if (isRangeBoundError) {
         showError('Invalid time range', 'End time is before the start time.')
         return
       }

@@ -83,8 +83,8 @@ export function latestFeedQuery({
       const userLikedMap = new Map<string, boolean>()
 
       likesData?.forEach((like) => {
-        const count = likeCounts.get(like.activity_id) || 0
-        likeCounts.set(like.activity_id, count + 1)
+        const likeCount = likeCounts.get(like.activity_id) || 0
+        likeCounts.set(like.activity_id, likeCount + 1)
         if (like.user_id === currentUserId) {
           userLikedMap.set(like.activity_id, true)
         }
@@ -101,8 +101,8 @@ export function latestFeedQuery({
 
       const commentCounts = new Map<string, number>()
       commentsData?.forEach((comment) => {
-        const count = commentCounts.get(comment.activity_id) || 0
-        commentCounts.set(comment.activity_id, count + 1)
+        const commentCount = commentCounts.get(comment.activity_id) || 0
+        commentCounts.set(comment.activity_id, commentCount + 1)
       })
 
       // Combine data
