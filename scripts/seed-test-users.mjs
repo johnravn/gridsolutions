@@ -2,8 +2,28 @@
  * Seeds deterministic test users, company, job, and offers for integration/E2E tests.
  * Idempotent — safe to run multiple times after db reset.
  */
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { loadLocalSupabaseEnv } from './loadLocalSupabaseEnv.mjs'
+
+const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/** Keep in sync with `APP_VERSION` so "What's new" does not block E2E clicks. */
+function readAppVersion() {
+  const source = readFileSync(
+    join(__dirname, '../src/app/config/releaseNotes.ts'),
+    'utf8',
+  )
+  const match = source.match(/export const APP_VERSION = '([^']+)'/)
+  if (!match) {
+    throw new Error('Could not read APP_VERSION from releaseNotes.ts')
+  }
+  return match[1]
+}
+
+const APP_VERSION = readAppVersion()
 
 export const TEST_IDS = {
   companyId: '11111111-1111-4111-8111-111111111111',
@@ -115,6 +135,9 @@ async function upsertProfile(userId, email, displayName, selectedCompanyId) {
       last_name: displayName.split(' ').slice(1).join(' ') || 'User',
       selected_company_id: selectedCompanyId,
       superuser: false,
+      // Mark current release as seen so WhatsNewPopover does not auto-open
+      // and intercept pointer events during Playwright runs.
+      last_seen_release_version: APP_VERSION,
     },
     { onConflict: 'user_id' },
   )
@@ -318,7 +341,6 @@ async function seedConflictBooking(ownerId) {
       time_period_id: TEST_IDS.conflictTimePeriodId,
       item_id: TEST_IDS.testItemId,
       quantity: 1,
-      status: 'planned',
       source_kind: 'direct',
       start_at: TEST_CONFLICT_BOOKING.startAt,
       end_at: TEST_CONFLICT_BOOKING.endAt,

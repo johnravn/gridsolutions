@@ -24,10 +24,18 @@ async function closeMobileMenuIfOpen(page: Page) {
   }
 }
 
+/** Dismiss auto-opened release notes so the popover cannot intercept nav clicks. */
+async function dismissWhatsNewIfOpen(page: Page) {
+  const gotIt = page.getByRole('button', { name: 'Got it' })
+  if (await gotIt.isVisible().catch(() => false)) {
+    await gotIt.click({ force: true })
+    await expect(gotIt).toBeHidden({ timeout: 5_000 })
+  }
+}
+
 async function clickNavLink(page: Page, name: string) {
   const openButton = page.getByRole('button', { name: 'Open menu' })
   const closeButton = page.getByRole('button', { name: 'Close menu' })
-  const drawer = page.getByRole('complementary', { name: 'Navigation' })
   const linkName = navLinkName(name)
   const inspectorBackdrop = page.locator(
     '.app-inspector-backdrop[data-open="true"]',
@@ -37,20 +45,24 @@ async function clickNavLink(page: Page, name: string) {
     await inspectorBackdrop.click({ force: true })
   }
 
+  await dismissWhatsNewIfOpen(page)
+
+  // Mobile: open the drawer, then click inside it (force is OK — drawer links can
+  // sit under the glass overlay during the open animation).
   if (await openButton.isVisible().catch(() => false)) {
     await openButton.click({ force: true })
     await expect(closeButton).toBeVisible({ timeout: 5_000 })
-  }
-
-  const drawerLink = drawer.getByRole('link', { name: linkName })
-  if ((await drawerLink.count()) > 0) {
-    await drawerLink.first().evaluate((el) => {
-      el.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const drawer = page.getByRole('complementary', {
+      name: 'Navigation',
+      exact: true,
     })
+    const drawerLink = drawer.getByRole('link', { name: linkName })
     await drawerLink.first().click({ force: true })
     return
   }
 
+  // Desktop: do not force-click. Lower sidebar items (Calendar/Matters/Profile)
+  // live in a scroll container; force skips scroll-into-view and the click misses.
   await page.getByRole('link', { name: linkName }).first().click()
 }
 
