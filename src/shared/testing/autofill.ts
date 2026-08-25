@@ -427,5 +427,119 @@ export function generateVehicleAutofill(options: {
   }
 }
 
+const CUSTOMER_NAME_PREFIXES = [
+  'Nordic',
+  'Fjell',
+  'Fjord',
+  'Arctic',
+  'Coastal',
+  'Urban',
+  'Polar',
+  'Summit',
+  'Harbor',
+  'Valley',
+  'Aurora',
+  'Bluepine',
+  'Northwind',
+  'Skog',
+  'Strand',
+] as const
+
+const CUSTOMER_NAME_CORES = [
+  'Events',
+  'Productions',
+  'Media',
+  'AV',
+  'Sound',
+  'Lighting',
+  'Stage',
+  'Broadcast',
+  'Studios',
+  'Live',
+  'Rental',
+  'Tech',
+  'Crew',
+  'Venue',
+  'Festival',
+] as const
+
+const CUSTOMER_NAME_SUFFIXES = [
+  'AS',
+  'ASA',
+  'Group',
+  'Labs',
+  'Co',
+  'Solutions',
+  'Services',
+  'Norway',
+] as const
+
+const CUSTOMER_STREETS = [
+  'Storgata',
+  'Kirkegata',
+  'Industriveien',
+  'Havnegata',
+  'Parkveien',
+  'Bjørnstjerne Bjørnsons gate',
+  'Karl Johans gate',
+  'Torggata',
+  'Skovveien',
+  'Bryggen',
+  'Nedre Slottsgate',
+  'Grensen',
+] as const
+
+/** Real Norwegian postcodes so zip→city lookup stays consistent in the form. */
+const CUSTOMER_LOCATIONS = [
+  { zip: '0150', city: 'Oslo' },
+  { zip: '0361', city: 'Oslo' },
+  { zip: '5003', city: 'Bergen' },
+  { zip: '7011', city: 'Trondheim' },
+  { zip: '4006', city: 'Stavanger' },
+  { zip: '9008', city: 'Tromsø' },
+  { zip: '3015', city: 'Drammen' },
+  { zip: '1606', city: 'Fredrikstad' },
+  { zip: '2815', city: 'Gjøvik' },
+  { zip: '8006', city: 'Bodø' },
+  { zip: '4611', city: 'Kristiansand' },
+  { zip: '6002', city: 'Ålesund' },
+] as const
+
+export type CustomerAutofillResult = {
+  name: string
+  vatNumber: string
+  addressLine: string
+  zipCode: string
+  city: string
+  country: string
+  isPartner: boolean
+}
+
+function randomNorwegianVat(): string {
+  const digits = String(randomInt(100_000_000, 999_999_999))
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`
+}
+
+export function generateCustomerAutofill(): CustomerAutofillResult {
+  const name = [
+    pickRandom(CUSTOMER_NAME_PREFIXES),
+    pickRandom(CUSTOMER_NAME_CORES),
+    pickRandom(CUSTOMER_NAME_SUFFIXES),
+  ].join(' ')
+  const location = pickRandom(CUSTOMER_LOCATIONS)
+  const streetNo = randomInt(1, 120)
+  const addressLine = `${pickRandom(CUSTOMER_STREETS)} ${streetNo}`
+
+  return {
+    name,
+    vatNumber: randomNorwegianVat(),
+    addressLine,
+    zipCode: location.zip,
+    city: location.city,
+    country: 'Norway',
+    isPartner: randomBool(0.35),
+  }
+}
+
 /** Minimum unique combinations each generator should support. */
 export const AUTOFILL_MIN_VARIATIONS = 200

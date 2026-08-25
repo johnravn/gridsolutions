@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
+import { Sparks } from 'iconoir-react'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -8,6 +9,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import { formatVATInput } from '@shared/lib/generalFunctions'
+import { generateCustomerAutofill } from '@shared/testing/autofill'
 
 const defaultValues = {
   name: '',
@@ -144,10 +146,33 @@ export default function AddCustomerDialog({
     },
   })
 
+  const autoPopulateFields = () => {
+    const sample = generateCustomerAutofill()
+    form.setFieldValue('name', sample.name)
+    form.setFieldValue('vat_number', sample.vatNumber)
+    form.setFieldValue('address_line', sample.addressLine)
+    form.setFieldValue('zip_code', sample.zipCode)
+    form.setFieldValue('city', sample.city)
+    form.setFieldValue('country', sample.country)
+    form.setFieldValue('is_partner', sample.isPartner)
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="480px">
-        <Dialog.Title>Add customer</Dialog.Title>
+        <Flex align="center" justify="between">
+          <Dialog.Title>Add customer</Dialog.Title>
+          <Button
+            size="2"
+            variant="soft"
+            onClick={autoPopulateFields}
+            type="button"
+            style={{ marginLeft: 'auto' }}
+          >
+            <Sparks width={16} height={16} />
+            Auto-fill
+          </Button>
+        </Flex>
         <form
           onSubmit={(e) => {
             e.preventDefault()

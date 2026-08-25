@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTOFILL_MIN_VARIATIONS,
+  generateCustomerAutofill,
   generateGroupAutofill,
   generateGroupPartsAutofill,
   generateItemAutofill,
@@ -53,5 +54,24 @@ describe('autofill generators', () => {
       )
     }
     expect(regs.size).toBeGreaterThanOrEqual(AUTOFILL_MIN_VARIATIONS)
+  })
+
+  it('customer autofill supports hundreds of name variations', () => {
+    const names = new Set<string>()
+    for (let i = 0; i < 400; i += 1) {
+      names.add(generateCustomerAutofill().name)
+    }
+    expect(names.size).toBeGreaterThanOrEqual(AUTOFILL_MIN_VARIATIONS)
+  })
+
+  it('customer autofill populates all fields', () => {
+    const sample = generateCustomerAutofill()
+    expect(sample.name.length).toBeGreaterThan(0)
+    expect(sample.vatNumber).toMatch(/^\d{3} \d{3} \d{3}$/)
+    expect(sample.addressLine.length).toBeGreaterThan(0)
+    expect(sample.zipCode).toMatch(/^\d{4}$/)
+    expect(sample.city.length).toBeGreaterThan(0)
+    expect(sample.country).toBe('Norway')
+    expect(typeof sample.isPartner).toBe('boolean')
   })
 })
