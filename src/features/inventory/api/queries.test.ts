@@ -60,23 +60,23 @@ describe('inventory query keys', () => {
         'on_hand',
         'desc',
       ),
-    ).toContain('inventory-index-all')
-    expect(
-      inventoryIndexKeyAll(
-        'company-1',
-        '',
-        true,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        null,
-        'on_hand',
-        'desc',
-      )[2],
-    ).toBe('inventory-index-all')
+    ).toEqual([
+      'company',
+      'company-1',
+      'inventory-index',
+      'all',
+      '',
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true,
+      null,
+      'on_hand',
+      'desc',
+    ])
   })
 
   it('builds inventory detail keys', () => {

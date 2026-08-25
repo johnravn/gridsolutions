@@ -115,10 +115,12 @@ export default function InventoryTable({
   const PAGE_SIZE = 200
 
   const inventoryQuery = useInfiniteQuery({
+    // Nest under `inventory-index` so create/edit/delete invalidations refresh this list
     queryKey: [
       'company',
       companyId,
-      'inventory-index-infinite',
+      'inventory-index',
+      'infinite',
       debouncedSearch,
       showActive,
       showInactive,

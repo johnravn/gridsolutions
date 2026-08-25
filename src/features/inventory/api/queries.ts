@@ -53,7 +53,8 @@ export const inventoryIndexKeyAll = (
   [
     'company',
     companyId,
-    'inventory-index-all',
+    'inventory-index',
+    'all',
     search,
     showActive,
     showInactive,

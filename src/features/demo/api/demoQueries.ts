@@ -7,7 +7,17 @@ export async function enterDemo(): Promise<string> {
 
   if (!sessionData.session) {
     const { error: anonError } = await supabase.auth.signInAnonymously()
-    if (anonError) throw anonError
+    if (anonError) {
+      if (
+        anonError.code === 'anonymous_provider_disabled' ||
+        /anonymous sign-ins are disabled/i.test(anonError.message)
+      ) {
+        throw new Error(
+          'Demo mode is unavailable: anonymous sign-ins are disabled on this project. Enable Anonymous under Authentication → Providers in the Supabase dashboard.',
+        )
+      }
+      throw anonError
+    }
   } else if (!sessionData.session.user.is_anonymous) {
     throw new Error(
       'Demo mode is only available when not signed in to a real account',
