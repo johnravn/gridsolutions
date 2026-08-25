@@ -1,4 +1,4 @@
-/** Keep in sync with `api/bibleVersion.ts` (serverless cannot import from `src/`). */
+/** Keep in sync with `api/_lib/bibleVersion.ts` (serverless cannot import from `src/`). */
 export const BIBLE_VERSIONS = ['bm11', 'nn11', 'msg'] as const
 
 export type BibleVersion = (typeof BIBLE_VERSIONS)[number]

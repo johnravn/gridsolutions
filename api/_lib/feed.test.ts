@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import handler from './feed'
+import handler from '../calendar/feed'
 
 function createMockRes() {
   const headers: Record<string, string> = {}

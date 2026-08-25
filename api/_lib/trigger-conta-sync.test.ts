@@ -44,14 +44,14 @@ describe('trigger-conta-sync handler', () => {
   })
 
   it('returns 405 for non-POST methods', async () => {
-    const handler = (await import('./trigger-conta-sync')).default
+    const handler = (await import('../super/trigger-conta-sync')).default
     const res = createMockRes()
     await handler({ method: 'GET', headers: {} }, res)
     expect(res.getStatus()).toBe(405)
   })
 
   it('returns 401 without authorization header', async () => {
-    const handler = (await import('./trigger-conta-sync')).default
+    const handler = (await import('../super/trigger-conta-sync')).default
     const res = createMockRes()
     await handler({ method: 'POST', headers: {} }, res)
     expect(res.getStatus()).toBe(401)
@@ -73,7 +73,7 @@ describe('trigger-conta-sync handler', () => {
       }),
     })
 
-    const handler = (await import('./trigger-conta-sync')).default
+    const handler = (await import('../super/trigger-conta-sync')).default
     const res = createMockRes()
     await handler(
       { method: 'POST', headers: { authorization: 'Bearer token' } },

@@ -76,7 +76,7 @@ export default defineConfig(({ mode }) => {
                 const url = new URL(req.url ?? '/', 'http://localhost')
                 const version = url.searchParams.get('version') || 'bm11'
                 const { fetchVerseOfTheDay } = await import(
-                  './api/verseOfTheDay'
+                  './api/_lib/verseOfTheDay'
                 )
                 const data = await fetchVerseOfTheDay(version)
 
