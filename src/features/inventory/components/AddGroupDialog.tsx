@@ -187,6 +187,7 @@ export default function AddGroupDialog({
       item.nicknames,
     ].some((value) => value?.toLowerCase().includes(normalized))
   }, [])
+  const unfilteredPickerPoolRef = React.useRef<Array<PickerItem>>([])
   const { data: pickerItems = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['company', companyId, 'picker-items-groups', search],
     enabled: !!companyId && open,
@@ -327,6 +328,13 @@ export default function AddGroupDialog({
     },
     staleTime: 15_000,
   })
+
+  // Keep an unfiltered snapshot so group autofill can pick parts even if search is active.
+  React.useEffect(() => {
+    if (!search.trim()) {
+      unfilteredPickerPoolRef.current = pickerItems
+    }
+  }, [search, pickerItems])
 
   /* -------- Reset form in CREATE mode when dialog opens -------- */
   React.useEffect(() => {
@@ -634,15 +642,20 @@ export default function AddGroupDialog({
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
 
-    form.reset({
-      name: sample.name,
-      categoryId: randomCategory?.id ?? null,
-      description: sample.description,
-      active: sample.active,
-      price: sample.price,
-      item_kind: sample.itemKind,
-    })
-    setParts(generateGroupPartsAutofill(pickerItems))
+    // Use setFieldValue (not form.reset) so AppField UIs update reliably.
+    form.setFieldValue('name', sample.name)
+    form.setFieldValue('categoryId', randomCategory?.id ?? null)
+    form.setFieldValue('description', sample.description)
+    form.setFieldValue('active', sample.active)
+    form.setFieldValue('price', sample.price)
+    form.setFieldValue('item_kind', sample.itemKind)
+
+    const partsPool =
+      unfilteredPickerPoolRef.current.length > 0
+        ? unfilteredPickerPoolRef.current
+        : pickerItems
+    setSearch('')
+    setParts(generateGroupPartsAutofill(partsPool))
     setPartQuantityDrafts({})
   }
   // ===== END TESTING ONLY =====
