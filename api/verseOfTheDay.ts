@@ -1,8 +1,8 @@
 import {
   BIBLE_VERSION_OPTIONS,
   normalizeBibleVersion,
-} from '../src/shared/lib/bibleVersion'
-import type { BibleVersion } from '../src/shared/lib/bibleVersion'
+} from './bibleVersion.js'
+import type { BibleVersion } from './bibleVersion.js'
 
 export type VerseOfTheDay = {
   citation: string
@@ -462,14 +462,20 @@ function decodeHtml(value: string): string {
 }
 
 async function fetchUrl(url: string): Promise<string> {
-  const res = await fetch(url, {
-    headers: FETCH_HEADERS,
-    signal: AbortSignal.timeout(12_000),
-  })
-  if (!res.ok) {
-    throw new Error(`Upstream ${res.status} for ${url}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 12_000)
+  try {
+    const res = await fetch(url, {
+      headers: FETCH_HEADERS,
+      signal: controller.signal,
+    })
+    if (!res.ok) {
+      throw new Error(`Upstream ${res.status} for ${url}`)
+    }
+    return await res.text()
+  } finally {
+    clearTimeout(timeout)
   }
-  return res.text()
 }
 
 async function fetchDailyReference(): Promise<string> {

@@ -161,6 +161,13 @@ export default defineConfig(({ mode }) => {
       // (IDE cancel, piped output, etc.) — see vitest-dev/vitest#8800
       pool: 'threads',
       environment: 'jsdom',
+      // CI has no .env.local; stub so modules that import `@shared/api/supabase`
+      // can load. Tests that need a real client mock `supabase` themselves.
+      env: {
+        VITE_SUPABASE_URL: 'http://127.0.0.1:54321',
+        VITE_SUPABASE_ANON_KEY:
+          'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
+      },
       setupFiles: ['src/test/setup.ts'],
       include: ['src/**/*.test.{ts,tsx}', 'api/**/*.test.ts'],
       exclude: ['src/test/integration/**'],
