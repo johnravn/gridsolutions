@@ -85,6 +85,8 @@ function PrettyOfferResponseSection({
   canAccept,
   response,
 }: Pick<Props, 'offer' | 'canAccept' | 'response'>) {
+  if (!response) return null
+
   const {
     acceptanceForm,
     setAcceptanceForm,

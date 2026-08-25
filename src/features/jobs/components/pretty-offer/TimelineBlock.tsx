@@ -4,9 +4,12 @@ import {
   formatProgramDuration,
   groupProgramPeriods,
 } from '../../utils/programTimeline'
-import type { PrettyOfferModuleBlockItem } from '../../types'
+import type { PrettyOfferModuleBlockItem, PrettyOfferModuleTimelineItem } from '../../types'
 
-export type TimelineBlockItem = PrettyOfferModuleBlockItem & {
+export type TimelineBlockItem = (
+  | PrettyOfferModuleBlockItem
+  | PrettyOfferModuleTimelineItem
+) & {
   start_at?: string | null
   end_at?: string | null
 }

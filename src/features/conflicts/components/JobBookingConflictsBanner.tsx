@@ -13,6 +13,7 @@ import {
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
 import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
+import type { EquipmentConflictRow } from '../api/queries'
 
 function formatPeriod(start: string, end: string) {
   const s = new Date(start)
@@ -255,7 +256,7 @@ function ConflictCallout({
               <Text key={i} size="1" color="gray" as="div">
                 {row.item_name ?? 'Item'}: {row.total_reserved}/{row.capacity}{' '}
                 booked ({formatPeriod(row.start_at, row.end_at)}) — also on{' '}
-                {formatEquipmentConflictJobs(row)}
+                {formatEquipmentConflictJobs(row as EquipmentConflictRow)}
               </Text>
             ))}
           </Box>

@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box, Text } from '@radix-ui/themes'
 import {
   formatHourGridLabel,

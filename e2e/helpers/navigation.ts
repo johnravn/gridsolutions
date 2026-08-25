@@ -130,11 +130,11 @@ export async function openJobsPage(page: Page) {
 export async function openInventoryPage(page: Page) {
   await clickNavLink(page, 'Inventory')
   await expect(page).toHaveURL(/\/inventory/, { timeout: 15_000 })
-  await expect(page.getByRole('button', { name: 'Add item' }).first()).toBeVisible(
-    {
-      timeout: 15_000,
-    },
-  )
+  await expect(
+    page.getByRole('button', { name: 'Add item' }).first(),
+  ).toBeVisible({
+    timeout: 15_000,
+  })
 }
 
 export async function openCustomersPage(page: Page) {

@@ -1,3 +1,4 @@
+import type { Json } from '@shared/types/database.types'
 import { supabase } from '@shared/api/supabase'
 import { fireAndForgetCrewPositionInviteEmail } from '@shared/email/supabaseEdgeEmail'
 import {
@@ -104,7 +105,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
 
       // Get all matters where user is a recipient (with read status)
       const { data: recipientMatters, error: recError } = await supabase
-        .from('matter_recipients' as any)
+        .from('matter_recipients')
         .select('matter_id, viewed_at')
         .eq('user_id', user.id)
 
@@ -112,19 +113,19 @@ export function mattersIndexQueryAll(userId?: string | null) {
 
       // Get all matter IDs where user is recipient or creator
       const recipientMatterIds = new Set<string>(
-        (recipientMatters || []).map((r) => r.matter_id as string),
+        (recipientMatters || []).map((r) => r.matter_id),
       )
 
       const unreadMatterIds = new Set<string>(
         (recipientMatters || [])
           .filter((r) => !r.viewed_at)
-          .map((r) => r.matter_id as string),
+          .map((r) => r.matter_id),
       )
 
       // Now fetch matters from all companies the user is a member of
       // User must be either creator OR recipient
       const q = supabase
-        .from('matters' as any)
+        .from('matters')
         .select(MATTER_SELECT)
         .in('company_id', companyIds)
         .order('created_at', { ascending: false })
@@ -150,11 +151,11 @@ export function mattersIndexQueryAll(userId?: string | null) {
       // Get recipient and response counts for these matters
       const [recipientsData, responsesData] = await Promise.all([
         supabase
-          .from('matter_recipients' as any)
+          .from('matter_recipients')
           .select('matter_id')
           .in('matter_id', matterIds),
         supabase
-          .from('matter_responses' as any)
+          .from('matter_responses')
           .select('matter_id')
           .in('matter_id', matterIds),
       ])
@@ -167,21 +168,21 @@ export function mattersIndexQueryAll(userId?: string | null) {
 
       for (const r of recipientsData.data || []) {
         recipientCounts.set(
-          r.matter_id as string,
-          (recipientCounts.get(r.matter_id as string) || 0) + 1,
+          r.matter_id,
+          (recipientCounts.get(r.matter_id) || 0) + 1,
         )
       }
 
       for (const r of responsesData.data || []) {
         responseCounts.set(
-          r.matter_id as string,
-          (responseCounts.get(r.matter_id as string) || 0) + 1,
+          r.matter_id,
+          (responseCounts.get(r.matter_id) || 0) + 1,
         )
       }
 
       // Get my responses for these matters
       const { data: myResponsesData } = await supabase
-        .from('matter_responses' as any)
+        .from('matter_responses')
         .select('matter_id, id, response, created_at, updated_at')
         .eq('user_id', user.id)
         .in('matter_id', matterIds)
@@ -189,7 +190,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
       const myResponseMap = new Map<string, any>()
       if (myResponsesData) {
         for (const r of myResponsesData) {
-          myResponseMap.set(r.matter_id as string, {
+          myResponseMap.set(r.matter_id, {
             id: r.id,
             matter_id: r.matter_id,
             user_id: user.id,
@@ -224,7 +225,7 @@ export function mattersIndexQuery(companyId: string) {
 
       // Get all matters where user is a recipient (with read status)
       const { data: recipientMatters, error: recError } = await supabase
-        .from('matter_recipients' as any)
+        .from('matter_recipients')
         .select('matter_id, viewed_at')
         .eq('user_id', user.id)
 
@@ -232,20 +233,20 @@ export function mattersIndexQuery(companyId: string) {
 
       // Get all matter IDs where user is recipient or creator
       const recipientMatterIds = new Set<string>(
-        (recipientMatters || []).map((r) => r.matter_id as string),
+        (recipientMatters || []).map((r) => r.matter_id),
       )
 
       const unreadMatterIds = new Set<string>(
         (recipientMatters || [])
           .filter((r) => !r.viewed_at)
-          .map((r) => r.matter_id as string),
+          .map((r) => r.matter_id),
       )
 
       // Now fetch matters that:
       // 1. Belong to the company
       // 2. User is either creator OR recipient
       const q = supabase
-        .from('matters' as any)
+        .from('matters')
         .select(MATTER_SELECT)
         .eq('company_id', companyId)
         .order('created_at', { ascending: false })
@@ -271,11 +272,11 @@ export function mattersIndexQuery(companyId: string) {
       // Get recipient and response counts for these matters
       const [recipientsData, responsesData] = await Promise.all([
         supabase
-          .from('matter_recipients' as any)
+          .from('matter_recipients')
           .select('matter_id')
           .in('matter_id', matterIds),
         supabase
-          .from('matter_responses' as any)
+          .from('matter_responses')
           .select('matter_id')
           .in('matter_id', matterIds),
       ])
@@ -288,21 +289,21 @@ export function mattersIndexQuery(companyId: string) {
 
       for (const r of recipientsData.data || []) {
         recipientCounts.set(
-          r.matter_id as string,
-          (recipientCounts.get(r.matter_id as string) || 0) + 1,
+          r.matter_id,
+          (recipientCounts.get(r.matter_id) || 0) + 1,
         )
       }
 
       for (const r of responsesData.data || []) {
         responseCounts.set(
-          r.matter_id as string,
-          (responseCounts.get(r.matter_id as string) || 0) + 1,
+          r.matter_id,
+          (responseCounts.get(r.matter_id) || 0) + 1,
         )
       }
 
       // Get my responses for these matters
       const { data: myResponsesData } = await supabase
-        .from('matter_responses' as any)
+        .from('matter_responses')
         .select('matter_id, id, response, created_at, updated_at')
         .eq('user_id', user.id)
         .in('matter_id', matterIds)
@@ -310,7 +311,7 @@ export function mattersIndexQuery(companyId: string) {
       const myResponseMap = new Map<string, any>()
       if (myResponsesData) {
         for (const r of myResponsesData) {
-          myResponseMap.set(r.matter_id as string, {
+          myResponseMap.set(r.matter_id, {
             id: r.id,
             matter_id: r.matter_id,
             user_id: user.id,
@@ -337,7 +338,7 @@ export function matterDetailQuery(matterId: string) {
     queryKey: ['matters', 'detail', matterId],
     queryFn: async (): Promise<Matter | null> => {
       const { data, error } = await supabase
-        .from('matters' as any)
+        .from('matters')
         .select(MATTER_SELECT)
         .eq('id', matterId)
         .single()
@@ -357,7 +358,7 @@ export function matterDetailQuery(matterId: string) {
 
       if (user) {
         const { data: responseData } = await supabase
-          .from('matter_responses' as any)
+          .from('matter_responses')
           .select(
             `
             id,
@@ -392,7 +393,7 @@ export function matterRecipientsQuery(matterId: string) {
     queryFn: async (): Promise<Array<MatterRecipient>> => {
       // Fetch recipients
       const { data: recipientsData, error: recipientsError } = await supabase
-        .from('matter_recipients' as any)
+        .from('matter_recipients')
         .select(
           `
           id,
@@ -412,7 +413,7 @@ export function matterRecipientsQuery(matterId: string) {
 
       // Fetch responses for this matter
       const { data: responsesData, error: responsesError } = await supabase
-        .from('matter_responses' as any)
+        .from('matter_responses')
         .select('id, matter_id, user_id, response, created_at, updated_at')
         .eq('matter_id', matterId)
 
@@ -422,7 +423,7 @@ export function matterRecipientsQuery(matterId: string) {
       const responseMap = new Map<string, any>()
       if (responsesData) {
         for (const response of responsesData) {
-          responseMap.set(response.user_id as string, {
+          responseMap.set(response.user_id, {
             id: response.id,
             response: response.response,
             created_at: response.created_at,
@@ -447,7 +448,7 @@ export function matterResponsesQuery(matterId: string) {
     queryKey: ['matters', 'responses', matterId],
     queryFn: async (): Promise<Array<MatterResponse>> => {
       const { data, error } = await supabase
-        .from('matter_responses' as any)
+        .from('matter_responses')
         .select(
           `
           id,
@@ -473,7 +474,7 @@ export function matterMessagesQuery(matterId: string) {
     queryKey: ['matters', 'messages', matterId],
     queryFn: async (): Promise<Array<MatterMessage>> => {
       const { data, error } = await supabase
-        .from('matter_messages' as any)
+        .from('matter_messages')
         .select(
           `
           id,
@@ -502,7 +503,7 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
 
   // Create the matter
   const { data: matter, error: matterError } = await supabase
-    .from('matters' as any)
+    .from('matters')
     .insert({
       company_id: input.company_id,
       created_by_user_id: user.id,
@@ -514,7 +515,7 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
       is_anonymous: input.is_anonymous ?? false,
       allow_custom_responses: input.allow_custom_responses ?? true,
       created_as_company: input.created_as_company ?? false,
-      metadata: input.metadata ?? null,
+      metadata: (input.metadata ?? null) as Json | null,
     })
     .select('id')
     .single()
@@ -532,7 +533,7 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
     }))
 
     const { error: recipientsError } = await supabase
-      .from('matter_recipients' as any)
+      .from('matter_recipients')
       .insert(recipients)
 
     if (recipientsError) throw recipientsError
@@ -557,16 +558,14 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
       if (uploadErr) throw uploadErr
 
       // Insert file metadata
-      const { error: fileErr } = await supabase
-        .from('matter_files' as any)
-        .insert({
-          matter_id: matter.id,
-          filename: file.name,
-          path,
-          mime_type: file.type,
-          size_bytes: file.size,
-          uploaded_by_user_id: user.id,
-        })
+      const { error: fileErr } = await supabase.from('matter_files').insert({
+        matter_id: matter.id,
+        filename: file.name,
+        path,
+        mime_type: file.type,
+        size_bytes: file.size,
+        uploaded_by_user_id: user.id,
+      })
 
       if (fileErr) throw fileErr
     }
@@ -942,7 +941,7 @@ export async function respondToMatter(
 
   // Get matter to check if it's a crew_invite
   const { data: matter, error: matterError } = await supabase
-    .from('matters' as any)
+    .from('matters')
     .select('matter_type, job_id, time_period_id')
     .eq('id', matterId)
     .single()
@@ -951,7 +950,7 @@ export async function respondToMatter(
 
   // Upsert response
   const { error: responseError } = await supabase
-    .from('matter_responses' as any)
+    .from('matter_responses')
     .upsert(
       {
         matter_id: matterId,
@@ -980,7 +979,7 @@ export async function respondToMatter(
 
   // Update recipient status
   const { data: updatedRecipients, error: recipientError } = await supabase
-    .from('matter_recipients' as any)
+    .from('matter_recipients')
     .update({
       status: recipientStatus as any,
       responded_at: new Date().toISOString(),
@@ -995,7 +994,7 @@ export async function respondToMatter(
   // This shouldn't normally happen, but handle gracefully
   if (!updatedRecipients || updatedRecipients.length === 0) {
     const { error: createError } = await supabase
-      .from('matter_recipients' as any)
+      .from('matter_recipients')
       .insert({
         matter_id: matterId,
         user_id: user.id,
@@ -1036,7 +1035,7 @@ export async function sendMessage(
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
-  const { error } = await supabase.from('matter_messages' as any).insert({
+  const { error } = await supabase.from('matter_messages').insert({
     matter_id: matterId,
     user_id: user.id,
     content: content.trim(),
@@ -1052,7 +1051,7 @@ export async function markMatterAsViewed(matterId: string): Promise<void> {
   if (!user) throw new Error('Not authenticated')
 
   const { error } = await supabase
-    .from('matter_recipients' as any)
+    .from('matter_recipients')
     .update({
       status: 'viewed' as any,
       viewed_at: new Date().toISOString(),
@@ -1075,7 +1074,7 @@ export function matterFilesQuery(matterId: string) {
     queryKey: ['matters', 'files', matterId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('matter_files' as any)
+        .from('matter_files')
         .select(
           `
           id,
@@ -1139,7 +1138,7 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
 
       // Get all matters where user is a recipient
       const { data: recipientMatters, error: recError } = await supabase
-        .from('matter_recipients' as any)
+        .from('matter_recipients')
         .select('matter_id, viewed_at')
         .eq('user_id', user.id)
         .is('viewed_at', null) // Only unread ones
@@ -1148,14 +1147,14 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
 
       // Get the matter IDs for unread matters
       const unreadMatterIds =
-        recipientMatters?.map((r) => r.matter_id as string) || []
+        recipientMatters?.map((r) => r.matter_id) || []
 
       if (unreadMatterIds.length === 0) return 0
 
       // Filter to only matters in companies the user is a member of.
       // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
-        .from('matters' as any)
+        .from('matters')
         .select('id, created_by_user_id, created_as_company')
         .in('company_id', companyIds)
         .in('id', unreadMatterIds)
@@ -1187,7 +1186,7 @@ export function unreadMattersCountQuery(companyId: string) {
 
       // Get all matters where user is a recipient
       const { data: recipientMatters, error: recError } = await supabase
-        .from('matter_recipients' as any)
+        .from('matter_recipients')
         .select('matter_id, viewed_at')
         .eq('user_id', user.id)
         .is('viewed_at', null) // Only unread ones
@@ -1196,14 +1195,14 @@ export function unreadMattersCountQuery(companyId: string) {
 
       // Get the matter IDs for unread matters
       const unreadMatterIds =
-        recipientMatters?.map((r) => r.matter_id as string) || []
+        recipientMatters?.map((r) => r.matter_id) || []
 
       if (unreadMatterIds.length === 0) return 0
 
       // Filter to only matters in the current company.
       // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
-        .from('matters' as any)
+        .from('matters')
         .select('id, created_by_user_id, created_as_company')
         .eq('company_id', companyId)
         .in('id', unreadMatterIds)
@@ -1233,7 +1232,7 @@ export async function deleteMatter(matterId: string): Promise<void> {
 
   // Verify user is the creator
   const { data: matter, error: matterError } = await supabase
-    .from('matters' as any)
+    .from('matters')
     .select('created_by_user_id')
     .eq('id', matterId)
     .single()
@@ -1246,7 +1245,7 @@ export async function deleteMatter(matterId: string): Promise<void> {
 
   // Get all files associated with this matter before deleting
   const { data: matterFiles, error: filesError } = await supabase
-    .from('matter_files' as any)
+    .from('matter_files')
     .select('path')
     .eq('matter_id', matterId)
 
@@ -1264,7 +1263,7 @@ export async function deleteMatter(matterId: string): Promise<void> {
 
   // Delete the matter (cascade will handle related database records)
   const { error: deleteError } = await supabase
-    .from('matters' as any)
+    .from('matters')
     .delete()
     .eq('id', matterId)
 

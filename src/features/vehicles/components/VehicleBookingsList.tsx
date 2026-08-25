@@ -1,5 +1,4 @@
 // src/features/vehicles/components/VehicleBookingsList.tsx
-import * as React from 'react'
 import {
   Badge,
   Box,
@@ -122,7 +121,7 @@ export default function VehicleBookingsList({
               )
             case 'actions':
               return isPersonal ? (
-                <Flex gap="1" shrink="0">
+                <Flex gap="1" style={{ flexShrink: 0 }}>
                   <IconButton
                     size="1"
                     variant="ghost"

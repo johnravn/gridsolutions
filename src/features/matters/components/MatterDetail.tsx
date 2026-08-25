@@ -366,7 +366,11 @@ export default function MatterDetail({
                 onClick={() =>
                   navigate({
                     to: '/jobs',
-                    search: { jobId: matter.job?.id, tab: undefined },
+                    search: {
+                      jobId: matter.job?.id,
+                      recurringJobId: undefined,
+                      tab: undefined,
+                    },
                   })
                 }
               >

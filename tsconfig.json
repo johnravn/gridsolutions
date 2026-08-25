@@ -9,6 +9,7 @@
     "vite.config.js"
   ],
   "exclude": [
+    "supabase/functions/**",
     "e2e/**",
     "playwright.config.ts",
     "**/*.test.ts",

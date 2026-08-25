@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Avatar, Box, Button, Flex, Spinner, Text } from '@radix-ui/themes'
+import { Avatar, Box, Button, Flex, Text } from '@radix-ui/themes'
 import { RssFeed } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useNavigate } from '@tanstack/react-router'

@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box, Skeleton } from '@radix-ui/themes'
 
 type Props = {

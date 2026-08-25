@@ -8,6 +8,7 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
+import { DialogTrigger } from '@shared/ui/radixAsChild'
 import { Edit, Link as LinkIcon, Trash } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
@@ -310,11 +311,11 @@ export default function TimeEntriesTable({
           </Text>
         ) : (
           <Dialog.Root>
-            <Dialog.Trigger asChild>
+            <DialogTrigger asChild>
               <Button variant="soft" size="1">
                 Show
               </Button>
-            </Dialog.Trigger>
+            </DialogTrigger>
             <Dialog.Content size="2" style={{ maxWidth: 520 }}>
               <Dialog.Title>Note</Dialog.Title>
               <Dialog.Description size="2" color="gray" mb="3">

@@ -94,7 +94,7 @@ function ResendEmailRow({ email }: { email: ResendSentEmail }) {
                     </Text>
                     <Text
                       size="1"
-                      as="pre"
+                      as="div"
                       style={{
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',
@@ -115,7 +115,7 @@ function ResendEmailRow({ email }: { email: ResendSentEmail }) {
                     </Text>
                     <Text
                       size="1"
-                      as="pre"
+                      as="div"
                       style={{
                         whiteSpace: 'pre-wrap',
                         wordBreak: 'break-word',

@@ -7,6 +7,7 @@ import { supabase } from '@shared/api/supabase'
 import LazyImage from '@shared/ui/components/LazyImage'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { generateVehicleAutofill } from '@shared/testing/autofill'
 import { Camera, Sparks } from 'iconoir-react'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { partnerCustomersQuery, upsertVehicle } from '../../api/queries'
@@ -256,81 +257,19 @@ export default function AddEditVehicleDialog({
   // ===== TESTING ONLY: Auto-populate function =====
   // TODO: Remove this function and button when testing is complete
   const autoPopulateFields = () => {
-    const vehicleNames = [
-      'Mercedes Sprinter',
-      'Ford Transit',
-      'Volkswagen Crafter',
-      'Iveco Daily',
-      'Renault Master',
-      'Peugeot Boxer',
-      'Fiat Ducato',
-      'Toyota Hiace',
-      'Nissan NV400',
-      'Opel Movano',
-    ]
-    const regNumbers = [
-      'AB12345',
-      'CD67890',
-      'EF11111',
-      'GH22222',
-      'IJ33333',
-      'KL44444',
-      'MN55555',
-      'OP66666',
-      'QR77777',
-      'ST88888',
-    ]
-    const fuels: Array<FuelType> = ['diesel', 'petrol', 'electric']
-    const categories: Array<VehicleCategory> = [
-      'passenger_car_small',
-      'passenger_car_medium',
-      'van_small',
-      'van_medium',
-      'van_big',
-    ]
-    const notes = [
-      'Test vehicle for inventory management',
-      'Standard company vehicle',
-      'Backup vehicle in fleet',
-      'Primary transport vehicle',
-      'Reserve vehicle',
-    ]
-
-    const randomName =
-      vehicleNames[Math.floor(Math.random() * vehicleNames.length)]
-    const randomReg = regNumbers[Math.floor(Math.random() * regNumbers.length)]
-    const randomFuel = fuels[Math.floor(Math.random() * fuels.length)]
-    const randomCategory =
-      categories[Math.floor(Math.random() * categories.length)]
-    const randomNotes = notes[Math.floor(Math.random() * notes.length)]
-    const ownerRoll = Math.random()
-    const ownerType: VehicleOwnerKind =
-      ownerRoll > 0.55 ? 'company' : ownerRoll > 0.25 ? 'partner' : 'person'
-    const randomPartner =
-      partners.length > 0
-        ? partners[Math.floor(Math.random() * partners.length)]
-        : null
-    const randomCrew =
-      crew.length > 0 ? crew[Math.floor(Math.random() * crew.length)] : null
+    const sample = generateVehicleAutofill({ partners, crew })
 
     form.reset(
       {
-        name: randomName,
-        registration_no: randomReg,
-        fuel: randomFuel,
-        vehicle_category: randomCategory,
-        ownerType:
-          ownerType === 'partner' && !randomPartner
-            ? 'company'
-            : ownerType === 'person' && !randomCrew
-              ? 'company'
-              : ownerType,
-        external_owner_id:
-          ownerType === 'partner' ? (randomPartner?.id ?? null) : null,
-        owner_user_id:
-          ownerType === 'person' ? (randomCrew?.user_id ?? null) : null,
+        name: sample.name,
+        registration_no: sample.registrationNo,
+        fuel: sample.fuel as FuelType,
+        vehicle_category: sample.vehicleCategory as VehicleCategory,
+        ownerType: sample.ownerType as VehicleOwnerKind,
+        external_owner_id: sample.externalOwnerId,
+        owner_user_id: sample.ownerUserId,
         image_path: null,
-        notes: randomNotes,
+        notes: sample.notes,
       },
       { keepDefaultValues: true },
     )

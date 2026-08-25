@@ -103,7 +103,7 @@ async function finishJobRun(
     .update({
       finished_at: new Date().toISOString(),
       status,
-      details,
+      details: details as import('@shared/types/database.types').Json,
       error_message: errorMessage ?? null,
     })
     .eq('id', runId)

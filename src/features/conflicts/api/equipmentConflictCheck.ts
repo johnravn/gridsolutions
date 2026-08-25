@@ -19,7 +19,7 @@ export type BasisBookingConflictPreview = EquipmentConflictPreview & {
 }
 
 type OfferItemQuantityInput = {
-  groups: OfferDetail['groups']
+  groups?: OfferDetail['groups']
 }
 
 function periodsOverlap(

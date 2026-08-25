@@ -253,7 +253,7 @@ export default function SubscribeToCalendarDialog({
                         }}
                       />
                     </Box>
-                    <Flex gap="2" shrink="0">
+                    <Flex gap="2" style={{ flexShrink: 0 }}>
                       <Button
                         variant="soft"
                         size="2"

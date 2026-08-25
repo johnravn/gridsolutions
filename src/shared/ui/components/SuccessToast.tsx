@@ -1,6 +1,5 @@
-import * as React from 'react'
 import * as Toast from '@radix-ui/react-toast'
-import { Button, Text } from '@radix-ui/themes'
+import { Text } from '@radix-ui/themes'
 import { CheckCircle } from 'iconoir-react'
 
 export function SuccessToast({

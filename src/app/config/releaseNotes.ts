@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.0'
+export const APP_VERSION = '1.13.1'
 
 export type ReleaseHighlight = {
   title: string
@@ -18,6 +18,11 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Daily verse fix',
+      description:
+        'The home daily verse loads again after the 1.13 release — the serverless endpoint no longer fails on cold start.',
+    },
     {
       title: 'Mobile list + inspector',
       description:

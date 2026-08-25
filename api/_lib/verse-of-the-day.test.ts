@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import handler from './verse-of-the-day'
+import handler from '../verse-of-the-day'
 
 vi.mock('./verseOfTheDay', () => ({
   fetchVerseOfTheDay: vi.fn(async (version: string) => ({

@@ -37,14 +37,24 @@ export async function closeOfferEditors(page: Page) {
   await expect(async () => {
     if (await unsaved.isVisible().catch(() => false)) {
       await unsaved.getByRole('button', { name: 'Discard' }).click()
-    } else if (await editor.first().isVisible().catch(() => false)) {
+    } else if (
+      await editor
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       await page.keyboard.press('Escape')
     }
 
     if (await unsaved.isVisible().catch(() => false)) {
       throw new Error('Unsaved changes dialog still open')
     }
-    if (await editor.first().isVisible().catch(() => false)) {
+    if (
+      await editor
+        .first()
+        .isVisible()
+        .catch(() => false)
+    ) {
       throw new Error('Offer editor still open')
     }
   }).toPass({ timeout: 15_000 })

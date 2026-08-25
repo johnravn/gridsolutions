@@ -52,14 +52,6 @@ export default function ActivityFilter({
 }) {
   const [open, setOpen] = React.useState(false)
 
-  const toggleType = (type: ActivityType) => {
-    if (selectedTypes.includes(type)) {
-      onTypesChange(selectedTypes.filter((t) => t !== type))
-    } else {
-      onTypesChange([...selectedTypes, type])
-    }
-  }
-
   const selectCategory = (category: string) => {
     if (category === 'All') {
       onTypesChange([])
