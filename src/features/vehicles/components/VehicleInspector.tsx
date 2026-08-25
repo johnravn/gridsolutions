@@ -9,7 +9,6 @@ import {
   Flex,
   SegmentedControl,
   Separator,
-  Spinner,
   Text,
 } from '@radix-ui/themes'
 import { Edit, Plus, Trash } from 'iconoir-react'

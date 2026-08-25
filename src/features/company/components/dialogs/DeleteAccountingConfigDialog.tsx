@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 
 export default function DeleteAccountingConfigDialog({

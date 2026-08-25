@@ -4,6 +4,7 @@ import { CalendarGrid } from './CalendarGrid'
 import { HourGrid } from './HourGrid'
 import { MinuteGrid } from './MinuteGrid'
 import { PickerTrigger } from './PickerTrigger'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import { SegmentedControl } from './SegmentedControl'
 import {
   buildRangeIso,
@@ -493,7 +494,7 @@ export default function DateTimeRangePicker({
           setOpen(newOpen)
         }}
       >
-        <Popover.Trigger asChild>
+        <PopoverTrigger asChild>
           <PickerTrigger
             fields={triggerFields}
             placeholder="Select period"
@@ -503,7 +504,7 @@ export default function DateTimeRangePicker({
             onFieldClick={handleFieldClick}
             onOpen={() => setOpen(true)}
           />
-        </Popover.Trigger>
+        </PopoverTrigger>
         <Popover.Content
           side="bottom"
           align="start"

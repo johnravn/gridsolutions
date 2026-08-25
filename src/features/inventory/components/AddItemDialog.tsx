@@ -18,6 +18,7 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { Plus, Sparks } from 'iconoir-react'
+import { generateItemAutofill } from '@shared/testing/autofill'
 import BrandAutocomplete from './BrandAutocomplete'
 import type { InventoryItemKind } from '../api/queries'
 
@@ -411,82 +412,27 @@ export default function AddItemDialog({
   }
 
   const autoPopulateFields = () => {
-    const itemNames = [
-      'XLR Cable 3m',
-      'HDMI Cable 5m',
-      'DMX Cable 10m',
-      'Power Cable 2m',
-      'USB-C Cable 1m',
-      'Ethernet Cable 15m',
-      'Audio Interface',
-      'Microphone Stand',
-      'Speaker Stand',
-      'Light Stand',
-      'Gobo Holder',
-      'Color Gel',
-      'Fog Machine',
-      'Wireless Mic',
-      'DI Box',
-    ]
-    const brands = [
-      'Neutrik',
-      'Mogami',
-      'Canare',
-      'Shure',
-      'Sennheiser',
-      'Yamaha',
-      'Behringer',
-      'Audio-Technica',
-      'Rode',
-      'Manfrotto',
-    ]
-    const models = [
-      'Pro',
-      'Standard',
-      'Premium',
-      'Elite',
-      'X1',
-      'X2',
-      '2024',
-      'Classic',
-      'Plus',
-      'Ultra',
-    ]
-    const notes = [
-      'Test item for inventory management',
-      'Used for production testing',
-      'Standard equipment item',
-      'Backup item in stock',
-      'Primary equipment',
-      'Reserve stock item',
-    ]
-
-    const randomName = itemNames[Math.floor(Math.random() * itemNames.length)]
-    const randomBrand = brands[Math.floor(Math.random() * brands.length)]
-    const randomModel = models[Math.floor(Math.random() * models.length)]
-    const randomNotes = notes[Math.floor(Math.random() * notes.length)]
-    const randomQuantity = Math.floor(Math.random() * 50) + 1
-    const randomPrice = Math.floor(Math.random() * 5000) + 100
+    const sample = generateItemAutofill()
     const randomCategory =
       categories.length > 0
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
-    const isStock = Math.random() > 0.3
 
     form.reset({
-      name: randomName,
+      name: sample.name,
       categoryId: randomCategory?.id ?? null,
       brandId: null,
-      model: randomModel,
-      allow_individual_booking: Math.random() > 0.5,
-      total_quantity: isStock ? randomQuantity : 0,
-      active: Math.random() > 0.2,
-      notes: randomNotes,
-      nicknames: '',
-      price: randomPrice,
-      item_kind: isStock ? 'stock' : 'subrental',
+      model: sample.model,
+      allow_individual_booking: sample.allowIndividualBooking,
+      total_quantity: sample.totalQuantity,
+      active: sample.active,
+      notes: sample.notes,
+      nicknames: sample.nicknames,
+      price: sample.price,
+      item_kind: sample.itemKind,
     })
-    setBrandName(randomBrand)
+    setBrandName(sample.brandName)
+    setTotalQuantityDraft(null)
   }
 
   const title = mode === 'edit' ? 'Edit item' : 'Add item to inventory'

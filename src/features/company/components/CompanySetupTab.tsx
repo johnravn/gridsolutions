@@ -311,7 +311,7 @@ function GeneralRatesSection({ companyId }: { companyId: string }) {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const updateData: any = {
+      const updateData: Record<string, number | null> = {
         employee_daily_rate: employeeDailyRate.trim()
           ? parseFloat(employeeDailyRate)
           : null,

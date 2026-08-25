@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box } from '@radix-ui/themes'
 
 type ShapeType = 'circles' | 'triangles' | 'rectangles'

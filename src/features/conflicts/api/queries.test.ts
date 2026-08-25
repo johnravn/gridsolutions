@@ -89,7 +89,12 @@ describe('conflicts query factories', () => {
     const opts = jobBookingConflictsQuery({ jobId: 'job-1' })
     const result = await opts.queryFn!({} as never)
 
-    expect(result).toEqual({ crew: [], vehicles: [], equipment: [], groups: [] })
+    expect(result).toEqual({
+      crew: [],
+      vehicles: [],
+      equipment: [],
+      groups: [],
+    })
     expect(rpcMock).toHaveBeenCalledWith('get_job_booking_conflicts', {
       p_job_id: 'job-1',
       p_from: undefined,

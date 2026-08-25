@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { Box, Popover, Text } from '@radix-ui/themes'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import { HourGrid } from './HourGrid'
 import { SinglePickerTrigger } from './PickerTrigger'
 import { atHour, formatHourLabel, parseIso, toLocalDate } from './dateTimeUtils'
@@ -64,14 +65,14 @@ export default function TimeOfDayPicker({
           setOpen(newOpen)
         }}
       >
-        <Popover.Trigger asChild>
+        <PopoverTrigger asChild>
           <SinglePickerTrigger
             displayValue={displayValue}
             placeholder={placeholder}
             invalid={invalid}
             disabled={disabled}
           />
-        </Popover.Trigger>
+        </PopoverTrigger>
         <Popover.Content
           side="bottom"
           align="start"

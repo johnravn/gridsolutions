@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { Box, Flex, Spinner, Text } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'

@@ -1,7 +1,4 @@
-import {
-  BIBLE_VERSION_OPTIONS,
-  normalizeBibleVersion,
-} from './bibleVersion.js'
+import { BIBLE_VERSION_OPTIONS, normalizeBibleVersion } from './bibleVersion.js'
 import type { BibleVersion } from './bibleVersion.js'
 
 export type VerseOfTheDay = {

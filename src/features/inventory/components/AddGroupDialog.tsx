@@ -21,6 +21,10 @@ import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  generateGroupAutofill,
+  generateGroupPartsAutofill,
+} from '@shared/testing/autofill'
 import type { InventoryItemKind } from '../api/queries'
 
 type Option = { id: string; name: string }
@@ -624,52 +628,22 @@ export default function AddGroupDialog({
   // ===== TESTING ONLY: Auto-populate function =====
   // TODO: Remove this function and button when testing is complete
   const autoPopulateFields = () => {
-    const groupNames = [
-      'Stage Box 8ch',
-      'PA System Basic',
-      'Lighting Rig Standard',
-      'Video Production Kit',
-      'Sound Recording Setup',
-      'Streaming Equipment',
-      'Conference AV Package',
-      'Stage Monitor System',
-      'Wireless Mic Package',
-      'DJ Equipment Bundle',
-    ]
-    const descriptions = [
-      'Complete stage box setup with 8 channels',
-      'Basic PA system for small venues',
-      'Standard lighting rig for events',
-      'Full video production equipment package',
-      'Professional sound recording setup',
-      'Complete streaming equipment bundle',
-      'Conference AV equipment package',
-      'Stage monitor system setup',
-      'Wireless microphone package',
-      'DJ equipment bundle',
-    ]
-
-    const randomName = groupNames[Math.floor(Math.random() * groupNames.length)]
-    const randomDescription =
-      descriptions[Math.floor(Math.random() * descriptions.length)]
-    const randomPrice = Math.floor(Math.random() * 10000) + 1000
-    const isStock = Math.random() > 0.3 // 70% chance of being stock
-
-    // Set random category if available
+    const sample = generateGroupAutofill()
     const randomCategory =
       categories.length > 0
         ? categories[Math.floor(Math.random() * categories.length)]
         : null
 
     form.reset({
-      name: randomName,
+      name: sample.name,
       categoryId: randomCategory?.id ?? null,
-      description: randomDescription,
-      active: Math.random() > 0.2,
-      price: randomPrice,
-      item_kind: isStock ? 'stock' : 'subrental',
+      description: sample.description,
+      active: sample.active,
+      price: sample.price,
+      item_kind: sample.itemKind,
     })
-    setParts([])
+    setParts(generateGroupPartsAutofill(pickerItems))
+    setPartQuantityDrafts({})
   }
   // ===== END TESTING ONLY =====
 

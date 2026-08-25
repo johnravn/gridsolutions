@@ -77,7 +77,9 @@ function useSurfaceInputActiveState(props: React.HTMLAttributes<HTMLElement>) {
   const [focusVisible, setFocusVisible] = React.useState(false)
   const [pressed, setPressed] = React.useState(false)
   const [hovered, setHovered] = React.useState(false)
-  const dataState = props['data-state']
+  const dataState = (props as Record<string, unknown>)['data-state'] as
+    | string
+    | undefined
   const active = focusVisible || dataState === 'open' || pressed
 
   const focusHandlers = {
@@ -347,15 +349,16 @@ export const PickerTrigger = React.forwardRef<
   }
 
   if (useInteractiveFields) {
+    const divProps = restButtonProps as React.HTMLAttributes<HTMLDivElement>
     return (
       <div
         ref={ref as React.Ref<HTMLDivElement>}
-        {...restButtonProps}
+        {...divProps}
         {...interactionHandlers}
         className={mergeTriggerClassName(className)}
         style={{
           ...containerStyle(invalid, disabled, hasValue, active, hovered),
-          ...restButtonProps.style,
+          ...divProps.style,
         }}
       >
         <FieldsRow

@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'

@@ -1,7 +1,7 @@
 // src/features/super/components/UsersTable.tsx
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Flex, Spinner, Text, TextField } from '@radix-ui/themes'
+import { Flex, Text, TextField } from '@radix-ui/themes'
 import { Search } from 'iconoir-react'
 import { prettyPhone } from '@shared/phone/phone'
 import {

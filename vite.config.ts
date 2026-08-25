@@ -110,9 +110,7 @@ export default defineConfig(({ mode }) => {
               try {
                 const url = new URL(req.url ?? '/', 'http://localhost')
                 const token = url.searchParams.get('token')
-                const { default: handler } = await import(
-                  '../api/calendar/feed'
-                )
+                const { default: handler } = await import('./api/calendar/feed')
                 const fakeReq = { method: req.method, query: { token } }
                 const fakeRes = {
                   setHeader: res.setHeader.bind(res),

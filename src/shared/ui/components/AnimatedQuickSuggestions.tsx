@@ -1,4 +1,3 @@
-import * as React from 'react'
 import { Box, Button, Flex, Text } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import {

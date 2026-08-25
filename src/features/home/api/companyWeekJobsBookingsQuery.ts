@@ -193,7 +193,7 @@ export function companyWeekJobsBookingsQuery({
             const list = groupChunkMap.get(chunkKey) ?? []
             list.push(row)
             groupChunkMap.set(chunkKey, list)
-            groupIdsForTemplate.add(row.source_group_id)
+            groupIdsForTemplate.add(row.source_group_id as string)
             continue
           }
 

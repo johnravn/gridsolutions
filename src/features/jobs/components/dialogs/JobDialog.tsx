@@ -700,20 +700,27 @@ export default function JobDialog({
 
       const lead = pickBySeedIndex(leads, seed.projectLeadIndex)
       const customer = pickBySeedIndex(customers, seed.customerIndex)
+      const companyMember = pickBySeedIndex(
+        companyUsers,
+        seed.companyCustomerIndex,
+      )
       const recurring = !recurringJobIdProp
         ? pickBySeedIndex(recurringJobs, seed.recurringJobIndex)
         : null
 
-      const nextCustomerId = customer?.id ?? ''
+      const nextCustomerId = seed.isCompanyCustomer ? '' : (customer?.id ?? '')
       form.setFieldValue('title', seed.title)
       form.setFieldValue('description', seed.description)
       form.setFieldValue('status', seed.status)
       form.setFieldValue('startAt', startDate.toISOString())
       form.setFieldValue('endAt', endDate.toISOString())
       form.setFieldValue('projectLead', lead?.user_id ?? '')
-      form.setFieldValue('isCompanyCustomer', false)
+      form.setFieldValue('isCompanyCustomer', seed.isCompanyCustomer)
       form.setFieldValue('customerId', nextCustomerId)
-      form.setFieldValue('customerUserId', '')
+      form.setFieldValue(
+        'customerUserId',
+        seed.isCompanyCustomer ? (companyMember?.user_id ?? '') : '',
+      )
       form.setFieldValue(
         'createCrewBookingForProjectLead',
         seed.createCrewBooking,
@@ -722,7 +729,7 @@ export default function JobDialog({
         form.setFieldValue('recurringJobId', recurring?.id ?? '')
       }
 
-      if (nextCustomerId && seed.contactIndex >= 0) {
+      if (!seed.isCompanyCustomer && nextCustomerId && seed.contactIndex >= 0) {
         if (nextCustomerId === customerId) {
           pendingAutofillContactIndexRef.current = null
           form.setFieldValue(
@@ -743,6 +750,7 @@ export default function JobDialog({
     [
       leads,
       customers,
+      companyUsers,
       recurringJobs,
       recurringJobIdProp,
       customerId,

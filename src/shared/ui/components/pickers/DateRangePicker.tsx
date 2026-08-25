@@ -2,6 +2,7 @@ import * as React from 'react'
 import { Box, Flex, IconButton, Popover, Text } from '@radix-ui/themes'
 import { Calendar, Xmark } from 'iconoir-react'
 import { CalendarGrid } from './CalendarGrid'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import {
   dateToLocalDate,
   formatDateLabel,
@@ -200,7 +201,7 @@ export default function DateRangePicker({
         setOpen(newOpen)
       }}
     >
-      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <Popover.Content
         side="bottom"
         align="start"

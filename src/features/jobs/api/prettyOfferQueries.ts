@@ -1129,7 +1129,9 @@ export async function copyPrettyOfferChildren(
     }
   })
 
-  const resolvedBases = resolveSplitAmountsForSave(mappedBasesWithSplits, {
+  const resolvedBases = resolveSplitAmountsForSave(
+    mappedBasesWithSplits as Parameters<typeof resolveSplitAmountsForSave>[0],
+    {
     offerBasesById: pricingContext.offerBasesById,
     technicalOffersById: pricingContext.technicalOffersById,
     technicalContext: pricingContext.technicalContext,

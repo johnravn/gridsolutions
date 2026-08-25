@@ -6,8 +6,6 @@ import {
   Box,
   Button,
   Card,
-  Checkbox,
-  DropdownMenu,
   Flex,
   Heading,
   IconButton,
@@ -18,7 +16,6 @@ import {
 import {
   CheckCircle,
   Edit,
-  Filter,
   InfoCircle,
   Plus,
   Trash,
@@ -95,12 +92,12 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   }
 
   // Fetch confirmed money items
-  const { data: confirmedItems = [], isLoading: isItemsLoading } = useQuery(
+  const { data: confirmedItems = [] } = useQuery(
     jobMoneyItemsQuery(jobId),
   )
 
   // Fetch accepted offers for suggestions
-  const { data: acceptedOffers = [], isLoading: isOffersLoading } = useQuery({
+  const { data: acceptedOffers = [] } = useQuery({
     queryKey: ['jobs', jobId, 'money', 'accepted-offers'],
     queryFn: async (): Promise<Array<JobOffer>> => {
       const { data, error } = await supabase
@@ -710,8 +707,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     setEditingItem(item)
     setEditDialogOpen(true)
   }
-
-  const isLoading = isOffersLoading || isItemsLoading
 
   const getSourceBadgeColor = (source: string) =>
     source === 'offer'

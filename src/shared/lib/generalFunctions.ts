@@ -108,7 +108,6 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
   // Calculate character-based similarity with position awareness
   // This helps with typos like "unaktive" vs "unactive" (k vs c)
   let matchingChars = 0
-  const maxLength = Math.max(search.length, target.length)
 
   // Count matching characters in similar positions (allows for some position shift)
   for (let i = 0; i < search.length; i++) {
