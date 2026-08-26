@@ -67,7 +67,7 @@ test.describe('Jobs', () => {
     await openJobsPage(page)
     await expect(
       page.getByRole('button', { name: 'New job' }).first(),
-    ).toBeVisible()
+    ).toBeVisible({ timeout: 15_000 })
   })
 
   test('owner can change job status from overview timeline', async ({

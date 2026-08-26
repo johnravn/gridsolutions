@@ -24,6 +24,23 @@ async function closeMobileMenuIfOpen(page: Page) {
   }
 }
 
+/** Close the phone inspector so list chrome (e.g. New job) is visible again. */
+async function closeMobileInspectorIfOpen(page: Page) {
+  const closeInspector = page.getByRole('button', { name: 'Close inspector' })
+  if (await closeInspector.isVisible().catch(() => false)) {
+    await closeInspector.click({ force: true })
+    await expect(closeInspector).toBeHidden({ timeout: 5_000 })
+  }
+
+  const inspectorBackdrop = page.locator(
+    '.app-inspector-backdrop[data-open="true"]',
+  )
+  if (await inspectorBackdrop.isVisible().catch(() => false)) {
+    await inspectorBackdrop.click({ force: true })
+    await expect(inspectorBackdrop).toBeHidden({ timeout: 5_000 })
+  }
+}
+
 /** Dismiss auto-opened release notes so the popover cannot intercept nav clicks. */
 async function dismissWhatsNewIfOpen(page: Page) {
   const gotIt = page.getByRole('button', { name: 'Got it' })
@@ -137,16 +154,14 @@ function tabSectionButton(page: Page) {
 }
 
 export async function openJobsPage(page: Page) {
-  const inspectorBackdrop = page.locator(
-    '.app-inspector-backdrop[data-open="true"]',
-  )
-  if (await inspectorBackdrop.isVisible().catch(() => false)) {
-    await inspectorBackdrop.click({ force: true })
-  }
+  await closeMobileInspectorIfOpen(page)
 
   if (!/\/jobs(?:\?|$)/.test(new URL(page.url()).pathname)) {
     await clickNavLink(page, 'Jobs')
   }
+
+  await closeMobileInspectorIfOpen(page)
+  await closeMobileMenuIfOpen(page)
 
   await expect(page).toHaveURL(/\/jobs/, { timeout: 15_000 })
   await expect(
@@ -182,7 +197,7 @@ export async function openCustomersPage(page: Page) {
 export async function openCalendarPage(page: Page) {
   await clickNavLink(page, 'Calendar')
   await expect(page).toHaveURL(/\/calendar/, { timeout: 15_000 })
-  await expect(page.getByText('Category:', { exact: true })).toBeVisible({
+  await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible({
     timeout: 15_000,
   })
 }
