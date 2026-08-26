@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.5'
+export const APP_VERSION = '1.13.6'
 
 export type ReleaseHighlight = {
   title: string
@@ -18,6 +18,11 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Recurring jobs for the whole company',
+      description:
+        'Everyone on staff can see recurring series in the jobs list. Jobs that belong to a series stay hidden until you turn on “Show jobs in recurring series”.',
+    },
     {
       title: 'Multi-job invoicing',
       description:
