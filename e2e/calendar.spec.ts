@@ -8,10 +8,7 @@ test.describe('Calendar', () => {
     test.setTimeout(60_000)
     await openCalendarPage(page)
 
-    const categorySelect = page
-      .getByText('Category:', { exact: true })
-      .locator('..')
-      .getByRole('combobox')
+    const categorySelect = page.getByRole('combobox', { name: 'Category' })
     await expect(categorySelect).toContainText('Jobs')
     await categorySelect.click()
     await page.getByRole('option', { name: 'Equipment' }).click()
