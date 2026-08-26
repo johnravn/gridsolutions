@@ -5,13 +5,19 @@ import {
   Badge,
   Button,
   Flex,
+  IconButton,
   Select,
   Spinner,
   Text,
   TextField,
+  Tooltip,
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+} from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
@@ -325,30 +331,28 @@ export default function InventoryTable({
         </Select.Root>
       )}
 
-      {canWrite && (
-        <Flex
-          gap="2"
-          style={{
-            width: isSmallScreen ? '100%' : undefined,
-            flex: isSmallScreen ? '1 1 100%' : undefined,
-          }}
-        >
-          <Button
-            size="3"
-            variant="outline"
-            onClick={() => setAddGroupDialog(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-          >
-            <Packages width={20} height={20} /> Add group
-          </Button>
-          <Button
-            size="3"
-            variant="solid"
-            onClick={() => setAddItemOpen(true)}
-            style={isSmallScreen ? { flex: 1, minWidth: 0 } : undefined}
-          >
-            <Package width={20} height={20} /> Add item
-          </Button>
+      {canWrite && !isMobile && (
+        <Flex gap="2">
+          <Tooltip content="Add group">
+            <IconButton
+              size="3"
+              variant="outline"
+              aria-label="Add group"
+              onClick={() => setAddGroupDialog(true)}
+            >
+              <Packages width={20} height={20} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip content="Add item">
+            <IconButton
+              size="3"
+              variant="solid"
+              aria-label="Add item"
+              onClick={() => setAddItemOpen(true)}
+            >
+              <Package width={20} height={20} />
+            </IconButton>
+          </Tooltip>
         </Flex>
       )}
     </Flex>
@@ -444,6 +448,28 @@ export default function InventoryTable({
             </Text>
           )}
         </MobilePageList>
+        {canWrite && (
+          <MobileBottomActionBar>
+            <Button
+              variant="ghost"
+              size="3"
+              className="app-mobile-bottom-action-icon"
+              aria-label="Add group"
+              onClick={() => setAddGroupDialog(true)}
+            >
+              <Packages width={20} height={20} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="3"
+              className="app-mobile-bottom-action-icon"
+              aria-label="Add item"
+              onClick={() => setAddItemOpen(true)}
+            >
+              <Package width={20} height={20} />
+            </Button>
+          </MobileBottomActionBar>
+        )}
         {dialogs}
       </>
     )

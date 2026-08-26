@@ -18,6 +18,7 @@ import {
 } from '@radix-ui/themes'
 import { Plus, Sparks, Trash } from 'iconoir-react'
 import { z } from 'zod'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -115,6 +116,7 @@ export default function AddGroupDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+  const isNarrow = useMediaQuery('(max-width: 1023px)')
 
   const fmtCurrency = React.useMemo(
     () =>
@@ -674,7 +676,14 @@ export default function AddGroupDialog({
           </Dialog.Trigger>
         )}
 
-        <Dialog.Content style={{ maxWidth: 1000 }}>
+        <Dialog.Content
+          style={{
+            maxWidth: 1000,
+            maxHeight: '90vh',
+            overflow: 'auto',
+            width: isNarrow ? 'calc(100vw - 2rem)' : undefined,
+          }}
+        >
           <Flex align="center" justify="between">
             <Dialog.Title>
               {mode === 'create' ? 'Create Group' : 'Edit Group'}
@@ -703,8 +712,8 @@ export default function AddGroupDialog({
             }}
           >
             <form.AppForm>
-              <Grid columns="2" gap="4" mt="4">
-                <Flex direction="column" gap="3">
+              <Grid columns={isNarrow ? '1' : '2'} gap="4" mt="4">
+                <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
                   <form.AppField name="name">
                     {(field) => <field.TextField placeholder="Group name" />}
                   </form.AppField>
@@ -787,23 +796,25 @@ export default function AddGroupDialog({
                     )}
                   </form.AppField>
 
-                  <Flex gap="2" justify="end" mt="auto">
-                    <Button
-                      type="button"
-                      variant="soft"
-                      onClick={() => onOpenChange(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <form.SubmitButton
-                      label={mode === 'create' ? 'Create' : 'Update'}
-                      pendingLabel="Saving…"
-                    />
-                  </Flex>
+                  {!isNarrow && (
+                    <Flex gap="2" justify="end" mt="auto">
+                      <Button
+                        type="button"
+                        variant="soft"
+                        onClick={() => onOpenChange(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <form.SubmitButton
+                        label={mode === 'create' ? 'Create' : 'Update'}
+                        pendingLabel="Saving…"
+                      />
+                    </Flex>
+                  )}
                 </Flex>
 
-                {/* RIGHT COLUMN: Parts Search and List */}
-                <Flex direction="column" gap="3">
+                {/* Parts: search and list (stacks below form fields on mobile) */}
+                <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
                   <Text size="2" weight="bold">
                     Parts
                   </Text>
@@ -910,6 +921,7 @@ export default function AddGroupDialog({
                           flex: 1,
                           minHeight: 0,
                           overflowY: 'auto',
+                          overflowX: 'auto',
                         }}
                       >
                         <Table.Root size="1">
@@ -930,7 +942,12 @@ export default function AddGroupDialog({
                                 <Table.Cell>
                                   <Flex direction="column" gap="1">
                                     <Flex align="center" gap="2">
-                                      <Text size="2">{part.item_name}</Text>
+                                      <Text
+                                        size="2"
+                                        style={{ wordBreak: 'break-word' }}
+                                      >
+                                        {part.item_name}
+                                      </Text>
                                       {part.part_type === 'group' && (
                                         <Badge color="blue" size="1">
                                           Group
@@ -1027,6 +1044,21 @@ export default function AddGroupDialog({
                   </Flex>
                 </Flex>
               </Grid>
+              {isNarrow && (
+                <Flex gap="2" justify="end" mt="4">
+                  <Button
+                    type="button"
+                    variant="soft"
+                    onClick={() => onOpenChange(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <form.SubmitButton
+                    label={mode === 'create' ? 'Create' : 'Update'}
+                    pendingLabel="Saving…"
+                  />
+                </Flex>
+              )}
             </form.AppForm>
           </form>
         </Dialog.Content>

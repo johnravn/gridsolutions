@@ -31,6 +31,7 @@ import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAppResume } from '../hooks/useAppResume'
 import { WhatsNewPopover } from '../components/WhatsNewPopover'
 import { NAV, Sidebar } from './Sidebar'
+import { MobileNavProvider } from './mobile/MobileNavContext'
 
 const prefersReducedMotionQuery = '(prefers-reduced-motion: reduce)'
 
@@ -154,6 +155,16 @@ export default function AppShell() {
     if (isMobile) setOpen(false)
   }, [isMobile])
 
+  const setNavOpen = React.useCallback<
+    React.Dispatch<React.SetStateAction<boolean>>
+  >(
+    (next) => {
+      if (!isMobile) return
+      setOpen(next)
+    },
+    [isMobile],
+  )
+
   async function handleLogout() {
     await supabase.auth.signOut()
     navigate({ to: '/' })
@@ -173,81 +184,77 @@ export default function AppShell() {
     !isPublic && !companyLoading && !!authUser?.id && companies.length === 0
 
   return (
-    <Flex
-      height={isPublic ? 'auto' : '100svh'} // was 100dvh
-      width="100%"
-      direction="row"
-      style={{ position: 'relative', minHeight: 0 }} // allow children to shrink
+    <MobileNavProvider
+      navOpen={Boolean(isMobile && open)}
+      setNavOpen={setNavOpen}
     >
-      {!isPublic ? <GlobalHotkeys /> : null}
-      {/* Animated background - only on authenticated pages and if enabled */}
-      {!isPublic && showAnimatedBackground && (
-        <AnimatedBackground
-          intensity={backgroundIntensity}
-          shapeType={backgroundShapeType}
-          speed={backgroundSpeed}
-        />
-      )}
-
-      {!isPublic && !showNoCompanyMessage && (
-        <Sidebar
-          open={isMobile ? open : true}
-          onToggle={(next) => {
-            if (!isMobile) return
-            setOpen(next ?? !open)
-          }}
-          currentPath={currentPath}
-          // NEW:
-          userDisplayName={displayName}
-          userEmail={myProfile?.email ?? ''}
-          userAvatarUrl={avatarUrl}
-          onLogout={handleLogout}
-        />
-      )}
-
-      <Box
-        style={{
-          flex: 1,
-          minWidth: 0,
-          position: 'relative',
-          zIndex: 1,
-          backgroundColor: isPublic ? undefined : 'transparent',
-        }}
+      <Flex
+        height={isPublic ? 'auto' : '100svh'} // was 100dvh
+        width="100%"
+        direction="row"
+        style={{ position: 'relative', minHeight: 0 }} // allow children to shrink
       >
-        <Flex
-          direction="column"
-          style={{ height: isPublic ? 'auto' : '100%', minHeight: 0 }}
+        {!isPublic ? <GlobalHotkeys /> : null}
+        {/* Animated background - only on authenticated pages and if enabled */}
+        {!isPublic && showAnimatedBackground && (
+          <AnimatedBackground
+            intensity={backgroundIntensity}
+            shapeType={backgroundShapeType}
+            speed={backgroundSpeed}
+          />
+        )}
+
+        {!isPublic && !showNoCompanyMessage && (
+          <Sidebar
+            open={isMobile ? open : true}
+            onToggle={(next) => {
+              if (!isMobile) return
+              setOpen(next ?? !open)
+            }}
+            currentPath={currentPath}
+            // NEW:
+            userDisplayName={displayName}
+            userEmail={myProfile?.email ?? ''}
+            userAvatarUrl={avatarUrl}
+            onLogout={handleLogout}
+          />
+        )}
+
+        <Box
+          style={{
+            flex: 1,
+            minWidth: 0,
+            position: 'relative',
+            zIndex: 1,
+            backgroundColor: isPublic ? undefined : 'transparent',
+          }}
         >
-          {/* Top bar — hidden on public offer pages (full-bleed deck layout) */}
-          {!isPublicOffer && (
-            <Flex
-              align="center"
-              justify="between"
-              px="4"
-              py="3"
-              style={{
-                flexShrink: 0,
-                paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
-              }}
-            >
-              {!isPublic && (
-                <Text
-                  size="8"
-                  weight="light"
-                  style={{ flex: isMobile ? 1 : undefined }}
-                >
-                  {title}
-                </Text>
-              )}
-              {!isPublic && isMobile && (
-                <WhatsNewPopover
-                  userId={authUser?.id}
-                  profileLoaded={profileLoaded}
-                  lastSeenReleaseVersion={myProfile?.last_seen_release_version}
-                />
-              )}
-              {!isPublic && !isMobile && (
-                <Flex align="center" gap="3">
+          <Flex
+            direction="column"
+            style={{ height: isPublic ? 'auto' : '100%', minHeight: 0 }}
+          >
+            {/* Top bar — hidden on public offer pages (full-bleed deck layout) */}
+            {!isPublicOffer && (
+              <Flex
+                align="center"
+                justify="between"
+                px="4"
+                py="3"
+                style={{
+                  flexShrink: 0,
+                  paddingTop: 'calc(var(--space-3) + var(--app-safe-top))',
+                }}
+              >
+                {!isPublic && (
+                  <Text
+                    size="8"
+                    weight="light"
+                    style={{ flex: isMobile ? 1 : undefined }}
+                  >
+                    {title}
+                  </Text>
+                )}
+                {!isPublic && isMobile && (
                   <WhatsNewPopover
                     userId={authUser?.id}
                     profileLoaded={profileLoaded}
@@ -255,62 +262,72 @@ export default function AppShell() {
                       myProfile?.last_seen_release_version
                     }
                   />
-                  <Link to="/profile" style={{ textDecoration: 'none' }}>
-                    <Flex
-                      align="center"
-                      gap="2"
-                      // make it feel like a button without Radix Button hover styles
-                      role="button"
-                      tabIndex={0}
-                      aria-label="Go to profile"
-                      style={{ cursor: 'pointer' }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.currentTarget.click()
-                          e.preventDefault()
-                        }
-                      }}
-                    >
-                      <Avatar
-                        size="2"
-                        radius="full"
-                        src={avatarUrl ?? undefined}
-                        fallback={getInitials(displayName || '?')}
-                        style={{ border: '1px solid var(--gray-5)' }}
-                      />
-                      <Text size="2" style={{ maxWidth: 200 }} truncate>
-                        {displayName}
-                      </Text>
-                    </Flex>
-                  </Link>
+                )}
+                {!isPublic && !isMobile && (
+                  <Flex align="center" gap="3">
+                    <WhatsNewPopover
+                      userId={authUser?.id}
+                      profileLoaded={profileLoaded}
+                      lastSeenReleaseVersion={
+                        myProfile?.last_seen_release_version
+                      }
+                    />
+                    <Link to="/profile" style={{ textDecoration: 'none' }}>
+                      <Flex
+                        align="center"
+                        gap="2"
+                        // make it feel like a button without Radix Button hover styles
+                        role="button"
+                        tabIndex={0}
+                        aria-label="Go to profile"
+                        style={{ cursor: 'pointer' }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.currentTarget.click()
+                            e.preventDefault()
+                          }
+                        }}
+                      >
+                        <Avatar
+                          size="2"
+                          radius="full"
+                          src={avatarUrl ?? undefined}
+                          fallback={getInitials(displayName || '?')}
+                          style={{ border: '1px solid var(--gray-5)' }}
+                        />
+                        <Text size="2" style={{ maxWidth: 200 }} truncate>
+                          {displayName}
+                        </Text>
+                      </Flex>
+                    </Link>
 
-                  <Button variant="soft" onClick={handleLogout}>
-                    Logout
-                  </Button>
-                </Flex>
-              )}
-            </Flex>
-          )}
-          <Box
-            p={isPublic ? undefined : '4'}
-            className={
-              isPublic
-                ? undefined
-                : open && isMobile
-                  ? 'app-main-scroll app-main-scroll--locked'
-                  : 'app-main-scroll'
-            }
-            style={{
-              flex: 1, // <-- grow to fill
-              minHeight: 0, // <-- allow scrolling area to shrink
-              overflow: isPublic ? 'visible' : 'auto', // <-- scroll here
-              paddingBottom: isPublic
-                ? undefined
-                : 'var(--app-main-padding-bottom)',
-            }}
-          >
-            {!isPublic && <OfflineBanner />}
-            {/* <AnimatePresence mode="wait">
+                    <Button variant="soft" onClick={handleLogout}>
+                      Logout
+                    </Button>
+                  </Flex>
+                )}
+              </Flex>
+            )}
+            <Box
+              p={isPublic ? undefined : '4'}
+              className={
+                isPublic
+                  ? undefined
+                  : open && isMobile
+                    ? 'app-main-scroll app-main-scroll--locked'
+                    : 'app-main-scroll'
+              }
+              style={{
+                flex: 1, // <-- grow to fill
+                minHeight: 0, // <-- allow scrolling area to shrink
+                overflow: isPublic ? 'visible' : 'auto', // <-- scroll here
+                paddingBottom: isPublic
+                  ? undefined
+                  : 'var(--app-main-padding-bottom)',
+              }}
+            >
+              {!isPublic && <OfflineBanner />}
+              {/* <AnimatePresence mode="wait">
               <motion.div
                 key={currentPath}
                 initial={{ opacity: 0, y: 8 }}
@@ -319,139 +336,140 @@ export default function AppShell() {
                 transition={{ duration: 0.18, ease: 'easeOut' }}
                 style={{ height: '100%' }}
               > */}
-            {showNoCompanyMessage ? (
-              <Flex
-                direction="column"
-                align="center"
-                justify="center"
-                gap="3"
-                style={{ height: '100%' }}
-              >
-                <Text size="6" weight="medium">
-                  You are not part of any company.
-                </Text>
-                <Text size="3" color="gray">
-                  If this is wrong,{' '}
-                  <Link
-                    to="/contact"
-                    style={{
-                      color: 'var(--accent-11)',
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    contact support
-                  </Link>
-                  .
-                </Text>
-              </Flex>
-            ) : (
-              <Outlet />
-            )}
-            {/* </motion.div>
+              {showNoCompanyMessage ? (
+                <Flex
+                  direction="column"
+                  align="center"
+                  justify="center"
+                  gap="3"
+                  style={{ height: '100%' }}
+                >
+                  <Text size="6" weight="medium">
+                    You are not part of any company.
+                  </Text>
+                  <Text size="3" color="gray">
+                    If this is wrong,{' '}
+                    <Link
+                      to="/contact"
+                      style={{
+                        color: 'var(--accent-11)',
+                        textDecoration: 'underline',
+                      }}
+                    >
+                      contact support
+                    </Link>
+                    .
+                  </Text>
+                </Flex>
+              ) : (
+                <Outlet />
+              )}
+              {/* </motion.div>
             </AnimatePresence> */}
-          </Box>
-        </Flex>
-      </Box>
-      {!isPublic && !showNoCompanyMessage && isMobile && (
-        <IconButton
-          size="3"
-          variant="ghost"
-          className="app-menu-fab"
-          data-open={open ? 'true' : undefined}
-          aria-label={open ? 'Close menu' : 'Open menu'}
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <span className="app-menu-fab-icons" aria-hidden>
-            <Menu
-              className="app-menu-fab-icons__menu"
-              width={22}
-              height={22}
-              strokeWidth={2}
-            />
-            <Xmark
-              className="app-menu-fab-icons__close"
-              width={22}
-              height={22}
-              strokeWidth={2}
-            />
-          </span>
-        </IconButton>
-      )}
-      {!isPublic && <DemoModeBadge />}
-      {isLocal && (
-        <Flex
-          direction="column"
-          gap="2"
-          style={{
-            position: 'fixed',
-            left: 12,
-            bottom: isMobile
-              ? 'calc(12px + var(--app-safe-bottom) + var(--app-menu-fab-clearance))'
-              : 'calc(12px + var(--app-safe-bottom))',
-            zIndex: 50,
-          }}
-        >
-          {isProductionContaInDev && (
-            <Badge
-              role="alert"
-              aria-live="assertive"
-              color="red"
-              variant="solid"
-              size="3"
-              highContrast
-              className="dev-badge"
-              style={{
-                fontWeight: 700,
-                boxShadow: '0 0 0 2px var(--red-9)',
-              }}
-            >
-              <DevBadgeContent marqueeClassName="dev-badge-marquee">
-                ⚠️ Production Conta in dev — real invoices possible
-              </DevBadgeContent>
-            </Badge>
-          )}
-          {isContaPaused && (
+            </Box>
+          </Flex>
+        </Box>
+        {!isPublic && !showNoCompanyMessage && isMobile && (
+          <IconButton
+            size="3"
+            variant="ghost"
+            className="app-menu-fab"
+            data-open={open ? 'true' : undefined}
+            aria-label={open ? 'Close menu' : 'Open menu'}
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span className="app-menu-fab-icons" aria-hidden>
+              <Menu
+                className="app-menu-fab-icons__menu"
+                width={22}
+                height={22}
+                strokeWidth={2}
+              />
+              <Xmark
+                className="app-menu-fab-icons__close"
+                width={22}
+                height={22}
+                strokeWidth={2}
+              />
+            </span>
+          </IconButton>
+        )}
+        {!isPublic && <DemoModeBadge />}
+        {isLocal && (
+          <Flex
+            direction="column"
+            gap="2"
+            style={{
+              position: 'fixed',
+              left: 12,
+              bottom: isMobile
+                ? 'calc(12px + var(--app-safe-bottom) + var(--app-menu-fab-clearance))'
+                : 'calc(12px + var(--app-safe-bottom))',
+              zIndex: 50,
+            }}
+          >
+            {isProductionContaInDev && (
+              <Badge
+                role="alert"
+                aria-live="assertive"
+                color="red"
+                variant="solid"
+                size="3"
+                highContrast
+                className="dev-badge"
+                style={{
+                  fontWeight: 700,
+                  boxShadow: '0 0 0 2px var(--red-9)',
+                }}
+              >
+                <DevBadgeContent marqueeClassName="dev-badge-marquee">
+                  ⚠️ Production Conta in dev — real invoices possible
+                </DevBadgeContent>
+              </Badge>
+            )}
+            {isContaPaused && (
+              <Badge
+                role="status"
+                aria-live="polite"
+                color="orange"
+                variant="surface"
+                size="3"
+                className="dev-badge"
+              >
+                <DevBadgeContent marqueeClassName="dev-badge-marquee">
+                  Conta paused — API key inactive
+                </DevBadgeContent>
+              </Badge>
+            )}
             <Badge
               role="status"
               aria-live="polite"
-              color="orange"
+              color="yellow"
               variant="surface"
               size="3"
               className="dev-badge"
             >
               <DevBadgeContent marqueeClassName="dev-badge-marquee">
-                Conta paused — API key inactive
+                Dev environment
               </DevBadgeContent>
             </Badge>
-          )}
-          <Badge
-            role="status"
-            aria-live="polite"
-            color="yellow"
-            variant="surface"
-            size="3"
-            className="dev-badge"
-          >
-            <DevBadgeContent marqueeClassName="dev-badge-marquee">
-              Dev environment
-            </DevBadgeContent>
-          </Badge>
-          <Badge
-            role="status"
-            aria-live="polite"
-            color={dbBadgeColor}
-            variant="surface"
-            size="3"
-            className="dev-badge"
-          >
-            <DevBadgeContent marqueeClassName="dev-badge-marquee">
-              {dbBadgeLabel}
-            </DevBadgeContent>
-          </Badge>
-        </Flex>
-      )}
-    </Flex>
+            <Badge
+              role="status"
+              aria-live="polite"
+              color={dbBadgeColor}
+              variant="surface"
+              size="3"
+              className="dev-badge"
+            >
+              <DevBadgeContent marqueeClassName="dev-badge-marquee">
+                {dbBadgeLabel}
+              </DevBadgeContent>
+            </Badge>
+          </Flex>
+        )}
+      </Flex>
+    </MobileNavProvider>
   )
 }
 

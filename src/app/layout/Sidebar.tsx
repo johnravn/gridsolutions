@@ -632,10 +632,12 @@ function SidebarContent({
             justifyContent: 'center',
             ...(isMobile
               ? {
-                  /* Match FAB height so logo + close sit on one row */
-                  minHeight: 'var(--app-menu-fab-size)',
+                  /* Match FAB size + inset so logo + close sit on one row */
+                  minHeight:
+                    'calc(var(--app-menu-fab-size) + var(--app-menu-fab-inset))',
+                  paddingBottom: 'var(--app-menu-fab-inset)',
                   paddingRight:
-                    'calc(var(--space-3) + var(--app-menu-fab-size) + var(--space-2))',
+                    'calc(var(--app-menu-fab-inset) + var(--app-menu-fab-size) + var(--space-2))',
                 }
               : undefined),
           }}

@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Box, Button, Checkbox, Flex, Text } from '@radix-ui/themes'
-import FullCalendar from '@fullcalendar/react'
+import FullCalendar from '@shared/calendar/FullCalendarSafe'
 import '@shared/calendar/fullcalendar.radix.css'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import timeGridPlugin from '@fullcalendar/timegrid'

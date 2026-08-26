@@ -1,37 +1,49 @@
 import { Box, Flex, Grid, Skeleton } from '@radix-ui/themes'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 
 export default function CalendarPageSkeleton() {
+  const isMobile = useMediaQuery('(max-width: 1023px)')
+
   return (
     <Flex className="calendar-page" direction="column" gap="2">
-      <Flex align="center" gap="3" wrap="wrap" style={{ flexShrink: 0 }}>
+      <Flex
+        align="center"
+        gap="2"
+        wrap="nowrap"
+        style={{ flexShrink: 0, minWidth: 0 }}
+      >
         <Skeleton>
-          <Box style={{ width: 150, height: 32 }} />
+          <Box style={{ width: 88, height: 32 }} />
         </Skeleton>
-        <Skeleton>
-          <Box style={{ width: 260, height: 32 }} />
+        <Skeleton style={{ flex: 1, minWidth: 0 }}>
+          <Box style={{ width: '100%', height: 32 }} />
         </Skeleton>
-        <Flex gap="2" style={{ marginLeft: 'auto' }}>
-          <Skeleton>
-            <Box style={{ width: 32, height: 32 }} />
-          </Skeleton>
-          <Skeleton>
-            <Box style={{ width: 32, height: 32 }} />
-          </Skeleton>
-        </Flex>
+        {!isMobile && (
+          <Flex gap="2" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+            <Skeleton>
+              <Box style={{ width: 32, height: 32 }} />
+            </Skeleton>
+            <Skeleton>
+              <Box style={{ width: 32, height: 32 }} />
+            </Skeleton>
+          </Flex>
+        )}
       </Flex>
 
       <Flex align="center" justify="between" style={{ flexShrink: 0 }}>
         <Skeleton>
           <Box style={{ width: 120, height: 24 }} />
         </Skeleton>
-        <Flex gap="2">
-          <Skeleton>
-            <Box style={{ width: 32, height: 32 }} />
-          </Skeleton>
-          <Skeleton>
-            <Box style={{ width: 32, height: 32 }} />
-          </Skeleton>
-        </Flex>
+        {!isMobile && (
+          <Flex gap="2">
+            <Skeleton>
+              <Box style={{ width: 32, height: 32 }} />
+            </Skeleton>
+            <Skeleton>
+              <Box style={{ width: 32, height: 32 }} />
+            </Skeleton>
+          </Flex>
+        )}
       </Flex>
 
       <Grid columns="7" gap="2" style={{ flexShrink: 0 }}>

@@ -3,7 +3,11 @@ import { useQuery } from '@tanstack/react-query'
 import { Plus, Search } from 'iconoir-react'
 import { Badge, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+} from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
@@ -159,12 +163,7 @@ export default function VehiclesView({
     )
 
   const toolbar = (
-    <Flex
-      gap={isMobile ? '4' : '2'}
-      align="center"
-      wrap="wrap"
-      direction={isMobile ? 'column' : 'row'}
-    >
+    <Flex gap={isMobile ? '4' : '2'} align="center" wrap="wrap">
       <Flex
         gap="3"
         align="center"
@@ -191,13 +190,8 @@ export default function VehiclesView({
         {isMobile ? toolbarExtra : null}
       </Flex>
 
-      {canWrite && (
-        <Button
-          variant="solid"
-          onClick={() => setAddOpen(true)}
-          style={isMobile ? { width: '100%' } : undefined}
-          size="3"
-        >
+      {canWrite && !isMobile && (
+        <Button variant="solid" onClick={() => setAddOpen(true)} size="3">
           <Plus width={18} height={18} />
           Add vehicle
         </Button>
@@ -214,71 +208,81 @@ export default function VehiclesView({
 
   if (isMobile) {
     return (
-      <MobilePageList toolbar={toolbar}>
-        {isLoading ? (
-          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
-        ) : rows.length === 0 ? (
-          <Text size="2" color="gray">
-            No vehicles
-          </Text>
-        ) : (
-          <Flex
-            direction="column"
-            gap="2"
-            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
-          >
-            {rows.map((row) => {
-              const isSelected = row.id === selectedId
-              return (
-                <div
-                  key={row.id}
-                  className={[
-                    INDEX_TABLE_ROW_CLASS,
-                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(row.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onSelect(row.id)
-                    }
-                  }}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: PAGE_GRID_COLUMNS,
-                    gap: 'var(--space-3)',
-                    alignItems: 'center',
-                    padding: '16px 12px',
-                    minHeight: 64,
-                    cursor: 'pointer',
-                    borderRadius: 'var(--radius-3)',
-                  }}
-                >
-                  <div style={{ minWidth: 0 }}>
-                    <Text size="2" weight="medium">
-                      {row.name}
-                    </Text>
-                    <Text as="div" size="1" color="gray">
-                      {row.registration_no ?? '—'}
-                    </Text>
+      <>
+        <MobilePageList toolbar={toolbar}>
+          {isLoading ? (
+            <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+          ) : rows.length === 0 ? (
+            <Text size="2" color="gray">
+              No vehicles
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {rows.map((row) => {
+                const isSelected = row.id === selectedId
+                return (
+                  <div
+                    key={row.id}
+                    className={[
+                      INDEX_TABLE_ROW_CLASS,
+                      isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelect(row.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect(row.id)
+                      }
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: PAGE_GRID_COLUMNS,
+                      gap: 'var(--space-3)',
+                      alignItems: 'center',
+                      padding: '16px 12px',
+                      minHeight: 64,
+                      cursor: 'pointer',
+                      borderRadius: 'var(--radius-3)',
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <Text size="2" weight="medium">
+                        {row.name}
+                      </Text>
+                      <Text as="div" size="1" color="gray">
+                        {row.registration_no ?? '—'}
+                      </Text>
+                    </div>
+                    {renderFuel(row)}
+                    {renderOwner(row)}
                   </div>
-                  {renderFuel(row)}
-                  {renderOwner(row)}
-                </div>
-              )
-            })}
-          </Flex>
+                )
+              })}
+            </Flex>
+          )}
+          {rows.length > 0 && (
+            <Text size="2" color="gray">
+              {rows.length} vehicle{rows.length !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </MobilePageList>
+        {canWrite && (
+          <MobileBottomActionBar>
+            <Button variant="ghost" size="3" onClick={() => setAddOpen(true)}>
+              <Plus width={18} height={18} />
+              Add vehicle
+            </Button>
+          </MobileBottomActionBar>
         )}
-        {rows.length > 0 && (
-          <Text size="2" color="gray">
-            {rows.length} vehicle{rows.length !== 1 ? 's' : ''}
-          </Text>
-        )}
-      </MobilePageList>
+      </>
     )
   }
 

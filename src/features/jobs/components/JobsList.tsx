@@ -11,6 +11,7 @@ import {
   Button,
   DropdownMenu,
   Flex,
+  IconButton,
   Spinner,
   Text,
   TextField,
@@ -20,7 +21,11 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+} from '@app/layout/mobile'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   ArrowLeft,
@@ -376,12 +381,7 @@ export default function JobsList({
   }
 
   const toolbar = (
-    <Flex
-      gap={compact ? '4' : '2'}
-      align="center"
-      wrap="wrap"
-      direction={compact ? 'column' : 'row'}
-    >
+    <Flex gap={compact ? '4' : '2'} align="center" wrap="wrap">
       <Flex
         gap="3"
         align="center"
@@ -408,18 +408,9 @@ export default function JobsList({
         </TextField.Root>
         {compact ? toolbarExtra : null}
       </Flex>
-      {canWrite && (
-        <Flex
-          gap="2"
-          align="center"
-          style={compact ? { width: '100%' } : undefined}
-        >
-          <Button
-            variant="solid"
-            size="3"
-            onClick={() => setCreateOpen(true)}
-            style={compact ? { flex: 1 } : undefined}
-          >
+      {canWrite && !compact && (
+        <Flex gap="2" align="center">
+          <Button variant="solid" size="3" onClick={() => setCreateOpen(true)}>
             <Plus width={18} height={18} />
             New job
           </Button>
@@ -678,76 +669,90 @@ export default function JobsList({
 
   if (compact) {
     return (
-      <MobilePageList toolbar={toolbar}>
-        {dialogs}
-        {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
-          <Box>
-            <Flex
-              align="center"
-              justify="between"
-              gap="2"
-              mb={recurringJobsOpen ? '1' : '0'}
-              onClick={
-                !recurringJobsOpen
-                  ? () => setRecurringJobsOpen(true)
-                  : undefined
-              }
-              onKeyDown={
-                !recurringJobsOpen
-                  ? (e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        setRecurringJobsOpen(true)
+      <>
+        <MobilePageList toolbar={toolbar}>
+          {dialogs}
+          {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
+            <Box>
+              <Flex
+                align="center"
+                justify="between"
+                gap="2"
+                mb={recurringJobsOpen ? '1' : '0'}
+                onClick={
+                  !recurringJobsOpen
+                    ? () => setRecurringJobsOpen(true)
+                    : undefined
+                }
+                onKeyDown={
+                  !recurringJobsOpen
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          setRecurringJobsOpen(true)
+                        }
                       }
-                    }
-                  : undefined
-              }
-              role={!recurringJobsOpen ? 'button' : undefined}
-              tabIndex={!recurringJobsOpen ? 0 : undefined}
-              aria-expanded={recurringJobsOpen}
-              style={{
-                minHeight: 24,
-                cursor: !recurringJobsOpen ? 'pointer' : undefined,
-                borderRadius: 'var(--radius-2)',
-                padding: '2px 0',
-                margin: '-2px 0',
-              }}
-            >
-              <Flex align="center" gap="1" style={{ minWidth: 0 }}>
-                {!recurringJobsOpen && (
-                  <NavArrowRight
-                    width={14}
-                    height={14}
-                    color="var(--gray-11)"
-                  />
-                )}
-                <Text size="1" weight="medium" color="gray">
-                  Recurring jobs
-                </Text>
-                {!recurringJobsOpen && (
-                  <Badge variant="soft" color="gray" size="1">
-                    {pinnedRecurringJobs.length}
-                  </Badge>
+                    : undefined
+                }
+                role={!recurringJobsOpen ? 'button' : undefined}
+                tabIndex={!recurringJobsOpen ? 0 : undefined}
+                aria-expanded={recurringJobsOpen}
+                style={{
+                  minHeight: 24,
+                  cursor: !recurringJobsOpen ? 'pointer' : undefined,
+                  borderRadius: 'var(--radius-2)',
+                  padding: '2px 0',
+                  margin: '-2px 0',
+                }}
+              >
+                <Flex align="center" gap="1" style={{ minWidth: 0 }}>
+                  {!recurringJobsOpen && (
+                    <NavArrowRight
+                      width={14}
+                      height={14}
+                      color="var(--gray-11)"
+                    />
+                  )}
+                  <Text size="1" weight="medium" color="gray">
+                    Recurring jobs
+                  </Text>
+                  {!recurringJobsOpen && (
+                    <Badge variant="soft" color="gray" size="1">
+                      {pinnedRecurringJobs.length}
+                    </Badge>
+                  )}
+                </Flex>
+                {recurringJobsOpen && (
+                  <Button
+                    size="1"
+                    variant="ghost"
+                    color="gray"
+                    aria-label="Hide recurring jobs"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setRecurringJobsOpen(false)
+                    }}
+                    style={recurringHideButtonStyle}
+                  >
+                    Hide
+                  </Button>
                 )}
               </Flex>
-              {recurringJobsOpen && (
-                <Button
-                  size="1"
-                  variant="ghost"
-                  color="gray"
-                  aria-label="Hide recurring jobs"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setRecurringJobsOpen(false)
-                  }}
-                  style={recurringHideButtonStyle}
-                >
-                  Hide
-                </Button>
-              )}
-            </Flex>
-            {recurringJobsOpen &&
-              pinnedRecurringJobs.map((row) => (
+              {recurringJobsOpen &&
+                pinnedRecurringJobs.map((row) => (
+                  <RecurringJobListRow
+                    key={row.id}
+                    row={row}
+                    compact
+                    isSelected={selectedRecurringJobId === row.id}
+                    onClick={() => onSelectRecurringJob(row.id, row.title)}
+                  />
+                ))}
+            </Box>
+          )}
+          {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
+            <Box>
+              {searchRecurringHits.map((row) => (
                 <RecurringJobListRow
                   key={row.id}
                   row={row}
@@ -756,68 +761,86 @@ export default function JobsList({
                   onClick={() => onSelectRecurringJob(row.id, row.title)}
                 />
               ))}
-          </Box>
+            </Box>
+          )}
+          {isLoading ? (
+            <IndexTableBodySkeleton rowCount={8} rowHeight={88} />
+          ) : rows.length === 0 &&
+            !hasNextPage &&
+            (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
+            <Text size="2" color="gray">
+              {allData.length === 0
+                ? 'No jobs yet'
+                : 'No jobs match your filters'}
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {rows.map((job) => (
+                <JobIndexRow
+                  key={job.id}
+                  job={job}
+                  compact
+                  isSelected={job.id === selectedJobId}
+                  companyRole={companyRole}
+                  myRole={getMyJobRole(job)}
+                  onSelect={() => onSelectJob(job.id)}
+                  getAvatarUrl={getAvatarUrl}
+                />
+              ))}
+              {hasNextPage && (
+                <Button
+                  variant="soft"
+                  onClick={() => {
+                    void fetchNextPage()
+                  }}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? 'Loading more…' : 'Load more'}
+                </Button>
+              )}
+            </Flex>
+          )}
+          {rows.length > 0 && (
+            <Text size="2" color="gray">
+              {totalCount} job{totalCount !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </MobilePageList>
+        {canWrite && (
+          <MobileBottomActionBar>
+            <Button
+              variant="ghost"
+              size="3"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus width={18} height={18} />
+              New job
+            </Button>
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <IconButton
+                  variant="ghost"
+                  size="3"
+                  aria-label="More job actions"
+                >
+                  <MoreHoriz width={18} height={18} />
+                </IconButton>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.Item
+                  onSelect={() => setCreateRecurringOpen(true)}
+                >
+                  New recurring job
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          </MobileBottomActionBar>
         )}
-        {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
-          <Box>
-            {searchRecurringHits.map((row) => (
-              <RecurringJobListRow
-                key={row.id}
-                row={row}
-                compact
-                isSelected={selectedRecurringJobId === row.id}
-                onClick={() => onSelectRecurringJob(row.id, row.title)}
-              />
-            ))}
-          </Box>
-        )}
-        {isLoading ? (
-          <IndexTableBodySkeleton rowCount={8} rowHeight={88} />
-        ) : rows.length === 0 &&
-          !hasNextPage &&
-          (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
-          <Text size="2" color="gray">
-            {allData.length === 0
-              ? 'No jobs yet'
-              : 'No jobs match your filters'}
-          </Text>
-        ) : (
-          <Flex
-            direction="column"
-            gap="2"
-            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
-          >
-            {rows.map((job) => (
-              <JobIndexRow
-                key={job.id}
-                job={job}
-                compact
-                isSelected={job.id === selectedJobId}
-                companyRole={companyRole}
-                myRole={getMyJobRole(job)}
-                onSelect={() => onSelectJob(job.id)}
-                getAvatarUrl={getAvatarUrl}
-              />
-            ))}
-            {hasNextPage && (
-              <Button
-                variant="soft"
-                onClick={() => {
-                  void fetchNextPage()
-                }}
-                disabled={isFetchingNextPage}
-              >
-                {isFetchingNextPage ? 'Loading more…' : 'Load more'}
-              </Button>
-            )}
-          </Flex>
-        )}
-        {rows.length > 0 && (
-          <Text size="2" color="gray">
-            {totalCount} job{totalCount !== 1 ? 's' : ''}
-          </Text>
-        )}
-      </MobilePageList>
+      </>
     )
   }
 

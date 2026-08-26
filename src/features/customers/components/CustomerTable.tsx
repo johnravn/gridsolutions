@@ -10,7 +10,11 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+} from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useDebouncedValue } from '@tanstack/react-pacer'
@@ -99,12 +103,7 @@ export default function CustomerTable({
   })
 
   const toolbar = (
-    <Flex
-      gap={isMobile ? '4' : '2'}
-      align="center"
-      wrap="wrap"
-      direction={isMobile ? 'column' : 'row'}
-    >
+    <Flex gap={isMobile ? '4' : '2'} align="center" wrap="wrap">
       <Flex
         gap="3"
         align="center"
@@ -136,13 +135,8 @@ export default function CustomerTable({
         {isMobile ? toolbarExtra : null}
       </Flex>
 
-      {canWrite && (
-        <Button
-          variant="solid"
-          onClick={() => setAddOpen(true)}
-          style={isMobile ? { width: '100%' } : undefined}
-          size="3"
-        >
+      {canWrite && !isMobile && (
+        <Button variant="solid" onClick={() => setAddOpen(true)} size="3">
           <Plus width={18} height={18} />
           Add customer
         </Button>
@@ -171,65 +165,75 @@ export default function CustomerTable({
 
   if (isMobile) {
     return (
-      <MobilePageList toolbar={toolbar}>
-        {isLoading ? (
-          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
-        ) : rows.length === 0 ? (
-          <Text size="2" color="gray">
-            No results
-          </Text>
-        ) : (
-          <Flex
-            direction="column"
-            gap="2"
-            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
-          >
-            {rows.map((r) => {
-              const isSelected = r.id === selectedId
-              return (
-                <div
-                  key={r.id}
-                  className={[
-                    INDEX_TABLE_ROW_CLASS,
-                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(r.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onSelect(r.id)
-                    }
-                  }}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: PAGE_GRID_COLUMNS,
-                    gap: 'var(--space-3)',
-                    alignItems: 'center',
-                    padding: '16px 12px',
-                    minHeight: 64,
-                    cursor: 'pointer',
-                    borderRadius: 'var(--radius-3)',
-                  }}
-                >
-                  <Text size="2" weight="medium">
-                    {r.name}
-                  </Text>
-                  {renderType(r)}
-                </div>
-              )
-            })}
-          </Flex>
+      <>
+        <MobilePageList toolbar={toolbar}>
+          {isLoading ? (
+            <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+          ) : rows.length === 0 ? (
+            <Text size="2" color="gray">
+              No results
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {rows.map((r) => {
+                const isSelected = r.id === selectedId
+                return (
+                  <div
+                    key={r.id}
+                    className={[
+                      INDEX_TABLE_ROW_CLASS,
+                      isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelect(r.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect(r.id)
+                      }
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: PAGE_GRID_COLUMNS,
+                      gap: 'var(--space-3)',
+                      alignItems: 'center',
+                      padding: '16px 12px',
+                      minHeight: 64,
+                      cursor: 'pointer',
+                      borderRadius: 'var(--radius-3)',
+                    }}
+                  >
+                    <Text size="2" weight="medium">
+                      {r.name}
+                    </Text>
+                    {renderType(r)}
+                  </div>
+                )
+              })}
+            </Flex>
+          )}
+          {rows.length > 0 && (
+            <Text size="2" color="gray">
+              {rows.length} customer{rows.length !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </MobilePageList>
+        {canWrite && (
+          <MobileBottomActionBar>
+            <Button variant="ghost" size="3" onClick={() => setAddOpen(true)}>
+              <Plus width={18} height={18} />
+              Add customer
+            </Button>
+          </MobileBottomActionBar>
         )}
-        {rows.length > 0 && (
-          <Text size="2" color="gray">
-            {rows.length} customer{rows.length !== 1 ? 's' : ''}
-          </Text>
-        )}
-      </MobilePageList>
+      </>
     )
   }
 

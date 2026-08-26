@@ -204,10 +204,10 @@ export default function SubscribeToCalendarDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="540px">
         <Dialog.Title>Subscribe to calendar</Dialog.Title>
-        <Text size="2" color="gray" as="p" mt="1">
+        <Dialog.Description size="2" color="gray" mt="1">
           Add calendar feeds to your phone or computer. You can have up to 10
           subscriptions. Choose a type below and copy the link.
-        </Text>
+        </Dialog.Description>
 
         {/* Your calendar subscriptions – always visible, not inside scroll */}
         <Box mt="4">
