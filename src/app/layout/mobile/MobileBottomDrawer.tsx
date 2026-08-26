@@ -24,7 +24,7 @@ export function MobileBottomDrawer({
 }) {
   const [host, setHost] = React.useState<HTMLElement | null>(null)
   const drawerRef = useBlurFocusedDescendantWhenClosed(open)
-  useLockAppMainScroll(open)
+  useLockAppMainScroll(open, true)
 
   React.useEffect(() => {
     setHost(portalHost())
@@ -67,12 +67,22 @@ export function MobileBottomDrawer({
       <aside
         ref={drawerRef}
         id={DRAWER_ID}
-        className="app-sidebar-glass app-bottom-drawer"
+        className="app-bottom-drawer"
         data-open={open ? 'true' : undefined}
         aria-label={typeof title === 'string' ? title : 'Details'}
         inert={!open ? true : undefined}
       >
-        <Flex direction="column" gap="4" style={{ flex: 1, minHeight: 0 }}>
+        {/* Glass on a sibling so WebKit hit-tests the scrolling content. */}
+        <div
+          className="app-bottom-drawer-surface app-sidebar-glass"
+          aria-hidden
+        />
+        <Flex
+          className="app-bottom-drawer-inner"
+          direction="column"
+          gap="4"
+          onPointerDown={(event) => event.stopPropagation()}
+        >
           <Flex
             align="center"
             justify="between"

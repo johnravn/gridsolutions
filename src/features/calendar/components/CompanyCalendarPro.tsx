@@ -125,6 +125,64 @@ function getRadixColorsForPeriod(
   }
 }
 
+type OverflowEvent = {
+  id: string
+  jobId?: string
+  category?: 'program' | 'equipment' | 'crew' | 'transport' | null
+  displayTitle: string
+  timeStr: string
+  isCanceled: boolean
+  bg: string
+  text: string
+  leadName: string | null
+  avatarUrl: string | null
+}
+
+function formatTimeRange(start: Date | null, end: Date | null): string {
+  const fmt = (d: Date) =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  if (!start) return ''
+  if (!end || start.getTime() === end.getTime()) return fmt(start)
+  return `${fmt(start)}–${fmt(end)}`
+}
+
+function snapshotOverflowEvent(event: EventApi): OverflowEvent {
+  const props = event.extendedProps as {
+    projectLead?: {
+      display_name: string | null
+      email: string
+      avatar_url: string | null
+    } | null
+    jobTitle?: string
+    status?: string
+    category?: 'program' | 'equipment' | 'crew' | 'transport' | null
+    ref?: { jobId?: string }
+  }
+  const projectLead = props.projectLead
+  const isCanceled = props.status === 'canceled'
+  const avatarUrl = projectLead?.avatar_url
+    ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url).data
+        .publicUrl
+    : null
+
+  return {
+    id: event.id,
+    jobId: props.ref?.jobId,
+    category: props.category,
+    displayTitle: props.jobTitle || event.title,
+    timeStr: formatTimeRange(event.start, event.end),
+    isCanceled,
+    bg: isCanceled
+      ? 'var(--gray-a3)'
+      : event.backgroundColor || 'var(--indigo-a6)',
+    text: isCanceled ? 'var(--gray-9)' : event.textColor || 'var(--indigo-12)',
+    leadName: projectLead
+      ? projectLead.display_name || projectLead.email
+      : null,
+    avatarUrl,
+  }
+}
+
 type Props = {
   events: Array<EventInput>
   onCreate?: (e: {
@@ -164,14 +222,18 @@ export default function CompanyCalendarPro({
   const calendarRef = React.useRef<FullCalendar>(null)
   const [overflowDay, setOverflowDay] = React.useState<{
     date: Date
-    events: Array<EventApi>
+    events: Array<OverflowEvent>
   } | null>(null)
 
   const closeOverflow = React.useCallback(() => {
     setOverflowDay(null)
   }, [])
 
-  useMobileDetailBack(isSmallScreen, overflowDay !== null, closeOverflow)
+  const { releaseTrap } = useMobileDetailBack(
+    isSmallScreen,
+    overflowDay !== null,
+    closeOverflow,
+  )
 
   React.useEffect(() => {
     if (!isSmallScreen) setOverflowDay(null)
@@ -325,6 +387,9 @@ export default function CompanyCalendarPro({
     (arg: MoreLinkArg) => {
       if (!isSmallScreen) return 'popover'
 
+      arg.jsEvent.preventDefault()
+      arg.jsEvent.stopPropagation()
+
       const seen = new Set<string>()
       const dayEvents = arg.allSegs
         .map((seg) => seg.event)
@@ -334,6 +399,7 @@ export default function CompanyCalendarPro({
           return true
         })
         .sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
+        .map(snapshotOverflowEvent)
 
       // FullCalendar still opens its popover when the handler returns void.
       // A truthy non-string skips both the popover and view-zoom. Defer our
@@ -346,59 +412,31 @@ export default function CompanyCalendarPro({
     [isSmallScreen],
   )
 
-  // Using shared getInitials from generalFunctions
-
-  function formatTimeRange(start: Date | null, end: Date | null): string {
-    const fmt = (d: Date) =>
-      `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-    if (!start) return ''
-    if (!end || start.getTime() === end.getTime()) return fmt(start)
-    return `${fmt(start)}–${fmt(end)}`
-  }
-
-  function overflowEventRow(event: EventApi) {
-    const props = event.extendedProps as any
-    const projectLead = props?.projectLead as
-      | {
-          display_name: string | null
-          email: string
-          avatar_url: string | null
-        }
-      | null
-      | undefined
-    const displayTitle = (props?.jobTitle as string | undefined) || event.title
-    const timeStr = formatTimeRange(event.start, event.end)
-    const isCanceled = (props?.status as string | undefined) === 'canceled'
-    const avatarUrl = projectLead?.avatar_url
-      ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url)
-          .data.publicUrl
-      : null
-    const leadName = projectLead
-      ? projectLead.display_name || projectLead.email
-      : null
-    const colors = isCanceled
-      ? {
-          bg: 'var(--gray-a3)',
-          text: 'var(--gray-9)',
-        }
-      : {
-          bg: event.backgroundColor || 'var(--indigo-a6)',
-          text: event.textColor || 'var(--indigo-12)',
-        }
-
+  function overflowEventRow(event: OverflowEvent) {
     return (
       <button
         key={event.id}
         type="button"
         className={
-          isCanceled
+          event.isCanceled
             ? 'calendar-overflow-event calendar-overflow-event--canceled'
             : 'calendar-overflow-event'
         }
-        style={{ background: colors.bg, color: colors.text }}
+        style={{ background: event.bg, color: event.text }}
         onClick={() => {
-          closeOverflow()
-          openJobFromEvent(event)
+          if (!event.jobId) {
+            closeOverflow()
+            return
+          }
+          releaseTrap()
+          navigate({
+            to: '/jobs',
+            search: {
+              jobId: event.jobId,
+              recurringJobId: undefined,
+              tab: getTabForCategory(event.category),
+            },
+          })
         }}
       >
         <div
@@ -410,7 +448,7 @@ export default function CompanyCalendarPro({
             minWidth: 0,
           }}
         >
-          {timeStr && (
+          {event.timeStr && (
             <span
               style={{
                 fontWeight: 600,
@@ -418,7 +456,7 @@ export default function CompanyCalendarPro({
                 flexShrink: 0,
               }}
             >
-              {timeStr}
+              {event.timeStr}
             </span>
           )}
           <span
@@ -431,16 +469,16 @@ export default function CompanyCalendarPro({
               minWidth: 0,
             }}
           >
-            {displayTitle}
+            {event.displayTitle}
           </span>
-          {projectLead && (
+          {event.leadName && (
             <Avatar
               className="fc-event-lead-avatar"
               size="2"
               radius="full"
-              src={avatarUrl ?? undefined}
-              fallback={getInitials(leadName)}
-              title={leadName ?? undefined}
+              src={event.avatarUrl ?? undefined}
+              fallback={getInitials(event.leadName)}
+              title={event.leadName}
               style={{
                 flexShrink: 0,
                 border: '1px solid var(--gray-a6)',

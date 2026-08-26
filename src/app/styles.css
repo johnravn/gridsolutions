@@ -276,6 +276,7 @@ button:not(:disabled),
 .app-inspector-backdrop[data-open] {
   opacity: 1;
   pointer-events: auto;
+  touch-action: none;
 }
 
 .app-inspector-drawer {
@@ -317,24 +318,50 @@ button:not(:disabled),
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  isolation: isolate;
   border-radius: 16px 16px 0 0;
   border-top: 1px solid var(--gray-a5);
   box-shadow: var(--shadow-4);
   transform: translateY(100%);
   pointer-events: none;
   transition: transform 380ms var(--motion-ease-ios);
-  padding-top: 20px !important;
-  padding-right: 20px !important;
-  padding-bottom: calc(20px + var(--app-safe-bottom)) !important;
-  padding-left: 16px !important;
+  padding: 0 !important;
+}
+
+.app-bottom-drawer-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+}
+
+.app-bottom-drawer-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-height: 0;
+  min-width: 0;
+  max-height: 75dvh;
+  overflow: hidden;
+  padding-top: 20px;
+  padding-right: 20px;
+  padding-bottom: calc(20px + var(--app-safe-bottom));
+  padding-left: 16px;
 }
 
 .app-bottom-drawer-body {
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0 !important;
   padding-bottom: var(--app-menu-fab-clearance) !important;
 }
