@@ -525,9 +525,14 @@ button:not(:disabled),
     background-color 220ms ease;
 }
 
+/* Closed: chevron points left (out into the page). Open: points right (in toward the edge). */
+.app-inspector-fab.rt-IconButton .app-menu-fab-icons__close {
+  transform: rotate(90deg);
+}
+
 .app-inspector-fab.rt-IconButton[data-open] .app-menu-fab-icons__menu {
   opacity: 0;
-  transform: rotate(90deg);
+  transform: rotate(-90deg);
 }
 
 .app-inspector-fab.rt-IconButton[data-open] .app-menu-fab-icons__close {

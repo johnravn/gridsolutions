@@ -22,13 +22,13 @@ export function MobileDrawerFab({
       onClick={onToggle}
     >
       <span className="app-menu-fab-icons" aria-hidden>
-        <NavArrowRight
+        <NavArrowLeft
           className="app-menu-fab-icons__menu"
           width={22}
           height={22}
           strokeWidth={2}
         />
-        <NavArrowLeft
+        <NavArrowRight
           className="app-menu-fab-icons__close"
           width={22}
           height={22}
