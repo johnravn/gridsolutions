@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   extractHolyBibleVerse,
+  extractOremusVerse,
   fetchVerseOfTheDay,
   formatVerseCitation,
   parseVerseReference,
@@ -45,6 +46,15 @@ describe('formatVerseCitation', () => {
     )
   })
 
+  it('keeps English names and a colon for NRSV', () => {
+    expect(formatVerseCitation(parseVerseReference('Psalm 62:1'), 'nrsv')).toBe(
+      'Psalm 62:1',
+    )
+    expect(
+      formatVerseCitation(parseVerseReference('1 John 4:7-8'), 'nrsv'),
+    ).toBe('1 John 4:7-8')
+  })
+
   it('keeps English names and a colon for The Message', () => {
     expect(formatVerseCitation(parseVerseReference('Psalm 62:1'), 'msg')).toBe(
       'Psalm 62:1',
@@ -52,6 +62,40 @@ describe('formatVerseCitation', () => {
     expect(
       formatVerseCitation(parseVerseReference('1 John 4:7-8'), 'msg'),
     ).toBe('1 John 4:7-8')
+  })
+})
+
+describe('extractOremusVerse', () => {
+  it('reads bibletext and decodes curly quotes', () => {
+    const html = `
+      <h2 class="passageref">John 3.16</h2>
+      <div class="bibletext">
+        <p>
+          <!-- <vnum>16</vnum> -->&#147;For God so loved the world that he gave his only Son.
+        </p>
+      </div>
+    `
+    expect(extractOremusVerse(html)).toBe(
+      '“For God so loved the world that he gave his only Son.',
+    )
+  })
+
+  it('joins a verse range into one passage', () => {
+    const html = `
+      <div class="bibletext">
+        <p>
+          <!-- <vnum>16</vnum> -->First verse.
+          <!-- <vnum>17</vnum> -->Second verse.
+        </p>
+      </div>
+    `
+    expect(extractOremusVerse(html)).toBe('First verse. Second verse.')
+  })
+
+  it('throws when the verse markup is missing', () => {
+    expect(() => extractOremusVerse('<p>No passage</p>')).toThrow(
+      /NRSV verse markup not found/i,
+    )
   })
 })
 
@@ -109,6 +153,12 @@ describe('fetchVerseOfTheDay', () => {
             { status: 200 },
           )
         }
+        if (url.includes('bible.oremus.org')) {
+          return new Response(
+            '<div class="bibletext"><p>&#147;For God so loved the world that he gave his only Son.</p></div>',
+            { status: 200 },
+          )
+        }
         return new Response('missing', { status: 404 })
       }),
     )
@@ -125,5 +175,12 @@ describe('fetchVerseOfTheDay', () => {
     const data = await fetchVerseOfTheDay('msg')
     expect(data.passage).toContain('God loved the world')
     expect(data.version).toBe('MSG')
+  })
+
+  it('returns NRSV from oremus', async () => {
+    const data = await fetchVerseOfTheDay('nrsv')
+    expect(data.citation).toBe('John 3:16')
+    expect(data.passage).toContain('God so loved the world')
+    expect(data.version).toBe('NRSV')
   })
 })

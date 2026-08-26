@@ -1,4 +1,4 @@
-import { expect, type Page } from '@playwright/test'
+import { expect, type Locator, type Page } from '@playwright/test'
 
 function navLinkName(name: string): RegExp {
   return new RegExp(`^${name}(?:\\s+\\d+)?$`)
@@ -266,13 +266,14 @@ export async function createDraftJob(page: Page, title?: string) {
   const createButton = dialog.getByRole('button', { name: 'Create' })
   const titleInput = dialog.getByPlaceholder('Enter job title')
 
-  await dialog.getByRole('button', { name: 'Auto-fill' }).click()
-  // Create stays disabled until Auto-fill has populated the required date range.
-  await expect(createButton).toBeEnabled({ timeout: 10_000 })
-
   await titleInput.fill(jobTitle)
   await expect(titleInput).toHaveValue(jobTitle)
-  await expect(createButton).toBeEnabled()
+
+  // Create stays disabled until a date range is set.
+  const today = new Date()
+  const localDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  await pickDateRangeInDialog(page, dialog, localDate)
+  await expect(createButton).toBeEnabled({ timeout: 10_000 })
 
   await createButton.scrollIntoViewIfNeeded()
   await expect(async () => {
@@ -375,7 +376,7 @@ export function bookEquipmentDialog(page: Page) {
 /** Pick a local date in the DateTimeRangePicker (sets a full-day range on that day). */
 async function pickDateRangeInDialog(
   page: Page,
-  dialog: ReturnType<typeof bookEquipmentDialog>,
+  dialog: Locator,
   localDate: string,
 ) {
   const periodTrigger = dialog.getByRole('button', { name: 'Select period' })

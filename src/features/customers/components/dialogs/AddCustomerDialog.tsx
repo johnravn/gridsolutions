@@ -9,7 +9,10 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import { formatVATInput } from '@shared/lib/generalFunctions'
-import { generateCustomerAutofill } from '@shared/testing/autofill'
+import {
+  SHOW_AUTOFILL_BUTTONS,
+  generateCustomerAutofill,
+} from '@shared/testing/autofill'
 
 const defaultValues = {
   name: '',
@@ -162,16 +165,18 @@ export default function AddCustomerDialog({
       <Dialog.Content maxWidth="480px">
         <Flex align="center" justify="between">
           <Dialog.Title>Add customer</Dialog.Title>
-          <Button
-            size="2"
-            variant="soft"
-            onClick={autoPopulateFields}
-            type="button"
-            style={{ marginLeft: 'auto' }}
-          >
-            <Sparks width={16} height={16} />
-            Auto-fill
-          </Button>
+          {SHOW_AUTOFILL_BUTTONS && (
+            <Button
+              size="2"
+              variant="soft"
+              onClick={autoPopulateFields}
+              type="button"
+              style={{ marginLeft: 'auto' }}
+            >
+              <Sparks width={16} height={16} />
+              Auto-fill
+            </Button>
+          )}
         </Flex>
         <form
           onSubmit={(e) => {

@@ -29,6 +29,7 @@ import {
 } from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
 import { Sparks } from 'iconoir-react'
+import { SHOW_AUTOFILL_BUTTONS } from '@shared/testing/autofill'
 import {
   JOB_AUTOFILL_SEEDS,
   getJobAutofillSeed,
@@ -777,7 +778,7 @@ export default function JobDialog({
             {mode === 'edit' ? 'Edit job' : 'New job'}
           </Dialog.Title>
           {/* ===== TESTING ONLY: Auto-fill + seed picker ===== */}
-          {mode === 'create' && (
+          {mode === 'create' && SHOW_AUTOFILL_BUTTONS && (
             <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
               {autofillSeed && (
                 <Select.Root

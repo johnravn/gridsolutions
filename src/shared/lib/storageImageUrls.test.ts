@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getBlurredPlaceholderUrl,
   isSupabaseStorageUrl,
+  isSvgUrl,
 } from './storageImageUrls'
 
 describe('getBlurredPlaceholderUrl', () => {
@@ -23,6 +24,29 @@ describe('getBlurredPlaceholderUrl', () => {
 
   it('returns null for external URLs', () => {
     expect(getBlurredPlaceholderUrl('https://example.com/photo.jpg')).toBeNull()
+  })
+
+  it('returns null for SVG logos so alpha is not flattened', () => {
+    expect(
+      getBlurredPlaceholderUrl(
+        'https://abc.supabase.co/storage/v1/object/public/logos/companies/1/logo_light.svg?v=1',
+      ),
+    ).toBeNull()
+  })
+})
+
+describe('isSvgUrl', () => {
+  it('detects SVG paths even with cache-busting query params', () => {
+    expect(
+      isSvgUrl(
+        'https://abc.supabase.co/storage/v1/object/public/logos/logo_light.svg?v=companies/1/logo_light.svg',
+      ),
+    ).toBe(true)
+    expect(
+      isSvgUrl(
+        'https://abc.supabase.co/storage/v1/object/public/logos/logo.png',
+      ),
+    ).toBe(false)
   })
 })
 

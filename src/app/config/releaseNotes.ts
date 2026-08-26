@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.4'
+export const APP_VERSION = '1.13.5'
 
 export type ReleaseHighlight = {
   title: string
@@ -61,7 +61,7 @@ export const RELEASE_NOTES = {
     {
       title: 'Bible version preference',
       description:
-        'Choose BM11, NN11, or The Message for the daily verse from Profile → Personalization.',
+        'Choose BM11, NN11, NRSV, or The Message for the daily verse from Profile → Personalization.',
     },
     {
       title: 'Polish and fixes',

@@ -23,6 +23,11 @@ import { usePrettyOfferOptions } from './PrettyOfferOptionsContext'
 import type { OfferDetail, PublicPrettyOfferModule } from '../../types'
 import type { usePublicOfferResponse } from '../../hooks/usePublicOfferResponse'
 
+const MUTED_ACCEPT_BUTTON_STYLE = {
+  ['--accent-9' as string]: 'color-mix(in oklab, var(--green-9) 70%, black)',
+  ['--accent-10' as string]: 'color-mix(in oklab, var(--green-10) 70%, black)',
+}
+
 type ResponseState = ReturnType<typeof usePublicOfferResponse>
 
 type Props = {
@@ -142,7 +147,9 @@ function PrettyOfferResponseSection({
             </Button>
             <Button
               size="3"
-              variant={showAcceptForm ? 'solid' : 'soft'}
+              variant="solid"
+              color="green"
+              style={MUTED_ACCEPT_BUTTON_STYLE}
               onClick={() => toggleResponseAction('accept')}
               disabled={responseActionsDisabled}
             >
@@ -216,6 +223,9 @@ function PrettyOfferResponseSection({
             <Flex gap="2">
               <Button
                 size="3"
+                variant="solid"
+                color="green"
+                style={MUTED_ACCEPT_BUTTON_STYLE}
                 onClick={() => acceptMutation.mutate()}
                 disabled={
                   !acceptanceForm.first_name ||

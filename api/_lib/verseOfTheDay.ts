@@ -7,7 +7,13 @@ export type VerseOfTheDay = {
   version: string
 }
 
-type BookLabels = Record<BibleVersion, string>
+type BookLabels = {
+  bm11: string
+  nn11: string
+  msg: string
+}
+
+type HolyBibleVersion = 'bm11' | 'nn11'
 
 type BookMeta = {
   names: Array<string>
@@ -381,7 +387,7 @@ const BOOKS: Array<BookMeta> = [
   }),
 ]
 
-const HOLY_BIBLE_VERSION: Record<Exclude<BibleVersion, 'msg'>, string> = {
+const HOLY_BIBLE_VERSION: Record<HolyBibleVersion, string> = {
   bm11: 'n11bm',
   nn11: 'n11nn',
 }
@@ -419,8 +425,11 @@ export function formatVerseCitation(
   parsed: ParsedReference,
   version: BibleVersion,
 ): string {
-  const bookName = parsed.book.labels[version]
-  const separator = version === 'msg' ? ':' : ','
+  const bookName =
+    version === 'bm11' || version === 'nn11'
+      ? parsed.book.labels[version]
+      : parsed.book.labels.msg
+  const separator = version === 'bm11' || version === 'nn11' ? ',' : ':'
   const verses =
     parsed.verseStart === parsed.verseEnd
       ? String(parsed.verseStart)
@@ -440,6 +449,20 @@ export function extractHolyBibleVerse(html: string): string {
   return text
 }
 
+export function extractOremusVerse(html: string): string {
+  const match = html.match(/<div class="bibletext">([\s\S]*?)<\/div>/i)
+  if (!match) {
+    throw new Error('NRSV verse markup not found')
+  }
+  const text = decodeHtml(stripTags(match[1].replace(/<!--[\s\S]*?-->/g, ' ')))
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) {
+    throw new Error('NRSV verse was not found')
+  }
+  return text
+}
+
 function stripTags(value: string): string {
   return value.replace(/<[^>]+>/g, ' ')
 }
@@ -455,7 +478,18 @@ function decodeHtml(value: string): string {
     .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) =>
       String.fromCharCode(parseInt(hex, 16)),
     )
-    .replace(/&#(\d+);/g, (_, dec: string) => String.fromCharCode(Number(dec)))
+    .replace(/&#(\d+);/g, (_, dec: string) => {
+      const n = Number(dec)
+      const win1252: Record<number, string> = {
+        145: '\u2018',
+        146: '\u2019',
+        147: '\u201C',
+        148: '\u201D',
+        150: '\u2013',
+        151: '\u2014',
+      }
+      return win1252[n] ?? String.fromCharCode(n)
+    })
 }
 
 async function fetchUrl(url: string): Promise<string> {
@@ -490,7 +524,7 @@ async function fetchDailyReference(): Promise<string> {
 }
 
 async function fetchHolyBibleVerses(
-  version: Exclude<BibleVersion, 'msg'>,
+  version: HolyBibleVersion,
   parsed: ParsedReference,
 ): Promise<string> {
   const edition = HOLY_BIBLE_VERSION[version]
@@ -502,6 +536,14 @@ async function fetchHolyBibleVerses(
     verses.push(extractHolyBibleVerse(html))
   }
   return verses.join(' ')
+}
+
+async function fetchNrsvVerses(parsed: ParsedReference): Promise<string> {
+  const passage = parsed.display.replace(/(\d+):(\d+(?:-\d+)?)$/, '$1.$2')
+  const html = await fetchUrl(
+    `https://bible.oremus.org/?version=NRSV&passage=${encodeURIComponent(passage)}&vnum=NO&fnote=NO&show_ref=NO&headings=NO&omithidden=YES`,
+  )
+  return extractOremusVerse(html)
 }
 
 async function fetchMessageVerses(parsed: ParsedReference): Promise<string> {
@@ -541,7 +583,9 @@ export async function fetchVerseOfTheDay(
   const passage =
     version === 'msg'
       ? await fetchMessageVerses(parsed)
-      : await fetchHolyBibleVerses(version, parsed)
+      : version === 'nrsv'
+        ? await fetchNrsvVerses(parsed)
+        : await fetchHolyBibleVerses(version, parsed)
   const shortLabel =
     BIBLE_VERSION_OPTIONS.find((option) => option.value === version)
       ?.shortLabel ?? version.toUpperCase()

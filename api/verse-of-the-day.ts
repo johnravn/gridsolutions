@@ -2,7 +2,7 @@
  * Daily verse endpoint.
  *
  * YouVersion's public site is bot-protected, so we resolve today's reference
- * from OurManna and load BM11/NN11/MSG from sources that still return text.
+ * from OurManna and load BM11/NN11/NRSV/MSG from sources that still return text.
  */
 import { normalizeBibleVersion } from './_lib/bibleVersion.js'
 import { fetchVerseOfTheDay } from './_lib/verseOfTheDay.js'

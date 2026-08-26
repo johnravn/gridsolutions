@@ -18,7 +18,10 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
 import { Plus, Sparks } from 'iconoir-react'
-import { generateItemAutofill } from '@shared/testing/autofill'
+import {
+  SHOW_AUTOFILL_BUTTONS,
+  generateItemAutofill,
+} from '@shared/testing/autofill'
 import BrandAutocomplete from './BrandAutocomplete'
 import type { InventoryItemKind } from '../api/queries'
 
@@ -454,7 +457,7 @@ export default function AddItemDialog({
         <Dialog.Content maxWidth="640px">
           <Flex align="center" justify="between">
             <Dialog.Title>{title}</Dialog.Title>
-            {mode === 'create' && (
+            {mode === 'create' && SHOW_AUTOFILL_BUTTONS && (
               <Button
                 size="2"
                 variant="soft"
