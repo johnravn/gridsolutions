@@ -2,12 +2,14 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { Button, Flex, IconButton, Select, Text } from '@radix-ui/themes'
+import { Button, Flex, IconButton, Select } from '@radix-ui/themes'
 import { Calendar, List, ShareAndroid } from 'iconoir-react'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import CalendarPageSkeleton from '@shared/ui/components/CalendarPageSkeleton'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MobileBottomActionBar } from '@app/layout/mobile'
 import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro'
 import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeToCalendarDialog'
 import {
@@ -20,12 +22,14 @@ import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
+import type { CalendarKind } from '@features/calendar/components/domain'
 
 type Category = 'jobDuration' | 'equipment' | 'crew' | 'transport' | 'all'
 
 export default function CalendarPage() {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
+  const isMobile = useMediaQuery('(max-width: 1023px)')
   const isFreelancer = companyRole === 'freelancer'
   const [category, setCategory] = React.useState<Category>('jobDuration')
   const [searchInput, setSearchInput] = React.useState('')
@@ -230,6 +234,14 @@ export default function CalendarPage() {
     })
   }, [calendarRecords, category, selectedEntityId])
 
+  const defaultKinds = React.useMemo((): Array<CalendarKind> => {
+    if (category === 'all') return ['job', 'item', 'vehicle', 'crew']
+    if (category === 'jobDuration') return ['job']
+    if (category === 'equipment') return ['item']
+    if (category === 'transport') return ['vehicle']
+    return ['crew']
+  }, [category])
+
   const handleCategoryChange = (value: string) => {
     setCategory(value as Category)
     setSelectedEntityId(null)
@@ -263,12 +275,21 @@ export default function CalendarPage() {
   return (
     <Flex className="calendar-page" direction="column" gap="2">
       <Flex align="center" gap="3" wrap="wrap" style={{ flexShrink: 0 }}>
-        <Flex align="center" gap="2">
-          <Text weight="bold" size="2">
-            Category:
-          </Text>
+        <Flex
+          align="center"
+          gap="2"
+          wrap="nowrap"
+          style={{ flex: 1, minWidth: 0 }}
+        >
           <Select.Root value={category} onValueChange={handleCategoryChange}>
-            <Select.Trigger style={{ minWidth: 150 }} />
+            <Select.Trigger
+              aria-label="Category"
+              style={{
+                flexShrink: 0,
+                minWidth: isMobile ? 0 : 150,
+                width: isMobile ? 'auto' : undefined,
+              }}
+            />
             <Select.Content>
               {!isFreelancer && <Select.Item value="all">All</Select.Item>}
               <Select.Item value="jobDuration">Jobs</Select.Item>
@@ -281,17 +302,8 @@ export default function CalendarPage() {
               <Select.Item value="crew">Crew</Select.Item>
             </Select.Content>
           </Select.Root>
-        </Flex>
 
-        {!isFreelancer && category !== 'all' && (
-          <Flex
-            align="center"
-            gap="2"
-            style={{ flex: '1 1 300px', position: 'relative' }}
-          >
-            <Text weight="bold" size="2">
-              Search:
-            </Text>
+          {!isFreelancer && category !== 'all' && (
             <SearchableSelect
               options={entityOptions}
               value={selectedEntityId ?? ''}
@@ -304,39 +316,43 @@ export default function CalendarPage() {
               filterLocally={false}
               placeholder={entitySearchPlaceholder}
               dropdownMaxHeight={300}
-              style={{ flex: 1, maxWidth: 'none' }}
+              style={{ flex: 1, minWidth: 0, maxWidth: 'none' }}
             />
-          </Flex>
+          )}
+        </Flex>
+
+        {!isMobile && (
+          <Button
+            type="button"
+            variant="soft"
+            size="2"
+            onClick={() => setSubscribeDialogOpen(true)}
+            title="Subscribe to calendar"
+          >
+            <ShareAndroid /> Subscribe to calendar
+          </Button>
         )}
 
-        <Button
-          type="button"
-          variant="soft"
-          size="2"
-          onClick={() => setSubscribeDialogOpen(true)}
-          title="Subscribe to calendar"
-        >
-          <ShareAndroid /> Subscribe to calendar
-        </Button>
-
-        <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
-          <IconButton
-            type="button"
-            variant={listMode ? 'soft' : 'solid'}
-            onClick={() => setListMode(false)}
-            title="Calendar view"
-          >
-            <Calendar />
-          </IconButton>
-          <IconButton
-            type="button"
-            variant={listMode ? 'solid' : 'soft'}
-            onClick={() => setListMode(true)}
-            title="List view"
-          >
-            <List />
-          </IconButton>
-        </Flex>
+        {!isMobile && (
+          <Flex align="center" gap="2" style={{ marginLeft: 'auto' }}>
+            <IconButton
+              type="button"
+              variant={listMode ? 'soft' : 'solid'}
+              onClick={() => setListMode(false)}
+              title="Calendar view"
+            >
+              <Calendar />
+            </IconButton>
+            <IconButton
+              type="button"
+              variant={listMode ? 'solid' : 'soft'}
+              onClick={() => setListMode(true)}
+              title="List view"
+            >
+              <List />
+            </IconButton>
+          </Flex>
+        )}
       </Flex>
 
       <SubscribeToCalendarDialog
@@ -349,21 +365,22 @@ export default function CalendarPage() {
         onCreate={() => {}}
         onUpdate={() => {}}
         onDelete={() => {}}
-        defaultKinds={
-          category === 'all'
-            ? ['job', 'item', 'vehicle', 'crew']
-            : category === 'jobDuration'
-              ? ['job']
-              : category === 'equipment'
-                ? ['item']
-                : category === 'transport'
-                  ? ['vehicle']
-                  : ['crew']
-        }
+        defaultKinds={defaultKinds}
         hideCreateButton
         initialListMode={listMode}
         onListModeChange={setListMode}
       />
+
+      <MobileBottomActionBar>
+        <Button
+          variant="ghost"
+          size="3"
+          onClick={() => setSubscribeDialogOpen(true)}
+        >
+          <ShareAndroid width={18} height={18} />
+          Subscribe to calendar
+        </Button>
+      </MobileBottomActionBar>
     </Flex>
   )
 }

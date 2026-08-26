@@ -955,7 +955,7 @@ export default function LoggingPage() {
           </Flex>
         </MobilePageList>
         <MobileBottomActionBar hidden={drawerOpen}>
-          <Button variant="solid" size="3" onClick={openNewEntry}>
+          <Button variant="ghost" size="3" onClick={openNewEntry}>
             <Plus width={18} height={18} />
             New entry
           </Button>

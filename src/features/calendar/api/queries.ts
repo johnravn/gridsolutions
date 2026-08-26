@@ -1,5 +1,6 @@
 // src/features/calendar/api/queries.ts
 import { queryOptions } from '@tanstack/react-query'
+import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
 import {
   buildFreelancerVisibleJobIds,
@@ -262,16 +263,16 @@ export function itemCalendarQuery({
       }
 
       // Fetch all items for each time period to populate itemIds array
-      const { data: allItemsRes, error: itemsError } = await supabase
-        .from('reserved_items')
-        .select('time_period_id, item_id')
-        .in('time_period_id', timePeriodIds)
-
-      if (itemsError) throw itemsError
+      const allItemsRes = await fetchAllInChunks(timePeriodIds, (chunk) =>
+        supabase
+          .from('reserved_items')
+          .select('time_period_id, item_id')
+          .in('time_period_id', chunk),
+      )
 
       // Create a map of time_period_id to array of item_ids
       const itemMap = new Map<string, Array<string>>()
-      ;(allItemsRes || []).forEach((i: any) => {
+      allItemsRes.forEach((i: any) => {
         if (!itemMap.has(i.time_period_id)) {
           itemMap.set(i.time_period_id, [])
         }
@@ -496,15 +497,15 @@ export function companyCalendarQuery({
         | 'paid'
       >()
       if (jobIds.length > 0) {
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs')
-          .select(
-            'id, title, status, project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )',
-          )
-          .in('id', jobIds)
-
-        if (jobsError) throw jobsError
-        ;(jobsData || []).forEach((job: any) => {
+        const jobsData = await fetchAllInChunks(jobIds, (chunk) =>
+          supabase
+            .from('jobs')
+            .select(
+              'id, title, status, project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )',
+            )
+            .in('id', chunk),
+        )
+        jobsData.forEach((job: any) => {
           if (job.id) {
             if (job.project_lead) {
               jobProjectLeads.set(job.id, job.project_lead)
@@ -522,24 +523,28 @@ export function companyCalendarQuery({
       // Now fetch related reservations to determine kind and refs
       const timePeriodIds = data.map((tp) => tp.id)
 
-      const [vehiclesRes, itemsRes, crewRes] = await Promise.all([
-        supabase
-          .from('reserved_vehicles')
-          .select('time_period_id, vehicle_id')
-          .in('time_period_id', timePeriodIds),
-        supabase
-          .from('reserved_items')
-          .select('time_period_id, item_id')
-          .in('time_period_id', timePeriodIds),
-        supabase
-          .from('reserved_crew')
-          .select('time_period_id, user_id, status')
-          .in('time_period_id', timePeriodIds),
+      // Chunk `.in()` lists — a 120-day calendar window can include hundreds of
+      // time periods, and a single GET URI will exceed Kong's ~8KB limit.
+      const [vehiclesData, itemsData, crewData] = await Promise.all([
+        fetchAllInChunks(timePeriodIds, (chunk) =>
+          supabase
+            .from('reserved_vehicles')
+            .select('time_period_id, vehicle_id')
+            .in('time_period_id', chunk),
+        ),
+        fetchAllInChunks(timePeriodIds, (chunk) =>
+          supabase
+            .from('reserved_items')
+            .select('time_period_id, item_id')
+            .in('time_period_id', chunk),
+        ),
+        fetchAllInChunks(timePeriodIds, (chunk) =>
+          supabase
+            .from('reserved_crew')
+            .select('time_period_id, user_id, status')
+            .in('time_period_id', chunk),
+        ),
       ])
-
-      if (vehiclesRes.error) throw vehiclesRes.error
-      if (itemsRes.error) throw itemsRes.error
-      if (crewRes.error) throw crewRes.error
 
       // Build job-level crew map (crew on any period for each job)
       const jobCrewMap = new Map<
@@ -549,7 +554,7 @@ export function companyCalendarQuery({
       data.forEach((tp) => {
         if (!tp.job_id) return
         const jobId = tp.job_id
-        const crewForPeriod = (crewRes.data || []).filter(
+        const crewForPeriod = crewData.filter(
           (c: any) => c.time_period_id === tp.id,
         )
         crewForPeriod.forEach((c: any) => {
@@ -571,13 +576,13 @@ export function companyCalendarQuery({
 
       // Create lookup maps
       const vehicleMap = new Map<string, string>()
-      ;(vehiclesRes.data || []).forEach((v: any) => {
+      vehiclesData.forEach((v: any) => {
         vehicleMap.set(v.time_period_id, v.vehicle_id)
       })
 
       // Map time_period_id to array of item_ids (equipment periods can have multiple items)
       const itemMap = new Map<string, Array<string>>()
-      ;(itemsRes.data || []).forEach((i: any) => {
+      itemsData.forEach((i: any) => {
         if (!itemMap.has(i.time_period_id)) {
           itemMap.set(i.time_period_id, [])
         }
@@ -589,7 +594,7 @@ export function companyCalendarQuery({
         string,
         Array<{ user_id: string; status: string }>
       >()
-      ;(crewRes.data || []).forEach((c: any) => {
+      crewData.forEach((c: any) => {
         if (!crewMap.has(c.time_period_id)) {
           crewMap.set(c.time_period_id, [])
         }
@@ -608,14 +613,16 @@ export function companyCalendarQuery({
           .map((tp) => tp.id)
 
         if (crewTimePeriodIds.length > 0) {
-          const { data: inviteMatters, error: inviteError } = await supabase
-            .from('matters')
-            .select('time_period_id, matter_recipients!inner(user_id)')
-            .eq('matter_type', 'crew_invite')
-            .in('time_period_id', crewTimePeriodIds)
-            .eq('matter_recipients.user_id', userId)
-
-          if (inviteError) throw inviteError
+          const inviteMatters = await fetchAllInChunks(
+            crewTimePeriodIds,
+            (chunk) =>
+              supabase
+                .from('matters')
+                .select('time_period_id, matter_recipients!inner(user_id)')
+                .eq('matter_type', 'crew_invite')
+                .in('time_period_id', chunk)
+                .eq('matter_recipients.user_id', userId),
+          )
 
           invitedTimePeriodIds = new Set(
             (
@@ -634,7 +641,7 @@ export function companyCalendarQuery({
         })
 
         freelancerVisibleJobIds = buildFreelancerVisibleJobIds({
-          crewRows: (crewRes.data || []) as Array<{
+          crewRows: crewData as Array<{
             time_period_id: string
             user_id: string
             status: string

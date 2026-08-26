@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { Box, Button, Flex, IconButton, Text } from '@radix-ui/themes'
 import { ArrowRight, Calendar, List } from 'iconoir-react'
-import FullCalendar from '@fullcalendar/react'
+import FullCalendar from '@shared/calendar/FullCalendarSafe'
 import nbLocale from '@fullcalendar/core/locales/nb'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'

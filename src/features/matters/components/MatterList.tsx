@@ -19,7 +19,11 @@ import {
   Xmark,
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
+import {
+  MOBILE_LIST_BOTTOM_PAD,
+  MobileBottomActionBar,
+  MobilePageList,
+} from '@app/layout/mobile'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
@@ -259,9 +263,6 @@ export default function MatterList({
       align="center"
       wrap="wrap"
       mb={isMobile ? undefined : '2'}
-      direction={
-        isMobile && onCreateMatter && canCreateAnnouncement ? 'column' : 'row'
-      }
       justify={isMobile ? 'start' : 'between'}
     >
       <Flex
@@ -275,10 +276,7 @@ export default function MatterList({
           placeholder="Search matters…"
           size="3"
           style={{
-            flex:
-              isMobile && onCreateMatter && canCreateAnnouncement
-                ? 1
-                : '1 1 260px',
+            flex: isMobile ? 1 : '1 1 260px',
             width: '100%',
             minWidth: 0,
           }}
@@ -292,7 +290,7 @@ export default function MatterList({
         </TextField.Root>
         {isMobile ? toolbarExtra : null}
       </Flex>
-      {onCreateMatter && canCreateAnnouncement && (
+      {onCreateMatter && canCreateAnnouncement && !isMobile && (
         <Tooltip content="Send a manual announcement to selected people (uncommon)">
           <Button
             type="button"
@@ -301,9 +299,8 @@ export default function MatterList({
             color="gray"
             onClick={onCreateMatter}
             style={{
-              ...(isMobile
-                ? { width: '100%' }
-                : { flexShrink: 0, alignSelf: 'center' }),
+              flexShrink: 0,
+              alignSelf: 'center',
               height: 'var(--space-7)',
               minHeight: 'var(--space-7)',
               maxHeight: 'var(--space-7)',
@@ -381,67 +378,82 @@ export default function MatterList({
 
   if (isMobile) {
     return (
-      <MobilePageList toolbar={toolbar}>
-        {isLoading ? (
-          <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
-        ) : rows.length === 0 ? (
-          <Text size="2" color="gray">
-            {emptyMessage}
-          </Text>
-        ) : (
-          <Flex
-            direction="column"
-            gap="2"
-            style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
-          >
-            {rows.map((matter) => {
-              const isSelected = matter.id === selectedId
-              return (
-                <div
-                  key={matter.id}
-                  className={[
-                    INDEX_TABLE_ROW_CLASS,
-                    isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
-                    matter.is_unread ? 'index-table-row--unread' : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onSelect(matter.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault()
-                      onSelect(matter.id)
-                    }
-                  }}
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'auto minmax(0, 1fr) auto',
-                    gap: 'var(--space-3)',
-                    alignItems: 'center',
-                    padding: '16px 12px',
-                    minHeight: 64,
-                    cursor: 'pointer',
-                    borderRadius: 'var(--radius-3)',
-                  }}
-                >
-                  {getTypeBadge(matter.matter_type)}
-                  {renderTitle(matter)}
-                  <Text size="1" color="gray">
-                    {formatMatterDate(matter.created_at)}
-                  </Text>
-                </div>
-              )
-            })}
-          </Flex>
+      <>
+        <MobilePageList toolbar={toolbar}>
+          {isLoading ? (
+            <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
+          ) : rows.length === 0 ? (
+            <Text size="2" color="gray">
+              {emptyMessage}
+            </Text>
+          ) : (
+            <Flex
+              direction="column"
+              gap="2"
+              style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
+            >
+              {rows.map((matter) => {
+                const isSelected = matter.id === selectedId
+                return (
+                  <div
+                    key={matter.id}
+                    className={[
+                      INDEX_TABLE_ROW_CLASS,
+                      isSelected ? INDEX_TABLE_ROW_SELECTED_CLASS : undefined,
+                      matter.is_unread ? 'index-table-row--unread' : undefined,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelect(matter.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        onSelect(matter.id)
+                      }
+                    }}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                      gap: 'var(--space-3)',
+                      alignItems: 'center',
+                      padding: '16px 12px',
+                      minHeight: 64,
+                      cursor: 'pointer',
+                      borderRadius: 'var(--radius-3)',
+                    }}
+                  >
+                    {getTypeBadge(matter.matter_type)}
+                    {renderTitle(matter)}
+                    <Text size="1" color="gray">
+                      {formatMatterDate(matter.created_at)}
+                    </Text>
+                  </div>
+                )
+              })}
+            </Flex>
+          )}
+          {rows.length > 0 && (
+            <Text size="2" color="gray">
+              {rows.length} matter{rows.length !== 1 ? 's' : ''}
+            </Text>
+          )}
+        </MobilePageList>
+        {onCreateMatter && canCreateAnnouncement && (
+          <MobileBottomActionBar>
+            <Button
+              type="button"
+              variant="ghost"
+              size="3"
+              onClick={onCreateMatter}
+            >
+              <Plus width={18} height={18} />
+              New announcement
+            </Button>
+          </MobileBottomActionBar>
         )}
-        {rows.length > 0 && (
-          <Text size="2" color="gray">
-            {rows.length} matter{rows.length !== 1 ? 's' : ''}
-          </Text>
-        )}
-      </MobilePageList>
+      </>
     )
   }
 
