@@ -64,6 +64,7 @@ export function PrettyOfferHero({ offer }: Props) {
                     width: 'auto',
                     height: 'auto',
                     objectFit: 'contain',
+                    backgroundColor: 'transparent',
                   }}
                 />
               </Box>
@@ -76,6 +77,7 @@ export function PrettyOfferHero({ offer }: Props) {
                 src={customerLogoUrl}
                 alt={offer.customer?.name || 'Customer logo'}
                 eager
+                transparent
                 className="pretty-deck-logo-lockup__logo pretty-deck-logo-lockup__logo--customer"
                 style={{ objectFit: 'contain' }}
               />

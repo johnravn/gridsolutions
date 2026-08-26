@@ -1,7 +1,10 @@
 /**
  * Shared helpers for dev/testing auto-fill buttons.
  * Combinatorial word banks yield hundreds of unique variations per form.
+ *
+ * Flip to `true` to show Auto-fill controls in create dialogs again.
  */
+export const SHOW_AUTOFILL_BUTTONS = false
 
 export function pickRandom<T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)]!
@@ -90,7 +93,16 @@ const ITEM_BASE_NAMES = [
   'UPS Battery',
 ] as const
 
-const ITEM_LENGTHS = ['1m', '2m', '3m', '5m', '10m', '15m', '20m', '25m'] as const
+const ITEM_LENGTHS = [
+  '1m',
+  '2m',
+  '3m',
+  '5m',
+  '10m',
+  '15m',
+  '20m',
+  '25m',
+] as const
 const ITEM_SIZES = ['Mini', 'Compact', 'Standard', 'Pro', 'Tour'] as const
 
 const ITEM_BRANDS = [
@@ -397,7 +409,9 @@ export function generateVehicleAutofill(options: {
 }): VehicleAutofillResult {
   const make = pickRandom(VEHICLE_MAKES)
   const model = pickRandom(VEHICLE_MODELS)
-  const variant = randomBool(0.3) ? ` ${pickRandom(['LWB', 'SWB', '4x4', 'Electric'])}` : ''
+  const variant = randomBool(0.3)
+    ? ` ${pickRandom(['LWB', 'SWB', '4x4', 'Electric'])}`
+    : ''
   const name = `${make} ${model}${variant}`
 
   let ownerType: VehicleAutofillResult['ownerType'] = 'company'

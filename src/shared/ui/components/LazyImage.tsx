@@ -1,5 +1,8 @@
 import * as React from 'react'
-import { getBlurredPlaceholderUrl } from '@shared/lib/storageImageUrls'
+import {
+  getBlurredPlaceholderUrl,
+  isSvgUrl,
+} from '@shared/lib/storageImageUrls'
 import './LazyImage.css'
 
 type LazyImageProps = Omit<
@@ -10,6 +13,11 @@ type LazyImageProps = Omit<
   rootMargin?: string
   /** Skip lazy loading and load immediately (still shows blur-up). */
   eager?: boolean
+  /**
+   * Skip the gray plate and blur-up. Use for logos/PNGs with alpha.
+   * SVGs are treated as transparent automatically.
+   */
+  transparent?: boolean
 }
 
 export default function LazyImage({
@@ -19,6 +27,7 @@ export default function LazyImage({
   style,
   rootMargin = '200px',
   eager = false,
+  transparent = false,
   onLoad,
   ...rest
 }: LazyImageProps) {
@@ -28,9 +37,12 @@ export default function LazyImage({
   const [placeholderFailed, setPlaceholderFailed] = React.useState(false)
 
   const resolvedSrc = typeof src === 'string' ? src : undefined
+  const skipBlurUp =
+    transparent || Boolean(resolvedSrc && isSvgUrl(resolvedSrc))
   const placeholderSrc = React.useMemo(
-    () => (resolvedSrc ? getBlurredPlaceholderUrl(resolvedSrc) : null),
-    [resolvedSrc],
+    () =>
+      resolvedSrc && !skipBlurUp ? getBlurredPlaceholderUrl(resolvedSrc) : null,
+    [resolvedSrc, skipBlurUp],
   )
   const useTinyPlaceholder = Boolean(placeholderSrc && !placeholderFailed)
 
@@ -64,7 +76,7 @@ export default function LazyImage({
     'lazy-image__full',
     isLoaded
       ? 'lazy-image__full--loaded'
-      : useTinyPlaceholder
+      : useTinyPlaceholder || skipBlurUp
         ? ''
         : 'lazy-image__full--blur-loading',
   ]
@@ -74,7 +86,13 @@ export default function LazyImage({
   return (
     <div
       ref={containerRef}
-      className={['lazy-image', className].filter(Boolean).join(' ')}
+      className={[
+        'lazy-image',
+        skipBlurUp ? 'lazy-image--transparent' : '',
+        className,
+      ]
+        .filter(Boolean)
+        .join(' ')}
       style={style}
     >
       {isVisible && useTinyPlaceholder && placeholderSrc && (

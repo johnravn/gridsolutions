@@ -100,6 +100,7 @@ export default function JobsList({
   onSelectRecurringJob,
   statusFilter,
   showOnlyArchived,
+  showJobsInRecurringSeries = false,
   dateFrom,
   dateTo,
   readyToInvoiceFilter = false,
@@ -115,6 +116,7 @@ export default function JobsList({
   onSelectRecurringJob: (id: string | null, title?: string) => void
   statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
+  showJobsInRecurringSeries?: boolean
   /** Local calendar YYYY-MM-DD — jobs starting in this period. */
   dateFrom: string
   dateTo: string
@@ -170,6 +172,10 @@ export default function JobsList({
         : statusFilter.length > 0
           ? statusFilter
           : null,
+      includeRecurringMembers:
+        companyRole === 'freelancer' ||
+        showJobsInRecurringSeries ||
+        readyToInvoiceFilter,
     }),
     enabled: !!companyId && !listScope,
   })
@@ -205,10 +211,9 @@ export default function JobsList({
   const { data: pinnedRecurringJobs = [] } = useQuery({
     ...recurringJobsIndexQuery({
       companyId: companyId ?? '__none__',
-      projectLeadUserId: userId,
       includeArchived: false,
     }),
-    enabled: !!companyId && !!userId && companyRole !== 'freelancer',
+    enabled: !!companyId && companyRole !== 'freelancer',
   })
 
   const { data: searchableRecurringJobs = [] } = useQuery({
@@ -717,7 +722,7 @@ export default function JobsList({
                   />
                 )}
                 <Text size="1" weight="medium" color="gray">
-                  Your recurring jobs
+                  Recurring jobs
                 </Text>
                 {!recurringJobsOpen && (
                   <Badge variant="soft" color="gray" size="1">
@@ -871,7 +876,7 @@ export default function JobsList({
                 <NavArrowRight width={14} height={14} color="var(--gray-11)" />
               )}
               <Text size="1" weight="medium" color="gray">
-                Your recurring jobs
+                Recurring jobs
               </Text>
               {!recurringJobsOpen && (
                 <Badge variant="soft" color="gray" size="1">

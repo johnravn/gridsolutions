@@ -22,6 +22,7 @@ import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
+  SHOW_AUTOFILL_BUTTONS,
   generateGroupAutofill,
   generateGroupPartsAutofill,
 } from '@shared/testing/autofill'
@@ -679,7 +680,7 @@ export default function AddGroupDialog({
               {mode === 'create' ? 'Create Group' : 'Edit Group'}
             </Dialog.Title>
             {/* ===== TESTING ONLY: Auto-fill button ===== */}
-            {mode === 'create' && (
+            {mode === 'create' && SHOW_AUTOFILL_BUTTONS && (
               <Button
                 size="2"
                 variant="soft"

@@ -110,6 +110,7 @@ describe('jobsIndexInfiniteQuery', () => {
       false,
       null,
       ['completed'],
+      true,
       50,
     ])
   })

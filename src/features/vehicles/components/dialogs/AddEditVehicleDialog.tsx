@@ -7,7 +7,10 @@ import { supabase } from '@shared/api/supabase'
 import LazyImage from '@shared/ui/components/LazyImage'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { generateVehicleAutofill } from '@shared/testing/autofill'
+import {
+  SHOW_AUTOFILL_BUTTONS,
+  generateVehicleAutofill,
+} from '@shared/testing/autofill'
 import { Camera, Sparks } from 'iconoir-react'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { partnerCustomersQuery, upsertVehicle } from '../../api/queries'
@@ -284,7 +287,7 @@ export default function AddEditVehicleDialog({
             {mode === 'edit' ? 'Edit vehicle' : 'Add vehicle'}
           </Dialog.Title>
           {/* ===== TESTING ONLY: Auto-fill button ===== */}
-          {mode === 'create' && (
+          {mode === 'create' && SHOW_AUTOFILL_BUTTONS && (
             <Button
               size="2"
               variant="soft"

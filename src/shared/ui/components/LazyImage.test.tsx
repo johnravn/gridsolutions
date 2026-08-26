@@ -68,6 +68,37 @@ describe('LazyImage', () => {
     expect(screen.getByAltText('Hero')).toBeInTheDocument()
   })
 
+  it('skips blur-up and the gray plate for SVG logos', () => {
+    render(
+      <LazyImage
+        src="https://abc.supabase.co/storage/v1/object/public/logos/logo_light.svg?v=1"
+        alt="Company logo"
+        eager
+      />,
+    )
+
+    expect(
+      document.querySelector('.lazy-image--transparent'),
+    ).toBeInTheDocument()
+    expect(
+      document.querySelector('.lazy-image__placeholder'),
+    ).not.toBeInTheDocument()
+    expect(
+      document.querySelector('.lazy-image__full--blur-loading'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('skips blur-up when transparent is set', () => {
+    render(<LazyImage src={FULL_SRC} alt="Logo" eager transparent />)
+
+    expect(
+      document.querySelector('.lazy-image--transparent'),
+    ).toBeInTheDocument()
+    expect(
+      document.querySelector('.lazy-image__placeholder'),
+    ).not.toBeInTheDocument()
+  })
+
   it('falls back to blurred full image when the tiny placeholder fails', async () => {
     render(<LazyImage src={FULL_SRC} alt="Gallery photo" eager />)
 

@@ -44,6 +44,8 @@ type Props = {
   onStatusFilterChange: (v: Array<JobStatus>) => void
   showOnlyArchived: boolean
   onShowOnlyArchivedChange: (v: boolean) => void
+  showJobsInRecurringSeries: boolean
+  onShowJobsInRecurringSeriesChange: (v: boolean) => void
 }
 
 export default function JobsFilter({
@@ -51,6 +53,8 @@ export default function JobsFilter({
   onStatusFilterChange,
   showOnlyArchived,
   onShowOnlyArchivedChange,
+  showJobsInRecurringSeries,
+  onShowJobsInRecurringSeriesChange,
 }: Props) {
   const [open, setOpen] = React.useState(false)
 
@@ -58,7 +62,10 @@ export default function JobsFilter({
     statusFilter.length === 0 || statusFilter.length === ALL_STATUSES.length
       ? 0
       : statusFilter.length
-  const activeCount = statusCount + (showOnlyArchived ? 1 : 0)
+  const activeCount =
+    statusCount +
+    (showOnlyArchived ? 1 : 0) +
+    (showJobsInRecurringSeries ? 1 : 0)
 
   const toggleStatus = (status: JobStatus) => {
     if (statusFilter.includes(status)) {
@@ -91,6 +98,7 @@ export default function JobsFilter({
 
   const resetFilters = () => {
     onShowOnlyArchivedChange(false)
+    onShowJobsInRecurringSeriesChange(false)
     onStatusFilterChange([...DEFAULT_STATUS_FILTER])
   }
 
@@ -158,6 +166,17 @@ export default function JobsFilter({
           <Flex align="center" gap="2">
             <Checkbox checked={showOnlyArchived} />
             <Text>Show archived</Text>
+          </Flex>
+        </DropdownMenu.Item>
+        <DropdownMenu.Item
+          onSelect={(e) => {
+            e.preventDefault()
+            onShowJobsInRecurringSeriesChange(!showJobsInRecurringSeries)
+          }}
+        >
+          <Flex align="center" gap="2">
+            <Checkbox checked={showJobsInRecurringSeries} />
+            <Text>Show jobs in recurring series</Text>
           </Flex>
         </DropdownMenu.Item>
         <DropdownMenu.Separator />

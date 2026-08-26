@@ -151,6 +151,10 @@
   background-color: transparent;
 }
 
+.pretty-deck-logo-lockup__logo--company img {
+  background-color: transparent;
+}
+
 .pretty-deck-logo-lockup__logo--customer {
   width: min(200px, 44vw);
   aspect-ratio: 2 / 1;

@@ -98,6 +98,8 @@ export default function JobsPage() {
     ...DEFAULT_STATUS_FILTER,
   ])
   const [showOnlyArchived, setShowOnlyArchived] = React.useState(false)
+  const [showJobsInRecurringSeries, setShowJobsInRecurringSeries] =
+    React.useState(false)
   const [dateFrom, setDateFrom] = React.useState('')
   const [dateTo, setDateTo] = React.useState('')
   const [readyToInvoiceFilter, setReadyToInvoiceFilter] = React.useState(false)
@@ -150,6 +152,14 @@ export default function JobsPage() {
     setReadyToInvoiceFilter(false)
     setShowOnlyArchived(next)
   }, [])
+
+  const handleShowJobsInRecurringSeriesChange = React.useCallback(
+    (next: boolean) => {
+      setReadyToInvoiceFilter(false)
+      setShowJobsInRecurringSeries(next)
+    },
+    [],
+  )
 
   const handlePeriodChange = React.useCallback(
     (range: { startDate: string; endDate: string }) => {
@@ -238,6 +248,11 @@ export default function JobsPage() {
     [],
   )
 
+  const includeRecurringMembers =
+    companyRole === 'freelancer' ||
+    showJobsInRecurringSeries ||
+    readyToInvoiceFilter
+
   const { isLoading: jobsIndexLoading } = useInfiniteQuery({
     ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
@@ -255,6 +270,7 @@ export default function JobsPage() {
         : statusFilter.length > 0
           ? statusFilter
           : null,
+      includeRecurringMembers,
     }),
     enabled: !!companyId,
   })
@@ -311,6 +327,10 @@ export default function JobsPage() {
         onStatusFilterChange={handleStatusFilterChange}
         showOnlyArchived={showOnlyArchived}
         onShowOnlyArchivedChange={handleShowOnlyArchivedChange}
+        showJobsInRecurringSeries={showJobsInRecurringSeries}
+        onShowJobsInRecurringSeriesChange={
+          handleShowJobsInRecurringSeriesChange
+        }
       />
     </Flex>
   )
@@ -342,6 +362,7 @@ export default function JobsPage() {
       onExitListScope={handleExitListScope}
       statusFilter={statusFilter}
       showOnlyArchived={showOnlyArchived}
+      showJobsInRecurringSeries={showJobsInRecurringSeries}
       dateFrom={dateFrom}
       dateTo={dateTo}
       readyToInvoiceFilter={readyToInvoiceFilter}

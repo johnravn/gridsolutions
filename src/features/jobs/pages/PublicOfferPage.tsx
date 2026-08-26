@@ -62,6 +62,11 @@ const SUBTLE_ANIMATED_BACKGROUND = {
   boostLightContrast: false,
 }
 
+const MUTED_ACCEPT_BUTTON_STYLE = {
+  ['--accent-9' as string]: 'color-mix(in oklab, var(--green-9) 70%, black)',
+  ['--accent-10' as string]: 'color-mix(in oklab, var(--green-10) 70%, black)',
+}
+
 function readDocumentTheme(): 'light' | 'dark' {
   if (typeof document === 'undefined') return 'light'
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light'
@@ -1786,11 +1791,11 @@ export default function PublicOfferPage() {
                     <Box
                       style={{
                         maxWidth: 225,
-                        maxHeight: 90,
                         marginBottom: '24px',
+                        backgroundColor: 'transparent',
                       }}
                     >
-                      <LazyImage
+                      <img
                         src={`${
                           supabase.storage
                             .from('logos')
@@ -1798,11 +1803,14 @@ export default function PublicOfferPage() {
                         }?v=${finalLogoPath}`}
                         alt={offer.company?.name || 'Company logo'}
                         key={`company-logo-${offer.company?.id}-${finalLogoPath}-${theme}`}
-                        eager
                         style={{
+                          display: 'block',
                           maxWidth: '100%',
-                          maxHeight: '100%',
+                          maxHeight: 90,
+                          width: 'auto',
+                          height: 'auto',
                           objectFit: 'contain',
+                          backgroundColor: 'transparent',
                         }}
                       />
                     </Box>
@@ -1848,10 +1856,15 @@ export default function PublicOfferPage() {
                   </Flex>
                   <Button
                     size="2"
-                    variant={showAcceptForm ? 'solid' : 'outline'}
+                    variant="solid"
+                    color="green"
                     onClick={() => toggleResponseAction('accept')}
                     disabled={responseActionsDisabled}
-                    style={isMobile ? { width: '100%' } : undefined}
+                    style={
+                      isMobile
+                        ? { width: '100%', ...MUTED_ACCEPT_BUTTON_STYLE }
+                        : MUTED_ACCEPT_BUTTON_STYLE
+                    }
                   >
                     Accept Offer
                   </Button>
@@ -1969,6 +1982,9 @@ export default function PublicOfferPage() {
                       )}
                       <Flex gap="2" mt="2">
                         <Button
+                          variant="solid"
+                          color="green"
+                          style={MUTED_ACCEPT_BUTTON_STYLE}
                           onClick={() => acceptMutation.mutate()}
                           disabled={
                             !acceptanceForm.first_name ||

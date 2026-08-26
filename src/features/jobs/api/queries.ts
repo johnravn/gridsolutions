@@ -413,6 +413,8 @@ type JobsIndexListParams = {
   showOnlyArchived?: boolean
   projectLeadUserId?: string | null
   statuses?: Array<JobListRow['status']> | null
+  /** When false, hide jobs that belong to a recurring series. Default true. */
+  includeRecurringMembers?: boolean
 }
 
 async function fetchJobsIndexPage({
@@ -430,6 +432,7 @@ async function fetchJobsIndexPage({
   showOnlyArchived = false,
   projectLeadUserId = null,
   statuses = null,
+  includeRecurringMembers = true,
 }: JobsIndexListParams): Promise<JobsIndexPageResult> {
   const from = Math.max(0, (page - 1) * pageSize)
   const to = Math.max(from, from + pageSize - 1)
@@ -447,6 +450,10 @@ async function fetchJobsIndexPage({
 
   if (projectLeadUserId) {
     q = q.eq('project_lead_user_id', projectLeadUserId)
+  }
+
+  if (!includeRecurringMembers) {
+    q = q.is('recurring_job_id', null)
   }
 
   if (statuses && statuses.length > 0) {
@@ -593,6 +600,7 @@ export function jobsIndexInfiniteQuery({
   showOnlyArchived = false,
   projectLeadUserId = null,
   statuses = null,
+  includeRecurringMembers = true,
   pageSize = JOBS_INDEX_INFINITE_PAGE_SIZE,
 }: {
   companyId: string
@@ -606,6 +614,7 @@ export function jobsIndexInfiniteQuery({
   showOnlyArchived?: boolean
   projectLeadUserId?: string | null
   statuses?: Array<JobListRow['status']> | null
+  includeRecurringMembers?: boolean
   pageSize?: number
 }) {
   return {
@@ -623,6 +632,7 @@ export function jobsIndexInfiniteQuery({
       showOnlyArchived,
       projectLeadUserId,
       statuses,
+      includeRecurringMembers,
       pageSize,
     ] as const,
     initialPageParam: 1,
@@ -641,6 +651,7 @@ export function jobsIndexInfiniteQuery({
         showOnlyArchived,
         projectLeadUserId,
         statuses,
+        includeRecurringMembers,
       }),
     getNextPageParam: (
       lastPage: JobsIndexPageResult,

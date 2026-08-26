@@ -38,6 +38,7 @@ import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatt
 import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
 import ProfileShortcutsTab from '@features/profile/components/ProfileShortcutsTab'
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
+import type { BibleVersion } from '@shared/lib/bibleVersion'
 
 type ProfileRow = {
   user_id: string
@@ -69,7 +70,7 @@ type OptionalFields = {
   notes?: string | null
   animated_background_intensity?: number | null
   daily_inspiration_type?: 'quote' | 'bibleverse' | null
-  bible_version?: 'bm11' | 'nn11' | 'msg' | null
+  bible_version?: BibleVersion | null
 }
 
 type AddressForm = {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   AUTOFILL_MIN_VARIATIONS,
+  SHOW_AUTOFILL_BUTTONS,
   generateCustomerAutofill,
   generateGroupAutofill,
   generateGroupPartsAutofill,
@@ -9,6 +10,10 @@ import {
 } from './autofill'
 
 describe('autofill generators', () => {
+  it('keeps Auto-fill buttons hidden until the flag is flipped', () => {
+    expect(SHOW_AUTOFILL_BUTTONS).toBe(false)
+  })
+
   it('item autofill supports hundreds of name variations', () => {
     const names = new Set<string>()
     for (let i = 0; i < 400; i += 1) {
