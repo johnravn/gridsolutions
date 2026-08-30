@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildJobInspectorKeyboardSteps,
   getJobInspectorKeyboardStep,
+  normalizeJobInspectorTab,
   parseJobInspectorKeyboardStep,
 } from './jobInspectorKeyboardTabs'
 
@@ -32,5 +33,12 @@ describe('jobInspectorKeyboardTabs', () => {
       bookingsSubTab: 'transport',
     })
     expect(parseJobInspectorKeyboardStep('offers')).toEqual({ tab: 'offers' })
+  })
+
+  it('maps the legacy invoices tab onto invoice', () => {
+    expect(normalizeJobInspectorTab(undefined)).toBe('overview')
+    expect(normalizeJobInspectorTab('overview')).toBe('overview')
+    expect(normalizeJobInspectorTab('invoice')).toBe('invoice')
+    expect(normalizeJobInspectorTab('invoices')).toBe('invoice')
   })
 })

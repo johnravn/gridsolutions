@@ -1,10 +1,10 @@
 import * as React from 'react'
 import { Box, Flex, Popover, Text } from '@radix-ui/themes'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import { CalendarGrid } from './CalendarGrid'
 import { HourGrid } from './HourGrid'
 import { MinuteGrid } from './MinuteGrid'
 import { PickerTrigger } from './PickerTrigger'
-import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import { SegmentedControl } from './SegmentedControl'
 import {
   buildRangeIso,

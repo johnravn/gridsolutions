@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Box, IconButton, Popover, Text } from '@radix-ui/themes'
 import { Calendar } from 'iconoir-react'
+import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import { CalendarGrid } from './CalendarGrid'
 import {
   dateToLocalDate,
@@ -10,7 +11,6 @@ import {
   parseIso,
 } from './dateTimeUtils'
 import { SinglePickerTrigger } from './PickerTrigger'
-import { PopoverTrigger } from '@shared/ui/radixAsChild'
 import type { PickerLocale } from './dateTimeUtils'
 
 type Props = {

@@ -5,6 +5,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   Heading,
   IconButton,
@@ -35,6 +36,12 @@ import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
 import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
+import {
+  categoryBookingIds,
+  countSelectedBookingRows,
+  selectionState,
+  setIdsSelected,
+} from '../../utils/equipmentBookingSelection'
 import type { ExternalReqStatus, ItemLite, ReservedItemRow } from '../../types'
 
 export default function EquipmentTab({ jobId }: { jobId: string }) {
@@ -217,6 +224,10 @@ function InternalEquipmentTable({
   const [editingQtyDrafts, setEditingQtyDrafts] = React.useState<
     Partial<Record<string, string>>
   >({})
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
+  const [deleteSelectedOpen, setDeleteSelectedOpen] = React.useState(false)
   const toggleGroup = (expandKey: string) => {
     setExpandedGroups((prev) => {
       const next = new Set(prev)
@@ -329,6 +340,26 @@ function InternalEquipmentTable({
     })
   }, [categorizedEntries])
 
+  React.useEffect(() => {
+    const validIds = new Set(rows.map((r) => r.id as string))
+    setSelectedIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [rows])
+
+  React.useEffect(() => {
+    if (rows.length === 0 && editMode) {
+      setEditMode(false)
+      setSelectedIds(new Set())
+    }
+  }, [editMode, rows.length, setEditMode])
+
+  const selectedRowCount = React.useMemo(
+    () => countSelectedBookingRows(categorizedEntries, selectedIds),
+    [categorizedEntries, selectedIds],
+  )
+
   const toggleCategory = (categoryName: string) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev)
@@ -363,32 +394,27 @@ function InternalEquipmentTable({
     }
   }
 
-  const handleDelete = async (rowId: string) => {
-    try {
-      const { error: delErr } = await supabase
-        .from('reserved_items')
-        .delete()
-        .eq('id', rowId)
-      if (delErr) throw delErr
-
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      success('Deleted', 'Booking removed')
-    } catch (e: any) {
-      error('Failed to delete', e?.message || 'Please try again.')
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      setDeleteSelectedOpen(false)
+      return
     }
-  }
 
-  const handleDeleteGroup = async (groupId: string, timePeriodId: string) => {
     try {
       const { error: delErr } = await supabase
         .from('reserved_items')
         .delete()
-        .eq('source_group_id', groupId)
-        .eq('time_period_id', timePeriodId)
+        .in('id', ids)
       if (delErr) throw delErr
 
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      success('Deleted', 'Group booking removed')
+      success(
+        'Deleted',
+        `Removed ${selectedRowCount} ${selectedRowCount === 1 ? 'booking' : 'bookings'}`,
+      )
+      setSelectedIds(new Set())
+      setDeleteSelectedOpen(false)
     } catch (e: any) {
       error('Failed to delete', e?.message || 'Please try again.')
     }
@@ -414,16 +440,33 @@ function InternalEquipmentTable({
         {companyRole !== 'freelancer' && (
           <Flex align="center" gap="3">
             {rows.length > 0 && (
-              <Button
-                size="2"
-                variant={editMode ? 'solid' : 'soft'}
-                color={editMode ? 'green' : undefined}
-                disabled={!canBook}
-                onClick={() => setEditMode(!editMode)}
-              >
-                <Edit width={16} height={16} />{' '}
-                {editMode ? 'Done editing' : 'Edit bookings'}
-              </Button>
+              <Flex align="center" gap="2">
+                {editMode && (
+                  <Button
+                    size="2"
+                    variant="soft"
+                    color="red"
+                    disabled={!canBook || selectedRowCount === 0}
+                    onClick={() => setDeleteSelectedOpen(true)}
+                  >
+                    <Trash width={16} height={16} /> Delete selected
+                    {selectedRowCount > 0 ? ` (${selectedRowCount})` : ''}
+                  </Button>
+                )}
+                <Button
+                  size="2"
+                  variant={editMode ? 'solid' : 'soft'}
+                  color={editMode ? 'green' : undefined}
+                  disabled={!canBook}
+                  onClick={() => {
+                    if (editMode) setSelectedIds(new Set())
+                    setEditMode(!editMode)
+                  }}
+                >
+                  <Edit width={16} height={16} />{' '}
+                  {editMode ? 'Done editing' : 'Edit bookings'}
+                </Button>
+              </Flex>
             )}
             <Select.Root value={view} onValueChange={handleViewChange}>
               <Select.Trigger style={{ minWidth: 120 }} />
@@ -480,6 +523,24 @@ function InternalEquipmentTable({
               >
                 <Flex align="center" justify="between">
                   <Flex align="center" gap="3">
+                    {editMode && (
+                      <BookingSelectCheckbox
+                        checked={selectionState(
+                          selectedIds,
+                          categoryBookingIds(category),
+                        )}
+                        label={`Select all ${category.categoryName} bookings`}
+                        onCheckedChange={(selected) => {
+                          setSelectedIds((prev) =>
+                            setIdsSelected(
+                              prev,
+                              categoryBookingIds(category),
+                              selected,
+                            ),
+                          )
+                        }}
+                      />
+                    )}
                     {isCategoryExpanded ? (
                       <NavArrowDown width={18} height={18} />
                     ) : (
@@ -498,6 +559,9 @@ function InternalEquipmentTable({
                   <Table.Root variant="surface">
                     <Table.Header>
                       <Table.Row>
+                        {editMode && (
+                          <Table.ColumnHeaderCell style={{ width: 40 }} />
+                        )}
                         <Table.ColumnHeaderCell>Item</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
@@ -508,7 +572,6 @@ function InternalEquipmentTable({
                         <Table.ColumnHeaderCell>
                           Time period
                         </Table.ColumnHeaderCell>
-                        {editMode && <Table.ColumnHeaderCell />}
                       </Table.Row>
                     </Table.Header>
                     <Table.Body>
@@ -530,8 +593,9 @@ function InternalEquipmentTable({
                             : sourceGroup?.category?.name
                           const expandKey = `${groupId}:${timePeriodId}`
                           const isExpanded = expandedGroups.has(expandKey)
-                          const periodId =
-                            timePeriodId || firstRow.time_period_id
+                          const groupRowIds = groupRows.map(
+                            (r: { id: string }) => r.id,
+                          )
                           const template =
                             groupItemsByGroupId.get(groupId) ?? []
                           const totalQty =
@@ -561,6 +625,26 @@ function InternalEquipmentTable({
                                   !editMode && toggleGroup(expandKey)
                                 }
                               >
+                                {editMode && (
+                                  <Table.Cell>
+                                    <BookingSelectCheckbox
+                                      checked={selectionState(
+                                        selectedIds,
+                                        groupRowIds,
+                                      )}
+                                      label={`Select ${groupName}`}
+                                      onCheckedChange={(selected) => {
+                                        setSelectedIds((prev) =>
+                                          setIdsSelected(
+                                            prev,
+                                            groupRowIds,
+                                            selected,
+                                          ),
+                                        )
+                                      }}
+                                    />
+                                  </Table.Cell>
+                                )}
                                 <Table.Cell>
                                   <Box
                                     style={{
@@ -596,21 +680,6 @@ function InternalEquipmentTable({
                                   {firstRow?.time_period?.title ??
                                     `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
                                 </Table.Cell>
-                                {editMode && (
-                                  <Table.Cell align="right">
-                                    <Button
-                                      size="1"
-                                      variant="soft"
-                                      color="red"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleDeleteGroup(groupId, periodId)
-                                      }}
-                                    >
-                                      <Trash width={14} height={14} />
-                                    </Button>
-                                  </Table.Cell>
-                                )}
                               </Table.Row>
 
                               {/* Expanded group items */}
@@ -655,6 +724,19 @@ function InternalEquipmentTable({
                         const isEditing = editingQty?.id === r.id
                         return (
                           <Table.Row key={r.id}>
+                            {editMode && (
+                              <Table.Cell>
+                                <BookingSelectCheckbox
+                                  checked={selectedIds.has(r.id)}
+                                  label={`Select ${item?.name ?? 'item'}`}
+                                  onCheckedChange={(selected) => {
+                                    setSelectedIds((prev) =>
+                                      setIdsSelected(prev, [r.id], selected),
+                                    )
+                                  }}
+                                />
+                              </Table.Cell>
+                            )}
                             <Table.Cell>
                               <Flex align="center" gap="2">
                                 <Text>{item?.name ?? '—'}</Text>
@@ -740,18 +822,6 @@ function InternalEquipmentTable({
                               {r.time_period?.title ??
                                 `${fmtDate(r.time_period?.start_at)} – ${fmtDate(r.time_period?.end_at)}`}
                             </Table.Cell>
-                            {editMode && (
-                              <Table.Cell align="right">
-                                <Button
-                                  size="1"
-                                  variant="soft"
-                                  color="red"
-                                  onClick={() => handleDelete(r.id)}
-                                >
-                                  <Trash width={14} height={14} />
-                                </Button>
-                              </Table.Cell>
-                            )}
                           </Table.Row>
                         )
                       })}
@@ -763,6 +833,36 @@ function InternalEquipmentTable({
           )
         })}
       </Flex>
+
+      <AlertDialog.Root
+        open={deleteSelectedOpen}
+        onOpenChange={setDeleteSelectedOpen}
+      >
+        <AlertDialog.Content maxWidth="480px">
+          <AlertDialog.Title>
+            Delete {selectedRowCount}{' '}
+            {selectedRowCount === 1 ? 'booking' : 'bookings'}?
+          </AlertDialog.Title>
+          <AlertDialog.Description size="2">
+            This will remove the selected bookings from this job. This action
+            cannot be undone.
+          </AlertDialog.Description>
+          <Flex gap="3" justify="end" mt="4">
+            <AlertDialog.Cancel>
+              <Button variant="soft">Cancel</Button>
+            </AlertDialog.Cancel>
+            <AlertDialog.Action>
+              <Button
+                color="red"
+                variant="solid"
+                onClick={handleDeleteSelected}
+              >
+                Yes, delete
+              </Button>
+            </AlertDialog.Action>
+          </Flex>
+        </AlertDialog.Content>
+      </AlertDialog.Root>
 
       {/* Add items area - always visible when canBook */}
       {canBook && (
@@ -865,6 +965,10 @@ function ExternalEquipmentTable({
     string | null
   >(null)
   const [hoveredRowId, setHoveredRowId] = React.useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
+  const [deleteSelectedOpen, setDeleteSelectedOpen] = React.useState(false)
 
   // Fetch job to get duration times
   const { data: _job } = useQuery({
@@ -905,6 +1009,21 @@ function ExternalEquipmentTable({
       a.ownerName.localeCompare(b.ownerName),
     )
   }, [rows])
+
+  React.useEffect(() => {
+    const validIds = new Set(rows.map((r) => r.id as string))
+    setSelectedIds((prev) => {
+      const next = new Set(Array.from(prev).filter((id) => validIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [rows])
+
+  React.useEffect(() => {
+    if (rows.length === 0 && editMode) {
+      setEditMode(false)
+      setSelectedIds(new Set())
+    }
+  }, [editMode, rows.length, setEditMode])
 
   // Sync ownerNotes when data changes
   React.useEffect(() => {
@@ -976,16 +1095,27 @@ function ExternalEquipmentTable({
     }
   }
 
-  const handleDelete = async (rowId: string) => {
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) {
+      setDeleteSelectedOpen(false)
+      return
+    }
+
     try {
       const { error: delErr } = await supabase
         .from('reserved_items')
         .delete()
-        .eq('id', rowId)
+        .in('id', ids)
       if (delErr) throw delErr
 
       await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      success('Deleted', 'Booking removed')
+      success(
+        'Deleted',
+        `Removed ${ids.length} ${ids.length === 1 ? 'booking' : 'bookings'}`,
+      )
+      setSelectedIds(new Set())
+      setDeleteSelectedOpen(false)
     } catch (e: any) {
       error('Failed to delete', e?.message || 'Please try again.')
     }
@@ -1123,6 +1253,18 @@ function ExternalEquipmentTable({
       >
         <Heading size="3">Subrental equipment</Heading>
         <Flex align="center" gap="3">
+          {editMode && (
+            <Button
+              size="2"
+              variant="soft"
+              color="red"
+              disabled={!canBook || selectedIds.size === 0}
+              onClick={() => setDeleteSelectedOpen(true)}
+            >
+              <Trash width={16} height={16} /> Delete selected
+              {selectedIds.size > 0 ? ` (${selectedIds.size})` : ''}
+            </Button>
+          )}
           {companyRole !== 'freelancer' && rows.length > 0 && (
             <Select.Root
               onValueChange={(value) =>
@@ -1157,6 +1299,7 @@ function ExternalEquipmentTable({
           const ownerItems = group.items
           const timePeriodId = group.timePeriodId
           const isExpanded = expandedOwners.has(ownerId)
+          const ownerItemIds = ownerItems.map((r: { id: string }) => r.id)
 
           const firstRow = ownerItems[0]
           const currentStatus =
@@ -1193,6 +1336,17 @@ function ExternalEquipmentTable({
               >
                 <Flex align="center" justify="between">
                   <Flex align="center" gap="3">
+                    {editMode && ownerItems.length > 0 && (
+                      <BookingSelectCheckbox
+                        checked={selectionState(selectedIds, ownerItemIds)}
+                        label={`Select all ${ownerName} bookings`}
+                        onCheckedChange={(selected) => {
+                          setSelectedIds((prev) =>
+                            setIdsSelected(prev, ownerItemIds, selected),
+                          )
+                        }}
+                      />
+                    )}
                     {isExpanded ? (
                       <NavArrowDown width={18} height={18} />
                     ) : (
@@ -1251,7 +1405,10 @@ function ExternalEquipmentTable({
                             variant={editMode ? 'solid' : 'soft'}
                             color={editMode ? 'green' : undefined}
                             disabled={!canBook}
-                            onClick={() => setEditMode(!editMode)}
+                            onClick={() => {
+                              if (editMode) setSelectedIds(new Set())
+                              setEditMode(!editMode)
+                            }}
                           >
                             <Edit width={16} height={16} />{' '}
                             {editMode ? 'Done editing' : 'Edit bookings'}
@@ -1350,6 +1507,11 @@ function ExternalEquipmentTable({
                           <Table.Root variant="surface">
                             <Table.Header>
                               <Table.Row>
+                                {editMode && (
+                                  <Table.ColumnHeaderCell
+                                    style={{ width: 40 }}
+                                  />
+                                )}
                                 <Table.ColumnHeaderCell>
                                   Item
                                 </Table.ColumnHeaderCell>
@@ -1365,7 +1527,6 @@ function ExternalEquipmentTable({
                                 <Table.ColumnHeaderCell>
                                   Status
                                 </Table.ColumnHeaderCell>
-                                {editMode && <Table.ColumnHeaderCell />}
                               </Table.Row>
                             </Table.Header>
                             <Table.Body>
@@ -1373,6 +1534,23 @@ function ExternalEquipmentTable({
                                 const rowItem = firstItem(r.item) as any
                                 return (
                                   <Table.Row key={r.id}>
+                                    {editMode && (
+                                      <Table.Cell>
+                                        <BookingSelectCheckbox
+                                          checked={selectedIds.has(r.id)}
+                                          label={`Select ${rowItem?.name ?? 'item'}`}
+                                          onCheckedChange={(selected) => {
+                                            setSelectedIds((prev) =>
+                                              setIdsSelected(
+                                                prev,
+                                                [r.id],
+                                                selected,
+                                              ),
+                                            )
+                                          }}
+                                        />
+                                      </Table.Cell>
+                                    )}
                                     <Table.Cell>
                                       {rowItem?.name ?? '—'}
                                     </Table.Cell>
@@ -1606,18 +1784,6 @@ function ExternalEquipmentTable({
                                         )}
                                       </Flex>
                                     </Table.Cell>
-                                    {editMode && (
-                                      <Table.Cell align="right">
-                                        <Button
-                                          size="1"
-                                          variant="soft"
-                                          color="red"
-                                          onClick={() => handleDelete(r.id)}
-                                        >
-                                          <Trash width={14} height={14} />
-                                        </Button>
-                                      </Table.Cell>
-                                    )}
                                   </Table.Row>
                                 )
                               })}
@@ -1674,6 +1840,35 @@ function ExternalEquipmentTable({
             companyId={companyId}
             subrentalOnlyInitial
           />
+          <AlertDialog.Root
+            open={deleteSelectedOpen}
+            onOpenChange={setDeleteSelectedOpen}
+          >
+            <AlertDialog.Content maxWidth="480px">
+              <AlertDialog.Title>
+                Delete {selectedIds.size}{' '}
+                {selectedIds.size === 1 ? 'booking' : 'bookings'}?
+              </AlertDialog.Title>
+              <AlertDialog.Description size="2">
+                This will remove the selected bookings from this job. This
+                action cannot be undone.
+              </AlertDialog.Description>
+              <Flex gap="3" justify="end" mt="4">
+                <AlertDialog.Cancel>
+                  <Button variant="soft">Cancel</Button>
+                </AlertDialog.Cancel>
+                <AlertDialog.Action>
+                  <Button
+                    color="red"
+                    variant="solid"
+                    onClick={handleDeleteSelected}
+                  >
+                    Yes, delete
+                  </Button>
+                </AlertDialog.Action>
+              </Flex>
+            </AlertDialog.Content>
+          </AlertDialog.Root>
           <AlertDialog.Root
             open={!!deleteOwnerOpen}
             onOpenChange={(open) => {
@@ -1752,4 +1947,25 @@ function itemKind(it: ReservedItemRow['item']) {
 }
 function fmtDate(v?: string) {
   return v ? new Date(v).toLocaleDateString() : ''
+}
+
+function BookingSelectCheckbox({
+  checked,
+  label,
+  onCheckedChange,
+}: {
+  checked: boolean | 'indeterminate'
+  label: string
+  onCheckedChange: (selected: boolean) => void
+}) {
+  return (
+    <Checkbox
+      size="1"
+      checked={checked}
+      aria-label={label}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onCheckedChange={(value) => onCheckedChange(value === true)}
+    />
+  )
 }

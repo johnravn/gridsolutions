@@ -158,6 +158,17 @@ function ConflictCallout({
     end_2: string
   }>
 }) {
+  const equipmentLines = [
+    ...groups.map((row, i) => ({
+      key: `group-${i}`,
+      text: `${groupConflictDisplayName(row)}: ${row.job_title_1 ?? 'Job'} (${formatPeriod(row.start_1, row.end_1)}) and ${row.job_title_2 ?? 'Job'} (${formatPeriod(row.start_2, row.end_2)})`,
+    })),
+    ...equipment.map((row, i) => ({
+      key: `item-${i}`,
+      text: `${row.item_name ?? 'Item'}: ${row.total_reserved}/${row.capacity} booked (${formatPeriod(row.start_at, row.end_at)}) — also on ${formatEquipmentConflictJobs(row as EquipmentConflictRow)}`,
+    })),
+  ]
+
   const bg = tone === 'red' ? 'var(--red-a2)' : 'var(--amber-a2)'
   const border = tone === 'red' ? 'var(--red-a5)' : 'var(--amber-a5)'
   const color = tone === 'red' ? 'red' : 'amber'
@@ -221,7 +232,7 @@ function ConflictCallout({
           </Box>
         )}
 
-        {groups.length > 0 && (
+        {equipmentLines.length > 0 && (
           <Box>
             <Text
               size="1"
@@ -229,34 +240,11 @@ function ConflictCallout({
               style={{ cursor: onNavigateSubTab ? 'pointer' : undefined }}
               onClick={() => onNavigateSubTab?.('equipment')}
             >
-              Groups ({groups.length})
+              Equipment ({equipmentLines.length})
             </Text>
-            {groups.slice(0, 3).map((row, i) => (
-              <Text key={i} size="1" color="gray" as="div">
-                {groupConflictDisplayName(row)}: {row.job_title_1 ?? 'Job'} (
-                {formatPeriod(row.start_1, row.end_1)}) and{' '}
-                {row.job_title_2 ?? 'Job'} (
-                {formatPeriod(row.start_2, row.end_2)})
-              </Text>
-            ))}
-          </Box>
-        )}
-
-        {equipment.length > 0 && (
-          <Box>
-            <Text
-              size="1"
-              color="blue"
-              style={{ cursor: onNavigateSubTab ? 'pointer' : undefined }}
-              onClick={() => onNavigateSubTab?.('equipment')}
-            >
-              Equipment ({equipment.length})
-            </Text>
-            {equipment.slice(0, 3).map((row, i) => (
-              <Text key={i} size="1" color="gray" as="div">
-                {row.item_name ?? 'Item'}: {row.total_reserved}/{row.capacity}{' '}
-                booked ({formatPeriod(row.start_at, row.end_at)}) — also on{' '}
-                {formatEquipmentConflictJobs(row as EquipmentConflictRow)}
+            {equipmentLines.slice(0, 3).map((line) => (
+              <Text key={line.key} size="1" color="gray" as="div">
+                {line.text}
               </Text>
             ))}
           </Box>

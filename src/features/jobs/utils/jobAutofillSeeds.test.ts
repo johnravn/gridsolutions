@@ -23,8 +23,17 @@ describe('jobAutofillSeeds', () => {
   })
 
   it('includes company-member customer seeds', () => {
+    expect(JOB_AUTOFILL_SEEDS.some((seed) => seed.isCompanyCustomer)).toBe(true)
+  })
+
+  it('covers both technician crew booking modes', () => {
     expect(
-      JOB_AUTOFILL_SEEDS.some((seed) => seed.isCompanyCustomer),
+      JOB_AUTOFILL_SEEDS.some((seed) => seed.technicianCrewBooking === 'open'),
+    ).toBe(true)
+    expect(
+      JOB_AUTOFILL_SEEDS.some(
+        (seed) => seed.technicianCrewBooking === 'confirm_myself',
+      ),
     ).toBe(true)
   })
 

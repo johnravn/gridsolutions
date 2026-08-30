@@ -44,59 +44,41 @@ npm run db:diff capture_gui_changes
 
 ### 3. Git Workflow
 
-**Recommended: Feature Branch Strategy**
+Work on `main`. Track work with GitHub issues. See `GITHUB_ISSUES.md`.
 
 ```bash
-# Create feature branch
-git checkout -b feature/new-feature
+git checkout main
+git pull origin main
 
-# Make changes, commit
+# Make changes, then:
 git add .
-git commit -m "Add new feature"
+git commit -m "$(cat <<'EOF'
+Add new feature
 
-# Push to GitHub
-git push origin feature/new-feature
-
-# When ready, merge to main
-git checkout main
-git merge feature/new-feature
+Closes #142
+EOF
+)"
 git push origin main
 ```
 
-**Or: Dev Branch Strategy**
-
-```bash
-# Work on dev branch
-git checkout dev
-# ... make changes ...
-git commit -m "Add feature"
-git push origin dev
-
-# When ready for production
-git checkout main
-git merge dev
-git push origin main
-```
+Do not create feature branches or pull requests.
 
 ## Deployment Workflow
 
 ### With Vercel Auto-Deploy
 
-1. **Work on `dev` branch:**
+1. **Work on `main`:**
 
-   ```bash
-   git checkout dev
-   # Make changes, test locally
-   git commit -m "Add feature"
-   git push origin dev
-   ```
-
-2. **Test on dev deployment** (if Vercel deploys dev branch)
-
-3. **Merge to `main` when ready:**
    ```bash
    git checkout main
-   git merge dev
+   git pull origin main
+   # Make changes, test locally
+   git commit -m "$(cat <<'EOF'
+   Add feature
+
+   Closes #142
+   EOF
+   )"
    git push origin main
    # Vercel auto-deploys from main
    ```
@@ -123,7 +105,7 @@ git push origin main
 
 - **Test migrations locally first:** `npm run db:reset`
 - **Push migrations before code:** Database schema must exist before app uses it
-- **Use feature branches:** Keep main stable
+- **Work on `main`:** Keep it deployable; test locally before pushing
 - **Commit migrations with code:** They're part of your codebase
 - **Update types after migrations:** `npm run db:types:remote`
 
@@ -142,8 +124,8 @@ npm run supabase:start
 npm run db:switch:local
 npm run dev
 
-# 2. Create feature branch
-git checkout -b feature/user-profiles
+# 2. Confirm or create a GitHub issue, stay on main
+git pull origin main
 
 # 3. Make database changes
 npm run db:migrate add_user_profiles
@@ -159,22 +141,20 @@ npm run db:types
 # 6. Write code that uses new schema
 # ... code changes ...
 
-# 7. Commit everything
+# 7. Commit everything and push main
 git add .
-git commit -m "Add user profiles feature"
-git push origin feature/user-profiles
+git commit -m "$(cat <<'EOF'
+Add user profiles feature
 
-# 8. When ready for production:
-#    a. Push migrations to remote
-npm run db:push
-npm run db:types:remote
-
-#    b. Merge to main
-git checkout main
-git merge feature/user-profiles
+Closes #142
+EOF
+)"
 git push origin main
 
-#    c. Vercel auto-deploys
+# 8. If you have not already: push migrations to remote before the code push
+#    npm run db:push && npm run db:types:remote
+
+# Vercel auto-deploys from main
 ```
 
 ## Migration Timing
@@ -211,10 +191,8 @@ npm run db:push
 npm run db:types:remote
 
 # Git workflow
-git checkout -b feature/name
-# ... work ...
-git push origin feature/name
 git checkout main
-git merge feature/name
+git pull origin main
+# ... work ...
 git push origin main
 ```

@@ -1,4 +1,5 @@
 import type { JobStatus } from '../types'
+import type { TechnicianCrewBookingMode } from './technicianCrewBooking'
 
 /**
  * Temporary testing seeds for New job autofill.
@@ -29,7 +30,7 @@ export type JobAutofillSeed = {
   companyCustomerIndex: number
   /** Index into company recurring jobs (-1 = none) */
   recurringJobIndex: number
-  createCrewBooking: boolean
+  technicianCrewBooking: TechnicianCrewBookingMode
 }
 
 const JOB_STATUSES: Array<JobStatus> = [
@@ -250,7 +251,9 @@ const JOB_TEMPLATES: Array<JobTemplate> = [
   },
 ]
 
-const DAY_OFFSETS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 21, 25, 28, 30]
+const DAY_OFFSETS = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 21, 25, 28, 30,
+]
 const START_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
 const DURATIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10]
 
@@ -258,7 +261,11 @@ function buildJobAutofillSeeds(): Array<JobAutofillSeed> {
   const seeds: Array<JobAutofillSeed> = []
   let id = 1
 
-  for (let templateIndex = 0; templateIndex < JOB_TEMPLATES.length; templateIndex += 1) {
+  for (
+    let templateIndex = 0;
+    templateIndex < JOB_TEMPLATES.length;
+    templateIndex += 1
+  ) {
     const template = JOB_TEMPLATES[templateIndex]
     for (let variant = 0; variant < 5; variant += 1) {
       const mix = templateIndex * 5 + variant
@@ -268,13 +275,9 @@ function buildJobAutofillSeeds(): Array<JobAutofillSeed> {
       seeds.push({
         id: id++,
         label:
-          variant === 0
-            ? template.label
-            : `${template.label} ${variant + 1}`,
+          variant === 0 ? template.label : `${template.label} ${variant + 1}`,
         title:
-          variant === 0
-            ? template.title
-            : `${template.title} (${variant + 1})`,
+          variant === 0 ? template.title : `${template.title} (${variant + 1})`,
         description: `${template.description}. Variant ${variant + 1}.`,
         status: JOB_STATUSES[mix % JOB_STATUSES.length],
         daysFromNow: DAY_OFFSETS[mix % DAY_OFFSETS.length],
@@ -286,7 +289,7 @@ function buildJobAutofillSeeds(): Array<JobAutofillSeed> {
         contactIndex: isCompanyCustomer ? -1 : mix % 4,
         companyCustomerIndex: isCompanyCustomer ? mix % 6 : -1,
         recurringJobIndex: mix % 5 === 0 ? -1 : mix % 6,
-        createCrewBooking: mix % 3 !== 0,
+        technicianCrewBooking: mix % 3 === 0 ? 'open' : 'confirm_myself',
       })
     }
   }
@@ -294,7 +297,8 @@ function buildJobAutofillSeeds(): Array<JobAutofillSeed> {
   return seeds
 }
 
-export const JOB_AUTOFILL_SEEDS: Array<JobAutofillSeed> = buildJobAutofillSeeds()
+export const JOB_AUTOFILL_SEEDS: Array<JobAutofillSeed> =
+  buildJobAutofillSeeds()
 
 export function getJobAutofillSeed(id: number): JobAutofillSeed | undefined {
   return JOB_AUTOFILL_SEEDS.find((seed) => seed.id === id)

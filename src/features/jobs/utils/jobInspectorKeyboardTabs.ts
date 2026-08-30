@@ -1,5 +1,12 @@
 import { BOOKINGS_SUB_TABS } from '@features/jobs/components/tabs/BookingsTab'
 
+/** Map legacy `invoices` deep-links to the combined Invoice tab. */
+export function normalizeJobInspectorTab(tab: string | undefined): string {
+  if (!tab) return 'overview'
+  if (tab === 'invoices') return 'invoice'
+  return tab
+}
+
 export function buildJobInspectorKeyboardSteps(
   tabValues: ReadonlyArray<string>,
 ): Array<string> {

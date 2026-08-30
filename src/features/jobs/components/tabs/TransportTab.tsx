@@ -21,6 +21,8 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
 import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
+import { jobBookingConflictsQuery } from '@features/conflicts/api/queries'
+import { vehicleConflictToneByPeriodId } from '@features/conflicts/utils/conflictCategories'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
 import type { ExternalReqStatus, ReservedVehicleRow } from '../../types'
 
@@ -122,6 +124,15 @@ export default function TransportTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const { data: bookingConflicts } = useQuery({
+    ...jobBookingConflictsQuery({ jobId }),
+    enabled: !!jobId && companyRole !== 'freelancer',
+  })
+  const conflictToneByPeriod = React.useMemo(
+    () => vehicleConflictToneByPeriodId(bookingConflicts?.vehicles ?? []),
+    [bookingConflicts?.vehicles],
+  )
+
   const bookings = data?.bookings ?? []
   const notices = data?.notices ?? []
 
@@ -189,6 +200,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
 
       await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
+      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       success('Deleted', 'Vehicle booking deleted')
       setDeletingBooking(null)
     } catch (e: any) {
@@ -290,6 +302,10 @@ export default function TransportTab({ jobId }: { jobId: string }) {
                 noteChanged={noteChanged}
                 isReadOnly={isReadOnly}
                 jobId={jobId}
+                conflictTone={
+                  conflictToneByPeriod.get(row.time_period_id) ??
+                  (row.forced ? 'forced' : null)
+                }
                 isExpanded={expandedCards.has(row.id)}
                 onToggleExpand={() => {
                   setExpandedCards((prev) => {
@@ -391,6 +407,7 @@ function VehicleBookingCard({
   noteChanged,
   isReadOnly,
   jobId,
+  conflictTone,
   isExpanded,
   onToggleExpand,
   onNoteChange,
@@ -405,6 +422,7 @@ function VehicleBookingCard({
   noteChanged: boolean
   isReadOnly: boolean
   jobId: string
+  conflictTone: 'unresolved' | 'forced' | null
   isExpanded: boolean
   onToggleExpand: () => void
   onNoteChange: (note: string) => void
@@ -412,6 +430,12 @@ function VehicleBookingCard({
   onDelete: () => void
 }) {
   const vehicleName = vehicle?.name ?? '—'
+  const conflictBorder =
+    conflictTone === 'unresolved'
+      ? '1px solid var(--red-a6)'
+      : conflictTone === 'forced'
+        ? '1px solid var(--amber-a6)'
+        : '1px solid var(--gray-a5)'
 
   const imageUrl = React.useMemo(() => {
     if (!vehicle?.image_path) return null
@@ -427,7 +451,7 @@ function VehicleBookingCard({
       variant="surface"
       style={{
         background: 'var(--gray-a1)',
-        border: '1px solid var(--gray-a5)',
+        border: conflictBorder,
       }}
     >
       <Flex
@@ -504,7 +528,12 @@ function VehicleBookingCard({
               {ownerBadge.label}
             </Badge>
 
-            {row.forced && (
+            {conflictTone === 'unresolved' && (
+              <Badge variant="soft" color="red">
+                Conflict
+              </Badge>
+            )}
+            {(conflictTone === 'forced' || row.forced) && (
               <Badge variant="soft" color="amber">
                 Forced
               </Badge>

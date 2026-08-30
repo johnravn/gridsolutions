@@ -7,7 +7,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.9'
+export const APP_VERSION = '1.13.10'
 
 export type ReleaseHighlight = {
   title: string
@@ -18,6 +18,21 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Technician crew booking on new jobs',
+      description:
+        'New jobs always create a Technician crew slot for the job duration. Choose whether to leave it open or confirm yourself on it.',
+    },
+    {
+      title: 'One Invoice tab',
+      description:
+        'Create, preview, and review invoice history on a single Invoice tab — for jobs and for recurring series.',
+    },
+    {
+      title: 'Reorder invoice lines',
+      description:
+        'Drag lines in the job invoice editor to choose the order that is sent to Conta.',
+    },
     {
       title: 'Recurring jobs for the whole company',
       description:

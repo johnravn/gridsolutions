@@ -96,6 +96,41 @@ describe('collectGroupOverlapConflicts', () => {
     expect(result.get('child')?.[0]?.itemName).toBe('Child kit')
   })
 
+  it('keeps group members as separate nested conflicts', () => {
+    const result = collectGroupOverlapConflicts({
+      bookedGroupIds: ['g1'],
+      lineageByGroupId: new Map([['g1', ['g1']]]),
+      groupNameById: new Map([['g1', 'Kit']]),
+      itemNameById: new Map([
+        ['mic', 'SM58'],
+        ['cable', 'XLR'],
+      ]),
+      rows: [
+        overlapRow({ item_id: 'mic', quantity: 2 }),
+        overlapRow({ item_id: 'cable', quantity: 4 }),
+      ],
+      startAt,
+      endAt,
+    })
+
+    expect(result.get('g1')).toEqual([
+      expect.objectContaining({
+        itemId: 'mic',
+        itemName: 'SM58',
+        quantity: 2,
+        sourceGroupId: 'g1',
+        sourceGroupName: 'Kit',
+      }),
+      expect.objectContaining({
+        itemId: 'cable',
+        itemName: 'XLR',
+        quantity: 4,
+        sourceGroupId: 'g1',
+        sourceGroupName: 'Kit',
+      }),
+    ])
+  })
+
   it('ignores sibling rows on the same time period', () => {
     const result = collectGroupOverlapConflicts({
       bookedGroupIds: ['g1'],

@@ -1,3 +1,4 @@
+import { parseCopyJobRpcResult } from '@features/jobs/utils/copyJobConflicts'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
   createAnonClient,
@@ -235,35 +236,92 @@ describeIntegration('job_copy RPC', () => {
 
     const startAt = new Date()
     startAt.setDate(startAt.getDate() + 14)
-    const endAt = new Date(startAt)
-    endAt.setDate(endAt.getDate() + 3)
 
-    const { data: newJobId, error } = await client.rpc('job_copy', {
+    const { data, error } = await client.rpc('job_copy', {
       p_job_id: TEST_JOB_ID,
       p_start_at: startAt.toISOString(),
-      p_end_at: endAt.toISOString(),
+      p_title: 'Copied festival job',
     })
 
     expect(error).toBeNull()
+    const newJobId = parseCopyJobRpcResult(data).jobId
     expect(newJobId).toBeTruthy()
 
     const admin = createServiceClient()
     const { data: newJob } = await admin
       .from('jobs')
-      .select('id, title')
-      .eq('id', newJobId as string)
+      .select('id, title, start_at, end_at')
+      .eq('id', newJobId)
       .single()
     expect(newJob).toBeTruthy()
+    expect(newJob?.title).toBe('Copied festival job')
+
+    const { data: sourceJob } = await admin
+      .from('jobs')
+      .select('start_at, end_at')
+      .eq('id', TEST_JOB_ID)
+      .single()
+    expect(sourceJob?.start_at).toBeTruthy()
+    expect(sourceJob?.end_at).toBeTruthy()
+    expect(new Date(newJob?.start_at as string).getTime()).toBe(
+      startAt.getTime(),
+    )
+    expect(
+      new Date(newJob?.end_at as string).getTime() -
+        new Date(newJob?.start_at as string).getTime(),
+    ).toBe(
+      new Date(sourceJob?.end_at as string).getTime() -
+        new Date(sourceJob?.start_at as string).getTime(),
+    )
 
     const { data: copiedOffers } = await admin
       .from('job_offers')
       .select('id, copied_from_job_id')
-      .eq('job_id', newJobId as string)
+      .eq('job_id', newJobId)
 
     expect(copiedOffers?.length).toBeGreaterThan(0)
     expect(
       copiedOffers?.every((o) => o.copied_from_job_id === TEST_JOB_ID),
     ).toBe(true)
+  })
+
+  it('copies overlapping equipment as forced instead of failing', async () => {
+    const { client } = await signInTestUser(TEST_EMAIL, TEST_PASSWORD)
+    const conflictJobId = '14141414-1414-4414-8414-141414141414'
+    const startAt = '2026-07-01T08:00:00.000Z'
+
+    const { data, error } = await client.rpc('job_copy', {
+      p_job_id: conflictJobId,
+      p_start_at: startAt,
+      p_title: 'Copied conflict job',
+    })
+
+    expect(error).toBeNull()
+    const copied = parseCopyJobRpcResult(data)
+    expect(copied.jobId).toBeTruthy()
+    expect(copied.conflicts).toContain('equipment')
+
+    const admin = createServiceClient()
+    const { data: periods } = await admin
+      .from('time_periods')
+      .select('id')
+      .eq('job_id', copied.jobId)
+    const periodIds = (periods ?? []).map((period) => period.id)
+    expect(periodIds.length).toBeGreaterThan(0)
+
+    const { data: copiedItems } = await admin
+      .from('reserved_items')
+      .select('forced')
+      .in('time_period_id', periodIds)
+
+    expect(copiedItems?.length).toBeGreaterThan(0)
+    expect(copiedItems?.every((row) => row.forced)).toBe(true)
+
+    const { data: conflicts } = await client.rpc('get_job_booking_conflicts', {
+      p_job_id: copied.jobId,
+    })
+    const parsed = conflicts as { equipment?: Array<unknown> }
+    expect(parsed.equipment?.length).toBeGreaterThan(0)
   })
 
   it('blocks freelancer from copying a job', async () => {
@@ -274,13 +332,10 @@ describeIntegration('job_copy RPC', () => {
 
     const startAt = new Date()
     startAt.setDate(startAt.getDate() + 21)
-    const endAt = new Date(startAt)
-    endAt.setDate(endAt.getDate() + 3)
 
     const { error } = await client.rpc('job_copy', {
       p_job_id: TEST_JOB_ID,
       p_start_at: startAt.toISOString(),
-      p_end_at: endAt.toISOString(),
     })
 
     expect(error).toBeTruthy()
@@ -344,13 +399,10 @@ describeIntegration('employee permissions RLS', () => {
 
     const startAt = new Date()
     startAt.setDate(startAt.getDate() + 28)
-    const endAt = new Date(startAt)
-    endAt.setDate(endAt.getDate() + 3)
 
     const { data: newJobId, error } = await client.rpc('job_copy', {
       p_job_id: ACCEPT_JOB_ID,
       p_start_at: startAt.toISOString(),
-      p_end_at: endAt.toISOString(),
     })
 
     expect(error).toBeNull()

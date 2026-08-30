@@ -83,15 +83,12 @@ import {
   buildOfferBasisBookingSummary,
 } from '../../utils/bookingSummary'
 import {
-  buildCurrentCrewMap,
-  buildCurrentEquipmentMap,
-  buildCurrentTransportMultiset,
-  buildExpectedCrewMap,
-  buildExpectedEquipmentMap,
-  buildExpectedTransportMultiset,
+  buildSyncPreviewViewModel,
+  catalogFromOfferDetail,
   computeOfferDiff,
   formatOfferDiffForPreview,
-  mapsEqual,
+  labelForId,
+  namesFromOfferDetail,
 } from '../../utils/offerBookingDiff'
 import { OffersStructureHelpDialog } from '../OffersStructureHelpDialog'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
@@ -99,13 +96,92 @@ import { SyncBasisBookingsDialog } from '../dialogs/SyncBasisBookingsDialog'
 import type { SyncBasisConfirmMode } from '../dialogs/SyncBasisBookingsDialog'
 import type {
   BookingsSnapshot,
-  FormattedOfferDiff,
+  ItemCatalogEntry,
   SyncLineItems,
+  SyncPreviewViewModel,
 } from '../../utils/offerBookingDiff'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type { JobOfferBasisRow } from '../../api/offerBasisQueries'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { JobOffer, OfferType } from '../../types'
+
+const EMPTY_BOOKINGS_SNAPSHOT: BookingsSnapshot = {
+  equipment: [],
+  crewPeriods: [],
+  transport: [],
+}
+
+async function fetchIdNames(
+  table: 'items' | 'vehicles',
+  ids: Array<string>,
+): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  const map = new Map<string, string>()
+  if (unique.length === 0) return map
+
+  const { data, error } = await supabase
+    .from(table)
+    .select('id, name')
+    .in('id', unique)
+  if (error) throw error
+
+  for (const row of (data as Array<{ id: string; name: string }> | null) ??
+    []) {
+    if (row.id && row.name?.trim()) map.set(row.id, row.name.trim())
+  }
+  return map
+}
+
+async function fetchItemCatalog(
+  ids: Array<string>,
+): Promise<Map<string, ItemCatalogEntry>> {
+  const unique = Array.from(new Set(ids.filter(Boolean)))
+  const map = new Map<string, ItemCatalogEntry>()
+  if (unique.length === 0) return map
+
+  const { data, error } = await supabase
+    .from('items')
+    .select(
+      'id, name, model, brand:brand_id ( name ), category:category_id ( name )',
+    )
+    .in('id', unique)
+  if (error) throw error
+
+  for (const row of (data as Array<{
+    id: string
+    name: string | null
+    model: string | null
+    brand: { name: string } | Array<{ name: string }> | null
+    category: { name: string } | Array<{ name: string }> | null
+  }> | null) ?? []) {
+    const brand = Array.isArray(row.brand) ? row.brand[0] : row.brand
+    const category = Array.isArray(row.category)
+      ? row.category[0]
+      : row.category
+    if (!row.id) continue
+    map.set(row.id, {
+      name: row.name?.trim() || '',
+      brand: brand?.name?.trim() || null,
+      model: row.model?.trim() || null,
+      category: category?.name?.trim() || 'Other',
+    })
+  }
+  return map
+}
+
+function thrownMessage(e: unknown, fallback: string): string {
+  if (e instanceof Error && e.message.trim()) return e.message
+  if (
+    typeof e === 'object' &&
+    e !== null &&
+    'message' in e &&
+    typeof (e as { message: unknown }).message === 'string'
+  ) {
+    const message = (e as { message: string }).message.trim()
+    if (message) return message
+  }
+  return fallback
+}
 
 function getOfferStatusBadgeColor(offer: JobOffer) {
   if (offer.revision_requested_at) return 'orange'
@@ -163,7 +239,7 @@ export default function OffersTab({
   const [syncPreview, setSyncPreview] = React.useState<{
     basisId: string
     basisTitle: string
-    preview: FormattedOfferDiff | null
+    preview: SyncPreviewViewModel | null
     conflicts: BasisBookingConflictPreview | null
     loading: boolean
   } | null>(null)
@@ -283,15 +359,33 @@ export default function OffersTab({
       const transportPeriodIds = timePeriods
         .filter((tp: any) => tp.category === 'transport')
         .map((tp: any) => tp.id as string)
-      const crewPeriods = timePeriods
-        .filter((tp: any) => tp.category === 'crew')
-        .map((tp: any) => ({
-          title: (tp.title as string | null) ?? null,
-          start_at: tp.start_at as string,
-          end_at: tp.end_at as string,
-          needed_count: (tp.needed_count as number | null) ?? null,
-          role_category: (tp.role_category as string | null) ?? null,
-        }))
+      const crewTimePeriods = timePeriods.filter(
+        (tp: any) => tp.category === 'crew',
+      )
+      const crewPeriodIds = crewTimePeriods.map((tp: any) => tp.id as string)
+      const confirmedByPeriodId = new Map<string, number>()
+      if (crewPeriodIds.length > 0) {
+        const { data: crewRows, error: crewErr } = await supabase
+          .from('reserved_crew')
+          .select('time_period_id, status')
+          .in('time_period_id', crewPeriodIds)
+        if (crewErr) throw crewErr
+        for (const row of crewRows ?? []) {
+          if (row.status !== 'confirmed' || !row.time_period_id) continue
+          confirmedByPeriodId.set(
+            row.time_period_id,
+            (confirmedByPeriodId.get(row.time_period_id) ?? 0) + 1,
+          )
+        }
+      }
+      const crewPeriods = crewTimePeriods.map((tp: any) => ({
+        title: (tp.title as string | null) ?? null,
+        start_at: tp.start_at as string,
+        end_at: tp.end_at as string,
+        needed_count: (tp.needed_count as number | null) ?? null,
+        role_category: (tp.role_category as string | null) ?? null,
+        confirmedCount: confirmedByPeriodId.get(tp.id as string) ?? 0,
+      }))
 
       const equipment =
         equipmentPeriodIds.length > 0
@@ -513,8 +607,11 @@ export default function OffersTab({
         }
       }
     }
+    for (const row of bookingsSnapshotQuery.data?.transport ?? []) {
+      if (row.vehicle_id) ids.add(row.vehicle_id)
+    }
     return Array.from(ids).sort()
-  }, [basisDetailsById])
+  }, [basisDetailsById, bookingsSnapshotQuery.data])
 
   const itemCategoriesQuery = useQuery({
     queryKey: ['items', 'categories', ...itemIdsUsedByBases] as const,
@@ -668,27 +765,28 @@ export default function OffersTab({
     ],
   )
 
-  const diffItemIds = React.useMemo(() => {
-    const ids = new Set<string>()
-    for (const basisId of basisIds) {
-      const diff = getBasisDiff(basisId)
-      if (!diff) continue
-      for (const ch of diff.equipmentChanges) {
-        if (ch.item_id) ids.add(ch.item_id)
+  const nameItemIds = React.useMemo(() => {
+    const ids = new Set<string>(itemIdsUsedByBases)
+    for (const row of bookingsSnapshotQuery.data?.equipment ?? []) {
+      if (row.item_id) ids.add(row.item_id)
+    }
+    for (const members of groupItemsQuery.data?.values() ?? []) {
+      for (const member of members) {
+        if (member.item_id) ids.add(member.item_id)
       }
     }
-    return Array.from(ids).slice(0, 200).sort()
-  }, [getBasisDiff, basisIds])
+    return Array.from(ids).sort()
+  }, [itemIdsUsedByBases, bookingsSnapshotQuery.data, groupItemsQuery.data])
 
   const itemNamesQuery = useQuery({
-    queryKey: ['items', 'names', diffItemIds] as const,
-    enabled: (isActive ?? true) && diffItemIds.length > 0,
+    queryKey: ['items', 'names', nameItemIds] as const,
+    enabled: (isActive ?? true) && nameItemIds.length > 0,
     staleTime: 60_000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from('items')
         .select('id, name')
-        .in('id', diffItemIds)
+        .in('id', nameItemIds)
       if (error) throw error
       const m = new Map<string, string>()
       for (const row of (data as Array<{ id: string; name: string }> | null) ??
@@ -699,15 +797,21 @@ export default function OffersTab({
     },
   })
 
-  const formatItem = (itemId: string) => {
-    const name = itemNamesQuery.data?.get(itemId)
-    return name ? `${name}` : itemId
-  }
+  const formatItem = React.useCallback(
+    (itemId: string) =>
+      labelForId(itemId, itemNamesQuery.data?.get(itemId), 'Unknown item'),
+    [itemNamesQuery.data],
+  )
 
-  const formatVehicle = (vehicleId: string) => {
-    const name = vehicleNamesQuery.data?.get(vehicleId)
-    return name ? name : vehicleId
-  }
+  const formatVehicle = React.useCallback(
+    (vehicleId: string) =>
+      labelForId(
+        vehicleId,
+        vehicleNamesQuery.data?.get(vehicleId),
+        'Unknown vehicle',
+      ),
+    [vehicleNamesQuery.data],
+  )
 
   const buildDiffTooltip = (basisId: string) => {
     const diff = getBasisDiff(basisId)
@@ -791,17 +895,6 @@ export default function OffersTab({
     (
       basisId: string,
     ): { label: string; color: 'green' | 'gray'; title: string } => {
-      const snapshot = bookingsSnapshotQuery.data
-      const detail = basisDetailsById.get(basisId)
-
-      if (!snapshot || !detail) {
-        return {
-          label: 'Checking…',
-          color: 'gray',
-          title: 'Refreshing bookings sync status…',
-        }
-      }
-
       if (syncingBasisId === basisId) {
         return {
           label: 'Checking…',
@@ -810,50 +903,46 @@ export default function OffersTab({
         }
       }
 
-      const needsGroupItems = (detail.groups ?? []).some((g) =>
-        g.items.some((i) => !!i.group_id),
-      )
-      const groupItemsMap = groupItemsQuery.data ?? new Map()
-      if (needsGroupItems && groupItemsQuery.isLoading) {
+      const diff = getBasisDiff(basisId)
+      if (!diff) {
         return {
           label: 'Checking…',
           color: 'gray',
-          title: 'Loading item group definitions…',
+          title: 'Refreshing bookings sync status…',
         }
       }
 
-      const expectedEquip = buildExpectedEquipmentMap(detail, groupItemsMap)
-      const currentEquip = buildCurrentEquipmentMap(snapshot)
-      const equipmentMatches = mapsEqual(expectedEquip, currentEquip)
+      const formatted = formatOfferDiffForPreview(
+        diff,
+        formatItem,
+        formatVehicle,
+      )
 
-      const expectedCrew = buildExpectedCrewMap(detail)
-      const currentCrew = buildCurrentCrewMap(snapshot)
-      const crewMatches = mapsEqual(expectedCrew, currentCrew)
-
-      const expectedTransport = buildExpectedTransportMultiset(detail)
-      const currentTransport = buildCurrentTransportMultiset(snapshot)
-      const transportMatches =
-        expectedTransport === null
-          ? true
-          : expectedTransport.join('|') === currentTransport.join('|')
-
-      const isSyncedNow = equipmentMatches && crewMatches && transportMatches
-
-      if (isSyncedNow) {
+      if (!formatted.hasChanges) {
         return {
           label: 'Synced',
           color: 'green',
-          title:
-            expectedTransport === null
-              ? 'Offer basis matches current bookings (transport not strictly verifiable).'
-              : 'Offer basis matches current bookings.',
+          title: 'Offer basis matches current bookings.',
         }
       }
 
       const reasons: Array<string> = []
-      if (!equipmentMatches) reasons.push('Equipment differs')
-      if (!crewMatches) reasons.push('Crew differs')
-      if (expectedTransport !== null && !transportMatches) {
+      if (
+        formatted.equipmentAdditions.length > 0 ||
+        formatted.equipmentRemovals.length > 0
+      ) {
+        reasons.push('Equipment differs')
+      }
+      if (
+        formatted.crewAdditions.length > 0 ||
+        formatted.crewRemovals.length > 0
+      ) {
+        reasons.push('Crew differs')
+      }
+      if (
+        formatted.transportAdditions.length > 0 ||
+        formatted.transportRemovals.length > 0
+      ) {
         reasons.push('Transport differs')
       }
 
@@ -863,13 +952,7 @@ export default function OffersTab({
         title: `Offer basis does not match current bookings. ${reasons.join(' • ')}`,
       }
     },
-    [
-      bookingsSnapshotQuery.data,
-      groupItemsQuery.data,
-      groupItemsQuery.isLoading,
-      basisDetailsById,
-      syncingBasisId,
-    ],
+    [formatItem, formatVehicle, getBasisDiff, syncingBasisId],
   )
 
   const prevIsActiveRef = React.useRef<boolean>(false)
@@ -1273,9 +1356,10 @@ export default function OffersTab({
   const fetchBasisDiffForSync = React.useCallback(
     async (basisId: string) => {
       const snapshotResult = await bookingsSnapshotQuery.refetch()
-      const snapshot = snapshotResult.data
+      if (snapshotResult.error) throw snapshotResult.error
+      const snapshot = snapshotResult.data ?? EMPTY_BOOKINGS_SNAPSHOT
       const detail = await qc.fetchQuery(offerBasisDetailQuery(basisId))
-      if (!snapshot || !detail) return null
+      if (!detail) throw new Error('Offer basis not found')
 
       const groupIds: Array<string> = []
       for (const group of detail.groups) {
@@ -1284,7 +1368,12 @@ export default function OffersTab({
         }
       }
       const groupItemsMap = await fetchGroupItemsMap(groupIds)
-      return computeOfferDiff(snapshot, detail, groupItemsMap)
+      return {
+        diff: computeOfferDiff(snapshot, detail, groupItemsMap),
+        detail,
+        groupItemsMap,
+        snapshot,
+      }
     },
     [bookingsSnapshotQuery, fetchGroupItemsMap, qc],
   )
@@ -1309,27 +1398,55 @@ export default function OffersTab({
       })
 
       try {
-        const [diff, conflicts] = await Promise.all([
-          fetchBasisDiffForSync(basis.id),
-          previewBookingConflictsForBasis(basis.id),
-        ])
+        const { diff, detail, groupItemsMap, snapshot } =
+          await fetchBasisDiffForSync(basis.id)
 
-        if (!diff) {
-          setSyncPreview(null)
-          info(
-            'Just a sec…',
-            'Loading differences so we can preview the sync. Try again in a moment.',
-          )
-          basesQuery.refetch()
-          bookingsSnapshotQuery.refetch()
-          groupItemsQuery.refetch()
-          return
+        let conflicts: BasisBookingConflictPreview | null = null
+        try {
+          conflicts = await previewBookingConflictsForBasis(basis.id)
+        } catch (conflictErr: unknown) {
+          console.warn('Failed to load booking conflict preview', conflictErr)
         }
 
-        const preview = formatOfferDiffForPreview(
+        const seeded = namesFromOfferDetail(detail)
+        const catalog = catalogFromOfferDetail(detail)
+        const itemIds = [
+          ...diff.equipmentChanges.map((change) => change.item_id),
+          ...Array.from(groupItemsMap.values()).flatMap((members) =>
+            members.map((member) => member.item_id),
+          ),
+        ]
+        const vehicleIds = [...diff.expectedTransport, ...diff.currentTransport]
+
+        const [fetchedCatalog, vehicleNames] = await Promise.all([
+          fetchItemCatalog(itemIds),
+          fetchIdNames('vehicles', vehicleIds),
+        ])
+        for (const [id, entry] of fetchedCatalog) catalog.set(id, entry)
+
+        const preview = buildSyncPreviewViewModel(
           diff,
-          (itemId) => itemNamesQuery.data?.get(itemId) ?? itemId,
-          (vehicleId) => vehicleNamesQuery.data?.get(vehicleId) ?? vehicleId,
+          detail,
+          catalog,
+          groupItemsMap,
+          (itemId) =>
+            labelForId(
+              itemId,
+              catalog.get(itemId)?.name ||
+                seeded.itemNames.get(itemId) ||
+                itemNamesQuery.data?.get(itemId),
+              'Unknown item',
+            ),
+          (vehicleId) =>
+            labelForId(
+              vehicleId,
+              vehicleNames.get(vehicleId) ??
+                seeded.vehicleNames.get(vehicleId) ??
+                vehicleNamesQuery.data?.get(vehicleId),
+              'Unknown vehicle',
+            ),
+          snapshot,
+          groupCategoriesQuery.data ?? new Map(),
         )
 
         setSyncPreview({
@@ -1340,20 +1457,23 @@ export default function OffersTab({
           loading: false,
         })
       } catch (e: unknown) {
-        setSyncPreview(null)
+        setSyncPreview({
+          basisId: basis.id,
+          basisTitle,
+          preview: null,
+          conflicts: null,
+          loading: false,
+        })
         toastError(
           'Failed to load sync preview',
-          e instanceof Error ? e.message : 'Please try again.',
+          thrownMessage(e, 'Please try again.'),
         )
       }
     },
     [
-      basesQuery,
-      bookingsSnapshotQuery,
       basisVersionById,
       fetchBasisDiffForSync,
-      groupItemsQuery,
-      info,
+      groupCategoriesQuery.data,
       itemNamesQuery.data,
       toastError,
       user?.id,

@@ -59,4 +59,33 @@ describe('AnimatedQuickSuggestions', () => {
     expect(onSelect).toHaveBeenCalledWith('Audio')
     expect(onAfterSelect).toHaveBeenCalled()
   })
+
+  it('renders chips as type=button so they do not submit a wrapping form', () => {
+    const onSubmit = vi.fn((event: React.FormEvent) => {
+      event.preventDefault()
+    })
+    const onSelect = vi.fn()
+
+    render(
+      <Theme>
+        <form onSubmit={onSubmit}>
+          <AnimatedQuickSuggestions
+            suggestions={['Technician']}
+            open
+            staticOpen
+            animate={false}
+            onSelect={onSelect}
+          />
+          <button type="submit">Save</button>
+        </form>
+      </Theme>,
+    )
+
+    const chip = screen.getByRole('button', { name: 'Technician' })
+    expect(chip).toHaveAttribute('type', 'button')
+
+    fireEvent.click(chip)
+    expect(onSelect).toHaveBeenCalledWith('Technician')
+    expect(onSubmit).not.toHaveBeenCalled()
+  })
 })

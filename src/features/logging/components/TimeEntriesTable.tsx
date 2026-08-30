@@ -218,7 +218,7 @@ export default function TimeEntriesTable({
   const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
     rows,
     getRowId: (e) => e.id,
-    estimateRowSize: 48,
+    estimateRowSize: 52,
   })
   const isMobile = useMediaQuery('(max-width: 1023px)')
 
@@ -287,7 +287,14 @@ export default function TimeEntriesTable({
                 </span>
               </Tooltip>
             ) : null}
-            <Text size="2" weight="medium" trim="end" truncate>
+            <Text
+              as="div"
+              size="2"
+              weight="medium"
+              truncate
+              title={entry.title}
+              style={{ minWidth: 0 }}
+            >
               {entry.title}
             </Text>
           </Flex>

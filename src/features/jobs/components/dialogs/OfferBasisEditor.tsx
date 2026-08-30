@@ -15,6 +15,7 @@ import { Import, Lock } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
+import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import {
   companyExpansionQuery,
   crewPricingLevelsQuery,
@@ -783,9 +784,11 @@ export default function OfferBasisEditor({
         style={offerEditorDialogContentStyle}
         onPointerDownOutside={(event) => {
           if (closeGuardOpen) event.preventDefault()
+          preventDialogCloseOnSearchableSelect(event)
         }}
         onInteractOutside={(event) => {
           if (closeGuardOpen) event.preventDefault()
+          preventDialogCloseOnSearchableSelect(event)
         }}
         onEscapeKeyDown={(event) => {
           if (closeGuardOpen) {

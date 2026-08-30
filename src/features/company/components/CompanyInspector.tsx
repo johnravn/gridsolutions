@@ -1,13 +1,6 @@
 // src/features/company/components/CompanyInspector.tsx
 import * as React from 'react'
-import {
-  Box,
-  Button,
-  Code,
-  Flex,
-  Separator,
-  Text,
-} from '@radix-ui/themes'
+import { Box, Button, Code, Flex, Separator, Text } from '@radix-ui/themes'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'

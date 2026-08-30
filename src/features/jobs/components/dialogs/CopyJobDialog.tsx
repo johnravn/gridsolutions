@@ -2,46 +2,41 @@ import * as React from 'react'
 import { Button, Dialog, Flex, Separator, Text } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
-import {
-  DateTimeRangePicker,
-  isInvalidTimeRange,
-} from '@shared/ui/components/pickers'
+import DateTimePicker from '@shared/ui/components/DateTimePicker'
 
-function addYearsKeepingTime(iso: string, years: number): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  d.setFullYear(d.getFullYear() + years)
-  return d.toISOString()
+export function getCopyJobInitialFormValues(input: {
+  title: string | null
+  startAt: string | null
+}) {
+  return {
+    title: input.title ?? '',
+    startAt: input.startAt ?? '',
+  }
 }
 
 const defaultValues = {
+  title: '',
   startAt: '',
-  endAt: '',
 }
 
-const schema = z
-  .object({
-    startAt: z.string().min(1, 'Start time is required'),
-    endAt: z.string().min(1, 'End time is required'),
-  })
-  .refine((v) => !isInvalidTimeRange(v.startAt, v.endAt), {
-    message: 'End time must be after start time.',
-    path: ['endAt'],
-  })
+const schema = z.object({
+  title: z.string().trim().min(1, 'Title is required'),
+  startAt: z.string().min(1, 'Start time is required'),
+})
 
 export default function CopyJobDialog({
   open,
   onOpenChange,
+  initialTitle,
   initialStartAt,
-  initialEndAt,
   onConfirm,
   isCopying,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialTitle: string | null
   initialStartAt: string | null
-  initialEndAt: string | null
-  onConfirm: (payload: { startAt: string; endAt: string }) => void
+  onConfirm: (payload: { title: string; startAt: string }) => void
   isCopying: boolean
 }) {
   const form = useAppForm({
@@ -50,28 +45,32 @@ export default function CopyJobDialog({
       onSubmit: schema,
     },
     onSubmit: ({ value }) => {
-      onConfirm({ startAt: value.startAt, endAt: value.endAt })
+      onConfirm({
+        title: value.title.trim(),
+        startAt: value.startAt,
+      })
     },
   })
 
   React.useEffect(() => {
     if (!open) return
     form.reset(
-      {
-        startAt: initialStartAt ? addYearsKeepingTime(initialStartAt, 1) : '',
-        endAt: initialEndAt ? addYearsKeepingTime(initialEndAt, 1) : '',
-      },
+      getCopyJobInitialFormValues({
+        title: initialTitle,
+        startAt: initialStartAt,
+      }),
       { keepDefaultValues: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [open, initialStartAt, initialEndAt])
+  }, [open, initialTitle, initialStartAt])
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="520px">
         <Dialog.Title>Copy job</Dialog.Title>
         <Dialog.Description>
-          Choose the new start and end time for the copied job.
+          Choose a title and start time. Bookings keep their original duration
+          and shift from this start.
         </Dialog.Description>
         <Separator my="3" />
 
@@ -83,32 +82,34 @@ export default function CopyJobDialog({
           }}
         >
           <form.AppForm>
-            <form.Subscribe
-              selector={(state) => [state.values.startAt, state.values.endAt]}
-            >
-              {([startAt, endAt]) => {
-                const hasInvalidTimeRange = isInvalidTimeRange(startAt, endAt)
-                return (
-                  <Flex direction="column" gap="3">
-                    <DateTimeRangePicker
-                      startAt={startAt}
-                      endAt={endAt}
-                      onChange={({ startAt: s, endAt: e }) => {
-                        form.setFieldValue('startAt', s)
-                        form.setFieldValue('endAt', e)
-                      }}
-                      invalid={hasInvalidTimeRange}
-                    />
+            <Flex direction="column" gap="3">
+              <form.AppField name="title">
+                {(field) => (
+                  <field.TextField
+                    label="Title"
+                    placeholder="Enter job title"
+                  />
+                )}
+              </form.AppField>
 
-                    {hasInvalidTimeRange && (
+              <form.AppField name="startAt">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <DateTimePicker
+                      label="Start"
+                      value={field.state.value}
+                      onChange={field.handleChange}
+                      invalid={field.state.meta.errors.length > 0}
+                    />
+                    {field.state.meta.errors.length > 0 && (
                       <Text size="2" color="red">
-                        End time must be after start time.
+                        Start time is required.
                       </Text>
                     )}
                   </Flex>
-                )
-              }}
-            </form.Subscribe>
+                )}
+              </form.AppField>
+            </Flex>
 
             <Flex gap="3" mt="4" justify="end">
               <Button

@@ -33,6 +33,8 @@ import {
   filterEquipmentConflictsByProjectLead,
   filterGroupConflictsByProjectLead,
   filterVehicleConflictsByProjectLead,
+  keepAttentionEquipmentConflicts,
+  keepAttentionPairConflicts,
 } from '@features/conflicts/utils/filterConflictsByProjectLead'
 import type { JobListRow } from '@features/jobs/types'
 import type { HomeMatter, WeekJobWithRole } from '@features/home/types'
@@ -205,13 +207,15 @@ export default function HomePage() {
     return mattersData.filter((matter) => matter.is_unread)
   }, [mattersData])
 
-  // IMPORTANT: make range stable so queryKey doesn't change every render
-  const { conflictFrom, conflictTo } = React.useMemo(() => {
+  // Fetch all open conflicts, then keep unresolved ones even after the period
+  // ended. Forced overlaps drop off once both windows are in the past.
+  const { conflictFrom, conflictTo, attentionNow } = React.useMemo(() => {
     void companyId
     const now = startOfMinute(new Date())
     return {
-      conflictFrom: now.toISOString(),
+      conflictFrom: null as string | null,
       conflictTo: null as string | null,
+      attentionNow: now,
     }
   }, [companyId])
 
@@ -279,25 +283,42 @@ export default function HomePage() {
     })
 
   const filteredCrewConflicts = React.useMemo(
-    () => filterCrewConflictsByProjectLead(crewConflicts, projectLeadJobIds),
-    [crewConflicts, projectLeadJobIds],
+    () =>
+      keepAttentionPairConflicts(
+        filterCrewConflictsByProjectLead(crewConflicts, projectLeadJobIds),
+        attentionNow,
+      ),
+    [crewConflicts, projectLeadJobIds, attentionNow],
   )
   const filteredVehicleConflicts = React.useMemo(
     () =>
-      filterVehicleConflictsByProjectLead(vehicleConflicts, projectLeadJobIds),
-    [vehicleConflicts, projectLeadJobIds],
+      keepAttentionPairConflicts(
+        filterVehicleConflictsByProjectLead(
+          vehicleConflicts,
+          projectLeadJobIds,
+        ),
+        attentionNow,
+      ),
+    [vehicleConflicts, projectLeadJobIds, attentionNow],
   )
   const filteredEquipmentConflicts = React.useMemo(
     () =>
-      filterEquipmentConflictsByProjectLead(
-        equipmentConflicts,
-        projectLeadJobIds,
+      keepAttentionEquipmentConflicts(
+        filterEquipmentConflictsByProjectLead(
+          equipmentConflicts,
+          projectLeadJobIds,
+        ),
+        attentionNow,
       ),
-    [equipmentConflicts, projectLeadJobIds],
+    [equipmentConflicts, projectLeadJobIds, attentionNow],
   )
   const filteredGroupConflicts = React.useMemo(
-    () => filterGroupConflictsByProjectLead(groupConflicts, projectLeadJobIds),
-    [groupConflicts, projectLeadJobIds],
+    () =>
+      keepAttentionPairConflicts(
+        filterGroupConflictsByProjectLead(groupConflicts, projectLeadJobIds),
+        attentionNow,
+      ),
+    [groupConflicts, projectLeadJobIds, attentionNow],
   )
 
   const conflictsLoading =

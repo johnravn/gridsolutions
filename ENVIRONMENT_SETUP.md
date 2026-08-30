@@ -108,9 +108,7 @@ CRON_SECRET=generate-a-long-random-string
 
 `CRON_SECRET` protects manual cron triggers. Vercel's built-in cron uses the `vercel-cron` user agent; GitHub Actions (`.github/workflows/sync-conta.yml`) sends `Authorization: Bearer <CRON_SECRET>`.
 
-5. Also add them for **Preview** (for feature branch deployments):
-   - Click "Add Another" or select "Preview" environment
-   - Add the same values
+5. Preview environment variables are unused (this repo ships only on `main`).
 
 ### Finding Your Production Values
 

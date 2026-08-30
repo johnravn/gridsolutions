@@ -40,11 +40,11 @@ type ToastContextValue = {
 const ToastCtx = React.createContext<ToastContextValue | null>(null)
 
 const DEFAULT_DURATION: Record<ToastKind, number> = {
-  success: 1800,
-  info: 2200,
-  error: 4000,
+  success: 2800,
+  info: 3200,
+  error: 5000,
 }
-const UNDO_DURATION = 4000
+const UNDO_DURATION = 5000
 /** Keep in sync with `--app-toast-exit-ms` in styles.css */
 const TOAST_EXIT_MS = 120
 
@@ -99,23 +99,23 @@ function ToastItemView({
     >
       <div className="app-toast-icon" aria-hidden>
         {t.kind === 'success' ? (
-          <CheckCircleSolid width={14} height={14} />
+          <CheckCircleSolid width={18} height={18} />
         ) : t.kind === 'error' ? (
-          <WarningTriangle width={14} height={14} />
+          <WarningTriangle width={18} height={18} />
         ) : (
-          <InfoCircle width={14} height={14} />
+          <InfoCircle width={18} height={18} />
         )}
       </div>
 
       <div className="app-toast-body">
         <Toast.Title asChild>
-          <Text size="2" weight="medium" className="app-toast-title">
+          <Text size="3" weight="medium" className="app-toast-title">
             {t.title}
           </Text>
         </Toast.Title>
         {t.description && (
           <Toast.Description asChild>
-            <Text size="1" color="gray" className="app-toast-desc">
+            <Text size="2" color="gray" className="app-toast-desc">
               {t.description}
             </Text>
           </Toast.Description>
@@ -131,7 +131,7 @@ function ToastItemView({
           onClick={handleUndo}
           className="app-toast-action"
         >
-          <Undo width={12} height={12} />
+          <Undo width={14} height={14} />
           {t.undoLabel || 'Undo'}
         </Button>
       )}
@@ -144,7 +144,7 @@ function ToastItemView({
           aria-label="Dismiss notification"
           className="app-toast-close"
         >
-          <Xmark width={12} height={12} strokeWidth={2} />
+          <Xmark width={14} height={14} strokeWidth={2} />
         </IconButton>
       </Toast.Close>
     </Toast.Root>
@@ -218,6 +218,15 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
     />
   )
 
+  const toastLayer = (
+    <>
+      {viewport}
+      {toasts.map((t) => (
+        <ToastItemView key={t.id} toast={t} onRemove={remove} />
+      ))}
+    </>
+  )
+
   return (
     <ToastCtx.Provider value={api}>
       <Toast.Provider
@@ -225,12 +234,7 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
         duration={DEFAULT_DURATION.info}
       >
         {children}
-
-        {host ? createPortal(viewport, host) : viewport}
-
-        {toasts.map((t) => (
-          <ToastItemView key={t.id} toast={t} onRemove={remove} />
-        ))}
+        {host ? createPortal(toastLayer, host) : toastLayer}
       </Toast.Provider>
     </ToastCtx.Provider>
   )

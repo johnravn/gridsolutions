@@ -11,7 +11,7 @@ import {
   Table,
   Text,
 } from '@radix-ui/themes'
-import { OpenNewWindow } from 'iconoir-react'
+import { CheckCircle, OpenNewWindow, XmarkCircle } from 'iconoir-react'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
   recurringJobInvoiceSummaryQuery,
@@ -19,6 +19,7 @@ import {
 } from '../../../api/recurringJobQueries'
 import RecurringInvoiceJobPickerDialog from '../../dialogs/RecurringInvoiceJobPickerDialog'
 import MultiJobInvoiceDialog from '../../dialogs/MultiJobInvoiceDialog'
+import { getSeriesInvoiceStatus } from '../../../utils/seriesInvoiceStatus'
 import type { RecurringJobDetail, RecurringSeriesInvoice } from '../../../types'
 
 type Props = {
@@ -107,15 +108,52 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
     ...recurringJobInvoicesOverviewQuery({ recurringJobId: detail.id }),
   })
 
-  const readyCount = invoiceSummary.filter(
-    (entry) =>
-      entry.status === 'completed' &&
-      entry.invoice_count === 0 &&
-      detail.jobs.some((j) => j.id === entry.job_id && !j.archived),
-  ).length
+  const {
+    activeJobs,
+    invoicedCount,
+    paidCount,
+    readyCount,
+    seriesFullyInvoiced,
+  } = getSeriesInvoiceStatus(detail.jobs, invoiceSummary)
 
   return (
     <Flex direction="column" gap="4">
+      <Heading size="3">Invoice</Heading>
+
+      <Card>
+        <Flex justify="between" align="center" gap="3" wrap="wrap">
+          <Box>
+            <Heading size="4" mb="1">
+              Series invoice status
+            </Heading>
+            <Text size="2" color="gray">
+              {activeJobs.length === 0
+                ? 'No jobs in this series yet.'
+                : `${invoicedCount} of ${activeJobs.length} job${activeJobs.length !== 1 ? 's' : ''} invoiced${paidCount > 0 ? ` (${paidCount} paid)` : ''}.`}
+            </Text>
+          </Box>
+          <Box>
+            {seriesFullyInvoiced ? (
+              <Flex align="center" gap="2">
+                <CheckCircle width={24} height={24} color="var(--green-9)" />
+                <Text size="3" weight="medium" color="green">
+                  {paidCount === activeJobs.length ? 'Paid' : 'Invoiced'}
+                </Text>
+              </Flex>
+            ) : (
+              <Flex align="center" gap="2">
+                <XmarkCircle width={24} height={24} color="var(--orange-9)" />
+                <Text size="3" weight="medium" color="orange">
+                  {readyCount > 0
+                    ? `${readyCount} ready to invoice`
+                    : 'Not fully invoiced'}
+                </Text>
+              </Flex>
+            )}
+          </Box>
+        </Flex>
+      </Card>
+
       <Card>
         <Flex justify="between" align="start" gap="3" wrap="wrap">
           <Box>
@@ -143,7 +181,7 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
 
       <Box>
         <Heading size="4" mb="3">
-          Invoices
+          Invoice history
         </Heading>
         {isLoading ? (
           <Text size="2" color="gray">

@@ -5,7 +5,19 @@ import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
+
+const TITLE_SUGGESTIONS = [
+  'Technician',
+  'Loader',
+  'FOH',
+  'Monitors',
+  'Hands',
+  'Driver',
+]
+
+const CATEGORY_SUGGESTIONS = ['Audio', 'Lights', 'AV', 'Transport', 'Rigging']
 
 type InitialRole = {
   id: string
@@ -56,6 +68,9 @@ export default function EditRoleDialog({
   const qc = useQueryClient()
   const { error: toastError, success } = useToast()
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
+  const [focusedField, setFocusedField] = React.useState<
+    'title' | 'category' | null
+  >(null)
 
   const form = useAppForm({
     defaultValues,
@@ -71,6 +86,7 @@ export default function EditRoleDialog({
     if (!open || !initial) return
     form.reset(buildValuesFromInitial(initial), { keepDefaultValues: true })
     setNeededDraft(null)
+    setFocusedField(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open, initial?.id])
 
@@ -124,10 +140,26 @@ export default function EditRoleDialog({
             <Flex direction="column" gap="3" mt="3">
               <form.AppField name="title">
                 {(field) => (
-                  <field.TextField
-                    label="Title"
-                    placeholder="e.g. FOH, Monitor, Loader"
-                  />
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Title
+                    </Text>
+                    <TextField.Root
+                      placeholder="e.g. FOH, Monitor, Loader"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      onFocus={() => setFocusedField('title')}
+                    />
+                    <AnimatedQuickSuggestions
+                      suggestions={TITLE_SUGGESTIONS}
+                      open={focusedField === 'title'}
+                      staticOpen={!field.state.value.trim()}
+                      showLabel
+                      onSelect={(value) => field.handleChange(value)}
+                      onAfterSelect={() => setFocusedField(null)}
+                    />
+                  </Box>
                 )}
               </form.AppField>
 
@@ -181,10 +213,26 @@ export default function EditRoleDialog({
 
               <form.AppField name="roleCategory">
                 {(field) => (
-                  <field.TextField
-                    label="Role Category"
-                    placeholder="e.g. Audio, Lights, AV"
-                  />
+                  <Box>
+                    <Text size="2" color="gray" mb="1">
+                      Role Category
+                    </Text>
+                    <TextField.Root
+                      placeholder="e.g. Audio, Lights, AV"
+                      value={field.state.value}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                      onBlur={field.handleBlur}
+                      onFocus={() => setFocusedField('category')}
+                    />
+                    <AnimatedQuickSuggestions
+                      suggestions={CATEGORY_SUGGESTIONS}
+                      open={focusedField === 'category'}
+                      staticOpen
+                      showLabel
+                      onSelect={(value) => field.handleChange(value)}
+                      onAfterSelect={() => setFocusedField(null)}
+                    />
+                  </Box>
                 )}
               </form.AppField>
             </Flex>

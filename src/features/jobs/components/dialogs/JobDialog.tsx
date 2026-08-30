@@ -7,6 +7,7 @@ import {
   Checkbox,
   Dialog,
   Flex,
+  RadioCards,
   Select,
   Separator,
   Text,
@@ -28,14 +29,21 @@ import {
   preventDialogCloseOnSearchableSelect,
 } from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
-import { Sparks } from 'iconoir-react'
+import { CheckCircle, Sparks, User } from 'iconoir-react'
 import { SHOW_AUTOFILL_BUTTONS } from '@shared/testing/autofill'
+import { useAuthz } from '@shared/auth/useAuthz'
 import {
   JOB_AUTOFILL_SEEDS,
   getJobAutofillSeed,
   pickBySeedIndex,
   pickRandomJobAutofillSeedId,
 } from '../../utils/jobAutofillSeeds'
+import {
+  DEFAULT_TECHNICIAN_CREW_BOOKING_MODE,
+  technicianCrewPeriodInsert,
+  technicianReservedCrewInsert,
+} from '../../utils/technicianCrewBooking'
+import type { TechnicianCrewBookingMode } from '../../utils/technicianCrewBooking'
 import type { JobDetail, JobStatus, UUID } from '../../types'
 import type { RecurringJobCreateDefaults } from '../../utils/recurringJobCreateDefaults'
 
@@ -58,7 +66,7 @@ type JobFormValues = {
   startAt: string
   endAt: string
   syncTimePeriods: boolean
-  createCrewBookingForProjectLead: boolean
+  technicianCrewBooking: TechnicianCrewBookingMode
   projectLead: UUID | ''
   isCompanyCustomer: boolean
   customerId: UUID | ''
@@ -74,7 +82,7 @@ const emptyDefaults: JobFormValues = {
   startAt: '',
   endAt: '',
   syncTimePeriods: false,
-  createCrewBookingForProjectLead: true,
+  technicianCrewBooking: DEFAULT_TECHNICIAN_CREW_BOOKING_MODE,
   projectLead: '',
   isCompanyCustomer: false,
   customerId: '',
@@ -91,7 +99,7 @@ const schema = z
     startAt: z.string(),
     endAt: z.string(),
     syncTimePeriods: z.boolean(),
-    createCrewBookingForProjectLead: z.boolean(),
+    technicianCrewBooking: z.enum(['open', 'confirm_myself']),
     projectLead: z.string(),
     isCompanyCustomer: z.boolean(),
     customerId: z.string(),
@@ -116,7 +124,7 @@ function buildCreateDefaults(
     startAt: d?.startAt ?? '',
     endAt: d?.endAt ?? '',
     syncTimePeriods: false,
-    createCrewBookingForProjectLead: !d?.fromTemplate,
+    technicianCrewBooking: DEFAULT_TECHNICIAN_CREW_BOOKING_MODE,
     projectLead: d?.projectLeadUserId ?? '',
     isCompanyCustomer: Boolean(d?.customerUserId),
     customerId: d?.customerId ?? '',
@@ -134,7 +142,7 @@ function buildEditDefaults(initialData: JobDetail): JobFormValues {
     startAt: initialData.start_at ?? '',
     endAt: initialData.end_at ?? '',
     syncTimePeriods: false,
-    createCrewBookingForProjectLead: true,
+    technicianCrewBooking: DEFAULT_TECHNICIAN_CREW_BOOKING_MODE,
     projectLead: initialData.project_lead_user_id ?? '',
     isCompanyCustomer: Boolean(initialData.customer_user_id),
     customerId: initialData.customer_id ?? '',
@@ -168,6 +176,7 @@ export default function JobDialog({
   const qc = useQueryClient()
 
   const { success, error: showError } = useToast()
+  const { userId: currentUserId } = useAuthz()
 
   const [autofillSeedId, setAutofillSeedId] = React.useState<number | null>(
     null,
@@ -370,7 +379,7 @@ export default function JobDialog({
         startAt,
         endAt,
         syncTimePeriods,
-        createCrewBookingForProjectLead,
+        technicianCrewBooking,
         projectLead,
         customerId: nextCustomerId,
         customerUserId: nextCustomerUserId,
@@ -435,12 +444,10 @@ export default function JobDialog({
           // and we don't want to confuse the user with an error after showing success
         }
 
-        // Optionally create crew booking for project lead (job duration)
-        if (
-          createCrewBookingForProjectLead &&
-          projectLead &&
-          (startAt || endAt)
-        ) {
+        // Always create a Technician crew booking for the job duration.
+        // "Leave it open" skips assigning anyone; "Confirm myself" confirms
+        // the current user on that slot.
+        if (startAt || endAt) {
           try {
             const periodStart = startAt || new Date().toISOString()
             const periodEnd =
@@ -448,32 +455,33 @@ export default function JobDialog({
 
             const { data: crewPeriod, error: crewTpError } = await supabase
               .from('time_periods')
-              .insert({
-                job_id: data.id,
-                company_id: companyId,
-                title: 'Project lead',
-                category: 'crew',
-                start_at: periodStart,
-                end_at: periodEnd,
-                needed_count: 1,
-              })
+              .insert(
+                technicianCrewPeriodInsert({
+                  jobId: data.id,
+                  companyId,
+                  startAt: periodStart,
+                  endAt: periodEnd,
+                }),
+              )
               .select('id')
               .single()
 
             if (crewTpError) throw crewTpError
 
-            const { error: crewBookingError } = await supabase
-              .from('reserved_crew')
-              .insert({
-                time_period_id: crewPeriod.id,
-                user_id: projectLead,
-                status: 'confirmed',
-                notes: null,
-              })
+            const reservedCrew = technicianReservedCrewInsert(
+              technicianCrewBooking,
+              crewPeriod.id,
+              currentUserId,
+            )
+            if (reservedCrew) {
+              const { error: crewBookingError } = await supabase
+                .from('reserved_crew')
+                .insert(reservedCrew)
 
-            if (crewBookingError) throw crewBookingError
+              if (crewBookingError) throw crewBookingError
+            }
           } catch (e: any) {
-            console.error('Failed to create crew booking for project lead', e)
+            console.error('Failed to create technician crew booking', e)
             // Don't fail the whole job create
           }
         }
@@ -722,10 +730,7 @@ export default function JobDialog({
         'customerUserId',
         seed.isCompanyCustomer ? (companyMember?.user_id ?? '') : '',
       )
-      form.setFieldValue(
-        'createCrewBookingForProjectLead',
-        seed.createCrewBooking,
-      )
+      form.setFieldValue('technicianCrewBooking', seed.technicianCrewBooking)
       if (!recurringJobIdProp) {
         form.setFieldValue('recurringJobId', recurring?.id ?? '')
       }
@@ -1073,9 +1078,79 @@ export default function JobDialog({
                           />
                         </Field>
                         {mode === 'create' && (
-                          <form.AppField name="createCrewBookingForProjectLead">
+                          <form.AppField name="technicianCrewBooking">
                             {(field) => (
-                              <field.Checkbox label="Create crew booking for project lead (job duration)" />
+                              <Field label="Technician crew booking">
+                                <RadioCards.Root
+                                  value={field.state.value}
+                                  onValueChange={(val) => {
+                                    if (
+                                      val === 'open' ||
+                                      val === 'confirm_myself'
+                                    ) {
+                                      field.handleChange(val)
+                                    }
+                                  }}
+                                  columns="2"
+                                  size="1"
+                                >
+                                  <RadioCards.Item value="open" type="button">
+                                    <Box>
+                                      <Flex gap="2" align="center" mb="1">
+                                        <User
+                                          style={{
+                                            width: 18,
+                                            height: 18,
+                                            flexShrink: 0,
+                                          }}
+                                        />
+                                        <Text size="2" weight="medium">
+                                          Leave it open
+                                        </Text>
+                                      </Flex>
+                                      <Text
+                                        size="1"
+                                        color="gray"
+                                        as="p"
+                                        mt="0"
+                                        mb="0"
+                                      >
+                                        Create a technician crew booking without
+                                        assigning anyone.
+                                      </Text>
+                                    </Box>
+                                  </RadioCards.Item>
+                                  <RadioCards.Item
+                                    value="confirm_myself"
+                                    type="button"
+                                  >
+                                    <Box>
+                                      <Flex gap="2" align="center" mb="1">
+                                        <CheckCircle
+                                          style={{
+                                            width: 18,
+                                            height: 18,
+                                            flexShrink: 0,
+                                          }}
+                                        />
+                                        <Text size="2" weight="medium">
+                                          Confirm myself
+                                        </Text>
+                                      </Flex>
+                                      <Text
+                                        size="1"
+                                        color="gray"
+                                        as="p"
+                                        mt="0"
+                                        mb="0"
+                                      >
+                                        Create a technician crew booking and set
+                                        you to confirmed.
+                                      </Text>
+                                    </Box>
+                                  </RadioCards.Item>
+                                </RadioCards.Root>
+                              </Field>
                             )}
                           </form.AppField>
                         )}

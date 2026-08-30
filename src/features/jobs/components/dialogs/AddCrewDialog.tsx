@@ -1,16 +1,7 @@
 // src/features/jobs/components/dialogs/AddCrewDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  Select,
-  Separator,
-  Text,
-  TextField,
-} from '@radix-ui/themes'
+import { Button, Dialog, Flex, Select } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
@@ -25,6 +16,10 @@ import {
   forcedBookingFields,
   isCrewOverlapError,
 } from '@features/conflicts/api/forceBooking'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { CrewReqStatus, UUID } from '../../types'
 
@@ -204,7 +199,11 @@ export default function AddCrewDialog({
   return (
     <>
       <Dialog.Root open={open && !forceDialogOpen} onOpenChange={onOpenChange}>
-        <Dialog.Content maxWidth="520px">
+        <Dialog.Content
+          maxWidth="520px"
+          onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+          onInteractOutside={preventDialogCloseOnSearchableSelect}
+        >
           <Dialog.Title>Add crew booking</Dialog.Title>
           <Dialog.Description size="2" color="gray" mb="2">
             Search for a person and add them to this job&apos;s crew time
@@ -220,106 +219,49 @@ export default function AddCrewDialog({
           >
             <form.AppForm>
               <Field label="Person">
-                <form.AppField name="search">
+                <form.AppField name="userId">
                   {(field) => (
-                    <TextField.Root
-                      placeholder="Search name or email…"
+                    <SearchableSelect
+                      options={people.map((p) => ({
+                        value: p.user_id,
+                        label: p.display_name ?? p.email,
+                        description: p.display_name ? p.email : undefined,
+                      }))}
                       value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
+                      onValueChange={field.handleChange}
+                      onInputChange={(q) => form.setFieldValue('search', q)}
+                      loading={isFetching}
+                      placeholder="Search name or email…"
+                      emptyMessage="No results"
+                      dropdownMatchTriggerWidth
+                      dropdownMaxHeight={220}
+                      style={{ width: '100%', maxWidth: 'none' }}
                     />
                   )}
                 </form.AppField>
-                <Box
-                  mt="2"
-                  p="2"
-                  style={{
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 8,
-                    maxHeight: 220,
-                    overflow: 'auto',
-                  }}
-                >
-                  {isFetching && (
-                    <Text size="2" color="gray">
-                      Searching…
-                    </Text>
-                  )}
-                  {!isFetching && people.length === 0 && (
-                    <Text size="2" color="gray">
-                      No results
-                    </Text>
-                  )}
-                  {!isFetching &&
-                    people.map((p, idx) => (
-                      <form.Subscribe
-                        key={p.user_id}
-                        selector={(state) => state.values.userId}
-                      >
-                        {(userId) => (
-                          <Box
-                            p="2"
-                            style={{
-                              cursor: 'pointer',
-                              borderRadius: 6,
-                              background:
-                                userId === p.user_id
-                                  ? 'var(--blue-a3)'
-                                  : 'transparent',
-                            }}
-                            onClick={() =>
-                              form.setFieldValue('userId', p.user_id)
-                            }
-                          >
-                            <Flex align="center" justify="between">
-                              <div>
-                                <Text weight="medium">
-                                  {p.display_name ?? p.email}
-                                </Text>
-                                {p.display_name && (
-                                  <Text
-                                    size="1"
-                                    color="gray"
-                                    style={{ marginLeft: 6 }}
-                                  >
-                                    {p.email}
-                                  </Text>
-                                )}
-                              </div>
-                              {userId === p.user_id && (
-                                <Text size="1" color="blue">
-                                  Selected
-                                </Text>
-                              )}
-                            </Flex>
-                            {idx < people.length - 1 && <Separator my="2" />}
-                          </Box>
-                        )}
-                      </form.Subscribe>
-                    ))}
-                </Box>
               </Field>
 
               <form.AppField name="timePeriodId">
                 {(field) => (
                   <Field label="Role / Time period">
-                    <Select.Root
+                    <SearchableSelect
+                      options={roles.map((tp) => ({
+                        value: tp.id,
+                        label:
+                          (tp.title || 'Untitled') +
+                          ' — ' +
+                          formatWhen(tp.start_at) +
+                          ' → ' +
+                          formatWhen(tp.end_at),
+                      }))}
                       value={field.state.value}
                       onValueChange={field.handleChange}
-                    >
-                      <Select.Trigger placeholder="Select role…" />
-                      <Select.Content style={{ zIndex: 10000 }}>
-                        {roles.map((tp) => (
-                          <Select.Item key={tp.id} value={tp.id}>
-                            {(tp.title || 'Untitled') +
-                              ' — ' +
-                              formatWhen(tp.start_at) +
-                              ' → ' +
-                              formatWhen(tp.end_at)}
-                          </Select.Item>
-                        ))}
-                      </Select.Content>
-                    </Select.Root>
+                      placeholder="Select role…"
+                      emptyMessage="No roles found"
+                      dropdownMatchTriggerWidth
+                      dropdownMaxHeight={220}
+                      style={{ width: '100%', maxWidth: 'none' }}
+                    />
                   </Field>
                 )}
               </form.AppField>

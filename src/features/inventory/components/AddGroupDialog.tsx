@@ -11,7 +11,6 @@ import {
   IconButton,
   Select,
   Separator,
-  Spinner,
   Table,
   Text,
   TextField,
@@ -22,6 +21,11 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  HighlightedText,
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import {
   SHOW_AUTOFILL_BUTTONS,
   generateGroupAutofill,
@@ -178,18 +182,6 @@ export default function AddGroupDialog({
 
   /* -------- Item and Group search (picker) -------- */
   const [search, setSearch] = React.useState('')
-  const matchesSearch = React.useCallback((item: PickerItem, term: string) => {
-    const normalized = term.trim().toLowerCase()
-    if (!normalized) return true
-    return [
-      item.name,
-      item.category_name,
-      item.brand_name,
-      item.model,
-      item.description,
-      item.nicknames,
-    ].some((value) => value?.toLowerCase().includes(normalized))
-  }, [])
   const unfilteredPickerPoolRef = React.useRef<Array<PickerItem>>([])
   const { data: pickerItems = [], isLoading: itemsLoading } = useQuery({
     queryKey: ['company', companyId, 'picker-items-groups', search],
@@ -683,6 +675,8 @@ export default function AddGroupDialog({
             overflow: 'auto',
             width: isNarrow ? 'calc(100vw - 2rem)' : undefined,
           }}
+          onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+          onInteractOutside={preventDialogCloseOnSearchableSelect}
         >
           <Flex align="center" justify="between">
             <Dialog.Title>
@@ -720,7 +714,14 @@ export default function AddGroupDialog({
 
                   <form.Subscribe selector={(state) => state.values.categoryId}>
                     {(categoryId) => (
-                      <Select.Root
+                      <SearchableSelect
+                        options={[
+                          { value: '__none__', label: 'None' },
+                          ...categories.map((cat) => ({
+                            value: cat.id,
+                            label: cat.name,
+                          })),
+                        ]}
                         value={categoryId ?? '__none__'}
                         onValueChange={(value) =>
                           form.setFieldValue(
@@ -728,22 +729,11 @@ export default function AddGroupDialog({
                             value === '__none__' ? null : value,
                           )
                         }
-                      >
-                        <Select.Trigger>
-                          {categoryId
-                            ? categories.find((c) => c.id === categoryId)
-                                ?.name || 'Category (optional)'
-                            : 'Category (optional)'}
-                        </Select.Trigger>
-                        <Select.Content style={{ zIndex: 10000 }}>
-                          <Select.Item value="__none__">None</Select.Item>
-                          {categories.map((cat) => (
-                            <Select.Item key={cat.id} value={cat.id}>
-                              {cat.name}
-                            </Select.Item>
-                          ))}
-                        </Select.Content>
-                      </Select.Root>
+                        placeholder="Category (optional)"
+                        emptyMessage="No categories found"
+                        dropdownMatchTriggerWidth
+                        style={{ width: '100%', maxWidth: 'none' }}
+                      />
                     )}
                   </form.Subscribe>
 
@@ -824,84 +814,78 @@ export default function AddGroupDialog({
                     <Text size="2" color="gray">
                       Search & Add
                     </Text>
-                    <Box style={{ position: 'relative' }}>
-                      <Flex gap="2">
-                        <TextField.Root
-                          placeholder="Search items or groups..."
-                          value={search}
-                          onChange={(e) => setSearch(e.target.value)}
-                          style={{ flex: 1 }}
-                        />
-                        {itemsLoading && <Spinner />}
-                      </Flex>
-
-                      {search && (
-                        <Box
-                          style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            right: 0,
-                            marginTop: '4px',
-                            border: '1px solid var(--gray-a6)',
-                            borderRadius: '4px',
-                            maxHeight: '200px',
-                            overflowY: 'auto',
-                            backgroundColor: 'var(--gray-1)',
-                            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                            zIndex: 1000,
-                          }}
-                        >
-                          {pickerItems
-                            .filter((item) => matchesSearch(item, search))
-                            .map((item) => (
-                              <Box
-                                key={item.id}
-                                onClick={() => handleAddPart(item)}
-                                style={{
-                                  padding: '8px 12px',
-                                  cursor: 'pointer',
-                                  borderBottom: '1px solid var(--gray-a6)',
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    'var(--gray-a3)'
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.backgroundColor =
-                                    'transparent'
-                                }}
-                              >
-                                <Flex direction="column" gap="1">
-                                  <Flex justify="between" align="center">
-                                    <Flex align="center" gap="2">
-                                      <Text size="2" weight="medium">
-                                        {item.name}
-                                      </Text>
-                                      {item.type === 'group' && (
-                                        <Badge color="blue" size="1">
-                                          Group
-                                        </Badge>
-                                      )}
-                                    </Flex>
-                                    {item.current_price != null && (
-                                      <Text size="1" color="gray">
-                                        {fmtCurrency.format(item.current_price)}
-                                      </Text>
-                                    )}
-                                  </Flex>
-                                  {item.type === 'item' &&
-                                    item.on_hand != null && (
-                                      <Text size="1" color="gray">
-                                        On hand: {item.on_hand}
-                                      </Text>
-                                    )}
-                                </Flex>
-                              </Box>
-                            ))}
-                        </Box>
-                      )}
-                    </Box>
+                    <SearchableSelect
+                      options={pickerItems.map((item) => ({
+                        value: `${item.type}:${item.id}`,
+                        label: item.name,
+                        description:
+                          item.type === 'item' && item.on_hand != null
+                            ? `On hand: ${item.on_hand}`
+                            : (item.description ?? undefined),
+                        keywords: [
+                          item.category_name,
+                          item.brand_name,
+                          item.model,
+                          item.nicknames,
+                          item.description,
+                        ]
+                          .filter(Boolean)
+                          .join(' '),
+                      }))}
+                      value=""
+                      onValueChange={(value) => {
+                        const item = pickerItems.find(
+                          (p) => `${p.type}:${p.id}` === value,
+                        )
+                        if (item) handleAddPart(item)
+                      }}
+                      onInputChange={setSearch}
+                      clearOnSelect
+                      loading={itemsLoading}
+                      placeholder="Search items or groups..."
+                      emptyMessage="No matching items"
+                      dropdownMatchTriggerWidth
+                      dropdownMaxHeight={240}
+                      style={{ width: '100%', maxWidth: 'none' }}
+                      renderOption={(option, { query }) => {
+                        const item = pickerItems.find(
+                          (p) => `${p.type}:${p.id}` === option.value,
+                        )
+                        if (!item) return option.label
+                        return (
+                          <Flex direction="column" gap="1">
+                            <Flex justify="between" align="center">
+                              <Flex align="center" gap="2">
+                                <Text size="2" weight="medium">
+                                  <HighlightedText
+                                    text={item.name}
+                                    query={query}
+                                  />
+                                </Text>
+                                {item.type === 'group' && (
+                                  <Badge color="blue" size="1">
+                                    Group
+                                  </Badge>
+                                )}
+                              </Flex>
+                              {item.current_price != null && (
+                                <Text size="1" color="gray">
+                                  {fmtCurrency.format(item.current_price)}
+                                </Text>
+                              )}
+                            </Flex>
+                            {option.description && (
+                              <Text size="1" color="gray">
+                                <HighlightedText
+                                  text={option.description}
+                                  query={query}
+                                />
+                              </Text>
+                            )}
+                          </Flex>
+                        )
+                      }}
+                    />
                   </Flex>
 
                   {/* Parts List */}

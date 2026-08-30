@@ -235,13 +235,15 @@ export function VirtualIndexTable<TRow, TSort extends string = string>({
                   {columns.map((col) => (
                     <div
                       key={col.id}
-                      style={
-                        col.align === 'end'
-                          ? { textAlign: 'right' }
-                          : col.align === 'center'
-                            ? { textAlign: 'center' }
-                            : undefined
-                      }
+                      style={{
+                        minWidth: 0,
+                        textAlign:
+                          col.align === 'end'
+                            ? 'right'
+                            : col.align === 'center'
+                              ? 'center'
+                              : undefined,
+                      }}
                     >
                       {renderCell(row, col.id)}
                     </div>

@@ -26,10 +26,12 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
-import { escapeForPostgrestOr } from './utils'
+import { postgrestIlikePatterns } from './utils'
 import { ItemSearchField } from './ItemSearchField'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
+import type { ItemSearchResult } from './ItemSearchField'
 import type { LocalEquipmentGroup, LocalEquipmentItem } from './types'
 
 export function EquipmentSection({
@@ -72,17 +74,10 @@ export function EquipmentSection({
     Record<string, string>
   >({})
   const [searchResults, setSearchResults] = React.useState<
-    Array<{
-      id: string
-      name: string
-      is_group: boolean
-      on_hand: number | null
-      price: number | null
-      item_kind: 'stock' | 'subrental'
-      brand_name: string | null
-      model: string | null
-    }>
+    Array<ItemSearchResult>
   >([])
+  const [searchLoading, setSearchLoading] = React.useState(false)
+  const searchSeqRef = React.useRef(0)
   const groupItemsCacheRef = React.useRef<
     Map<
       string,
@@ -109,11 +104,6 @@ export function EquipmentSection({
     groupsRef.current = groups
   }, [groups])
 
-  // Get search term for a specific group
-  const getSearchTerm = (groupId: string) => {
-    return searchTerms.get(groupId) || ''
-  }
-
   // Set search term for a specific group
   const setSearchTerm = (groupId: string, term: string) => {
     const newTerms = new Map(searchTerms)
@@ -125,12 +115,23 @@ export function EquipmentSection({
   // Search for items
   const searchItems = React.useCallback(
     async (term: string) => {
+      const seq = ++searchSeqRef.current
       if (!term.trim()) {
         setSearchResults([])
+        setSearchLoading(false)
         return
       }
 
-      const termSafe = escapeForPostgrestOr(term)
+      setSearchLoading(true)
+      const patterns = postgrestIlikePatterns(term.trim())
+      const conditions = patterns.flatMap((pattern) => [
+        `name.ilike.${pattern}`,
+        `category_name.ilike.${pattern}`,
+        `brand_name.ilike.${pattern}`,
+        `model.ilike.${pattern}`,
+        `nicknames.ilike.${pattern}`,
+      ])
+
       const { data, error } = await supabase
         .from('inventory_index')
         .select(
@@ -142,37 +143,56 @@ export function EquipmentSection({
           current_price,
           item_kind,
           brand_name,
-          model
+          model,
+          nicknames,
+          category_name
         `,
         )
         .eq('company_id', companyId)
         .eq('active', true)
         .or('deleted.is.null,deleted.eq.false')
         .or('is_group.eq.true,allow_individual_booking.eq.true')
-        .or(
-          `name.ilike.%${termSafe}%,category_name.ilike.%${termSafe}%,brand_name.ilike.%${termSafe}%,model.ilike.%${termSafe}%,nicknames.ilike.%${termSafe}%`,
-        )
-        .limit(20)
+        .or(conditions.join(','))
+        .limit(50)
+
+      if (seq !== searchSeqRef.current) return
 
       if (error) {
         console.error('Search error:', error)
+        setSearchLoading(false)
         return
       }
 
+      const mapped: Array<ItemSearchResult> = (data ?? [])
+        .filter((r) => !!r.id && !!r.name)
+        .map((r) => ({
+          id: r.id as string,
+          name: r.name as string,
+          is_group: !!r.is_group,
+          on_hand: r.on_hand != null ? Number(r.on_hand) : null,
+          price: r.current_price ?? null,
+          item_kind: r.item_kind ?? 'stock',
+          brand_name: r.brand_name ?? null,
+          model: r.model ?? null,
+          nicknames: r.nicknames ?? null,
+          category_name: r.category_name ?? null,
+        }))
+
       setSearchResults(
-        data.map((r: any) => {
-          return {
-            id: r.id,
-            name: r.name,
-            is_group: !!r.is_group,
-            on_hand: r.on_hand != null ? Number(r.on_hand) : null,
-            price: r.current_price ?? null,
-            item_kind: (r.item_kind ?? 'stock') as 'stock' | 'subrental',
-            brand_name: r.brand_name ?? null,
-            model: r.model ?? null,
-          }
-        }),
+        fuzzySearch(
+          mapped,
+          term.trim(),
+          [
+            (item) => item.name,
+            (item) => item.category_name,
+            (item) => item.brand_name,
+            (item) => item.model,
+            (item) => item.nicknames,
+          ],
+          0.25,
+        ).slice(0, 20),
       )
+      setSearchLoading(false)
     },
     [companyId],
   )
@@ -245,6 +265,7 @@ export function EquipmentSection({
     setSearchTerm(groupId, '')
     setActiveSearchGroupId(null)
     setSearchResults([])
+    setSearchLoading(false)
 
     if (isGroup && itemId) {
       void loadGroupItems(itemId, groupId, newItem.id)
@@ -281,26 +302,21 @@ export function EquipmentSection({
 
   // Search effect - trigger search when active group's search term changes
   React.useEffect(() => {
-    if (!activeSearchGroupId) {
-      if (activeSearchTerm.trim() === '') {
-        setSearchResults([])
-      }
-      return
-    }
-
-    if (!activeSearchTerm.trim()) {
+    if (!activeSearchGroupId || !activeSearchTerm.trim()) {
+      searchSeqRef.current += 1
       setSearchResults([])
+      setSearchLoading(false)
       return
     }
 
+    setSearchLoading(true)
     const timeout = setTimeout(() => {
-      // Double-check the term hasn't changed and we're still on the same group
       const currentTerm = searchTerms.get(activeSearchGroupId) || ''
       if (
         activeSearchGroupId &&
         currentTerm.trim() === activeSearchTerm.trim()
       ) {
-        searchItems(activeSearchTerm.trim())
+        void searchItems(activeSearchTerm.trim())
       }
     }, 300)
 
@@ -609,7 +625,6 @@ export function EquipmentSection({
                                     }}
                                   >
                                     <ItemSearchField
-                                      searchTerm={getSearchTerm(group.id)}
                                       onSearchChange={(term) =>
                                         setSearchTerm(group.id, term)
                                       }
@@ -617,6 +632,10 @@ export function EquipmentSection({
                                         activeSearchGroupId === group.id
                                           ? searchResults
                                           : []
+                                      }
+                                      loading={
+                                        activeSearchGroupId === group.id &&
+                                        searchLoading
                                       }
                                       onSelectItem={(itemId) =>
                                         addItemToGroup(group.id, itemId)

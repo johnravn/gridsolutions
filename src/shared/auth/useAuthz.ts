@@ -14,10 +14,13 @@ type AuthzData = {
 }
 
 export function useAuthz() {
-  const { companyId } = useCompany()
+  const { companyId, loading: companyLoading = false } = useCompany()
+  // resolvedCompanyId stays null until memberships load — don't treat empty
+  // caps as "no access" or RequireCap will bounce every refresh to /dashboard.
+  const companyUnresolved = Boolean(companyLoading && !companyId)
 
   // Get user from shared query cache
-  const { data: user } = useQuery({
+  const { data: user, isPending: userPending } = useQuery({
     queryKey: ['auth', 'user'],
     queryFn: async () => {
       const { data } = await supabase.auth.getUser()
@@ -25,11 +28,12 @@ export function useAuthz() {
     },
   })
   const userId = user?.id ?? null
+  const authzEnabled = !!userId && !companyUnresolved
 
   // Fetch authorization data
-  const { data, isLoading } = useQuery<AuthzData>({
+  const { data, isPending: authzPending } = useQuery<AuthzData>({
     queryKey: ['authz', userId, companyId],
-    enabled: !!userId,
+    enabled: authzEnabled,
     queryFn: async () => {
       let isGlobalSuperuser = false
       let companyRole: CompanyRole | null = null
@@ -92,8 +96,11 @@ export function useAuthz() {
     return new Set<Capability>()
   }, [data])
 
+  const loading =
+    userPending || (!!userId && (companyUnresolved || authzPending))
+
   return {
-    loading: isLoading,
+    loading,
     isGlobalSuperuser: data?.isGlobalSuperuser ?? false,
     companyRole: data?.companyRole ?? null,
     caps,

@@ -10,6 +10,26 @@ export function isForcedPair(forced1: boolean, forced2: boolean): boolean {
   return forced1 || forced2
 }
 
+export function vehicleConflictToneByPeriodId(
+  rows: Array<VehicleConflictRow>,
+): Map<string, 'unresolved' | 'forced'> {
+  const tones = new Map<string, 'unresolved' | 'forced'>()
+  for (const row of rows) {
+    const tone: 'unresolved' | 'forced' = isForcedPair(
+      row.forced_1,
+      row.forced_2,
+    )
+      ? 'forced'
+      : 'unresolved'
+    for (const periodId of [row.period_id_1, row.period_id_2]) {
+      if (!periodId) continue
+      if (tones.get(periodId) === 'unresolved') continue
+      tones.set(periodId, tone)
+    }
+  }
+  return tones
+}
+
 export function splitCrewConflicts(rows: Array<CrewConflictRow>) {
   const unresolved: Array<CrewConflictRow> = []
   const forced: Array<CrewConflictRow> = []

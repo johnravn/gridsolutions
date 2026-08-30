@@ -9,7 +9,11 @@ export type OverlapConflict = {
   customerName?: string | null
   projectLeadName?: string | null
   itemName?: string | null
+  itemId?: string | null
   quantity?: number
+  sourceGroupId?: string | null
+  sourceGroupName?: string | null
+  sourceGroupQuantity?: number
 }
 
 export function dedupeOverlapConflicts(
@@ -19,12 +23,14 @@ export function dedupeOverlapConflicts(
 
   for (const conflict of conflicts) {
     const key = [
-      conflict.itemName ?? '',
+      conflict.sourceGroupId ?? '',
+      conflict.itemId ?? conflict.itemName ?? '',
       conflict.jobId ?? conflict.jobTitle ?? '',
     ].join(':')
     const existing = merged.find((candidate) => {
       const candidateKey = [
-        candidate.itemName ?? '',
+        candidate.sourceGroupId ?? '',
+        candidate.itemId ?? candidate.itemName ?? '',
         candidate.jobId ?? candidate.jobTitle ?? '',
       ].join(':')
       return (
@@ -220,6 +226,8 @@ export async function findVehicleOverlaps({
 
 export type GroupOverlapRow = {
   source_group_id: string | null
+  item_id?: string | null
+  quantity?: number | null
   time_period_id: string | null
   time_period: TimePeriodJoin
 }
@@ -228,6 +236,7 @@ export function collectGroupOverlapConflicts({
   bookedGroupIds,
   lineageByGroupId,
   groupNameById,
+  itemNameById,
   rows,
   startAt,
   endAt,
@@ -237,6 +246,7 @@ export function collectGroupOverlapConflicts({
   bookedGroupIds: Array<string>
   lineageByGroupId: Map<string, Array<string>>
   groupNameById: Map<string, string>
+  itemNameById?: Map<string, string>
   rows: Array<GroupOverlapRow>
   startAt: string
   endAt: string
@@ -260,9 +270,17 @@ export function collectGroupOverlapConflicts({
       if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
       const conflict = conflictFromTimePeriod(tp)
       if (!conflict) continue
+      const itemId = row.item_id ?? null
+      const itemName = itemId
+        ? (itemNameById?.get(itemId) ?? groupName)
+        : groupName
       conflicts.push({
         ...conflict,
-        itemName: groupName,
+        itemId,
+        itemName,
+        quantity: row.quantity ?? conflict.quantity,
+        sourceGroupId: groupId,
+        sourceGroupName: groupName,
       })
     }
 
@@ -303,6 +321,8 @@ export async function findGroupOverlaps({
     .select(
       `
       source_group_id,
+      item_id,
+      quantity,
       time_period_id,
       time_period:time_period_id (
         start_at,
@@ -319,9 +339,10 @@ export async function findGroupOverlaps({
     )
     .eq('source_kind', 'group')
     .in('source_group_id', Array.from(relatedIds))
-    .neq('status', 'canceled')
 
-  if (error) throw error
+  // reserved_items has no booking status — a row existing means it is booked.
+
+  if (error) throw new Error(error.message)
 
   const { data: groupRows, error: groupErr } = await supabase
     .from('item_groups')
@@ -336,10 +357,31 @@ export async function findGroupOverlaps({
     groupNameById.set(row.id, row.name?.trim() || 'Group')
   }
 
+  const itemIds = Array.from(
+    new Set(
+      ((data ?? []) as Array<GroupOverlapRow>)
+        .map((row) => row.item_id)
+        .filter((id): id is string => !!id),
+    ),
+  )
+  const itemNameById = new Map<string, string>()
+  if (itemIds.length > 0) {
+    const { data: itemRows, error: itemErr } = await supabase
+      .from('items')
+      .select('id, name')
+      .in('id', itemIds)
+    if (itemErr) throw itemErr
+    for (const row of itemRows ?? []) {
+      if (!row.id) continue
+      itemNameById.set(row.id, row.name?.trim() || 'Item')
+    }
+  }
+
   return collectGroupOverlapConflicts({
     bookedGroupIds: uniqueIds,
     lineageByGroupId,
     groupNameById,
+    itemNameById,
     rows: (data ?? []) as Array<GroupOverlapRow>,
     startAt,
     endAt,

@@ -40,6 +40,7 @@ export default function AppShell() {
   const routerState = useRouterState()
   const currentPath = routerState.location.pathname
   const isMobile = useMediaQuery('(max-width: 768px)')
+  const isCompactChrome = useMediaQuery('(max-width: 1023px)')
   const systemPrefersReducedMotion = useMediaQuery(prefersReducedMotionQuery)
   const navigate = useNavigate()
   const { companies, companyId, loading: companyLoading } = useCompany()
@@ -255,16 +256,20 @@ export default function AppShell() {
                   </Text>
                 )}
                 {!isPublic && isMobile && (
-                  <WhatsNewPopover
-                    userId={authUser?.id}
-                    profileLoaded={profileLoaded}
-                    lastSeenReleaseVersion={
-                      myProfile?.last_seen_release_version
-                    }
-                  />
+                  <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+                    <DemoModeBadge placement="inline" />
+                    <WhatsNewPopover
+                      userId={authUser?.id}
+                      profileLoaded={profileLoaded}
+                      lastSeenReleaseVersion={
+                        myProfile?.last_seen_release_version
+                      }
+                    />
+                  </Flex>
                 )}
                 {!isPublic && !isMobile && (
                   <Flex align="center" gap="3">
+                    {isCompactChrome && <DemoModeBadge placement="inline" />}
                     <WhatsNewPopover
                       userId={authUser?.id}
                       profileLoaded={profileLoaded}
@@ -395,7 +400,7 @@ export default function AppShell() {
             </span>
           </IconButton>
         )}
-        {!isPublic && <DemoModeBadge />}
+        {!isPublic && !isCompactChrome && <DemoModeBadge />}
         {isLocal && (
           <Flex
             direction="column"

@@ -6,11 +6,11 @@
  */
 export const SHOW_AUTOFILL_BUTTONS = false
 
-export function pickRandom<T>(items: readonly T[]): T {
-  return items[Math.floor(Math.random() * items.length)]!
+export function pickRandom<T>(items: ReadonlyArray<T>): T {
+  return items[Math.floor(Math.random() * items.length)]
 }
 
-export function pickRandomFrom<T>(items: readonly T[]): T | null {
+export function pickRandomFrom<T>(items: ReadonlyArray<T>): T | null {
   if (items.length === 0) return null
   return pickRandom(items)
 }
@@ -23,7 +23,7 @@ export function randomBool(probability = 0.5): boolean {
   return Math.random() < probability
 }
 
-export function shuffle<T>(items: readonly T[]): Array<T> {
+export function shuffle<T>(items: ReadonlyArray<T>): Array<T> {
   const copy = [...items]
   for (let i = copy.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1))
@@ -33,7 +33,7 @@ export function shuffle<T>(items: readonly T[]): Array<T> {
 }
 
 export function pickRandomSubset<T>(
-  items: readonly T[],
+  items: ReadonlyArray<T>,
   minCount: number,
   maxCount: number,
 ): Array<T> {
@@ -356,7 +356,7 @@ export type GroupPartAutofillResult = {
 }
 
 export function generateGroupPartsAutofill(
-  pickerItems: readonly GroupPartAutofillInput[],
+  pickerItems: ReadonlyArray<GroupPartAutofillInput>,
 ): Array<GroupPartAutofillResult> {
   const selected = pickRandomSubset(pickerItems, 1, 4)
   return selected.map((item) => ({

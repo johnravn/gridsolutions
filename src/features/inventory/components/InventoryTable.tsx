@@ -6,7 +6,6 @@ import {
   Button,
   Flex,
   IconButton,
-  Select,
   Spinner,
   Text,
   TextField,
@@ -31,6 +30,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
@@ -311,24 +311,22 @@ export default function InventoryTable({
       </Flex>
 
       {!isSmallScreen && (
-        <Select.Root
-          value={categoryFilter ?? ''}
+        <SearchableSelect
+          options={[
+            { value: 'all', label: 'All' },
+            ...categories.map((name) => ({
+              value: name,
+              label: name.toUpperCase(),
+            })),
+          ]}
+          value={categoryFilter ?? 'all'}
+          onValueChange={(val) => setCategoryFilter(val === 'all' ? null : val)}
+          placeholder="Filter category…"
+          emptyMessage="No categories found"
           size="3"
-          onValueChange={(val) => setCategoryFilter(val === '' ? null : val)}
-        >
-          <Select.Trigger
-            placeholder="Filter category…"
-            style={{ minHeight: 'var(--space-7)' }}
-          />
-          <Select.Content>
-            <Select.Item value="all">All</Select.Item>
-            {categories.map((name) => (
-              <Select.Item key={name} value={name}>
-                {name.toUpperCase()}
-              </Select.Item>
-            ))}
-          </Select.Content>
-        </Select.Root>
+          dropdownMaxWidth={240}
+          style={{ width: 200, maxWidth: 240 }}
+        />
       )}
 
       {canWrite && !isMobile && (

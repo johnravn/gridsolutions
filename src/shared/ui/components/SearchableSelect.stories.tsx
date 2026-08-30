@@ -18,7 +18,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Fuzzy-search dropdown with portal rendering. Use `preventDialogCloseOnSearchableSelect` when inside Radix dialogs.',
+          'Fuzzy-search dropdown with portal rendering and bold match highlighting. Use `preventDialogCloseOnSearchableSelect` when inside Radix dialogs. Set `clearOnSelect` for search-to-add fields.',
       },
     },
   },
@@ -102,6 +102,15 @@ export const Disabled: Story = {
       placeholder="Disabled"
       disabled
       initialValue="acme"
+      style={{ width: 280 }}
+    />
+  ),
+}
+
+export const MatchHighlighting: Story = {
+  render: () => (
+    <ControlledSelect
+      placeholder="Type to see bold matches…"
       style={{ width: 280 }}
     />
   ),

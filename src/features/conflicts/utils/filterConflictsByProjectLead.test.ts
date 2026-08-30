@@ -4,6 +4,8 @@ import {
   filterEquipmentConflictsByProjectLead,
   filterVehicleConflictsByProjectLead,
   hasAnyConflicts,
+  keepAttentionEquipmentConflicts,
+  keepAttentionPairConflicts,
 } from '@features/conflicts/utils/filterConflictsByProjectLead'
 import type {
   CrewConflictRow,
@@ -121,5 +123,51 @@ describe('hasAnyConflicts', () => {
         equipmentConflicts: [],
       }),
     ).toBe(false)
+  })
+})
+
+describe('keepAttentionPairConflicts', () => {
+  const now = new Date('2026-08-31T10:00:00Z')
+
+  it('keeps unresolved conflicts after the period ended', () => {
+    expect(
+      keepAttentionPairConflicts(
+        [
+          vehicleRow({
+            end_1: '2026-05-05T18:00:00Z',
+            end_2: '2026-05-07T19:00:00Z',
+          }),
+        ],
+        now,
+      ),
+    ).toHaveLength(1)
+  })
+
+  it('drops forced conflicts once both windows have ended', () => {
+    expect(
+      keepAttentionPairConflicts(
+        [
+          vehicleRow({
+            forced_1: true,
+            end_1: '2026-05-05T18:00:00Z',
+            end_2: '2026-05-07T19:00:00Z',
+          }),
+        ],
+        now,
+      ),
+    ).toHaveLength(0)
+  })
+})
+
+describe('keepAttentionEquipmentConflicts', () => {
+  const now = new Date('2026-08-31T10:00:00Z')
+
+  it('keeps unresolved equipment conflicts from the past', () => {
+    expect(
+      keepAttentionEquipmentConflicts(
+        [equipmentRow({ end_at: '2026-07-01T18:00:00Z' })],
+        now,
+      ),
+    ).toHaveLength(1)
   })
 })

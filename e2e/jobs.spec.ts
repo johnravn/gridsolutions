@@ -62,6 +62,37 @@ test.describe('Jobs', () => {
     })
   })
 
+  test('owner can copy a job with the same start time and a new title', async ({
+    authedPage: page,
+  }) => {
+    const sourceTitle = await createDraftJob(page)
+    const copiedTitle = `${sourceTitle} copy`
+
+    await page.getByRole('button', { name: 'Copy job' }).click()
+    const dialog = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Copy job' }),
+    })
+    await expect(dialog).toBeVisible()
+
+    const titleInput = dialog.getByLabel('Title')
+    await expect(titleInput).toHaveValue(sourceTitle)
+
+    const year = new Date().getFullYear()
+    await expect(
+      dialog.getByRole('button', { name: new RegExp(String(year)) }),
+    ).toBeVisible()
+    await expect(
+      dialog.getByRole('button', { name: new RegExp(String(year + 1)) }),
+    ).toHaveCount(0)
+
+    await titleInput.fill(copiedTitle)
+    await dialog.getByRole('button', { name: 'Copy job' }).click()
+
+    await expect(page.getByRole('heading', { name: copiedTitle })).toBeVisible({
+      timeout: 15_000,
+    })
+  })
+
   test('owner can return to jobs list', async ({ authedPage: page }) => {
     await createDraftJob(page)
     await openJobsPage(page)

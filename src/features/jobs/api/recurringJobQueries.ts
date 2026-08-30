@@ -2,6 +2,7 @@ import { supabase } from '@shared/api/supabase'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { aggregateRecurringJobCrew } from '../utils/aggregateRecurringJobCrew'
 import { copyJob, deleteJobById } from './queries'
+import type { CopyJobResult } from './queries'
 import type { RawCrewBooking } from '../utils/aggregateRecurringJobCrew'
 import type {
   JobListRow,
@@ -827,19 +828,19 @@ export async function deleteRecurringJobTemplate(id: UUID): Promise<void> {
 export async function copyJobIntoRecurringJob(payload: {
   jobId: UUID
   startAt: string
-  endAt: string
+  title: string
   recurringJobId: UUID
-}): Promise<UUID> {
-  const newJobId = await copyJob({
+}): Promise<CopyJobResult> {
+  const copied = await copyJob({
     jobId: payload.jobId,
     startAt: payload.startAt,
-    endAt: payload.endAt,
+    title: payload.title,
   })
   await assignJobToRecurringJob({
-    jobId: newJobId,
+    jobId: copied.jobId,
     recurringJobId: payload.recurringJobId,
   })
-  return newJobId
+  return copied
 }
 
 export async function deleteRecurringMemberJob(jobId: UUID): Promise<void> {

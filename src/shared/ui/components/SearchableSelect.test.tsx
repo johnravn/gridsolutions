@@ -22,6 +22,16 @@ const mockRect = {
   toJSON: () => ({}),
 }
 
+function findOptionByLabel(label: string) {
+  return screen.findByText((_, el) => {
+    if (!(el instanceof HTMLElement)) return false
+    if (el.dataset.searchableSelectOption === undefined) return false
+    return (
+      (el.textContent ?? '').replace(/\s+/g, '') === label.replace(/\s+/g, '')
+    )
+  })
+}
+
 describe('SearchableSelect', () => {
   beforeEach(() => {
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
@@ -100,7 +110,7 @@ describe('SearchableSelect', () => {
     fireEvent.focus(input)
     fireEvent.change(input, { target: { value: 'Al' } })
     expect(input).toHaveValue('Al')
-    expect(await screen.findByText('Alpha')).toBeInTheDocument()
+    expect(await findOptionByLabel('Alpha')).toBeInTheDocument()
   })
 
   it('highlights options with arrow keys and selects with Enter', async () => {
@@ -199,5 +209,98 @@ describe('SearchableSelect', () => {
     await vi.waitFor(() => {
       expect(screen.getByTestId('next-field')).toHaveFocus()
     })
+  })
+
+  it('bolds matched letters in dropdown results', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={options}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Pick one"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'br' } })
+
+    const bold = await screen.findByText('Br')
+    expect(bold.tagName).toBe('STRONG')
+    expect(bold.parentElement).toHaveTextContent('Bravo')
+  })
+
+  it('clears the input after select when clearOnSelect is set', async () => {
+    const onValueChange = vi.fn()
+
+    renderWithProviders(
+      <SearchableSelect
+        options={options}
+        value=""
+        onValueChange={onValueChange}
+        clearOnSelect
+        placeholder="Search to add"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'Al' } })
+    const option = await findOptionByLabel('Alpha')
+    fireEvent.pointerDown(option)
+
+    expect(onValueChange).toHaveBeenCalledWith('a')
+    expect(input).toHaveValue('')
+  })
+
+  it('matches labels when the query has extra spaces', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={[
+          { value: '1', label: '1ch' },
+          { value: '2', label: '2ch' },
+        ]}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Search"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: '1 ch' } })
+
+    expect(await findOptionByLabel('1ch')).toBeInTheDocument()
+  })
+
+  it('matches a one-letter typo in the label', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={[
+          { value: 'shure', label: 'Shure SM58' },
+          { value: 'cam', label: 'Camera' },
+        ]}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Search"
+        data-testid="search-select"
+      />,
+    )
+
+    const input = screen.getByTestId('search-select')
+    fireEvent.focus(input)
+    fireEvent.change(input, { target: { value: 'share' } })
+
+    expect(await findOptionByLabel('Shure SM58')).toBeInTheDocument()
+    expect(
+      screen.queryByText((_, el) => {
+        if (!(el instanceof HTMLElement)) return false
+        if (el.dataset.searchableSelectOption === undefined) return false
+        return (el.textContent ?? '').includes('Camera')
+      }),
+    ).not.toBeInTheDocument()
   })
 })

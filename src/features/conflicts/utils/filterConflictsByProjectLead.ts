@@ -70,3 +70,31 @@ export function hasAnyConflicts({
     groupConflicts.length > 0
   )
 }
+
+function periodStillOpen(endAt: string, now: Date): boolean {
+  return new Date(endAt).getTime() >= now.getTime()
+}
+
+/** Unresolved overlaps stay visible; forced overlaps drop off after they end. */
+export function keepAttentionPairConflicts<
+  T extends {
+    forced_1: boolean
+    forced_2: boolean
+    end_1: string
+    end_2: string
+  },
+>(rows: ReadonlyArray<T>, now: Date): Array<T> {
+  return rows.filter((row) => {
+    if (!row.forced_1 && !row.forced_2) return true
+    return periodStillOpen(row.end_1, now) || periodStillOpen(row.end_2, now)
+  })
+}
+
+export function keepAttentionEquipmentConflicts(
+  rows: ReadonlyArray<EquipmentConflictRow>,
+  now: Date,
+): Array<EquipmentConflictRow> {
+  return rows.filter(
+    (row) => !row.has_forced || periodStillOpen(row.end_at, now),
+  )
+}

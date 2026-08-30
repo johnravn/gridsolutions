@@ -69,6 +69,7 @@ function AnimatedQuickSuggestionsView({
   ) => (
     <Button
       key={suggestion}
+      type="button"
       size="1"
       variant="soft"
       color="gray"

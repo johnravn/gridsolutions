@@ -18,8 +18,10 @@ vi.mock('@shared/api/supabase', () => ({
   },
 }))
 
+const companyState = { companyId: 'company-1' as string | null, loading: false }
+
 vi.mock('@shared/companies/CompanyProvider', () => ({
-  useCompany: () => ({ companyId: 'company-1' }),
+  useCompany: () => companyState,
 }))
 
 function buildFromChain(result: { data: unknown; error: unknown }) {
@@ -45,6 +47,8 @@ describe('useAuthz', () => {
   beforeEach(() => {
     getUserMock.mockReset()
     fromMock.mockReset()
+    companyState.companyId = 'company-1'
+    companyState.loading = false
     getUserMock.mockResolvedValue({
       data: { user: { id: 'user-1' } },
       error: null,
@@ -111,6 +115,26 @@ describe('useAuthz', () => {
       wrapper: createWrapper(),
     })
 
+    expect(result.current.loading).toBe(true)
+    expect(result.current.caps.size).toBe(0)
+  })
+
+  it('stays loading while company membership is unresolved', async () => {
+    companyState.companyId = null
+    companyState.loading = true
+    fromMock.mockImplementation(() =>
+      buildFromChain({ data: null, error: null }),
+    )
+
+    const { result } = renderHook(() => useAuthz(), {
+      wrapper: createWrapper(),
+    })
+
+    await waitFor(() => {
+      expect(getUserMock).toHaveBeenCalled()
+    })
+    expect(fromMock).not.toHaveBeenCalled()
+    expect(result.current.loading).toBe(true)
     expect(result.current.caps.size).toBe(0)
   })
 })

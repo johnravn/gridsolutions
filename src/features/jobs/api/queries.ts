@@ -1,5 +1,7 @@
 import { supabase } from '@shared/api/supabase'
 import { endOfDay, startOfDay } from '@shared/ui/components/pickers'
+import { parseCopyJobRpcResult } from '../utils/copyJobConflicts'
+import type { CopyJobResult } from '../utils/copyJobConflicts'
 import type {
   AddressListRow,
   JobDetail,
@@ -821,18 +823,20 @@ export async function upsertTimePeriod(payload: {
   }
 }
 
+export type { CopyJobResult }
+
 export async function copyJob(payload: {
   jobId: string
   startAt: string // ISO
-  endAt: string // ISO
-}): Promise<string> {
-  const { data, error } = await (supabase as any).rpc('job_copy', {
+  title: string
+}): Promise<CopyJobResult> {
+  const { data, error } = await supabase.rpc('job_copy', {
     p_job_id: payload.jobId,
     p_start_at: payload.startAt,
-    p_end_at: payload.endAt,
+    p_title: payload.title.trim(),
   })
   if (error) throw error
-  return data as string
+  return parseCopyJobRpcResult(data)
 }
 
 /** Permanently delete a job and its direct booking data. */

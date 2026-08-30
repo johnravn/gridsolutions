@@ -642,6 +642,26 @@ body:has(.app-inspector-fab[data-open]) .app-mobile-bottom-action-bar {
     background-color 220ms ease;
 }
 
+/* Demo badge — desktop: bottom-right. Compact screens: inline in the top bar. */
+.app-demo-mode-badge {
+  position: fixed;
+  right: calc(var(--app-menu-fab-inset) + var(--app-safe-right));
+  bottom: calc(var(--app-menu-fab-inset) + var(--app-safe-bottom));
+  z-index: 2147483647;
+  font-weight: 600;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.app-demo-mode-badge--inline {
+  position: static;
+  right: auto;
+  bottom: auto;
+  z-index: auto;
+  box-shadow: none;
+}
+
 /*
  * Only one chrome drawer at a time. Hide the idle FAB so it cannot compete
  * with the open drawer's close control.
@@ -865,18 +885,18 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   font-weight: 600;
 }
 
-/* Compact toasts — sit above dialogs */
+/* Toasts — sit above dialogs */
 .app-toast-viewport,
 [data-radix-toast-viewport] {
   position: fixed;
   z-index: 2147483647 !important;
-  bottom: calc(12px + var(--app-safe-bottom)) !important;
-  right: calc(12px + var(--app-safe-right)) !important;
+  bottom: calc(16px + var(--app-safe-bottom)) !important;
+  right: calc(16px + var(--app-safe-right)) !important;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 6px;
-  width: min(280px, calc(100vw - 24px));
+  gap: 8px;
+  width: min(360px, calc(100vw - 32px));
   outline: none;
   pointer-events: none;
 }
@@ -892,18 +912,18 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   --app-toast-icon: var(--gray-11);
   box-sizing: border-box;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 8px;
   width: fit-content;
   max-width: 100%;
-  padding: 5px 4px 5px 8px;
-  border-radius: 8px;
+  padding: 10px 8px 10px 12px;
+  border-radius: 10px;
   border: 1px solid var(--gray-6);
-  border-left: 2px solid var(--app-toast-accent);
+  border-left: 3px solid var(--app-toast-accent);
   background: color-mix(in srgb, var(--color-panel-solid) 92%, transparent);
   backdrop-filter: blur(12px) saturate(160%);
   -webkit-backdrop-filter: blur(12px) saturate(160%);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   color: var(--gray-12);
 }
 
@@ -927,44 +947,49 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   flex-shrink: 0;
   color: var(--app-toast-icon);
   line-height: 0;
+  padding-top: 1px;
 }
 
 .app-toast-body {
   flex: 1 1 auto;
   min-width: 0;
-  padding-right: 2px;
+  padding-right: 4px;
 }
 
 .app-toast .app-toast-title {
   display: block;
   color: var(--gray-12);
   font-weight: 600;
+  font-size: var(--font-size-4);
+  line-height: var(--line-height-4);
 }
 
 .app-toast .app-toast-desc {
   display: block;
-  margin-top: 1px;
+  margin-top: 2px;
+  font-size: var(--font-size-3);
+  line-height: var(--line-height-3);
 }
 
 .app-toast-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
 }
 
 .app-toast-action.rt-Button {
   flex-shrink: 0;
-  height: 22px;
-  padding-inline: 6px;
-  font-size: var(--font-size-1);
+  height: 28px;
+  padding-inline: 8px;
+  font-size: var(--font-size-2);
   font-weight: 600;
 }
 
 .app-toast-close.rt-IconButton {
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  min-width: 20px;
-  min-height: 20px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
 }
 
 /* Tablet: inspector FAB stays through the split breakpoint. */
@@ -975,7 +1000,17 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
       8px + var(--app-menu-fab-inset) + var(--app-safe-bottom) +
         var(--app-menu-fab-clearance)
     ) !important;
-    width: min(320px, calc(100vw - 24px));
+    width: min(380px, calc(100vw - 32px));
+  }
+
+  .app-toast .app-toast-title {
+    font-size: var(--font-size-3);
+    line-height: var(--line-height-3);
+  }
+
+  .app-toast .app-toast-desc {
+    font-size: var(--font-size-2);
+    line-height: var(--line-height-2);
   }
 }
 
@@ -995,8 +1030,8 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   .app-toast {
     width: 100%;
     max-width: none;
-    gap: 10px;
-    padding: 12px 10px 12px 14px;
+    gap: 12px;
+    padding: 14px 12px 14px 16px;
     border-radius: 12px;
   }
 
@@ -1011,8 +1046,8 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   }
 
   .app-toast-icon svg {
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
   }
 
   .app-toast-close.rt-IconButton {
@@ -1365,13 +1400,13 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   }
 }
 
-/* Index table rows: selection + hover via CSS (replaces imperative mouse handlers) */
+/* Index table rows: selection + hover via CSS (replaces imperative mouse handlers).
+   Hover is background-only — virtualized rows are position:absolute, so scale
+   overlaps neighbors and looks like jitter. */
 .index-table-row {
   background-color: transparent;
-  transition:
-    background-color var(--motion-duration-reveal) var(--motion-ease-reveal-out),
-    transform var(--motion-duration-reveal) var(--motion-ease-reveal-out);
-  transform-origin: center center;
+  transition: background-color var(--motion-duration-reveal)
+    var(--motion-ease-reveal-out);
 }
 .index-table-row--selected {
   background-color: var(--accent-a3);
@@ -1384,12 +1419,6 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   box-shadow: inset 3px 0 0 0 var(--blue-9);
 }
 @media (hover: hover) and (pointer: fine) {
-  @media (prefers-reduced-motion: no-preference) {
-    .index-table-row:hover {
-      transform: scale(var(--motion-scale-hover));
-    }
-  }
-
   .index-table-row:not(.index-table-row--selected):hover {
     background-color: var(--gray-a2);
   }

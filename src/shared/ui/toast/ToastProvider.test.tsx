@@ -47,7 +47,7 @@ function renderToast(kind: 'success' | 'error' | 'info' = 'success') {
 }
 
 describe('AppToastProvider', () => {
-  it('shows a compact success toast', async () => {
+  it('shows a success toast', async () => {
     renderToast('success')
     fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
 
@@ -77,5 +77,18 @@ describe('AppToastProvider', () => {
       'error',
     )
     errorSpy.mockRestore()
+  })
+
+  it('shows an info toast with the info kind', async () => {
+    renderToast('info')
+    fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Copied to clipboard')).toBeInTheDocument()
+    })
+    expect(document.querySelector('.app-toast')).toHaveAttribute(
+      'data-kind',
+      'info',
+    )
   })
 })

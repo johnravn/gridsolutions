@@ -1,5 +1,10 @@
 import * as React from 'react'
-import { Badge, Box, Flex, Text, TextField } from '@radix-ui/themes'
+import { Badge, Flex, Text } from '@radix-ui/themes'
+import {
+  HighlightedText,
+  SearchableSelect,
+  type SearchableSelectOption,
+} from '@shared/ui/components/SearchableSelect'
 
 export type ItemSearchResult = {
   id: string
@@ -10,139 +15,109 @@ export type ItemSearchResult = {
   item_kind: 'stock' | 'subrental'
   brand_name: string | null
   model: string | null
+  nicknames?: string | null
+  category_name?: string | null
+}
+
+function itemDescription(item: ItemSearchResult) {
+  return item.is_group
+    ? `Group | Qty: ${item.on_hand ?? 'N/A'}`
+    : `Brand: ${item.brand_name ?? 'N/A'} | Model: ${
+        item.model ?? 'N/A'
+      } | Qty: ${item.on_hand ?? 'N/A'}`
 }
 
 export function ItemSearchField({
-  searchTerm,
   onSearchChange,
   searchResults,
   onSelectItem,
   formatCurrency,
   compact,
+  loading,
 }: {
-  searchTerm: string
   onSearchChange: (term: string) => void
   searchResults: Array<ItemSearchResult>
   onSelectItem: (itemId: string) => void
   formatCurrency: (amount: number) => string
   compact?: boolean
+  loading?: boolean
 }) {
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const [dropdownPosition, setDropdownPosition] = React.useState<{
-    top: number
-    left: number
-    width: number
-  } | null>(null)
+  const resultsById = React.useMemo(
+    () => new Map(searchResults.map((item) => [item.id, item])),
+    [searchResults],
+  )
 
-  // Update dropdown position when search term or results change
-  React.useEffect(() => {
-    if (!searchTerm || searchResults.length === 0) {
-      setDropdownPosition(null)
-      return
-    }
-
-    // Use requestAnimationFrame to ensure DOM is ready
-    const updatePosition = () => {
-      if (containerRef.current) {
-        const input = containerRef.current.querySelector('input')
-        if (input) {
-          const rect = input.getBoundingClientRect()
-          setDropdownPosition({
-            top: rect.bottom + window.scrollY + 4,
-            left: rect.left + window.scrollX,
-            width: rect.width,
-          })
-        }
-      }
-    }
-
-    // Try immediately, then with a small delay to ensure layout is ready
-    updatePosition()
-    const timer = setTimeout(updatePosition, 10)
-
-    return () => clearTimeout(timer)
-  }, [searchTerm, searchResults.length])
+  const options = React.useMemo<Array<SearchableSelectOption>>(
+    () =>
+      searchResults.map((item) => ({
+        value: item.id,
+        label: item.name,
+        description: itemDescription(item),
+        keywords: [
+          item.nicknames,
+          item.category_name,
+          item.brand_name,
+          item.model,
+        ]
+          .filter(Boolean)
+          .join(' '),
+      })),
+    [searchResults],
+  )
 
   return (
-    <Box
-      ref={containerRef}
-      style={{ position: 'relative' }}
-      mb={compact ? undefined : '3'}
-    >
-      <TextField.Root
-        placeholder="Search items or groups to add..."
-        value={searchTerm}
-        onChange={(e) => onSearchChange(e.target.value)}
-      />
-      {dropdownPosition && searchResults.length > 0 && (
-        <Box
-          style={{
-            position: 'fixed',
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
-            zIndex: 10000,
-            backgroundColor: 'var(--color-panel-solid)',
-            border: '1px solid var(--gray-6)',
-            borderRadius: 8,
-            maxHeight: 'min(400px, 50vh)',
-            overflowY: 'auto',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-          }}
-        >
-          {searchResults.map((item) => (
-            <Box
-              key={item.id}
-              p="2"
-              style={{
-                cursor: 'pointer',
-                borderBottom: '1px solid var(--gray-4)',
-                backgroundColor: 'transparent',
-              }}
-              onClick={() => onSelectItem(item.id)}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = 'var(--gray-3)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent'
-              }}
-            >
-              <Flex justify="between" align="center" gap="2">
-                <Flex
-                  direction="column"
-                  gap="1"
-                  style={{ flex: 1, minWidth: 0 }}
-                >
-                  <Flex align="center" gap="2" style={{ minWidth: 0 }}>
-                    <Text style={{ flex: 1, minWidth: 0 }}>{item.name}</Text>
-                    {item.item_kind === 'stock' ? (
-                      <Badge size="1" variant="soft" color="indigo">
-                        Stock
-                      </Badge>
-                    ) : (
-                      <Badge size="1" variant="soft" color="amber">
-                        Subrental
-                      </Badge>
-                    )}
-                  </Flex>
-                  <Text size="1" color="gray">
-                    {item.is_group
-                      ? `Group | Qty: ${item.on_hand ?? 'N/A'}`
-                      : `Brand: ${item.brand_name ?? 'N/A'} | Model: ${
-                          item.model ?? 'N/A'
-                        } | Qty: ${item.on_hand ?? 'N/A'}`}
-                  </Text>
-                </Flex>
-                {item.price !== null && (
-                  <Text size="2" color="gray" style={{ flexShrink: 0 }}>
-                    {formatCurrency(item.price)}
-                  </Text>
+    <SearchableSelect
+      options={options}
+      value=""
+      onValueChange={onSelectItem}
+      onInputChange={onSearchChange}
+      clearOnSelect
+      filterLocally
+      loading={loading}
+      placeholder="Search items or groups to add..."
+      emptyMessage="No matching items"
+      dropdownMatchTriggerWidth
+      dropdownMaxHeight={400}
+      style={{
+        width: '100%',
+        maxWidth: 'none',
+        marginBottom: compact ? undefined : 12,
+      }}
+      renderOption={(option, { query }) => {
+        const item = resultsById.get(option.value)
+        if (!item) return option.label
+        return (
+          <Flex justify="between" align="center" gap="2">
+            <Flex direction="column" gap="1" style={{ flex: 1, minWidth: 0 }}>
+              <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                <Text style={{ flex: 1, minWidth: 0 }}>
+                  <HighlightedText text={item.name} query={query} />
+                </Text>
+                {item.item_kind === 'stock' ? (
+                  <Badge size="1" variant="soft" color="indigo">
+                    Stock
+                  </Badge>
+                ) : (
+                  <Badge size="1" variant="soft" color="amber">
+                    Subrental
+                  </Badge>
                 )}
               </Flex>
-            </Box>
-          ))}
-        </Box>
-      )}
-    </Box>
+              <Text size="1" color="gray">
+                <HighlightedText
+                  text={option.description ?? ''}
+                  query={query}
+                />
+              </Text>
+            </Flex>
+            {item.price !== null && (
+              <Text size="2" color="gray" style={{ flexShrink: 0 }}>
+                {formatCurrency(item.price)}
+              </Text>
+            )}
+          </Flex>
+        )
+      }}
+    />
   )
 }

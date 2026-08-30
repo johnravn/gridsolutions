@@ -1,8 +1,8 @@
 import * as React from 'react'
 import { Box, Flex, IconButton, Popover, Text } from '@radix-ui/themes'
 import { Calendar, Xmark } from 'iconoir-react'
-import { CalendarGrid } from './CalendarGrid'
 import { PopoverTrigger } from '@shared/ui/radixAsChild'
+import { CalendarGrid } from './CalendarGrid'
 import {
   dateToLocalDate,
   formatDateLabel,

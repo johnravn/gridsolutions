@@ -66,21 +66,146 @@ export function addThreeHours(isoString: string): string {
  * Fuzzy search utility functions
  */
 
+function compactWhitespace(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, '')
+}
+
+function compactChars(text: string): {
+  compact: string
+  indices: Array<number>
+} {
+  const indices: Array<number> = []
+  let compact = ''
+  for (let i = 0; i < text.length; i++) {
+    if (/\s/.test(text[i])) continue
+    indices.push(i)
+    compact += text[i].toLowerCase()
+  }
+  return { compact, indices }
+}
+
+/** Adjacent transpositions count as one edit (typos like "shrue" vs "shure"). */
+function damerauLevenshtein(a: string, b: string): number {
+  const m = a.length
+  const n = b.length
+  if (m === 0) return n
+  if (n === 0) return m
+
+  const dp: Array<Array<number>> = Array.from({ length: m + 1 }, (_, i) => {
+    const row = Array.from({ length: n + 1 }, () => 0)
+    row[0] = i
+    return row
+  })
+  for (let j = 0; j <= n; j++) dp[0][j] = j
+
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      )
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        dp[i][j] = Math.min(dp[i][j], dp[i - 2][j - 2] + 1)
+      }
+    }
+  }
+  return dp[m][n]
+}
+
+function maxAllowedEdits(searchLen: number): number {
+  if (searchLen < 3) return 0
+  return Math.max(1, Math.floor(searchLen / 3))
+}
+
+function bestEditWindow(
+  search: string,
+  target: string,
+): { start: number; end: number; distance: number } | null {
+  const maxEdits = maxAllowedEdits(search.length)
+  if (maxEdits === 0 || !target) return null
+
+  let bestStart = 0
+  let bestEnd = target.length
+  let bestDistance = damerauLevenshtein(search, target)
+  if (bestDistance > maxEdits) bestDistance = Number.POSITIVE_INFINITY
+
+  const minLen = Math.max(1, search.length - maxEdits)
+  const maxLen = Math.min(target.length, search.length + maxEdits)
+  for (let len = minLen; len <= maxLen; len++) {
+    for (let start = 0; start <= target.length - len; start++) {
+      const distance = damerauLevenshtein(
+        search,
+        target.slice(start, start + len),
+      )
+      if (distance > maxEdits) continue
+      const betterDistance = distance < bestDistance
+      const sameDistanceShorter =
+        distance === bestDistance && len < bestEnd - bestStart
+      const sameDistanceEarlier =
+        distance === bestDistance &&
+        len === bestEnd - bestStart &&
+        start < bestStart
+      if (betterDistance || sameDistanceShorter || sameDistanceEarlier) {
+        bestStart = start
+        bestEnd = start + len
+        bestDistance = distance
+        if (distance === 0) {
+          return { start: bestStart, end: bestEnd, distance: bestDistance }
+        }
+      }
+    }
+  }
+
+  if (!Number.isFinite(bestDistance)) return null
+  return { start: bestStart, end: bestEnd, distance: bestDistance }
+}
+
+function typoMatchScore(search: string, target: string): number {
+  const window = bestEditWindow(search, target)
+  if (!window) return 0
+  const windowLen = window.end - window.start
+  const similarity = 1 - window.distance / Math.max(search.length, windowLen)
+  const prefixBonus = window.start === 0 ? 0.12 : 0
+  return Math.min(0.82, similarity * 0.7 + prefixBonus)
+}
+
+function typoMatchRange(
+  searchTerm: string,
+  text: string,
+): Array<FuzzyMatchRange> {
+  const compactSearch = compactWhitespace(searchTerm)
+  const { compact, indices } = compactChars(text)
+  const window = bestEditWindow(compactSearch, compact)
+  if (!window) return []
+  const start = indices[window.start]
+  const end = indices[window.end - 1] + 1
+  return [{ start, end }]
+}
+
 /**
  * Calculates fuzzy match score between two strings (0-1)
- * Uses a combination of substring matching and Levenshtein-like distance
+ * Uses substring matching plus Damerau-Levenshtein for typos ("share" → "Shure").
+ * Whitespace is optional, so "1 ch" matches "1ch".
  */
 export function fuzzyMatchScore(searchTerm: string, text: string): number {
   if (!searchTerm || !text) return 0
 
-  const search = searchTerm.toLowerCase().trim()
+  const search = searchTerm.toLowerCase().trim().replace(/\s+/g, ' ')
   const target = text.toLowerCase().trim()
+  if (!search) return 0
 
-  // Exact match
-  if (target === search) return 1
+  const compactSearch = compactWhitespace(search)
+  const compactTarget = compactWhitespace(target)
+
+  // Exact match (raw or ignoring spaces)
+  if (target === search || compactTarget === compactSearch) return 1
 
   // Starts with search term
-  if (target.startsWith(search)) return 0.9
+  if (target.startsWith(search) || compactTarget.startsWith(compactSearch)) {
+    return 0.9
+  }
 
   // Contains search term as whole word
   const wordRegex = new RegExp(
@@ -89,69 +214,45 @@ export function fuzzyMatchScore(searchTerm: string, text: string): number {
   )
   if (wordRegex.test(target)) return 0.8
 
-  // Contains search term anywhere
-  if (target.includes(search)) return 0.7
+  // Contains search term anywhere (raw or ignoring spaces)
+  if (target.includes(search) || compactTarget.includes(compactSearch)) {
+    return 0.7
+  }
 
-  // Check if all characters of search term appear in order (fuzzy substring)
+  const tokens = search.split(' ').filter(Boolean)
+  if (tokens.length > 1) {
+    let pos = 0
+    let inOrder = true
+    for (const token of tokens) {
+      const idx = compactTarget.indexOf(token, pos)
+      if (idx < 0) {
+        inOrder = false
+        break
+      }
+      pos = idx + token.length
+    }
+    if (inOrder) return 0.85
+
+    const allPresent = tokens.every(
+      (token) => target.includes(token) || compactTarget.includes(token),
+    )
+    if (allPresent) return 0.75
+  }
+
+  // Sequential characters, skipping spaces in the query
   let searchIdx = 0
   for (let i = 0; i < target.length && searchIdx < search.length; i++) {
-    if (target[i] === search[searchIdx]) {
-      searchIdx++
-    }
+    while (searchIdx < search.length && search[searchIdx] === ' ') searchIdx++
+    if (searchIdx >= search.length) break
+    if (target[i] === search[searchIdx]) searchIdx++
   }
+  while (searchIdx < search.length && search[searchIdx] === ' ') searchIdx++
   if (searchIdx === search.length) {
-    // Calculate score based on how "spread out" the match is
-    const spread = target.length - search.length
+    const spread = target.length - compactSearch.length
     return Math.max(0.3, 0.6 - spread * 0.05)
   }
 
-  // Calculate character-based similarity with position awareness
-  // This helps with typos like "unaktive" vs "unactive" (k vs c)
-  let matchingChars = 0
-
-  // Count matching characters in similar positions (allows for some position shift)
-  for (let i = 0; i < search.length; i++) {
-    const char = search[i]
-    // Check exact position
-    if (target[i] === char) {
-      matchingChars += 1
-    } else {
-      // Check nearby positions (within 2 characters) for typos
-      const checkRange = Math.min(2, target.length - i)
-      let found = false
-      for (
-        let j = Math.max(0, i - 1);
-        j <= Math.min(target.length - 1, i + checkRange);
-        j++
-      ) {
-        if (target[j] === char && Math.abs(i - j) <= 2) {
-          matchingChars += 0.7 // Partial credit for nearby match
-          found = true
-          break
-        }
-      }
-      // If not found nearby, check if character exists anywhere (less weight)
-      if (!found && target.includes(char)) {
-        matchingChars += 0.3
-      }
-    }
-  }
-
-  // Also check reverse: how many target chars match search
-  // This helps when search is shorter than target
-  let reverseMatches = 0
-  for (const char of target) {
-    if (search.includes(char)) {
-      reverseMatches++
-    }
-  }
-
-  // Combine forward and reverse matching
-  const forwardSimilarity = matchingChars / search.length
-  const reverseSimilarity = reverseMatches / target.length
-  const combinedSimilarity = (forwardSimilarity + reverseSimilarity) / 2
-
-  return combinedSimilarity * 0.4
+  return typoMatchScore(compactSearch, compactTarget)
 }
 
 /**
@@ -202,6 +303,110 @@ export function fuzzySearch<T>(
     .sort((a, b) => b.score - a.score) // Sort by score descending
 
   return scored.map(({ item }) => item)
+}
+
+export type FuzzyMatchRange = { start: number; end: number }
+
+function mergeFuzzyMatchRanges(
+  ranges: Array<FuzzyMatchRange>,
+): Array<FuzzyMatchRange> {
+  if (ranges.length === 0) return []
+  const sorted = [...ranges].sort((a, b) => a.start - b.start)
+  const merged: Array<FuzzyMatchRange> = [{ ...sorted[0] }]
+  for (let i = 1; i < sorted.length; i++) {
+    const last = merged[merged.length - 1]
+    const next = sorted[i]
+    if (next.start <= last.end) {
+      last.end = Math.max(last.end, next.end)
+    } else {
+      merged.push({ ...next })
+    }
+  }
+  return merged
+}
+
+function sequentialMatchIndices(search: string, text: string): Array<number> {
+  const lowerText = text.toLowerCase()
+  const indices: Array<number> = []
+  let searchIdx = 0
+  for (let i = 0; i < lowerText.length && searchIdx < search.length; i++) {
+    if (lowerText[i] === search[searchIdx]) {
+      indices.push(i)
+      searchIdx++
+    }
+  }
+  return searchIdx === search.length ? indices : []
+}
+
+function indicesToRanges(indices: Array<number>): Array<FuzzyMatchRange> {
+  if (indices.length === 0) return []
+  const ranges: Array<FuzzyMatchRange> = []
+  let start = indices[0]
+  let end = indices[0] + 1
+  for (let i = 1; i < indices.length; i++) {
+    if (indices[i] === end) {
+      end = indices[i] + 1
+    } else {
+      ranges.push({ start, end })
+      start = indices[i]
+      end = indices[i] + 1
+    }
+  }
+  ranges.push({ start, end })
+  return ranges
+}
+
+function compactSubstringRange(
+  searchTerm: string,
+  text: string,
+): Array<FuzzyMatchRange> {
+  const compactSearch = compactWhitespace(searchTerm)
+  if (!compactSearch) return []
+
+  const { compact, indices } = compactChars(text)
+  const idx = compact.indexOf(compactSearch)
+  if (idx < 0) return []
+  const start = indices[idx]
+  const end = indices[idx + compactSearch.length - 1] + 1
+  return [{ start, end }]
+}
+
+/**
+ * Character ranges to bold in `text` for a fuzzy query.
+ * Prefers a contiguous substring, then ignoring spaces, then per-token matches,
+ * then the closest typo window (one swapped letter, etc.).
+ */
+export function getFuzzyMatchRanges(
+  searchTerm: string,
+  text: string,
+): Array<FuzzyMatchRange> {
+  if (!searchTerm.trim() || !text) return []
+
+  const lowerText = text.toLowerCase()
+  const lowerSearch = searchTerm.trim().toLowerCase().replace(/\s+/g, ' ')
+
+  const substringIdx = lowerText.indexOf(lowerSearch)
+  if (substringIdx >= 0) {
+    return [{ start: substringIdx, end: substringIdx + lowerSearch.length }]
+  }
+
+  const compactRange = compactSubstringRange(lowerSearch, text)
+  if (compactRange.length > 0) return compactRange
+
+  const tokens = lowerSearch.split(' ').filter(Boolean)
+  if (tokens.length > 1) {
+    const ranges: Array<FuzzyMatchRange> = []
+    for (const token of tokens) {
+      ranges.push(...getFuzzyMatchRanges(token, text))
+    }
+    const merged = mergeFuzzyMatchRanges(ranges)
+    if (merged.length > 0) return merged
+  }
+
+  const sequential = indicesToRanges(sequentialMatchIndices(lowerSearch, text))
+  if (sequential.length > 0) return sequential
+
+  return typoMatchRange(lowerSearch, text)
 }
 
 /**

@@ -1,6 +1,22 @@
 // src/features/jobs/components/invoice/InvoicePreview.tsx
 import * as React from 'react'
 import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import {
   Box,
   Button,
   Card,
@@ -14,12 +30,13 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
-import { Plus, Trash } from 'iconoir-react'
+import { DotsGrid3x3, Plus, Trash } from 'iconoir-react'
 import { addLocalCalendarDays } from '@shared/lib/generalFunctions'
 import {
   acceptedOfferInvoiceLineDescription,
   sanitizeOfferTitleForInvoiceLine,
 } from '../../utils/offerNumber'
+import type { DragEndEvent } from '@dnd-kit/core'
 import type { JobDetail, JobOffer } from '../../types'
 import type {
   BookingInvoiceLine,
@@ -91,9 +108,90 @@ type InvoicePreviewProps =
       ) => void
       onAddLine?: () => void
       onRemoveLine?: (lineId: string) => void
+      onReorderLines?: (lines: Array<BookingInvoiceLine>) => void
       /** Line ids to visually highlight (e.g. pattern apply targets). */
       highlightedLineIds?: ReadonlySet<string>
     }
+
+export function reorderInvoiceLinesByActiveOver<T extends { id: string }>(
+  items: Array<T>,
+  activeId: string | number,
+  overId: string | number,
+): Array<T> {
+  const oldIndex = items.findIndex((item) => item.id === String(activeId))
+  const newIndex = items.findIndex((item) => item.id === String(overId))
+  if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return items
+  return arrayMove(items, oldIndex, newIndex)
+}
+
+function SortableInvoiceLineRow({
+  id,
+  highlighted,
+  children,
+}: {
+  id: string
+  highlighted: boolean
+  children: React.ReactNode
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id })
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition: transition ?? 'background 160ms ease',
+    opacity: isDragging ? 0.85 : undefined,
+    zIndex: isDragging ? 1 : undefined,
+    position: 'relative',
+    background: highlighted
+      ? 'var(--amber-a3)'
+      : isDragging
+        ? 'var(--gray-a2)'
+        : undefined,
+    boxShadow: highlighted ? 'inset 3px 0 0 var(--amber-9)' : undefined,
+  }
+
+  return (
+    <Table.Row ref={setNodeRef as React.Ref<HTMLTableRowElement>} style={style}>
+      <Table.Cell
+        style={{
+          width: 40,
+          paddingLeft: 6,
+          paddingRight: 6,
+          verticalAlign: 'middle',
+        }}
+      >
+        <IconButton
+          ref={setActivatorNodeRef as React.Ref<HTMLButtonElement>}
+          size="1"
+          variant="ghost"
+          color="gray"
+          style={{
+            cursor: 'grab',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 28,
+            height: 28,
+          }}
+          {...attributes}
+          {...listeners}
+          aria-label="Drag to reorder"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <DotsGrid3x3 width={16} height={16} />
+        </IconButton>
+      </Table.Cell>
+      {children}
+    </Table.Row>
+  )
+}
 
 export default function InvoicePreview(props: InvoicePreviewProps) {
   const formatCurrency = (amount: number) => {
@@ -284,10 +382,41 @@ function BookingsInvoicePreview({
     onLineChange,
     onAddLine,
     onRemoveLine,
+    onReorderLines,
     highlightedLineIds,
   } = props
 
   const displayLines = editedLines ?? bookings.all
+  const canReorder = Boolean(onReorderLines)
+  const lineColumnCount = 6 + (canReorder ? 1 : 0) + (onRemoveLine ? 1 : 0)
+  const [quantityDrafts, setQuantityDrafts] = React.useState<
+    Record<string, string>
+  >({})
+
+  const clearQuantityDraft = (lineId: string) => {
+    setQuantityDrafts((prev) => {
+      if (!(lineId in prev)) return prev
+      const next = { ...prev }
+      delete next[lineId]
+      return next
+    })
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  )
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    if (!onReorderLines) return
+    const { active, over } = event
+    if (!over || active.id === over.id) return
+    onReorderLines(
+      reorderInvoiceLinesByActiveOver(displayLines, active.id, over.id),
+    )
+  }
 
   const custAddr = parseAddress(customerAddress)
   const compAddr = parseAddress(companyAddress)
@@ -552,173 +681,242 @@ function BookingsInvoicePreview({
               </Button>
             </Flex>
           )}
-          <Table.Root
-            style={{ width: '100%', minWidth: 640 }}
-            data-invoice-lines
-          >
-            <Table.Header>
-              <Table.Row>
-                {onRemoveLine && (
-                  <Table.ColumnHeaderCell style={{ width: 40 }} />
-                )}
-                <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                  Price
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                  Qty
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                  Discount
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                  VAT
-                </Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
-                  Total
-                </Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {displayLines.length === 0 && onAddLine ? (
-                <Table.Row>
-                  <Table.Cell colSpan={onRemoveLine ? 7 : 6}>
-                    <Text size="2" color="gray" style={{ fontStyle: 'italic' }}>
-                      No lines. Click Add line to add invoice lines.
-                    </Text>
-                  </Table.Cell>
-                </Table.Row>
-              ) : null}
-              {displayLines.map((line) => {
-                const discountedPrice = getLineTotalPrice(line)
-                const lineVat = vatIncluded
-                  ? (discountedPrice * line.vatPercent) / 100
-                  : 0
-                const lineTotal = discountedPrice + lineVat
-                const isHighlighted = highlightedLineIds?.has(line.id) ?? false
-                return (
-                  <Table.Row
-                    key={line.id}
-                    style={
-                      isHighlighted
-                        ? {
-                            background: 'var(--amber-a3)',
-                            boxShadow: 'inset 3px 0 0 var(--amber-9)',
-                            transition: 'background 160ms ease',
-                          }
-                        : { transition: 'background 160ms ease' }
-                    }
-                  >
-                    {onRemoveLine && (
-                      <Table.Cell
-                        style={{
-                          width: 40,
-                          paddingLeft: 12,
-                          verticalAlign: 'top',
-                        }}
-                      >
-                        <IconButton
-                          size="1"
-                          variant="ghost"
-                          color="red"
-                          onClick={() => onRemoveLine(line.id)}
-                          title="Remove line"
-                        >
-                          <Trash width={14} height={14} />
-                        </IconButton>
-                      </Table.Cell>
+          {(() => {
+            const table = (
+              <Table.Root
+                style={{ width: '100%', minWidth: 640 }}
+                data-invoice-lines
+              >
+                <Table.Header>
+                  <Table.Row>
+                    {canReorder && (
+                      <Table.ColumnHeaderCell style={{ width: 40 }} />
                     )}
-                    <Table.Cell style={{ minWidth: 200, maxWidth: 400 }}>
-                      {onLineChange ? (
-                        <TextArea
-                          size="1"
-                          value={line.description}
-                          onChange={(e) =>
-                            onLineChange(line.id, {
-                              description: e.target.value,
-                            })
-                          }
-                          placeholder="Description"
-                          style={{
-                            width: '100%',
-                            height: 28,
-                            minHeight: 28,
-                            resize: 'vertical',
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                            overflowWrap: 'break-word',
-                          }}
-                          rows={1}
-                        />
-                      ) : (
-                        <Text
-                          as="div"
-                          style={{
-                            whiteSpace: 'pre-wrap',
-                            wordBreak: 'break-word',
-                          }}
-                        >
-                          {line.description}
-                        </Text>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell style={{ textAlign: 'right', width: 80 }}>
-                      {onLineChange ? (
-                        <TextField.Root
-                          type="number"
-                          size="1"
-                          value={String(line.unitPrice)}
-                          onChange={(e) => {
-                            const v = parseFloat(e.target.value)
-                            if (!isNaN(v) && v >= 0) {
-                              onLineChange(line.id, {
-                                unitPrice: v,
-                                quantity: line.quantity,
-                              })
-                            }
-                          }}
-                          style={numberInputStyle}
-                        />
-                      ) : (
-                        <Text>{formatCurrency(line.unitPrice)}</Text>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell style={{ textAlign: 'right', width: 64 }}>
-                      {onLineChange ? (
-                        <TextField.Root
-                          type="number"
-                          size="1"
-                          min={0.01}
-                          value={String(line.quantity)}
-                          onChange={(e) => {
-                            const v = parseFloat(e.target.value)
-                            if (!isNaN(v) && v > 0) {
-                              onLineChange(line.id, {
-                                unitPrice: line.unitPrice,
-                                quantity: v,
-                              })
-                            }
-                          }}
-                          style={numberInputStyle}
-                        />
-                      ) : (
-                        <Text>{line.quantity}</Text>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell style={{ textAlign: 'right' }}>
-                      {renderDiscountCell(line)}
-                    </Table.Cell>
-                    <Table.Cell style={{ textAlign: 'right' }}>
-                      <Text>{vatIncluded ? `${line.vatPercent}%` : '0%'}</Text>
-                    </Table.Cell>
-                    <Table.Cell style={{ textAlign: 'right' }}>
-                      <Text weight="medium">{formatCurrency(lineTotal)}</Text>
-                    </Table.Cell>
+                    {onRemoveLine && (
+                      <Table.ColumnHeaderCell style={{ width: 40 }} />
+                    )}
+                    <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
+                      Price
+                    </Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
+                      Qty
+                    </Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
+                      Discount
+                    </Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
+                      VAT
+                    </Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>
+                      Total
+                    </Table.ColumnHeaderCell>
                   </Table.Row>
-                )
-              })}
-            </Table.Body>
-          </Table.Root>
+                </Table.Header>
+                <Table.Body>
+                  {displayLines.length === 0 && onAddLine ? (
+                    <Table.Row>
+                      <Table.Cell colSpan={lineColumnCount}>
+                        <Text
+                          size="2"
+                          color="gray"
+                          style={{ fontStyle: 'italic' }}
+                        >
+                          No lines. Click Add line to add invoice lines.
+                        </Text>
+                      </Table.Cell>
+                    </Table.Row>
+                  ) : null}
+                  {displayLines.map((line) => {
+                    const discountedPrice = getLineTotalPrice(line)
+                    const lineVat = vatIncluded
+                      ? (discountedPrice * line.vatPercent) / 100
+                      : 0
+                    const lineTotal = discountedPrice + lineVat
+                    const isHighlighted =
+                      highlightedLineIds?.has(line.id) ?? false
+                    const cells = (
+                      <>
+                        {onRemoveLine && (
+                          <Table.Cell
+                            style={{
+                              width: 40,
+                              paddingLeft: 12,
+                              verticalAlign: 'top',
+                            }}
+                          >
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              color="red"
+                              onClick={() => onRemoveLine(line.id)}
+                              title="Remove line"
+                            >
+                              <Trash width={14} height={14} />
+                            </IconButton>
+                          </Table.Cell>
+                        )}
+                        <Table.Cell style={{ minWidth: 200, maxWidth: 400 }}>
+                          {onLineChange ? (
+                            <TextArea
+                              size="1"
+                              value={line.description}
+                              onChange={(e) =>
+                                onLineChange(line.id, {
+                                  description: e.target.value,
+                                })
+                              }
+                              placeholder="Description"
+                              style={{
+                                width: '100%',
+                                height: 28,
+                                minHeight: 28,
+                                resize: 'vertical',
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                overflowWrap: 'break-word',
+                              }}
+                              rows={1}
+                            />
+                          ) : (
+                            <Text
+                              as="div"
+                              style={{
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                              }}
+                            >
+                              {line.description}
+                            </Text>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell style={{ textAlign: 'right', width: 80 }}>
+                          {onLineChange ? (
+                            <TextField.Root
+                              type="number"
+                              size="1"
+                              value={String(line.unitPrice)}
+                              onChange={(e) => {
+                                const v = parseFloat(e.target.value)
+                                if (!isNaN(v) && v >= 0) {
+                                  onLineChange(line.id, {
+                                    unitPrice: v,
+                                    quantity: line.quantity,
+                                  })
+                                }
+                              }}
+                              style={numberInputStyle}
+                            />
+                          ) : (
+                            <Text>{formatCurrency(line.unitPrice)}</Text>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell style={{ textAlign: 'right', width: 64 }}>
+                          {onLineChange ? (
+                            <TextField.Root
+                              type="number"
+                              size="1"
+                              min={0}
+                              step={1}
+                              aria-label="Quantity"
+                              value={
+                                quantityDrafts[line.id] ??
+                                (line.quantity > 0 ? String(line.quantity) : '')
+                              }
+                              onChange={(e) => {
+                                const nextValue = e.target.value
+                                setQuantityDrafts((prev) => ({
+                                  ...prev,
+                                  [line.id]: nextValue,
+                                }))
+                                const parsed = Number.parseFloat(nextValue)
+                                if (
+                                  nextValue === '' ||
+                                  !Number.isFinite(parsed) ||
+                                  parsed <= 0
+                                ) {
+                                  onLineChange(line.id, {
+                                    unitPrice: line.unitPrice,
+                                    quantity: 0,
+                                  })
+                                  return
+                                }
+                                onLineChange(line.id, {
+                                  unitPrice: line.unitPrice,
+                                  quantity: parsed,
+                                })
+                                clearQuantityDraft(line.id)
+                              }}
+                              style={numberInputStyle}
+                            />
+                          ) : (
+                            <Text>{line.quantity}</Text>
+                          )}
+                        </Table.Cell>
+                        <Table.Cell style={{ textAlign: 'right' }}>
+                          {renderDiscountCell(line)}
+                        </Table.Cell>
+                        <Table.Cell style={{ textAlign: 'right' }}>
+                          <Text>
+                            {vatIncluded ? `${line.vatPercent}%` : '0%'}
+                          </Text>
+                        </Table.Cell>
+                        <Table.Cell style={{ textAlign: 'right' }}>
+                          <Text weight="medium">
+                            {formatCurrency(lineTotal)}
+                          </Text>
+                        </Table.Cell>
+                      </>
+                    )
+                    if (canReorder) {
+                      return (
+                        <SortableInvoiceLineRow
+                          key={line.id}
+                          id={line.id}
+                          highlighted={isHighlighted}
+                        >
+                          {cells}
+                        </SortableInvoiceLineRow>
+                      )
+                    }
+                    return (
+                      <Table.Row
+                        key={line.id}
+                        style={
+                          isHighlighted
+                            ? {
+                                background: 'var(--amber-a3)',
+                                boxShadow: 'inset 3px 0 0 var(--amber-9)',
+                                transition: 'background 160ms ease',
+                              }
+                            : { transition: 'background 160ms ease' }
+                        }
+                      >
+                        {cells}
+                      </Table.Row>
+                    )
+                  })}
+                </Table.Body>
+              </Table.Root>
+            )
+
+            if (!canReorder) return table
+
+            return (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={displayLines.map((line) => line.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {table}
+                </SortableContext>
+              </DndContext>
+            )
+          })()}
         </Box>
 
         <Separator />

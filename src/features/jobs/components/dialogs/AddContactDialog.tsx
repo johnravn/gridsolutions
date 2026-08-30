@@ -2,7 +2,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  Box,
   Button,
   Dialog,
   Flex,
@@ -17,9 +16,12 @@ import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
-import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import type { UUID } from '../../types'
 
 const roleSuggestions = [
@@ -150,16 +152,6 @@ export default function AddContactDialog({
     },
   })
 
-  const filteredContacts = React.useMemo(() => {
-    if (!searchQuery.trim()) return contacts
-    return fuzzySearch(
-      contacts,
-      searchQuery,
-      [(c) => c.name, (c) => c.email ?? '', (c) => c.phone ?? ''],
-      0.25,
-    )
-  }, [contacts, searchQuery])
-
   const save = useMutation({
     mutationFn: async (value: typeof defaultValues) => {
       let cid: UUID
@@ -203,7 +195,11 @@ export default function AddContactDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth={mode === 'new' ? '720px' : '520px'}>
+      <Dialog.Content
+        maxWidth={mode === 'new' ? '720px' : '520px'}
+        onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+        onInteractOutside={preventDialogCloseOnSearchableSelect}
+      >
         <Dialog.Title>Add contact</Dialog.Title>
 
         <form
@@ -240,91 +236,32 @@ export default function AddContactDialog({
               <form.Subscribe selector={(state) => state.values.mode}>
                 {(contactMode) =>
                   contactMode === 'existing' ? (
-                    <form.AppField name="searchQuery">
+                    <form.AppField name="contactId">
                       {(field) => (
                         <Field label="Search contact">
-                          <TextField.Root
+                          <SearchableSelect
+                            options={contacts.map((c) => ({
+                              value: c.id,
+                              label: c.name,
+                              description: [c.email, c.title]
+                                .filter(Boolean)
+                                .join(' · '),
+                              keywords: [c.email, c.phone, c.title]
+                                .filter(Boolean)
+                                .join(' '),
+                            }))}
                             value={field.state.value}
-                            onChange={(e) => {
-                              field.handleChange(e.target.value)
-                              form.setFieldValue('contactId', '')
+                            onValueChange={field.handleChange}
+                            onInputChange={(q) => {
+                              form.setFieldValue('searchQuery', q)
+                              field.handleChange('')
                             }}
                             placeholder="Search by name, email, or phone..."
-                            autoFocus
+                            emptyMessage="No contacts found"
+                            dropdownMatchTriggerWidth
+                            dropdownMaxHeight={240}
+                            style={{ width: '100%', maxWidth: 'none' }}
                           />
-                          {field.state.value.trim() &&
-                            filteredContacts.length > 0 && (
-                              <Box
-                                mt="2"
-                                style={{
-                                  border: '1px solid var(--gray-a6)',
-                                  borderRadius: 8,
-                                  maxHeight: 200,
-                                  overflowY: 'auto',
-                                }}
-                              >
-                                {filteredContacts.map((c) => (
-                                  <form.Subscribe
-                                    key={c.id}
-                                    selector={(state) => state.values.contactId}
-                                  >
-                                    {(contactId) => (
-                                      <Box
-                                        p="3"
-                                        style={{
-                                          cursor: 'pointer',
-                                          backgroundColor:
-                                            contactId === c.id
-                                              ? 'var(--accent-a3)'
-                                              : 'transparent',
-                                        }}
-                                        onClick={() => {
-                                          form.setFieldValue('contactId', c.id)
-                                          form.setFieldValue(
-                                            'searchQuery',
-                                            `${c.name}${c.email ? ` · ${c.email}` : ''}`,
-                                          )
-                                        }}
-                                        onMouseEnter={(e) => {
-                                          e.currentTarget.style.backgroundColor =
-                                            'var(--gray-a3)'
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          e.currentTarget.style.backgroundColor =
-                                            contactId === c.id
-                                              ? 'var(--accent-a3)'
-                                              : 'transparent'
-                                        }}
-                                      >
-                                        <Text
-                                          size="2"
-                                          weight={
-                                            contactId === c.id
-                                              ? 'medium'
-                                              : 'regular'
-                                          }
-                                        >
-                                          {c.name}
-                                        </Text>
-                                        {(c.email || c.title) && (
-                                          <Text size="1" color="gray" mt="1">
-                                            {c.email || ''}
-                                            {c.email && c.title ? ' · ' : ''}
-                                            {c.title || ''}
-                                          </Text>
-                                        )}
-                                      </Box>
-                                    )}
-                                  </form.Subscribe>
-                                ))}
-                              </Box>
-                            )}
-                          {field.state.value.trim() &&
-                            filteredContacts.length === 0 && (
-                              <Text size="2" color="gray" mt="2">
-                                No contacts found
-                              </Text>
-                            )}
                         </Field>
                       )}
                     </form.AppField>

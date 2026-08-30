@@ -31,6 +31,53 @@ function periodsOverlap(
   return start1 < end2 && start2 < end1
 }
 
+async function buildOfferGroupMembership(
+  offer: OfferItemQuantityInput,
+): Promise<{
+  quantityById: Map<string, number>
+  membership: Map<
+    string,
+    { groupId: string; groupName: string; quantity: number }
+  >
+}> {
+  const quantityById = new Map<string, number>()
+  const nameById = new Map<string, string>()
+  const groupIds = new Set<string>()
+
+  for (const group of offer.groups ?? []) {
+    for (const line of group.items ?? []) {
+      if (!line.group_id) continue
+      groupIds.add(line.group_id)
+      quantityById.set(
+        line.group_id,
+        (quantityById.get(line.group_id) ?? 0) + Math.max(0, line.quantity),
+      )
+      const name = line.group?.name?.trim()
+      if (name && !nameById.has(line.group_id)) {
+        nameById.set(line.group_id, name)
+      }
+    }
+  }
+
+  const membership = new Map<
+    string,
+    { groupId: string; groupName: string; quantity: number }
+  >()
+  if (groupIds.size === 0) return { quantityById, membership }
+
+  const leafMap = await flattenGroupLeafItems(Array.from(groupIds))
+  for (const [groupId, members] of leafMap) {
+    const groupName = nameById.get(groupId) ?? 'Group'
+    const quantity = Math.max(1, quantityById.get(groupId) ?? 1)
+    for (const member of members) {
+      if (!member.item_id || membership.has(member.item_id)) continue
+      membership.set(member.item_id, { groupId, groupName, quantity })
+    }
+  }
+
+  return { quantityById, membership }
+}
+
 export async function buildOfferItemQuantityMap(
   offer: OfferItemQuantityInput,
 ): Promise<Map<string, number>> {
@@ -84,15 +131,9 @@ export async function getEquipmentConflictsForOfferBooking({
   endAt: string
 }): Promise<EquipmentConflictPreview> {
   const itemQuantityMap = await buildOfferItemQuantityMap(offer)
-  const offerGroupIds = Array.from(
-    new Set(
-      (offer.groups ?? []).flatMap((group) =>
-        group.items
-          .map((item) => item.group_id)
-          .filter((id): id is string => !!id),
-      ),
-    ),
-  )
+  const { quantityById: offerGroupQuantityById, membership } =
+    await buildOfferGroupMembership(offer)
+  const offerGroupIds = Array.from(offerGroupQuantityById.keys())
 
   const summaryLines: Array<string> = []
   const conflicts: Array<OverlapConflict> = []
@@ -107,9 +148,19 @@ export async function getEquipmentConflictsForOfferBooking({
     })
     for (const overlaps of groupOverlaps.values()) {
       if (overlaps.length === 0) continue
-      const groupName = overlaps[0]?.itemName ?? 'Group'
+      const groupName =
+        overlaps[0]?.sourceGroupName ?? overlaps[0]?.itemName ?? 'Group'
       summaryLines.push(`${groupName}: already booked in an overlapping period`)
-      conflicts.push(...overlaps)
+      const groupId = overlaps[0]?.sourceGroupId
+      const groupQuantity = groupId
+        ? (offerGroupQuantityById.get(groupId) ?? 1)
+        : 1
+      for (const overlap of overlaps) {
+        conflicts.push({
+          ...overlap,
+          sourceGroupQuantity: overlap.sourceGroupQuantity ?? groupQuantity,
+        })
+      }
     }
   }
 
@@ -242,11 +293,14 @@ export async function getEquipmentConflictsForOfferBooking({
 
     conflictingItemIds.push(itemId)
     const itemName = itemNameMap.get(itemId) ?? 'Item'
-    const existingPart =
-      existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-    summaryLines.push(
-      `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-    )
+    const source = membership.get(itemId)
+    if (!source) {
+      const existingPart =
+        existingQty > 0 ? ` (${existingQty} already reserved)` : ''
+      summaryLines.push(
+        `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
+      )
+    }
 
     const itemReservations = (overlappingReservations ?? []).filter(
       (res) => res.item_id === itemId,
@@ -262,6 +316,7 @@ export async function getEquipmentConflictsForOfferBooking({
       const conflictJob = overlappingJobMap.get(tp.job_id)
       conflicts.push({
         jobId: tp.job_id,
+        itemId,
         itemName,
         quantity: res.quantity,
         jobTitle: conflictJob?.title ?? null,
@@ -269,6 +324,9 @@ export async function getEquipmentConflictsForOfferBooking({
         endAt: tp.end_at,
         customerName: conflictJob?.customerName ?? null,
         projectLeadName: conflictJob?.projectLeadName ?? null,
+        sourceGroupId: source?.groupId ?? null,
+        sourceGroupName: source?.groupName ?? null,
+        sourceGroupQuantity: source?.quantity,
       })
     }
   }

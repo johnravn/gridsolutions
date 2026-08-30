@@ -15,7 +15,7 @@ This project uses a **layered testing strategy**: fast unit tests for business l
 | `npm run test:e2e:install`   | Install Playwright Chromium (one-time) | No                    |
 | `npm run test:all`           | Unit + seed + integration + E2E        | Yes                   |
 
-**Before pushing a feature branch**, run at minimum:
+**Before pushing to `main`**, run at minimum:
 
 ```bash
 npm run check
@@ -327,7 +327,7 @@ Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 | Integration | `supabase start` → `db reset` → seed → `test:integration`            | unit        |
 | E2E         | `playwright install chromium` → `supabase start` → seed → `test:e2e` | integration |
 
-Runs on every push to `main` and on pull requests.
+Runs on every push to `main`.
 
 ---
 
@@ -416,6 +416,7 @@ Re-run seed — a previous test accepted the offer, or multiple sent offers exis
 
 ## Related docs
 
-- [CONTRIBUTING.md](../CONTRIBUTING.md) — migration workflow, PR process
-- [DEPLOYMENT_WORKFLOW.md](../DEPLOYMENT_WORKFLOW.md) — preview vs production
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — migration workflow
+- [GITHUB_ISSUES.md](../GITHUB_ISSUES.md) — issues and shipping on `main`
+- [DEPLOYMENT_WORKFLOW.md](../DEPLOYMENT_WORKFLOW.md) — production deploys from `main`
 - [.cursorrules](../.cursorrules) — quality gates before push

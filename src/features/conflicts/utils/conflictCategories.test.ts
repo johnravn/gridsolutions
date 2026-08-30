@@ -4,6 +4,7 @@ import {
   splitCrewConflicts,
   splitEquipmentConflicts,
   splitVehicleConflicts,
+  vehicleConflictToneByPeriodId,
 } from '@features/conflicts/utils/conflictCategories'
 import type {
   CrewConflictRow,
@@ -82,6 +83,22 @@ describe('splitVehicleConflicts', () => {
     expect(
       splitVehicleConflicts([{ ...base, forced_1: true }]).forced,
     ).toHaveLength(1)
+  })
+
+  it('maps period ids to the stronger conflict tone', () => {
+    const tones = vehicleConflictToneByPeriodId([
+      { ...base, period_id_1: 'p1', period_id_2: 'p2' },
+      {
+        ...base,
+        period_id_1: 'p2',
+        period_id_2: 'p3',
+        forced_1: true,
+        forced_2: true,
+      },
+    ])
+    expect(tones.get('p1')).toBe('unresolved')
+    expect(tones.get('p2')).toBe('unresolved')
+    expect(tones.get('p3')).toBe('forced')
   })
 })
 

@@ -2,12 +2,19 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Spinner, Text, TextField, Theme } from '@radix-ui/themes'
-import { fuzzySearch } from '@shared/lib/generalFunctions'
+import { fuzzySearch, getFuzzyMatchRanges } from '@shared/lib/generalFunctions'
 
 export type SearchableSelectOption = {
   value: string
   label: string
   description?: string
+  /** Extra text used only for fuzzy ranking (nicknames, brand, etc.). */
+  keywords?: string
+}
+
+export type SearchableSelectRenderContext = {
+  query: string
+  highlighted: boolean
 }
 
 type DropdownPosition = {
@@ -27,12 +34,46 @@ type Props = {
   /** Restrict dropdown width; defaults to matching input. Use e.g. 260 for natural width. */
   dropdownMaxWidth?: number
   dropdownMaxHeight?: number
+  /** When true, dropdown width always matches the input (ignores dropdownMaxWidth). */
+  dropdownMatchTriggerWidth?: boolean
   style?: React.CSSProperties
   /** When false, options are shown as-is (e.g. server pre-filtered). Default true. */
   filterLocally?: boolean
   onInputChange?: (value: string) => void
   onOpenChange?: (open: boolean) => void
   loading?: boolean
+  size?: '1' | '2' | '3'
+  /** After picking an option, clear the input instead of showing the label (search-to-add). */
+  clearOnSelect?: boolean
+  renderOption?: (
+    option: SearchableSelectOption,
+    ctx: SearchableSelectRenderContext,
+  ) => React.ReactNode
+}
+
+export function HighlightedText({
+  text,
+  query,
+}: {
+  text: string
+  query: string
+}) {
+  const ranges = getFuzzyMatchRanges(query, text)
+  if (ranges.length === 0 || !query.trim()) return <>{text}</>
+
+  const parts: Array<React.ReactNode> = []
+  let cursor = 0
+  ranges.forEach((range, i) => {
+    if (range.start > cursor) {
+      parts.push(text.slice(cursor, range.start))
+    }
+    parts.push(<strong key={i}>{text.slice(range.start, range.end)}</strong>)
+    cursor = range.end
+  })
+  if (cursor < text.length) {
+    parts.push(text.slice(cursor))
+  }
+  return <>{parts}</>
 }
 
 export const SEARCHABLE_SELECT_DROPDOWN_SELECTOR =
@@ -241,11 +282,15 @@ export function SearchableSelect({
   'data-testid': dataTestId,
   dropdownMaxWidth = 320,
   dropdownMaxHeight = 160,
+  dropdownMatchTriggerWidth = false,
   style,
   filterLocally = true,
   onInputChange,
   onOpenChange,
   loading,
+  size,
+  clearOnSelect = false,
+  renderOption,
 }: Props) {
   const [inputValue, setInputValue] = React.useState('')
   const [open, setOpen] = React.useState(false)
@@ -263,25 +308,27 @@ export function SearchableSelect({
     [options, value],
   )
 
-  const displayValue = open ? inputValue : (selectedOption?.label ?? inputValue)
+  const displayValue =
+    open || clearOnSelect ? inputValue : (selectedOption?.label ?? inputValue)
 
   const filteredOptions = React.useMemo(() => {
     if (!filterLocally || !inputValue.trim()) return options
     return fuzzySearch(
       options,
       inputValue.trim(),
-      [(o) => o.label, (o) => o.description ?? ''],
+      [(o) => o.label, (o) => o.description ?? '', (o) => o.keywords ?? ''],
       0.25,
     )
   }, [options, inputValue, filterLocally])
 
   React.useEffect(() => {
+    if (clearOnSelect) return
     if (value && selectedOption) {
       setInputValue(selectedOption.label)
     } else if (!open) {
       setInputValue('')
     }
-  }, [value, selectedOption, open])
+  }, [value, selectedOption, open, clearOnSelect])
 
   React.useEffect(() => {
     setHighlightedIndex(null)
@@ -305,6 +352,10 @@ export function SearchableSelect({
 
   const handleFocus = () => {
     setOpenState(true, setOpen, onOpenChange)
+    if (clearOnSelect) {
+      onInputChange?.(inputValue)
+      return
+    }
     if (value && selectedOption) {
       setInputValue(selectedOption.label)
       setTimeout(() => inputRef.current?.select(), 0)
@@ -318,6 +369,7 @@ export function SearchableSelect({
         return
       }
       setOpenState(false, setOpen, onOpenChange)
+      if (clearOnSelect) return
       if (value && selectedOption) {
         setInputValue(selectedOption.label)
       } else {
@@ -339,9 +391,21 @@ export function SearchableSelect({
   ) => {
     selectingRef.current = true
     onValueChange(option.value)
-    setInputValue(option.label)
+    if (clearOnSelect) {
+      setInputValue('')
+      onInputChange?.('')
+    } else {
+      setInputValue(option.label)
+    }
     setOpenState(false, setOpen, onOpenChange)
     const current = inputRef.current
+    if (clearOnSelect) {
+      window.setTimeout(() => {
+        selectingRef.current = false
+        current?.focus()
+      }, 0)
+      return
+    }
     if (advanceFocus && current) {
       // Defer so the dropdown unmounts and React can re-enable downstream fields.
       requestAnimationFrame(() => focusNextFocusable(current))
@@ -385,8 +449,16 @@ export function SearchableSelect({
     }
   }
 
+  const showDropdown =
+    open &&
+    !!fixedPosition &&
+    (loading ||
+      filteredOptions.length > 0 ||
+      inputValue.trim().length > 0 ||
+      !clearOnSelect)
+
   const dropdownEl =
-    open && fixedPosition ? (
+    showDropdown && fixedPosition ? (
       <Theme appearance={portalAppearance()} hasBackground={false}>
         <Box
           ref={listRef}
@@ -397,7 +469,9 @@ export function SearchableSelect({
             position: 'fixed',
             top: fixedPosition.top,
             left: fixedPosition.left,
-            width: Math.min(fixedPosition.width, dropdownMaxWidth),
+            width: dropdownMatchTriggerWidth
+              ? fixedPosition.width
+              : Math.min(fixedPosition.width, dropdownMaxWidth),
             zIndex: 2147483647,
             pointerEvents: 'auto',
             backgroundColor: 'var(--color-panel-solid)',
@@ -434,7 +508,7 @@ export function SearchableSelect({
                   handleSelect(option)
                 }}
                 px="2"
-                py="1"
+                py={renderOption ? '2' : '1'}
                 style={{
                   cursor: 'pointer',
                   borderRadius: 'var(--radius-2)',
@@ -445,13 +519,25 @@ export function SearchableSelect({
                 }}
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
-                <Text as="div" size="2" truncate>
-                  {option.label}
-                </Text>
-                {option.description && (
-                  <Text as="div" size="1" color="gray" truncate>
-                    {option.description}
-                  </Text>
+                {renderOption ? (
+                  renderOption(option, {
+                    query: inputValue,
+                    highlighted: index === highlightedIndex,
+                  })
+                ) : (
+                  <>
+                    <Text as="div" size="2" truncate>
+                      <HighlightedText text={option.label} query={inputValue} />
+                    </Text>
+                    {option.description && (
+                      <Text as="div" size="1" color="gray" truncate>
+                        <HighlightedText
+                          text={option.description}
+                          query={inputValue}
+                        />
+                      </Text>
+                    )}
+                  </>
                 )}
               </Box>
             ))
@@ -478,6 +564,7 @@ export function SearchableSelect({
         onKeyDown={handleKeyDown}
         disabled={disabled}
         placeholder={placeholder}
+        size={size}
         data-testid={dataTestId}
       >
         {loading && (

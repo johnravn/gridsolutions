@@ -14,17 +14,14 @@ export default function RequireCap({
 }) {
   const { loading, caps } = useAuthz()
   const navigate = useNavigate()
+  const allowed = caps.has(need)
 
   React.useEffect(() => {
-    if (!loading) {
-      if (!caps.has(need)) {
-        // Navigate to a safe page (home) if blocked
-        navigate({ to: '/dashboard' })
-      }
-    }
-  }, [loading, caps, need, navigate])
+    if (loading || allowed) return
+    void navigate({ to: '/dashboard', replace: true })
+  }, [loading, allowed, navigate])
 
-  if (loading) {
+  if (loading || !allowed) {
     return (
       <Flex align="center" justify="center" style={{ height: '50vh' }}>
         <Flex align="center" gap="1">
@@ -35,6 +32,5 @@ export default function RequireCap({
     )
   }
 
-  // If user lacks permission, a nav will trigger; render nothing here.
   return <>{children}</>
 }

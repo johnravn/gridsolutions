@@ -4,37 +4,24 @@ This document outlines the complete workflow for developing, testing, and deploy
 
 ## 🏗️ Branch Strategy
 
-### Branch Structure
+Work only on **`main`**. No feature branches, no pull requests. Track work with GitHub issues — see `GITHUB_ISSUES.md`.
 
-- **`main`** - Production branch
+- **`main`** — the only branch
   - Auto-deploys to Vercel → gridsolutions.app
-  - Must always be stable and deployable
-  - All migrations must be applied before merging
-- **`develop`** (optional) - Development branch
-  - For integrating multiple features
-  - Can have a staging Vercel preview
-- **`feature/*`** - Feature branches
-  - Named like: `feature/add-inventory-tracking`
-  - Created from `main` or `develop`
-  - Merged back via Pull Request
-
-### Branch Naming Convention
-
-- `feature/description` - New features
-- `fix/description` - Bug fixes
-- `migration/description` - Database migrations only
-- `refactor/description` - Code refactoring
+  - Must stay deployable: test locally before pushing
+  - Apply backward-compatible migrations before pushing code that needs them
 
 ## 🔄 Development Workflow
 
 ### Starting a New Feature
 
-1. **Create feature branch from main:**
+1. **Issue first, then pull `main`:**
 
    ```bash
+   gh issue list --state open --limit 30
+   # or: gh issue create --title "..." --body "..."
    git checkout main
    git pull origin main
-   git checkout -b feature/my-feature-name
    ```
 
 2. **Develop locally:**
@@ -50,14 +37,20 @@ This document outlines the complete workflow for developing, testing, and deploy
    - Create migrations if needed (see Migration Workflow below)
    - Test locally
 
-4. **Commit and push:**
+4. **Commit and push `main`:**
+
    ```bash
    git add .
-   git commit -m "feat: add inventory tracking feature"
-   git push origin feature/my-feature-name
+   git commit -m "$(cat <<'EOF'
+   Add inventory tracking
+
+   Closes #142
+   EOF
+   )"
+   git push origin main
    ```
 
-### Migration Workflow in Feature Branches
+### Migration Workflow on `main`
 
 **⚠️ CRITICAL: Database migrations require special handling**
 
@@ -65,7 +58,7 @@ This document outlines the complete workflow for developing, testing, and deploy
 
 If your migration is backward-compatible (adds columns, tables, etc. without breaking existing code):
 
-1. **Create migration in feature branch:**
+1. **Create migration:**
 
    ```bash
    npm run db:migrate add_inventory_tracking
@@ -78,26 +71,28 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
    npm run db:reset  # Test migration locally
    ```
 
-3. **Push migration to production BEFORE merging code:**
+3. **Push migration to production BEFORE pushing code that uses it:**
 
    ```bash
    npm run db:push  # Push to production Supabase
    npm run db:types:remote  # Update types
    git add supabase/migrations/ src/shared/types/database.types.ts
-   git commit -m "migration: add inventory tracking tables"
-   git push origin feature/my-feature-name
+   git commit -m "$(cat <<'EOF'
+   Add inventory tracking tables
+
+   Closes #142
+   EOF
+   )"
+   git push origin main
    ```
 
-4. **Merge feature branch to main:**
-   - Migration is already in production
-   - Code can safely use new schema
-   - Vercel deploys the code
+   If the schema and app change belong in the same commit, still run `npm run db:push` **before** `git push origin main`.
 
 #### Option B: Breaking Migrations
 
 If your migration breaks existing code (removes columns, changes types, etc.):
 
-1. **Create migration in feature branch:**
+1. **Create migration:**
 
    ```bash
    npm run db:migrate remove_old_column
@@ -109,18 +104,19 @@ If your migration breaks existing code (removes columns, changes types, etc.):
    npm run db:reset
    ```
 
-3. **Merge feature branch to main FIRST:**
-   - Code is deployed but may have errors
-   - Migration is included in the merge
+3. **Push code that no longer depends on the old schema, then apply the migration immediately:**
 
-4. **Immediately push migration to production:**
    ```bash
-   git checkout main
-   git pull origin main
+   git push origin main
    npm run db:push  # Apply migration
    npm run db:types:remote  # Update types
    git add src/shared/types/database.types.ts
-   git commit -m "chore: update types after migration"
+   git commit -m "$(cat <<'EOF'
+   Update types after migration
+
+   Refs #142
+   EOF
+   )"
    git push origin main
    ```
 
@@ -128,30 +124,9 @@ If your migration breaks existing code (removes columns, changes types, etc.):
 
 ## 🚀 Deployment Workflow
 
-### Vercel Deployment Types
+### Vercel Deployment
 
-Vercel creates **two types of deployments**:
-
-#### 1. Preview Deployments (Feature Branches/PRs)
-
-**When**: Every push to a feature branch or PR
-**URL**: `https://grid-xxxxx-johnravns-projects.vercel.app` (unique per branch)
-**Purpose**: Test changes before merging to production
-**Environment**: Uses Preview environment variables (or Production if not set)
-
-**Benefits**:
-
-- ✅ Test changes safely
-- ✅ Share with team for feedback
-- ✅ Catch issues before production
-- ✅ No risk to production site
-
-#### 2. Production Deployment (Main Branch)
-
-**When**: Every merge/push to `main` branch
-**URL**: `https://gridsolutions.app` (your custom domain)
-**Purpose**: Live production site
-**Environment**: Uses Production environment variables
+Every push to `main` deploys **production** at `https://gridsolutions.app`.
 
 **Process**:
 
@@ -159,6 +134,8 @@ Vercel creates **two types of deployments**:
 2. Builds the application
 3. Deploys to gridsolutions.app
 4. Uses environment variables from Vercel dashboard (Production)
+
+Test locally before pushing. This workflow does not use feature-branch preview deployments.
 
 ### Manual Deployment Steps
 
@@ -181,18 +158,17 @@ Vercel creates **two types of deployments**:
    git push origin main
    ```
 
-3. **Merge to main:**
+3. **Push to `main`:**
 
    ```bash
    git checkout main
-   git merge feature/my-feature-name
+   git pull origin main
    git push origin main
    ```
 
 4. **Monitor Vercel deployment:**
    - Check Vercel dashboard for build status
-   - **Preview**: Test on preview URL (e.g., `grid-xxxxx.vercel.app`)
-   - **Production**: Verify deployment at gridsolutions.app (after merging to main)
+   - Verify production at gridsolutions.app
 
 ## 🔐 Environment Variables
 
@@ -245,10 +221,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
    - **anon/public key** → `VITE_SUPABASE_ANON_KEY`
    - **Project Reference ID** → `SUPABASE_PROJECT_REF` (from URL: `https://app.supabase.com/project/YOUR-PROJECT-REF`)
 
-**Preview Environment (for feature branches):**
-
-- Set the same values in **Vercel → Settings → Environment Variables → Preview**
-- Or use a separate staging Supabase project if you have one
+**Preview environment:** unused in this workflow (everything ships on `main`). Keep Production variables set.
 
 ### Quick Check: Which URL Should You Use?
 
@@ -266,7 +239,7 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 
 ## 📋 Pre-Deployment Checklist
 
-Before merging to `main`:
+Before pushing to `main`:
 
 - [ ] All migrations tested locally (`npm run db:reset`)
 - [ ] Migrations pushed to production (if backward-compatible)
@@ -299,7 +272,7 @@ Before merging to `main`:
 
 ### Pre-Production Testing
 
-Before merging to main:
+Before pushing to `main`:
 
 1. **Test migration locally:**
 
@@ -359,81 +332,30 @@ Before merging to main:
 
 **Better approach:** Always make migrations backward-compatible so rollback isn't needed.
 
-## 📝 Pull Request Workflow
+## 📝 GitHub Issues
 
-### Creating a Pull Request
-
-1. **Push feature branch:**
-
-   ```bash
-   git push origin feature/my-feature-name
-   ```
-
-2. **Create PR on GitHub:**
-   - Title: Clear description of changes
-   - Description: Include migration details if applicable
-   - Link to related issues
-
-3. **Review checklist:**
-   - [ ] Migrations tested locally
-   - [ ] Types updated
-   - [ ] Code follows project patterns
-   - [ ] No breaking changes (or documented)
-
-4. **Merge PR:**
-   - Squash and merge (recommended for clean history)
-   - Or merge commit (preserves branch history)
-
-### PR Template (Optional)
-
-Create `.github/pull_request_template.md`:
-
-```markdown
-## Description
-
-Brief description of changes
-
-## Database Changes
-
-- [ ] No database changes
-- [ ] Migration created: `YYYYMMDDHHMMSS_description.sql`
-- [ ] Migration tested locally
-- [ ] Migration pushed to production (if backward-compatible)
-- [ ] Types updated
-
-## Testing
-
-- [ ] Tested locally
-- [ ] Tested with production data (if applicable)
-- [ ] RLS policies verified
-
-## Checklist
-
-- [ ] Code follows project patterns
-- [ ] Types updated
-- [ ] No console errors
-- [ ] Environment variables documented
-```
+See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes #N` / `Fixes #N` / `Refs #N`. Do not open pull requests.
 
 ## 🎯 Best Practices
 
 ### Do's ✅
 
 - Always test migrations locally before pushing
-- Push backward-compatible migrations before merging code
+- Push backward-compatible migrations before pushing code that uses them
 - Update TypeScript types after schema changes
-- Use feature branches for all changes
-- Keep `main` branch always deployable
-- Document breaking changes in PR descriptions
+- Work on `main` and reference GitHub issues in commits
+- Keep `main` always deployable
+- Document breaking changes in the issue and/or commit body
 
 ### Don'ts ❌
 
-- Never push breaking migrations without deploying code first
+- Never push breaking migrations without deploying compatible code first
 - Never skip local testing
 - Never commit `.env.local` files
 - Never make schema changes in Supabase Dashboard without migrations
-- Never merge to `main` with failing tests
+- Never push to `main` with failing tests
 - Never skip updating TypeScript types
+- Never create pull requests or feature branches
 
 ## 🔗 Related Documentation
 
@@ -466,4 +388,4 @@ Brief description of changes
 
 ---
 
-**Remember**: When in doubt, test locally first, then test in a feature branch, and only merge to main when everything is verified!
+**Remember**: When in doubt, test locally first, then push to `main` only when quality gates pass.

@@ -203,19 +203,20 @@ The project uses Supabase (PostgreSQL) for data storage. Database schema is mana
 
 ## Deployment
 
-The application is deployed to **gridsolutions.app** via Vercel. The `main` branch auto-deploys to production.
+The application is deployed to **gridsolutions.app** via Vercel. Pushing `main` auto-deploys production.
 
-**⚠️ IMPORTANT: See `DEPLOYMENT_WORKFLOW.md` for complete deployment and branch strategy.**
+**⚠️ IMPORTANT: See `DEPLOYMENT_WORKFLOW.md` and `GITHUB_ISSUES.md`.**
 
 ### Quick Deployment Reference
 
-- **Production**: Merges to `main` auto-deploy to gridsolutions.app
-- **Feature Branches**: Create from `main`, test locally, merge via PR
-- **Migrations**: Push backward-compatible migrations before merging code
+- **Production**: Pushes to `main` auto-deploy to gridsolutions.app
+- **Git**: Work on `main`, track work with GitHub issues, no pull requests
+- **Migrations**: Push backward-compatible migrations before pushing code that uses them
 
 For detailed instructions, see:
 
-- `DEPLOYMENT_WORKFLOW.md` - Complete deployment workflow, branch strategy, and migration timing
+- `GITHUB_ISSUES.md` - Issues, commits, and pushing `main`
+- `DEPLOYMENT_WORKFLOW.md` - Complete deployment workflow and migration timing
 - `CONTRIBUTING.md` - Complete migration workflow and best practices
 - `supabase/DEVELOPMENT_WORKFLOW.md` - Detailed Supabase development guide
 - `SUPABASE_SETUP.md` - Database setup instructions

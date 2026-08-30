@@ -19,6 +19,7 @@ import { companyDetailQuery } from '@features/company/api/queries'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import {
   createContaInvoiceFromBookings,
+  invoiceLinesHaveValidQuantities,
   markJobsInvoiced,
 } from '../../api/createContaInvoice'
 import { jobDetailQuery } from '../../api/queries'
@@ -371,6 +372,14 @@ export default function MultiJobInvoiceDialog({
       info('No lines', 'There are no billable lines to invoice.')
       return
     }
+    const linesToSend = editedLines.length > 0 ? editedLines : bookings.all
+    if (!invoiceLinesHaveValidQuantities(linesToSend)) {
+      info(
+        'Quantity required',
+        'Enter a quantity for every line before sending.',
+      )
+      return
+    }
     if (sendInFlightRef.current) return
     sendInFlightRef.current = true
     setSendPhase('sending')
@@ -536,6 +545,7 @@ export default function MultiJobInvoiceDialog({
                 onRemoveLine={(lineId) =>
                   setEditedLines((prev) => prev.filter((l) => l.id !== lineId))
                 }
+                onReorderLines={setEditedLines}
                 highlightedLineIds={highlightedLineIds}
               />
             </>

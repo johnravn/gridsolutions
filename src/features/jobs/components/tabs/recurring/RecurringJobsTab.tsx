@@ -29,6 +29,7 @@ import {
   Trash,
 } from 'iconoir-react'
 import { useDebouncedValue } from '@tanstack/react-pacer'
+import { useNavigate } from '@tanstack/react-router'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
@@ -55,6 +56,11 @@ import {
 } from '../../../utils/recurringJobCreateDefaults'
 import { ACTIVE_STATUS_FILTER, ALL_STATUSES } from '../../JobsFilter'
 import { getJobStatusColor } from '../../../utils/statusColors'
+import {
+  copyJobConflictToastTitle,
+  copyJobResultTab,
+  formatCopyJobConflictMessage,
+} from '../../../utils/copyJobConflicts'
 import type { RecurringJobCreateDefaults } from '../../../utils/recurringJobCreateDefaults'
 import type {
   JobListRow,
@@ -91,7 +97,8 @@ type Props = {
 export default function RecurringJobsTab({ detail, onSelectJob }: Props) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
-  const { success, error: showError } = useToast()
+  const navigate = useNavigate()
+  const { success, error: showError, info } = useToast()
   const [createOpen, setCreateOpen] = React.useState(false)
   const [createDefaults, setCreateDefaults] = React.useState<
     RecurringJobCreateDefaults | undefined
@@ -180,16 +187,34 @@ export default function RecurringJobsTab({ detail, onSelectJob }: Props) {
   })
 
   const copyMember = useMutation({
-    mutationFn: (payload: { jobId: UUID; startAt: string; endAt: string }) =>
+    mutationFn: (payload: { jobId: UUID; startAt: string; title: string }) =>
       copyJobIntoRecurringJob({
         ...payload,
         recurringJobId: detail.id,
       }),
-    onSuccess: (newJobId) => {
+    onSuccess: (copied, payload) => {
       setCopyJob(null)
       invalidateJobs()
-      success('Job copied into this recurring job')
-      onSelectJob(newJobId)
+      const tab = copyJobResultTab(copied.conflicts)
+      void navigate({
+        to: '/jobs',
+        search: {
+          jobId: copied.jobId,
+          recurringJobId: undefined,
+          tab,
+        },
+      })
+      window.setTimeout(() => {
+        if (copied.conflicts.length > 0) {
+          info(
+            copyJobConflictToastTitle(payload.title),
+            formatCopyJobConflictMessage(copied.conflicts, payload.title),
+            8000,
+          )
+          return
+        }
+        success('Job copied into this recurring job')
+      }, 50)
     },
     onError: (err: Error) => showError('Failed to copy job', err.message),
   })
@@ -557,15 +582,15 @@ export default function RecurringJobsTab({ detail, onSelectJob }: Props) {
       <CopyJobDialog
         open={!!copyJob}
         onOpenChange={(open) => !open && setCopyJob(null)}
+        initialTitle={copyJob?.title ?? null}
         initialStartAt={copyJob?.start_at ?? null}
-        initialEndAt={copyJob?.end_at ?? null}
         isCopying={copyMember.isPending}
-        onConfirm={({ startAt, endAt }) => {
+        onConfirm={({ title, startAt }) => {
           if (!copyJob) return
           copyMember.mutate({
             jobId: copyJob.id,
+            title,
             startAt,
-            endAt,
           })
         }}
       />

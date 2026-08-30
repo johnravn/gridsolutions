@@ -1,0 +1,51 @@
+---
+description: Trunk-based git — work on main, GitHub issues, no pull requests
+alwaysApply: true
+---
+
+# Git workflow
+
+This repo ships on `main`. Do not use pull requests or feature branches.
+
+## Issues first
+
+Track work with GitHub issues (`gh`). Before committing:
+
+1. If the user named an issue (`#123`, a URL, or a title), use that.
+2. Otherwise search: `gh issue list --state open --limit 30`
+3. If none fits, create one: `gh issue create --title "..." --body "..."`
+4. Put that issue number in the commit.
+
+Do not open a second issue for work already covered by an open one.
+
+## Branching
+
+- Stay on `main`. `git pull origin main` before starting.
+- Never `git checkout -b`, never `gh pr create`.
+- If asked to open a PR, do not. Commit and push to `main` instead.
+
+## Commits
+
+Large commits are fine. Prefer one commit per issue (or one commit that closes the issues this change finishes).
+
+Every commit must reference the issue(s):
+
+```
+Add customer CSV export
+
+Closes #142
+```
+
+- Completes the issue → `Closes #N` or `Fixes #N` (auto-closes on push to `main`)
+- Partial work → `Refs #N` (leave the issue open)
+- Multiple issues → `Closes #12, #34`
+
+Subject line: what changed and why. Not a file list.
+
+## Push
+
+Push to `origin main`. That deploys production (Vercel → gridsolutions.app).
+
+Before push, run quality gates: `npm run check`, `npm run test`, `npm run build:check`.
+
+Never force-push `main` unless the user explicitly asks.

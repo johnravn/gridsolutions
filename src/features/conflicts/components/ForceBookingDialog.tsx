@@ -1,6 +1,6 @@
 import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { WarningTriangle } from 'iconoir-react'
-import { ConflictCard } from './ConflictCard'
+import { ConflictGroupList } from './ConflictGroupList'
 import type { OverlapConflict } from '../api/overlapChecks'
 
 export function ForceBookingDialog({
@@ -56,12 +56,7 @@ export function ForceBookingDialog({
               </Text>
             </Flex>
           ))}
-          {conflictRows.map((conflict, index) => (
-            <ConflictCard
-              key={`${conflict.startAt}-${conflict.endAt}-${conflict.itemName ?? ''}-${index}`}
-              conflict={conflict}
-            />
-          ))}
+          <ConflictGroupList conflicts={conflictRows} />
         </Flex>
 
         <Flex justify="end" gap="2" mt="4">

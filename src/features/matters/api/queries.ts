@@ -1,4 +1,3 @@
-import type { Json } from '@shared/types/database.types'
 import { supabase } from '@shared/api/supabase'
 import { fireAndForgetCrewPositionInviteEmail } from '@shared/email/supabaseEdgeEmail'
 import {
@@ -6,6 +5,7 @@ import {
   markNotificationReadByEntity,
 } from '@features/notifications/api/queries'
 import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
+import type { Json } from '@shared/types/database.types'
 import type {
   CreateMatterInput,
   Matter,
@@ -1146,8 +1146,7 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
       if (recError) throw recError
 
       // Get the matter IDs for unread matters
-      const unreadMatterIds =
-        recipientMatters?.map((r) => r.matter_id) || []
+      const unreadMatterIds = recipientMatters?.map((r) => r.matter_id) || []
 
       if (unreadMatterIds.length === 0) return 0
 
@@ -1194,8 +1193,7 @@ export function unreadMattersCountQuery(companyId: string) {
       if (recError) throw recError
 
       // Get the matter IDs for unread matters
-      const unreadMatterIds =
-        recipientMatters?.map((r) => r.matter_id) || []
+      const unreadMatterIds = recipientMatters?.map((r) => r.matter_id) || []
 
       if (unreadMatterIds.length === 0) return 0
 

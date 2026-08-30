@@ -1,10 +1,14 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Button, Dialog, Flex, Select, Text } from '@radix-ui/themes'
+import { Button, Dialog, Flex } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { partnerCustomersQuery } from '@features/inventory/api/partners'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import {
   addJobSubcontractor,
   jobSubcontractorsKey,
@@ -77,7 +81,11 @@ export default function AddJobSubcontractorDialog({
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content maxWidth="440px">
+      <Dialog.Content
+        maxWidth="440px"
+        onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+        onInteractOutside={preventDialogCloseOnSearchableSelect}
+      >
         <Dialog.Title>Add subcontractor</Dialog.Title>
         <Dialog.Description size="2" color="gray" mb="3">
           Choose a partner customer to use as a subcontractor on this job.
@@ -94,30 +102,18 @@ export default function AddJobSubcontractorDialog({
             <Flex direction="column" gap="3">
               <form.AppField name="customerId">
                 {(field) => (
-                  <Select.Root
+                  <SearchableSelect
+                    options={availablePartners.map((p) => ({
+                      value: p.id,
+                      label: p.name,
+                    }))}
                     value={field.state.value}
                     onValueChange={field.handleChange}
-                  >
-                    <Select.Trigger placeholder="Select partner…" />
-                    <Select.Content style={{ zIndex: 10000 }}>
-                      {availablePartners.length === 0 ? (
-                        <Text
-                          size="2"
-                          color="gray"
-                          as="div"
-                          style={{ padding: 8 }}
-                        >
-                          No partners available
-                        </Text>
-                      ) : (
-                        availablePartners.map((p) => (
-                          <Select.Item key={p.id} value={p.id}>
-                            {p.name}
-                          </Select.Item>
-                        ))
-                      )}
-                    </Select.Content>
-                  </Select.Root>
+                    placeholder="Select partner…"
+                    emptyMessage="No partners available"
+                    dropdownMatchTriggerWidth
+                    style={{ width: '100%', maxWidth: 'none' }}
+                  />
                 )}
               </form.AppField>
 

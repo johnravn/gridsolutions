@@ -1,7 +1,6 @@
 // src/features/jobs/components/tabs/InvoiceTab.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import {
   Box,
   Button,
@@ -25,12 +24,14 @@ import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { companyDetailQuery } from '@features/company/api/queries'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
+import InvoiceHistory from '../invoice/InvoiceHistory'
 import InvoiceDescriptionTemplateEditor, {
   trackManualDescriptionEdit,
 } from '../invoice/InvoiceDescriptionTemplateEditor'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
 import {
   createContaInvoiceFromBookings,
+  invoiceLinesHaveValidQuantities,
   markJobsInvoiced,
 } from '../../api/createContaInvoice'
 import { acceptedOfferInvoiceLineDescription } from '../../utils/offerNumber'
@@ -866,6 +867,15 @@ export default function InvoiceTab({
     invoiceWithVatParam: boolean = true,
     offerId: string | null = null,
   ): Promise<void> => {
+    const linesToSend =
+      editedLines.length > 0 ? editedLines : sourceBookings.all
+    if (!invoiceLinesHaveValidQuantities(linesToSend)) {
+      info(
+        'Quantity required',
+        'Enter a quantity for every line before sending.',
+      )
+      return
+    }
     if (!beginInvoiceSend()) return
     if (!accountingConfig?.accounting_organization_id) {
       resetInvoiceSend()
@@ -1001,93 +1011,78 @@ export default function InvoiceTab({
         <Heading size="3">Invoice</Heading>
       </Flex>
 
-      {/* Job Invoice Status */}
-      {isInvoiced ? (
-        <Card mb="4">
-          <Flex justify="between" align="center" gap="3" wrap="wrap">
-            <Box>
-              <Heading size="4" mb="1">
-                Already invoiced
-              </Heading>
-              <Text size="2" color="gray">
-                This job is marked as{' '}
-                {job.status === 'paid' ? 'paid' : 'invoiced'}. View invoice
-                history and Conta status in the Invoices tab.
-              </Text>
-            </Box>
-            <Button size="2" variant="soft" asChild>
-              <Link
-                to="/jobs"
-                search={{ jobId, recurringJobId: undefined, tab: 'invoices' }}
-              >
-                View invoices
-              </Link>
-            </Button>
-          </Flex>
-        </Card>
-      ) : (
-        <>
-          <Card mb="4">
-            <Flex justify="between" align="center" mb="3">
-              <Box>
-                <Heading size="4" mb="1">
-                  Job invoice status
-                </Heading>
-                <Text size="2" color="gray">
-                  Current status: {makeWordPresentable(job.status)}
-                </Text>
-              </Box>
-              <Box>
-                <Flex align="center" gap="2">
-                  <XmarkCircle width={24} height={24} color="var(--orange-9)" />
-                  <Text size="3" weight="medium" color="orange">
-                    Not invoiced
-                  </Text>
-                </Flex>
-              </Box>
-            </Flex>
-            {isCompleted && (
-              <Box
-                p="3"
-                style={{
-                  background: 'var(--orange-a2)',
-                  borderRadius: 8,
-                  border: '1px solid var(--orange-a6)',
-                }}
-              >
-                <Text size="2" color="gray">
-                  This job is completed and ready to be invoiced.
-                </Text>
-              </Box>
-            )}
-          </Card>
-
-          {/* Create invoice: unified flow (offer or bookings) */}
-          <Card mb="4">
-            <Heading size="4" mb="2">
-              Create invoice
+      <Card mb="4">
+        <Flex justify="between" align="center">
+          <Box>
+            <Heading size="4" mb="1">
+              Job invoice status
             </Heading>
-            <Text size="2" color="gray" mb="3">
-              {isRecurringMember
-                ? 'This job is part of a recurring series. Invoice from bookings on this job (one line per booking), or optionally from an accepted offer.'
-                : 'Choose to invoice from the accepted offer (one line with the offer total) or from bookings on the job (one line per booking).'}
+            <Text size="2" color="gray">
+              Current status: {makeWordPresentable(job.status)}
             </Text>
-            <Flex gap="3" wrap="wrap">
-              {isRecurringMember ? (
-                <>
-                  {fromBookingsButton}
-                  {fromOfferButton}
-                </>
-              ) : (
-                <>
-                  {fromOfferButton}
-                  {fromBookingsButton}
-                </>
-              )}
-            </Flex>
-          </Card>
-        </>
-      )}
+          </Box>
+          <Box>
+            {isInvoiced ? (
+              <Flex align="center" gap="2">
+                <CheckCircle width={24} height={24} color="var(--green-9)" />
+                <Text size="3" weight="medium" color="green">
+                  {job.status === 'paid' ? 'Paid' : 'Invoiced'}
+                </Text>
+              </Flex>
+            ) : (
+              <Flex align="center" gap="2">
+                <XmarkCircle width={24} height={24} color="var(--orange-9)" />
+                <Text size="3" weight="medium" color="orange">
+                  Not invoiced
+                </Text>
+              </Flex>
+            )}
+          </Box>
+        </Flex>
+        {!isInvoiced && isCompleted && (
+          <Box
+            mt="3"
+            p="3"
+            style={{
+              background: 'var(--orange-a2)',
+              borderRadius: 8,
+              border: '1px solid var(--orange-a6)',
+            }}
+          >
+            <Text size="2" color="gray">
+              This job is completed and ready to be invoiced.
+            </Text>
+          </Box>
+        )}
+      </Card>
+
+      <Card mb="4">
+        <Heading size="4" mb="2">
+          Create invoice
+        </Heading>
+        <Text size="2" color="gray" mb="3">
+          {isRecurringMember
+            ? 'This job is part of a recurring series. Invoice from bookings on this job (one line per booking), or optionally from an accepted offer.'
+            : 'Choose to invoice from the accepted offer (one line with the offer total) or from bookings on the job (one line per booking).'}
+        </Text>
+        <Flex gap="3" wrap="wrap">
+          {isRecurringMember ? (
+            <>
+              {fromBookingsButton}
+              {fromOfferButton}
+            </>
+          ) : (
+            <>
+              {fromOfferButton}
+              {fromBookingsButton}
+            </>
+          )}
+        </Flex>
+      </Card>
+
+      <Box mb="4">
+        <InvoiceHistory jobId={jobId} />
+      </Box>
 
       {/* Test Mode Indicator */}
       {isSandboxConta && (
@@ -1279,6 +1274,7 @@ export default function InvoiceTab({
                   onLineChange={handleLineChange}
                   onAddLine={handleAddInvoiceLine}
                   onRemoveLine={handleRemoveInvoiceLine}
+                  onReorderLines={setEditedInvoiceLines}
                   highlightedLineIds={highlightedLineIds}
                 />
               </>

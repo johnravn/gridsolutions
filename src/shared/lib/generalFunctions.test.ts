@@ -7,6 +7,7 @@ import {
   fuzzyMatch,
   fuzzyMatchScore,
   fuzzySearch,
+  getFuzzyMatchRanges,
   getInitials,
   getInitialsFromNameOrEmail,
   makeWordPresentable,
@@ -59,7 +60,63 @@ describe('fuzzy matching', () => {
       { name: 'Mixer' },
     ]
     const result = fuzzySearch(items, 'mic', [(item) => item.name])
-    expect(result.map((item) => item.name)).toEqual(['Microphone'])
+    expect(result[0]?.name).toBe('Microphone')
+    expect(result.map((item) => item.name)).not.toContain('Camera')
+  })
+
+  it('returns substring ranges for highlighting', () => {
+    expect(getFuzzyMatchRanges('mic', 'Microphone')).toEqual([
+      { start: 0, end: 3 },
+    ])
+  })
+
+  it('matches compacted tokens so "1 ch" finds "1ch"', () => {
+    expect(fuzzyMatchScore('1 ch', '1ch')).toBe(1)
+    expect(fuzzyMatch('1 ch', '1ch', 0.25)).toBe(true)
+    const result = fuzzySearch(
+      [{ name: '2ch' }, { name: '1ch' }, { name: '12ch' }],
+      '1 ch',
+      [(item) => item.name],
+      0.25,
+    )
+    expect(result[0]?.name).toBe('1ch')
+    expect(result.map((item) => item.name)).toContain('12ch')
+  })
+
+  it('highlights compacted queries on names without spaces', () => {
+    expect(getFuzzyMatchRanges('1 ch', '1ch')).toEqual([{ start: 0, end: 3 }])
+  })
+
+  it('highlights out-of-order tokens and sequential characters', () => {
+    expect(getFuzzyMatchRanges('sm58 shure', 'Shure SM58')).toEqual([
+      { start: 0, end: 5 },
+      { start: 6, end: 10 },
+    ])
+    expect(getFuzzyMatchRanges('mro', 'Microphone')).toEqual([
+      { start: 0, end: 1 },
+      { start: 3, end: 5 },
+    ])
+  })
+
+  it('matches a single-letter substitution like o vs a', () => {
+    expect(fuzzyMatchScore('share', 'Shure')).toBeGreaterThanOrEqual(0.25)
+    expect(fuzzyMatch('share', 'Shure SM58', 0.25)).toBe(true)
+    expect(fuzzyMatch('yomaha', 'Yamaha', 0.25)).toBe(true)
+    expect(fuzzyMatch('zzzzz', 'Shure SM58', 0.25)).toBe(false)
+
+    const result = fuzzySearch(
+      [{ name: 'Camera' }, { name: 'Shure SM58' }, { name: 'Mixer' }],
+      'share',
+      [(item) => item.name],
+      0.25,
+    )
+    expect(result.map((item) => item.name)).toEqual(['Shure SM58'])
+  })
+
+  it('highlights the typo window for a substituted letter', () => {
+    expect(getFuzzyMatchRanges('share', 'Shure SM58')).toEqual([
+      { start: 0, end: 5 },
+    ])
   })
 })
 

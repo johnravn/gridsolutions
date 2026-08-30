@@ -84,6 +84,8 @@ CREATE POLICY "Users can view company addresses"
 
 ## Development Workflow
 
+Work on `main`. Track work with GitHub issues (`gh issue list` / `gh issue create`). Commits must include `Closes #N`, `Fixes #N`, or `Refs #N`. Do not open pull requests or feature branches — see `GITHUB_ISSUES.md`.
+
 ### Local Development Setup
 
 1. Start local Supabase:
@@ -134,7 +136,8 @@ Always commit updated `src/shared/types/database.types.ts` after schema changes.
 
 ## Resources
 
-- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Complete guide for deploying to Vercel
+- **Git & issues**: See `GITHUB_ISSUES.md`
+- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Deploying to Vercel from `main`
 - **Migration Workflow**: See `supabase/DEVELOPMENT_WORKFLOW.md`
 - **Quick Start**: See `QUICK_START.md`
 - **Database Setup**: See `SUPABASE_SETUP.md`

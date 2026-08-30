@@ -7,7 +7,11 @@ import {
   setDemoModeActive,
 } from '@features/demo/lib/demoModeState'
 
-export function DemoModeBadge() {
+export function DemoModeBadge({
+  placement = 'fixed',
+}: {
+  placement?: 'fixed' | 'inline'
+}) {
   const { isDemoMode } = useDemoMode()
   const toast = useToast()
 
@@ -37,15 +41,11 @@ export function DemoModeBadge() {
       variant="solid"
       size="2"
       highContrast
-      style={{
-        position: 'fixed',
-        right: 'calc(16px + var(--app-safe-right))',
-        bottom: 'calc(16px + var(--app-safe-bottom))',
-        zIndex: 2147483647,
-        fontWeight: 600,
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-        pointerEvents: 'none',
-      }}
+      className={
+        placement === 'inline'
+          ? 'app-demo-mode-badge app-demo-mode-badge--inline'
+          : 'app-demo-mode-badge'
+      }
     >
       Demo mode
     </Badge>

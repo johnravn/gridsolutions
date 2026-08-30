@@ -6,7 +6,7 @@ import {
   formatLocalYmd,
 } from '@shared/lib/generalFunctions'
 import { ensureContaProjectId } from '../utils/contaProjects'
-import type { BookingsForInvoice } from './invoiceQueries'
+import type { BookingInvoiceLine, BookingsForInvoice } from './invoiceQueries'
 
 export type InvoiceRecipient = { type: string; ehfRecipient?: string }
 
@@ -16,6 +16,42 @@ export function getVatCode(vatPercent: number): string {
   if (vatPercent >= 10) return 'medium'
   if (vatPercent > 0) return 'low'
   return 'high'
+}
+
+export type ContaInvoiceLinePayload = {
+  description: string
+  quantity: number
+  price: number
+  discount: number
+  vatCode: string
+  lineNo: number
+}
+
+export function invoiceLinesHaveValidQuantities(
+  lines: Array<Pick<BookingInvoiceLine, 'quantity'>>,
+): boolean {
+  return lines.every(
+    (line) => Number.isFinite(line.quantity) && line.quantity > 0,
+  )
+}
+
+/** Map preview lines in display order to Conta invoiceLines (`lineNo` is 1-based). */
+export function mapBookingsToContaInvoiceLines(
+  lines: Array<BookingInvoiceLine>,
+  lineDiscountOverrides: Record<string, number> = {},
+  invoiceWithVat = true,
+): Array<ContaInvoiceLinePayload> {
+  if (!invoiceLinesHaveValidQuantities(lines)) {
+    throw new Error('Every invoice line must have a quantity greater than 0.')
+  }
+  return lines.map((line, index) => ({
+    description: line.description,
+    quantity: line.quantity,
+    price: line.unitPrice,
+    discount: lineDiscountOverrides[line.id] ?? 0,
+    vatCode: getVatCode(invoiceWithVat ? line.vatPercent : 0),
+    lineNo: index + 1,
+  }))
 }
 
 export type CreateContaInvoiceParams = {
@@ -84,14 +120,11 @@ export async function createContaInvoiceFromBookings(
     throw new Error('No bookings available to invoice')
   }
 
-  const invoiceLines = bookingsData.all.map((line, index) => ({
-    description: line.description,
-    quantity: line.quantity,
-    price: line.unitPrice,
-    discount: lineDiscountOverrides[line.id] ?? 0,
-    vatCode: getVatCode(invoiceWithVat ? line.vatPercent : 0),
-    lineNo: index + 1,
-  }))
+  const invoiceLines = mapBookingsToContaInvoiceLines(
+    bookingsData.all,
+    lineDiscountOverrides,
+    invoiceWithVat,
+  )
 
   const invoiceDateLocal = new Date()
   const invoiceDueDateLocal = addLocalCalendarDays(

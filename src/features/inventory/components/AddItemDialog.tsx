@@ -14,6 +14,10 @@ import { useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  SearchableSelect,
+  preventDialogCloseOnSearchableSelect,
+} from '@shared/ui/components/SearchableSelect'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { supabase } from '@shared/api/supabase'
@@ -454,7 +458,11 @@ export default function AddItemDialog({
           </Dialog.Trigger>
         )}
 
-        <Dialog.Content maxWidth="640px">
+        <Dialog.Content
+          maxWidth="640px"
+          onPointerDownOutside={preventDialogCloseOnSearchableSelect}
+          onInteractOutside={preventDialogCloseOnSearchableSelect}
+        >
           <Flex align="center" justify="between">
             <Dialog.Title>{title}</Dialog.Title>
             {mode === 'create' && SHOW_AUTOFILL_BUTTONS && (
@@ -493,8 +501,22 @@ export default function AddItemDialog({
                   <form.AppField name="categoryId">
                     {(field) => (
                       <Field label="Category">
-                        <Select.Root
-                          value={field.state.value ?? undefined}
+                        <SearchableSelect
+                          options={[
+                            ...categories.map((c: Option) => ({
+                              value: c.id,
+                              label: c.name,
+                            })),
+                            ...(isOwner
+                              ? [
+                                  {
+                                    value: '__new_category__',
+                                    label: '+ New category',
+                                  },
+                                ]
+                              : []),
+                          ]}
+                          value={field.state.value ?? ''}
                           onValueChange={(v) => {
                             if (v === '__new_category__') {
                               navigate({
@@ -507,31 +529,13 @@ export default function AddItemDialog({
                             }
                           }}
                           disabled={catLoading}
-                        >
-                          <Select.Trigger
-                            placeholder={
-                              catLoading ? 'Loading…' : 'Select category'
-                            }
-                            style={{ width: '100%' }}
-                          />
-                          <Select.Content style={{ zIndex: 10000 }}>
-                            <Select.Group>
-                              {categories.map((c: Option) => (
-                                <Select.Item key={c.id} value={c.id}>
-                                  {c.name}
-                                </Select.Item>
-                              ))}
-                              {isOwner && (
-                                <>
-                                  <Select.Separator />
-                                  <Select.Item value="__new_category__">
-                                    + New category
-                                  </Select.Item>
-                                </>
-                              )}
-                            </Select.Group>
-                          </Select.Content>
-                        </Select.Root>
+                          placeholder={
+                            catLoading ? 'Loading…' : 'Select category'
+                          }
+                          emptyMessage="No categories found"
+                          dropdownMatchTriggerWidth
+                          style={{ width: '100%', maxWidth: 'none' }}
+                        />
                       </Field>
                     )}
                   </form.AppField>

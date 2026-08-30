@@ -290,7 +290,14 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
         Subrental equipment
       </Heading>
       {!isReadOnly && unassignedCount > 0 && (
-        <label style={{ display: "flex", alignItems: "center", gap: "var(--space-2)", marginBottom: "var(--space-2)" }}>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            marginBottom: 'var(--space-2)',
+          }}
+        >
           <Switch
             checked={selectionEnabled}
             onCheckedChange={setBulkSelectionEnabled}

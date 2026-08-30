@@ -1387,7 +1387,7 @@ export async function duplicateOfferBasis(
     .insert({
       job_id: basis.job_id,
       company_id: basis.company_id,
-      title: `${basis.title} (copy)`,
+      title: basis.title,
       days_of_use: basis.days_of_use,
       discount_percent: basis.discount_percent,
       vat_percent: basis.vat_percent,

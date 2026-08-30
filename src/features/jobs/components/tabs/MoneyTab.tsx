@@ -92,9 +92,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   }
 
   // Fetch confirmed money items
-  const { data: confirmedItems = [] } = useQuery(
-    jobMoneyItemsQuery(jobId),
-  )
+  const { data: confirmedItems = [] } = useQuery(jobMoneyItemsQuery(jobId))
 
   // Fetch accepted offers for suggestions
   const { data: acceptedOffers = [] } = useQuery({

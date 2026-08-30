@@ -30,11 +30,17 @@ import {
 import {
   buildJobInspectorKeyboardSteps,
   getJobInspectorKeyboardStep,
+  normalizeJobInspectorTab,
   parseJobInspectorKeyboardStep,
 } from '../utils/jobInspectorKeyboardTabs'
 import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
 import { getJobStatusColor } from '../utils/statusColors'
+import {
+  copyJobConflictToastTitle,
+  copyJobResultTab,
+  formatCopyJobConflictMessage,
+} from '../utils/copyJobConflicts'
 import OverviewTab from './tabs/OverviewTab'
 import BookingsTab from './tabs/BookingsTab'
 import TimelineTab from './tabs/TimelineTab'
@@ -44,7 +50,6 @@ import ProgramTab from './tabs/ProgramTab'
 import FilesTab from './tabs/FilesTab'
 import OffersTab from './tabs/OffersTab'
 import InvoiceTab from './tabs/InvoiceTab'
-import InvoicesTab from './tabs/InvoicesTab'
 import MoneyTab from './tabs/MoneyTab'
 import ToDoTab from './tabs/ToDoTab'
 import PackingTab from './tabs/PackingTab'
@@ -89,10 +94,14 @@ export default function JobInspector({
   const [archiveOpen, setArchiveOpen] = React.useState(false)
   const [copyOpen, setCopyOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState<string>(
-    initialTab || 'overview',
+    normalizeJobInspectorTab(initialTab),
   )
   const [bookingsSubTab, setBookingsSubTab] = React.useState<string>('crew')
   const filesTabRef = React.useRef<FilesTabHandle>(null)
+  const pendingCopyTabRef = React.useRef<{
+    jobId: string
+    tab: 'bookings' | 'overview'
+  } | null>(null)
 
   const blockedFreelancerTabs = React.useMemo(
     () =>
@@ -101,7 +110,6 @@ export default function JobInspector({
         'subcontractors',
         'offers',
         'invoice',
-        'invoices',
         'money',
         'todo',
       ]),
@@ -119,9 +127,21 @@ export default function JobInspector({
   // Update activeTab when initialTab changes
   React.useEffect(() => {
     if (initialTab) {
-      setActiveTab(isTabAllowed(initialTab) ? initialTab : 'overview')
+      const resolved = normalizeJobInspectorTab(initialTab)
+      setActiveTab(isTabAllowed(resolved) ? resolved : 'overview')
+      if (resolved === 'bookings') setBookingsSubTab('crew')
     }
   }, [initialTab, isTabAllowed])
+
+  // After copy, switch tab on the new job (not the source) even if the URL tab is unchanged.
+  React.useEffect(() => {
+    const pending = pendingCopyTabRef.current
+    if (!id || !pending || pending.jobId !== id) return
+    pendingCopyTabRef.current = null
+    const resolved = normalizeJobInspectorTab(pending.tab)
+    setActiveTab(isTabAllowed(resolved) ? resolved : 'overview')
+    if (resolved === 'bookings') setBookingsSubTab('crew')
+  }, [id, isTabAllowed])
 
   // If role changes (or deep-link points to blocked tab), ensure activeTab is allowed.
   React.useEffect(() => {
@@ -141,7 +161,6 @@ export default function JobInspector({
       { value: 'subcontractors', label: 'Subcontractors' },
       { value: 'packing', label: 'Packing' },
       { value: 'invoice', label: 'Invoice' },
-      { value: 'invoices', label: 'Invoices' },
       { value: 'money', label: 'Money' },
       { value: 'todo', label: 'To Do' },
       { value: 'contacts', label: 'Contacts' },
@@ -205,7 +224,7 @@ export default function JobInspector({
   })
 
   const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, info } = useToast()
 
   const { data, isLoading } = useQuery({
     ...jobDetailQuery({ jobId: id ?? '__none__' }),
@@ -264,24 +283,37 @@ export default function JobInspector({
     mutationFn: async (payload: {
       jobId: string
       startAt: string
-      endAt: string
+      title: string
     }) => {
       return await copyJob(payload)
     },
-    onSuccess: async (newJobId) => {
+    onSuccess: async (copied, payload) => {
       await qc.invalidateQueries({ queryKey: ['company'] })
       await qc.invalidateQueries({ queryKey: ['jobs-index'] })
       await qc.invalidateQueries({ queryKey: ['jobs-detail'] })
+      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       setCopyOpen(false)
-      success('Job copied', 'A new job was created from this one.')
+      const tab = copyJobResultTab(copied.conflicts)
+      pendingCopyTabRef.current = { jobId: copied.jobId, tab }
       navigate({
         to: '/jobs',
         search: {
-          jobId: newJobId,
+          jobId: copied.jobId,
           recurringJobId: undefined,
-          tab: undefined,
+          tab,
         },
       })
+      window.setTimeout(() => {
+        if (copied.conflicts.length > 0) {
+          info(
+            copyJobConflictToastTitle(payload.title),
+            formatCopyJobConflictMessage(copied.conflicts, payload.title),
+            8000,
+          )
+          return
+        }
+        success('Job copied', 'A new job was created from this one.')
+      }, 50)
     },
     onError: (err: any) => {
       toastError('Failed to copy job', err?.message || 'Please try again.')
@@ -403,6 +435,7 @@ export default function JobInspector({
                 <Button
                   size="2"
                   variant="soft"
+                  aria-label="Copy job"
                   onClick={() => setCopyOpen(true)}
                 >
                   <Copy width={16} height={16} />
@@ -437,11 +470,15 @@ export default function JobInspector({
               <CopyJobDialog
                 open={copyOpen}
                 onOpenChange={setCopyOpen}
+                initialTitle={job.title}
                 initialStartAt={job.start_at}
-                initialEndAt={job.end_at}
                 isCopying={copyJobMutation.isPending}
-                onConfirm={({ startAt, endAt }) =>
-                  copyJobMutation.mutate({ jobId: job.id, startAt, endAt })
+                onConfirm={({ title, startAt }) =>
+                  copyJobMutation.mutate({
+                    jobId: job.id,
+                    title,
+                    startAt,
+                  })
                 }
               />
               <DeleteJobDialog
@@ -544,9 +581,6 @@ export default function JobInspector({
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
-            {!isFreelancer && (
-              <Tabs.Trigger value="invoices">Invoices</Tabs.Trigger>
-            )}
             {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
             {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
             <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
@@ -595,11 +629,6 @@ export default function JobInspector({
         {!isFreelancer && (
           <Tabs.Content value="invoice" mt={'10px'}>
             <InvoiceTab jobId={job.id} job={job} />
-          </Tabs.Content>
-        )}
-        {!isFreelancer && (
-          <Tabs.Content value="invoices" mt={'10px'}>
-            <InvoicesTab jobId={job.id} job={job} />
           </Tabs.Content>
         )}
         {!isFreelancer && (
