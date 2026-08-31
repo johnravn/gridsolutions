@@ -26,7 +26,7 @@ describe('jobAutofillSeeds', () => {
     expect(JOB_AUTOFILL_SEEDS.some((seed) => seed.isCompanyCustomer)).toBe(true)
   })
 
-  it('covers both technician crew booking modes', () => {
+  it('covers all technician crew booking selections', () => {
     expect(
       JOB_AUTOFILL_SEEDS.some((seed) => seed.technicianCrewBooking === 'open'),
     ).toBe(true)
@@ -34,6 +34,9 @@ describe('jobAutofillSeeds', () => {
       JOB_AUTOFILL_SEEDS.some(
         (seed) => seed.technicianCrewBooking === 'confirm_myself',
       ),
+    ).toBe(true)
+    expect(
+      JOB_AUTOFILL_SEEDS.some((seed) => seed.technicianCrewBooking === null),
     ).toBe(true)
   })
 

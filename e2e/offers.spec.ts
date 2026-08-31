@@ -72,7 +72,14 @@ async function createTechnicalOfferWithCustomEquipment(
 
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write'])
   await editor.getByRole('button', { name: 'Lock & send' }).click()
-  await page.getByRole('button', { name: "I'll send the link myself" }).click()
+  const lockDialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'Lock & send' }),
+  })
+  await expect(lockDialog).toBeVisible({ timeout: 15_000 })
+  await lockDialog
+    .getByRole('button', { name: "I'll send the link myself" })
+    .click()
+  await expect(lockDialog).toBeHidden({ timeout: 15_000 })
 
   await expect(
     page

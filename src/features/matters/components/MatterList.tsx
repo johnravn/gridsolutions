@@ -39,6 +39,7 @@ import {
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
 import { mattersIndexQueryAll } from '../api/queries'
+import { crewInviteResponseKind } from '../utils/crewInviteResponse'
 import type { IndexColumn } from '@shared/ui/index-table'
 import type { Matter, MatterType } from '../types'
 
@@ -126,17 +127,24 @@ function compareMatters(
 function getResponseIcon(matter: Matter) {
   if (matter.matter_type === 'crew_invite') {
     if (matter.my_response) {
-      const responseLower = matter.my_response.response.toLowerCase()
-      if (responseLower === 'approved' || responseLower === 'accepted') {
+      const kind = crewInviteResponseKind(matter.my_response.response)
+      if (kind === 'accepted') {
         return (
-          <Badge radius="full" color="green" size="2">
+          <Badge radius="full" color="green" size="2" title="Accepted">
             <Check width={14} height={14} />
           </Badge>
         )
       }
-      if (responseLower === 'rejected' || responseLower === 'declined') {
+      if (kind === 'declined') {
         return (
-          <Badge radius="full" color="red" size="2">
+          <Badge radius="full" color="red" size="2" title="Declined">
+            <Xmark width={14} height={14} />
+          </Badge>
+        )
+      }
+      if (kind === 'filled') {
+        return (
+          <Badge radius="full" color="amber" size="2" title="Role filled">
             <Xmark width={14} height={14} />
           </Badge>
         )

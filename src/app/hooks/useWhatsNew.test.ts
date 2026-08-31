@@ -24,15 +24,37 @@ describe('shouldShowWhatsNew', () => {
     ).toBe(false)
   })
 
-  it('shows again after a version bump', () => {
+  it('shows again after a minor version bump', () => {
     expect(
       shouldShowWhatsNew({
         userId: 'u1',
         profileLoaded: true,
-        lastSeenReleaseVersion: '1.12.1',
-        appVersion: '1.12.2',
+        lastSeenReleaseVersion: '1.12.9',
+        appVersion: '1.13.0',
       }),
     ).toBe(true)
+  })
+
+  it('shows again after a major version bump', () => {
+    expect(
+      shouldShowWhatsNew({
+        userId: 'u1',
+        profileLoaded: true,
+        lastSeenReleaseVersion: '1.13.11',
+        appVersion: '2.0.0',
+      }),
+    ).toBe(true)
+  })
+
+  it('does not show again after a patch bump', () => {
+    expect(
+      shouldShowWhatsNew({
+        userId: 'u1',
+        profileLoaded: true,
+        lastSeenReleaseVersion: '1.13.10',
+        appVersion: '1.13.11',
+      }),
+    ).toBe(false)
   })
 
   it('does not treat a missing cache field as unseen', () => {

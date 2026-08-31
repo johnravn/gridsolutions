@@ -20,6 +20,8 @@ test.describe('Customers', () => {
 
     const customerName = `E2E Customer ${Date.now()}`
     await dialog.getByPlaceholder('Company or customer name').fill(customerName)
+    await expect(dialog.getByText('Offer discount (%)')).toBeVisible()
+    await dialog.getByPlaceholder('Company default').fill('15')
 
     const createButton = dialog.getByRole('button', { name: 'Create' })
     const createResponse = page.waitForResponse(

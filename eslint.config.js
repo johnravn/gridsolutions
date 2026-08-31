@@ -17,6 +17,7 @@ export default [
       'src/shared/types/database.types.ts',
       // Not in tsconfig.json — type-aware linting cannot parse these.
       'e2e/**',
+      'supabase/functions/**',
       '**/*.stories.ts',
       '**/*.stories.tsx',
       'playwright.config.ts',

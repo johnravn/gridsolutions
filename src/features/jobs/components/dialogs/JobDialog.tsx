@@ -7,7 +7,6 @@ import {
   Checkbox,
   Dialog,
   Flex,
-  RadioCards,
   Select,
   Separator,
   Text,
@@ -29,7 +28,7 @@ import {
   preventDialogCloseOnSearchableSelect,
 } from '@shared/ui/components/SearchableSelect'
 import { logActivity } from '@features/latest/api/queries'
-import { CheckCircle, Sparks, User } from 'iconoir-react'
+import { Sparks } from 'iconoir-react'
 import { SHOW_AUTOFILL_BUTTONS } from '@shared/testing/autofill'
 import { useAuthz } from '@shared/auth/useAuthz'
 import {
@@ -43,7 +42,8 @@ import {
   technicianCrewPeriodInsert,
   technicianReservedCrewInsert,
 } from '../../utils/technicianCrewBooking'
-import type { TechnicianCrewBookingMode } from '../../utils/technicianCrewBooking'
+import { TechnicianCrewBookingCards } from './TechnicianCrewBookingCards'
+import type { TechnicianCrewBookingSelection } from '../../utils/technicianCrewBooking'
 import type { JobDetail, JobStatus, UUID } from '../../types'
 import type { RecurringJobCreateDefaults } from '../../utils/recurringJobCreateDefaults'
 
@@ -66,7 +66,7 @@ type JobFormValues = {
   startAt: string
   endAt: string
   syncTimePeriods: boolean
-  technicianCrewBooking: TechnicianCrewBookingMode
+  technicianCrewBooking: TechnicianCrewBookingSelection
   projectLead: UUID | ''
   isCompanyCustomer: boolean
   customerId: UUID | ''
@@ -99,7 +99,7 @@ const schema = z
     startAt: z.string(),
     endAt: z.string(),
     syncTimePeriods: z.boolean(),
-    technicianCrewBooking: z.enum(['open', 'confirm_myself']),
+    technicianCrewBooking: z.enum(['open', 'confirm_myself']).nullable(),
     projectLead: z.string(),
     isCompanyCustomer: z.boolean(),
     customerId: z.string(),
@@ -444,10 +444,10 @@ export default function JobDialog({
           // and we don't want to confuse the user with an error after showing success
         }
 
-        // Always create a Technician crew booking for the job duration.
+        // Optionally create a Technician crew booking for the job duration.
         // "Leave it open" skips assigning anyone; "Confirm myself" confirms
-        // the current user on that slot.
-        if (startAt || endAt) {
+        // the current user on that slot. No selection skips the booking.
+        if (technicianCrewBooking && (startAt || endAt)) {
           try {
             const periodStart = startAt || new Date().toISOString()
             const periodEnd =
@@ -1081,75 +1081,10 @@ export default function JobDialog({
                           <form.AppField name="technicianCrewBooking">
                             {(field) => (
                               <Field label="Technician crew booking">
-                                <RadioCards.Root
+                                <TechnicianCrewBookingCards
                                   value={field.state.value}
-                                  onValueChange={(val) => {
-                                    if (
-                                      val === 'open' ||
-                                      val === 'confirm_myself'
-                                    ) {
-                                      field.handleChange(val)
-                                    }
-                                  }}
-                                  columns="2"
-                                  size="1"
-                                >
-                                  <RadioCards.Item value="open" type="button">
-                                    <Box>
-                                      <Flex gap="2" align="center" mb="1">
-                                        <User
-                                          style={{
-                                            width: 18,
-                                            height: 18,
-                                            flexShrink: 0,
-                                          }}
-                                        />
-                                        <Text size="2" weight="medium">
-                                          Leave it open
-                                        </Text>
-                                      </Flex>
-                                      <Text
-                                        size="1"
-                                        color="gray"
-                                        as="p"
-                                        mt="0"
-                                        mb="0"
-                                      >
-                                        Create a technician crew booking without
-                                        assigning anyone.
-                                      </Text>
-                                    </Box>
-                                  </RadioCards.Item>
-                                  <RadioCards.Item
-                                    value="confirm_myself"
-                                    type="button"
-                                  >
-                                    <Box>
-                                      <Flex gap="2" align="center" mb="1">
-                                        <CheckCircle
-                                          style={{
-                                            width: 18,
-                                            height: 18,
-                                            flexShrink: 0,
-                                          }}
-                                        />
-                                        <Text size="2" weight="medium">
-                                          Confirm myself
-                                        </Text>
-                                      </Flex>
-                                      <Text
-                                        size="1"
-                                        color="gray"
-                                        as="p"
-                                        mt="0"
-                                        mb="0"
-                                      >
-                                        Create a technician crew booking and set
-                                        you to confirmed.
-                                      </Text>
-                                    </Box>
-                                  </RadioCards.Item>
-                                </RadioCards.Root>
+                                  onChange={field.handleChange}
+                                />
                               </Field>
                             )}
                           </form.AppField>

@@ -1408,6 +1408,16 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   transition: background-color var(--motion-duration-reveal)
     var(--motion-ease-reveal-out);
 }
+/* Compact row actions so the 44px mobile hit-target bump does not overflow
+   the 44px row or sit off the Type/status badges. */
+.index-table-row .rt-IconButton:where(.rt-r-size-1) {
+  min-width: 32px;
+  min-height: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  box-sizing: border-box;
+}
 .index-table-row--selected {
   background-color: var(--accent-a3);
 }

@@ -16,6 +16,7 @@ import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
+import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type {
   LocalCrewItem,
@@ -78,7 +79,7 @@ async function resolveDefaultBasisPricing(
     .from('jobs')
     .select(
       `start_at, end_at,
-      customer:customers!jobs_customer_id_fkey ( is_partner )`,
+      customer:customers!jobs_customer_id_fkey ( is_partner, discount_percent )`,
     )
     .eq('id', jobId)
     .single()
@@ -95,24 +96,14 @@ async function resolveDefaultBasisPricing(
     .eq('company_id', companyId)
     .maybeSingle()
 
-  let discountPercent = 0
-  if (
-    customer?.is_partner &&
-    expansion?.partner_discount_percent !== null &&
-    expansion?.partner_discount_percent !== undefined
-  ) {
-    discountPercent = Number(expansion.partner_discount_percent)
-  } else if (
-    !customer?.is_partner &&
-    expansion?.customer_discount_percent !== null &&
-    expansion?.customer_discount_percent !== undefined
-  ) {
-    discountPercent = Number(expansion.customer_discount_percent)
-  }
-
   return {
     daysOfUse: offerDaySpanBetween(job.start_at, job.end_at),
-    discountPercent,
+    discountPercent: resolveDefaultDiscountPercent({
+      customerDiscountPercent: customer?.discount_percent,
+      isPartner: !!customer?.is_partner,
+      companyCustomerDiscountPercent: expansion?.customer_discount_percent,
+      companyPartnerDiscountPercent: expansion?.partner_discount_percent,
+    }),
     vatPercent: 25,
   }
 }

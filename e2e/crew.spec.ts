@@ -31,5 +31,11 @@ test.describe('Crew', () => {
     await expect(
       page.getByRole('heading', { name: 'Add Crew to Role' }),
     ).toBeVisible({ timeout: 15_000 })
+    await expect(
+      page.getByRole('button', { name: 'Add crew member' }),
+    ).toBeVisible()
+    await expect(
+      page.getByRole('button', { name: 'Add and invite crew member' }),
+    ).toBeVisible()
   })
 })

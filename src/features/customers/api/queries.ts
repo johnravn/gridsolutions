@@ -20,6 +20,7 @@ export type CustomerRow = {
   accent_color?: string | null
   accent_color_custom?: string | null
   crew_pricing_level_id: string | null
+  discount_percent: number | null
   crew_pricing_level?: CrewPricingLevelInfo | null
   created_at: string
   conta_customer_id?: number | null
@@ -68,7 +69,7 @@ export function customersIndexQuery({
       let q = supabase
         .from('customers')
         .select(
-          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, accent_color, accent_color_custom, crew_pricing_level_id, created_at, conta_customer_id,
+          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, accent_color, accent_color_custom, crew_pricing_level_id, discount_percent, created_at, conta_customer_id,
           crew_pricing_level:crew_pricing_level_id (id, name, crew_rate_per_day, crew_rate_per_hour)`,
         )
         .eq('company_id', companyId)
@@ -146,7 +147,7 @@ export function customerDetailQuery({
       const { data: c, error } = await supabase
         .from('customers')
         .select(
-          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, accent_color, accent_color_custom, crew_pricing_level_id, created_at,
+          `id, company_id, name, email, phone, address, vat_number, is_partner, logo_path, accent_color, accent_color_custom, crew_pricing_level_id, discount_percent, created_at,
           conta_customer_id, conta_days_until_payment_reminder, conta_days_until_estimate_overdue,
           conta_invoice_delivery_method, conta_invoice_count, conta_total_invoiced, conta_total_unpaid,
           conta_last_synced_at,
@@ -193,6 +194,7 @@ export async function upsertCustomer(payload: {
   accent_color?: string | null
   accent_color_custom?: string | null
   crew_pricing_level_id?: string | null
+  discount_percent?: number | null
 }) {
   const body: {
     company_id: string
@@ -204,6 +206,7 @@ export async function upsertCustomer(payload: {
     accent_color?: string | null
     accent_color_custom?: string | null
     crew_pricing_level_id?: string | null
+    discount_percent?: number | null
     email?: string | null
     phone?: string | null
   } = {
@@ -220,6 +223,8 @@ export async function upsertCustomer(payload: {
   if (payload.phone !== undefined) body.phone = payload.phone
   if (payload.crew_pricing_level_id !== undefined)
     body.crew_pricing_level_id = payload.crew_pricing_level_id
+  if (payload.discount_percent !== undefined)
+    body.discount_percent = payload.discount_percent
   if (payload.accent_color !== undefined)
     body.accent_color = payload.accent_color
   if (payload.accent_color_custom !== undefined)

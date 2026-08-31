@@ -2,6 +2,9 @@ import * as React from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { InfiniteScrollConfig } from './types'
 
+/** Hide the infinite-scroll loader if no additional rows arrive in this window. */
+export const LOAD_MORE_STALL_MS = 5000
+
 type UseVirtualIndexTableOptions<TRow> = {
   rows: Array<TRow>
   getRowId: (row: TRow) => string
@@ -23,7 +26,24 @@ export function useVirtualIndexTable<TRow>({
   const onLoadMoreRef = React.useRef(infinite?.onLoadMore)
   onLoadMoreRef.current = infinite?.onLoadMore
 
-  const hasLoaderRow = infinite?.hasNextPage ?? false
+  const headId = rows[0] ? getRowId(rows[0]) : ''
+  const lastRow = rows[rows.length - 1]
+  const tailId = lastRow ? getRowId(lastRow) : ''
+  const [loadMoreStalled, setLoadMoreStalled] = React.useState(false)
+
+  React.useEffect(() => {
+    setLoadMoreStalled(false)
+  }, [rows.length, headId, tailId])
+
+  React.useEffect(() => {
+    if (!infinite?.hasNextPage || loadMoreStalled) return
+    const timeoutId = window.setTimeout(() => {
+      setLoadMoreStalled(true)
+    }, LOAD_MORE_STALL_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [infinite?.hasNextPage, loadMoreStalled, rows.length, headId, tailId])
+
+  const hasLoaderRow = (infinite?.hasNextPage ?? false) && !loadMoreStalled
   const virtualCount = rows.length + (hasLoaderRow ? 1 : 0)
 
   const rowVirtualizer = useVirtualizer({
@@ -42,6 +62,7 @@ export function useVirtualIndexTable<TRow>({
   const lastVirtualIndex = rowVirtualizer.getVirtualItems().at(-1)?.index ?? -1
 
   React.useEffect(() => {
+    if (loadMoreStalled) return
     if (infinite?.isFetchingNextPage) return
     if (!infinite?.hasNextPage) return
 
@@ -58,6 +79,7 @@ export function useVirtualIndexTable<TRow>({
   }, [
     lastVirtualIndex,
     rows.length,
+    loadMoreStalled,
     infinite?.hasNextPage,
     infinite?.isFetchingNextPage,
   ])

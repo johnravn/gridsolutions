@@ -27,18 +27,30 @@ async function closeMobileMenuIfOpen(page: Page) {
 /** Close the phone inspector so list chrome (e.g. New job) is visible again. */
 async function closeMobileInspectorIfOpen(page: Page) {
   const closeInspector = page.getByRole('button', { name: 'Close inspector' })
-  if (await closeInspector.isVisible().catch(() => false)) {
-    await closeInspector.click({ force: true })
-    await expect(closeInspector).toBeHidden({ timeout: 5_000 })
-  }
-
   const inspectorBackdrop = page.locator(
     '.app-inspector-backdrop[data-open="true"]',
   )
-  if (await inspectorBackdrop.isVisible().catch(() => false)) {
-    await inspectorBackdrop.click({ force: true })
-    await expect(inspectorBackdrop).toBeHidden({ timeout: 5_000 })
+
+  if (
+    !(await closeInspector.isVisible().catch(() => false)) &&
+    !(await inspectorBackdrop.isVisible().catch(() => false))
+  ) {
+    return
   }
+
+  // The inspector drawer uses transform + a full-screen backdrop. A Playwright
+  // mouse click (even { force: true }) often hits the drawer instead of the FAB.
+  // Dispatch a DOM click, same as mobile nav links and date-picker days.
+  await expect(async () => {
+    if (await closeInspector.isVisible().catch(() => false)) {
+      await closeInspector.evaluate((el) => (el as HTMLElement).click())
+    } else if (await inspectorBackdrop.isVisible().catch(() => false)) {
+      await inspectorBackdrop.evaluate((el) => (el as HTMLElement).click())
+    }
+
+    await expect(closeInspector).toBeHidden({ timeout: 2_000 })
+    await expect(inspectorBackdrop).toBeHidden({ timeout: 2_000 })
+  }).toPass({ timeout: 10_000 })
 }
 
 /** Dismiss auto-opened release notes so the popover cannot intercept nav clicks. */
@@ -64,17 +76,17 @@ async function clickNavLink(page: Page, name: string) {
 
   await dismissWhatsNewIfOpen(page)
 
-  // Mobile: open the drawer, then click inside it (force is OK — drawer links can
-  // sit under the glass overlay during the open animation).
+  // Mobile: open the drawer, then click inside it. The panel slides in with
+  // transform, so a real mouse click rejects "outside of the viewport" even
+  // with { force: true } — dispatch a DOM click after it is marked open.
   if (await openButton.isVisible().catch(() => false)) {
     await openButton.click({ force: true })
     await expect(closeButton).toBeVisible({ timeout: 5_000 })
-    const drawer = page.getByRole('complementary', {
-      name: 'Navigation',
-      exact: true,
-    })
+    const drawer = page.locator('.app-sidebar-drawer[data-open="true"]')
+    await expect(drawer).toBeVisible({ timeout: 5_000 })
     const drawerLink = drawer.getByRole('link', { name: linkName })
-    await drawerLink.first().click({ force: true })
+    await expect(drawerLink.first()).toBeAttached({ timeout: 5_000 })
+    await drawerLink.first().evaluate((el) => (el as HTMLElement).click())
     return
   }
 
@@ -304,25 +316,39 @@ export async function createDraftJob(page: Page, title?: string) {
   }).toPass({ timeout: 30_000 })
 
   await closeMobileMenuIfOpen(page)
-
-  await expect(async () => {
-    const heading = page.getByRole('heading', { name: jobTitle })
-    if (await heading.isVisible().catch(() => false)) return
-
-    const openInspector = page.getByRole('button', { name: 'Open inspector' })
-    if (await openInspector.isVisible().catch(() => false)) {
-      await openInspector.click({ force: true })
-      await expect(heading).toBeVisible({ timeout: 10_000 })
-      return
-    }
-
-    const row = page.getByText(jobTitle, { exact: true }).first()
-    await expect(row).toBeVisible({ timeout: 5_000 })
-    await row.click({ force: true })
-    await expect(heading).toBeVisible({ timeout: 10_000 })
-  }).toPass({ timeout: 20_000 })
+  await openJobInspector(page, jobTitle)
 
   return jobTitle
+}
+
+/** Find a job in the list (search skips infinite-scroll pagination) and open it. */
+async function openJobInspector(page: Page, jobTitle: string) {
+  const heading = page.getByRole('heading', { name: jobTitle })
+  if (await heading.isVisible().catch(() => false)) return
+
+  const closeInspector = page.getByRole('button', { name: 'Close inspector' })
+  // Creating a job selects it and opens the inspector. Wait for that heading
+  // instead of closing a drawer that is still loading.
+  if (await closeInspector.isVisible().catch(() => false)) {
+    if (await heading.isVisible({ timeout: 10_000 }).catch(() => false)) return
+  }
+
+  await closeMobileInspectorIfOpen(page)
+
+  const search = page.getByPlaceholder('Search')
+  await expect(search).toBeVisible({ timeout: 15_000 })
+  await search.fill(jobTitle)
+
+  const row = page.getByText(jobTitle, { exact: true }).first()
+  await expect(row).toBeVisible({ timeout: 15_000 })
+  await row.click()
+
+  const openInspector = page.getByRole('button', { name: 'Open inspector' })
+  if (await openInspector.isVisible().catch(() => false)) {
+    await openInspector.evaluate((el) => (el as HTMLElement).click())
+  }
+
+  await expect(heading).toBeVisible({ timeout: 15_000 })
 }
 
 function bookingsSubTabList(page: Page) {
@@ -412,11 +438,19 @@ async function pickDateRangeInDialog(
 
   const targetMs = new Date(`${localDate}T12:00:00`).getTime()
 
+  // Last-row days (e.g. the 31st) often sit below the mobile viewport inside a
+  // transformed Radix popover. Playwright then rejects a real click as
+  // "outside of the viewport" even after scrollIntoView — dispatch a DOM click.
+  const clickDayButton = async (dayButton: Locator) => {
+    await expect(dayButton).toBeAttached({ timeout: 5_000 })
+    await dayButton.evaluate((el) => (el as HTMLElement).click())
+  }
+
   const clickTargetDay = async () => {
     for (let i = 0; i < 24; i++) {
       const dayButton = picker.getByRole('button', { name: localDate }).last()
       if (await dayButton.isVisible().catch(() => false)) {
-        await dayButton.click()
+        await clickDayButton(dayButton)
         return
       }
 
@@ -446,7 +480,7 @@ async function pickDateRangeInDialog(
 
     const dayButton = picker.getByRole('button', { name: localDate }).last()
     await expect(dayButton).toBeVisible({ timeout: 5_000 })
-    await dayButton.click()
+    await clickDayButton(dayButton)
   }
 
   // First click may expand from the job's existing single day into a multi-day
@@ -480,10 +514,12 @@ export async function bookSeededItemOnJob(
     await pickDateRangeInDialog(page, dialog, '2026-09-01')
   }
 
-  await dialog.getByPlaceholder('Search by name…').fill('Test Seeded')
+  await dialog
+    .getByPlaceholder('Search items or groups to add...')
+    .fill('Test Seeded')
   await expect(dialog.getByText('Test Seeded Item')).toBeVisible({
     timeout: 15_000,
   })
-  await dialog.getByRole('button', { name: 'Add' }).first().click()
+  await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
   await dialog.getByRole('button', { name: 'Book items' }).click()
 }

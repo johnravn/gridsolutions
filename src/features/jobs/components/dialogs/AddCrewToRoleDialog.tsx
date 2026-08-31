@@ -26,12 +26,23 @@ import {
   forcedBookingFields,
   isCrewOverlapError,
 } from '@features/conflicts/api/forceBooking'
+import { sendCrewInvite } from '@features/matters/api/queries'
 import {
   addMemberOrInvite,
   crewInternalNotesQuery,
 } from '../../../crew/api/queries'
+import { jobDetailQuery } from '../../api/queries'
+import { recentCustomerCrewQuery } from '../../api/recentCustomerCrewQuery'
+import {
+  addCrewActionLabels,
+  selectedUserIdsToInvite,
+} from '../../utils/addCrewActionLabels'
+import { splitCrewPickerPeople } from '../../utils/rankRecentCustomerCrew'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
+import type { RecentCustomerCrewPerson } from '../../utils/rankRecentCustomerCrew'
 import type { UUID } from '../../types'
+
+type CrewPickerPerson = RecentCustomerCrewPerson
 
 const defaultValues = {
   search: '',
@@ -73,6 +84,7 @@ export default function AddCrewToRoleDialog({
   const [expandedPanel, setExpandedPanel] = React.useState<
     'placeholder' | 'invite' | null
   >(null)
+  const [pendingInvite, setPendingInvite] = React.useState(false)
 
   const form = useAppForm({
     defaultValues,
@@ -80,7 +92,7 @@ export default function AddCrewToRoleDialog({
       onSubmit: schema,
     },
     onSubmit: async () => {
-      await save.mutateAsync({})
+      await runAddCrew({ invite: true })
     },
   })
 
@@ -88,15 +100,22 @@ export default function AddCrewToRoleDialog({
     if (open) {
       form.reset(defaultValues)
       setExpandedPanel(null)
+      setPendingInvite(false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open])
 
-  const search = useStore(form.store, (s) => s.values.search)
-  const placeholderName = useStore(form.store, (s) => s.values.placeholderName)
+  const search = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.search,
+  )
+  const placeholderName = useStore(
+    form.store,
+    (s: { values: typeof defaultValues }) => s.values.placeholderName,
+  )
   const placeholderEmail = useStore(
     form.store,
-    (s) => s.values.placeholderEmail,
+    (s: { values: typeof defaultValues }) => s.values.placeholderEmail,
   )
 
   const canSeeInternalNotes =
@@ -117,6 +136,20 @@ export default function AddCrewToRoleDialog({
     }
     return m
   }, [internalNotes])
+
+  const { data: job } = useQuery({
+    ...jobDetailQuery({ jobId }),
+    enabled: open,
+  })
+  const customerId = job?.customer_id ?? null
+
+  const { data: recentCrew = [] } = useQuery({
+    ...recentCustomerCrewQuery({
+      companyId,
+      customerId: customerId ?? '',
+    }),
+    enabled: open && !!customerId,
+  })
 
   const { data: existingCrew = [] } = useQuery({
     queryKey: ['jobs.crew', jobId, 'role', timePeriodId],
@@ -164,17 +197,46 @@ export default function AddCrewToRoleDialog({
     },
   })
 
+  const suggestedForRole = React.useMemo(
+    () => recentCrew.filter((person) => !existingUserIds.has(person.user_id)),
+    [recentCrew, existingUserIds],
+  )
+
+  const { suggested, rest } = React.useMemo(
+    () => splitCrewPickerPeople(people, suggestedForRole, search),
+    [people, suggestedForRole, search],
+  )
+
+  const pickerPeople = React.useMemo(() => {
+    const seen = new Set<string>()
+    const merged: Array<CrewPickerPerson> = []
+    for (const person of [...suggestedForRole, ...people]) {
+      if (seen.has(person.user_id)) continue
+      seen.add(person.user_id)
+      merged.push(person)
+    }
+    return merged
+  }, [suggestedForRole, people])
+
   const toggleSelection = (userId: UUID) => {
     const current = form.state.values.selectedIds
     const next = current.includes(userId)
-      ? current.filter((id) => id !== userId)
+      ? current.filter((id: UUID) => id !== userId)
       : [...current, userId]
     form.setFieldValue('selectedIds', next)
   }
 
   const save = useMutation({
-    mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
-      const selectedIds = form.state.values.selectedIds
+    mutationFn: async ({
+      force = false,
+      invite = false,
+      selectedIds: selectedIdsArg,
+    }: {
+      force?: boolean
+      invite?: boolean
+      selectedIds?: Array<UUID>
+    } = {}) => {
+      const selectedIds = selectedIdsArg ?? [...form.state.values.selectedIds]
       if (selectedIds.length === 0) {
         throw new Error('Please select at least one crew member')
       }
@@ -191,7 +253,7 @@ export default function AddCrewToRoleDialog({
           const allConflicts: Array<OverlapConflict> = []
           const names: Array<string> = []
           for (const [userId, conflicts] of overlaps) {
-            const person = people.find((p) => p.user_id === userId)
+            const person = pickerPeople.find((p) => p.user_id === userId)
             names.push(person?.display_name ?? person?.email ?? 'Crew member')
             allConflicts.push(...conflicts)
           }
@@ -205,7 +267,7 @@ export default function AddCrewToRoleDialog({
       const forcedFields =
         force && authUserId ? forcedBookingFields(authUserId) : {}
 
-      const payload = selectedIds.map((userId) => ({
+      const payload = selectedIds.map((userId: UUID) => ({
         time_period_id: timePeriodId,
         user_id: userId,
         status: 'planned' as const,
@@ -215,9 +277,33 @@ export default function AddCrewToRoleDialog({
 
       const { error } = await supabase.from('reserved_crew').insert(payload)
       if (error) throw error
+
+      let invited = false
+      let inviteError: string | null = null
+      if (invite) {
+        const toInvite = selectedUserIdsToInvite(selectedIds, authUserId)
+        if (toInvite.length === 0) {
+          inviteError =
+            'You can’t send a crew invitation to yourself. The booking was added without an invite.'
+        } else {
+          try {
+            for (const userId of toInvite) {
+              await sendCrewInvite(jobId, timePeriodId, userId, companyId)
+            }
+            invited = true
+          } catch (e) {
+            inviteError = e instanceof Error ? e.message : 'Please try again.'
+          }
+        }
+      }
+
+      return {
+        count: selectedIds.length,
+        invited,
+        inviteError,
+      }
     },
-    onSuccess: () => {
-      const count = form.state.values.selectedIds.length
+    onSuccess: (result) => {
       setForceDialogOpen(false)
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
@@ -225,7 +311,22 @@ export default function AddCrewToRoleDialog({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['conflicts'] })
-      success('Success', `Added ${count} crew member(s) to role`)
+      if (result.invited || result.inviteError) {
+        qc.invalidateQueries({ queryKey: ['matters'] })
+      }
+      if (result.inviteError) {
+        toastError('Crew added, but invite failed', result.inviteError)
+      } else if (result.invited) {
+        success(
+          'Success',
+          `Added and invited ${result.count} crew member${result.count !== 1 ? 's' : ''}`,
+        )
+      } else {
+        success(
+          'Success',
+          `Added ${result.count} crew member${result.count !== 1 ? 's' : ''} to role`,
+        )
+      }
       form.reset(defaultValues)
       onOpenChange(false)
     },
@@ -241,6 +342,16 @@ export default function AddCrewToRoleDialog({
       toastError('Failed to add crew', msg)
     },
   })
+
+  const runAddCrew = async ({ invite }: { invite: boolean }) => {
+    const selectedIds = [...form.state.values.selectedIds]
+    setPendingInvite(invite)
+    try {
+      await save.mutateAsync({ invite, selectedIds })
+    } catch {
+      // Mutation onError handles toasts (including overlap → force dialog).
+    }
+  }
 
   const addPlaceholder = useMutation({
     mutationFn: async (name: string) => {
@@ -355,14 +466,16 @@ export default function AddCrewToRoleDialog({
         >
           <Dialog.Title>Add Crew to Role</Dialog.Title>
           <Dialog.Description>
-            Select crew members to add to this role
+            Select people, then add them to the role or add and send an
+            invitation. Invite is the usual action.
           </Dialog.Description>
 
           <form
             onSubmit={(e) => {
               e.preventDefault()
               e.stopPropagation()
-              void form.handleSubmit()
+              if (form.state.values.selectedIds.length === 0) return
+              void runAddCrew({ invite: true })
             }}
             style={{
               display: 'flex',
@@ -490,101 +603,90 @@ export default function AddCrewToRoleDialog({
                       padding: 8,
                     }}
                   >
-                    {isFetching && (
-                      <Text size="2" color="gray">
-                        Searching…
-                      </Text>
-                    )}
-                    {!isFetching && people.length === 0 && (
-                      <Text size="2" color="gray">
-                        No crew members found
-                      </Text>
-                    )}
-                    {!isFetching &&
-                      people.map((p, idx) => {
-                        const internalNote = internalNotesByUserId[p.user_id]
-                        return (
-                          <form.Subscribe
-                            key={p.user_id}
-                            selector={(state) => state.values.selectedIds}
-                          >
-                            {(selectedIds) => {
-                              const isSelected = selectedIds.includes(p.user_id)
-                              return (
-                                <React.Fragment>
-                                  <Box
-                                    p="2"
-                                    style={{
-                                      cursor: 'pointer',
-                                      borderRadius: 6,
-                                      background: isSelected
-                                        ? 'var(--blue-a3)'
-                                        : 'transparent',
-                                    }}
-                                    onClick={() => toggleSelection(p.user_id)}
-                                  >
-                                    <Flex align="center" justify="between">
-                                      <Flex align="center" gap="2">
-                                        {isSelected && (
-                                          <Check
-                                            width={18}
-                                            height={18}
-                                            style={{ color: 'var(--blue-11)' }}
-                                          />
-                                        )}
-                                        <div>
-                                          <Text weight="medium">
-                                            {p.display_name ?? p.email}
-                                          </Text>
-                                          {p.display_name && (
-                                            <Text
-                                              size="1"
-                                              color="gray"
-                                              style={{ marginLeft: 6 }}
-                                            >
-                                              {p.email}
-                                            </Text>
-                                          )}
-                                          {internalNote && (
-                                            <Text
-                                              as="div"
-                                              size="1"
-                                              color="gray"
-                                              mt="1"
-                                            >
-                                              <Text weight="medium">
-                                                Internal:
-                                              </Text>{' '}
-                                              {internalNote}
-                                            </Text>
-                                          )}
-                                        </div>
-                                      </Flex>
-                                      {isSelected && (
-                                        <Text size="1" color="blue">
-                                          Selected
-                                        </Text>
-                                      )}
-                                    </Flex>
-                                  </Box>
-                                  {idx < people.length - 1 && (
-                                    <Separator my="2" />
-                                  )}
-                                </React.Fragment>
-                              )
-                            }}
-                          </form.Subscribe>
-                        )
-                      })}
+                    <form.Subscribe
+                      selector={(state: { values: typeof defaultValues }) =>
+                        state.values.selectedIds
+                      }
+                    >
+                      {(selectedIds: Array<UUID>) => (
+                        <>
+                          {suggested.length > 0 && (
+                            <Text
+                              as="div"
+                              size="1"
+                              color="gray"
+                              weight="medium"
+                              mb="1"
+                            >
+                              Last used for this customer
+                            </Text>
+                          )}
+                          {suggested.map((p, idx) => (
+                            <CrewPickerPersonRow
+                              key={p.user_id}
+                              person={p}
+                              internalNote={internalNotesByUserId[p.user_id]}
+                              isSelected={selectedIds.includes(p.user_id)}
+                              onToggle={toggleSelection}
+                              showSeparator={
+                                idx < suggested.length - 1 ||
+                                rest.length > 0 ||
+                                isFetching
+                              }
+                            />
+                          ))}
+                          {suggested.length > 0 && rest.length > 0 && (
+                            <Text
+                              as="div"
+                              size="1"
+                              color="gray"
+                              weight="medium"
+                              mt="2"
+                              mb="1"
+                            >
+                              All crew
+                            </Text>
+                          )}
+                          {isFetching && (
+                            <Text size="2" color="gray">
+                              Searching…
+                            </Text>
+                          )}
+                          {!isFetching &&
+                            suggested.length === 0 &&
+                            rest.length === 0 && (
+                              <Text size="2" color="gray">
+                                No crew members found
+                              </Text>
+                            )}
+                          {!isFetching &&
+                            rest.map((p, idx) => (
+                              <CrewPickerPersonRow
+                                key={p.user_id}
+                                person={p}
+                                internalNote={internalNotesByUserId[p.user_id]}
+                                isSelected={selectedIds.includes(p.user_id)}
+                                onToggle={toggleSelection}
+                                showSeparator={idx < rest.length - 1}
+                              />
+                            ))}
+                        </>
+                      )}
+                    </form.Subscribe>
                   </Box>
                 )}
 
-                <form.Subscribe selector={(state) => state.values.selectedIds}>
-                  {(selectedIds) => (
+                <form.Subscribe
+                  selector={(state: { values: typeof defaultValues }) =>
+                    state.values.selectedIds
+                  }
+                >
+                  {(selectedIds: Array<UUID>) => (
                     <Flex
                       pt="4"
                       gap="2"
                       justify="end"
+                      wrap="wrap"
                       style={{ flexShrink: 0, marginTop: 'auto' }}
                     >
                       <Dialog.Close>
@@ -617,10 +719,34 @@ export default function AddCrewToRoleDialog({
                         </Button>
                       )}
                       {!expandedPanel && (
-                        <form.SubmitButton
-                          label={`Add ${selectedIds.length} crew member${selectedIds.length !== 1 ? 's' : ''}`}
-                          pendingLabel="Adding…"
-                        />
+                        <>
+                          <Button
+                            type="button"
+                            variant="soft"
+                            disabled={
+                              save.isPending || selectedIds.length === 0
+                            }
+                            onClick={() => void runAddCrew({ invite: false })}
+                          >
+                            {save.isPending && !pendingInvite
+                              ? 'Adding…'
+                              : addCrewActionLabels(selectedIds.length).add}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="solid"
+                            disabled={
+                              save.isPending || selectedIds.length === 0
+                            }
+                            onClick={() => void runAddCrew({ invite: true })}
+                          >
+                            <Mail width={16} height={16} />
+                            {save.isPending && pendingInvite
+                              ? 'Inviting…'
+                              : addCrewActionLabels(selectedIds.length)
+                                  .addAndInvite}
+                          </Button>
+                        </>
                       )}
                     </Flex>
                   )}
@@ -637,8 +763,73 @@ export default function AddCrewToRoleDialog({
         resourceLabel={forceResourceLabel}
         conflicts={forceConflicts}
         loading={save.isPending}
-        onConfirm={() => save.mutate({ force: true })}
+        onConfirm={() =>
+          save.mutate({
+            force: true,
+            invite: pendingInvite,
+            selectedIds: [...form.state.values.selectedIds],
+          })
+        }
       />
+    </>
+  )
+}
+
+function CrewPickerPersonRow({
+  person,
+  internalNote,
+  isSelected,
+  onToggle,
+  showSeparator,
+}: {
+  person: CrewPickerPerson
+  internalNote?: string
+  isSelected: boolean
+  onToggle: (userId: UUID) => void
+  showSeparator: boolean
+}) {
+  return (
+    <>
+      <Box
+        p="2"
+        style={{
+          cursor: 'pointer',
+          borderRadius: 6,
+          background: isSelected ? 'var(--blue-a3)' : 'transparent',
+        }}
+        onClick={() => onToggle(person.user_id)}
+      >
+        <Flex align="center" justify="between">
+          <Flex align="center" gap="2">
+            {isSelected && (
+              <Check
+                width={18}
+                height={18}
+                style={{ color: 'var(--blue-11)' }}
+              />
+            )}
+            <div>
+              <Text weight="medium">{person.display_name ?? person.email}</Text>
+              {person.display_name && (
+                <Text size="1" color="gray" style={{ marginLeft: 6 }}>
+                  {person.email}
+                </Text>
+              )}
+              {internalNote && (
+                <Text as="div" size="1" color="gray" mt="1">
+                  <Text weight="medium">Internal:</Text> {internalNote}
+                </Text>
+              )}
+            </div>
+          </Flex>
+          {isSelected && (
+            <Text size="1" color="blue">
+              Selected
+            </Text>
+          )}
+        </Flex>
+      </Box>
+      {showSeparator && <Separator my="2" />}
     </>
   )
 }

@@ -13,6 +13,10 @@ import {
   SHOW_AUTOFILL_BUTTONS,
   generateCustomerAutofill,
 } from '@shared/testing/autofill'
+import {
+  optionalDiscountPercentSchema,
+  parseOptionalDiscountPercent,
+} from '../../utils/discountPercent'
 
 const defaultValues = {
   name: '',
@@ -22,6 +26,7 @@ const defaultValues = {
   city: '',
   country: 'Norway',
   is_partner: false,
+  discount_percent: '',
 }
 
 const schema = z.object({
@@ -32,6 +37,7 @@ const schema = z.object({
   city: z.string(),
   country: z.string(),
   is_partner: z.boolean(),
+  discount_percent: optionalDiscountPercentSchema,
 })
 
 export default function AddCustomerDialog({
@@ -82,6 +88,7 @@ export default function AddCustomerDialog({
         vat_number: value.vat_number.trim() || null,
         address: addressString,
         is_partner: !!value.is_partner,
+        discount_percent: parseOptionalDiscountPercent(value.discount_percent),
       }
 
       let customerId: string | undefined
@@ -251,6 +258,29 @@ export default function AddCustomerDialog({
               </Flex>
               <form.AppField name="country">
                 {(field) => <field.TextField label="Country" />}
+              </form.AppField>
+              <form.AppField name="discount_percent">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      Offer discount (%)
+                    </Text>
+                    <TextField.Root
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      placeholder="Company default"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <Text size="1" color="gray">
+                      Leave empty to use the company customer or partner
+                      default.
+                    </Text>
+                  </Flex>
+                )}
               </form.AppField>
               <form.AppField name="is_partner">
                 {(field) => <field.Switch label="Partner" />}

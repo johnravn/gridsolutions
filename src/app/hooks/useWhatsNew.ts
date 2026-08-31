@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { myProfileQueryKey } from '@shared/api/myProfileQuery'
-import { APP_VERSION } from '@app/config/releaseNotes'
+import { APP_VERSION, whatsNewReleaseChannel } from '@app/config/releaseNotes'
 import type { MyProfile } from '@shared/api/myProfileQuery'
 
 export function shouldShowWhatsNew({
@@ -19,7 +19,11 @@ export function shouldShowWhatsNew({
   // `undefined` means the cached profile row is missing this field (usually a
   // query-key collision with a narrower select). Don't treat that as unseen.
   if (lastSeenReleaseVersion === undefined) return false
-  return lastSeenReleaseVersion !== appVersion
+  if (lastSeenReleaseVersion === null) return true
+  return (
+    whatsNewReleaseChannel(lastSeenReleaseVersion) !==
+    whatsNewReleaseChannel(appVersion)
+  )
 }
 
 export function useWhatsNew({

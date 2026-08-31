@@ -8,7 +8,7 @@ import {
   syncCustomersWithContaCore,
 } from './customerSyncCore.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '../types/database.types.js'
+import type { Database, Json } from '../types/database.types.js'
 
 const contaBaseUrl =
   process.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
@@ -103,7 +103,7 @@ async function finishJobRun(
     .update({
       finished_at: new Date().toISOString(),
       status,
-      details: details as import('@shared/types/database.types').Json,
+      details: details as Json,
       error_message: errorMessage ?? null,
     })
     .eq('id', runId)

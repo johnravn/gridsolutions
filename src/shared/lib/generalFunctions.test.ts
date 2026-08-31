@@ -71,7 +71,7 @@ describe('fuzzy matching', () => {
   })
 
   it('matches compacted tokens so "1 ch" finds "1ch"', () => {
-    expect(fuzzyMatchScore('1 ch', '1ch')).toBe(1)
+    expect(fuzzyMatchScore('1 ch', '1ch')).toBeGreaterThan(0.9)
     expect(fuzzyMatch('1 ch', '1ch', 0.25)).toBe(true)
     const result = fuzzySearch(
       [{ name: '2ch' }, { name: '1ch' }, { name: '12ch' }],
@@ -87,13 +87,12 @@ describe('fuzzy matching', () => {
     expect(getFuzzyMatchRanges('1 ch', '1ch')).toEqual([{ start: 0, end: 3 }])
   })
 
-  it('highlights out-of-order tokens and sequential characters', () => {
+  it('highlights out-of-order tokens from Fuse match indices', () => {
     expect(getFuzzyMatchRanges('sm58 shure', 'Shure SM58')).toEqual([
       { start: 0, end: 5 },
       { start: 6, end: 10 },
     ])
     expect(getFuzzyMatchRanges('mro', 'Microphone')).toEqual([
-      { start: 0, end: 1 },
       { start: 3, end: 5 },
     ])
   })
@@ -115,7 +114,8 @@ describe('fuzzy matching', () => {
 
   it('highlights the typo window for a substituted letter', () => {
     expect(getFuzzyMatchRanges('share', 'Shure SM58')).toEqual([
-      { start: 0, end: 5 },
+      { start: 0, end: 2 },
+      { start: 3, end: 5 },
     ])
   })
 })

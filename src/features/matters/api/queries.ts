@@ -5,6 +5,7 @@ import {
   markNotificationReadByEntity,
 } from '@features/notifications/api/queries'
 import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
+import { selectCrewInviteRecipients } from '../utils/selectCrewInviteRecipients'
 import type { Json } from '@shared/types/database.types'
 import type {
   CreateMatterInput,
@@ -663,6 +664,7 @@ export async function sendCrewInvites(
   timePeriodId: string,
   companyId: string,
   invitationMessage?: string | null,
+  options?: { onlyUserIds?: Array<string> },
 ): Promise<string> {
   // Get current user who is sending the invite (the creator)
   const {
@@ -703,16 +705,11 @@ export async function sendCrewInvites(
     throw new Error('No crew members to invite (add crew members first)')
   }
 
-  const userIds = crew
-    .map((c) => c.user_id)
-    .filter((id): id is string => !!id && id !== currentUser.id)
-
-  const placeholderRows = crew.filter(
-    (c) =>
-      !c.user_id &&
-      typeof c.placeholder_email === 'string' &&
-      c.placeholder_email.trim().length > 0,
-  )
+  const { userIds, placeholderRows } = selectCrewInviteRecipients({
+    crew,
+    currentUserId: currentUser.id,
+    onlyUserIds: options?.onlyUserIds,
+  })
 
   if (userIds.length === 0 && placeholderRows.length === 0) {
     throw new Error(
@@ -928,10 +925,30 @@ export async function sendCrewInvite(
   return matterId
 }
 
+export type MatterResponseResult = {
+  status: 'confirmed' | 'canceled' | 'role_filled' | 'recorded'
+}
+
+function parseCrewInviteRpcStatus(
+  data: unknown,
+): MatterResponseResult['status'] {
+  if (data && typeof data === 'object' && 'status' in data) {
+    const status = (data as { status: string }).status
+    if (
+      status === 'confirmed' ||
+      status === 'canceled' ||
+      status === 'role_filled'
+    ) {
+      return status
+    }
+  }
+  throw new Error('Could not record crew invite response')
+}
+
 export async function respondToMatter(
   matterId: string,
   response: string,
-): Promise<void> {
+): Promise<MatterResponseResult> {
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -947,6 +964,15 @@ export async function respondToMatter(
     .single()
 
   if (matterError) throw matterError
+
+  if (matter.matter_type === 'crew_invite') {
+    const { data, error } = await supabase.rpc('respond_to_crew_invite', {
+      p_matter_id: matterId,
+      p_response: response.trim(),
+    })
+    if (error) throw error
+    return { status: parseCrewInviteRpcStatus(data) }
+  }
 
   // Upsert response
   const { error: responseError } = await supabase
@@ -966,15 +992,11 @@ export async function respondToMatter(
 
   // Determine recipient status based on response
   // For votes: 'approved' -> 'accepted', 'rejected' -> 'declined', otherwise -> 'responded'
-  // For crew_invite: 'approved' -> 'confirmed', 'rejected' -> 'canceled'
   let recipientStatus: 'accepted' | 'declined' | 'responded' = 'responded'
-  let crewStatus: 'confirmed' | 'canceled' | null = null
   if (trimmedResponse === 'approved') {
     recipientStatus = 'accepted'
-    crewStatus = 'confirmed'
   } else if (trimmedResponse === 'rejected') {
     recipientStatus = 'declined'
-    crewStatus = 'canceled'
   }
 
   // Update recipient status
@@ -1010,20 +1032,7 @@ export async function respondToMatter(
     }
   }
 
-  // If this is a crew_invite and we have a crew status, update reserved_crew
-  if (
-    matter.matter_type === 'crew_invite' &&
-    crewStatus &&
-    matter.time_period_id
-  ) {
-    const { error: crewUpdateError } = await supabase
-      .from('reserved_crew')
-      .update({ status: crewStatus as any })
-      .eq('time_period_id', matter.time_period_id)
-      .eq('user_id', user.id)
-
-    if (crewUpdateError) throw crewUpdateError
-  }
+  return { status: 'recorded' }
 }
 
 export async function sendMessage(

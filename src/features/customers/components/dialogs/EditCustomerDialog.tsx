@@ -15,6 +15,11 @@ import {
   sanitizeCustomHexInput,
 } from '../CustomerBrandColorsFields'
 import { upsertCustomer } from '../../api/queries'
+import {
+  formatDiscountPercentInput,
+  optionalDiscountPercentSchema,
+  parseOptionalDiscountPercent,
+} from '../../utils/discountPercent'
 import type { RadixAccentColor } from '@shared/theme/accentColorTypes'
 
 const STANDARD_PRICING_LEVEL = '__standard__'
@@ -29,6 +34,7 @@ type Initial = {
   accent_color?: string | null
   accent_color_custom?: string | null
   crew_pricing_level_id?: string | null
+  discount_percent?: number | null
 }
 
 function parseAddress(addr: string | null) {
@@ -53,6 +59,7 @@ function buildDefaults(initial: Initial) {
     logo_path: initial.logo_path ?? null,
     crew_pricing_level_id:
       initial.crew_pricing_level_id ?? STANDARD_PRICING_LEVEL,
+    discount_percent: formatDiscountPercentInput(initial.discount_percent),
     accent_color: normalizeAccentColor(initial.accent_color),
     accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
@@ -66,6 +73,7 @@ const schema = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   logo_path: z.string().nullable(),
   crew_pricing_level_id: z.string(),
+  discount_percent: optionalDiscountPercentSchema,
   accent_color: z.custom<RadixAccentColor>(),
   accent_color_custom: z.string(),
   vat_number: z.string(),
@@ -119,6 +127,7 @@ export default function EditCustomerDialog({
     initial.accent_color,
     initial.accent_color_custom,
     initial.crew_pricing_level_id,
+    initial.discount_percent,
   ])
 
   const mut = useMutation({
@@ -147,6 +156,7 @@ export default function EditCustomerDialog({
           value.crew_pricing_level_id === STANDARD_PRICING_LEVEL
             ? null
             : value.crew_pricing_level_id,
+        discount_percent: parseOptionalDiscountPercent(value.discount_percent),
         accent_color: value.accent_color,
         accent_color_custom: sanitizeCustomHexInput(value.accent_color_custom),
       })
@@ -251,6 +261,29 @@ export default function EditCustomerDialog({
                         ))}
                       </Select.Content>
                     </Select.Root>
+                  </Flex>
+                )}
+              </form.AppField>
+              <form.AppField name="discount_percent">
+                {(field) => (
+                  <Flex direction="column" gap="1">
+                    <Text as="label" size="2" weight="medium">
+                      Offer discount (%)
+                    </Text>
+                    <TextField.Root
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      placeholder="Company default"
+                      value={field.state.value}
+                      onBlur={field.handleBlur}
+                      onChange={(e) => field.handleChange(e.target.value)}
+                    />
+                    <Text size="1" color="gray">
+                      Leave empty to use the company customer or partner
+                      default.
+                    </Text>
                   </Flex>
                 )}
               </form.AppField>

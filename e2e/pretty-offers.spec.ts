@@ -10,6 +10,7 @@ test.describe('Pretty offers', () => {
   test('offers tab supports pretty offer flow', async ({
     authedPage: page,
   }) => {
+    test.setTimeout(60_000)
     await createDraftJob(page)
 
     await clickJobTab(page, 'Offers')

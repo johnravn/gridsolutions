@@ -5,8 +5,10 @@ export async function openPublicOfferAction(
   action: 'Accept Offer' | 'Reject Offer' | 'Revise Offer',
 ) {
   const buttonName = action === 'Revise Offer' ? 'Request Revision' : action
+  await expect(page.getByText('Loading offer...')).toHaveCount(0, {
+    timeout: 15_000,
+  })
   const actionButton = page.getByRole('button', { name: buttonName })
-  await actionButton.scrollIntoViewIfNeeded()
   await expect(actionButton).toBeVisible({ timeout: 15_000 })
   await actionButton.click()
 }

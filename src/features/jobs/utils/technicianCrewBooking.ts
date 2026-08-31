@@ -5,8 +5,35 @@ export const TECHNICIAN_CREW_BOOKING_MODES = ['open', 'confirm_myself'] as const
 export type TechnicianCrewBookingMode =
   (typeof TECHNICIAN_CREW_BOOKING_MODES)[number]
 
-export const DEFAULT_TECHNICIAN_CREW_BOOKING_MODE: TechnicianCrewBookingMode =
-  'confirm_myself'
+export type TechnicianCrewBookingSelection = TechnicianCrewBookingMode | null
+
+export const DEFAULT_TECHNICIAN_CREW_BOOKING_MODE: TechnicianCrewBookingSelection =
+  null
+
+export function isTechnicianCrewBookingMode(
+  value: string | null,
+): value is TechnicianCrewBookingMode {
+  return value === 'open' || value === 'confirm_myself'
+}
+
+/** Clicking the selected card clears it so none are selected. */
+export function toggleTechnicianCrewBooking(
+  current: TechnicianCrewBookingSelection,
+  clicked: string,
+): TechnicianCrewBookingSelection {
+  if (!isTechnicianCrewBookingMode(clicked)) return current
+  return current === clicked ? null : clicked
+}
+
+/** Checkbox-card groups report every checked value; keep at most one. */
+export function technicianCrewBookingFromCheckedValues(
+  current: TechnicianCrewBookingSelection,
+  values: ReadonlyArray<string>,
+): TechnicianCrewBookingSelection {
+  if (values.length === 0) return null
+  const added = values.find((item) => item !== current) ?? values[0]
+  return isTechnicianCrewBookingMode(added) ? added : null
+}
 
 export type TechnicianCrewPeriodInsert = {
   job_id: string

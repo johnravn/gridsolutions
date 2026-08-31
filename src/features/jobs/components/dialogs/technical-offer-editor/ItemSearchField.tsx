@@ -3,21 +3,11 @@ import { Badge, Flex, Text } from '@radix-ui/themes'
 import {
   HighlightedText,
   SearchableSelect,
-  type SearchableSelectOption,
 } from '@shared/ui/components/SearchableSelect'
+import type { SearchableSelectOption } from '@shared/ui/components/SearchableSelect'
+import type { InventorySearchHit } from '@features/jobs/api/searchInventoryItems'
 
-export type ItemSearchResult = {
-  id: string
-  name: string
-  is_group: boolean
-  on_hand: number | null
-  price: number | null
-  item_kind: 'stock' | 'subrental'
-  brand_name: string | null
-  model: string | null
-  nicknames?: string | null
-  category_name?: string | null
-}
+export type ItemSearchResult = InventorySearchHit
 
 function itemDescription(item: ItemSearchResult) {
   return item.is_group

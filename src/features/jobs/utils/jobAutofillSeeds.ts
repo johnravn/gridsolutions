@@ -1,5 +1,5 @@
 import type { JobStatus } from '../types'
-import type { TechnicianCrewBookingMode } from './technicianCrewBooking'
+import type { TechnicianCrewBookingSelection } from './technicianCrewBooking'
 
 /**
  * Temporary testing seeds for New job autofill.
@@ -30,7 +30,7 @@ export type JobAutofillSeed = {
   companyCustomerIndex: number
   /** Index into company recurring jobs (-1 = none) */
   recurringJobIndex: number
-  technicianCrewBooking: TechnicianCrewBookingMode
+  technicianCrewBooking: TechnicianCrewBookingSelection
 }
 
 const JOB_STATUSES: Array<JobStatus> = [
@@ -289,7 +289,8 @@ function buildJobAutofillSeeds(): Array<JobAutofillSeed> {
         contactIndex: isCompanyCustomer ? -1 : mix % 4,
         companyCustomerIndex: isCompanyCustomer ? mix % 6 : -1,
         recurringJobIndex: mix % 5 === 0 ? -1 : mix % 6,
-        technicianCrewBooking: mix % 3 === 0 ? 'open' : 'confirm_myself',
+        technicianCrewBooking:
+          mix % 3 === 0 ? 'open' : mix % 3 === 1 ? 'confirm_myself' : null,
       })
     }
   }

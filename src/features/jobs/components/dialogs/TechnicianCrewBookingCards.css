@@ -1,0 +1,45 @@
+.technician-crew-booking-cards .rt-CheckboxCardsItem {
+  --checkbox-cards-item-padding-right: var(--checkbox-cards-item-padding-left);
+}
+
+.technician-crew-booking-cards .rt-CheckboxCardsItem::after {
+  outline-offset: -1px;
+}
+
+.technician-crew-booking-cards
+  .rt-CheckboxCardsItem:where(:has([data-state='checked']))::after {
+  outline: 2px solid var(--accent-indicator);
+}
+
+.technician-crew-booking-cards
+  .rt-CheckboxCardsItem:where(:has(:focus-visible))::after {
+  outline: 2px solid var(--focus-8);
+}
+
+.technician-crew-booking-cards
+  .rt-CheckboxCardsItem:where(
+    :has(:focus-visible[data-state='checked'])
+  )::before {
+  background-image: linear-gradient(var(--focus-a3), var(--focus-a3));
+}
+
+.technician-crew-booking-cards
+  .rt-CheckboxCardsItem:where(
+    :has(:focus-visible[data-state='checked'])
+  )::after {
+  outline-color: var(--focus-10);
+}
+
+.technician-crew-booking-cards .rt-CheckboxCardCheckbox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}

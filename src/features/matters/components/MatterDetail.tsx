@@ -31,6 +31,11 @@ import {
   respondToMatter,
 } from '../api/queries'
 import { resolveMatterCardAuthor } from '../utils/matterAuthor'
+import {
+  ROLE_FILLED_DETAIL,
+  ROLE_FILLED_MESSAGE,
+  crewInviteResponseKind,
+} from '../utils/crewInviteResponse'
 
 export default function MatterDetail({
   matterId,
@@ -40,7 +45,7 @@ export default function MatterDetail({
   onDeleted?: () => void
 }) {
   const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { success, error: toastError, info } = useToast()
   const { user } = useAuth()
   const { companyId } = useCompany()
   const { companyRole } = useAuthz()
@@ -269,12 +274,13 @@ export default function MatterDetail({
 
   const respond = useMutation({
     mutationFn: async (response: string) => {
-      await respondToMatter(matterId, response)
+      return await respondToMatter(matterId, response)
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['matters', 'detail', matterId] })
       qc.invalidateQueries({ queryKey: ['matters', 'responses', matterId] })
       qc.invalidateQueries({ queryKey: ['matters', 'recipients', matterId] })
+      qc.invalidateQueries({ queryKey: ['matters'] })
       // If this is a crew_invite, also invalidate crew queries
       if (matter?.matter_type === 'crew_invite' && matter.job_id) {
         qc.invalidateQueries({ queryKey: ['jobs.crew', matter.job_id] })
@@ -282,7 +288,11 @@ export default function MatterDetail({
           queryKey: ['jobs', matter.job_id, 'time_periods'],
         })
       }
-      success('Success', 'Response recorded')
+      if (result.status === 'role_filled') {
+        info(ROLE_FILLED_MESSAGE, ROLE_FILLED_DETAIL)
+      } else {
+        success('Success', 'Response recorded')
+      }
       setIsEditingResponse(false)
     },
     onError: (e: any) => {
@@ -444,7 +454,9 @@ export default function MatterDetail({
             <Heading size="4">Your Response</Heading>
             {matter.my_response &&
               !isEditingResponse &&
-              companyRole !== 'freelancer' && (
+              companyRole !== 'freelancer' &&
+              crewInviteResponseKind(matter.my_response.response) !==
+                'filled' && (
                 <Button
                   size="2"
                   variant="soft"
@@ -462,17 +474,31 @@ export default function MatterDetail({
               style={{ background: 'var(--gray-a2)', borderRadius: 8 }}
             >
               <Flex align="center" gap="2" mb="2">
-                {matter.my_response.response.toLowerCase() === 'approved' && (
+                {crewInviteResponseKind(matter.my_response.response) ===
+                  'accepted' && (
                   <Badge radius="full" color="green">
                     <Check width={12} height={12} /> Accepted
                   </Badge>
                 )}
-                {matter.my_response.response.toLowerCase() === 'rejected' && (
+                {crewInviteResponseKind(matter.my_response.response) ===
+                  'declined' && (
                   <Badge radius="full" color="red">
                     <Xmark width={12} height={12} /> Declined
                   </Badge>
                 )}
+                {crewInviteResponseKind(matter.my_response.response) ===
+                  'filled' && (
+                  <Badge radius="full" color="amber">
+                    <Xmark width={12} height={12} /> Role filled
+                  </Badge>
+                )}
               </Flex>
+              {crewInviteResponseKind(matter.my_response.response) ===
+                'filled' && (
+                <Text size="2" style={{ display: 'block', marginBottom: 8 }}>
+                  {ROLE_FILLED_MESSAGE}. {ROLE_FILLED_DETAIL}
+                </Text>
+              )}
               <Text
                 size="1"
                 color="gray"

@@ -75,6 +75,21 @@ type JobInfo = {
   } | null
 }
 
+/** Clipboard write can hang on mobile Chromium; never block lock success on it. */
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    await Promise.race([
+      navigator.clipboard.writeText(text),
+      new Promise<never>((_, reject) => {
+        window.setTimeout(() => reject(new Error('clipboard timeout')), 2000)
+      }),
+    ])
+    return true
+  } catch {
+    return false
+  }
+}
+
 function serializeOfferEditorState(s: {
   title: string
   showPricePerLine: boolean
@@ -607,8 +622,8 @@ export default function TechnicalOfferEditor({
       lockOutcomeRef.current = 'close'
       if (updatedOffer?.access_token) {
         const url = `${window.location.origin}/offer/${updatedOffer.access_token}`
-        try {
-          await navigator.clipboard.writeText(url)
+        const copied = await copyTextToClipboard(url)
+        if (copied) {
           success(
             'Link copied',
             stayOpen
@@ -616,7 +631,7 @@ export default function TechnicalOfferEditor({
               : `The offer is locked. The link has been copied to your clipboard.`,
           )
           info('Offer link', `Link: ${url}`)
-        } catch {
+        } else {
           success(
             'Offer locked',
             stayOpen

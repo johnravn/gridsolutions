@@ -36,6 +36,7 @@ import {
   canAutosaveOfferBasisState,
   editorStateHasLineItems,
 } from '../../utils/offerBasisWriteSafety'
+import { resolveDefaultDiscountPercent } from '../../utils/resolveDefaultDiscountPercent'
 import {
   lineItemsFromBasisDetail,
   lineItemsFromLocalEditorState,
@@ -67,6 +68,7 @@ type JobInfo = {
   end_at: string | null
   customer: {
     is_partner: boolean
+    discount_percent: number | null
     crew_pricing_level_id: string | null
     crew_pricing_level: {
       crew_rate_per_day: number | null
@@ -182,6 +184,7 @@ export default function OfferBasisEditor({
           `title, start_at, end_at,
           customer:customers!jobs_customer_id_fkey (
             is_partner,
+            discount_percent,
             crew_pricing_level_id,
             crew_pricing_level:crew_pricing_level_id ( crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit )
           )`,
@@ -201,6 +204,10 @@ export default function OfferBasisEditor({
         customer: customer
           ? {
               is_partner: customer.is_partner ?? false,
+              discount_percent:
+                customer.discount_percent != null
+                  ? Number(customer.discount_percent)
+                  : null,
               crew_pricing_level_id: customer.crew_pricing_level_id ?? null,
               crew_pricing_level: Array.isArray(customer.crew_pricing_level)
                 ? customer.crew_pricing_level[0]
@@ -372,20 +379,14 @@ export default function OfferBasisEditor({
   const defaultTitle = job.title ? `Offer for ${job.title}` : 'Offer basis'
 
   const defaultDiscountPercent = React.useMemo(() => {
-    if (!companyExpansion || !job.customer) return 0
-    if (
-      job.customer.is_partner &&
-      companyExpansion.partner_discount_percent !== null
-    ) {
-      return companyExpansion.partner_discount_percent
-    }
-    if (
-      !job.customer.is_partner &&
-      companyExpansion.customer_discount_percent !== null
-    ) {
-      return companyExpansion.customer_discount_percent
-    }
-    return 0
+    if (!job.customer) return 0
+    return resolveDefaultDiscountPercent({
+      customerDiscountPercent: job.customer.discount_percent,
+      isPartner: job.customer.is_partner,
+      companyCustomerDiscountPercent:
+        companyExpansion?.customer_discount_percent,
+      companyPartnerDiscountPercent: companyExpansion?.partner_discount_percent,
+    })
   }, [companyExpansion, job.customer])
 
   React.useEffect(() => {

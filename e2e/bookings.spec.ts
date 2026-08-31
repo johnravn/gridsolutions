@@ -20,8 +20,13 @@ test.describe('Bookings', () => {
       .click()
     const dialog = bookEquipmentDialog(page)
     await expect(dialog).toBeVisible({ timeout: 15_000 })
-    await dialog.getByPlaceholder('Search by name…').fill('Test Seeded')
-    await dialog.getByRole('button', { name: 'Add' }).first().click()
+    await dialog
+      .getByPlaceholder('Search items or groups to add...')
+      .fill('Test Seeded')
+    await expect(dialog.getByText('Test Seeded Item')).toBeVisible({
+      timeout: 15_000,
+    })
+    await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
     await dialog.getByRole('button', { name: 'Book items' }).click()
 
     const conflictDialog = page.getByRole('dialog').filter({
@@ -90,8 +95,13 @@ test.describe('Bookings', () => {
       .click()
     const dialog = bookEquipmentDialog(page)
     await expect(dialog).toBeVisible({ timeout: 15_000 })
-    await dialog.getByPlaceholder('Search by name…').fill('Test Seeded')
-    await dialog.getByRole('button', { name: 'Add' }).first().click()
+    await dialog
+      .getByPlaceholder('Search items or groups to add...')
+      .fill('Test Seeded')
+    await expect(dialog.getByText('Test Seeded Item')).toBeVisible({
+      timeout: 15_000,
+    })
+    await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
     await dialog.getByRole('button', { name: 'Book items' }).click()
 
     const conflictDialog = page.getByRole('dialog').filter({

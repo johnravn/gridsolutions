@@ -703,6 +703,7 @@ export type Database = {
           created_at: string
           crew_pricing_level_id: string | null
           deleted: boolean
+          discount_percent: number | null
           email: string | null
           id: string
           is_partner: boolean
@@ -728,6 +729,7 @@ export type Database = {
           created_at?: string
           crew_pricing_level_id?: string | null
           deleted?: boolean
+          discount_percent?: number | null
           email?: string | null
           id?: string
           is_partner?: boolean
@@ -753,6 +755,7 @@ export type Database = {
           created_at?: string
           crew_pricing_level_id?: string | null
           deleted?: boolean
+          discount_percent?: number | null
           email?: string | null
           id?: string
           is_partner?: boolean
@@ -5058,6 +5061,10 @@ export type Database = {
         Returns: undefined
       }
       resolve_pg_net_edge_base_url: { Args: never; Returns: string }
+      respond_to_crew_invite: {
+        Args: { p_matter_id: string; p_response: string }
+        Returns: Json
+      }
       set_company_user_role: {
         Args: {
           p_actor_user_id: string

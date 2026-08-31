@@ -32,6 +32,7 @@ import MapEmbed from '@shared/maps/MapEmbed'
 import LogoUpload from '@shared/ui/components/LogoUpload'
 import { supabase } from '@shared/api/supabase'
 import { companyExpansionQuery } from '@features/company/api/queries'
+import { resolveDefaultDiscountPercent } from '@features/jobs/utils/resolveDefaultDiscountPercent'
 import {
   customerDetailQuery,
   customerRecentJobsQuery,
@@ -123,10 +124,7 @@ export default function CustomerInspector({
 
   const { data: companyExpansion } = useQuery({
     ...companyExpansionQuery({ companyId: companyId ?? '' }),
-    enabled:
-      enabled &&
-      !!data &&
-      (!data.crew_pricing_level_id || data.conta_customer_id != null),
+    enabled,
   })
 
   const { data: accountingConfig } = useQuery({
@@ -341,6 +339,7 @@ export default function CustomerInspector({
               accent_color: c.accent_color ?? null,
               accent_color_custom: c.accent_color_custom ?? null,
               crew_pricing_level_id: c.crew_pricing_level_id ?? null,
+              discount_percent: c.discount_percent ?? null,
             }}
             onSaved={() => {
               qc.invalidateQueries({
@@ -689,6 +688,36 @@ export default function CustomerInspector({
                   : '—'}
             </Text>
           </Flex>
+        </Flex>
+      </Box>
+
+      <Separator my="3" />
+
+      {/* Offer discount */}
+      <Box mb="4">
+        <Text as="div" size="1" color="gray" style={{ marginBottom: 4 }}>
+          Offer discount
+        </Text>
+        <Flex align="center" gap="2" wrap="wrap">
+          <Text size="2" weight="medium">
+            {`${resolveDefaultDiscountPercent({
+              customerDiscountPercent: c.discount_percent,
+              isPartner: c.is_partner,
+              companyCustomerDiscountPercent:
+                companyExpansion?.customer_discount_percent,
+              companyPartnerDiscountPercent:
+                companyExpansion?.partner_discount_percent,
+            })}%`}
+          </Text>
+          {c.discount_percent == null ? (
+            <Badge variant="soft" size="1">
+              Company default
+            </Badge>
+          ) : (
+            <Badge variant="soft" color="green" size="1">
+              Customer
+            </Badge>
+          )}
         </Flex>
       </Box>
 

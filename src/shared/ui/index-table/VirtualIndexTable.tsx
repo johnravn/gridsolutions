@@ -237,19 +237,29 @@ export function VirtualIndexTable<TRow, TSort extends string = string>({
                       key={col.id}
                       style={{
                         minWidth: 0,
-                        textAlign:
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent:
                           col.align === 'end'
-                            ? 'right'
+                            ? 'flex-end'
                             : col.align === 'center'
                               ? 'center'
-                              : undefined,
+                              : 'flex-start',
                       }}
                     >
                       {renderCell(row, col.id)}
                     </div>
                   ))}
                   {renderRowActions && (
-                    <div style={{ textAlign: 'right' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'flex-end',
+                      }}
+                    >
                       {renderRowActions(row)}
                     </div>
                   )}

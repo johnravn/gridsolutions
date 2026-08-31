@@ -26,12 +26,10 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
-import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
-import { postgrestIlikePatterns } from './utils'
+import { useInventoryItemSearch } from '../../../hooks/useInventoryItemSearch'
 import { ItemSearchField } from './ItemSearchField'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
-import type { ItemSearchResult } from './ItemSearchField'
 import type { LocalEquipmentGroup, LocalEquipmentItem } from './types'
 
 export function EquipmentSection({
@@ -73,11 +71,8 @@ export function EquipmentSection({
   const [unitPriceDrafts, setUnitPriceDrafts] = React.useState<
     Record<string, string>
   >({})
-  const [searchResults, setSearchResults] = React.useState<
-    Array<ItemSearchResult>
-  >([])
-  const [searchLoading, setSearchLoading] = React.useState(false)
-  const searchSeqRef = React.useRef(0)
+  const { searchResults, searchLoading, searchItems, clearSearch } =
+    useInventoryItemSearch(companyId)
   const groupItemsCacheRef = React.useRef<
     Map<
       string,
@@ -111,91 +106,6 @@ export function EquipmentSection({
     setSearchTerms(newTerms)
     setActiveSearchGroupId(groupId) // Track which group is being searched
   }
-
-  // Search for items
-  const searchItems = React.useCallback(
-    async (term: string) => {
-      const seq = ++searchSeqRef.current
-      if (!term.trim()) {
-        setSearchResults([])
-        setSearchLoading(false)
-        return
-      }
-
-      setSearchLoading(true)
-      const patterns = postgrestIlikePatterns(term.trim())
-      const conditions = patterns.flatMap((pattern) => [
-        `name.ilike.${pattern}`,
-        `category_name.ilike.${pattern}`,
-        `brand_name.ilike.${pattern}`,
-        `model.ilike.${pattern}`,
-        `nicknames.ilike.${pattern}`,
-      ])
-
-      const { data, error } = await supabase
-        .from('inventory_index')
-        .select(
-          `
-          id,
-          name,
-          is_group,
-          on_hand,
-          current_price,
-          item_kind,
-          brand_name,
-          model,
-          nicknames,
-          category_name
-        `,
-        )
-        .eq('company_id', companyId)
-        .eq('active', true)
-        .or('deleted.is.null,deleted.eq.false')
-        .or('is_group.eq.true,allow_individual_booking.eq.true')
-        .or(conditions.join(','))
-        .limit(50)
-
-      if (seq !== searchSeqRef.current) return
-
-      if (error) {
-        console.error('Search error:', error)
-        setSearchLoading(false)
-        return
-      }
-
-      const mapped: Array<ItemSearchResult> = (data ?? [])
-        .filter((r) => !!r.id && !!r.name)
-        .map((r) => ({
-          id: r.id as string,
-          name: r.name as string,
-          is_group: !!r.is_group,
-          on_hand: r.on_hand != null ? Number(r.on_hand) : null,
-          price: r.current_price ?? null,
-          item_kind: r.item_kind ?? 'stock',
-          brand_name: r.brand_name ?? null,
-          model: r.model ?? null,
-          nicknames: r.nicknames ?? null,
-          category_name: r.category_name ?? null,
-        }))
-
-      setSearchResults(
-        fuzzySearch(
-          mapped,
-          term.trim(),
-          [
-            (item) => item.name,
-            (item) => item.category_name,
-            (item) => item.brand_name,
-            (item) => item.model,
-            (item) => item.nicknames,
-          ],
-          0.25,
-        ).slice(0, 20),
-      )
-      setSearchLoading(false)
-    },
-    [companyId],
-  )
 
   const addGroup = () => {
     const newGroup: LocalEquipmentGroup = {
@@ -264,8 +174,7 @@ export function EquipmentSection({
     })
     setSearchTerm(groupId, '')
     setActiveSearchGroupId(null)
-    setSearchResults([])
-    setSearchLoading(false)
+    clearSearch()
 
     if (isGroup && itemId) {
       void loadGroupItems(itemId, groupId, newItem.id)
@@ -303,13 +212,9 @@ export function EquipmentSection({
   // Search effect - trigger search when active group's search term changes
   React.useEffect(() => {
     if (!activeSearchGroupId || !activeSearchTerm.trim()) {
-      searchSeqRef.current += 1
-      setSearchResults([])
-      setSearchLoading(false)
+      clearSearch()
       return
     }
-
-    setSearchLoading(true)
     const timeout = setTimeout(() => {
       const currentTerm = searchTerms.get(activeSearchGroupId) || ''
       if (
@@ -321,7 +226,13 @@ export function EquipmentSection({
     }, 300)
 
     return () => clearTimeout(timeout)
-  }, [activeSearchGroupId, activeSearchTerm, searchTerms, searchItems])
+  }, [
+    activeSearchGroupId,
+    activeSearchTerm,
+    searchTerms,
+    searchItems,
+    clearSearch,
+  ])
 
   const updateItem = (
     groupId: string,

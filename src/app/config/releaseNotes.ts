@@ -1,13 +1,23 @@
 /**
  * Application version and release notes for the "What's new" popover.
  *
+ * The popover only auto-opens when major or minor changes (1.13.x → 1.14.0).
+ * Patch bumps (1.13.10 → 1.13.11) still update the sidebar version, but do
+ * not prompt users again.
+ *
  * Release checklist:
  * 1. Bump APP_VERSION below
- * 2. Update RELEASE_NOTES (title + highlights for that release)
+ * 2. On major/minor bumps, update RELEASE_NOTES (title + highlights)
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.10'
+export const APP_VERSION = '1.13.11'
+
+/** Major.minor used to decide when to show "What's new". Patch is ignored. */
+export function whatsNewReleaseChannel(version: string): string {
+  const [major = version, minor = '0'] = version.split('.')
+  return `${major}.${minor}`
+}
 
 export type ReleaseHighlight = {
   title: string
