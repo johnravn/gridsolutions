@@ -1,0 +1,17 @@
+{
+  "name": "Grid",
+  "install": "bash scripts/cloud-agent-install.sh",
+  "start": "bash scripts/cloud-agent-start.sh",
+  "terminals": [
+    {
+      "name": "dev",
+      "command": "npm run dev",
+      "description": "Vite dev server for the Grid app on http://localhost:3000 (reads .env.local written by the start script)."
+    }
+  ],
+  "ports": [
+    { "name": "app", "port": 3000 },
+    { "name": "supabase-api", "port": 54321 },
+    { "name": "supabase-studio", "port": 54323 }
+  ]
+}
