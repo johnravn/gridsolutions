@@ -95,12 +95,14 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
       })
       return id
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+    onSuccess: () => {
       setEditing(null)
       setCreating(false)
       success('Success', 'Program period saved successfully')
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] }),
+      ])
     },
     onError: (e: any) => {
       error('Failed to save', e?.hint || e?.message || 'Please try again.')
@@ -145,14 +147,16 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
         .eq('id', periodId)
       if (deleteErr) throw deleteErr
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
+    onSuccess: () => {
       setDeleting(null)
       success(
         'Deleted',
         'Program period deleted and items reassigned to Job duration',
       )
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] }),
+      ])
     },
     onError: (e: any) => {
       error('Failed to delete', e?.hint || e?.message || 'Please try again.')

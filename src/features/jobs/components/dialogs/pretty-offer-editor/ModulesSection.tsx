@@ -151,11 +151,12 @@ export function ModulesSection({
   return (
     <Flex
       gap="4"
+      direction={{ initial: 'column', md: 'row' }}
       style={{ flex: 1, minHeight: 0, height: '100%', alignItems: 'stretch' }}
     >
       <Box
+        width={{ initial: '100%', md: '300px' }}
         style={{
-          width: 300,
           flexShrink: 0,
           minHeight: 0,
           display: 'flex',
@@ -291,7 +292,14 @@ export function ModulesSection({
         </Box>
       </Box>
 
-      <Box style={{ flex: 1, minWidth: 0, minHeight: 0, overflowY: 'auto' }}>
+      <Box
+        style={{
+          flex: 1,
+          minWidth: 0,
+          minHeight: 200,
+          overflowY: 'auto',
+        }}
+      >
         {selected ? (
           selected.module_type === 'timeline' ? (
             <TimelineModuleEditor

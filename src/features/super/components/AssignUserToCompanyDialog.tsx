@@ -88,23 +88,25 @@ export default function AssignUserToCompanyDialog({
         role: selectedRole,
       })
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       success('Success!', 'User assigned to company')
       setSearchTerm('')
       setSelectedUserId(null)
       setSelectedRole('employee')
       onOpenChange(false)
-      await qc.invalidateQueries({
-        queryKey: ['companies', companyId, 'users'],
-      })
-      await qc.invalidateQueries({
-        predicate: (q) =>
-          Array.isArray(q.queryKey) &&
-          q.queryKey[0] === 'company' &&
-          q.queryKey[1] === companyId &&
-          q.queryKey[2] === 'crew-index',
-      })
       onAssigned?.()
+      void Promise.all([
+        qc.invalidateQueries({
+          queryKey: ['companies', companyId, 'users'],
+        }),
+        qc.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            q.queryKey[0] === 'company' &&
+            q.queryKey[1] === companyId &&
+            q.queryKey[2] === 'crew-index',
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to assign user', e?.message ?? 'Please try again.')

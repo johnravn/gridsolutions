@@ -547,7 +547,7 @@ describe('buildSyncPreviewViewModel', () => {
       {
         kind: 'direct',
         item: {
-          key: 'direct::item-a',
+          key: 'direct::item-a:',
           item_id: 'item-a',
           name: 'QL1',
           brand: 'Yamaha',
@@ -619,7 +619,7 @@ describe('buildSyncPreviewViewModel', () => {
         quantity: 1,
         items: [
           {
-            key: 'group:inv-group:item-mic',
+            key: 'group:inv-group:item-mic:',
             item_id: 'item-mic',
             name: 'SM58',
             brand: 'Shure',
@@ -628,7 +628,7 @@ describe('buildSyncPreviewViewModel', () => {
             quantity: 2,
           },
           {
-            key: 'group:inv-group:item-cable',
+            key: 'group:inv-group:item-cable:',
             item_id: 'item-cable',
             name: 'XLR',
             brand: 'Klotz',
@@ -744,7 +744,7 @@ describe('buildSyncPreviewViewModel', () => {
     expect(preview.removalGroups).toEqual([])
     expect(preview.removalUngrouped).toEqual([
       {
-        key: 'direct::item-extra',
+        key: 'direct::item-extra:',
         item_id: 'item-extra',
         name: 'Extra PAR',
         brand: 'Chauvet',

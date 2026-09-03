@@ -56,19 +56,21 @@ export default function CompanyInspector({
       if (!id) throw new Error('No company selected')
       return await removeUserFromCompany({ companyId: id, userId })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: ['companies', id, 'users'],
-      })
-      await qc.invalidateQueries({
-        predicate: (q) =>
-          Array.isArray(q.queryKey) &&
-          q.queryKey[0] === 'company' &&
-          q.queryKey[1] === id &&
-          q.queryKey[2] === 'crew-index',
-      })
+    onSuccess: () => {
       setUserToRemove(null)
       success('Success!', 'User removed from company')
+      void Promise.all([
+        qc.invalidateQueries({
+          queryKey: ['companies', id, 'users'],
+        }),
+        qc.invalidateQueries({
+          predicate: (q) =>
+            Array.isArray(q.queryKey) &&
+            q.queryKey[0] === 'company' &&
+            q.queryKey[1] === id &&
+            q.queryKey[2] === 'crew-index',
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to remove user', e?.message ?? 'Please try again.')
@@ -465,17 +467,19 @@ export default function CompanyInspector({
         open={assignDialogOpen}
         onOpenChange={setAssignDialogOpen}
         companyId={id ?? ''}
-        onAssigned={async () => {
-          await qc.invalidateQueries({
-            queryKey: ['companies', id, 'users'],
-          })
-          await qc.invalidateQueries({
-            predicate: (q) =>
-              Array.isArray(q.queryKey) &&
-              q.queryKey[0] === 'company' &&
-              q.queryKey[1] === id &&
-              q.queryKey[2] === 'crew-index',
-          })
+        onAssigned={() => {
+          void Promise.all([
+            qc.invalidateQueries({
+              queryKey: ['companies', id, 'users'],
+            }),
+            qc.invalidateQueries({
+              predicate: (q) =>
+                Array.isArray(q.queryKey) &&
+                q.queryKey[0] === 'company' &&
+                q.queryKey[1] === id &&
+                q.queryKey[2] === 'crew-index',
+            }),
+          ])
         }}
       />
 

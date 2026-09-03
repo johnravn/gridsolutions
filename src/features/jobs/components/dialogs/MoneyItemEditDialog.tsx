@@ -144,11 +144,11 @@ export default function MoneyItemEditDialog({
       }
       return insertJobMoneyItem(payload)
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    onSuccess: () => {
       success('Item added')
       onOpenChange(false)
       onSaved?.()
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
     },
     onError: (e: unknown) => {
       toastError(
@@ -169,11 +169,11 @@ export default function MoneyItemEditDialog({
         reference: value.reference.trim() || null,
       })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    onSuccess: () => {
       success('Item updated')
       onOpenChange(false)
       onSaved?.()
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
     },
     onError: (e: unknown) => {
       toastError(

@@ -109,17 +109,17 @@ export default function ContactDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      success('Contact set on job')
+      onOpenChange(false)
+      onSaved?.()
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'customer', customerId, 'contacts'],
         }),
         qc.invalidateQueries({ queryKey: ['jobs-detail', job.id] }),
         qc.invalidateQueries({ queryKey: ['jobs-index'], exact: false }),
       ])
-      success('Contact set on job')
-      onOpenChange(false)
-      onSaved?.()
     },
     onError: (e: any) => {
       toastError(
@@ -310,9 +310,8 @@ export default function ContactDialog({
         onOpenChange={setAddContactOpen}
         companyId={companyId}
         customerId={customerId}
-        onSaved={async () => {
-          // Refresh contacts list
-          await qc.invalidateQueries({
+        onSaved={() => {
+          void qc.invalidateQueries({
             queryKey: [
               'company',
               companyId,

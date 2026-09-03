@@ -7,11 +7,10 @@ import {
   markMattersAsUnread,
 } from '../api/queries'
 import {
-  
   applyOptimisticMarkAllMattersRead,
   applyOptimisticMatterReadState,
   invalidateMattersInBackground,
-  restoreOptimisticMatterReadSnapshot
+  restoreOptimisticMatterReadSnapshot,
 } from '../utils/optimisticMatterRead'
 
 export function useMatterReadMutations() {
@@ -32,10 +31,7 @@ export function useMatterReadMutations() {
       return { snapshot }
     },
     onError: (_err, _id, ctx) => {
-      restoreOptimisticMatterReadSnapshot(
-        qc,
-        ctx?.snapshot,
-      )
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
     },
     onSettled: invalidate,
   })
@@ -51,10 +47,7 @@ export function useMatterReadMutations() {
       return { snapshot }
     },
     onError: (_err, _id, ctx) => {
-      restoreOptimisticMatterReadSnapshot(
-        qc,
-        ctx?.snapshot,
-      )
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
     },
     onSettled: invalidate,
   })
@@ -70,10 +63,7 @@ export function useMatterReadMutations() {
       return { snapshot }
     },
     onError: (_err, _ids, ctx) => {
-      restoreOptimisticMatterReadSnapshot(
-        qc,
-        ctx?.snapshot,
-      )
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
     },
     onSettled: invalidate,
   })
@@ -89,10 +79,7 @@ export function useMatterReadMutations() {
       return { snapshot }
     },
     onError: (_err, _ids, ctx) => {
-      restoreOptimisticMatterReadSnapshot(
-        qc,
-        ctx?.snapshot,
-      )
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
     },
     onSettled: invalidate,
   })
@@ -105,10 +92,7 @@ export function useMatterReadMutations() {
       return { snapshot }
     },
     onError: (_err, _vars, ctx) => {
-      restoreOptimisticMatterReadSnapshot(
-        qc,
-        ctx?.snapshot,
-      )
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
     },
     onSettled: invalidate,
   })

@@ -410,11 +410,13 @@ export default function SuperPage() {
       // Remove the company from query cache to prevent loading attempts
       await qc.removeQueries({ queryKey: ['company', companyId] })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['companies'] })
-      await qc.invalidateQueries({ queryKey: ['company'] })
+    onSuccess: () => {
       setDeletingCompany(null)
       success('Success!', 'Company was deleted')
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['companies'] }),
+        qc.invalidateQueries({ queryKey: ['company'] }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to delete company', e?.message ?? 'Please try again.')
@@ -518,16 +520,18 @@ export default function SuperPage() {
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['users'] })
-      await qc.invalidateQueries({ queryKey: ['users', 'detail'] })
-      await qc.invalidateQueries({ queryKey: ['companies'] })
-      await qc.invalidateQueries({ queryKey: ['company'] })
+    onSuccess: () => {
       setDeletingUser(null)
       if (selectedId === deletingUser?.user_id) {
         setSelectedId(null)
       }
       success('Success!', 'User was deleted')
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['users'] }),
+        qc.invalidateQueries({ queryKey: ['users', 'detail'] }),
+        qc.invalidateQueries({ queryKey: ['companies'] }),
+        qc.invalidateQueries({ queryKey: ['company'] }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to delete user', e?.message ?? 'Please try again.')

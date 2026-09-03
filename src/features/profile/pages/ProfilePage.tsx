@@ -369,27 +369,17 @@ export default function ProfilePage() {
       } as any)
       if (rpcErr) throw rpcErr
     },
-    onSuccess: async () => {
-      // Invalidate and refetch profile data
-      await qc.invalidateQueries({ queryKey: ['profile', authUser?.id] })
-      // Force refetch the background preference query immediately
-      await qc.refetchQueries({
-        queryKey: ['profile', authUser?.id, 'animated-background-preference'],
-        exact: false,
-      })
-      await qc.refetchQueries({
-        queryKey: ['profile', authUser?.id, 'daily-inspiration-type'],
-        exact: false,
-      })
-      await qc.invalidateQueries({
-        queryKey: ['youversion', 'verse-of-the-day'],
-      })
-      // Also invalidate any queries that might use this preference
-      await qc.invalidateQueries({
-        queryKey: ['profile', authUser?.id],
-        exact: false,
-      })
+    onSuccess: () => {
       success('Saved', 'Your profile has been updated.')
+      void Promise.all([
+        qc.invalidateQueries({
+          queryKey: ['profile', authUser?.id],
+          exact: false,
+        }),
+        qc.invalidateQueries({
+          queryKey: ['youversion', 'verse-of-the-day'],
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError('Save failed', e?.message ?? 'Please try again.')

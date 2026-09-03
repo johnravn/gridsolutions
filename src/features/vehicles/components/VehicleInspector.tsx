@@ -259,13 +259,13 @@ export default function VehicleInspector({ id }: { id: string | null }) {
 
   const deleteBooking = useMutation({
     mutationFn: deletePersonalVehicleBooking,
-    onSuccess: async () => {
-      await qc.invalidateQueries({
+    onSuccess: () => {
+      success('Deleted', 'Personal booking removed')
+      setDeleteBookingId(null)
+      void qc.invalidateQueries({
         queryKey: ['company', companyId, 'vehicle-calendar', id],
         exact: false,
       })
-      success('Deleted', 'Personal booking removed')
-      setDeleteBookingId(null)
     },
     onError: (err: unknown) =>
       toastError(

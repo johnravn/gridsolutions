@@ -114,15 +114,17 @@ export default function AddRoleDialog({
       const { error } = await supabase.from('time_periods').insert(payload)
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'time_periods', 'crew'],
-      })
+    onSuccess: () => {
       form.reset(defaultValues, { keepDefaultValues: true })
       setNeededDraft(null)
       setFocusedField(null)
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'time_periods', 'crew'],
+        }),
+      ])
     },
   })
 

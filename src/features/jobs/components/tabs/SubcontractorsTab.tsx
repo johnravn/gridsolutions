@@ -120,9 +120,9 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
 
   const removeMutation = useMutation({
     mutationFn: removeJobSubcontractor,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
+    onSuccess: () => {
       success('Removed', 'Subcontractor removed from job')
+      void qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not remove subcontractor', e.message)
@@ -131,9 +131,9 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
 
   const assignSingleMutation = useMutation({
     mutationFn: assignSubrentalBookingSubcontractor,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
+    onSuccess: () => {
       success('Assigned', 'Subrental equipment assigned to subcontractor')
+      void qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not assign subcontractor', e.message)
@@ -142,10 +142,10 @@ export default function SubcontractorsTab({ jobId }: { jobId: string }) {
 
   const assignBatchMutation = useMutation({
     mutationFn: assignSubrentalBookingsToSubcontractor,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
+    onSuccess: () => {
       setSelectedItemIds(new Set())
       success('Assigned', 'Selected items assigned to subcontractor')
+      void qc.invalidateQueries({ queryKey: jobSubrentalBookingsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not assign subcontractor', e.message)

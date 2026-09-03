@@ -224,11 +224,11 @@ export default function CompanyDialog({
       if (error) throw error
       return data
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['companies'] })
+    onSuccess: () => {
       onOpenChange(false)
       success('Success!', 'Company was created')
       onSaved?.()
+      void qc.invalidateQueries({ queryKey: ['companies'] })
     },
     onError: (e: any) => {
       toastError('Failed to create company', e?.message ?? 'Please try again.')
@@ -261,14 +261,16 @@ export default function CompanyDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['companies'] })
-      await qc.invalidateQueries({
-        queryKey: ['company', initialData!.id],
-      })
+    onSuccess: () => {
       onOpenChange(false)
       success('Success!', 'Company was updated')
       onSaved?.()
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['companies'] }),
+        qc.invalidateQueries({
+          queryKey: ['company', initialData!.id],
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to update company', e?.message ?? 'Please try again.')

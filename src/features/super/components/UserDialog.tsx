@@ -102,14 +102,16 @@ export default function UserDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['users'] })
-      await qc.invalidateQueries({
-        queryKey: ['users', 'detail', initialData!.user_id],
-      })
+    onSuccess: () => {
       onOpenChange(false)
       success('Success!', 'User was updated')
       onSaved?.()
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['users'] }),
+        qc.invalidateQueries({
+          queryKey: ['users', 'detail', initialData!.user_id],
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError('Failed to update user', e?.message ?? 'Please try again.')
@@ -129,11 +131,11 @@ export default function UserDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['users'] })
+    onSuccess: () => {
       onOpenChange(false)
       success('Success!', 'User was deleted')
       onSaved?.()
+      void qc.invalidateQueries({ queryKey: ['users'] })
     },
     onError: (e: any) => {
       toastError('Failed to delete user', e?.message ?? 'Please try again.')

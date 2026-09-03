@@ -81,10 +81,10 @@ export default function EditVehicleBookingDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
+    onSuccess: () => {
       success('Updated', 'Vehicle booking updated')
       onOpenChange(false)
+      void qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
     },
     onError: (err: any) => {
       showError('Failed to update', err?.message || 'Please try again.')

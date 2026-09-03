@@ -144,15 +144,15 @@ export default function AddCustomerDialog({
 
       return customerId
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       form.reset(defaultValues)
-      await qc.invalidateQueries({
-        queryKey: ['company', companyId, 'latest-feed'],
-        exact: false,
-      })
       onOpenChange(false)
       onAdded?.()
       success('Success', 'Customer added')
+      void qc.invalidateQueries({
+        queryKey: ['company', companyId, 'latest-feed'],
+        exact: false,
+      })
     },
   })
 

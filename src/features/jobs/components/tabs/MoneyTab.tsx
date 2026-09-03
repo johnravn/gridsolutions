@@ -673,9 +673,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
 
   const deleteMutation = useMutation({
     mutationFn: deleteJobMoneyItem,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    onSuccess: () => {
       success('Item removed')
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
     },
     onError: (e: unknown) => {
       toastError(

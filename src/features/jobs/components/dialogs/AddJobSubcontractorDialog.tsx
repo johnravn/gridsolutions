@@ -69,10 +69,10 @@ export default function AddJobSubcontractorDialog({
         customerId,
       })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
+    onSuccess: () => {
       success('Subcontractor added', 'Partner was added to this job')
       onOpenChange(false)
+      void qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not add subcontractor', e.message)

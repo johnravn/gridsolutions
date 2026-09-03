@@ -153,8 +153,8 @@ export default function LatestInspector({
       }
       return toggleActivityLike({ companyId, activityId })
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'latest-inspector', activityId],
         }),
@@ -175,12 +175,12 @@ export default function LatestInspector({
         : activityId
       return createActivityComment({ companyId, activityId: targetId, content })
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setCommentText('')
-      await qc.invalidateQueries({
+      success('Comment added', 'Your comment was posted successfully.')
+      void qc.invalidateQueries({
         queryKey: ['company', companyId, 'latest-inspector', activityId],
       })
-      success('Comment added', 'Your comment was posted successfully.')
     },
     onError: (err: any) => {
       toastError('Failed to add comment', err.message)
@@ -189,11 +189,11 @@ export default function LatestInspector({
 
   const deleteCommentMutation = useMutation({
     mutationFn: deleteActivityComment,
-    onSuccess: async () => {
-      await qc.invalidateQueries({
+    onSuccess: () => {
+      success('Comment deleted', 'The comment was removed successfully.')
+      void qc.invalidateQueries({
         queryKey: ['company', companyId, 'latest-inspector', activityId],
       })
-      success('Comment deleted', 'The comment was removed successfully.')
     },
   })
 

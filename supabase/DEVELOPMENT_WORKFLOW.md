@@ -47,12 +47,12 @@
    -- Always enable RLS on new tables
    ALTER TABLE new_table ENABLE ROW LEVEL SECURITY;
 
-   -- Add RLS policies
+   -- Add RLS policies (wrap auth.uid() for InitPlan)
    CREATE POLICY "Users can view their company's data"
    ON new_table FOR SELECT
    USING (company_id IN (
      SELECT company_id FROM company_users
-     WHERE user_id = auth.uid()
+     WHERE user_id = (select auth.uid())
    ));
    ```
 
@@ -221,6 +221,10 @@ npm run supabase:stop          # Stop local Supabase
 npm run db:status              # Show status
 npm run supabase:link          # Link to remote project
 ```
+
+### Dashboard settings (not migrations)
+
+Auth connection allocation (Dashboard → Project Settings → Database): prefer **percentage-based** pool allocation for Auth over a fixed absolute count (e.g. 10). This cannot be set via SQL migrations.
 
 ### Next Steps
 

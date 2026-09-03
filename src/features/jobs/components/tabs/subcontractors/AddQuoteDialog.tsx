@@ -129,10 +129,7 @@ export default function AddQuoteDialog({
         })
       }
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: jobSubcontractorQuotesKey(jobId),
-      })
+    onSuccess: () => {
       success(
         isEdit ? 'Quote updated' : 'Quote added',
         isEdit
@@ -141,6 +138,9 @@ export default function AddQuoteDialog({
       )
       form.reset(defaultValues)
       onOpenChange(false)
+      void qc.invalidateQueries({
+        queryKey: jobSubcontractorQuotesKey(jobId),
+      })
     },
     onError: (e: Error) => {
       toastError(

@@ -155,8 +155,8 @@ export default function SubcontractorCard({
 
   const contactMutation = useMutation({
     mutationFn: updateJobSubcontractorContact,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not update contact', e.message)
@@ -165,9 +165,9 @@ export default function SubcontractorCard({
 
   const notesMutation = useMutation({
     mutationFn: updateJobSubcontractorNotes,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
+    onSuccess: () => {
       setNoteDialog(null)
+      void qc.invalidateQueries({ queryKey: jobSubcontractorsKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not save notes', e.message)
@@ -176,10 +176,10 @@ export default function SubcontractorCard({
 
   const deleteQuoteMutation = useMutation({
     mutationFn: deleteJobSubcontractorQuote,
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: jobSubcontractorQuotesKey(jobId) })
+    onSuccess: () => {
       success('Quote deleted', 'Subcontractor quote version was removed.')
       setDeleteQuote(null)
+      void qc.invalidateQueries({ queryKey: jobSubcontractorQuotesKey(jobId) })
     },
     onError: (e: Error) => {
       toastError('Could not delete quote', e.message)

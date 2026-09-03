@@ -234,12 +234,12 @@ export default function ContactsTab({
         .eq('contact_id', contactId)
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
+    onSuccess: () => {
       success('Deleted', 'Contact removed from job')
       setDeleteConfirmOpen(false)
       setPendingDeleteContactId(null)
       setPendingDeleteContactName('')
+      void qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
     },
     onError: (e: any) =>
       toastError('Failed to delete', e?.message ?? 'Please try again.'),

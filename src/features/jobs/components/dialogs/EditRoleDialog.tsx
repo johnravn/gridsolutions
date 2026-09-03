@@ -108,14 +108,16 @@ export default function EditRoleDialog({
         .eq('id', initial.id)
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'time_periods', 'crew'],
-      })
-      await qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+    onSuccess: () => {
       success('Role updated', 'Role details saved.')
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'time_periods', 'crew'],
+        }),
+        qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] }),
+      ])
     },
     onError: (e: unknown) => {
       toastError(

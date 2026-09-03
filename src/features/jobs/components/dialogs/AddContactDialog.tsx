@@ -182,11 +182,11 @@ export default function AddContactDialog({
       })
       if (linkErr) throw linkErr
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
+    onSuccess: () => {
       form.reset(defaultValues)
       onOpenChange(false)
       success('Success', 'Contact added to job')
+      void qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
     },
     onError: (e: Error) => {
       toastError('Failed to add contact', e.message || 'Please try again.')
@@ -439,9 +439,9 @@ export function EditContactDialog({
       if (upLink) throw upLink
       if (upContact) throw upContact
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
+    onSuccess: () => {
       onOpenChange(false)
+      void qc.invalidateQueries({ queryKey: ['jobs.contacts', jobId] })
     },
   })
 

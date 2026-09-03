@@ -47,7 +47,7 @@ This project is primarily developed using AI agents. This guide ensures all cont
 2. Create policies for SELECT, INSERT, UPDATE, DELETE operations
 3. Follow the pattern:
    - Company-scoped data: Check `company_users` table membership
-   - Personal data: Check ownership via `profiles.user_id = auth.uid()`
+   - Personal data: Check ownership via `profiles.user_id = (select auth.uid())`
    - Superusers: Allow access via `profiles.superuser = true`
 
 Example RLS policy pattern:
@@ -57,16 +57,17 @@ Example RLS policy pattern:
 ALTER TABLE addresses ENABLE ROW LEVEL SECURITY;
 
 -- SELECT policy
+-- Wrap auth.uid() in (select ...) so Postgres evaluates it once (InitPlan)
 CREATE POLICY "Users can view company addresses"
   ON addresses FOR SELECT
   USING (
     company_id IN (
       SELECT company_id FROM company_users
-      WHERE user_id = auth.uid()
+      WHERE user_id = (select auth.uid())
     )
     OR EXISTS (
       SELECT 1 FROM profiles
-      WHERE profiles.user_id = auth.uid()
+      WHERE profiles.user_id = (select auth.uid())
         AND profiles.superuser = true
     )
   );

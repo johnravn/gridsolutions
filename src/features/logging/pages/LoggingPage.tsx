@@ -363,8 +363,7 @@ export default function LoggingPage() {
         job_id: selectedJobId,
       } as TimeEntryInsert)
     },
-    onSuccess: async () => {
-      await invalidateEntries()
+    onSuccess: () => {
       const { startAt: resetStart, endAt: resetEnd } = getDefaultTimes()
       setNote('')
       if (timeMode === 'hours') {
@@ -379,6 +378,7 @@ export default function LoggingPage() {
       }
       if (selectedJobId) {
         success('Saved', 'Time entry added. You can add another for this job.')
+        invalidateEntries()
         return
       }
       setTitle('')
@@ -386,6 +386,7 @@ export default function LoggingPage() {
       setJobSearch('')
       setSelectedJobId(null)
       success('Saved', 'Time entry added')
+      invalidateEntries()
     },
     onError: (e: any) => {
       error('Failed to save', e?.message || 'Please try again.')
@@ -406,26 +407,28 @@ export default function LoggingPage() {
       }
       await deleteTimeEntry({ id: entry.id })
     },
-    onSuccess: async () => {
-      await invalidateEntries()
+    onSuccess: () => {
       setDeleteCandidate(null)
       success('Deleted', 'Time entry removed')
+      invalidateEntries()
     },
     onError: (e: any) => {
       error('Failed to delete', e?.message || 'Please try again.')
     },
   })
 
-  const invalidateEntries = React.useCallback(async () => {
-    await qc.invalidateQueries({
-      queryKey: ['time_entries', companyId, userId, from, to],
-    })
-    await qc.invalidateQueries({
-      queryKey: ['time_entries', companyId, 'all', from, to],
-    })
-    await qc.invalidateQueries({
-      queryKey: ['logging', 'previously-logged-jobs', companyId, userId],
-    })
+  const invalidateEntries = React.useCallback(() => {
+    void Promise.all([
+      qc.invalidateQueries({
+        queryKey: ['time_entries', companyId, userId, from, to],
+      }),
+      qc.invalidateQueries({
+        queryKey: ['time_entries', companyId, 'all', from, to],
+      }),
+      qc.invalidateQueries({
+        queryKey: ['logging', 'previously-logged-jobs', companyId, userId],
+      }),
+    ])
   }, [companyId, from, qc, to, userId])
 
   const lastSelectedMonthRef = React.useRef(selectedMonth)

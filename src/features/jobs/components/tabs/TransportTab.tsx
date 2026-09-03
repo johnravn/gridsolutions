@@ -151,8 +151,8 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         .eq('id', bookingId)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
       success('Updated', 'Vehicle booking updated')
+      void qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
 
       // Clear the edited note
       if (updates.external_note !== undefined) {
@@ -199,11 +199,13 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         if (tpDeleteErr) throw tpDeleteErr
       }
 
-      await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       success('Deleted', 'Vehicle booking deleted')
       setDeletingBooking(null)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['conflicts'] }),
+      ])
     } catch (e: any) {
       showError('Failed to delete', e?.message || 'Please try again.')
     }

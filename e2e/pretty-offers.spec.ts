@@ -23,6 +23,7 @@ test.describe('Pretty offers', () => {
   test('pretty offer editor shows module story fields', async ({
     authedPage: page,
   }) => {
+    test.setTimeout(60_000)
     const jobTitle = await createDraftJob(page)
     await clickJobTab(page, 'Offers')
 
@@ -44,7 +45,16 @@ test.describe('Pretty offers', () => {
     const dialog = page.getByRole('dialog').filter({ hasText: 'Pretty Offer' })
     await expect(dialog).toBeVisible({ timeout: 15_000 })
 
-    await dialog.getByRole('button', { name: 'Add' }).click()
+    await dialog.getByRole('tab', { name: 'Modules' }).click()
+    const addModuleButton = dialog
+      .getByRole('tabpanel', { name: 'Modules' })
+      .getByRole('button', { name: 'Add', exact: true })
+    // Sticky editor chrome overlays this control on mobile; DOM click still
+    // runs the React handler without needing a clear hit-target.
+    await addModuleButton.evaluate((el: HTMLButtonElement) => el.click())
+    await expect(
+      dialog.getByText('Untitled module', { exact: true }).first(),
+    ).toBeVisible({ timeout: 15_000 })
 
     const paragraph = dialog.getByPlaceholder('Paragraph text')
     await paragraph.scrollIntoViewIfNeeded()

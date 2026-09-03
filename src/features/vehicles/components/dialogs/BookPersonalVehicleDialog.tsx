@@ -108,14 +108,14 @@ export default function BookPersonalVehicleDialog({
         startAt: value.startAt,
         endAt: value.endAt,
       }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: ['company', companyId, 'vehicle-calendar'],
-        exact: false,
-      })
+    onSuccess: () => {
       success('Booked', 'Personal booking created')
       onOpenChange(false)
       onSaved?.()
+      void qc.invalidateQueries({
+        queryKey: ['company', companyId, 'vehicle-calendar'],
+        exact: false,
+      })
     },
     onError: (err: unknown) => {
       showError(
@@ -137,14 +137,14 @@ export default function BookPersonalVehicleDialog({
         endAt: value.endAt,
       })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: ['company', companyId, 'vehicle-calendar'],
-        exact: false,
-      })
+    onSuccess: () => {
       success('Updated', 'Personal booking updated')
       onOpenChange(false)
       onSaved?.()
+      void qc.invalidateQueries({
+        queryKey: ['company', companyId, 'vehicle-calendar'],
+        exact: false,
+      })
     },
     onError: (err: unknown) => {
       showError(
