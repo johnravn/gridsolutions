@@ -463,7 +463,7 @@ async function fetchJobBookingsForInvoice({
           .select(
             `
             time_period_id, status, placeholder_name,
-            user:user_id ( display_name, email )
+            user:profiles!reserved_crew_user_id_fkey ( display_name, email )
           `,
           )
           .in('time_period_id', crewTimePeriodIds)

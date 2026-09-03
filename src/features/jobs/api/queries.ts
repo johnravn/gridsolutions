@@ -833,9 +833,10 @@ export function jobTimePeriodsQuery({ jobId }: { jobId: string }) {
       const { data, error } = await supabase
         .from('time_periods')
         .select(
-          'id, company_id, job_id, title, start_at, end_at, category, program_group',
+          'id, company_id, job_id, title, start_at, end_at, category, program_group, needed_count, role_category, notes',
         )
         .eq('job_id', jobId)
+        .eq('deleted', false)
         .order('start_at', { ascending: true })
       if (error) throw error
       return data as Array<TimePeriodLite>
@@ -853,6 +854,9 @@ export async function upsertTimePeriod(payload: {
   end_at: string // ISO
   category?: 'program' | 'equipment' | 'crew' | 'transport'
   program_group?: string | null
+  needed_count?: number | null
+  role_category?: string | null
+  notes?: string | null
 }) {
   if (payload.id) {
     const { error } = await supabase
@@ -862,6 +866,9 @@ export async function upsertTimePeriod(payload: {
         start_at: payload.start_at,
         end_at: payload.end_at,
         program_group: payload.program_group ?? null,
+        needed_count: payload.needed_count ?? null,
+        role_category: payload.role_category ?? null,
+        notes: payload.notes ?? null,
         // Don't update category on edit (preserve existing)
       })
       .eq('id', payload.id)
@@ -878,12 +885,50 @@ export async function upsertTimePeriod(payload: {
         end_at: payload.end_at,
         category: payload.category ?? 'program',
         program_group: payload.program_group ?? null,
+        needed_count: payload.needed_count ?? null,
+        role_category: payload.role_category ?? null,
+        notes: payload.notes ?? null,
       })
       .select('id')
       .single()
     if (error) throw error
     return data.id
   }
+}
+
+export const DEFAULT_EQUIPMENT_PERIOD_TITLE = 'Equipment period'
+
+/**
+ * Ensure the job has a default equipment period spanning job start/end.
+ * Returns the period id (existing or newly created).
+ */
+export async function ensureDefaultEquipmentPeriod(params: {
+  jobId: string
+  companyId: string
+  startAt: string
+  endAt: string
+}): Promise<string> {
+  const { data: existing, error: existingErr } = await supabase
+    .from('time_periods')
+    .select('id')
+    .eq('job_id', params.jobId)
+    .eq('deleted', false)
+    .eq('category', 'equipment')
+    .eq('title', DEFAULT_EQUIPMENT_PERIOD_TITLE)
+    .order('start_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (existingErr) throw existingErr
+  if (existing?.id) return existing.id
+
+  return upsertTimePeriod({
+    job_id: params.jobId,
+    company_id: params.companyId,
+    title: DEFAULT_EQUIPMENT_PERIOD_TITLE,
+    start_at: params.startAt,
+    end_at: params.endAt,
+    category: 'equipment',
+  })
 }
 
 export type { CopyJobResult }

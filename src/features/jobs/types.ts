@@ -344,6 +344,9 @@ export type TimePeriodLite = {
   end_at: string // ISO
   category?: 'program' | 'equipment' | 'crew' | 'transport' | null
   program_group?: string | null
+  needed_count?: number | null
+  role_category?: string | null
+  notes?: string | null
 }
 
 /* ---------- Crew tab ---------- */

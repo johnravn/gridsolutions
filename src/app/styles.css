@@ -1286,6 +1286,13 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   z-index: 201 !important;
 }
 
+/* Nested manage-periods dialog stacks above offer-basis / other parent dialogs. */
+.manage-time-periods-dialog.rt-DialogContent,
+.manage-time-periods-dialog.rt-BaseDialogContent,
+[data-manage-time-periods-dialog] {
+  z-index: 220 !important;
+}
+
 body:has([data-state='open'].rt-DialogContent) .app-menu-fab,
 body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   pointer-events: none;
