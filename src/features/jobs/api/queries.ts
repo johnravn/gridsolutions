@@ -1,6 +1,9 @@
 import { supabase } from '@shared/api/supabase'
-import { endOfDay, startOfDay } from '@shared/ui/components/pickers'
 import { parseCopyJobRpcResult } from '../utils/copyJobConflicts'
+import {
+  jobsIndexDateOverlapFilters,
+  resolveJobsIndexDateOverlap,
+} from './jobsIndexDateOverlap'
 import type { CopyJobResult } from '../utils/copyJobConflicts'
 import type {
   AddressListRow,
@@ -137,9 +140,12 @@ export function jobsIndexQuery({
 }: {
   companyId: string
   search: string
-  /** Local calendar date YYYY-MM-DD — inclusive start of period filter on job start_at. */
+  /** Local calendar date YYYY-MM-DD — overlap filter start (open-ended if dateTo is empty). */
   dateFrom?: string
-  /** Local calendar date YYYY-MM-DD — inclusive end of period filter on job start_at. */
+  /**
+   * Local calendar date YYYY-MM-DD — overlap filter end.
+   * Empty with dateFrom means upcoming; set with empty dateFrom means past through that day.
+   */
   dateTo?: string
   sortBy?: 'title' | 'start_at' | 'status' | 'customer_name'
   sortDir?: 'asc' | 'desc'
@@ -202,27 +208,34 @@ export function jobsIndexQuery({
         q = q.in('status', statuses)
       }
 
-      // Jobs whose start_at falls within the selected period (inclusive).
-      if (dateFrom && dateTo) {
-        q = q
-          .gte('start_at', startOfDay(dateFrom))
-          .lte('start_at', endOfDay(dateTo))
+      const dateOverlap = jobsIndexDateOverlapFilters(
+        resolveJobsIndexDateOverlap(dateFrom, dateTo),
+      )
+      if (dateOverlap.notNullStart) {
+        q = q.not('start_at', 'is', null)
+      }
+      if (dateOverlap.startAtLte) {
+        q = q.lte('start_at', dateOverlap.startAtLte)
       }
 
-      // Match the infinite jobs index: title, numeric jobnr, and customer/lead ids.
+      let searchOrFilter: string | null = null
       const fuzzyTerm = search.trim().replace(/^#/, '')
       if (fuzzyTerm) {
         const [customerIds, customerUserIds] = await Promise.all([
           findCustomerIdsByName(companyId, fuzzyTerm),
           findCustomerUserIdsBySearch(fuzzyTerm),
         ])
-        const orFilter = jobsIndexSearchOrFilter({
+        searchOrFilter = jobsIndexSearchOrFilter({
           search: fuzzyTerm,
           customerIds,
           customerUserIds,
         })
-        if (orFilter) q = q.or(orFilter)
       }
+      const combinedOr = mergePostgrestAndOrFilters(
+        searchOrFilter,
+        dateOverlap.endAtOrFilter,
+      )
+      if (combinedOr) q = q.or(combinedOr)
 
       if (upcomingFrom) {
         q = q
@@ -345,6 +358,30 @@ const JOBS_INDEX_SEARCH_ID_LIMIT = 100
  * PostgREST `.or()` filter for the jobs index: title, numeric jobnr,
  * matching customer IDs, and matching customer-user IDs.
  */
+const JOBS_INDEX_ID_IN_CHUNK = 100
+
+/** PostgREST `.or()` filter for an ID allow-list, chunked to keep URLs short. */
+export function jobsIndexIdInOrFilter(jobIds: Array<string>): string | null {
+  if (jobIds.length === 0) return null
+  const chunks: Array<string> = []
+  for (let i = 0; i < jobIds.length; i += JOBS_INDEX_ID_IN_CHUNK) {
+    chunks.push(
+      `id.in.(${jobIds.slice(i, i + JOBS_INDEX_ID_IN_CHUNK).join(',')})`,
+    )
+  }
+  return chunks.join(',')
+}
+
+/** AND together PostgREST `.or()` groups (a second `.or()` would overwrite the first). */
+export function mergePostgrestAndOrFilters(
+  ...filters: Array<string | null | undefined>
+): string | null {
+  const parts = filters.filter((item): item is string => !!item)
+  if (parts.length === 0) return null
+  if (parts.length === 1) return parts[0]
+  return `and(${parts.map((part) => `or(${part})`).join(',')})`
+}
+
 export function jobsIndexSearchOrFilter({
   search,
   customerIds = [],
@@ -417,6 +454,8 @@ type JobsIndexListParams = {
   statuses?: Array<JobListRow['status']> | null
   /** When false, hide jobs that belong to a recurring series. Default true. */
   includeRecurringMembers?: boolean
+  /** When set, only these job IDs (e.g. My jobs: crew or project lead). */
+  onlyJobIds?: Array<string> | null
 }
 
 async function fetchJobsIndexPage({
@@ -435,14 +474,21 @@ async function fetchJobsIndexPage({
   projectLeadUserId = null,
   statuses = null,
   includeRecurringMembers = true,
+  onlyJobIds = null,
 }: JobsIndexListParams): Promise<JobsIndexPageResult> {
   const from = Math.max(0, (page - 1) * pageSize)
   const to = Math.max(from, from + pageSize - 1)
+
+  if (onlyJobIds && onlyJobIds.length === 0) {
+    return { rows: [], count: 0, fetched: 0, page }
+  }
 
   let q = supabase
     .from('jobs')
     .select(JOBS_LIST_SELECT, { count: 'exact' })
     .eq('company_id', companyId)
+
+  const idFilter = onlyJobIds ? jobsIndexIdInOrFilter(onlyJobIds) : null
 
   if (showOnlyArchived) {
     q = q.eq('archived', true)
@@ -462,25 +508,35 @@ async function fetchJobsIndexPage({
     q = q.in('status', statuses)
   }
 
-  if (dateFrom && dateTo) {
-    q = q
-      .gte('start_at', startOfDay(dateFrom))
-      .lte('start_at', endOfDay(dateTo))
+  const dateOverlap = jobsIndexDateOverlapFilters(
+    resolveJobsIndexDateOverlap(dateFrom, dateTo),
+  )
+  if (dateOverlap.notNullStart) {
+    q = q.not('start_at', 'is', null)
+  }
+  if (dateOverlap.startAtLte) {
+    q = q.lte('start_at', dateOverlap.startAtLte)
   }
 
+  let searchOrFilter: string | null = null
   const indexSearch = search.trim().replace(/^#/, '')
   if (indexSearch) {
     const [customerIds, customerUserIds] = await Promise.all([
       findCustomerIdsByName(companyId, indexSearch),
       findCustomerUserIdsBySearch(indexSearch),
     ])
-    const orFilter = jobsIndexSearchOrFilter({
+    searchOrFilter = jobsIndexSearchOrFilter({
       search: indexSearch,
       customerIds,
       customerUserIds,
     })
-    if (orFilter) q = q.or(orFilter)
   }
+  const combinedOr = mergePostgrestAndOrFilters(
+    idFilter,
+    searchOrFilter,
+    dateOverlap.endAtOrFilter,
+  )
+  if (combinedOr) q = q.or(combinedOr)
 
   if (sortBy === 'customer_name') {
     q = q.order('start_at', { ascending: sortDir === 'asc' })
@@ -522,9 +578,12 @@ export function jobsIndexPageQuery({
   page: number
   pageSize: number
   search: string
-  /** Local calendar date YYYY-MM-DD — inclusive start of period filter on job start_at. */
+  /** Local calendar date YYYY-MM-DD — overlap filter start (open-ended if dateTo is empty). */
   dateFrom?: string
-  /** Local calendar date YYYY-MM-DD — inclusive end of period filter on job start_at. */
+  /**
+   * Local calendar date YYYY-MM-DD — overlap filter end.
+   * Empty with dateFrom means upcoming; set with empty dateFrom means past through that day.
+   */
   dateTo?: string
   sortBy?: JobsIndexSortBy
   sortDir?: JobsIndexSortDir
@@ -603,6 +662,7 @@ export function jobsIndexInfiniteQuery({
   projectLeadUserId = null,
   statuses = null,
   includeRecurringMembers = true,
+  onlyJobIds = null,
   pageSize = JOBS_INDEX_INFINITE_PAGE_SIZE,
 }: {
   companyId: string
@@ -617,6 +677,7 @@ export function jobsIndexInfiniteQuery({
   projectLeadUserId?: string | null
   statuses?: Array<JobListRow['status']> | null
   includeRecurringMembers?: boolean
+  onlyJobIds?: Array<string> | null
   pageSize?: number
 }) {
   return {
@@ -635,6 +696,7 @@ export function jobsIndexInfiniteQuery({
       projectLeadUserId,
       statuses,
       includeRecurringMembers,
+      onlyJobIds,
       pageSize,
     ] as const,
     initialPageParam: 1,
@@ -654,6 +716,7 @@ export function jobsIndexInfiniteQuery({
         projectLeadUserId,
         statuses,
         includeRecurringMembers,
+        onlyJobIds,
       }),
     getNextPageParam: (
       lastPage: JobsIndexPageResult,

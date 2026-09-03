@@ -61,4 +61,86 @@ describe('resolveMatterCardAuthor', () => {
       }),
     ).toBeNull()
   })
+
+  it('shows the answering crew member for crew-response updates', () => {
+    expect(
+      resolveMatterCardAuthor({
+        created_as_company: true,
+        created_by: person,
+        company: { id: 'co-1', name: 'Nordic Grid' },
+        answered_by: {
+          user_id: 'crew-1',
+          display_name: 'Jane Doe',
+          email: 'jane@example.com',
+          avatar_url: 'jane.png',
+        },
+        metadata: {
+          source_crew_invite_matter_id: 'invite-1',
+          answered_by_user_id: 'crew-1',
+          recipient_status: 'accepted',
+        },
+      }),
+    ).toEqual({
+      kind: 'person',
+      name: 'Jane Doe',
+      avatarPath: 'jane.png',
+      userId: 'crew-1',
+      email: 'jane@example.com',
+    })
+  })
+
+  it('falls back to the company when the answering crew member is missing', () => {
+    expect(
+      resolveMatterCardAuthor({
+        created_as_company: true,
+        created_by: person,
+        company: { id: 'co-1', name: 'Nordic Grid' },
+        answered_by: null,
+        metadata: {
+          source_crew_invite_matter_id: 'invite-1',
+          answered_by_user_id: 'crew-1',
+          recipient_status: 'declined',
+        },
+      }),
+    ).toMatchObject({
+      kind: 'company',
+      name: 'Nordic Grid',
+    })
+  })
+
+  it('shows the customer name for offer accepted and declined updates', () => {
+    expect(
+      resolveMatterCardAuthor({
+        created_as_company: true,
+        created_by: person,
+        company: { id: 'co-1', name: 'Nordic Grid' },
+        metadata: {
+          offer_id: 'offer-1',
+          accepted_at: '2026-09-01T00:00:00Z',
+          accepted_by_name: 'Alex Customer',
+        },
+      }),
+    ).toEqual({
+      kind: 'person',
+      name: 'Alex Customer',
+      avatarPath: null,
+      userId: null,
+      email: '',
+    })
+    expect(
+      resolveMatterCardAuthor({
+        created_as_company: true,
+        created_by: person,
+        company: { id: 'co-1', name: 'Nordic Grid' },
+        metadata: {
+          offer_id: 'offer-2',
+          rejected_at: '2026-09-01T00:00:00Z',
+          rejected_by_name: 'Sam Client',
+        },
+      }),
+    ).toMatchObject({
+      kind: 'person',
+      name: 'Sam Client',
+    })
+  })
 })

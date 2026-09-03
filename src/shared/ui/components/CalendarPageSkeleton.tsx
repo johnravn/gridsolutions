@@ -1,10 +1,10 @@
-import { Box, Flex, Grid, Skeleton } from '@radix-ui/themes'
+import { Box, Card, Flex, Grid, Skeleton } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 
 export default function CalendarPageSkeleton() {
   const isMobile = useMediaQuery('(max-width: 1023px)')
 
-  return (
+  const page = (
     <Flex className="calendar-page" direction="column" gap="2">
       <Flex
         align="center"
@@ -66,5 +66,23 @@ export default function CalendarPageSkeleton() {
         ))}
       </Grid>
     </Flex>
+  )
+
+  if (isMobile) return page
+
+  return (
+    <Card
+      size="3"
+      className="calendar-page-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
+      {page}
+    </Card>
   )
 }

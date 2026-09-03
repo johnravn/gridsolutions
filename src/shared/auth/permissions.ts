@@ -6,6 +6,7 @@ export type Capability =
   | 'visit:vehicles'
   | 'visit:crew'
   | 'visit:jobs'
+  | 'visit:conflicts'
   | 'visit:calendar'
   | 'visit:logging'
   | 'visit:customers'
@@ -41,6 +42,7 @@ export function capabilitiesFor({
         'visit:vehicles',
         'visit:crew',
         'visit:jobs',
+        'visit:conflicts',
         'visit:logging',
         'visit:customers',
         'visit:latest',
@@ -64,6 +66,7 @@ export function capabilitiesFor({
         'visit:vehicles',
         'visit:crew',
         'visit:jobs',
+        'visit:conflicts',
         'visit:logging',
         'visit:customers',
         'visit:latest',
@@ -80,6 +83,7 @@ export function capabilitiesFor({
         'visit:vehicles',
         'visit:crew',
         'visit:jobs',
+        'visit:conflicts',
         'visit:logging',
         'visit:customers',
         'visit:latest',

@@ -37,6 +37,13 @@ export type Matter = {
     email: string
     avatar_url: string | null
   } | null
+  /** Crew member who accepted/declined, when this is a crew-response update. */
+  answered_by?: {
+    user_id: string
+    display_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
   company?: {
     id: string
     name: string
@@ -59,6 +66,7 @@ export type Matter = {
   response_count?: number
   my_response?: MatterResponse | null
   is_unread?: boolean // Whether this matter is unread for the current user
+  is_recipient?: boolean // Current user has a matter_recipients row
 }
 
 export type MatterRecipient = {
@@ -67,6 +75,7 @@ export type MatterRecipient = {
   user_id: string
   status: MatterRecipientStatus
   viewed_at: string | null
+  inbox_read_at: string | null
   responded_at: string | null
   created_at: string
   user?: {

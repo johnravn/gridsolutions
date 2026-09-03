@@ -2,7 +2,7 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import {
-  calculateOfferTotals,
+  calculateOfferTotalsFromStoredLines,
   generateSecureToken,
 } from '../utils/offerCalculations'
 import { exportOfferAsPDF } from '../utils/offerPdfExport'
@@ -19,7 +19,6 @@ import {
   isOfferBasisLocked,
   syncBookingsFromOfferBasis,
 } from './offerBasisQueries'
-import type { RentalFactorConfig } from '../utils/offerCalculations'
 import type {
   JobOffer,
   OfferAcceptance,
@@ -658,59 +657,22 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
     vat_percent: basisRow.vat_percent,
   }
 
-  const equipmentItems =
-    offer.groups?.flatMap((g) =>
-      (g.items || []).map((item: OfferEquipmentItem) => ({
-        ...item,
-        total_price: item.unit_price * item.quantity,
-      })),
-    ) || []
+  const equipmentItems = offer.groups?.flatMap((g) => g.items || []) || []
 
   const crewItems = offer.crew_items || []
-  const transportItems = offer.transport_items || []
+  const transportItems =
+    offer.transport_groups?.flatMap((g) => g.items || []) ??
+    offer.transport_items ??
+    []
 
-  // Fetch company expansion to get vehicle rates (including daily rate for transport subtotal)
-  let vehicleDistanceRate: number | null = null
-  let vehicleDistanceIncrement: number | null = null
-  let vehicleDailyRate: number | null = null
-  let rentalFactorConfig: RentalFactorConfig | null = null
-  if (offer.company_id) {
-    const { data: expansion } = await supabase
-      .from('company_expansions')
-      .select(
-        'vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, rental_factor_config',
-      )
-      .eq('company_id', offer.company_id)
-      .maybeSingle()
-    if (expansion) {
-      vehicleDailyRate = expansion.vehicle_daily_rate ?? null
-      vehicleDistanceRate = expansion.vehicle_distance_rate
-      vehicleDistanceIncrement = expansion.vehicle_distance_increment ?? 150
-      try {
-        const raw = (expansion as any).rental_factor_config
-        if (typeof raw === 'string' && raw.trim()) {
-          rentalFactorConfig = JSON.parse(raw) as RentalFactorConfig
-        } else if (raw && typeof raw === 'object') {
-          // JSONB sometimes comes through as object
-          rentalFactorConfig = raw as RentalFactorConfig
-        }
-      } catch {
-        rentalFactorConfig = null
-      }
-    }
-  }
-
-  const totals = calculateOfferTotals(
+  // Prefer stored line totals so job_offers matches the public offer and invoice.
+  const totals = calculateOfferTotalsFromStoredLines(
     equipmentItems,
     crewItems,
     transportItems,
     basisPricing.days_of_use,
     basisPricing.discount_percent,
     basisPricing.vat_percent,
-    rentalFactorConfig,
-    vehicleDistanceRate,
-    vehicleDistanceIncrement,
-    vehicleDailyRate,
   )
 
   // Update offer with new totals
@@ -736,6 +698,10 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
  * Lock an offer (prevents further editing)
  */
 export async function lockOffer(offerId: string): Promise<void> {
+  // Persist totals from stored lines before locking so accepted offers match
+  // the public line sums and later invoices.
+  await recalculateOfferTotals(offerId)
+
   const { data: offer, error: offerError } = await supabase
     .from('job_offers')
     .select('id, job_id, version_number')

@@ -18,6 +18,8 @@ type PickerTriggerProps = {
   invalid?: boolean
   disabled?: boolean
   compact?: boolean
+  /** One-line trigger matching Radix TextField height. */
+  inline?: boolean
   /** When true, Start/End fields are clickable (popover open on times tab). */
   fieldInteraction?: boolean
   onFieldClick?: (field: 'start' | 'end') => void
@@ -145,7 +147,32 @@ const containerStyle = (
   alignItems: 'stretch',
 })
 
-function FieldContent({ field }: { field: FieldDisplay }) {
+function FieldContent({
+  field,
+  inline = false,
+}: {
+  field: FieldDisplay
+  inline?: boolean
+}) {
+  if (inline) {
+    const value = [field.primary, field.secondary].filter(Boolean).join(' · ')
+    return (
+      <Flex align="baseline" gap="2" wrap="nowrap" style={{ minWidth: 0 }}>
+        <Text size="1" color="gray" weight="medium" style={{ flexShrink: 0 }}>
+          {field.label}
+        </Text>
+        <Text
+          size="2"
+          weight="medium"
+          color={field.muted ? 'gray' : undefined}
+          style={{ whiteSpace: 'nowrap' }}
+        >
+          {value}
+        </Text>
+      </Flex>
+    )
+  }
+
   return (
     <>
       <Text as="div" size="1" color="gray" weight="medium">
@@ -193,20 +220,23 @@ function FieldSlot({
   interactive,
   onClick,
   disabled,
+  inline = false,
 }: {
   field: FieldDisplay
   interactive?: boolean
   onClick?: () => void
   disabled?: boolean
+  inline?: boolean
 }) {
   const content = (
     <Flex
-      direction="column"
+      direction={inline ? 'row' : 'column'}
       justify="center"
-      gap="1"
-      style={{ position: 'relative', zIndex: 1, width: '100%' }}
+      align={inline ? 'center' : undefined}
+      gap={inline ? '0' : '1'}
+      style={{ position: 'relative', zIndex: 1, width: '100%', minWidth: 0 }}
     >
-      <FieldContent field={field} />
+      <FieldContent field={field} inline={inline} />
     </Flex>
   )
 
@@ -214,7 +244,7 @@ function FieldSlot({
     flex: 1,
     minWidth: 0,
     position: 'relative',
-    padding: FIELD_SLOT_PADDING,
+    padding: inline ? '0 8px' : FIELD_SLOT_PADDING,
     borderRadius: 'var(--radius-2)',
     textAlign: 'left',
     border: 'none',
@@ -222,6 +252,7 @@ function FieldSlot({
     fontFamily: 'inherit',
     display: 'flex',
     alignItems: 'stretch',
+    height: inline ? '100%' : undefined,
   }
 
   if (interactive && onClick) {
@@ -263,31 +294,45 @@ function FieldsRow({
   fieldInteraction,
   onFieldClick,
   disabled,
+  inline = false,
 }: {
   fields: Array<FieldDisplay>
   fieldInteraction?: boolean
   onFieldClick?: (field: 'start' | 'end') => void
   disabled?: boolean
+  inline?: boolean
 }) {
   return (
     <Flex
       align="stretch"
       justify="between"
-      gap="3"
-      style={{ width: '100%', flex: 1 }}
+      gap={inline ? '2' : '3'}
+      style={{ width: '100%', flex: 1, minWidth: 0 }}
     >
-      {fields.map((field) => {
+      {fields.map((field, index) => {
         const id = fieldId(field.label)
         const interactive =
           fieldInteraction && id != null && onFieldClick != null
         return (
-          <FieldSlot
-            key={field.label}
-            field={field}
-            interactive={interactive}
-            disabled={disabled}
-            onClick={interactive ? () => onFieldClick(id) : undefined}
-          />
+          <React.Fragment key={field.label}>
+            {inline && index > 0 ? (
+              <Text
+                size="2"
+                color="gray"
+                aria-hidden
+                style={{ alignSelf: 'center', flexShrink: 0 }}
+              >
+                –
+              </Text>
+            ) : null}
+            <FieldSlot
+              field={field}
+              inline={inline}
+              interactive={interactive}
+              disabled={disabled}
+              onClick={interactive ? () => onFieldClick(id) : undefined}
+            />
+          </React.Fragment>
         )
       })}
     </Flex>
@@ -304,6 +349,7 @@ export const PickerTrigger = React.forwardRef<
     invalid = false,
     disabled = false,
     compact = false,
+    inline = false,
     fieldInteraction = false,
     onFieldClick,
     onOpen,
@@ -357,12 +403,21 @@ export const PickerTrigger = React.forwardRef<
         {...interactionHandlers}
         className={mergeTriggerClassName(className)}
         style={{
-          ...containerStyle(invalid, disabled, hasValue, active, hovered),
+          ...(inline
+            ? textFieldLikeTriggerStyle(
+                invalid,
+                hasValue,
+                disabled,
+                active,
+                hovered,
+              )
+            : containerStyle(invalid, disabled, hasValue, active, hovered)),
           ...divProps.style,
         }}
       >
         <FieldsRow
           fields={fields}
+          inline={inline}
           fieldInteraction
           onFieldClick={onFieldClick}
           disabled={disabled}
@@ -381,20 +436,28 @@ export const PickerTrigger = React.forwardRef<
       {...interactionHandlers}
       className={mergeTriggerClassName(className)}
       style={{
-        ...containerStyle(invalid, disabled, hasValue, active, hovered),
+        ...(inline
+          ? textFieldLikeTriggerStyle(
+              invalid,
+              hasValue,
+              disabled,
+              active,
+              hovered,
+            )
+          : containerStyle(invalid, disabled, hasValue, active, hovered)),
         cursor: disabled ? 'not-allowed' : 'pointer',
         ...restButtonProps.style,
       }}
     >
       {!hasValue ? (
         <Flex align="center" gap="2" style={{ width: '100%' }}>
-          <Calendar width={18} height={18} color="var(--gray-9)" />
+          <Calendar width={16} height={16} color="var(--gray-9)" />
           <Text size="2" color="gray">
             {placeholder}
           </Text>
         </Flex>
       ) : (
-        <FieldsRow fields={fields} disabled={disabled} />
+        <FieldsRow fields={fields} inline={inline} disabled={disabled} />
       )}
     </button>
   )

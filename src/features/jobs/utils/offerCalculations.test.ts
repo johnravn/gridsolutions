@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateOfferTotals,
+  calculateOfferTotalsFromStoredLines,
   calculateRentalFactor,
   calculateTransportLineTotal,
 } from './offerCalculations'
@@ -137,8 +138,30 @@ describe('calculateOfferTotals', () => {
   it('calculates equipment with rental factor', () => {
     const totals = calculateOfferTotals(equipment, [], [], 4, 0, 25)
     // 2 * 100 * 2.3 = 460
-    expect(totals.equipmentSubtotal).toBeCloseTo(460, 5)
+    expect(totals.equipmentSubtotal).toBe(460)
     expect(totals.equipmentRentalFactor).toBe(2.3)
+  })
+
+  it('rounds each equipment line to øre like saved offer lines', () => {
+    const equipment: Array<OfferEquipmentItem> = [
+      {
+        id: '1',
+        offer_group_id: 'g1',
+        item_id: null,
+        group_id: null,
+        quantity: 1,
+        unit_price: 100,
+        total_price: 0,
+        is_internal: true,
+        sort_order: 0,
+      },
+    ]
+    const totals = calculateOfferTotals(equipment, [], [], 6, 0, 0)
+    // Factor 6 interpolates 2.5–2.8; line is rounded to øre.
+    expect(Number.isInteger(totals.equipmentSubtotal * 100)).toBe(true)
+    expect(totals.equipmentSubtotal).toBe(
+      Math.round(100 * totals.equipmentRentalFactor * 100) / 100,
+    )
   })
 
   it('applies discount to equipment only', () => {
@@ -195,5 +218,35 @@ describe('calculateOfferTotals', () => {
     )
     // Must bill 2 days, not 5: 300 * 2 = 600
     expect(totals.transportSubtotal).toBe(600)
+  })
+
+  it('prefers daily_rate_count over days_used for transport billing', () => {
+    const total = calculateTransportLineTotal({
+      start_date: '2026-06-01',
+      end_date: '2026-06-06',
+      days_used: 2,
+      daily_rate_count: 1,
+      daily_rate: 300,
+      distance_km: null,
+    })
+    expect(total).toBe(300)
+  })
+})
+
+describe('calculateOfferTotalsFromStoredLines', () => {
+  it('sums stored line totals and applies equipment-only discount', () => {
+    const totals = calculateOfferTotalsFromStoredLines(
+      [{ total_price: 1600 }],
+      [{ total_price: 800 }],
+      [{ total_price: 500 }],
+      2,
+      10,
+      25,
+    )
+    expect(totals.equipmentSubtotal).toBe(1600)
+    expect(totals.crewSubtotal).toBe(800)
+    expect(totals.transportSubtotal).toBe(500)
+    expect(totals.discountAmount).toBe(160)
+    expect(totals.totalAfterDiscount).toBe(2740)
   })
 })

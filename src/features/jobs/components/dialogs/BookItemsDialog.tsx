@@ -22,7 +22,11 @@ import {
   isGroupOverlapError,
 } from '@features/conflicts/api/forceBooking'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
+import {
+  emptyGroupBookingMessage,
+  emptyGroupNames,
+  flattenGroupLeafItems,
+} from '@features/inventory/api/flattenGroupItems'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
 import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
@@ -30,6 +34,10 @@ import {
   dedupeOverlapConflicts,
   findGroupOverlaps,
 } from '@features/conflicts/api/overlapChecks'
+import {
+  formatGroupOverlapWarning,
+  formatItemCapacityWarning,
+} from '@features/conflicts/utils/conflictCopy'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import BookEquipmentPickerList from './BookEquipmentPickerList'
 import type {
@@ -476,6 +484,11 @@ export default function BookItemsDialog({
           ? await flattenGroupLeafItems(groupRows.map((g) => g.group_id))
           : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
+      const emptyNames = emptyGroupNames(groupRows, byGroup)
+      if (emptyNames.length > 0) {
+        throw new Error(emptyGroupBookingMessage(emptyNames))
+      }
+
       const kindLookupIds = new Set(itemRows.map((r) => r.item_id))
       for (const members of byGroup.values()) {
         for (const member of members) kindLookupIds.add(member.item_id)
@@ -527,6 +540,21 @@ export default function BookItemsDialog({
               itemKindMap.get(m.item_id) === 'subrental'
                 ? ('planned' as const)
                 : null,
+          })
+        }
+      }
+
+      const groupSourceByItemId = new Map<
+        string,
+        { groupId: string; groupName: string; quantity: number }
+      >()
+      for (const group of groupRows) {
+        for (const member of byGroup.get(group.group_id) ?? []) {
+          if (groupSourceByItemId.has(member.item_id)) continue
+          groupSourceByItemId.set(member.item_id, {
+            groupId: group.group_id,
+            groupName: group.name,
+            quantity: group.quantity,
           })
         }
       }
@@ -609,13 +637,23 @@ export default function BookItemsDialog({
         bookingTimePeriods.map((tp) => tp.id),
       )
 
-      // Get all equipment time periods for the company to check for overlaps
+      const overlapStart = bookingTimePeriods.reduce(
+        (min, tp) => (tp.start_at < min ? tp.start_at : min),
+        bookingTimePeriods[0].start_at,
+      )
+      const overlapEnd = bookingTimePeriods.reduce(
+        (max, tp) => (tp.end_at > max ? tp.end_at : max),
+        bookingTimePeriods[0].end_at,
+      )
+
       const { data: allEquipmentPeriods, error: allTpErr } = await supabase
         .from('time_periods')
         .select('id, start_at, end_at')
         .eq('company_id', companyId)
         .eq('category', 'equipment')
         .eq('deleted', false)
+        .lt('start_at', overlapEnd)
+        .gt('end_at', overlapStart)
 
       if (allTpErr) throw allTpErr
 
@@ -748,11 +786,7 @@ export default function BookItemsDialog({
         if (!hasCapacityConflict) continue
 
         const itemName = itemNameMap.get(itemId) ?? 'Item'
-        const existingPart =
-          existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-        bookingWarnings.push(
-          `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-        )
+        const source = groupSourceByItemId.get(itemId)
 
         const itemReservations = (overlappingReservations ?? []).filter(
           (res) =>
@@ -770,6 +804,7 @@ export default function BookItemsDialog({
             ? otherJobReservations
             : itemReservations
 
+        const itemConflicts: Array<OverlapConflict> = []
         for (const res of reservationsToShow) {
           const tp = res.time_period as {
             start_at: string
@@ -780,8 +815,9 @@ export default function BookItemsDialog({
           const conflictJob = tp.job_id
             ? overlappingJobMap.get(tp.job_id)
             : undefined
-          bookingConflicts.push({
+          itemConflicts.push({
             jobId: tp.job_id,
+            itemId,
             itemName,
             quantity: res.quantity,
             jobTitle: conflictJob?.title ?? null,
@@ -789,8 +825,24 @@ export default function BookItemsDialog({
             endAt: tp.end_at,
             customerName: conflictJob?.customerName ?? null,
             projectLeadName: conflictJob?.projectLeadName ?? null,
+            sourceGroupId: source?.groupId ?? null,
+            sourceGroupName: source?.groupName ?? null,
+            sourceGroupQuantity: source?.quantity,
           })
         }
+
+        if (!source) {
+          bookingWarnings.push(
+            formatItemCapacityWarning({
+              itemName,
+              newQty,
+              existingQty,
+              onHand,
+              conflicts: itemConflicts,
+            }),
+          )
+        }
+        bookingConflicts.push(...itemConflicts)
       }
 
       if (groupRows.length > 0) {
@@ -803,12 +855,16 @@ export default function BookItemsDialog({
             excludePeriodId: defaultTimePeriodId,
           })
           for (const [groupId, overlaps] of groupOverlaps) {
-            const groupName =
-              groupRows.find((g) => g.group_id === groupId)?.name ?? 'Group'
-            bookingWarnings.push(
-              `${groupName}: already booked in an overlapping period`,
+            const groupRow = groupRows.find((g) => g.group_id === groupId)
+            const groupName = groupRow?.name ?? 'Group'
+            bookingWarnings.push(formatGroupOverlapWarning(groupName, overlaps))
+            bookingConflicts.push(
+              ...overlaps.map((overlap) => ({
+                ...overlap,
+                sourceGroupQuantity:
+                  overlap.sourceGroupQuantity ?? groupRow?.quantity,
+              })),
             )
-            bookingConflicts.push(...overlaps)
           }
         }
       }

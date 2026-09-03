@@ -1018,7 +1018,10 @@ export default function OffersTab({
       if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       toastError(
         'Failed to create bookings',
-        err instanceof Error ? err.message : 'Please try again.',
+        err instanceof Error
+          ? err.message
+          : ((err as { message?: string } | null)?.message ??
+              'Please try again.'),
       )
     },
   })
@@ -1067,7 +1070,10 @@ export default function OffersTab({
       if (err instanceof Error && err.message === OVERLAP_NEEDS_FORCE) return
       toastError(
         'Failed to sync bookings',
-        err instanceof Error ? err.message : 'Please try again.',
+        err instanceof Error
+          ? err.message
+          : ((err as { message?: string } | null)?.message ??
+              'Please try again.'),
       )
     },
   })

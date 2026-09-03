@@ -153,6 +153,50 @@ export async function markNotificationReadByEntity(
   if (error) throw error
 }
 
+/** Clear notification read state by entity (e.g. when a matter is marked unread). */
+export async function markNotificationUnreadByEntity(
+  userId: string,
+  entityType: string,
+  entityId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: null })
+    .eq('user_id', userId)
+    .eq('entity_type', entityType)
+    .eq('entity_id', entityId)
+  if (error) throw error
+}
+
+export async function markNotificationsReadByMatterIds(
+  userId: string,
+  matterIds: Array<string>,
+): Promise<void> {
+  if (matterIds.length === 0) return
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .eq('entity_type', 'matter')
+    .in('entity_id', matterIds)
+    .is('read_at', null)
+  if (error) throw error
+}
+
+export async function markNotificationsUnreadByMatterIds(
+  userId: string,
+  matterIds: Array<string>,
+): Promise<void> {
+  if (matterIds.length === 0) return
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: null })
+    .eq('user_id', userId)
+    .eq('entity_type', 'matter')
+    .in('entity_id', matterIds)
+  if (error) throw error
+}
+
 export async function markAllNotificationsRead(
   userId: string,
   companyId: string | null,
@@ -169,7 +213,7 @@ export async function markAllNotificationsRead(
   if (error) throw error
 }
 
-/** Get entity_ids of unread notifications with entity_type='matter' (for syncing matter_recipients.viewed_at). */
+/** Get entity_ids of unread notifications with entity_type='matter' (for syncing inbox read state). */
 export async function getUnreadMatterEntityIds(
   userId: string,
   companyId: string | null,

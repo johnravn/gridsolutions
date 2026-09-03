@@ -63,7 +63,7 @@ const LIST_HEADER = {
 
 function getRadixColorsForPeriod(
   title: string | null,
-  category?: 'program' | 'equipment' | 'crew' | 'transport' | null,
+  category?: 'program' | 'equipment' | 'crew' | 'transport' | 'personal' | null,
 ): {
   bg: string
   border: string
@@ -82,6 +82,12 @@ function getRadixColorsForPeriod(
       bg: 'var(--violet-a6)',
       border: 'var(--violet-a8)',
       text: 'var(--violet-12)',
+    }
+  if (category === 'personal')
+    return {
+      bg: 'var(--teal-a6)',
+      border: 'var(--teal-a8)',
+      text: 'var(--teal-12)',
     }
   if (category === 'crew' || t.includes('crew'))
     return {
@@ -128,7 +134,7 @@ function getRadixColorsForPeriod(
 type OverflowEvent = {
   id: string
   jobId?: string
-  category?: 'program' | 'equipment' | 'crew' | 'transport' | null
+  category?: 'program' | 'equipment' | 'crew' | 'transport' | 'personal' | null
   displayTitle: string
   timeStr: string
   isCanceled: boolean
@@ -136,6 +142,13 @@ type OverflowEvent = {
   text: string
   leadName: string | null
   avatarUrl: string | null
+  personal?: {
+    id: string
+    title: string
+    start: string
+    end: string
+    userId: string
+  }
 }
 
 function formatTimeRange(start: Date | null, end: Date | null): string {
@@ -155,8 +168,16 @@ function snapshotOverflowEvent(event: EventApi): OverflowEvent {
     } | null
     jobTitle?: string
     status?: string
-    category?: 'program' | 'equipment' | 'crew' | 'transport' | null
-    ref?: { jobId?: string }
+    category?:
+      | 'program'
+      | 'equipment'
+      | 'crew'
+      | 'transport'
+      | 'personal'
+      | null
+    ref?: { jobId?: string; userId?: string }
+    kind?: string
+    notes?: string
   }
   const projectLead = props.projectLead
   const isCanceled = props.status === 'canceled'
@@ -180,6 +201,16 @@ function snapshotOverflowEvent(event: EventApi): OverflowEvent {
       ? projectLead.display_name || projectLead.email
       : null,
     avatarUrl,
+    personal:
+      props.kind === 'personal' && props.ref?.userId
+        ? {
+            id: event.id,
+            title: props.notes || event.title,
+            start: event.start?.toISOString() ?? '',
+            end: event.end?.toISOString() ?? event.start?.toISOString() ?? '',
+            userId: props.ref.userId,
+          }
+        : undefined,
   }
 }
 
@@ -199,6 +230,13 @@ type Props = {
   initialScope?: CalendarFilter['scope']
   // Hide the create booking button
   hideCreateButton?: boolean
+  onPersonalEventClick?: (event: {
+    id: string
+    title: string
+    start: string
+    end: string
+    userId: string
+  }) => void
   // Control list mode externally
   initialListMode?: boolean
   onListModeChange?: (listMode: boolean) => void
@@ -212,6 +250,7 @@ export default function CompanyCalendarPro({
   defaultKinds = ['job'],
   initialScope,
   hideCreateButton = false,
+  onPersonalEventClick,
   initialListMode = false,
   onListModeChange,
 }: Props) {
@@ -344,7 +383,13 @@ export default function CompanyCalendarPro({
 
   // Map event category to job tab
   function getTabForCategory(
-    category?: 'program' | 'equipment' | 'crew' | 'transport' | null,
+    category?:
+      | 'program'
+      | 'equipment'
+      | 'crew'
+      | 'transport'
+      | 'personal'
+      | null,
   ): string {
     switch (category) {
       case 'equipment':
@@ -380,6 +425,22 @@ export default function CompanyCalendarPro({
   }
 
   function handleEventClick(arg: EventClickArg) {
+    const xp = arg.event.extendedProps as {
+      kind?: string
+      notes?: string
+      ref?: { userId?: string }
+    }
+    if (xp.kind === 'personal' && xp.ref?.userId && onPersonalEventClick) {
+      onPersonalEventClick({
+        id: arg.event.id,
+        title: xp.notes || arg.event.title,
+        start: arg.event.start?.toISOString() ?? '',
+        end:
+          arg.event.end?.toISOString() ?? arg.event.start?.toISOString() ?? '',
+        userId: xp.ref.userId,
+      })
+      return
+    }
     openJobFromEvent(arg.event)
   }
 
@@ -424,6 +485,11 @@ export default function CompanyCalendarPro({
         }
         style={{ background: event.bg, color: event.text }}
         onClick={() => {
+          if (event.personal && onPersonalEventClick) {
+            closeOverflow()
+            onPersonalEventClick(event.personal)
+            return
+          }
           if (!event.jobId) {
             closeOverflow()
             return
@@ -820,8 +886,9 @@ export default function CompanyCalendarPro({
             height="100%"
             expandRows
             dayMaxEventRows
-            slotMinTime="07:00:00"
-            slotMaxTime="20:00:00"
+            slotMinTime="00:00:00"
+            slotMaxTime="24:00:00"
+            scrollTime="00:00:00"
             eventDisplay="block"
           />
         ) : (

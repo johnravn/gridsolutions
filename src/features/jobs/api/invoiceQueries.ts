@@ -4,6 +4,13 @@ import { supabase } from '@shared/api/supabase'
 
 import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { impliedBookedGroupCount } from '../utils/groupBookingQuantity'
+import {
+  equipmentDiscountOverridesForLines,
+  jobDaysOfUse,
+  parseRentalFactorConfig,
+  priceEquipmentBookingLine,
+  resolveBookingsEquipmentDiscountPercent,
+} from '../utils/bookingsInvoicePricing'
 import { defaultDescriptionForLine } from '../utils/invoiceLineDescription'
 
 export type BookingInvoiceLine = {
@@ -17,9 +24,13 @@ export type BookingInvoiceLine = {
   jobTitle?: string | null
   jobnr?: number | null
   roleLabel?: string | null
+  /** Assigned people on the crew role, joined for description tokens. */
+  crewName?: string | null
   vehicleName?: string | null
   groupName?: string | null
   itemName?: string | null
+  /** Rental period in days (equipment / offer days of use) for description tokens. */
+  rentalDays?: number | null
   quantity: number
   unitPrice: number // Price ex VAT per unit
   totalPrice: number // Total ex VAT
@@ -40,10 +51,32 @@ export type BookingsForInvoice = {
   totalExVat: number
   totalVat: number
   totalWithVat: number
+  /**
+   * Customer/default discount on equipment lines only — same as technical-offer
+   * invoice expansion (`equipmentDiscountOverridesFromOffer`).
+   */
+  equipmentDiscountOverrides?: Record<string, number>
+}
+
+function assignedCrewDisplayName(row: {
+  placeholder_name?: string | null
+  user?:
+    | { display_name?: string | null; email?: string | null }
+    | Array<{ display_name?: string | null; email?: string | null }>
+    | null
+}): string | null {
+  const user = Array.isArray(row.user) ? row.user[0] : row.user
+  const name =
+    user?.display_name?.trim() ||
+    user?.email?.trim() ||
+    row.placeholder_name?.trim() ||
+    ''
+  return name || null
 }
 
 function sumBookingsForInvoice(
   lines: Array<BookingInvoiceLine>,
+  equipmentDiscountOverrides: Record<string, number> = {},
 ): BookingsForInvoice {
   const equipment = lines.filter((l) => l.type === 'equipment')
   const crew = lines.filter((l) => l.type === 'crew')
@@ -61,6 +94,7 @@ function sumBookingsForInvoice(
     totalExVat,
     totalVat,
     totalWithVat: totalExVat + totalVat,
+    equipmentDiscountOverrides,
   }
 }
 
@@ -68,7 +102,11 @@ export function mergeBookingsForInvoice(
   parts: Array<BookingsForInvoice>,
 ): BookingsForInvoice {
   const all = parts.flatMap((p) => p.all)
-  return sumBookingsForInvoice(all)
+  const equipmentDiscountOverrides = Object.assign(
+    {},
+    ...parts.map((p) => p.equipmentDiscountOverrides ?? {}),
+  )
+  return sumBookingsForInvoice(all, equipmentDiscountOverrides)
 }
 
 async function fetchJobBookingsForInvoice({
@@ -88,12 +126,14 @@ async function fetchJobBookingsForInvoice({
 }): Promise<BookingsForInvoice> {
   const lineId = (rawId: string) => (idPrefix ? `${idPrefix}${rawId}` : rawId)
 
-  // Fetch job with customer and crew_pricing_level for crew rates
+  // Fetch job with customer (crew rates + default equipment discount) and dates
   const { data: jobData } = await supabase
     .from('jobs')
     .select(
-      `title, jobnr, customer_id,
+      `title, jobnr, start_at, end_at, customer_id,
           customer:customers!jobs_customer_id_fkey (
+            discount_percent,
+            is_partner,
             crew_pricing_level_id,
             crew_pricing_level:crew_pricing_level_id (
               crew_rate_per_day,
@@ -116,14 +156,37 @@ async function fetchJobBookingsForInvoice({
     ? customer?.crew_pricing_level?.[0]
     : customer?.crew_pricing_level
 
-  // Fetch company expansion for rates (crew standard + vehicle)
+  // Fetch company expansion for rates (crew standard + vehicle + rental + discounts)
   const { data: companyExpansion } = await supabase
     .from('company_expansions')
     .select(
-      'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate',
+      'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, rental_factor_config, customer_discount_percent, partner_discount_percent',
     )
     .eq('company_id', companyId)
     .maybeSingle()
+
+  const rentalFactorConfig = parseRentalFactorConfig(
+    (companyExpansion as { rental_factor_config?: unknown } | null)
+      ?.rental_factor_config,
+  )
+  const daysOfUse = jobDaysOfUse(
+    (jobData as { start_at?: string | null } | null)?.start_at,
+    (jobData as { end_at?: string | null } | null)?.end_at,
+  )
+  const equipmentDiscountPercent = resolveBookingsEquipmentDiscountPercent({
+    customerDiscountPercent: customer?.discount_percent,
+    isPartner: !!customer?.is_partner,
+    companyCustomerDiscountPercent: (
+      companyExpansion as {
+        customer_discount_percent?: number | null
+      } | null
+    )?.customer_discount_percent,
+    companyPartnerDiscountPercent: (
+      companyExpansion as {
+        partner_discount_percent?: number | null
+      } | null
+    )?.partner_discount_percent,
+  })
 
   const crewBillingUnit: 'day' | 'hour' =
     (crewLevel?.default_crew_billing_unit ??
@@ -293,9 +356,14 @@ async function fetchJobBookingsForInvoice({
     const brandName = brand?.name ?? null
     const model = item.model ?? null
 
-    const unitPrice = pricesMap.get(booking.item_id) ?? 0
+    const dailyUnitPrice = pricesMap.get(booking.item_id) ?? 0
     const quantity = booking.quantity
-    const totalPrice = unitPrice * quantity
+    const priced = priceEquipmentBookingLine({
+      dailyUnitPrice,
+      quantity,
+      daysOfUse,
+      rentalFactorConfig,
+    })
 
     equipmentLines.push({
       id: lineId(booking.id),
@@ -304,10 +372,11 @@ async function fetchJobBookingsForInvoice({
       brandName,
       model,
       itemName: item.name ?? null,
+      rentalDays: priced.rentalDays,
       ...ctx,
       quantity,
-      unitPrice,
-      totalPrice,
+      unitPrice: priced.unitPrice,
+      totalPrice: priced.totalPrice,
       vatPercent: defaultVatPercent,
       timePeriodId: booking.time_period_id,
       timePeriodTitle: timePeriod.title,
@@ -338,8 +407,13 @@ async function fetchJobBookingsForInvoice({
       ([item_id, quantity]) => ({ item_id, quantity }),
     )
     const quantity = impliedBookedGroupCount(templateItems, bookedLines)
-    const unitPrice = info.current_price
-    const totalPrice = unitPrice * quantity
+    const dailyUnitPrice = info.current_price
+    const priced = priceEquipmentBookingLine({
+      dailyUnitPrice,
+      quantity,
+      daysOfUse,
+      rentalFactorConfig,
+    })
 
     const timePeriod = timePeriodMap.get(bucket.time_period_id)
     if (!timePeriod) continue
@@ -351,10 +425,11 @@ async function fetchJobBookingsForInvoice({
       brandName: null,
       model: null,
       groupName: info.name,
+      rentalDays: priced.rentalDays,
       ...ctx,
       quantity,
-      unitPrice,
-      totalPrice,
+      unitPrice: priced.unitPrice,
+      totalPrice: priced.totalPrice,
       vatPercent: defaultVatPercent,
       timePeriodId: bucket.time_period_id,
       timePeriodTitle: timePeriod.title,
@@ -381,6 +456,31 @@ async function fetchJobBookingsForInvoice({
 
   if (crewError) throw crewError
 
+  const { data: reservedCrewRows, error: reservedCrewError } =
+    crewTimePeriodIds.length > 0
+      ? await supabase
+          .from('reserved_crew')
+          .select(
+            `
+            time_period_id, status, placeholder_name,
+            user:user_id ( display_name, email )
+          `,
+          )
+          .in('time_period_id', crewTimePeriodIds)
+          .neq('status', 'canceled')
+      : { data: [], error: null }
+
+  if (reservedCrewError) throw reservedCrewError
+
+  const crewNamesByPeriod = new Map<string, Array<string>>()
+  for (const row of reservedCrewRows ?? []) {
+    const name = assignedCrewDisplayName(row)
+    if (!name) continue
+    const names = crewNamesByPeriod.get(row.time_period_id) ?? []
+    names.push(name)
+    crewNamesByPeriod.set(row.time_period_id, names)
+  }
+
   // Fetch transport bookings
   const { data: transportBookings, error: transError } = await supabase
     .from('reserved_vehicles')
@@ -399,7 +499,7 @@ async function fetchJobBookingsForInvoice({
 
   if (transError) throw transError
 
-  // Process crew roles (one line per role, using role title/category - not assigned crew)
+  // Process crew roles (one line per role; assigned names are optional tokens)
   const crewLines: Array<BookingInvoiceLine> = []
   if (crewRoles) {
     for (const role of crewRoles) {
@@ -411,6 +511,7 @@ async function fetchJobBookingsForInvoice({
       const neededCount = Math.max(1, role.needed_count ?? 1)
       const roleLabel =
         role.title?.trim() || role.role_category?.trim() || 'technician'
+      const assignedNames = crewNamesByPeriod.get(role.id) ?? []
 
       let quantity: number
       let unitPrice: number
@@ -432,6 +533,7 @@ async function fetchJobBookingsForInvoice({
         brandName: null,
         model: null,
         roleLabel,
+        crewName: assignedNames.join(', ') || null,
         ...ctx,
         quantity,
         unitPrice,
@@ -496,7 +598,13 @@ async function fetchJobBookingsForInvoice({
 
   // Combine all lines
   const allLines = [...equipmentLines, ...crewLines, ...transportLines]
-  return sumBookingsForInvoice(allLines)
+  return sumBookingsForInvoice(
+    allLines,
+    equipmentDiscountOverridesForLines(
+      equipmentLines.map((l) => l.id),
+      equipmentDiscountPercent,
+    ),
+  )
 }
 
 /**

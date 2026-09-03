@@ -26,6 +26,7 @@ import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
 import { DemoModeBadge } from '@features/demo/components/DemoModeBadge'
+import { BetaBadge } from '@shared/ui/components/BetaBadge'
 import { GlobalHotkeys } from '@shared/hotkeys'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useAppResume } from '../hooks/useAppResume'
@@ -172,6 +173,8 @@ export default function AppShell() {
   }
 
   const title = getPageTitle(currentPath)
+  const showPageBeta =
+    currentPath.startsWith('/conflicts') || currentPath.startsWith('/reporting')
   const isPublicOffer = currentPath.startsWith('/offer/')
   const isPublic =
     currentPath === '/login' ||
@@ -247,13 +250,31 @@ export default function AppShell() {
                 }}
               >
                 {!isPublic && (
-                  <Text
-                    size="8"
-                    weight="light"
-                    style={{ flex: isMobile ? 1 : undefined }}
+                  <Flex
+                    align="center"
+                    gap="2"
+                    wrap="wrap"
+                    style={{ flex: isMobile ? 1 : undefined, minWidth: 0 }}
                   >
-                    {title}
-                  </Text>
+                    <Text
+                      size="8"
+                      weight="light"
+                      style={{ lineHeight: 1, display: 'block' }}
+                    >
+                      {title}
+                    </Text>
+                    {showPageBeta ? (
+                      <Box
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <BetaBadge size="2" />
+                      </Box>
+                    ) : null}
+                  </Flex>
                 )}
                 {!isPublic && isMobile && (
                   <Flex align="center" gap="2" style={{ flexShrink: 0 }}>

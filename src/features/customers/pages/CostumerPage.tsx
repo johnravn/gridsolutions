@@ -157,6 +157,10 @@ export default function CustomerPage() {
       onSelect={isLarge ? setSelectedId : handleSelect}
       showRegular={true}
       showPartner={true}
+      contaEnabled={
+        accountingConfig?.accounting_software === 'conta' &&
+        !!accountingConfig.accounting_organization_id
+      }
       toolbarExtra={isLarge ? undefined : syncButton}
     />
   )

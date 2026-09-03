@@ -24,6 +24,7 @@ import ProfilePage from '@features/profile/pages/ProfilePage'
 import MattersPage from '@features/matters/pages/MattersPage'
 import CustomerPage from '@features/customers/pages/CostumerPage'
 import LatestPage from '@features/latest/pages/LatestPage'
+import ConflictsPage from '@features/conflicts/pages/ConflictsPage'
 import PublicOfferPage from '@features/jobs/pages/PublicOfferPage'
 import LoggingPage from '@features/logging/pages/LoggingPage'
 import ReportingPage from '@features/reporting/pages/ReportingPage'
@@ -178,6 +179,15 @@ const jobsRoute = createRoute({
   component: guarded('visit:jobs', JobsPage),
 })
 
+const conflictsRoute = createRoute({
+  getParentRoute: () => splitLayoutRoute,
+  path: 'conflicts',
+  validateSearch: (search: Record<string, unknown>) => ({
+    conflictId: (search.conflictId as string | undefined) || undefined,
+  }),
+  component: guarded('visit:conflicts', ConflictsPage),
+})
+
 const crewRoute = createRoute({
   getParentRoute: () => splitLayoutRoute,
   path: 'crew',
@@ -276,6 +286,7 @@ const routeTree = rootRoute.addChildren([
       loggingRoute,
       vehiclesRoute,
       jobsRoute,
+      conflictsRoute,
       crewRoute,
       mattersRoute,
       customersRoute,

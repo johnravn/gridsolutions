@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.11'
+export const APP_VERSION = '1.13.13'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -28,6 +28,21 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'My jobs on the Jobs list',
+      description:
+        'Filter the Jobs tab to jobs you are crew or project lead on, sorted by date — without the two-week window on Home.',
+    },
+    {
+      title: 'Hourly crew hours on offers',
+      description:
+        'The offer editor no longer bills hourly crew as 24 hours per day. Set start and end times, or type hours per day, before crew bookings exist.',
+    },
+    {
+      title: 'Private customers in Conta',
+      description:
+        'Sync private / individual customers without an organisation number. Search Conta by name or email, pick the right match when several exist, and see which Conta customers are already linked.',
+    },
     {
       title: 'Technician crew booking on new jobs',
       description:

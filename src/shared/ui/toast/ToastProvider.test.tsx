@@ -91,4 +91,18 @@ describe('AppToastProvider', () => {
       'info',
     )
   })
+
+  it('portals the toast layer onto document.body above dialog stacking', async () => {
+    renderToast('success')
+    fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Saved')).toBeInTheDocument()
+    })
+
+    const host = document.getElementById('app-toast-host')
+    expect(host?.parentElement).toBe(document.body)
+    expect(host?.querySelector('.app-toast-layer')).toBeTruthy()
+    expect(host?.querySelector('.app-toast')).toBeTruthy()
+  })
 })

@@ -57,12 +57,16 @@ describe('JobBookingConflictsBanner', () => {
     renderWithProviders(<JobBookingConflictsBanner jobId="job-1" />)
 
     await waitFor(() => {
-      expect(screen.getByText('Forced overlaps (2)')).toBeInTheDocument()
+      expect(
+        screen.getByText('Forced overlaps (1 group and 1 item)'),
+      ).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Equipment (2)')).toBeInTheDocument()
+    expect(
+      screen.getByText('Equipment (1 group and 1 item)'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/Groups \(/)).not.toBeInTheDocument()
-    expect(screen.getByText(/Vocal package:/)).toBeInTheDocument()
-    expect(screen.getByText(/SM58:/)).toBeInTheDocument()
+    expect(screen.getByText(/Vocal package overlaps/)).toBeInTheDocument()
+    expect(screen.getByText(/SM58 is over capacity/)).toBeInTheDocument()
   })
 })

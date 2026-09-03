@@ -65,11 +65,13 @@ export function useIndexTableSelectionKeyboard({
     enabled: canNav,
     preventDefault: false,
     ignoreInputs: true,
+    conflictBehavior: 'replace',
   })
 
   useHotkey('ArrowUp', (event) => move(-1, event), {
     enabled: canNav,
     preventDefault: false,
     ignoreInputs: true,
+    conflictBehavior: 'replace',
   })
 }

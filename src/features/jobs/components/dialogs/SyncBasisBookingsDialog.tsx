@@ -15,6 +15,10 @@ import {
   conflictDisplayCounts,
   groupConflictsForDisplay,
 } from '@features/conflicts/utils/groupConflictsForDisplay'
+import {
+  formatConflictCountLabel,
+  formatConflictEntriesSummary,
+} from '@features/conflicts/utils/conflictCopy'
 import { SyncPreviewChangeList } from './SyncPreviewChangeList'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type { SyncPreviewViewModel } from '@features/jobs/utils/offerBookingDiff'
@@ -157,16 +161,10 @@ export function SyncBasisBookingsDialog({
                     {hasConflicts ? (
                       <Text size="2" color="amber">
                         (
-                        {[
-                          groupCount > 0
-                            ? `${groupCount} ${groupCount === 1 ? 'group' : 'groups'}`
-                            : null,
-                          itemCount > 0
-                            ? `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`
-                            : null,
-                        ]
-                          .filter(Boolean)
-                          .join(', ') || 'conflicts'}
+                        {formatConflictCountLabel({
+                          groups: groupCount,
+                          items: itemCount,
+                        })}
                         )
                       </Text>
                     ) : null}
@@ -181,7 +179,7 @@ export function SyncBasisBookingsDialog({
                     as="div"
                   >
                     {hasConflicts
-                      ? 'Expand to see overlapping bookings and overlap duration.'
+                      ? formatConflictEntriesSummary(conflictEntries)
                       : 'None'}
                   </Text>
                 ) : !hasConflicts ? (

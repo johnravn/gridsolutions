@@ -3,7 +3,13 @@ import { fireAndForgetCrewPositionInviteEmail } from '@shared/email/supabaseEdge
 import {
   createNotificationAndSendEmail,
   markNotificationReadByEntity,
+  markNotificationsReadByMatterIds,
+  markNotificationsUnreadByMatterIds,
 } from '@features/notifications/api/queries'
+import {
+  crewInviteAnswerUserIds,
+  parseCrewInviteAnswerMeta,
+} from '../utils/crewInviteAnswer'
 import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
 import { selectCrewInviteRecipients } from '../utils/selectCrewInviteRecipients'
 import type { Json } from '@shared/types/database.types'
@@ -65,6 +71,32 @@ function mapMatterRow(row: Record<string, unknown>): Matter {
   }
 }
 
+async function attachAnsweredByProfiles(
+  matters: Array<Matter>,
+): Promise<Array<Matter>> {
+  const userIds = crewInviteAnswerUserIds(matters)
+  if (userIds.length === 0) return matters
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('user_id, display_name, email, avatar_url')
+    .in('user_id', userIds)
+
+  if (error) throw error
+
+  const byId = new Map(
+    (data || []).map((profile) => [profile.user_id, profile]),
+  )
+  return matters.map((matter) => {
+    const answer = parseCrewInviteAnswerMeta(matter.metadata)
+    if (!answer) return matter
+    return {
+      ...matter,
+      answered_by: byId.get(answer.answered_by_user_id) ?? null,
+    }
+  })
+}
+
 // Fetch matters from all companies the user is a member of
 export function mattersIndexQueryAll(userId?: string | null) {
   return {
@@ -107,7 +139,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
       // Get all matters where user is a recipient (with read status)
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
-        .select('matter_id, viewed_at')
+        .select('matter_id, inbox_read_at')
         .eq('user_id', user.id)
 
       if (recError) throw recError
@@ -119,7 +151,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
 
       const unreadMatterIds = new Set<string>(
         (recipientMatters || [])
-          .filter((r) => !r.viewed_at)
+          .filter((r) => !r.inbox_read_at)
           .map((r) => r.matter_id),
       )
 
@@ -134,16 +166,10 @@ export function mattersIndexQueryAll(userId?: string | null) {
       const { data: allMatters, error } = await q
       if (error) throw error
 
-      // Filter to only matters where user is creator or recipient
-      // For crew_invite matters, only show if user is a recipient (not if they're the creator)
-      const filteredMatters = (allMatters || []).filter((m) => {
-        // For crew_invite, only show if user is a recipient
-        if (m.matter_type === 'crew_invite') {
-          return recipientMatterIds.has(m.id)
-        }
-        // For other matter types, show if user is creator or recipient
-        return m.created_by_user_id === user.id || recipientMatterIds.has(m.id)
-      })
+      // Inbox is recipient-only for every matter type (offers, invites, announcements).
+      const filteredMatters = (allMatters || []).filter((m) =>
+        recipientMatterIds.has(m.id),
+      )
 
       if (filteredMatters.length === 0) return []
 
@@ -202,13 +228,16 @@ export function mattersIndexQueryAll(userId?: string | null) {
         }
       }
 
-      return filteredMatters.map((m) => ({
-        ...mapMatterRow(m as Record<string, unknown>),
-        recipient_count: recipientCounts.get(m.id) || 0,
-        response_count: responseCounts.get(m.id) || 0,
-        my_response: myResponseMap.get(m.id) || null,
-        is_unread: unreadMatterIds.has(m.id),
-      }))
+      return attachAnsweredByProfiles(
+        filteredMatters.map((m) => ({
+          ...mapMatterRow(m as Record<string, unknown>),
+          recipient_count: recipientCounts.get(m.id) || 0,
+          response_count: responseCounts.get(m.id) || 0,
+          my_response: myResponseMap.get(m.id) || null,
+          is_unread: unreadMatterIds.has(m.id),
+          is_recipient: recipientMatterIds.has(m.id),
+        })),
+      )
     },
   }
 }
@@ -227,7 +256,7 @@ export function mattersIndexQuery(companyId: string) {
       // Get all matters where user is a recipient (with read status)
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
-        .select('matter_id, viewed_at')
+        .select('matter_id, inbox_read_at')
         .eq('user_id', user.id)
 
       if (recError) throw recError
@@ -239,7 +268,7 @@ export function mattersIndexQuery(companyId: string) {
 
       const unreadMatterIds = new Set<string>(
         (recipientMatters || [])
-          .filter((r) => !r.viewed_at)
+          .filter((r) => !r.inbox_read_at)
           .map((r) => r.matter_id),
       )
 
@@ -255,16 +284,10 @@ export function mattersIndexQuery(companyId: string) {
       const { data: allMatters, error } = await q
       if (error) throw error
 
-      // Filter to only matters where user is creator or recipient
-      // For crew_invite matters, only show if user is a recipient (not if they're the creator)
-      const filteredMatters = (allMatters || []).filter((m) => {
-        // For crew_invite, only show if user is a recipient
-        if (m.matter_type === 'crew_invite') {
-          return recipientMatterIds.has(m.id)
-        }
-        // For other matter types, show if user is creator or recipient
-        return m.created_by_user_id === user.id || recipientMatterIds.has(m.id)
-      })
+      // Inbox is recipient-only for every matter type (offers, invites, announcements).
+      const filteredMatters = (allMatters || []).filter((m) =>
+        recipientMatterIds.has(m.id),
+      )
 
       if (filteredMatters.length === 0) return []
 
@@ -323,13 +346,16 @@ export function mattersIndexQuery(companyId: string) {
         }
       }
 
-      return filteredMatters.map((m) => ({
-        ...mapMatterRow(m as Record<string, unknown>),
-        recipient_count: recipientCounts.get(m.id) || 0,
-        response_count: responseCounts.get(m.id) || 0,
-        my_response: myResponseMap.get(m.id) || null,
-        is_unread: unreadMatterIds.has(m.id),
-      }))
+      return attachAnsweredByProfiles(
+        filteredMatters.map((m) => ({
+          ...mapMatterRow(m as Record<string, unknown>),
+          recipient_count: recipientCounts.get(m.id) || 0,
+          response_count: responseCounts.get(m.id) || 0,
+          my_response: myResponseMap.get(m.id) || null,
+          is_unread: unreadMatterIds.has(m.id),
+          is_recipient: recipientMatterIds.has(m.id),
+        })),
+      )
     },
   }
 }
@@ -351,17 +377,20 @@ export function matterDetailQuery(matterId: string) {
 
       if (!data) return null
 
-      // Get my response if logged in
       const {
         data: { user },
       } = await supabase.auth.getUser()
       let myResponse: MatterResponse | null = null
+      let isUnread = false
+      let isRecipient = false
 
       if (user) {
-        const { data: responseData } = await supabase
-          .from('matter_responses')
-          .select(
-            `
+        const [{ data: responseData }, { data: recipientRow }] =
+          await Promise.all([
+            supabase
+              .from('matter_responses')
+              .select(
+                `
             id,
             matter_id,
             user_id,
@@ -370,20 +399,36 @@ export function matterDetailQuery(matterId: string) {
             updated_at,
             user:user_id ( user_id, display_name, email, avatar_url )
           `,
-          )
-          .eq('matter_id', matterId)
-          .eq('user_id', user.id)
-          .maybeSingle()
+              )
+              .eq('matter_id', matterId)
+              .eq('user_id', user.id)
+              .maybeSingle(),
+            supabase
+              .from('matter_recipients')
+              .select('inbox_read_at')
+              .eq('matter_id', matterId)
+              .eq('user_id', user.id)
+              .maybeSingle(),
+          ])
 
         if (responseData) {
           myResponse = responseData as unknown as MatterResponse
         }
+        if (recipientRow) {
+          isRecipient = true
+          isUnread = !recipientRow.inbox_read_at
+        }
       }
 
-      return {
-        ...mapMatterRow(data as Record<string, unknown>),
-        my_response: myResponse,
-      }
+      const [hydrated] = await attachAnsweredByProfiles([
+        {
+          ...mapMatterRow(data as Record<string, unknown>),
+          my_response: myResponse,
+          is_unread: isUnread,
+          is_recipient: isRecipient,
+        },
+      ])
+      return hydrated ?? null
     },
   }
 }
@@ -1059,11 +1104,12 @@ export async function markMatterAsViewed(matterId: string): Promise<void> {
   } = await supabase.auth.getUser()
   if (!user) throw new Error('Not authenticated')
 
+  const now = new Date().toISOString()
   const { error } = await supabase
     .from('matter_recipients')
     .update({
-      status: 'viewed' as any,
-      viewed_at: new Date().toISOString(),
+      viewed_at: now,
+      inbox_read_at: now,
     })
     .eq('matter_id', matterId)
     .eq('user_id', user.id)
@@ -1073,6 +1119,99 @@ export async function markMatterAsViewed(matterId: string): Promise<void> {
   // Sync: mark the corresponding notification as read so the bell count updates
   try {
     await markNotificationReadByEntity(user.id, 'matter', matterId)
+  } catch {
+    // Non-blocking
+  }
+}
+
+/** Personal inbox only — does not change sender-visible viewed_at or response status. */
+export async function markMattersAsRead(
+  matterIds: Array<string>,
+): Promise<void> {
+  const ids = [...new Set(matterIds.filter(Boolean))]
+  if (ids.length === 0) return
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase
+    .from('matter_recipients')
+    .update({ inbox_read_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .in('matter_id', ids)
+
+  if (error) throw error
+
+  try {
+    await markNotificationsReadByMatterIds(user.id, ids)
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function markMatterAsRead(matterId: string): Promise<void> {
+  await markMattersAsRead([matterId])
+}
+
+export async function markMattersAsUnread(
+  matterIds: Array<string>,
+): Promise<void> {
+  const ids = [...new Set(matterIds.filter(Boolean))]
+  if (ids.length === 0) return
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { error } = await supabase
+    .from('matter_recipients')
+    .update({ inbox_read_at: null })
+    .eq('user_id', user.id)
+    .in('matter_id', ids)
+
+  if (error) throw error
+
+  try {
+    await markNotificationsUnreadByMatterIds(user.id, ids)
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function markMatterAsUnread(matterId: string): Promise<void> {
+  await markMattersAsUnread([matterId])
+}
+
+export async function markAllMattersAsRead(): Promise<void> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: unread, error: unreadError } = await supabase
+    .from('matter_recipients')
+    .select('matter_id')
+    .eq('user_id', user.id)
+    .is('inbox_read_at', null)
+
+  if (unreadError) throw unreadError
+
+  const matterIds = [...new Set((unread || []).map((row) => row.matter_id))]
+  if (matterIds.length === 0) return
+
+  const { error } = await supabase
+    .from('matter_recipients')
+    .update({ inbox_read_at: new Date().toISOString() })
+    .eq('user_id', user.id)
+    .is('inbox_read_at', null)
+
+  if (error) throw error
+
+  try {
+    await markNotificationsReadByMatterIds(user.id, matterIds)
   } catch {
     // Non-blocking
   }
@@ -1148,9 +1287,9 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
       // Get all matters where user is a recipient
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
-        .select('matter_id, viewed_at')
+        .select('matter_id, inbox_read_at')
         .eq('user_id', user.id)
-        .is('viewed_at', null) // Only unread ones
+        .is('inbox_read_at', null) // Only unread in the personal inbox
 
       if (recError) throw recError
 
@@ -1160,24 +1299,15 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
       if (unreadMatterIds.length === 0) return 0
 
       // Filter to only matters in companies the user is a member of.
-      // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
         .from('matters')
-        .select('id, created_by_user_id, created_as_company')
+        .select('id')
         .in('company_id', companyIds)
         .in('id', unreadMatterIds)
 
       if (matterError) throw matterError
 
-      const filtered = (companyMatters || []).filter(
-        (matter: {
-          created_by_user_id: string
-          created_as_company?: boolean
-        }) =>
-          matter.created_by_user_id !== user.id || matter.created_as_company,
-      )
-
-      return filtered.length
+      return (companyMatters || []).length
     },
   }
 }
@@ -1195,9 +1325,9 @@ export function unreadMattersCountQuery(companyId: string) {
       // Get all matters where user is a recipient
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
-        .select('matter_id, viewed_at')
+        .select('matter_id, inbox_read_at')
         .eq('user_id', user.id)
-        .is('viewed_at', null) // Only unread ones
+        .is('inbox_read_at', null) // Only unread in the personal inbox
 
       if (recError) throw recError
 
@@ -1207,24 +1337,15 @@ export function unreadMattersCountQuery(companyId: string) {
       if (unreadMatterIds.length === 0) return 0
 
       // Filter to only matters in the current company.
-      // Exclude matters created by the user unless created_as_company is true.
       const { data: companyMatters, error: matterError } = await supabase
         .from('matters')
-        .select('id, created_by_user_id, created_as_company')
+        .select('id')
         .eq('company_id', companyId)
         .in('id', unreadMatterIds)
 
       if (matterError) throw matterError
 
-      const filtered = (companyMatters || []).filter(
-        (matter: {
-          created_by_user_id: string
-          created_as_company?: boolean
-        }) =>
-          matter.created_by_user_id !== user.id || matter.created_as_company,
-      )
-
-      return filtered.length
+      return (companyMatters || []).length
     },
     refetchInterval: 120_000,
     refetchIntervalInBackground: false,

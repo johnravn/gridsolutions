@@ -7,6 +7,7 @@ export const SPLIT_LEFT_WIDTH = {
   logging: 35,
   latest: 37,
   jobs: 52,
+  conflicts: 52,
   vehicles: 60,
   customers: 50,
   matters: 55,

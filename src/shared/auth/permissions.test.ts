@@ -7,6 +7,7 @@ const ALL_CAPS: Array<Capability> = [
   'visit:vehicles',
   'visit:crew',
   'visit:jobs',
+  'visit:conflicts',
   'visit:calendar',
   'visit:logging',
   'visit:customers',
@@ -45,6 +46,7 @@ describe('capabilitiesFor', () => {
     })
     expect(caps.has('visit:company')).toBe(true)
     expect(caps.has('visit:jobs')).toBe(true)
+    expect(caps.has('visit:conflicts')).toBe(true)
     expect(caps.has('visit:inventory')).toBe(true)
     expect(caps.has('visit:super')).toBe(false)
   })
@@ -55,6 +57,7 @@ describe('capabilitiesFor', () => {
       companyRole: 'employee',
     })
     expect(caps.has('visit:jobs')).toBe(true)
+    expect(caps.has('visit:conflicts')).toBe(true)
     expect(caps.has('visit:company')).toBe(false)
     expect(caps.has('visit:inventory')).toBe(true)
   })
@@ -65,6 +68,7 @@ describe('capabilitiesFor', () => {
       companyRole: 'freelancer',
     })
     expect(caps.has('visit:jobs')).toBe(true)
+    expect(caps.has('visit:conflicts')).toBe(false)
     expect(caps.has('visit:inventory')).toBe(false)
     expect(caps.has('visit:crew')).toBe(false)
     expect(caps.has('visit:vehicles')).toBe(false)

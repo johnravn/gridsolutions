@@ -54,7 +54,7 @@ async function closeMobileInspectorIfOpen(page: Page) {
 }
 
 /** Dismiss auto-opened release notes so the popover cannot intercept nav clicks. */
-async function dismissWhatsNewIfOpen(page: Page) {
+export async function dismissWhatsNewIfOpen(page: Page) {
   const gotIt = page.getByRole('button', { name: 'Got it' })
   if (await gotIt.isVisible().catch(() => false)) {
     await gotIt.click({ force: true })
@@ -212,6 +212,36 @@ export async function openCalendarPage(page: Page) {
   await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible({
     timeout: 15_000,
   })
+}
+
+export async function openSubscribeToCalendar(page: Page) {
+  await dismissWhatsNewIfOpen(page)
+  const dialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'Subscribe to calendar' }),
+  })
+  const subscribe = page
+    .getByRole('button', { name: 'Subscribe to calendar' })
+    .first()
+  if (await subscribe.isVisible().catch(() => false)) {
+    await subscribe.click()
+  } else {
+    const more = page.getByRole('button', { name: 'More calendar actions' })
+    await expect(more).toBeVisible({ timeout: 15_000 })
+    await more.click()
+    await page.getByRole('menuitem', { name: 'Subscribe to calendar' }).click()
+  }
+  await expect(dialog).toBeVisible({ timeout: 15_000 })
+}
+
+export async function openAddPersonalEvent(page: Page) {
+  await dismissWhatsNewIfOpen(page)
+  const dialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'Add personal event' }),
+  })
+  const add = page.getByRole('button', { name: 'Add personal event' }).first()
+  await expect(add).toBeVisible({ timeout: 15_000 })
+  await add.click()
+  await expect(dialog).toBeVisible({ timeout: 15_000 })
 }
 
 export async function openLoggingPage(page: Page) {

@@ -1,12 +1,17 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
-import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
+import {
+  emptyGroupBookingMessage,
+  flattenGroupLeafItems,
+} from '@features/inventory/api/flattenGroupItems'
 import { getEquipmentConflictsForOfferBooking } from '@features/conflicts/api/equipmentConflictCheck'
 import {
   BookingOverlapError,
   forcedBookingFields,
+  isVehicleOverlapError,
 } from '@features/conflicts/api/forceBooking'
-import { calculateHoursPerDay } from '../components/dialogs/technical-offer-editor/utils'
+import { resolveOfferTransportVehicles } from '../utils/resolveOfferTransportVehicles'
+import { resolveHourlyHoursPerDay } from '../components/dialogs/technical-offer-editor/utils'
 import {
   calculateRentalFactor,
   calculateTransportLineTotal,
@@ -940,14 +945,24 @@ export async function createOfferBasisFromBookings({
           companyExpansion?.vehicle_distance_increment ?? 150,
         )
         const distanceKm = distanceIncrement
-        const distanceRate = companyExpansion?.vehicle_distance_rate ?? 0
-        const distanceIncrements = Math.ceil(distanceKm / distanceIncrement)
-        const distanceCost =
-          distanceRate > 0 && distanceIncrements > 0
-            ? distanceRate * distanceIncrements
-            : 0
-        const totalPrice =
-          dailyRate * offerDaySpanBetween(startDate, endDate) + distanceCost
+        const distanceRate = companyExpansion?.vehicle_distance_rate ?? null
+        const daysUsed = offerDaySpanBetween(startDate, endDate)
+        const totalPrice = calculateTransportLineTotal(
+          {
+            start_date: startDate,
+            end_date: endDate,
+            days_used: daysUsed,
+            daily_rate: dailyRate,
+            distance_km: distanceKm,
+            distance_rate: distanceRate,
+          },
+          {
+            vehicleDailyRate: dailyRate,
+            vehicleDistanceRate:
+              companyExpansion?.vehicle_distance_rate ?? null,
+            vehicleDistanceIncrement: distanceIncrement,
+          },
+        )
 
         const { error: transportInsertError } = await supabase
           .from('offer_transport_items')
@@ -958,8 +973,10 @@ export async function createOfferBasisFromBookings({
             vehicle_id: booking.vehicle_id ?? null,
             vehicle_category: vehicle?.vehicle_category ?? null,
             distance_km: distanceKm,
+            distance_rate: distanceRate,
             start_date: startDate,
             end_date: endDate,
+            days_used: daysUsed,
             daily_rate: dailyRate,
             total_price: totalPrice,
             is_internal: vehicle?.internally_owned ?? true,
@@ -1205,10 +1222,11 @@ export async function saveOfferBasis({
       const safeDays = Math.max(1, days)
       let totalPrice = item.daily_rate * item.crew_count * safeDays
       if (item.billing_type === 'hourly' && item.hourly_rate !== null) {
-        const hoursPerDay =
-          item.hours_per_day ??
-          calculateHoursPerDay(item.start_date, item.end_date) ??
-          0
+        const hoursPerDay = resolveHourlyHoursPerDay(
+          item.start_date,
+          item.end_date,
+          item.hours_per_day,
+        )
         totalPrice = item.hourly_rate * hoursPerDay * item.crew_count * safeDays
       }
 
@@ -1570,6 +1588,17 @@ export async function markOfferBasisBookingsSynced(
 /**
  * Create bookings from an offer basis line items.
  */
+function throwIfVehicleOverlap(error: { message?: string } | null): void {
+  if (!error || !isVehicleOverlapError(error.message)) return
+  throw new BookingOverlapError(
+    [
+      error.message ??
+        'Vehicle is already booked in an overlapping time period',
+    ],
+    [],
+  )
+}
+
 export async function createBookingsFromOfferBasis(
   basisId: string,
   userId: string,
@@ -1577,6 +1606,7 @@ export async function createBookingsFromOfferBasis(
     force?: boolean
     skipConflictCheck?: boolean
     excludeItemIds?: Array<string>
+    excludeVehicleIds?: Array<string>
   },
 ): Promise<void> {
   const basis = await (
@@ -1703,6 +1733,29 @@ export async function createBookingsFromOfferBasis(
       groupIds.size > 0
         ? await flattenGroupLeafItems(Array.from(groupIds))
         : new Map<string, Array<{ item_id: string; quantity: number }>>()
+
+    const emptyGroupIds = Array.from(groupIds).filter(
+      (id) => (groupItemsMap.get(id) ?? []).length === 0,
+    )
+    if (emptyGroupIds.length > 0) {
+      const hasBookableEquipment = equipmentEntries.some((entry) =>
+        entry.kind === 'item'
+          ? true
+          : (groupItemsMap.get(entry.group_id) ?? []).length > 0,
+      )
+      if (!hasBookableEquipment) {
+        const { data: emptyGroups, error: emptyErr } = await supabase
+          .from('item_groups')
+          .select('id, name')
+          .in('id', emptyGroupIds)
+        if (emptyErr) throw emptyErr
+        throw new Error(
+          emptyGroupBookingMessage(
+            (emptyGroups ?? []).map((row) => row.name?.trim() || 'Group'),
+          ),
+        )
+      }
+    }
 
     const timePeriodId = await getOrCreateTimePeriod(
       'Equipment period',
@@ -1858,15 +1911,6 @@ export async function createBookingsFromOfferBasis(
   }
 
   if (basis.transport_items && basis.transport_items.length > 0) {
-    type VehicleCandidate = {
-      id: string
-      name: string
-      internally_owned: boolean
-      external_owner_id: string | null
-      owner_user_id: string | null
-      vehicle_category: string | null
-    }
-
     const { data: vehicleRows, error: vehiclesFetchError } = await supabase
       .from('vehicles')
       .select(
@@ -1877,20 +1921,27 @@ export async function createBookingsFromOfferBasis(
 
     if (vehiclesFetchError) throw vehiclesFetchError
 
-    const availableVehicles: Array<VehicleCandidate> = (vehicleRows || [])
-      .filter((row: any) => !row.deleted)
-      .map((row: any) => ({
-        id: row.id as string,
-        name: row.name as string,
+    const availableVehicles = (vehicleRows || [])
+      .filter((row) => !row.deleted)
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
         internally_owned: !!row.internally_owned,
         external_owner_id: row.external_owner_id ?? null,
         owner_user_id: row.owner_user_id ?? null,
         vehicle_category: row.vehicle_category ?? null,
       }))
 
-    const usedVehicleIds = new Set<string>()
+    const excludeVehicleIds = new Set(options?.excludeVehicleIds ?? [])
+    const resolvedVehicles = resolveOfferTransportVehicles({
+      transportItems: basis.transport_items,
+      availableVehicles,
+      defaultStart,
+      defaultEnd,
+    })
 
-    for (const transportItem of basis.transport_items) {
+    for (let index = 0; index < basis.transport_items.length; index++) {
+      const transportItem = basis.transport_items[index]
       const startAt = transportItem.start_date || defaultStart
       const endAt = transportItem.end_date || defaultEnd
       const category = transportItem.vehicle_category ?? null
@@ -1944,51 +1995,15 @@ export async function createBookingsFromOfferBasis(
         timePeriodId = createdPeriod.id
       }
 
-      const existingVehicleId = transportItem.vehicle_id
-      let chosenVehicle: VehicleCandidate | undefined
+      const chosenVehicle = resolvedVehicles[index] ?? null
 
-      if (existingVehicleId) {
-        chosenVehicle = availableVehicles.find(
-          (vehicle) => vehicle.id === existingVehicleId,
-        )
-        if (!chosenVehicle) {
-          chosenVehicle = {
-            id: existingVehicleId,
-            name: transportItem.vehicle_name || 'Vehicle',
-            internally_owned: transportItem.is_internal,
-            external_owner_id: transportItem.is_internal
-              ? null
-              : (transportItem.vehicle?.external_owner_id ?? null),
-            owner_user_id: null,
-            vehicle_category: category,
-          }
-        }
-      } else if (category) {
-        const matches = availableVehicles.filter(
-          (vehicle) => vehicle.vehicle_category === category,
-        )
-
-        const internalMatch = matches.find(
-          (vehicle) =>
-            vehicle.internally_owned && !usedVehicleIds.has(vehicle.id),
-        )
-        const externalMatch = matches.find(
-          (vehicle) =>
-            !vehicle.internally_owned && !usedVehicleIds.has(vehicle.id),
-        )
-
-        chosenVehicle = internalMatch ?? externalMatch ?? undefined
-      }
-
-      if (chosenVehicle) {
-        usedVehicleIds.add(chosenVehicle.id)
-
+      if (chosenVehicle && !excludeVehicleIds.has(chosenVehicle.vehicleId)) {
         const { data: existingReservation, error: reservationLookupError } =
           await supabase
             .from('reserved_vehicles')
             .select('id')
             .eq('time_period_id', timePeriodId)
-            .eq('vehicle_id', chosenVehicle.id)
+            .eq('vehicle_id', chosenVehicle.vehicleId)
             .maybeSingle()
 
         if (reservationLookupError) throw reservationLookupError
@@ -1998,15 +2013,17 @@ export async function createBookingsFromOfferBasis(
             .from('reserved_vehicles')
             .insert({
               time_period_id: timePeriodId,
-              vehicle_id: chosenVehicle.id,
+              vehicle_id: chosenVehicle.vehicleId,
               start_at: null,
               end_at: null,
-              external_status: chosenVehicle.internally_owned
+              external_status: chosenVehicle.internallyOwned
                 ? null
                 : ('planned' as const),
               external_note: null,
+              ...forcedFields,
             })
 
+          throwIfVehicleOverlap(insertReservationError)
           if (insertReservationError) throw insertReservationError
         }
 
@@ -2017,9 +2034,14 @@ export async function createBookingsFromOfferBasis(
 
         if (clearNotesError) throw clearNotesError
       } else {
-        const message = category
-          ? `No available vehicles found for ${category.replace(/_/g, ' ')}`
-          : 'No available vehicles found for the requested transport'
+        const skippedConflict =
+          chosenVehicle != null &&
+          excludeVehicleIds.has(chosenVehicle.vehicleId)
+        const message = skippedConflict
+          ? `Skipped: ${chosenVehicle.vehicleName} overlaps another booking`
+          : category
+            ? `No available vehicles found for ${category.replace(/_/g, ' ')}`
+            : 'No available vehicles found for the requested transport'
 
         const { error: noteError } = await supabase
           .from('time_periods')
@@ -2115,7 +2137,8 @@ export async function syncBookingsFromOfferBasis(
   const warnings: Array<string> = []
   if (
     options?.skipConflictingEquipment &&
-    preview.conflictingItemIds.length > 0
+    (preview.conflictingItemIds.length > 0 ||
+      preview.conflictingVehicleIds.length > 0)
   ) {
     warnings.push(...preview.summaryLines.map((line) => `Skipped: ${line}`))
   }
@@ -2161,6 +2184,9 @@ export async function syncBookingsFromOfferBasis(
     skipConflictCheck: true,
     excludeItemIds: options?.skipConflictingEquipment
       ? preview.conflictingItemIds
+      : undefined,
+    excludeVehicleIds: options?.skipConflictingEquipment
+      ? preview.conflictingVehicleIds
       : undefined,
   })
   return options?.force ? preview.summaryLines : warnings

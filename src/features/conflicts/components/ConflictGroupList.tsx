@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Badge, Box, Flex, Text } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight } from 'iconoir-react'
+import { formatGroupOverlapWarning } from '../utils/conflictCopy'
 import { groupConflictsForDisplay } from '../utils/groupConflictsForDisplay'
 import { ConflictCard } from './ConflictCard'
 import type { OverlapConflict } from '../api/overlapChecks'
@@ -21,6 +22,7 @@ function ConflictGroupBlock({
   jobPeriodEnd?: string
 }) {
   const [expanded, setExpanded] = React.useState(false)
+  const canExpand = items.length > 0
 
   return (
     <Box
@@ -33,11 +35,15 @@ function ConflictGroupBlock({
     >
       <Box
         p="2"
-        role="button"
-        tabIndex={0}
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
+        role={canExpand ? 'button' : undefined}
+        tabIndex={canExpand ? 0 : undefined}
+        aria-expanded={canExpand ? expanded : undefined}
+        onClick={() => {
+          if (!canExpand) return
+          setExpanded((value) => !value)
+        }}
         onKeyDown={(event) => {
+          if (!canExpand) return
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault()
             setExpanded((value) => !value)
@@ -45,16 +51,19 @@ function ConflictGroupBlock({
         }}
         style={{
           background: 'var(--gray-a2)',
-          cursor: 'pointer',
-          borderBottom: expanded ? '1px solid var(--gray-a5)' : 'none',
+          cursor: canExpand ? 'pointer' : 'default',
+          borderBottom:
+            expanded && canExpand ? '1px solid var(--gray-a5)' : 'none',
         }}
       >
         <Flex align="center" gap="2">
-          {expanded ? (
-            <NavArrowDown width={16} height={16} />
-          ) : (
-            <NavArrowRight width={16} height={16} />
-          )}
+          {canExpand ? (
+            expanded ? (
+              <NavArrowDown width={16} height={16} />
+            ) : (
+              <NavArrowRight width={16} height={16} />
+            )
+          ) : null}
           <Text size="2" weight="medium">
             {groupName}
           </Text>
@@ -63,10 +72,16 @@ function ConflictGroupBlock({
           </Badge>
           <Text size="1" color="gray">
             {quantity}×
+            {items.length > 0
+              ? ` · ${items.length} ${items.length === 1 ? 'item' : 'items'}`
+              : ''}
           </Text>
         </Flex>
+        <Text size="1" color="gray" as="div" mt="1">
+          {formatGroupOverlapWarning(groupName, items)}
+        </Text>
       </Box>
-      {expanded ? (
+      {expanded && items.length > 0 ? (
         <Flex direction="column" gap="2" p="2">
           {items.map((conflict, index) => (
             <ConflictCard

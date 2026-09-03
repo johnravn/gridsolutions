@@ -56,9 +56,9 @@ export function formatEquipmentConflictJobs(row: EquipmentConflictRow): string {
   const ids = row.job_ids ?? []
   const titles = row.job_titles ?? []
 
-  if (ids.length === 0) return 'Unknown jobs'
+  if (ids.length === 0) return 'a personal booking'
 
   return ids
-    .map((id, index) => titles[index]?.trim() || `Job ${id.slice(0, 8)}`)
+    .map((_id, index) => titles[index]?.trim() || 'Untitled job')
     .join(' and ')
 }

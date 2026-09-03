@@ -12,6 +12,7 @@ export type ShortcutId =
   | 'nav.goVehicles'
   | 'nav.goCrew'
   | 'nav.goJobs'
+  | 'nav.goConflicts'
   | 'nav.goCalendar'
   | 'nav.goLogging'
   | 'nav.goCustomers'
@@ -122,6 +123,14 @@ export const SHORTCUT_REGISTRY: ReadonlyArray<ShortcutDefinition> = [
     category: 'navigation',
     defaultHotkey: null,
     route: '/jobs',
+  },
+  {
+    id: 'nav.goConflicts',
+    label: 'Go to Conflicts',
+    description: 'Navigate to booking conflicts',
+    category: 'navigation',
+    defaultHotkey: null,
+    route: '/conflicts',
   },
   {
     id: 'nav.goCustomers',

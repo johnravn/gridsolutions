@@ -46,6 +46,8 @@ This directory contains the integration with Conta accounting software.
 
    The app will then use the company’s **production** API key and production URL regardless of the company’s “Sandbox / Production” setting. Only has effect when running in development mode.
 
+   Put this in `.env.local` (Vite exposes that file to the browser). Values in `.env.local.db` are also injected into `import.meta.env` via `vite.config.ts`.
+
 ## Usage
 
 Import the client in your features:

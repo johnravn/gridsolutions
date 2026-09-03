@@ -14,7 +14,14 @@ import { Check, Message } from 'iconoir-react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { formatDistanceToNow } from 'date-fns'
-import { markMatterAsViewed } from '@features/matters/api/queries'
+import {
+  markAllMattersAsRead,
+  markMatterAsRead,
+} from '@features/matters/api/queries'
+import {
+  CrewInviteAnswerBadge,
+  crewInviteAnswerStatus,
+} from '@features/matters/components/CrewInviteAnswerStatus'
 import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
@@ -83,6 +90,7 @@ function MatterCard({
   if (!author) return null
   const avatarUrl = getAvatarUrl(author.avatarPath)
   const initials = getInitials(author.name, author.email || author.name)
+  const answerStatus = crewInviteAnswerStatus(matter.metadata)
 
   return (
     <Card
@@ -116,13 +124,17 @@ function MatterCard({
             <Text size="3" weight="bold">
               {matter.title}
             </Text>
-            <Badge
-              size="1"
-              color={getMatterTypeColor(matter.matter_type)}
-              variant="soft"
-            >
-              {getMatterTypeLabel(matter.matter_type)}
-            </Badge>
+            {answerStatus ? (
+              <CrewInviteAnswerBadge status={answerStatus} withLabel />
+            ) : (
+              <Badge
+                size="1"
+                color={getMatterTypeColor(matter.matter_type)}
+                variant="soft"
+              >
+                {getMatterTypeLabel(matter.matter_type)}
+              </Badge>
+            )}
           </Flex>
           <Text size="1" color="gray" mt="1" as="div">
             {author.name}
@@ -209,7 +221,7 @@ export function MattersScrollContent({
   const markOne = useMutation({
     mutationFn: async (matterId: string) => {
       setMarkingId(matterId)
-      await markMatterAsViewed(matterId)
+      await markMatterAsRead(matterId)
     },
     onSettled: async () => {
       setMarkingId(null)
@@ -283,9 +295,7 @@ export function MattersSection({
   }, [qc])
 
   const markAll = useMutation({
-    mutationFn: async () => {
-      await Promise.all(visibleMatters.map((m) => markMatterAsViewed(m.id)))
-    },
+    mutationFn: markAllMattersAsRead,
     onSettled: async () => {
       await invalidateMatters()
     },

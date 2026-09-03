@@ -6,8 +6,10 @@ vi.mock('@shared/api/supabase', () => ({
 
 import {
   getJobsIndexNextPageParam,
+  jobsIndexIdInOrFilter,
   jobsIndexInfiniteQuery,
   jobsIndexSearchOrFilter,
+  mergePostgrestAndOrFilters,
 } from './queries'
 import type { JobsIndexPageResult } from './queries'
 
@@ -111,7 +113,39 @@ describe('jobsIndexInfiniteQuery', () => {
       null,
       ['completed'],
       true,
+      null,
       50,
     ])
+  })
+})
+
+describe('jobsIndexIdInOrFilter', () => {
+  it('returns null for an empty list', () => {
+    expect(jobsIndexIdInOrFilter([])).toBeNull()
+  })
+
+  it('chunks large id lists', () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`)
+    const filter = jobsIndexIdInOrFilter(ids)
+    expect(filter).toContain('id.in.(id-0')
+    expect(filter).toContain(',id.in.(id-100)')
+  })
+})
+
+describe('mergePostgrestAndOrFilters', () => {
+  it('returns null when every part is empty', () => {
+    expect(mergePostgrestAndOrFilters(null, undefined, '')).toBeNull()
+  })
+
+  it('returns a single filter unchanged', () => {
+    expect(mergePostgrestAndOrFilters('end_at.is.null,end_at.gte.x')).toBe(
+      'end_at.is.null,end_at.gte.x',
+    )
+  })
+
+  it('ands multiple or-groups so they are not overwritten', () => {
+    expect(
+      mergePostgrestAndOrFilters('id.in.(a)', 'end_at.is.null,end_at.gte.x'),
+    ).toBe('and(or(id.in.(a)),or(end_at.is.null,end_at.gte.x))')
   })
 })

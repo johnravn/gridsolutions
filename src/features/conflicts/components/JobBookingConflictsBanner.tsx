@@ -12,6 +12,10 @@ import {
   splitGroupConflicts,
   splitVehicleConflicts,
 } from '../utils/conflictCategories'
+import {
+  formatConflictCountLabel,
+  formatPairOverlapLine,
+} from '../utils/conflictCopy'
 import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
 import type { EquipmentConflictRow } from '../api/queries'
 
@@ -84,7 +88,12 @@ export function JobBookingConflictsBanner({
       {unresolvedCount > 0 && (
         <ConflictCallout
           tone="red"
-          label={`Unresolved conflicts (${unresolvedCount})`}
+          label={`Unresolved conflicts (${formatConflictCountLabel({
+            crew: unresolved.crew.length,
+            vehicles: unresolved.vehicles.length,
+            groups: unresolved.groups.length,
+            items: unresolved.equipment.length,
+          })})`}
           onNavigateSubTab={onNavigateSubTab}
           crew={unresolved.crew}
           vehicles={unresolved.vehicles}
@@ -96,7 +105,12 @@ export function JobBookingConflictsBanner({
       {forcedCount > 0 && (
         <ConflictCallout
           tone="amber"
-          label={`Forced overlaps (${forcedCount})`}
+          label={`Forced overlaps (${formatConflictCountLabel({
+            crew: forced.crew.length,
+            vehicles: forced.vehicles.length,
+            groups: forced.groups.length,
+            items: forced.equipment.length,
+          })})`}
           onNavigateSubTab={onNavigateSubTab}
           crew={forced.crew}
           vehicles={forced.vehicles}
@@ -122,6 +136,8 @@ function ConflictCallout({
   onNavigateSubTab?: (tab: 'crew' | 'equipment' | 'transport') => void
   crew: Array<{
     user_display_name: string | null
+    job_id_1: string | null
+    job_id_2: string | null
     job_title_1: string | null
     job_title_2: string | null
     start_1: string
@@ -131,6 +147,8 @@ function ConflictCallout({
   }>
   vehicles: Array<{
     vehicle_name: string | null
+    job_id_1: string | null
+    job_id_2: string | null
     job_title_1: string | null
     job_title_2: string | null
     start_1: string
@@ -150,6 +168,8 @@ function ConflictCallout({
   groups: Array<{
     group_name_1: string | null
     group_name_2: string | null
+    job_id_1: string | null
+    job_id_2: string | null
     job_title_1: string | null
     job_title_2: string | null
     start_1: string
@@ -158,14 +178,22 @@ function ConflictCallout({
     end_2: string
   }>
 }) {
+  const equipmentHeading = formatConflictCountLabel({
+    groups: groups.length,
+    items: equipment.length,
+  })
   const equipmentLines = [
     ...groups.map((row, i) => ({
       key: `group-${i}`,
-      text: `${groupConflictDisplayName(row)}: ${row.job_title_1 ?? 'Job'} (${formatPeriod(row.start_1, row.end_1)}) and ${row.job_title_2 ?? 'Job'} (${formatPeriod(row.start_2, row.end_2)})`,
+      text: formatPairOverlapLine(
+        groupConflictDisplayName(row),
+        row,
+        formatPeriod,
+      ),
     })),
     ...equipment.map((row, i) => ({
       key: `item-${i}`,
-      text: `${row.item_name ?? 'Item'}: ${row.total_reserved}/${row.capacity} booked (${formatPeriod(row.start_at, row.end_at)}) — also on ${formatEquipmentConflictJobs(row as EquipmentConflictRow)}`,
+      text: `${row.item_name ?? 'Item'} is over capacity (${row.total_reserved}/${row.capacity} booked, ${formatPeriod(row.start_at, row.end_at)}) — overlaps ${formatEquipmentConflictJobs(row as EquipmentConflictRow)}`,
     })),
   ]
 
@@ -202,10 +230,11 @@ function ConflictCallout({
             </Text>
             {crew.slice(0, 3).map((row, i) => (
               <Text key={i} size="1" color="gray" as="div">
-                {row.user_display_name ?? 'Crew'}: {row.job_title_1 ?? 'Job'} (
-                {formatPeriod(row.start_1, row.end_1)}) and{' '}
-                {row.job_title_2 ?? 'Job'} (
-                {formatPeriod(row.start_2, row.end_2)})
+                {formatPairOverlapLine(
+                  row.user_display_name ?? 'Crew',
+                  row,
+                  formatPeriod,
+                )}
               </Text>
             ))}
           </Box>
@@ -223,10 +252,11 @@ function ConflictCallout({
             </Text>
             {vehicles.slice(0, 3).map((row, i) => (
               <Text key={i} size="1" color="gray" as="div">
-                {row.vehicle_name ?? 'Vehicle'}: {row.job_title_1 ?? 'Job'} (
-                {formatPeriod(row.start_1, row.end_1)}) and{' '}
-                {row.job_title_2 ?? 'Job'} (
-                {formatPeriod(row.start_2, row.end_2)})
+                {formatPairOverlapLine(
+                  row.vehicle_name ?? 'Vehicle',
+                  row,
+                  formatPeriod,
+                )}
               </Text>
             ))}
           </Box>
@@ -240,7 +270,7 @@ function ConflictCallout({
               style={{ cursor: onNavigateSubTab ? 'pointer' : undefined }}
               onClick={() => onNavigateSubTab?.('equipment')}
             >
-              Equipment ({equipmentLines.length})
+              Equipment ({equipmentHeading})
             </Text>
             {equipmentLines.slice(0, 3).map((line) => (
               <Text key={line.key} size="1" color="gray" as="div">

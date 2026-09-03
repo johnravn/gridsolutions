@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import * as Toast from '@radix-ui/react-toast'
-import { Button, IconButton, Text } from '@radix-ui/themes'
+import { Button, IconButton, Text, Theme } from '@radix-ui/themes'
 import {
   CheckCircleSolid,
   InfoCircle,
@@ -151,8 +151,16 @@ function ToastItemView({
   )
 }
 
+const TOAST_HOST_ID = 'app-toast-host'
+
+/** Sit on `document.body` so dialog overlays cannot trap toasts in a lower stacking context. */
 function toastPortalHost(): HTMLElement {
-  return document.querySelector<HTMLElement>('.radix-themes') ?? document.body
+  const existing = document.getElementById(TOAST_HOST_ID)
+  if (existing) return existing
+  const el = document.createElement('div')
+  el.id = TOAST_HOST_ID
+  document.body.appendChild(el)
+  return el
 }
 
 export function AppToastProvider({ children }: { children: React.ReactNode }) {
@@ -219,12 +227,12 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
   )
 
   const toastLayer = (
-    <>
+    <Theme hasBackground={false} className="app-toast-layer">
       {viewport}
       {toasts.map((t) => (
         <ToastItemView key={t.id} toast={t} onRemove={remove} />
       ))}
-    </>
+    </Theme>
   )
 
   return (

@@ -43,7 +43,14 @@ export type HomeMatter = {
   created_at: string
   is_unread?: boolean
   created_as_company?: boolean
+  metadata?: Record<string, unknown> | null
   created_by?: {
+    user_id: string
+    display_name: string | null
+    email: string
+    avatar_url: string | null
+  } | null
+  answered_by?: {
     user_id: string
     display_name: string | null
     email: string

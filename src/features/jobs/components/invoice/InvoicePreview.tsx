@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import {
   Box,
   Button,
+  Callout,
   Card,
   Flex,
   IconButton,
@@ -30,12 +31,17 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
-import { DotsGrid3x3, Plus, Trash } from 'iconoir-react'
+import { DotsGrid3x3, Plus, Trash, WarningTriangle } from 'iconoir-react'
 import { addLocalCalendarDays } from '@shared/lib/generalFunctions'
 import {
   acceptedOfferInvoiceLineDescription,
   sanitizeOfferTitleForInvoiceLine,
 } from '../../utils/offerNumber'
+import {
+  invoiceLineNet,
+  offerInvoiceTotalMismatch,
+  roundMoney,
+} from '../../utils/invoiceMoney'
 import type { DragEndEvent } from '@dnd-kit/core'
 import type { JobDetail, JobOffer } from '../../types'
 import type {
@@ -111,6 +117,8 @@ type InvoicePreviewProps =
       onReorderLines?: (lines: Array<BookingInvoiceLine>) => void
       /** Line ids to visually highlight (e.g. pattern apply targets). */
       highlightedLineIds?: ReadonlySet<string>
+      /** Accepted offer total (ex VAT) to warn when the invoice diverges. */
+      acceptedOfferTotalExVat?: number | null
     }
 
 export function reorderInvoiceLinesByActiveOver<T extends { id: string }>(
@@ -122,6 +130,19 @@ export function reorderInvoiceLinesByActiveOver<T extends { id: string }>(
   const newIndex = items.findIndex((item) => item.id === String(overId))
   if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return items
   return arrayMove(items, oldIndex, newIndex)
+}
+
+function invoiceLineHighlightStyle(
+  highlighted: boolean,
+  base?: React.CSSProperties,
+): React.CSSProperties {
+  return {
+    ...base,
+    transition: [base?.transition, 'box-shadow 400ms ease']
+      .filter(Boolean)
+      .join(', '),
+    boxShadow: highlighted ? 'inset 3px 0 0 var(--amber-9)' : base?.boxShadow,
+  }
 }
 
 function SortableInvoiceLineRow({
@@ -143,19 +164,14 @@ function SortableInvoiceLineRow({
     isDragging,
   } = useSortable({ id })
 
-  const style: React.CSSProperties = {
+  const style: React.CSSProperties = invoiceLineHighlightStyle(highlighted, {
     transform: CSS.Transform.toString(transform),
-    transition: transition ?? 'background 160ms ease',
+    transition: transition ?? undefined,
     opacity: isDragging ? 0.85 : undefined,
     zIndex: isDragging ? 1 : undefined,
     position: 'relative',
-    background: highlighted
-      ? 'var(--amber-a3)'
-      : isDragging
-        ? 'var(--gray-a2)'
-        : undefined,
-    boxShadow: highlighted ? 'inset 3px 0 0 var(--amber-9)' : undefined,
-  }
+    background: isDragging ? 'var(--gray-a2)' : undefined,
+  })
 
   return (
     <Table.Row ref={setNodeRef as React.Ref<HTMLTableRowElement>} style={style}>
@@ -477,7 +493,7 @@ function BookingsInvoicePreview({
   const getLineTotalPrice = React.useCallback(
     (line: BookingInvoiceLine) => {
       const discount = lineDiscountOverrides[line.id] ?? 0
-      return line.unitPrice * line.quantity * (1 - discount / 100)
+      return invoiceLineNet(line, discount)
     },
     [lineDiscountOverrides],
   )
@@ -487,19 +503,29 @@ function BookingsInvoicePreview({
     for (const line of displayLines) {
       exVat += getLineTotalPrice(line)
     }
+    exVat = roundMoney(exVat)
     const vat = vatIncluded
-      ? displayLines.reduce(
-          (sum, line) =>
-            sum + (getLineTotalPrice(line) * line.vatPercent) / 100,
-          0,
-        )
+      ? displayLines.every((l) => l.vatPercent === displayLines[0]?.vatPercent)
+        ? roundMoney((exVat * (displayLines[0]?.vatPercent ?? 0)) / 100)
+        : roundMoney(
+            displayLines.reduce(
+              (sum, line) =>
+                sum + (getLineTotalPrice(line) * line.vatPercent) / 100,
+              0,
+            ),
+          )
       : 0
     return {
       subtotal: exVat,
       vatAmount: vat,
-      total: exVat + vat,
+      total: roundMoney(exVat + vat),
     }
   }, [displayLines, vatIncluded, getLineTotalPrice])
+
+  const offerTotalMismatch =
+    props.acceptedOfferTotalExVat != null
+      ? offerInvoiceTotalMismatch(subtotal, props.acceptedOfferTotalExVat)
+      : null
 
   const vatSummaryLabel = React.useMemo(() => {
     if (!vatIncluded) return '0%'
@@ -742,7 +768,7 @@ function BookingsInvoicePreview({
                             style={{
                               width: 40,
                               paddingLeft: 12,
-                              verticalAlign: 'top',
+                              verticalAlign: 'middle',
                             }}
                           >
                             <IconButton
@@ -882,15 +908,7 @@ function BookingsInvoicePreview({
                     return (
                       <Table.Row
                         key={line.id}
-                        style={
-                          isHighlighted
-                            ? {
-                                background: 'var(--amber-a3)',
-                                boxShadow: 'inset 3px 0 0 var(--amber-9)',
-                                transition: 'background 160ms ease',
-                              }
-                            : { transition: 'background 160ms ease' }
-                        }
+                        style={invoiceLineHighlightStyle(isHighlighted)}
                       >
                         {cells}
                       </Table.Row>
@@ -920,6 +938,22 @@ function BookingsInvoicePreview({
         </Box>
 
         <Separator />
+
+        {offerTotalMismatch?.differs ? (
+          <Callout.Root color="amber" size="1">
+            <Callout.Icon>
+              <WarningTriangle width={16} height={16} />
+            </Callout.Icon>
+            <Callout.Text>
+              Invoice total does not match the accepted offer. Offer{' '}
+              {formatCurrency(offerTotalMismatch.offerExVat)} (ex VAT), invoice{' '}
+              {formatCurrency(offerTotalMismatch.invoiceExVat)} (ex VAT),
+              difference {formatCurrency(offerTotalMismatch.delta)}. Extra
+              expenses on the invoice are OK — send only if that difference is
+              intended.
+            </Callout.Text>
+          </Callout.Root>
+        ) : null}
 
         <Flex direction="column" gap="2" style={{ alignItems: 'flex-end' }}>
           <Flex justify="between" style={{ width: '100%', maxWidth: '300px' }}>

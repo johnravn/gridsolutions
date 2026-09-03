@@ -50,12 +50,39 @@ type Props = {
   dateOnly?: boolean
   /** Allow an empty end (open-ended). Used with dateOnly. */
   optionalEnd?: boolean
+  /**
+   * One-line trigger matching TextField height on large screens.
+   * Small screens keep the stacked (tall) trigger.
+   */
+  inline?: boolean
 }
 
 type Phase = 'dates' | 'hours' | 'minutes'
 type BoundTarget = 'range' | 'start' | 'end'
 
 const MULTI_DAY_END_TAB_DELAY_MS = 300
+const INLINE_TRIGGER_QUERY = '(min-width: 769px)'
+
+function useInlineTriggerAllowed() {
+  const [isLargeScreen, setIsLargeScreen] = React.useState(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.matchMedia !== 'function'
+    ) {
+      return false
+    }
+    return window.matchMedia(INLINE_TRIGGER_QUERY).matches
+  })
+
+  React.useEffect(() => {
+    const mql = window.matchMedia(INLINE_TRIGGER_QUERY)
+    const onChange = () => setIsLargeScreen(mql.matches)
+    mql.addEventListener('change', onChange)
+    return () => mql.removeEventListener('change', onChange)
+  }, [])
+
+  return isLargeScreen
+}
 
 function resolveEndDate(start: string, end: string | null): string {
   return end ?? start
@@ -87,7 +114,10 @@ export default function DateTimeRangePicker({
   minuteStep = 5,
   dateOnly = false,
   optionalEnd = false,
+  inline = false,
 }: Props) {
+  const inlineTriggerAllowed = useInlineTriggerAllowed()
+  const useInlineTrigger = inline && inlineTriggerAllowed
   const [open, setOpen] = React.useState(false)
   const [phase, setPhase] = React.useState<Phase>('dates')
   const [dateSelection, setDateSelection] = React.useState<{
@@ -500,6 +530,7 @@ export default function DateTimeRangePicker({
             placeholder="Select period"
             invalid={rangeInvalid}
             disabled={disabled}
+            inline={useInlineTrigger}
             fieldInteraction={fieldInteraction}
             onFieldClick={handleFieldClick}
             onOpen={() => setOpen(true)}

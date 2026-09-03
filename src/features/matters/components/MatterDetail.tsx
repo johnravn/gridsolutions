@@ -23,6 +23,7 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import MapEmbed from '@shared/maps/MapEmbed'
 import {
   deleteMatter,
+  markMatterAsUnread,
   markMatterAsViewed,
   matterDetailQuery,
   matterFilesQuery,
@@ -30,12 +31,16 @@ import {
   matterRecipientsQuery,
   respondToMatter,
 } from '../api/queries'
+import { useMatterReadMutations } from '../hooks/useMatterReadMutations'
 import { resolveMatterCardAuthor } from '../utils/matterAuthor'
 import {
   ROLE_FILLED_DETAIL,
   ROLE_FILLED_MESSAGE,
   crewInviteResponseKind,
 } from '../utils/crewInviteResponse'
+import { parseMatterOutcome } from '../utils/crewInviteAnswer'
+import { MatterReadIconButton } from './MatterReadIconButton'
+import { MatterOutcomeBanner } from './CrewInviteAnswerStatus'
 
 export default function MatterDetail({
   matterId,
@@ -51,6 +56,7 @@ export default function MatterDetail({
   const { companyRole } = useAuthz()
   const navigate = useNavigate()
   const [isEditingResponse, setIsEditingResponse] = React.useState(false)
+  const { markRead, markUnread } = useMatterReadMutations()
 
   const { data: matter } = useQuery({
     ...matterDetailQuery(matterId),
@@ -240,11 +246,19 @@ export default function MatterDetail({
 
   // Track if we've already marked this matter as viewed to prevent duplicate calls
   const hasMarkedAsViewedRef = React.useRef<string | null>(null)
+  const skipAutoViewRef = React.useRef<string | null>(null)
+  const matterLoaded = !!matter
 
-  // Mark as viewed when component mounts (only once per matterId)
+  // Mark as viewed when the matter is first opened (once per matterId).
   React.useEffect(() => {
+    skipAutoViewRef.current = null
+    hasMarkedAsViewedRef.current = null
+  }, [matterId])
+
+  React.useEffect(() => {
+    if (!matterLoaded) return
+    if (skipAutoViewRef.current === matterId) return
     if (hasMarkedAsViewedRef.current === matterId) return
-    if (!matter) return
 
     hasMarkedAsViewedRef.current = matterId
 
@@ -252,6 +266,9 @@ export default function MatterDetail({
     // marks any notification for this matter as read so the bell and matters list stay in sync.
     markMatterAsViewed(matterId)
       .then(async () => {
+        if (skipAutoViewRef.current === matterId) {
+          await markMatterAsUnread(matterId)
+        }
         await Promise.all([
           qc.invalidateQueries({ queryKey: ['matters'] }),
           qc.invalidateQueries({ queryKey: ['notifications'] }),
@@ -259,18 +276,10 @@ export default function MatterDetail({
         await qc.refetchQueries({ queryKey: ['matters'] })
       })
       .catch((error) => {
-        // If marking as viewed fails, reset the ref so we can try again
         console.error('Failed to mark matter as viewed:', error)
         hasMarkedAsViewedRef.current = null
       })
-
-    // Reset ref when matterId changes
-    return () => {
-      if (hasMarkedAsViewedRef.current === matterId) {
-        hasMarkedAsViewedRef.current = null
-      }
-    }
-  }, [matterId, matter, user?.id, qc])
+  }, [matterId, matterLoaded, qc])
 
   const respond = useMutation({
     mutationFn: async (response: string) => {
@@ -326,11 +335,19 @@ export default function MatterDetail({
   }, [projectLead?.avatar_url])
 
   const author = matter ? resolveMatterCardAuthor(matter) : null
+  const outcome = matter ? parseMatterOutcome(matter.metadata) : null
   const showProjectLead =
     !!projectLead && projectLead.user_id !== author?.userId
 
   const leadName = projectLead?.display_name || projectLead?.email || null
   const leadInitials = leadName ? getInitials(leadName) : ''
+  const authorAvatarUrl = React.useMemo(() => {
+    if (!author?.avatarPath) return null
+    const { data } = supabase.storage
+      .from('avatars')
+      .getPublicUrl(author.avatarPath)
+    return data.publicUrl
+  }, [author?.avatarPath])
 
   if (!matter) {
     return (
@@ -369,6 +386,21 @@ export default function MatterDetail({
             <Heading size="5">{matter.title}</Heading>
           </Flex>
           <Flex align="center" gap="2">
+            {matter.is_recipient && (
+              <MatterReadIconButton
+                size="2"
+                isUnread={!!matter.is_unread}
+                disabled={markRead.isPending || markUnread.isPending}
+                onMarkRead={() => {
+                  skipAutoViewRef.current = null
+                  markRead.mutate(matterId)
+                }}
+                onMarkUnread={() => {
+                  skipAutoViewRef.current = matterId
+                  markUnread.mutate(matterId)
+                }}
+              />
+            )}
             {matter.job?.id && (
               <Button
                 size="2"
@@ -403,9 +435,24 @@ export default function MatterDetail({
         <Flex align="center" justify="between" gap="4">
           <Box>
             {author && (
-              <Text size="2" color="gray">
-                Created by {author.name} on {formatDate(matter.created_at)}
-              </Text>
+              <Flex align="center" gap="2">
+                {outcome && (
+                  <Avatar
+                    size="3"
+                    radius="full"
+                    fallback={getInitials(author.name)}
+                    src={authorAvatarUrl || undefined}
+                    style={{ border: '1px solid var(--gray-5)' }}
+                  />
+                )}
+                <Text size="2" color="gray">
+                  {outcome
+                    ? `${author.name} · ${formatDate(matter.created_at)}`
+                    : `Created by ${author.name} on ${formatDate(
+                        matter.created_at,
+                      )}`}
+                </Text>
+              </Flex>
             )}
           </Box>
           {showProjectLead && (
@@ -693,12 +740,21 @@ export default function MatterDetail({
         </Box>
       )}
 
-      {/* Content - only show for non-crew_invite matters (crew_invite shows formatted job info above) */}
-      {matter.content && matter.matter_type !== 'crew_invite' && (
-        <Box mb="4">
-          <Separator size="4" mb="3" />
-          <Text style={{ whiteSpace: 'pre-line' }}>{matter.content}</Text>
-        </Box>
+      {/* Content - crew-response updates get a status banner instead of plain text */}
+      {outcome ? (
+        <MatterOutcomeBanner
+          outcome={outcome}
+          jobTitle={matter.job?.title}
+          roleTitle={matter.time_period?.title}
+        />
+      ) : (
+        matter.content &&
+        matter.matter_type !== 'crew_invite' && (
+          <Box mb="4">
+            <Separator size="4" mb="3" />
+            <Text style={{ whiteSpace: 'pre-line' }}>{matter.content}</Text>
+          </Box>
+        )
       )}
 
       {/* Link to latest update if this is a notification about an activity */}

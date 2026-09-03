@@ -1,4 +1,4 @@
-import { calculateHoursPerDay } from './utils'
+import { resolveHourlyHoursPerDay } from './utils'
 import type { OfferBasisDetail } from '../../../types'
 import type {
   LocalCrewItem,
@@ -61,13 +61,13 @@ export function lineItemsFromBasisDetail(
       const rawItem: any = item
       const billingType: 'daily' | 'hourly' =
         rawItem?.billing_type === 'hourly' ? 'hourly' : 'daily'
-      const hoursFromDates = calculateHoursPerDay(
-        item.start_date,
-        item.end_date,
-      )
       const baseHoursPerDay =
         billingType === 'hourly'
-          ? (hoursFromDates ?? rawItem?.hours_per_day ?? 8)
+          ? resolveHourlyHoursPerDay(
+              item.start_date,
+              item.end_date,
+              rawItem?.hours_per_day,
+            )
           : null
       const baseHourlyRate =
         billingType === 'hourly'

@@ -45,10 +45,16 @@ describe('applyCalendarFilter', () => {
       title: 'Mic rental',
       ref: { itemIds: ['i1', 'i2'] },
     }),
+    makeCalendarRecord({
+      id: 'personal-1',
+      kind: 'personal',
+      title: 'Jane: Accounting',
+      ref: { userId: 'u1' },
+    }),
   ])
 
   it('returns all events when filter is undefined', () => {
-    expect(applyCalendarFilter(events, undefined)).toHaveLength(3)
+    expect(applyCalendarFilter(events, undefined)).toHaveLength(4)
   })
 
   it('filters by kind', () => {
@@ -72,6 +78,16 @@ describe('applyCalendarFilter', () => {
   it('filters by vehicle scope', () => {
     const filter: CalendarFilter = { scope: { vehicleId: 'v1' } }
     expect(applyCalendarFilter(events, filter)).toHaveLength(1)
+  })
+
+  it('filters personal events by crew user scope', () => {
+    const filter: CalendarFilter = {
+      kinds: ['personal'],
+      scope: { userId: 'u1' },
+    }
+    const result = applyCalendarFilter(events, filter)
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('personal-1')
   })
 
   it('filters by text search on title', () => {

@@ -25,9 +25,8 @@ import { companyDetailQuery } from '@features/company/api/queries'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
-import InvoiceDescriptionTemplateEditor, {
-  trackManualDescriptionEdit,
-} from '../invoice/InvoiceDescriptionTemplateEditor'
+import { trackManualDescriptionEdit } from '../invoice/InvoiceDescriptionTemplateEditor'
+import InvoiceSettingsCards from '../invoice/InvoiceSettingsCards'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
 import {
   createContaInvoiceFromBookings,
@@ -35,6 +34,13 @@ import {
   markJobsInvoiced,
 } from '../../api/createContaInvoice'
 import { acceptedOfferInvoiceLineDescription } from '../../utils/offerNumber'
+import {
+  equipmentDiscountOverridesFromOffer,
+  offerLinesToBookings,
+} from '../../utils/offerLinesToBookings'
+import { invoiceLineNet, roundMoney } from '../../utils/invoiceMoney'
+import { calculateOfferTotalsFromStoredLines } from '../../utils/offerCalculations'
+import { offerDetailQuery } from '../../api/offerQueries'
 import type {
   BookingInvoiceLine,
   BookingsForInvoice,
@@ -94,7 +100,7 @@ function lineExVatAfterDiscount(
   lineDiscountOverrides: Record<string, number>,
 ): number {
   const d = lineDiscountOverrides[line.id] ?? 0
-  return line.unitPrice * line.quantity * (1 - d / 100)
+  return invoiceLineNet(line, d)
 }
 
 /**
@@ -176,6 +182,10 @@ export default function InvoiceTab({
   >('idle')
   const invoiceSendInFlightRef = React.useRef(false)
   const bookingsPreviewSyncRef = React.useRef<string | null>(null)
+  const [expandOfferLines, setExpandOfferLines] = React.useState(false)
+  const [expandedSettingsCard, setExpandedSettingsCard] = React.useState<
+    'description' | 'offerLines' | null
+  >(null)
 
   const beginInvoiceSend = (): boolean => {
     if (invoiceSendInFlightRef.current) return false
@@ -196,6 +206,8 @@ export default function InvoiceTab({
     setEhfStatus(null)
     bookingsPreviewSyncRef.current = null
     setHighlightedLineIds(new Set())
+    setExpandOfferLines(false)
+    setExpandedSettingsCard(null)
   }
 
   const closeManualSendDialog = () => {
@@ -303,6 +315,65 @@ export default function InvoiceTab({
     },
   })
 
+  // Offer detail for expanding offer line items
+  const isTechnicalOffer = previewSourceOffer?.offer_type === 'technical'
+  const { data: offerDetail } = useQuery({
+    ...offerDetailQuery(previewSourceOffer?.id ?? ''),
+    enabled: !!previewSourceOffer && isTechnicalOffer,
+  })
+
+  const acceptedOfferTotalExVat = React.useMemo(() => {
+    if (!previewSourceOffer) return null
+    if (offerDetail) {
+      const equipment = offerDetail.groups?.flatMap((g) => g.items ?? []) ?? []
+      const crew = offerDetail.crew_items ?? []
+      const transport =
+        offerDetail.transport_groups?.flatMap((g) => g.items ?? []) ??
+        offerDetail.transport_items ??
+        []
+      return calculateOfferTotalsFromStoredLines(
+        equipment,
+        crew,
+        transport,
+        offerDetail.days_of_use,
+        offerDetail.discount_percent,
+        offerDetail.vat_percent,
+      ).totalAfterDiscount
+    }
+    return previewSourceOffer.total_after_discount
+  }, [previewSourceOffer, offerDetail])
+
+  // When expandOfferLines toggles, rebuild bookings from offer detail
+  React.useEffect(() => {
+    if (!previewSourceOffer) return
+    if (expandOfferLines && offerDetail) {
+      const expanded = offerLinesToBookings(offerDetail)
+      setPreviewBookings(expanded)
+      setEditedInvoiceLines(expanded.all)
+      setLineDiscountOverrides(equipmentDiscountOverridesFromOffer(offerDetail))
+      setManualDescriptionOverrides(new Set())
+    } else if (!expandOfferLines) {
+      const totalExVat =
+        acceptedOfferTotalExVat ?? previewSourceOffer.total_after_discount
+      const oneLineBookings = offerToBookingsForInvoice({
+        ...previewSourceOffer,
+        total_after_discount: totalExVat,
+        total_with_vat: roundMoney(
+          totalExVat * (1 + previewSourceOffer.vat_percent / 100),
+        ),
+      })
+      setPreviewBookings(oneLineBookings)
+      setEditedInvoiceLines(oneLineBookings.all)
+      setLineDiscountOverrides({})
+      setManualDescriptionOverrides(new Set())
+    }
+  }, [
+    expandOfferLines,
+    offerDetail,
+    previewSourceOffer,
+    acceptedOfferTotalExVat,
+  ])
+
   // Customer contacts for "their ref" dropdown
   const { data: customerContacts = [] } = useQuery({
     queryKey: ['customer', job.customer_id, 'contacts'],
@@ -332,6 +403,7 @@ export default function InvoiceTab({
     bookingsPreviewSyncRef.current = signature
     setPreviewBookings(bookings)
     setEditedInvoiceLines(bookings.all)
+    setLineDiscountOverrides(bookings.equipmentDiscountOverrides ?? {})
   }, [bookings, previewSourceOffer, previewBookings])
 
   // Get accounting config and invoice defaults from company_expansions
@@ -801,7 +873,7 @@ export default function InvoiceTab({
       job.project_lead?.display_name || job.project_lead?.email || '',
     )
     setInvoicePreviewTheirRef(job.customer_contact?.name?.trim() || '')
-    setLineDiscountOverrides({})
+    setLineDiscountOverrides(bookings.equipmentDiscountOverrides ?? {})
     setEditedInvoiceLines(bookings.all)
     setInvoiceWithVat(true)
   }
@@ -849,7 +921,7 @@ export default function InvoiceTab({
       if (updates.unitPrice !== undefined) line.unitPrice = updates.unitPrice
       if (updates.quantity !== undefined) line.quantity = updates.quantity
       if (updates.unitPrice !== undefined || updates.quantity !== undefined) {
-        line.totalPrice = line.unitPrice * line.quantity
+        line.totalPrice = roundMoney(line.unitPrice * line.quantity)
       }
       const next = [...base]
       next[idx] = line
@@ -1231,19 +1303,24 @@ export default function InvoiceTab({
                     ) : null}
                   </Box>
                 )}
-                {companyId && (
-                  <InvoiceDescriptionTemplateEditor
-                    companyId={companyId}
-                    lines={
-                      editedInvoiceLines.length > 0
-                        ? editedInvoiceLines
-                        : displayBookings.all
-                    }
-                    manualOverrides={manualDescriptionOverrides}
-                    onApply={(updated) => setEditedInvoiceLines(updated)}
-                    onHighlightChange={setHighlightedLineIds}
-                  />
-                )}
+                <InvoiceSettingsCards
+                  expandedCard={expandedSettingsCard}
+                  onExpandedCardChange={setExpandedSettingsCard}
+                  companyId={companyId}
+                  lines={
+                    editedInvoiceLines.length > 0
+                      ? editedInvoiceLines
+                      : displayBookings.all
+                  }
+                  manualOverrides={manualDescriptionOverrides}
+                  onApplyDescriptionTemplate={(updated) =>
+                    setEditedInvoiceLines(updated)
+                  }
+                  onHighlightChange={setHighlightedLineIds}
+                  offerLinesEnabled={!!previewSourceOffer && isTechnicalOffer}
+                  expandOfferLines={expandOfferLines}
+                  onExpandOfferLinesChange={setExpandOfferLines}
+                />
                 <InvoicePreview
                   basis="bookings"
                   bookings={displayBookings}
@@ -1276,6 +1353,7 @@ export default function InvoiceTab({
                   onRemoveLine={handleRemoveInvoiceLine}
                   onReorderLines={setEditedInvoiceLines}
                   highlightedLineIds={highlightedLineIds}
+                  acceptedOfferTotalExVat={acceptedOfferTotalExVat}
                 />
               </>
             )}

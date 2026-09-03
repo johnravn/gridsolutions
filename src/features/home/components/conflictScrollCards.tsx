@@ -1,201 +1,24 @@
-import * as React from 'react'
-import { Card, Flex, Link, Text } from '@radix-ui/themes'
-import { Link as RouterLink } from '@tanstack/react-router'
-import { format } from 'date-fns'
-import { nb } from 'date-fns/locale'
+import { Card, Flex, Text } from '@radix-ui/themes'
+import { useNavigate } from '@tanstack/react-router'
+import { useAuthz } from '@shared/auth/useAuthz'
+import { canVisit } from '@shared/auth/permissions'
+import { ConflictJobButtonList } from '@features/conflicts/components/JobOverlapPair'
+import { formatConflictPeriod } from '@features/conflicts/utils/conflictCopy'
 import {
-  groupConflictDisplayName,
-  splitCrewConflicts,
-  splitEquipmentConflicts,
-  splitGroupConflicts,
-  splitVehicleConflicts,
-} from '@features/conflicts/utils/conflictCategories'
+  conflictJobButtonItems,
+  conflictKindLabel,
+  conflictResourceName,
+  conflictStatusLabel,
+} from '@features/conflicts/utils/conflictItems'
 import { HorizontalScrollCard } from './HorizontalCardScroller'
-import type {
-  CrewConflictRow,
-  EquipmentConflictRow,
-  GroupConflictRow,
-  VehicleConflictRow,
-} from '@features/conflicts/api/queries'
+import type { ConflictCardItem } from '@features/conflicts/utils/conflictItems'
+import type { KeyboardEvent } from 'react'
 
-function formatPeriod(start: string, end: string) {
-  const s = new Date(start)
-  const e = new Date(end)
-  return `${format(s, 'd. MMM HH:mm', { locale: nb })} – ${format(e, 'HH:mm', { locale: nb })}`
-}
-
-export function countConflictItems(
-  crewConflicts: Array<CrewConflictRow>,
-  vehicleConflicts: Array<VehicleConflictRow>,
-  equipmentConflicts: Array<EquipmentConflictRow>,
-  groupConflicts: Array<GroupConflictRow> = [],
-) {
-  const crew = splitCrewConflicts(crewConflicts)
-  const vehicles = splitVehicleConflicts(vehicleConflicts)
-  const equipment = splitEquipmentConflicts(equipmentConflicts)
-  const groups = splitGroupConflicts(groupConflicts)
-  return (
-    crew.unresolved.length +
-    crew.forced.length +
-    vehicles.unresolved.length +
-    vehicles.forced.length +
-    equipment.unresolved.length +
-    equipment.forced.length +
-    groups.unresolved.length +
-    groups.forced.length
-  )
-}
-
-function ConflictJobLink({
-  jobId,
-  children,
-}: {
-  jobId: string
-  children: React.ReactNode
-}) {
-  return (
-    <Link asChild size="1" underline="hover" weight="medium" color="blue">
-      <RouterLink
-        to="/jobs"
-        search={{ jobId, recurringJobId: undefined, tab: undefined }}
-        style={{ cursor: 'pointer' }}
-      >
-        {children}
-      </RouterLink>
-    </Link>
-  )
-}
-
-function JobPairLinks({
-  row,
-}: {
-  row: {
-    job_id_1: string | null
-    job_id_2: string | null
-    job_title_1: string | null
-    job_title_2: string | null
-    start_1: string
-    end_1: string
-    start_2: string
-    end_2: string
-  }
-}) {
-  return (
-    <Flex gap="2" wrap="wrap" align="center" mt="1">
-      {row.job_id_1 && (
-        <ConflictJobLink jobId={row.job_id_1}>
-          {row.job_title_1 ?? 'Job'} ({formatPeriod(row.start_1, row.end_1)})
-        </ConflictJobLink>
-      )}
-      <Text size="1" color="gray">
-        and
-      </Text>
-      {row.job_id_2 && (
-        <ConflictJobLink jobId={row.job_id_2}>
-          {row.job_title_2 ?? 'Job'} ({formatPeriod(row.start_2, row.end_2)})
-        </ConflictJobLink>
-      )}
-    </Flex>
-  )
-}
-
-export type ConflictCardItem =
-  | {
-      kind: 'crew'
-      key: string
-      tone: 'red' | 'amber'
-      row: CrewConflictRow
-    }
-  | {
-      kind: 'vehicle'
-      key: string
-      tone: 'red' | 'amber'
-      row: VehicleConflictRow
-    }
-  | {
-      kind: 'equipment'
-      key: string
-      tone: 'red' | 'amber'
-      row: EquipmentConflictRow
-    }
-  | {
-      kind: 'group'
-      key: string
-      tone: 'red' | 'amber'
-      row: GroupConflictRow
-    }
-
-export function buildConflictCards(
-  crewConflicts: Array<CrewConflictRow>,
-  vehicleConflicts: Array<VehicleConflictRow>,
-  equipmentConflicts: Array<EquipmentConflictRow>,
-  groupConflicts: Array<GroupConflictRow> = [],
-): Array<ConflictCardItem> {
-  const crew = splitCrewConflicts(crewConflicts)
-  const vehicles = splitVehicleConflicts(vehicleConflicts)
-  const equipment = splitEquipmentConflicts(equipmentConflicts)
-  const groups = splitGroupConflicts(groupConflicts)
-  const items: Array<ConflictCardItem> = []
-
-  const pushCrew = (rows: Array<CrewConflictRow>, tone: 'red' | 'amber') => {
-    rows.forEach((row, i) => {
-      items.push({
-        kind: 'crew',
-        key: `crew-${tone}-${row.user_id}-${row.period_id_1}-${row.period_id_2}-${i}`,
-        tone,
-        row,
-      })
-    })
-  }
-  const pushVehicle = (
-    rows: Array<VehicleConflictRow>,
-    tone: 'red' | 'amber',
-  ) => {
-    rows.forEach((row, i) => {
-      items.push({
-        kind: 'vehicle',
-        key: `vehicle-${tone}-${row.vehicle_id}-${row.period_id_1}-${row.period_id_2}-${i}`,
-        tone,
-        row,
-      })
-    })
-  }
-  const pushEquipment = (
-    rows: Array<EquipmentConflictRow>,
-    tone: 'red' | 'amber',
-  ) => {
-    rows.forEach((row, i) => {
-      const ids = [...(row.job_ids ?? [])].sort().join('|')
-      items.push({
-        kind: 'equipment',
-        key: `equipment-${tone}-${row.item_id}-${ids}-${row.start_at}-${i}`,
-        tone,
-        row,
-      })
-    })
-  }
-  const pushGroup = (rows: Array<GroupConflictRow>, tone: 'red' | 'amber') => {
-    rows.forEach((row, i) => {
-      items.push({
-        kind: 'group',
-        key: `group-${tone}-${row.group_id_1}-${row.group_id_2}-${row.period_id_1}-${row.period_id_2}-${i}`,
-        tone,
-        row,
-      })
-    })
-  }
-
-  pushCrew(crew.unresolved, 'red')
-  pushVehicle(vehicles.unresolved, 'red')
-  pushEquipment(equipment.unresolved, 'red')
-  pushGroup(groups.unresolved, 'red')
-  pushCrew(crew.forced, 'amber')
-  pushVehicle(vehicles.forced, 'amber')
-  pushEquipment(equipment.forced, 'amber')
-  pushGroup(groups.forced, 'amber')
-
-  return items
-}
+export {
+  buildConflictCards,
+  countConflictItems,
+  type ConflictCardItem,
+} from '@features/conflicts/utils/conflictItems'
 
 export function ConflictScrollCard({
   item,
@@ -206,8 +29,28 @@ export function ConflictScrollCard({
   minWidth?: number
   fillHeight?: boolean
 }) {
+  const navigate = useNavigate()
+  const { caps } = useAuthz()
+  const canOpenConflicts = canVisit(caps, 'visit:conflicts')
   const border = item.tone === 'red' ? 'var(--red-a4)' : 'var(--amber-a4)'
   const labelColor = item.tone === 'red' ? 'red' : 'amber'
+  const jobs = conflictJobButtonItems(item, formatConflictPeriod)
+
+  const openConflict = () => {
+    if (!canOpenConflicts) return
+    void navigate({
+      to: '/conflicts',
+      search: { conflictId: item.key },
+    })
+  }
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!canOpenConflicts) return
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openConflict()
+    }
+  }
 
   return (
     <HorizontalScrollCard
@@ -216,76 +59,42 @@ export function ConflictScrollCard({
     >
       <Card
         size="2"
+        role={canOpenConflicts ? 'link' : undefined}
+        tabIndex={canOpenConflicts ? 0 : undefined}
+        aria-label={
+          canOpenConflicts
+            ? `Open conflict ${conflictResourceName(item)}`
+            : undefined
+        }
+        onClick={canOpenConflicts ? openConflict : undefined}
+        onKeyDown={canOpenConflicts ? onKeyDown : undefined}
         style={{
-          height: fillHeight ? '100%' : '100%',
+          height: '100%',
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
           border: `1px solid ${border}`,
+          cursor: canOpenConflicts ? 'pointer' : 'default',
         }}
       >
-        <Flex direction="column" gap="2">
-          {item.kind === 'crew' && (
-            <>
-              <Text size="1" weight="medium" color={labelColor} as="div">
-                {item.tone === 'red' ? 'Unresolved' : 'Forced'} · Crew
-              </Text>
-              <Text size="2" weight="bold" as="div">
-                {item.row.user_display_name ?? 'Unknown'}
-              </Text>
-              <JobPairLinks row={item.row} />
-            </>
-          )}
-          {item.kind === 'vehicle' && (
-            <>
-              <Text size="1" weight="medium" color={labelColor} as="div">
-                {item.tone === 'red' ? 'Unresolved' : 'Forced'} · Vehicle
-              </Text>
-              <Text size="2" weight="bold" as="div">
-                {item.row.vehicle_name ?? 'Unknown'}
-              </Text>
-              <JobPairLinks row={item.row} />
-            </>
-          )}
-          {item.kind === 'group' && (
-            <>
-              <Text size="1" weight="medium" color={labelColor} as="div">
-                {item.tone === 'red' ? 'Unresolved' : 'Forced'} · Group
-              </Text>
-              <Text size="2" weight="bold" as="div">
-                {groupConflictDisplayName(item.row)}
-              </Text>
-              <JobPairLinks row={item.row} />
-            </>
-          )}
-          {item.kind === 'equipment' && (
-            <>
-              <Text size="1" weight="medium" color={labelColor} as="div">
-                {item.tone === 'red' ? 'Unresolved' : 'Forced'} · Equipment
-              </Text>
-              <Text size="2" weight="bold" as="div">
-                {item.row.item_name ?? 'Unknown'} ({item.row.total_reserved}/
-                {item.row.capacity} booked)
-              </Text>
-              <Text size="1" color="gray" as="div">
-                {formatPeriod(item.row.start_at, item.row.end_at)}
-              </Text>
-              {(item.row.job_ids ?? []).length > 0 && (
-                <Flex gap="1" wrap="wrap" align="center">
-                  {(item.row.job_ids ?? []).map((jobId, jobIndex) => (
-                    <React.Fragment key={jobId}>
-                      {jobIndex > 0 && (
-                        <Text size="1" color="gray">
-                          ·
-                        </Text>
-                      )}
-                      <ConflictJobLink jobId={jobId}>
-                        {item.row.job_titles?.[jobIndex]?.trim() ||
-                          `Job ${jobIndex + 1}`}
-                      </ConflictJobLink>
-                    </React.Fragment>
-                  ))}
-                </Flex>
-              )}
-            </>
-          )}
+        <Flex
+          direction="column"
+          gap="2"
+          style={{ flex: 1, minHeight: 0, minWidth: 0 }}
+        >
+          <Text size="1" weight="medium" color={labelColor} as="div">
+            {conflictStatusLabel(item.tone)} · {conflictKindLabel(item.kind)}
+          </Text>
+          <Text size="2" weight="bold" as="div">
+            {conflictResourceName(item)}
+          </Text>
+          {item.kind === 'equipment' ? (
+            <Text size="1" color="gray" as="div">
+              {item.row.total_reserved}/{item.row.capacity} booked
+            </Text>
+          ) : null}
+          <ConflictJobButtonList jobs={jobs} linkJobs />
         </Flex>
       </Card>
     </HorizontalScrollCard>

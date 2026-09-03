@@ -169,6 +169,7 @@ export default function MattersPage() {
       selectedId={selectedId}
       onSelect={isLarge ? setSelectedId : handleSelect}
       unreadFilter={unreadFilter}
+      onUnreadFilterChange={setUnreadFilter}
       companyFilter={companyFilter}
       typeFilter={typeFilter}
       companies={companies || []}

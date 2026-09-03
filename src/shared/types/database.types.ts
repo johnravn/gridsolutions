@@ -220,8 +220,10 @@ export type Database = {
         Row: {
           company_id: string
           created_at: string
+          crew_user_id: string | null
           id: string
           kind: string
+          remind_1h_before: boolean
           token: string
           updated_at: string
           user_id: string
@@ -230,8 +232,10 @@ export type Database = {
         Insert: {
           company_id: string
           created_at?: string
+          crew_user_id?: string | null
           id?: string
           kind?: string
+          remind_1h_before?: boolean
           token: string
           updated_at?: string
           user_id: string
@@ -240,8 +244,10 @@ export type Database = {
         Update: {
           company_id?: string
           created_at?: string
+          crew_user_id?: string | null
           id?: string
           kind?: string
+          remind_1h_before?: boolean
           token?: string
           updated_at?: string
           user_id?: string
@@ -254,6 +260,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'companies'
             referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'calendar_subscriptions_crew_user_id_fkey'
+            columns: ['crew_user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
           },
           {
             foreignKeyName: 'calendar_subscriptions_user_id_fkey'
@@ -2250,6 +2263,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          inbox_read_at: string | null
           matter_id: string
           responded_at: string | null
           status: Database['public']['Enums']['matter_recipient_status']
@@ -2259,6 +2273,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          inbox_read_at?: string | null
           matter_id: string
           responded_at?: string | null
           status?: Database['public']['Enums']['matter_recipient_status']
@@ -2268,6 +2283,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          inbox_read_at?: string | null
           matter_id?: string
           responded_at?: string | null
           status?: Database['public']['Enums']['matter_recipient_status']
@@ -3071,6 +3087,54 @@ export type Database = {
             isOneToOne: false
             referencedRelation: 'companies'
             referencedColumns: ['id']
+          },
+        ]
+      }
+      personal_calendar_events: {
+        Row: {
+          company_id: string
+          created_at: string
+          end_at: string
+          id: string
+          start_at: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          company_id: string
+          created_at?: string
+          end_at: string
+          id?: string
+          start_at: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          company_id?: string
+          created_at?: string
+          end_at?: string
+          id?: string
+          start_at?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'personal_calendar_events_company_id_fkey'
+            columns: ['company_id']
+            isOneToOne: false
+            referencedRelation: 'companies'
+            referencedColumns: ['id']
+          },
+          {
+            foreignKeyName: 'personal_calendar_events_user_id_fkey'
+            columns: ['user_id']
+            isOneToOne: false
+            referencedRelation: 'profiles'
+            referencedColumns: ['user_id']
           },
         ]
       }
@@ -4757,6 +4821,14 @@ export type Database = {
         Args: { p_company_id: string; p_time_period_id: string }
         Returns: boolean
       }
+      can_subscribe_to_crew_user: {
+        Args: {
+          p_company_id: string
+          p_subscriber_id: string
+          p_target_id: string
+        }
+        Returns: boolean
+      }
       can_view_matter: { Args: { p_matter_id: string }; Returns: boolean }
       check_circular_group_reference: {
         Args: { p_child_group_id: string; p_parent_group_id: string }
@@ -4765,6 +4837,10 @@ export type Database = {
       check_item_availability_for_job: {
         Args: { p_item_id: string; p_job_id: string }
         Returns: Json
+      }
+      close_pending_crew_invites_if_role_full: {
+        Args: { p_time_period_id: string }
+        Returns: undefined
       }
       collect_offer_options: {
         Args: { p_offer_id: string }
@@ -4998,11 +5074,7 @@ export type Database = {
         Returns: number
       }
       job_copy: {
-        Args: {
-          p_job_id: string
-          p_start_at: string
-          p_title?: string
-        }
+        Args: { p_job_id: string; p_start_at: string; p_title?: string }
         Returns: Json
       }
       mark_job_offer_bookings_synced: {

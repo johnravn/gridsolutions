@@ -109,6 +109,9 @@ export default function JobsList({
   dateFrom,
   dateTo,
   readyToInvoiceFilter = false,
+  showMyJobsOnly = false,
+  onlyJobIds = null,
+  waitingForMyJobIds = false,
   compact = false,
   toolbarExtra,
   listScope = null,
@@ -127,6 +130,10 @@ export default function JobsList({
   dateTo: string
   /** Same criteria as homepage: completed + current user is project lead */
   readyToInvoiceFilter?: boolean
+  /** Same meaning as Home: only jobs where the current user is crew or project lead */
+  showMyJobsOnly?: boolean
+  onlyJobIds?: Array<string> | null
+  waitingForMyJobIds?: boolean
   /** When true, use a stacked card layout for better mobile display */
   compact?: boolean
   toolbarExtra?: React.ReactNode
@@ -180,9 +187,11 @@ export default function JobsList({
       includeRecurringMembers:
         companyRole === 'freelancer' ||
         showJobsInRecurringSeries ||
-        readyToInvoiceFilter,
+        readyToInvoiceFilter ||
+        showMyJobsOnly,
+      onlyJobIds,
     }),
-    enabled: !!companyId && !listScope,
+    enabled: !!companyId && !listScope && !waitingForMyJobIds,
   })
 
   const { data: scopedRecurringDetail, isLoading: scopedLoading } = useQuery({
@@ -200,6 +209,8 @@ export default function JobsList({
     isFetchingNextPage,
     fetchNextPage,
   } = jobsQuery
+  const listIsLoading = isLoading || waitingForMyJobIds
+  const hideRecurringPins = readyToInvoiceFilter || showMyJobsOnly
   const allData = React.useMemo(
     () => jobsQuery.data?.pages.flatMap((page) => page.rows) ?? [],
     [jobsQuery.data],
@@ -328,22 +339,12 @@ export default function JobsList({
   })
 
   React.useLayoutEffect(() => {
-    if (rows.length === 0 || isLoading) return
+    if (rows.length === 0 || listIsLoading) return
     rowVirtualizer.measure()
-  }, [rows.length, isLoading, rowVirtualizer])
-
-  useIndexTableSelectionKeyboard({
-    enabled: selectedJobId != null,
-    selectedId: selectedJobId,
-    getIds: () => rows.map((r) => r.id),
-    onSelect: (id) => onSelectJob(id),
-    scrollToIndex: (index) => {
-      rowVirtualizer.scrollToIndex(index, { align: 'auto' })
-    },
-  })
+  }, [rows.length, listIsLoading, rowVirtualizer])
 
   const visibleRecurringIds = React.useMemo(() => {
-    if (readyToInvoiceFilter) return []
+    if (hideRecurringPins) return []
     if (searchRecurringHits.length > 0) {
       return searchRecurringHits.map((r) => r.id)
     }
@@ -352,17 +353,27 @@ export default function JobsList({
     }
     return []
   }, [
-    readyToInvoiceFilter,
+    hideRecurringPins,
     searchRecurringHits,
     recurringJobsOpen,
     pinnedRecurringJobs,
   ])
 
+  const navigatingJobs = selectedJobId != null
   useIndexTableSelectionKeyboard({
-    enabled: selectedRecurringJobId != null,
-    selectedId: selectedRecurringJobId,
-    getIds: () => visibleRecurringIds,
-    onSelect: (id) => onSelectRecurringJob(id),
+    enabled: navigatingJobs || selectedRecurringJobId != null,
+    selectedId: navigatingJobs ? selectedJobId : selectedRecurringJobId,
+    getIds: () =>
+      navigatingJobs ? rows.map((r) => r.id) : visibleRecurringIds,
+    onSelect: (id) => {
+      if (navigatingJobs) onSelectJob(id)
+      else onSelectRecurringJob(id)
+    },
+    scrollToIndex: navigatingJobs
+      ? (index) => {
+          rowVirtualizer.scrollToIndex(index, { align: 'auto' })
+        }
+      : undefined,
   })
 
   const handleSort = (column: SortBy) => {
@@ -403,7 +414,7 @@ export default function JobsList({
             <Search width={20} height={20} />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {isFetching && <Spinner size="3" />}
+            {(isFetching || waitingForMyJobIds) && <Spinner size="3" />}
           </TextField.Slot>
         </TextField.Root>
         {compact ? toolbarExtra : null}
@@ -672,7 +683,7 @@ export default function JobsList({
       <>
         <MobilePageList toolbar={toolbar}>
           {dialogs}
-          {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
+          {pinnedRecurringJobs.length > 0 && !hideRecurringPins && (
             <Box>
               <Flex
                 align="center"
@@ -750,7 +761,7 @@ export default function JobsList({
                 ))}
             </Box>
           )}
-          {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
+          {searchRecurringHits.length > 0 && !hideRecurringPins && (
             <Box>
               {searchRecurringHits.map((row) => (
                 <RecurringJobListRow
@@ -763,13 +774,13 @@ export default function JobsList({
               ))}
             </Box>
           )}
-          {isLoading ? (
+          {listIsLoading ? (
             <IndexTableBodySkeleton rowCount={8} rowHeight={88} />
           ) : rows.length === 0 &&
             !hasNextPage &&
-            (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
+            (hideRecurringPins || searchRecurringHits.length === 0) ? (
             <Text size="2" color="gray">
-              {allData.length === 0
+              {allData.length === 0 && !hideRecurringPins
                 ? 'No jobs yet'
                 : 'No jobs match your filters'}
             </Text>
@@ -820,24 +831,26 @@ export default function JobsList({
               <Plus width={18} height={18} />
               New job
             </Button>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <IconButton
-                  variant="ghost"
-                  size="3"
-                  aria-label="More job actions"
-                >
-                  <MoreHoriz width={18} height={18} />
-                </IconButton>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content align="end">
-                <DropdownMenu.Item
-                  onSelect={() => setCreateRecurringOpen(true)}
-                >
-                  New recurring job
-                </DropdownMenu.Item>
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
+            <div className="app-mobile-bottom-action-trailing">
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger>
+                  <IconButton
+                    variant="ghost"
+                    size="3"
+                    aria-label="More job actions"
+                  >
+                    <MoreHoriz width={18} height={18} />
+                  </IconButton>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Content align="end">
+                  <DropdownMenu.Item
+                    onSelect={() => setCreateRecurringOpen(true)}
+                  >
+                    New recurring job
+                  </DropdownMenu.Item>
+                </DropdownMenu.Content>
+              </DropdownMenu.Root>
+            </div>
           </MobileBottomActionBar>
         )}
       </>
@@ -861,7 +874,7 @@ export default function JobsList({
       </Box>
       {dialogs}
 
-      {pinnedRecurringJobs.length > 0 && !readyToInvoiceFilter && (
+      {pinnedRecurringJobs.length > 0 && !hideRecurringPins && (
         <Box mb="2" style={{ flexShrink: 0 }}>
           <Flex
             align="center"
@@ -1018,7 +1031,7 @@ export default function JobsList({
               marginTop: 8,
             }}
           >
-            {searchRecurringHits.length > 0 && !readyToInvoiceFilter && (
+            {searchRecurringHits.length > 0 && !hideRecurringPins && (
               <Box mb="2">
                 {searchRecurringHits.map((row) => (
                   <RecurringJobListRow
@@ -1031,16 +1044,16 @@ export default function JobsList({
                 ))}
               </Box>
             )}
-            {isLoading ? (
+            {listIsLoading ? (
               <Box p="3">
                 <IndexTableBodySkeleton rowCount={8} />
               </Box>
             ) : rows.length === 0 &&
               !hasNextPage &&
-              (readyToInvoiceFilter || searchRecurringHits.length === 0) ? (
+              (hideRecurringPins || searchRecurringHits.length === 0) ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
-                  {allData.length === 0
+                  {allData.length === 0 && !hideRecurringPins
                     ? 'No jobs yet'
                     : 'No jobs match your filters'}
                 </Text>

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen } from '@testing-library/react'
 import { renderWithProviders } from '@test/render'
 import { AppToastProvider } from '@shared/ui/toast/ToastProvider'
@@ -18,6 +18,22 @@ vi.mock('@shared/api/supabase', () => ({
 vi.mock('@app/hooks/useMediaQuery', () => ({
   useMediaQuery: vi.fn(() => false),
 }))
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+})
 
 const initial = {
   id: 'role-1',

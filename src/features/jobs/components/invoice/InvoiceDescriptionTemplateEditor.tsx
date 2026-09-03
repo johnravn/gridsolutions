@@ -29,43 +29,38 @@ import { DotsGrid3x3, Plus, Xmark } from 'iconoir-react'
 import { DropdownMenuTrigger } from '@shared/ui/radixAsChild'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
+  COMMON_TOKEN_OPTIONS,
   applyTemplatesToLines,
   buildInvoiceLineDescription,
   countChangedDescriptions,
   countLinesByScope,
+  defaultTemplateForScope,
   getLinesAffectedByScope,
   loadInvoiceLineTemplates,
   saveInvoiceLineTemplates,
+  tokenLabel,
+  tokenOptionsForScope,
 } from '../../utils/invoiceLineDescription'
 import type {
   DescriptionTemplate,
   DescriptionToken,
+  DescriptionTokenKind,
   InvoiceLineDescriptionScope,
   InvoiceLineTemplateStore,
+  TokenOption,
 } from '../../utils/invoiceLineDescription'
 import type { DragEndEvent } from '@dnd-kit/core'
 import type { BookingInvoiceLine } from '../../api/invoiceQueries'
 
 /** Above Radix Dialog overlay when used inside invoice preview modals */
 const OVERLAY_Z_INDEX = 10000
-
-const TOKEN_OPTIONS: Array<{ value: DescriptionToken['kind']; label: string }> =
-  [
-    { value: 'custom', label: 'Custom' },
-    { value: 'job', label: 'Job' },
-    { value: 'date', label: 'Date' },
-    { value: 'crew', label: 'Crew' },
-    { value: 'equipment', label: 'Equipment' },
-    { value: 'transport', label: 'Transport' },
-    { value: 'timePeriod', label: 'Time period' },
-    { value: 'type', label: 'Type' },
-  ]
+export const INVOICE_LINE_HIGHLIGHT_HOLD_MS = 5000
 
 const SCOPE_OPTIONS: Array<{
   value: InvoiceLineDescriptionScope
   label: string
 }> = [
-  { value: 'all', label: 'All lines' },
+  { value: 'other', label: 'Other' },
   { value: 'equipment', label: 'Equipment' },
   { value: 'crew', label: 'Crew' },
   { value: 'transport', label: 'Transport' },
@@ -76,8 +71,10 @@ type DraftTokenEntry = {
   token: DescriptionToken
 }
 
-function emptyTemplate(): DescriptionTemplate {
-  return { tokens: [{ kind: 'equipment' }] }
+function emptyTemplate(
+  scope: InvoiceLineDescriptionScope,
+): DescriptionTemplate {
+  return defaultTemplateForScope(scope)
 }
 
 function templateToEntries(
@@ -93,14 +90,6 @@ function entriesToTemplate(
   entries: Array<DraftTokenEntry>,
 ): DescriptionTemplate {
   return { tokens: entries.map((entry) => entry.token) }
-}
-
-function tokenLabel(token: DescriptionToken): string {
-  if (token.kind === 'custom') {
-    const t = token.text.trim()
-    return t ? `"${t}"` : 'Custom'
-  }
-  return TOKEN_OPTIONS.find((o) => o.value === token.kind)?.label ?? token.kind
 }
 
 const chipBase: React.CSSProperties = {
@@ -129,12 +118,46 @@ function scopeChipStyle(active: boolean): React.CSSProperties {
 
 function tokenChipStyle(): React.CSSProperties {
   return {
-    ...chipBase,
-    padding: '4px 8px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    padding: '2px 4px 2px 8px',
+    borderRadius: 'var(--radius-2)',
+    fontSize: 'var(--font-size-1)',
+    fontWeight: 500,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
+    userSelect: 'none',
     background: 'var(--indigo-a3)',
     color: 'var(--indigo-11)',
-    borderColor: 'var(--indigo-a6)',
+    border: '1px solid var(--indigo-a6)',
   }
+}
+
+const tokenChipLabelStyle: React.CSSProperties = {
+  background: 'transparent',
+  border: 'none',
+  padding: '2px 0',
+  color: 'inherit',
+  font: 'inherit',
+  fontWeight: 500,
+  cursor: 'pointer',
+  lineHeight: 1.2,
+}
+
+const tokenChipRemoveStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  width: 18,
+  height: 18,
+  padding: 0,
+  border: 'none',
+  borderRadius: 'var(--radius-1)',
+  background: 'transparent',
+  color: 'inherit',
+  cursor: 'pointer',
+  opacity: 0.7,
 }
 
 function addChipStyle(): React.CSSProperties {
@@ -147,16 +170,55 @@ function addChipStyle(): React.CSSProperties {
   }
 }
 
+function TokenKindMenuItems({
+  options,
+  onSelect,
+}: {
+  options: Array<TokenOption>
+  onSelect: (kind: DescriptionTokenKind) => void
+}) {
+  const specificValues = new Set(
+    options
+      .filter(
+        (opt) =>
+          !COMMON_TOKEN_OPTIONS.some((common) => common.value === opt.value),
+      )
+      .map((opt) => opt.value),
+  )
+  const specific = options.filter((opt) => specificValues.has(opt.value))
+  const common = options.filter((opt) => !specificValues.has(opt.value))
+
+  return (
+    <>
+      {specific.map((opt) => (
+        <DropdownMenu.Item key={opt.value} onSelect={() => onSelect(opt.value)}>
+          {opt.label}
+        </DropdownMenu.Item>
+      ))}
+      {specific.length > 0 && common.length > 0 ? (
+        <DropdownMenu.Separator />
+      ) : null}
+      {common.map((opt) => (
+        <DropdownMenu.Item key={opt.value} onSelect={() => onSelect(opt.value)}>
+          {opt.label}
+        </DropdownMenu.Item>
+      ))}
+    </>
+  )
+}
+
 function SortableTokenRow({
   id,
   token,
+  tokenOptions,
   onUpdateKind,
   onUpdateCustomText,
   onRemove,
 }: {
   id: string
   token: DescriptionToken
-  onUpdateKind: (kind: DescriptionToken['kind']) => void
+  tokenOptions: Array<TokenOption>
+  onUpdateKind: (kind: DescriptionTokenKind) => void
   onUpdateCustomText: (text: string) => void
   onRemove: () => void
 }) {
@@ -193,43 +255,43 @@ function SortableTokenRow({
         <DotsGrid3x3 width={14} height={14} />
       </IconButton>
 
-      <DropdownMenu.Root>
-        <DropdownMenuTrigger asChild>
-          <button type="button" style={tokenChipStyle()}>
-            {tokenLabel(token)}
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenu.Content style={{ zIndex: OVERLAY_Z_INDEX }}>
-          {TOKEN_OPTIONS.map((opt) => (
-            <DropdownMenu.Item
-              key={opt.value}
-              onSelect={() => onUpdateKind(opt.value)}
-            >
-              {opt.label}
-            </DropdownMenu.Item>
-          ))}
-        </DropdownMenu.Content>
-      </DropdownMenu.Root>
+      <div style={tokenChipStyle()}>
+        <DropdownMenu.Root>
+          <DropdownMenuTrigger asChild>
+            <button type="button" style={tokenChipLabelStyle}>
+              {tokenLabel(token)}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenu.Content style={{ zIndex: OVERLAY_Z_INDEX }}>
+            <TokenKindMenuItems
+              options={tokenOptions}
+              onSelect={onUpdateKind}
+            />
+          </DropdownMenu.Content>
+        </DropdownMenu.Root>
 
-      {token.kind === 'custom' && (
-        <TextField.Root
-          size="1"
-          value={token.text}
-          placeholder="Text…"
-          onChange={(e) => onUpdateCustomText(e.target.value)}
-          style={{ width: 88, minWidth: 72 }}
-        />
-      )}
+        {token.kind === 'custom' && (
+          <TextField.Root
+            size="1"
+            value={token.text}
+            placeholder="Text…"
+            onChange={(e) => onUpdateCustomText(e.target.value)}
+            style={{ width: 88, minWidth: 72 }}
+          />
+        )}
 
-      <IconButton
-        size="1"
-        variant="ghost"
-        color="gray"
-        aria-label="Remove token"
-        onClick={onRemove}
-      >
-        <Xmark width={12} height={12} />
-      </IconButton>
+        <button
+          type="button"
+          aria-label="Remove token"
+          style={tokenChipRemoveStyle}
+          onClick={(e) => {
+            e.stopPropagation()
+            onRemove()
+          }}
+        >
+          <Xmark width={12} height={12} />
+        </button>
+      </div>
     </Flex>
   )
 }
@@ -241,6 +303,8 @@ type Props = {
   onApply: (lines: Array<BookingInvoiceLine>) => void
   /** When set, called whenever highlight mode or affected line set changes. */
   onHighlightChange?: (lineIds: ReadonlySet<string>) => void
+  /** Hide the built-in heading and outer panel chrome (e.g. inside a settings card). */
+  embedded?: boolean
 }
 
 export default function InvoiceDescriptionTemplateEditor({
@@ -249,10 +313,14 @@ export default function InvoiceDescriptionTemplateEditor({
   manualOverrides,
   onApply,
   onHighlightChange,
+  embedded = false,
 }: Props) {
   const { success, info } = useToast()
-  const [scope, setScope] = React.useState<InvoiceLineDescriptionScope>('all')
+  const [scope, setScope] = React.useState<InvoiceLineDescriptionScope>('other')
   const [highlightEnabled, setHighlightEnabled] = React.useState(false)
+  const [highlightPulse, setHighlightPulse] = React.useState(0)
+  const [highlightSecondsLeft, setHighlightSecondsLeft] = React.useState(0)
+  const highlightExpiresAtRef = React.useRef<number | null>(null)
   const [store, setStore] = React.useState<InvoiceLineTemplateStore>(() =>
     loadInvoiceLineTemplates(companyId),
   )
@@ -260,7 +328,7 @@ export default function InvoiceDescriptionTemplateEditor({
     Array<DraftTokenEntry>
   >(() => {
     const loaded = loadInvoiceLineTemplates(companyId)
-    return templateToEntries(loaded.all ?? emptyTemplate())
+    return templateToEntries(loaded.other ?? emptyTemplate('other'))
   })
 
   const sensors = useSensors(
@@ -273,12 +341,12 @@ export default function InvoiceDescriptionTemplateEditor({
   React.useEffect(() => {
     const loaded = loadInvoiceLineTemplates(companyId)
     setStore(loaded)
-    setDraftEntries(templateToEntries(loaded.all ?? emptyTemplate()))
+    setDraftEntries(templateToEntries(loaded.other ?? emptyTemplate('other')))
   }, [companyId])
 
   React.useEffect(() => {
-    const template = scope === 'all' ? store.all : store[scope]
-    setDraftEntries(templateToEntries(template ?? emptyTemplate()))
+    const template = store[scope]
+    setDraftEntries(templateToEntries(template ?? emptyTemplate(scope)))
   }, [scope, store])
 
   const draft = React.useMemo(
@@ -286,14 +354,16 @@ export default function InvoiceDescriptionTemplateEditor({
     [draftEntries],
   )
 
+  const tokenOptions = React.useMemo(() => tokenOptionsForScope(scope), [scope])
+
   const scopeCounts = React.useMemo(
-    () => countLinesByScope(lines, manualOverrides),
-    [lines, manualOverrides],
+    () => countLinesByScope(lines, manualOverrides, store),
+    [lines, manualOverrides, store],
   )
 
   const affectedLines = React.useMemo(
-    () => getLinesAffectedByScope(lines, manualOverrides, scope),
-    [lines, manualOverrides, scope],
+    () => getLinesAffectedByScope(lines, manualOverrides, scope, store),
+    [lines, manualOverrides, scope, store],
   )
 
   const affectedIds = React.useMemo(
@@ -308,14 +378,47 @@ export default function InvoiceDescriptionTemplateEditor({
     onHighlightChangeRef.current?.(highlightEnabled ? affectedIds : new Set())
   }, [highlightEnabled, affectedIds])
 
+  React.useEffect(() => {
+    if (!highlightEnabled) {
+      setHighlightSecondsLeft(0)
+      highlightExpiresAtRef.current = null
+      return
+    }
+    const tick = () => {
+      const expiresAt = highlightExpiresAtRef.current
+      if (expiresAt == null) return
+      const secondsLeft = Math.max(
+        0,
+        Math.ceil((expiresAt - Date.now()) / 1000),
+      )
+      setHighlightSecondsLeft(secondsLeft)
+    }
+    tick()
+    const interval = window.setInterval(tick, 250)
+    return () => window.clearInterval(interval)
+  }, [highlightEnabled, highlightPulse])
+
+  React.useEffect(() => {
+    if (!highlightEnabled) return
+    const timer = window.setTimeout(() => {
+      setHighlightEnabled(false)
+    }, INVOICE_LINE_HIGHLIGHT_HOLD_MS)
+    return () => window.clearTimeout(timer)
+  }, [highlightEnabled, highlightPulse])
+
+  const enableHighlights = () => {
+    highlightExpiresAtRef.current = Date.now() + INVOICE_LINE_HIGHLIGHT_HOLD_MS
+    setHighlightEnabled(true)
+    setHighlightPulse((n) => n + 1)
+  }
+
   const livePreviewText = React.useMemo(() => {
-    const sampleLine =
-      lines.find((l) => (scope === 'all' ? true : l.type === scope)) ?? lines[0]
+    const sampleLine = affectedLines[0] ?? lines[0]
     if (!sampleLine) return null
     return buildInvoiceLineDescription(sampleLine, draft)
-  }, [draft, lines, scope])
+  }, [affectedLines, draft, lines])
 
-  const updateToken = (id: string, kind: DescriptionToken['kind']) => {
+  const updateToken = (id: string, kind: DescriptionTokenKind) => {
     setDraftEntries((prev) =>
       prev.map((entry) =>
         entry.id === id
@@ -339,7 +442,7 @@ export default function InvoiceDescriptionTemplateEditor({
     )
   }
 
-  const addToken = (kind: DescriptionToken['kind']) => {
+  const addToken = (kind: DescriptionTokenKind) => {
     setDraftEntries((prev) => [
       ...prev,
       {
@@ -364,12 +467,7 @@ export default function InvoiceDescriptionTemplateEditor({
   }
 
   const handleApply = () => {
-    const nextStore: InvoiceLineTemplateStore = { ...store }
-    if (scope === 'all') {
-      nextStore.all = draft
-    } else {
-      nextStore[scope] = draft
-    }
+    const nextStore: InvoiceLineTemplateStore = { ...store, [scope]: draft }
     setStore(nextStore)
     saveInvoiceLineTemplates(companyId, nextStore)
     const updated = applyTemplatesToLines(
@@ -380,7 +478,7 @@ export default function InvoiceDescriptionTemplateEditor({
     )
     const changedCount = countChangedDescriptions(lines, updated)
     onApply(updated)
-    setHighlightEnabled(true)
+    enableHighlights()
     if (changedCount === 0) {
       info(
         'No lines updated',
@@ -400,17 +498,24 @@ export default function InvoiceDescriptionTemplateEditor({
 
   return (
     <Box
-      mb="4"
-      p="3"
-      style={{
-        borderRadius: 8,
-        border: '1px solid var(--gray-a6)',
-        background: 'var(--gray-a2)',
-      }}
+      mb={embedded ? '0' : '4'}
+      p={embedded ? '0' : '3'}
+      pt={embedded ? '2' : '3'}
+      style={
+        embedded
+          ? undefined
+          : {
+              borderRadius: 8,
+              border: '1px solid var(--gray-a6)',
+              background: 'var(--gray-a2)',
+            }
+      }
     >
-      <Text size="2" weight="medium" mb="2" as="p">
-        Line description pattern
-      </Text>
+      {!embedded && (
+        <Text size="2" weight="medium" mb="2" as="p">
+          Line description pattern
+        </Text>
+      )}
 
       <Flex
         gap="1"
@@ -465,6 +570,7 @@ export default function InvoiceDescriptionTemplateEditor({
                 key={entry.id}
                 id={entry.id}
                 token={entry.token}
+                tokenOptions={tokenOptions}
                 onUpdateKind={(kind) => updateToken(entry.id, kind)}
                 onUpdateCustomText={(text) => updateCustomText(entry.id, text)}
                 onRemove={() => removeToken(entry.id)}
@@ -479,14 +585,10 @@ export default function InvoiceDescriptionTemplateEditor({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenu.Content style={{ zIndex: OVERLAY_Z_INDEX }}>
-                {TOKEN_OPTIONS.map((opt) => (
-                  <DropdownMenu.Item
-                    key={opt.value}
-                    onSelect={() => addToken(opt.value)}
-                  >
-                    {opt.label}
-                  </DropdownMenu.Item>
-                ))}
+                <TokenKindMenuItems
+                  options={tokenOptions}
+                  onSelect={addToken}
+                />
               </DropdownMenu.Content>
             </DropdownMenu.Root>
           </Flex>
@@ -525,16 +627,22 @@ export default function InvoiceDescriptionTemplateEditor({
             size="1"
             variant={highlightEnabled ? 'soft' : 'outline'}
             color={highlightEnabled ? 'amber' : 'gray'}
-            onClick={() => setHighlightEnabled((prev) => !prev)}
+            onClick={() => {
+              if (highlightEnabled) setHighlightEnabled(false)
+              else enableHighlights()
+            }}
           >
-            {highlightEnabled ? 'Hide highlights' : 'Highlight lines'}
+            {highlightEnabled
+              ? `Hide highlights (${highlightSecondsLeft}s)`
+              : 'Highlight lines'}
           </Button>
         )}
       </Flex>
 
       <Text size="1" color="gray" as="p">
-        Preview updates as you edit. Apply writes the pattern to the invoice
-        lines below. Manually edited lines are kept.
+        Preview updates as you edit. Equipment, crew, and transport patterns
+        apply to those booking types; Other is the fallback. Manually edited
+        lines are kept.
       </Text>
     </Box>
   )

@@ -70,4 +70,33 @@ describe('formatEquipmentConflictJobs', () => {
       }),
     ).toBe('Alpha and Beta')
   })
+
+  it('labels missing jobs without dumping ids', () => {
+    expect(
+      formatEquipmentConflictJobs({
+        item_id: 'i1',
+        item_name: 'Mixer',
+        capacity: 1,
+        total_reserved: 2,
+        start_at: '2026-06-01T10:00:00Z',
+        end_at: '2026-06-01T12:00:00Z',
+        job_ids: [],
+        job_titles: [],
+        has_forced: false,
+      }),
+    ).toBe('a personal booking')
+    expect(
+      formatEquipmentConflictJobs({
+        item_id: 'i1',
+        item_name: 'Mixer',
+        capacity: 1,
+        total_reserved: 2,
+        start_at: '2026-06-01T10:00:00Z',
+        end_at: '2026-06-01T12:00:00Z',
+        job_ids: ['j1'],
+        job_titles: [''],
+        has_forced: false,
+      }),
+    ).toBe('Untitled job')
+  })
 })

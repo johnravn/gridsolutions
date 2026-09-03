@@ -8,6 +8,7 @@ export type CrewPerson = {
   display_name: string | null
   first_name: string | null
   last_name: string | null
+  avatar_url: string | null
   role: CrewKind | 'super_user'
 }
 
@@ -50,7 +51,9 @@ export function crewIndexQuery({
       // Get users from company_user_profiles view
       const { data, error } = await supabase
         .from('company_user_profiles')
-        .select('user_id, role, email, display_name, first_name, last_name')
+        .select(
+          'user_id, role, email, display_name, first_name, last_name, avatar_url',
+        )
         .eq('company_id', companyId)
 
       if (error) throw error
@@ -62,6 +65,7 @@ export function crewIndexQuery({
         display_name: string | null
         first_name: string | null
         last_name: string | null
+        avatar_url: string | null
       }>
 
       if (kind && kind !== 'all') {

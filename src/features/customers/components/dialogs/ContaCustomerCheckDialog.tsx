@@ -1,13 +1,50 @@
+import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Box, Button, Dialog, Flex, Spinner, Text } from '@radix-ui/themes'
+import {
+  Badge,
+  Box,
+  Button,
+  Dialog,
+  Flex,
+  RadioGroup,
+  ScrollArea,
+  Spinner,
+  Text,
+} from '@radix-ui/themes'
 import { Download, Plus, Refresh } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { checkContaCustomerExists } from '../../utils/contaCustomerCheck'
+import { hasCompleteContaAddress } from '@shared/conta/customerSyncCore'
+import { resolveContaCustomerType } from '@shared/conta/contaCustomerMatch'
+import {
+  checkContaCustomerExists,
+  contaCustomerTypeLabel,
+  contaMatchReasonLabel,
+} from '../../utils/contaCustomerCheck'
 import {
   createCustomerInConta,
   fetchAndSyncContaCustomer,
 } from '../../api/contaCustomerSync'
+import type { ContaCustomerMatch } from '../../utils/contaCustomerCheck'
+
+function searchedByLabel(fields: Array<string>) {
+  const labels: Record<string, string> = {
+    orgNo: 'organisation number',
+    email: 'email',
+    name: 'name',
+    phone: 'phone',
+  }
+  return fields.map((field) => labels[field] ?? field).join(', ')
+}
+
+function matchDetailLine(match: ContaCustomerMatch) {
+  const parts = [
+    contaCustomerTypeLabel(match.customerType),
+    match.email,
+    match.orgNo,
+  ].filter(Boolean)
+  return parts.join(' · ')
+}
 
 export default function ContaCustomerCheckDialog({
   open,
@@ -33,6 +70,8 @@ export default function ContaCustomerCheckDialog({
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+  const [selectedId, setSelectedId] = React.useState('')
+
   const { data: accountingConfig } = useQuery({
     queryKey: ['company', companyId, 'accounting-config'],
     queryFn: async () => {
@@ -62,21 +101,46 @@ export default function ContaCustomerCheckDialog({
       accountingConfig?.accounting_organization_id,
       customer.id,
       customer.name,
+      customer.email,
+      customer.phone,
       customer.vat_number,
     ],
     queryFn: async () => {
       const orgId = accountingConfig?.accounting_organization_id
       if (!orgId) throw new Error('Accounting not configured')
-      return checkContaCustomerExists(orgId, {
-        name: customer.name,
-        vat_number: customer.vat_number,
-      })
+      return checkContaCustomerExists(
+        orgId,
+        {
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          vat_number: customer.vat_number,
+        },
+        { companyId },
+      )
     },
     enabled:
       open &&
       !!accountingConfig?.accounting_organization_id &&
       accountingConfig?.accounting_software === 'conta',
   })
+
+  React.useEffect(() => {
+    const matches = checkResult?.matches ?? []
+    const linkedHere = matches.find(
+      (match) => match.linkedGridCustomer?.id === customer.id,
+    )
+    if (linkedHere) {
+      setSelectedId(String(linkedHere.id))
+      return
+    }
+    const available = matches.find(
+      (match) =>
+        !match.linkedGridCustomer ||
+        match.linkedGridCustomer.id === customer.id,
+    )
+    setSelectedId(available ? String(available.id) : '')
+  }, [checkResult, customer.id])
 
   const canCheck =
     accountingConfig?.accounting_software === 'conta' &&
@@ -113,24 +177,22 @@ export default function ContaCustomerCheckDialog({
       success('Created in Conta', 'The customer was created in Conta.')
       onOpenChange(false)
     },
-    onError: (e: any) => {
-      toastError('Create failed', e?.message ?? 'Could not create in Conta.')
+    onError: (e: unknown) => {
+      const message =
+        e instanceof Error ? e.message : 'Could not create in Conta.'
+      toastError('Create failed', message)
     },
   })
 
   const fetchFromContaMut = useMutation({
-    mutationFn: async () => {
-      if (
-        !companyId ||
-        !accountingConfig?.accounting_organization_id ||
-        !checkResult?.contaCustomerId
-      )
+    mutationFn: async (contaCustomerId: number) => {
+      if (!companyId || !accountingConfig?.accounting_organization_id)
         throw new Error('Missing config or Conta customer ID')
       const res = await fetchAndSyncContaCustomer(
         companyId,
         accountingConfig.accounting_organization_id,
         customer.id,
-        checkResult.contaCustomerId,
+        contaCustomerId,
       )
       if (!res.ok) throw new Error(res.error)
     },
@@ -145,24 +207,37 @@ export default function ContaCustomerCheckDialog({
       onFetchedFromConta?.()
       success('Data fetched', 'Conta customer data synced to this customer.')
     },
-    onError: (e: any) => {
-      toastError('Fetch failed', e?.message ?? 'Could not fetch from Conta.')
+    onError: (e: unknown) => {
+      const message =
+        e instanceof Error ? e.message : 'Could not fetch from Conta.'
+      toastError('Fetch failed', message)
     },
   })
 
+  const createType = resolveContaCustomerType(customer.vat_number)
+  const alreadyLinkedHere = (checkResult?.matches ?? []).some(
+    (match) => match.linkedGridCustomer?.id === customer.id,
+  )
   const canCreateInConta =
     canCheck &&
     checkResult &&
-    !checkResult.exists &&
     !checkResult.error &&
-    (customer?.vat_number?.replace(/\D/g, '') ?? '').trim().length >= 6
+    !alreadyLinkedHere &&
+    hasCompleteContaAddress(customer.address)
+  const selectedMatch = (checkResult?.matches ?? []).find(
+    (match) => String(match.id) === selectedId,
+  )
+  const selectedLinkedToOther =
+    selectedMatch?.linkedGridCustomer != null &&
+    selectedMatch.linkedGridCustomer.id !== customer.id
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content size="2" style={{ maxWidth: '420px' }}>
-        <Dialog.Title>Check in Conta</Dialog.Title>
+      <Dialog.Content size="3" style={{ maxWidth: '520px' }}>
+        <Dialog.Title>Sync with Conta</Dialog.Title>
         <Dialog.Description size="2" color="gray" mb="3">
-          Check if this customer exists in your Conta accounting system.
+          Search Conta by name, email, or organisation number. If several
+          customers match, pick which one to link.
         </Dialog.Description>
 
         {!canCheck && (
@@ -179,10 +254,12 @@ export default function ContaCustomerCheckDialog({
             {isLoading || isFetching ? (
               <Flex align="center" gap="2">
                 <Spinner size="1" />
-                <Text size="2">Checking Conta...</Text>
+                <Text size="2">Searching Conta...</Text>
               </Flex>
             ) : checkResult ? (
-              <Box
+              <Flex
+                direction="column"
+                gap="3"
                 p="3"
                 style={{
                   background: checkResult.exists
@@ -199,37 +276,101 @@ export default function ContaCustomerCheckDialog({
                     {checkResult.error}
                   </Text>
                 ) : checkResult.exists ? (
-                  <Flex direction="column" gap="2">
+                  <Flex direction="column" gap="3">
                     <Flex direction="column" gap="1">
                       <Text size="2" weight="medium" color="green">
-                        ✓ Customer found in Conta
+                        {checkResult.matches.length === 1
+                          ? 'Customer found in Conta'
+                          : `${checkResult.matches.length} possible matches in Conta`}
                       </Text>
-                      {checkResult.contaCustomerName && (
-                        <Text size="1" color="gray">
-                          {checkResult.contaCustomerName}
-                        </Text>
-                      )}
-                      {checkResult.contaCustomerId && (
-                        <Text size="1" color="gray">
-                          Conta ID: {checkResult.contaCustomerId}
-                        </Text>
-                      )}
                       <Text size="1" color="gray">
-                        Matched by organization number
+                        Searched by {searchedByLabel(checkResult.searchedBy)}.
                       </Text>
                     </Flex>
+                    <ScrollArea
+                      type="auto"
+                      scrollbars="vertical"
+                      style={{ maxHeight: 240 }}
+                    >
+                      <RadioGroup.Root
+                        value={selectedId}
+                        onValueChange={setSelectedId}
+                      >
+                        <Flex direction="column" gap="2">
+                          {checkResult.matches.map((match) => {
+                            const linkedToOther =
+                              match.linkedGridCustomer != null &&
+                              match.linkedGridCustomer.id !== customer.id
+                            const linkedHere =
+                              match.linkedGridCustomer?.id === customer.id
+                            return (
+                              <Text as="label" size="2" key={match.id}>
+                                <Flex align="start" gap="2">
+                                  <RadioGroup.Item
+                                    value={String(match.id)}
+                                    disabled={linkedToOther}
+                                  />
+                                  <Flex
+                                    direction="column"
+                                    gap="1"
+                                    style={{ minWidth: 0 }}
+                                  >
+                                    <Flex align="center" gap="2" wrap="wrap">
+                                      <Text size="2" weight="medium">
+                                        {match.name}
+                                      </Text>
+                                      {linkedHere && (
+                                        <Badge size="1" color="green">
+                                          Linked to this customer
+                                        </Badge>
+                                      )}
+                                      {linkedToOther && (
+                                        <Badge size="1" color="amber">
+                                          Linked to{' '}
+                                          {match.linkedGridCustomer?.name}
+                                        </Badge>
+                                      )}
+                                    </Flex>
+                                    <Text size="1" color="gray">
+                                      {matchDetailLine(match)}
+                                    </Text>
+                                    {match.reasons.length > 0 && (
+                                      <Text size="1" color="gray">
+                                        Matched by{' '}
+                                        {match.reasons
+                                          .map(contaMatchReasonLabel)
+                                          .join(', ')}
+                                      </Text>
+                                    )}
+                                  </Flex>
+                                </Flex>
+                              </Text>
+                            )
+                          })}
+                        </Flex>
+                      </RadioGroup.Root>
+                    </ScrollArea>
                     <Button
                       size="2"
                       variant="soft"
-                      onClick={() => fetchFromContaMut.mutate()}
-                      disabled={fetchFromContaMut.isPending}
+                      onClick={() => {
+                        if (!selectedMatch || selectedLinkedToOther) return
+                        fetchFromContaMut.mutate(selectedMatch.id)
+                      }}
+                      disabled={
+                        !selectedMatch ||
+                        selectedLinkedToOther ||
+                        fetchFromContaMut.isPending
+                      }
                     >
                       {fetchFromContaMut.isPending ? (
                         <Spinner size="1" />
                       ) : (
                         <Download width={14} height={14} />
                       )}
-                      Fetch data from Conta
+                      {selectedMatch?.linkedGridCustomer?.id === customer.id
+                        ? 'Refresh from Conta'
+                        : 'Link selected'}
                     </Button>
                   </Flex>
                 ) : (
@@ -238,34 +379,37 @@ export default function ContaCustomerCheckDialog({
                       Customer not found in Conta
                     </Text>
                     <Text size="1" color="gray">
-                      Searched by organization number.
+                      Searched by {searchedByLabel(checkResult.searchedBy)}.
                     </Text>
-                    {canCreateInConta && (
-                      <Button
-                        size="2"
-                        onClick={() => createInContaMut.mutate()}
-                        disabled={createInContaMut.isPending}
-                      >
-                        {createInContaMut.isPending ? (
-                          <Spinner size="1" />
-                        ) : (
-                          <Plus width={14} height={14} />
-                        )}
-                        Create in Conta
-                      </Button>
-                    )}
-                    {!canCreateInConta &&
-                      !checkResult.error &&
-                      (customer.vat_number?.replace(/\D/g, '').trim().length ??
-                        0) < 6 && (
-                        <Text size="1" color="gray">
-                          Add an organization number to create the customer in
-                          Conta.
-                        </Text>
-                      )}
                   </Flex>
                 )}
-              </Box>
+                {canCreateInConta && (
+                  <Button
+                    size="2"
+                    variant={checkResult.exists ? 'soft' : 'solid'}
+                    onClick={() => createInContaMut.mutate()}
+                    disabled={createInContaMut.isPending}
+                  >
+                    {createInContaMut.isPending ? (
+                      <Spinner size="1" />
+                    ) : (
+                      <Plus width={14} height={14} />
+                    )}
+                    {createType === 'INDIVIDUAL'
+                      ? 'Create private customer in Conta'
+                      : 'Create organisation in Conta'}
+                  </Button>
+                )}
+                {!canCreateInConta &&
+                  !checkResult.error &&
+                  !alreadyLinkedHere &&
+                  !hasCompleteContaAddress(customer.address) && (
+                    <Text size="1" color="gray">
+                      Add a street address, postal code, and city to create this
+                      customer in Conta.
+                    </Text>
+                  )}
+              </Flex>
             ) : null}
 
             {canCheck && (
@@ -276,7 +420,7 @@ export default function ContaCustomerCheckDialog({
                 disabled={isFetching}
               >
                 <Refresh width={14} height={14} />
-                Check again
+                Search again
               </Button>
             )}
           </Flex>

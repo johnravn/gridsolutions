@@ -9,7 +9,9 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig(({ mode }) => {
   // Load .env / .env.local so API middleware (e.g. calendar feed) can read SUPABASE_SERVICE_ROLE_KEY.
   const env = loadEnv(mode, process.cwd(), '')
-  // Also load .env.local.db so Conta/other vars (e.g. VITE_CONTA_USE_PRODUCTION_IN_DEV) are used when running with local Supabase
+  // Also load .env.local.db so local-Supabase vars (and Conta flags) are
+  // available to Node middleware. VITE_* from that file are defined onto
+  // import.meta.env below — Vite does not load `.env.local.db` on its own.
   const localDbPath = path.resolve(process.cwd(), '.env.local.db')
   if (fs.existsSync(localDbPath)) {
     const content = fs.readFileSync(localDbPath, 'utf-8')
@@ -31,6 +33,22 @@ export default defineConfig(({ mode }) => {
   }
   if (env.SUPABASE_URL && !process.env.SUPABASE_URL) {
     process.env.SUPABASE_URL = env.SUPABASE_URL
+  }
+
+  // `.env.local.db` is not a Vite env file, so VITE_* there never reach
+  // import.meta.env unless we define them. That used to send a production
+  // Conta key to the sandbox host.
+  const contaClientEnvKeys = [
+    'VITE_CONTA_USE_PRODUCTION_IN_DEV',
+    'VITE_CONTA_API_URL_PROD',
+    'VITE_CONTA_API_URL_SANDBOX',
+  ] as const
+  const contaClientEnvDefine: Record<string, string> = {}
+  for (const key of contaClientEnvKeys) {
+    const value = env[key]
+    if (value) {
+      contaClientEnvDefine[`import.meta.env.${key}`] = JSON.stringify(value)
+    }
   }
 
   return {
@@ -150,6 +168,7 @@ export default defineConfig(({ mode }) => {
       // Avoid stale chunk errors when devtools (or other deps) are re-optimized
       exclude: ['@tanstack/react-router-devtools'],
     },
+    define: contaClientEnvDefine,
     preview: {
       // Ensure preview server handles SPA routing correctly
       port: 3000,
@@ -167,7 +186,11 @@ export default defineConfig(({ mode }) => {
           'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0',
       },
       setupFiles: ['src/test/setup.ts'],
-      include: ['src/**/*.test.{ts,tsx}', 'api/**/*.test.ts'],
+      include: [
+        'src/**/*.test.{ts,tsx}',
+        'api/**/*.test.ts',
+        'scripts/**/*.test.ts',
+      ],
       exclude: ['src/test/integration/**'],
       coverage: {
         provider: 'v8',

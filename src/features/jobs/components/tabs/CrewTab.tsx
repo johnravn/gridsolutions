@@ -30,7 +30,6 @@ import { crewInternalNotesQuery } from '../../../crew/api/queries'
 import AddRoleDialog from '../dialogs/AddRoleDialog'
 import EditRoleDialog from '../dialogs/EditRoleDialog'
 import AddCrewToRoleDialog from '../dialogs/AddCrewToRoleDialog'
-import ConfirmStatusChangeDialog from '../dialogs/ConfirmStatusChangeDialog'
 import SendInviteDialog from '../dialogs/SendInviteDialog'
 import type { BookingStatus, ReservedCrewRow } from '../../types'
 
@@ -76,12 +75,6 @@ export default function CrewTab({
     new Set(),
   )
   const [addCrewToRole, setAddCrewToRole] = React.useState<string | null>(null)
-  const [statusChangeConfirm, setStatusChangeConfirm] = React.useState<{
-    crewId: string
-    crewName: string
-    currentStatus: BookingStatus
-    newStatus: BookingStatus
-  } | null>(null)
   const [sendInviteDialog, setSendInviteDialog] = React.useState<{
     userId?: string // Optional - if not provided, it's "send to all"
     timePeriodId: string
@@ -374,25 +367,11 @@ export default function CrewTab({
 
   const handleStatusChange = (
     crewId: string,
-    crewName: string,
     currentStatus: BookingStatus,
     newStatus: BookingStatus,
   ) => {
     if (currentStatus === newStatus) return
-    setStatusChangeConfirm({
-      crewId,
-      crewName,
-      currentStatus,
-      newStatus,
-    })
-  }
-
-  const confirmStatusChange = () => {
-    if (!statusChangeConfirm) return
-    updateStatus.mutate({
-      id: statusChangeConfirm.crewId,
-      status: statusChangeConfirm.newStatus,
-    })
+    updateStatus.mutate({ id: crewId, status: newStatus })
   }
 
   const sendInvites = useMutation({
@@ -900,7 +879,6 @@ export default function CrewTab({
                                             onValueChange={(v) =>
                                               handleStatusChange(
                                                 crew.id,
-                                                crewName,
                                                 crew.status,
                                                 v as BookingStatus,
                                               )
@@ -928,7 +906,6 @@ export default function CrewTab({
                                             onValueChange={(v) =>
                                               handleStatusChange(
                                                 crew.id,
-                                                crewName,
                                                 crew.status,
                                                 v as BookingStatus,
                                               )
@@ -1042,20 +1019,6 @@ export default function CrewTab({
           onOpenChange={(v) => !v && setEditRole(null)}
           jobId={jobId}
           initial={editRole}
-        />
-      )}
-
-      {statusChangeConfirm && (
-        <ConfirmStatusChangeDialog
-          open={!!statusChangeConfirm}
-          onOpenChange={(v) => !v && setStatusChangeConfirm(null)}
-          currentStatus={statusChangeConfirm.currentStatus}
-          newStatus={statusChangeConfirm.newStatus}
-          crewName={statusChangeConfirm.crewName}
-          onConfirm={() => {
-            confirmStatusChange()
-            setStatusChangeConfirm(null)
-          }}
         />
       )}
 

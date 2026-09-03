@@ -331,7 +331,7 @@ export function HomeAttentionBand({
                     <ConflictScrollCard
                       key={item.key}
                       item={item}
-                      minWidth={200}
+                      minWidth={240}
                       fillHeight
                     />
                   ))}

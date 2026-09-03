@@ -3,6 +3,12 @@
  * Safe for Vercel serverless (api/cron) and the app (via contaCustomerSync wrapper).
  */
 
+import {
+  isValidOrgNo,
+  normalizeEmail,
+  normalizeOrgNo,
+  resolveContaCustomerType,
+} from './contaCustomerMatch.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '../types/database.types.js'
 
@@ -16,6 +22,8 @@ type ContaCustomerHit = {
   name?: string
   customerName?: string
   orgNo?: string
+  emailAddress?: string
+  customerType?: string
   daysUntilPaymentReminder?: number
   daysUntilEstimateOverdue?: number
   invoiceDeliveryMethod?: string
@@ -36,7 +44,7 @@ export type SyncResult = {
   errors: Array<string>
 }
 
-function parseCustomerAddress(address: string) {
+export function parseCustomerAddress(address: string) {
   const normalized = address.replace(/\r/g, '').trim()
   let addressLine1 = ''
   let addressPostcode = ''
@@ -80,6 +88,66 @@ function parseCustomerAddress(address: string) {
     if (parts.length > 2) addressCountry = parts[parts.length - 1] || ''
   }
   return { addressLine1, addressPostcode, addressCity, addressCountry }
+}
+
+export function hasCompleteContaAddress(address: string | null | undefined) {
+  const addr = parseCustomerAddress(address || '')
+  return Boolean(addr.addressLine1 && addr.addressPostcode && addr.addressCity)
+}
+
+export type ContaCustomerCreateBody = {
+  name: string
+  customerType: 'INDIVIDUAL' | 'ORGANIZATION'
+  orgNo?: string
+  emailAddress?: string
+  phoneNo?: string
+  customerAddressLine1: string
+  customerAddressPostcode: string
+  customerAddressCity: string
+  customerAddressCountry?: string
+}
+
+export function buildContaCustomerCreateBody(customer: {
+  name: string | null
+  vat_number: string | null
+  email: string | null
+  phone: string | null
+  address: string | null
+}): { ok: true; body: ContaCustomerCreateBody } | { ok: false; error: string } {
+  const addr = parseCustomerAddress(customer.address || '')
+  if (!addr.addressLine1 || !addr.addressPostcode || !addr.addressCity) {
+    return {
+      ok: false,
+      error:
+        'Valid address (street, postal code, city) is required to create in Conta.',
+    }
+  }
+
+  const customerType = resolveContaCustomerType(customer.vat_number)
+  const orgNo = normalizeOrgNo(customer.vat_number)
+  const body: ContaCustomerCreateBody = {
+    name: customer.name?.trim() || 'Customer',
+    customerType,
+    emailAddress: customer.email?.trim() || undefined,
+    phoneNo: customer.phone?.trim() || undefined,
+    customerAddressLine1: addr.addressLine1,
+    customerAddressPostcode: addr.addressPostcode,
+    customerAddressCity: addr.addressCity,
+    customerAddressCountry: addr.addressCountry || undefined,
+  }
+  if (customerType === 'ORGANIZATION' && isValidOrgNo(orgNo)) {
+    body.orgNo = orgNo
+  }
+  return { ok: true, body }
+}
+
+function isContaIdAvailable(
+  contaId: number,
+  gridCustomerId: string,
+  gridIdByContaId: Map<number, string>,
+) {
+  const linkedGridId = gridIdByContaId.get(contaId)
+  return linkedGridId == null || linkedGridId === gridCustomerId
 }
 
 export function makeContaFetch(opt: ContaClientOptions): ContaFetch {
@@ -155,7 +223,9 @@ export async function syncCustomersWithContaCore(
 ): Promise<SyncResult> {
   const result: SyncResult = { updated: 0, created: 0, skipped: 0, errors: [] }
 
+  const contaCustomersById = new Map<number, ContaCustomerHit>()
   const contaCustomersByOrgNo = new Map<string, ContaCustomerHit>()
+  const contaCustomersByEmail = new Map<string, Array<ContaCustomerHit>>()
   let page = 0
   const hitsPerPage = 100
   let hasMore = true
@@ -165,12 +235,19 @@ export async function syncCustomersWithContaCore(
     )) as { hits?: Array<ContaCustomerHit>; totalHits?: number }
     const hits = Array.isArray(res?.hits) ? res.hits : []
     for (const h of hits) {
-      const orgNo = (h.orgNo || '').replace(/\D/g, '').trim()
-      if (orgNo && h.id) {
-        contaCustomersByOrgNo.set(orgNo, {
-          ...h,
-          name: h.name ?? h.customerName,
-        })
+      if (!h.id) continue
+      const normalized: ContaCustomerHit = {
+        ...h,
+        name: h.name ?? h.customerName,
+      }
+      contaCustomersById.set(h.id, normalized)
+      const orgNo = normalizeOrgNo(h.orgNo)
+      if (orgNo) contaCustomersByOrgNo.set(orgNo, normalized)
+      const email = normalizeEmail(h.emailAddress)
+      if (email) {
+        const existing = contaCustomersByEmail.get(email) ?? []
+        existing.push(normalized)
+        contaCustomersByEmail.set(email, existing)
       }
     }
     const total = res?.totalHits ?? 0
@@ -190,17 +267,53 @@ export async function syncCustomersWithContaCore(
     return result
   }
 
+  const gridIdByContaId = new Map<number, string>()
+  const gridIdsByEmail = new Map<string, Array<string>>()
+  for (const c of subbCustomers ?? []) {
+    if (c.conta_customer_id != null) {
+      gridIdByContaId.set(c.conta_customer_id, c.id)
+    }
+    const email = normalizeEmail(c.email)
+    if (email) {
+      const existing = gridIdsByEmail.get(email) ?? []
+      existing.push(c.id)
+      gridIdsByEmail.set(email, existing)
+    }
+  }
+
   const now = new Date().toISOString()
 
   for (const c of subbCustomers ?? []) {
-    const orgNo = (c.vat_number || '').replace(/\D/g, '').trim()
-    if (!orgNo) {
-      result.skipped++
-      continue
+    const orgNo = normalizeOrgNo(c.vat_number)
+    const contaId = c.conta_customer_id ?? null
+    let contaHit: ContaCustomerHit | null = null
+
+    if (contaId) {
+      contaHit = contaCustomersById.get(contaId) ?? null
+    }
+    if (!contaHit && orgNo) {
+      const byOrg = contaCustomersByOrgNo.get(orgNo) ?? null
+      if (byOrg?.id && isContaIdAvailable(byOrg.id, c.id, gridIdByContaId)) {
+        contaHit = byOrg
+      }
+    }
+    if (!contaHit) {
+      const email = normalizeEmail(c.email)
+      const emailHits = email ? (contaCustomersByEmail.get(email) ?? []) : []
+      const gridSharingEmail = email ? (gridIdsByEmail.get(email) ?? []) : []
+      if (emailHits.length === 1 && gridSharingEmail.length <= 1) {
+        const byEmail = emailHits[0]
+        const hitOrg = normalizeOrgNo(byEmail?.orgNo)
+        if (
+          byEmail?.id &&
+          isContaIdAvailable(byEmail.id, c.id, gridIdByContaId) &&
+          (!orgNo || !hitOrg || hitOrg === orgNo)
+        ) {
+          contaHit = byEmail
+        }
+      }
     }
 
-    const contaId = c.conta_customer_id ?? null
-    let contaHit = contaCustomersByOrgNo.get(orgNo) ?? null
     contaHit = await resolveContaHit(conta, organizationId, contaHit, contaId)
 
     if (contaHit?.id) {
@@ -240,32 +353,31 @@ export async function syncCustomersWithContaCore(
           .eq('id', c.id)
           .eq('company_id', companyId)
         if (error) result.errors.push(`${c.name}: ${error.message}`)
-        else result.updated++
+        else {
+          result.updated++
+          gridIdByContaId.set(contaHit.id, c.id)
+        }
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Update failed'
         result.errors.push(`${c.name}: ${message}`)
       }
-    } else {
-      const addr = parseCustomerAddress(c.address || '')
-      if (!addr.addressLine1 || !addr.addressPostcode || !addr.addressCity) {
+    } else if (isValidOrgNo(orgNo)) {
+      const createdBody = buildContaCustomerCreateBody({
+        name: c.name,
+        vat_number: c.vat_number,
+        email: c.email,
+        phone: c.phone,
+        address: c.address,
+      })
+      if (!createdBody.ok) {
         result.skipped++
-        result.errors.push(`${c.name}: Missing address for Conta create`)
+        result.errors.push(`${c.name}: ${createdBody.error}`)
         continue
       }
       try {
         const created = (await conta.post(
           `/invoice/organizations/${organizationId}/customers`,
-          {
-            name: c.name?.trim() || 'Customer',
-            customerType: 'ORGANIZATION',
-            orgNo: orgNo,
-            emailAddress: c.email?.trim() || undefined,
-            phoneNo: c.phone?.trim() || undefined,
-            customerAddressLine1: addr.addressLine1,
-            customerAddressPostcode: addr.addressPostcode,
-            customerAddressCity: addr.addressCity,
-            customerAddressCountry: addr.addressCountry || undefined,
-          },
+          createdBody.body,
         )) as { id?: number }
         const newId = created?.id
         if (newId) {
@@ -278,12 +390,17 @@ export async function syncCustomersWithContaCore(
             .eq('id', c.id)
             .eq('company_id', companyId)
           if (error) result.errors.push(`${c.name}: ${error.message}`)
-          else result.created++
+          else {
+            result.created++
+            gridIdByContaId.set(newId, c.id)
+          }
         }
       } catch (e: unknown) {
         const message = e instanceof Error ? e.message : 'Create failed'
         result.errors.push(`${c.name}: ${message}`)
       }
+    } else {
+      result.skipped++
     }
   }
 

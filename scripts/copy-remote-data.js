@@ -116,6 +116,7 @@ async function copyData() {
     subrentalItems,
     droppedThemeScaling,
     companiesOnConflict,
+    profilesUpsert,
   } = transformRemoteDataDump(rawDump)
   writeFileSync(tempFile, transformedDump, 'utf8')
   if (transformed) {
@@ -130,6 +131,9 @@ async function copyData() {
     }
     if (companiesOnConflict) {
       parts.push('companies INSERT uses ON CONFLICT (id) DO NOTHING')
+    }
+    if (profilesUpsert) {
+      parts.push('profiles INSERT uses ON CONFLICT (user_id) DO UPDATE')
     }
     log(`   ✅ ${parts.join('; ') || 'Applied schema transforms'}`, 'green')
   } else {

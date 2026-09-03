@@ -2,8 +2,15 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useDebouncedValue } from '@tanstack/react-pacer'
-import { Button, Flex, IconButton, Select } from '@radix-ui/themes'
-import { Calendar, List, ShareAndroid } from 'iconoir-react'
+import {
+  Button,
+  Card,
+  DropdownMenu,
+  Flex,
+  IconButton,
+  Select,
+} from '@radix-ui/themes'
+import { Calendar, List, MoreHoriz, Plus, ShareAndroid } from 'iconoir-react'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import CalendarPageSkeleton from '@shared/ui/components/CalendarPageSkeleton'
@@ -12,6 +19,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { MobileBottomActionBar } from '@app/layout/mobile'
 import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro'
 import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeToCalendarDialog'
+import PersonalCalendarEventDialog from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
 import {
   applyCalendarFilter,
   toEventInputs,
@@ -22,6 +30,7 @@ import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
+import type { PersonalEventDraft } from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
 import type { CalendarKind } from '@features/calendar/components/domain'
 
 type Category = 'jobDuration' | 'equipment' | 'crew' | 'transport' | 'all'
@@ -40,6 +49,9 @@ export default function CalendarPage() {
   const [suggestionsOpen, setSuggestionsOpen] = React.useState(false)
   const [listMode, setListMode] = React.useState(false)
   const [subscribeDialogOpen, setSubscribeDialogOpen] = React.useState(false)
+  const [personalDialogOpen, setPersonalDialogOpen] = React.useState(false)
+  const [personalEvent, setPersonalEvent] =
+    React.useState<PersonalEventDraft | null>(null)
 
   const calendarWindow = React.useMemo(() => {
     const from = new Date()
@@ -204,15 +216,12 @@ export default function CalendarPage() {
     })
 
     // Map category to kind for filtering
-    const categoryToKind: Record<
-      Category,
-      Array<'job' | 'item' | 'vehicle' | 'crew'> | null
-    > = {
+    const categoryToKind: Record<Category, Array<CalendarKind> | null> = {
       all: null, // Show all (already filtered above)
       jobDuration: ['job'],
       equipment: ['item'],
       transport: ['vehicle'],
-      crew: ['crew'],
+      crew: ['crew', 'personal'],
     }
 
     const kinds = categoryToKind[category]
@@ -235,11 +244,12 @@ export default function CalendarPage() {
   }, [calendarRecords, category, selectedEntityId])
 
   const defaultKinds = React.useMemo((): Array<CalendarKind> => {
-    if (category === 'all') return ['job', 'item', 'vehicle', 'crew']
+    if (category === 'all')
+      return ['job', 'item', 'vehicle', 'crew', 'personal']
     if (category === 'jobDuration') return ['job']
     if (category === 'equipment') return ['item']
     if (category === 'transport') return ['vehicle']
-    return ['crew']
+    return ['crew', 'personal']
   }, [category])
 
   const handleCategoryChange = (value: string) => {
@@ -272,7 +282,7 @@ export default function CalendarPage() {
     return <CalendarPageSkeleton />
   }
 
-  return (
+  const page = (
     <Flex className="calendar-page" direction="column" gap="2">
       <Flex align="center" gap="3" wrap="wrap" style={{ flexShrink: 0 }}>
         <Flex
@@ -326,6 +336,21 @@ export default function CalendarPage() {
             type="button"
             variant="soft"
             size="2"
+            onClick={() => {
+              setPersonalEvent(null)
+              setPersonalDialogOpen(true)
+            }}
+            title="Add personal event"
+          >
+            Add personal event
+          </Button>
+        )}
+
+        {!isMobile && (
+          <Button
+            type="button"
+            variant="soft"
+            size="2"
             onClick={() => setSubscribeDialogOpen(true)}
             title="Subscribe to calendar"
           >
@@ -360,6 +385,23 @@ export default function CalendarPage() {
         onOpenChange={setSubscribeDialogOpen}
       />
 
+      {userId && (
+        <PersonalCalendarEventDialog
+          open={personalDialogOpen}
+          onOpenChange={(open) => {
+            setPersonalDialogOpen(open)
+            if (!open) setPersonalEvent(null)
+          }}
+          userId={
+            personalEvent && personalEvent.userId !== userId
+              ? personalEvent.userId
+              : userId
+          }
+          event={personalEvent}
+          readOnly={Boolean(personalEvent && personalEvent.userId !== userId)}
+        />
+      )}
+
       <CompanyCalendarPro
         events={events}
         onCreate={() => {}}
@@ -369,18 +411,62 @@ export default function CalendarPage() {
         hideCreateButton
         initialListMode={listMode}
         onListModeChange={setListMode}
+        onPersonalEventClick={(payload) => {
+          setPersonalEvent(payload)
+          setPersonalDialogOpen(true)
+        }}
       />
 
-      <MobileBottomActionBar>
+      <MobileBottomActionBar extendRight>
         <Button
           variant="ghost"
           size="3"
-          onClick={() => setSubscribeDialogOpen(true)}
+          aria-label="Add personal event"
+          onClick={() => {
+            setPersonalEvent(null)
+            setPersonalDialogOpen(true)
+          }}
         >
-          <ShareAndroid width={18} height={18} />
-          Subscribe to calendar
+          <Plus width={18} height={18} />
+          Event
         </Button>
+        <div className="app-mobile-bottom-action-trailing">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger>
+              <IconButton
+                variant="ghost"
+                size="3"
+                aria-label="More calendar actions"
+              >
+                <MoreHoriz width={18} height={18} />
+              </IconButton>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Content align="end">
+              <DropdownMenu.Item onSelect={() => setSubscribeDialogOpen(true)}>
+                Subscribe to calendar
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Root>
+        </div>
       </MobileBottomActionBar>
     </Flex>
+  )
+
+  if (isMobile) return page
+
+  return (
+    <Card
+      size="3"
+      className="calendar-page-card"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: 0,
+        overflow: 'hidden',
+      }}
+    >
+      {page}
+    </Card>
   )
 }

@@ -9,9 +9,12 @@ function portalHost(): HTMLElement {
 /** Fixed bottom action slot between the menu and inspector FABs. Phone only. */
 export function MobileBottomActionBar({
   hidden,
+  extendRight,
   children,
 }: {
   hidden?: boolean
+  /** Extend to the right edge (use on pages without an inspector FAB). */
+  extendRight?: boolean
   children: ReactNode
 }) {
   const [host, setHost] = React.useState<HTMLElement | null>(null)
@@ -23,7 +26,16 @@ export function MobileBottomActionBar({
   if (hidden || !host) return null
 
   return createPortal(
-    <div className="app-mobile-bottom-action-bar">{children}</div>,
+    <div
+      className={[
+        'app-mobile-bottom-action-bar',
+        extendRight ? 'app-mobile-bottom-action-bar--extend-right' : undefined,
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
+      {children}
+    </div>,
     host,
   )
 }

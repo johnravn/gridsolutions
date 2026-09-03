@@ -3,6 +3,8 @@ import {
   buildICS,
   foldLine,
   formatICalDate,
+  formatIcsTriggerBefore,
+  icsAlarmMinutesBefore,
   icsEscape,
   parseTstzRange,
   rangesOverlap,
@@ -85,6 +87,43 @@ describe('withRecurringJobPrefix', () => {
   })
 })
 
+describe('formatIcsTriggerBefore', () => {
+  it('formats whole hours as PT#H', () => {
+    expect(formatIcsTriggerBefore(60)).toBe('-PT1H')
+    expect(formatIcsTriggerBefore(120)).toBe('-PT2H')
+  })
+
+  it('formats other durations as minutes', () => {
+    expect(formatIcsTriggerBefore(15)).toBe('-PT15M')
+  })
+})
+
+describe('icsAlarmMinutesBefore', () => {
+  it('returns 60 only for opted-in project lead job feeds', () => {
+    expect(
+      icsAlarmMinutesBefore({
+        kind: 'project_lead_jobs',
+        remind1hBefore: true,
+      }),
+    ).toBe(60)
+    expect(
+      icsAlarmMinutesBefore({
+        kind: 'project_lead_jobs',
+        remind1hBefore: false,
+      }),
+    ).toBeUndefined()
+    expect(
+      icsAlarmMinutesBefore({ kind: 'all_jobs', remind1hBefore: true }),
+    ).toBeUndefined()
+    expect(
+      icsAlarmMinutesBefore({ kind: 'crew_jobs', remind1hBefore: true }),
+    ).toBeUndefined()
+    expect(
+      icsAlarmMinutesBefore({ kind: 'crew_user', remind1hBefore: true }),
+    ).toBeUndefined()
+  })
+})
+
 describe('buildICS', () => {
   it('builds a valid calendar with escaped content', () => {
     const ics = buildICS([
@@ -100,5 +139,23 @@ describe('buildICS', () => {
     expect(ics).toContain('SUMMARY:Job\\; test')
     expect(ics).toContain('DESCRIPTION:Line one\\nLine two')
     expect(ics).toContain('END:VCALENDAR')
+    expect(ics).not.toContain('BEGIN:VALARM')
+  })
+
+  it('adds a 1-hour DISPLAY VALARM when requested', () => {
+    const ics = buildICS([
+      {
+        id: 'evt-2',
+        title: 'Lead job',
+        start: '2026-06-26T08:00:00.000Z',
+        end: '2026-06-26T10:00:00.000Z',
+        alarmMinutesBefore: 60,
+      },
+    ])
+    expect(ics).toContain('BEGIN:VALARM')
+    expect(ics).toContain('ACTION:DISPLAY')
+    expect(ics).toContain('DESCRIPTION:Job starts in 1 hour')
+    expect(ics).toContain('TRIGGER:-PT1H')
+    expect(ics).toContain('END:VALARM')
   })
 })

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  emptyGroupBookingMessage,
+  emptyGroupNames,
   flattenGroupItemsFromRows,
   GROUP_FLATTEN_MAX_DEPTH,
   indexGroupItemRows,
@@ -130,6 +132,20 @@ describe('flattenGroupItemsFromRows', () => {
     expect(result.leafItemsByGroupId.get('a')).toEqual([
       { item_id: 'mic', quantity: 1 },
     ])
+  })
+})
+
+describe('emptyGroupNames', () => {
+  it('lists groups that flatten to no leaf items', () => {
+    const names = emptyGroupNames(
+      [
+        { group_id: 'empty', name: 'AV-kit' },
+        { group_id: 'full', name: 'Cables' },
+      ],
+      new Map([['full', [{ item_id: 'hdmi', quantity: 1 }]]]),
+    )
+    expect(names).toEqual(['AV-kit'])
+    expect(emptyGroupBookingMessage(names)).toMatch(/AV-kit/)
   })
 })
 

@@ -28,6 +28,7 @@ import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceDescriptionTemplateEditor, {
   trackManualDescriptionEdit,
 } from '../invoice/InvoiceDescriptionTemplateEditor'
+import { invoiceLineNet, roundMoney } from '../../utils/invoiceMoney'
 import type { InvoiceRecipient } from '../../api/createContaInvoice'
 import type {
   BookingInvoiceLine,
@@ -52,7 +53,7 @@ function lineExVatAfterDiscount(
   lineDiscountOverrides: Record<string, number>,
 ): number {
   const d = lineDiscountOverrides[line.id] ?? 0
-  return line.unitPrice * line.quantity * (1 - d / 100)
+  return invoiceLineNet(line, d)
 }
 
 function buildSendPayload(
@@ -234,7 +235,7 @@ export default function MultiJobInvoiceDialog({
     setMessage(`Jobs: ${labels}`)
     setOurRef('')
     setTheirRef('')
-    setLineDiscountOverrides({})
+    setLineDiscountOverrides(bookings.equipmentDiscountOverrides ?? {})
     setManualDescriptionOverrides(new Set())
   }, [open, bookings, bookingsInitKey, selectedMembers])
 
@@ -412,7 +413,7 @@ export default function MultiJobInvoiceDialog({
       if (updates.unitPrice !== undefined) line.unitPrice = updates.unitPrice
       if (updates.quantity !== undefined) line.quantity = updates.quantity
       if (updates.unitPrice !== undefined || updates.quantity !== undefined) {
-        line.totalPrice = line.unitPrice * line.quantity
+        line.totalPrice = roundMoney(line.unitPrice * line.quantity)
       }
       const next = [...base]
       next[idx] = line

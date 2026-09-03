@@ -30,6 +30,7 @@ import {
   StatsUpSquare,
   User,
   UserLove,
+  WarningTriangle,
 } from 'iconoir-react'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
@@ -39,6 +40,8 @@ import { getInitials } from '@shared/lib/generalFunctions'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { unreadMattersCountQueryAll } from '@features/matters/api/queries'
 import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
+import { BetaBadge } from '@shared/ui/components/BetaBadge'
+import { useProjectLeadConflictCount } from '@features/conflicts/hooks/useProjectLeadConflictCount'
 import logoBlack from '@shared/assets/gridLogo/grid_logo_black.svg'
 import logoWhite from '@shared/assets/gridLogo/grid_logo_white.svg'
 import { useDemoMode } from '@features/demo/hooks/useDemoMode'
@@ -61,6 +64,7 @@ export const NAV: Array<Array<NavItem>> = [
     { to: '/vehicles', label: 'Vehicles', icon: <Car /> },
     { to: '/crew', label: 'Crew', icon: <Group /> },
     { to: '/jobs', label: 'Jobs', icon: <GoogleDocs /> },
+    { to: '/conflicts', label: 'Conflicts', icon: <WarningTriangle /> },
     { to: '/customers', label: 'Customers', icon: <UserLove /> },
     { to: '/logging', label: 'Logging', icon: <Clock /> },
     { to: '/calendar', label: 'Calendar', icon: <Calendar /> },
@@ -82,6 +86,7 @@ const LABEL_TO_CAP: Record<string, string> = {
   Vehicles: 'visit:vehicles',
   Crew: 'visit:crew',
   Jobs: 'visit:jobs',
+  Conflicts: 'visit:conflicts',
   Calendar: 'visit:calendar',
   Logging: 'visit:logging',
   Customers: 'visit:customers',
@@ -324,6 +329,7 @@ function SidebarContent({
     enabled: !!companyId && !!userId,
   })
   const readyToInvoiceCount = jobsReadyToInvoice.length
+  const projectLeadConflictCount = useProjectLeadConflictCount()
   const navCountBadgeStyle = isMobile
     ? {
         minWidth: 24,
@@ -549,6 +555,7 @@ function SidebarContent({
                   currentPath={currentPath}
                   isMobile={isMobile}
                   onCloseMobile={() => onToggle(false)}
+                  tag={n.label === 'Conflicts' ? <BetaBadge /> : undefined}
                   badge={
                     n.label === 'Jobs' && readyToInvoiceCount > 0 ? (
                       <Badge
@@ -557,6 +564,17 @@ function SidebarContent({
                         style={navCountBadgeStyle}
                       >
                         {readyToInvoiceCount > 99 ? '99+' : readyToInvoiceCount}
+                      </Badge>
+                    ) : n.label === 'Conflicts' &&
+                      projectLeadConflictCount > 0 ? (
+                      <Badge
+                        size={isMobile ? '2' : '1'}
+                        radius="full"
+                        style={navCountBadgeStyle}
+                      >
+                        {projectLeadConflictCount > 99
+                          ? '99+'
+                          : projectLeadConflictCount}
                       </Badge>
                     ) : undefined
                   }
@@ -578,6 +596,7 @@ function SidebarContent({
                       currentPath={currentPath}
                       isMobile={isMobile}
                       onCloseMobile={() => onToggle(false)}
+                      tag={n.label === 'Reporting' ? <BetaBadge /> : undefined}
                       badge={
                         n.label === 'Matters' && unreadMatters > 0 ? (
                           <Badge
@@ -676,6 +695,7 @@ function NavItem({
   isMobile,
   onCloseMobile,
   badge,
+  tag,
 }: {
   to: string
   icon: React.ReactNode
@@ -685,6 +705,7 @@ function NavItem({
   isMobile: boolean
   onCloseMobile: () => void
   badge?: React.ReactNode
+  tag?: React.ReactNode
 }) {
   const active =
     to === '/'
@@ -745,7 +766,8 @@ function NavItem({
           >
             <span
               style={{
-                lineHeight: 1,
+                /* line-height > 1 so descenders aren't clipped by overflow */
+                lineHeight: 1.25,
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -754,6 +776,7 @@ function NavItem({
             >
               {label}
             </span>
+            {tag}
             {badge}
           </Flex>
         )}
@@ -764,7 +787,7 @@ function NavItem({
   const slotted = (
     <div className="sidebar-nav-slot">
       {!open ? (
-        <Tooltip content={label} delayDuration={300}>
+        <Tooltip content={tag ? `${label} (beta)` : label} delayDuration={300}>
           {content}
         </Tooltip>
       ) : (

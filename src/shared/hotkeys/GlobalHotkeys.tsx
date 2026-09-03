@@ -26,6 +26,7 @@ const ROUTE_CAP: Record<string, Capability> = {
   '/vehicles': 'visit:vehicles',
   '/crew': 'visit:crew',
   '/jobs': 'visit:jobs',
+  '/conflicts': 'visit:conflicts',
   '/calendar': 'visit:calendar',
   '/logging': 'visit:logging',
   '/customers': 'visit:customers',
@@ -53,6 +54,7 @@ export function GlobalHotkeys() {
         const def = SHORTCUT_REGISTRY.find((s) => s.id === id)!
         const route = def.route!
         const cap = ROUTE_CAP[route]
+        if (!cap) return []
         return [
           {
             hotkey: asRegisterableHotkey(hotkey),

@@ -3,7 +3,6 @@ import { Button, Flex, Text, Tooltip } from '@radix-ui/themes'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { LotOfCash, Sparks } from 'iconoir-react'
-import { DateRangePicker } from '@shared/ui/components/pickers'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { companyExpansionQuery } from '@features/company/api/queries'
@@ -31,6 +30,7 @@ import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
 import { jobsIndexInfiniteQuery } from '../api/queries'
+import { myJobIdsQuery } from '../api/myJobIdsQuery'
 import type { JobStatus, JobsListScope, JobsPageSelection } from '../types'
 
 function JobInspectorTabShortcutTip() {
@@ -103,6 +103,10 @@ export default function JobsPage() {
   const [dateFrom, setDateFrom] = React.useState('')
   const [dateTo, setDateTo] = React.useState('')
   const [readyToInvoiceFilter, setReadyToInvoiceFilter] = React.useState(false)
+  const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(false)
+  const isFreelancer = companyRole === 'freelancer'
+  const canFilterMyJobs = !isFreelancer
+  const myJobsFilterActive = showMyJobsOnly && canFilterMyJobs
 
   const { data: jobsReadyToInvoice = [] } = useQuery({
     ...jobsReadyToInvoiceQuery({
@@ -161,19 +165,18 @@ export default function JobsPage() {
     [],
   )
 
+  const handleShowMyJobsOnlyChange = React.useCallback((next: boolean) => {
+    setShowMyJobsOnly(next)
+  }, [])
+
   const handlePeriodChange = React.useCallback(
     (range: { startDate: string; endDate: string }) => {
-      if (range.startDate && range.endDate) setReadyToInvoiceFilter(false)
+      if (range.startDate || range.endDate) setReadyToInvoiceFilter(false)
       setDateFrom(range.startDate)
       setDateTo(range.endDate)
     },
     [],
   )
-
-  const clearPeriodFilter = React.useCallback(() => {
-    setDateFrom('')
-    setDateTo('')
-  }, [])
 
   React.useEffect(() => {
     if (recurringJobId) {
@@ -248,10 +251,21 @@ export default function JobsPage() {
     [],
   )
 
+  const { data: myJobIds, isLoading: myJobIdsLoading } = useQuery({
+    ...myJobIdsQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: !!companyId && !!userId && myJobsFilterActive,
+  })
+  const waitingForMyJobIds = myJobsFilterActive && myJobIdsLoading
+  const onlyJobIds = myJobsFilterActive ? (myJobIds ?? []) : null
+
   const includeRecurringMembers =
     companyRole === 'freelancer' ||
     showJobsInRecurringSeries ||
-    readyToInvoiceFilter
+    readyToInvoiceFilter ||
+    myJobsFilterActive
 
   const { isLoading: jobsIndexLoading } = useInfiniteQuery({
     ...jobsIndexInfiniteQuery({
@@ -271,8 +285,9 @@ export default function JobsPage() {
           ? statusFilter
           : null,
       includeRecurringMembers,
+      onlyJobIds,
     }),
-    enabled: !!companyId,
+    enabled: !!companyId && !waitingForMyJobIds,
   })
   const showInitialSkeleton = useInitialPageLoad(jobsIndexLoading)
 
@@ -314,14 +329,6 @@ export default function JobsPage() {
           {readyToInvoiceCount}
         </Button>
       )}
-      <DateRangePicker
-        startDate={dateFrom}
-        endDate={dateTo}
-        onChange={handlePeriodChange}
-        onClear={clearPeriodFilter}
-        iconButton
-        iconButtonSize="2"
-      />
       <JobsFilter
         statusFilter={statusFilter}
         onStatusFilterChange={handleStatusFilterChange}
@@ -331,6 +338,13 @@ export default function JobsPage() {
         onShowJobsInRecurringSeriesChange={
           handleShowJobsInRecurringSeriesChange
         }
+        showMyJobsOnly={showMyJobsOnly}
+        onShowMyJobsOnlyChange={handleShowMyJobsOnlyChange}
+        canFilterMyJobs={canFilterMyJobs}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onPeriodChange={handlePeriodChange}
+        compact={!isLarge}
       />
     </Flex>
   )
@@ -366,6 +380,9 @@ export default function JobsPage() {
       dateFrom={dateFrom}
       dateTo={dateTo}
       readyToInvoiceFilter={readyToInvoiceFilter}
+      showMyJobsOnly={myJobsFilterActive}
+      onlyJobIds={onlyJobIds}
+      waitingForMyJobIds={waitingForMyJobIds}
       compact={!isLarge}
       toolbarExtra={isLarge ? undefined : leftToolbar}
     />

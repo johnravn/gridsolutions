@@ -30,25 +30,35 @@ import {
 } from '@shared/ui/index-table/indexTableStyles'
 import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
+import { ContaLinkedBadge } from './ContaLinkedBadge'
 import type { IndexColumn } from '@shared/ui/index-table'
 
-const GRID_COLUMNS = 'minmax(180px, 2fr) 100px 100px'
+const GRID_COLUMNS = 'minmax(180px, 2fr) 100px'
+const GRID_COLUMNS_WITH_CONTA = 'minmax(180px, 2fr) 100px 100px'
 const PAGE_GRID_COLUMNS = 'minmax(0, 1fr) auto'
+const PAGE_GRID_COLUMNS_WITH_CONTA = 'minmax(0, 1fr) auto auto'
 
-const COLUMNS: Array<IndexColumn> = [
+const TYPE_COLUMN: IndexColumn = {
+  id: 'type',
+  header: (
+    <Flex gap="1" align="center">
+      Type
+      <Tooltip content="Customer: normal customer. Partner: can be used as a job subcontractor or external vehicle owner.">
+        <InfoCircle width="1em" height="1em" />
+      </Tooltip>
+    </Flex>
+  ),
+}
+
+const BASE_COLUMNS: Array<IndexColumn> = [
   { id: 'name', header: 'Name' },
-  {
-    id: 'type',
-    header: (
-      <Flex gap="1" align="center">
-        Type
-        <Tooltip content="Customer: normal customer. Partner: can be used as a job subcontractor or external vehicle owner.">
-          <InfoCircle width="1em" height="1em" />
-        </Tooltip>
-      </Flex>
-    ),
-  },
-  { id: 'crew_rate', header: 'Crew rate' },
+  TYPE_COLUMN,
+]
+
+const CONTA_COLUMNS: Array<IndexColumn> = [
+  { id: 'name', header: 'Name' },
+  TYPE_COLUMN,
+  { id: 'conta', header: 'Conta' },
 ]
 
 export default function CustomerTable({
@@ -57,12 +67,14 @@ export default function CustomerTable({
   onSelect,
   showRegular,
   showPartner,
+  contaEnabled = false,
   toolbarExtra,
 }: {
   selectedId: string | null
   onSelect: (id: string) => void
   showRegular: boolean
   showPartner: boolean
+  contaEnabled?: boolean
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
   toolbarExtra?: React.ReactNode
 }) {
@@ -201,7 +213,9 @@ export default function CustomerTable({
                     }}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: PAGE_GRID_COLUMNS,
+                      gridTemplateColumns: contaEnabled
+                        ? PAGE_GRID_COLUMNS_WITH_CONTA
+                        : PAGE_GRID_COLUMNS,
                       gap: 'var(--space-3)',
                       alignItems: 'center',
                       padding: '16px 12px',
@@ -214,6 +228,9 @@ export default function CustomerTable({
                       {r.name}
                     </Text>
                     {renderType(r)}
+                    {contaEnabled ? (
+                      <ContaLinkedBadge linked={r.conta_customer_id != null} />
+                    ) : null}
                   </div>
                 )
               })}
@@ -240,8 +257,10 @@ export default function CustomerTable({
   return (
     <VirtualIndexTable
       rows={rows}
-      columns={COLUMNS}
-      gridTemplateColumns={GRID_COLUMNS}
+      columns={contaEnabled ? CONTA_COLUMNS : BASE_COLUMNS}
+      gridTemplateColumns={
+        contaEnabled ? GRID_COLUMNS_WITH_CONTA : GRID_COLUMNS
+      }
       getRowId={(r) => r.id}
       renderCell={(r, colId) => {
         switch (colId) {
@@ -253,13 +272,8 @@ export default function CustomerTable({
             )
           case 'type':
             return renderType(r)
-          case 'crew_rate':
-            return (
-              <Text size="1" color="gray">
-                {(r as { crew_pricing_level?: { name?: string } })
-                  .crew_pricing_level?.name ?? 'Standard'}
-              </Text>
-            )
+          case 'conta':
+            return <ContaLinkedBadge linked={r.conta_customer_id != null} />
           default:
             return null
         }

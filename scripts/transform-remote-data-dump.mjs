@@ -294,14 +294,14 @@ function transformInsertBlock(
 }
 
 /**
- * Seed/migration already inserts Demo Company. Remote dumps include it in the
- * same multi-row INSERT — without ON CONFLICT the whole statement fails and
- * every other company is skipped.
+ * Append an ON CONFLICT clause to the first INSERT for `marker` if missing.
  *
  * @param {string} sql
+ * @param {string} marker e.g. `INSERT INTO "public"."companies"`
+ * @param {string} onConflictClause full clause without trailing semicolon
+ * @param {string} label for error messages
  */
-function ensureCompaniesOnConflict(sql) {
-  const marker = 'INSERT INTO "public"."companies"'
+function ensureInsertOnConflict(sql, marker, onConflictClause, label) {
   const start = sql.indexOf(marker)
   if (start === -1) return { sql, changed: false }
 
@@ -338,16 +338,63 @@ function ensureCompaniesOnConflict(sql) {
   }
 
   if (endIdx === -1) {
-    throw new Error('Unterminated companies INSERT statement')
+    throw new Error(`Unterminated ${label} INSERT statement`)
   }
 
   const rewritten =
     sql.slice(0, start) +
     statement.slice(0, endIdx) +
-    '\nON CONFLICT (id) DO NOTHING;' +
+    `\n${onConflictClause};` +
     statement.slice(endIdx + 1)
 
   return { sql: rewritten, changed: true }
+}
+
+/**
+ * Seed/migration already inserts Demo Company. Remote dumps include it in the
+ * same multi-row INSERT — without ON CONFLICT the whole statement fails and
+ * every other company is skipped.
+ *
+ * @param {string} sql
+ */
+function ensureCompaniesOnConflict(sql) {
+  return ensureInsertOnConflict(
+    sql,
+    'INSERT INTO "public"."companies"',
+    'ON CONFLICT (id) DO NOTHING',
+    'companies',
+  )
+}
+
+/**
+ * copy-auth creates stub profiles via trg_sync_profile_from_auth before
+ * copy-data runs. Without an upsert, the remote profiles INSERT fails on
+ * unique(email)/PK and every avatar_url + superuser flag is lost.
+ *
+ * @param {string} sql
+ */
+function ensureProfilesUpsert(sql) {
+  return ensureInsertOnConflict(
+    sql,
+    'INSERT INTO "public"."profiles"',
+    `ON CONFLICT (user_id) DO UPDATE SET
+  first_name = EXCLUDED.first_name,
+  phone = EXCLUDED.phone,
+  created_at = EXCLUDED.created_at,
+  email = EXCLUDED.email,
+  display_name = EXCLUDED.display_name,
+  avatar_url = EXCLUDED.avatar_url,
+  locale = EXCLUDED.locale,
+  timezone = EXCLUDED.timezone,
+  bio = EXCLUDED.bio,
+  preferences = EXCLUDED.preferences,
+  superuser = EXCLUDED.superuser,
+  last_name = EXCLUDED.last_name,
+  selected_company_id = EXCLUDED.selected_company_id,
+  primary_address_id = EXCLUDED.primary_address_id,
+  last_seen_release_version = EXCLUDED.last_seen_release_version`,
+    'profiles',
+  )
 }
 
 export function buildSubrentalBackfillSql() {
@@ -383,7 +430,7 @@ ON CONFLICT (job_id, customer_id) DO NOTHING;
 
 /**
  * @param {string} dumpSql
- * @returns {{ sql: string, transformed: boolean, subrentalItems: number, droppedThemeScaling: boolean, companiesOnConflict: boolean }}
+ * @returns {{ sql: string, transformed: boolean, subrentalItems: number, droppedThemeScaling: boolean, companiesOnConflict: boolean, profilesUpsert: boolean }}
  */
 export function transformRemoteDataDump(dumpSql) {
   subrentalItemOwners.clear()
@@ -392,6 +439,7 @@ export function transformRemoteDataDump(dumpSql) {
   let transformed = false
   let droppedThemeScaling = false
   let companiesOnConflict = false
+  let profilesUpsert = false
 
   if (sql.includes(ITEMS_OLD_HEADER)) {
     sql = transformInsertBlock(
@@ -433,11 +481,21 @@ export function transformRemoteDataDump(dumpSql) {
     }
   }
 
+  {
+    const result = ensureProfilesUpsert(sql)
+    sql = result.sql
+    if (result.changed) {
+      profilesUpsert = true
+      transformed = true
+    }
+  }
+
   return {
     sql,
     transformed,
     subrentalItems: subrentalItemOwners.size,
     droppedThemeScaling,
     companiesOnConflict,
+    profilesUpsert,
   }
 }

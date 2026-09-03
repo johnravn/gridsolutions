@@ -783,6 +783,7 @@ export default function OfferBasisEditor({
         maxWidth="1280px"
         className={OFFER_EDITOR_DIALOG_CLASS}
         style={offerEditorDialogContentStyle}
+        aria-describedby={undefined}
         onPointerDownOutside={(event) => {
           if (closeGuardOpen) event.preventDefault()
           preventDialogCloseOnSearchableSelect(event)
@@ -1044,6 +1045,7 @@ export default function OfferBasisEditor({
         <Dialog.Content
           maxWidth="480px"
           style={{ zIndex: 101 }}
+          aria-describedby={undefined}
           onPointerDownOutside={(event) => event.preventDefault()}
           onInteractOutside={(event) => event.preventDefault()}
           onEscapeKeyDown={(event) => event.preventDefault()}

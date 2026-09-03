@@ -5,6 +5,7 @@ import {
   formatOverlapDuration,
   overlapHoursBetweenPeriods,
 } from '../api/overlapChecks'
+import { formatNamedJob } from '../utils/conflictCopy'
 import type { OverlapConflict } from '../api/overlapChecks'
 
 function formatPeriod(start: string, end: string) {
@@ -50,7 +51,7 @@ export function ConflictCard({
         </Text>
       ) : null}
       <Text size="2" weight="medium" as="div">
-        {conflict.jobTitle ?? 'Personal / other booking'}
+        {formatNamedJob(conflict.jobTitle, !!conflict.jobId)}
       </Text>
       <Text size="1" color="gray" as="div" mt="1">
         {formatPeriod(conflict.startAt, conflict.endAt)}

@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@test/render'
 import { AppToastProvider } from '@shared/ui/toast/ToastProvider'
+import {
+  findCrewOverlaps,
+  getTimePeriodWindow,
+} from '@features/conflicts/api/overlapChecks'
 import AddCrewToRoleDialog from './AddCrewToRoleDialog'
 
-const { thenable } = vi.hoisted(() => {
+const { thenable, insertMock } = vi.hoisted(() => {
+  const insertMock = vi.fn(async () => ({ data: null, error: null }))
+
   function thenable(data: unknown) {
     const chain: Record<string, unknown> = {}
     const self = () => chain
@@ -16,14 +23,22 @@ const { thenable } = vi.hoisted(() => {
     chain.is = self
     chain.order = self
     chain.limit = self
-    chain.insert = self
-    chain.maybeSingle = async () => ({ data, error: null })
+    chain.insert = (...args: Array<unknown>) => {
+      void insertMock(...args)
+      return Promise.resolve({ data: null, error: null })
+    }
+    chain.maybeSingle = async () => {
+      if (Array.isArray(data)) {
+        return { data: data[0] ?? null, error: null }
+      }
+      return { data, error: null }
+    }
     chain.then = (
       resolve: (value: { data: unknown; error: null }) => unknown,
     ) => Promise.resolve(resolve({ data, error: null }))
     return chain
   }
-  return { thenable }
+  return { thenable, insertMock }
 })
 
 vi.mock('@app/hooks/useMediaQuery', () => ({
@@ -35,6 +50,11 @@ vi.mock('@shared/api/supabase', () => ({
     from: (table: string) => {
       if (table === 'profiles') {
         return thenable([
+          {
+            user_id: 'auth-1',
+            display_name: 'Me Logged In',
+            email: 'me@example.com',
+          },
           {
             user_id: 'u-bob',
             display_name: 'Bob Other',
@@ -87,6 +107,8 @@ vi.mock('@features/conflicts/components/ForceBookingDialog', () => ({
 describe('AddCrewToRoleDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.mocked(getTimePeriodWindow).mockResolvedValue(null)
+    vi.mocked(findCrewOverlaps).mockResolvedValue(new Map())
   })
 
   it('shows last-used crew for the customer above the full list', async () => {
@@ -102,6 +124,12 @@ describe('AddCrewToRoleDialog', () => {
       </AppToastProvider>,
     )
 
+    expect(await screen.findByText('You')).toBeInTheDocument()
+    expect(screen.getByText('Me Logged In')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Confirm myself/i }),
+    ).toBeInTheDocument()
+
     expect(
       await screen.findByText('Last used for this customer'),
     ).toBeInTheDocument()
@@ -111,5 +139,43 @@ describe('AddCrewToRoleDialog', () => {
       expect(screen.getByText('All crew')).toBeInTheDocument()
     })
     expect(screen.getByText('Bob Other')).toBeInTheDocument()
+  })
+
+  it('adds the logged-in user as confirmed crew via Confirm myself', async () => {
+    const user = userEvent.setup()
+    const onOpenChange = vi.fn()
+
+    renderWithProviders(
+      <AppToastProvider>
+        <AddCrewToRoleDialog
+          open
+          onOpenChange={onOpenChange}
+          jobId="job-1"
+          timePeriodId="role-1"
+          companyId="co-1"
+        />
+      </AppToastProvider>,
+    )
+
+    const confirmBtn = await screen.findByRole('button', {
+      name: /Confirm myself/i,
+    })
+    await user.click(confirmBtn)
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalled()
+    })
+
+    expect(insertMock).toHaveBeenCalledWith([
+      expect.objectContaining({
+        time_period_id: 'role-1',
+        user_id: 'auth-1',
+        status: 'confirmed',
+        notes: null,
+      }),
+    ])
+    await waitFor(() => {
+      expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
   })
 })

@@ -98,14 +98,50 @@ export type TransportLineCalcInput = {
   start_date: string
   end_date: string
   days_used?: number | null
+  /** When set, overrides days_used / date span for how many daily rates to charge. */
+  daily_rate_count?: number | null
   daily_rate?: number | null
   distance_km?: number | null
   distance_rate?: number | null
 }
 
+/** Round to whole øre (2 decimal NOK). */
+export function roundMoney(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
+/** Equipment line total: edited price-per-day × qty × rental factor. */
+export function equipmentLineTotal(
+  unitPrice: number,
+  quantity: number,
+  rentalFactor: number,
+): number {
+  return roundMoney(unitPrice * quantity * rentalFactor)
+}
+
+/** Billing days for a transport line (matches TransportSection / DB comments). */
+export function transportBillingDays(item: {
+  start_date: string
+  end_date: string
+  days_used?: number | null
+  daily_rate_count?: number | null
+}): number {
+  if (item.daily_rate_count != null && item.daily_rate_count > 0) {
+    return item.daily_rate_count
+  }
+  if (item.days_used != null && item.days_used > 0) {
+    return item.days_used
+  }
+  const days = Math.ceil(
+    (new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) /
+      (1000 * 60 * 60 * 24),
+  )
+  return Math.max(1, days)
+}
+
 /**
  * Transport line total: daily_rate × billing days + distance increments.
- * Billing days: days_used when set, otherwise date span (min 1).
+ * Billing days: daily_rate_count → days_used → date span (min 1).
  * Matches TransportSection so Totals stay in sync with the editor.
  */
 export function calculateTransportLineTotal(
@@ -116,12 +152,7 @@ export function calculateTransportLineTotal(
     vehicleDistanceIncrement?: number | null
   },
 ): number {
-  const days = Math.ceil(
-    (new Date(item.end_date).getTime() - new Date(item.start_date).getTime()) /
-      (1000 * 60 * 60 * 24),
-  )
-  const derivedDays = Math.max(1, days)
-  const billingDays = item.days_used ?? derivedDays
+  const billingDays = transportBillingDays(item)
 
   const effectiveDailyRate = item.daily_rate ?? defaults?.vehicleDailyRate ?? 0
   const dailyCost = effectiveDailyRate * Math.max(0, billingDays)
@@ -137,7 +168,7 @@ export function calculateTransportLineTotal(
       ? effectiveDistanceRate * distanceIncrements
       : 0
 
-  return dailyCost + distanceCost
+  return roundMoney(dailyCost + distanceCost)
 }
 
 export function calculateOfferTotals(
@@ -163,45 +194,103 @@ export function calculateOfferTotals(
     rentalFactorConfig,
   )
 
-  // Calculate equipment subtotal (unit price * qty * rental factor)
-  const equipmentSubtotal = equipmentItems.reduce(
-    (sum, item) =>
-      sum + item.unit_price * item.quantity * equipmentRentalFactor,
-    0,
+  const equipmentSubtotal = roundMoney(
+    equipmentItems.reduce(
+      (sum, item) =>
+        sum +
+        equipmentLineTotal(
+          item.unit_price,
+          item.quantity,
+          equipmentRentalFactor,
+        ),
+      0,
+    ),
   )
 
-  // Calculate crew subtotal (total daily rate * days of use)
-  const crewSubtotal = crewItems.reduce((sum, item) => {
-    const dailyTotal = item.daily_rate * item.crew_count
-    const days = Math.ceil(
-      (new Date(item.end_date).getTime() -
-        new Date(item.start_date).getTime()) /
-        (1000 * 60 * 60 * 24),
-    )
-    return sum + dailyTotal * Math.max(1, days)
-  }, 0)
+  const crewSubtotal = roundMoney(
+    crewItems.reduce((sum, item) => {
+      const dailyTotal = item.daily_rate * item.crew_count
+      const days = Math.ceil(
+        (new Date(item.end_date).getTime() -
+          new Date(item.start_date).getTime()) /
+          (1000 * 60 * 60 * 24),
+      )
+      return sum + roundMoney(dailyTotal * Math.max(1, days))
+    }, 0),
+  )
 
   const transportDefaults = {
     vehicleDailyRate,
     vehicleDistanceRate,
     vehicleDistanceIncrement,
   }
-  const transportSubtotal = transportItems.reduce(
-    (sum, item) => sum + calculateTransportLineTotal(item, transportDefaults),
-    0,
+  const transportSubtotal = roundMoney(
+    transportItems.reduce(
+      (sum, item) =>
+        sum + roundMoney(calculateTransportLineTotal(item, transportDefaults)),
+      0,
+    ),
   )
 
-  // Total before discount
-  const totalBeforeDiscount =
-    equipmentSubtotal + crewSubtotal + transportSubtotal
+  const totalBeforeDiscount = roundMoney(
+    equipmentSubtotal + crewSubtotal + transportSubtotal,
+  )
 
-  // Apply discount (equipment only)
-  const discountAmount = (equipmentSubtotal * discountPercent) / 100
-  const totalAfterDiscount = totalBeforeDiscount - discountAmount
+  const discountAmount = roundMoney((equipmentSubtotal * discountPercent) / 100)
+  const totalAfterDiscount = roundMoney(totalBeforeDiscount - discountAmount)
 
-  // Apply VAT
-  const vatAmount = (totalAfterDiscount * vatPercent) / 100
-  const totalWithVAT = totalAfterDiscount + vatAmount
+  const vatAmount = roundMoney((totalAfterDiscount * vatPercent) / 100)
+  const totalWithVAT = roundMoney(totalAfterDiscount + vatAmount)
+
+  return {
+    equipmentSubtotal,
+    crewSubtotal,
+    transportSubtotal,
+    totalBeforeDiscount,
+    totalAfterDiscount,
+    totalWithVAT,
+    daysOfUse,
+    discountPercent,
+    vatPercent,
+    equipmentRentalFactor,
+    discountAmount,
+  }
+}
+
+/**
+ * Offer header totals from stored line `total_price` values (public offer /
+ * invoice source of truth). Prefer this when persisting job_offers totals so
+ * they cannot drift from recomputed rate × days.
+ */
+export function calculateOfferTotalsFromStoredLines(
+  equipmentItems: Array<Pick<OfferEquipmentItem, 'total_price'>>,
+  crewItems: Array<Pick<OfferCrewItem, 'total_price'>>,
+  transportItems: Array<Pick<OfferTransportItem, 'total_price'>>,
+  daysOfUse: number,
+  discountPercent: number,
+  vatPercent: number,
+  rentalFactorConfig?: RentalFactorConfig | null,
+): OfferTotals {
+  const equipmentRentalFactor = calculateRentalFactor(
+    daysOfUse,
+    rentalFactorConfig,
+  )
+  const equipmentSubtotal = roundMoney(
+    equipmentItems.reduce((sum, item) => sum + roundMoney(item.total_price), 0),
+  )
+  const crewSubtotal = roundMoney(
+    crewItems.reduce((sum, item) => sum + roundMoney(item.total_price), 0),
+  )
+  const transportSubtotal = roundMoney(
+    transportItems.reduce((sum, item) => sum + roundMoney(item.total_price), 0),
+  )
+  const totalBeforeDiscount = roundMoney(
+    equipmentSubtotal + crewSubtotal + transportSubtotal,
+  )
+  const discountAmount = roundMoney((equipmentSubtotal * discountPercent) / 100)
+  const totalAfterDiscount = roundMoney(totalBeforeDiscount - discountAmount)
+  const vatAmount = roundMoney((totalAfterDiscount * vatPercent) / 100)
+  const totalWithVAT = roundMoney(totalAfterDiscount + vatAmount)
 
   return {
     equipmentSubtotal,

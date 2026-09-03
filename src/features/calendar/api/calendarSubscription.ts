@@ -5,6 +5,7 @@ export type CalendarSubscriptionKind =
   | 'all_jobs'
   | 'project_lead_jobs'
   | 'crew_jobs'
+  | 'crew_user'
   | 'transport_vehicle'
   | 'transport_all'
 
@@ -15,6 +16,8 @@ export type CalendarSubscriptionRow = {
   token: string
   kind: CalendarSubscriptionKind
   vehicle_id: string | null
+  crew_user_id: string | null
+  remind_1h_before: boolean
   created_at: string
   updated_at: string
 }
@@ -25,10 +28,12 @@ export type CalendarSubscriptionInsert = {
   token: string
   kind: CalendarSubscriptionKind
   vehicle_id?: string | null
+  crew_user_id?: string | null
+  remind_1h_before?: boolean
 }
 
 const SELECT_COLS =
-  'id, company_id, user_id, token, kind, vehicle_id, created_at, updated_at'
+  'id, company_id, user_id, token, kind, vehicle_id, crew_user_id, remind_1h_before, created_at, updated_at'
 
 function randomToken(): string {
   const bytes = new Uint8Array(24)
@@ -63,7 +68,12 @@ export async function getCalendarSubscriptions(
 export async function createCalendarSubscription(
   companyId: string,
   userId: string,
-  params: { kind: CalendarSubscriptionKind; vehicleId?: string | null },
+  params: {
+    kind: CalendarSubscriptionKind
+    vehicleId?: string | null
+    crewUserId?: string | null
+    remind1hBefore?: boolean
+  },
 ): Promise<CalendarSubscriptionRow> {
   const existing = await getCalendarSubscriptions(companyId, userId)
   if (existing.length >= MAX_SUBSCRIPTIONS_PER_USER) {
@@ -79,11 +89,34 @@ export async function createCalendarSubscription(
     kind: params.kind,
     vehicle_id:
       params.kind === 'transport_vehicle' ? (params.vehicleId ?? null) : null,
+    crew_user_id:
+      params.kind === 'crew_user' ? (params.crewUserId ?? null) : null,
+    remind_1h_before:
+      params.kind === 'project_lead_jobs' && params.remind1hBefore === true,
   }
 
   const { data, error } = await supabase
     .from('calendar_subscriptions')
     .insert(row)
+    .select(SELECT_COLS)
+    .single()
+
+  if (error) throw error
+  return data as CalendarSubscriptionRow
+}
+
+/** Update reminder preference on an existing project-lead jobs subscription. */
+export async function updateCalendarSubscription(
+  subscriptionId: string,
+  userId: string,
+  params: { remind1hBefore: boolean },
+): Promise<CalendarSubscriptionRow> {
+  const { data, error } = await supabase
+    .from('calendar_subscriptions')
+    .update({ remind_1h_before: params.remind1hBefore })
+    .eq('id', subscriptionId)
+    .eq('user_id', userId)
+    .eq('kind', 'project_lead_jobs')
     .select(SELECT_COLS)
     .single()
 

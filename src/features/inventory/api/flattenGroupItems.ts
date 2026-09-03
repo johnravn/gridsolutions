@@ -213,6 +213,24 @@ export async function flattenGroupLeafItems(
   return flattened.leafItemsByGroupId
 }
 
+export function emptyGroupNames(
+  groups: Array<{ group_id: string; name: string }>,
+  leafItemsByGroupId: Map<string, Array<GroupLeafItem>>,
+): Array<string> {
+  return groups
+    .filter(
+      (group) => (leafItemsByGroupId.get(group.group_id) ?? []).length === 0,
+    )
+    .map((group) => group.name.trim() || 'Group')
+}
+
+export function emptyGroupBookingMessage(groupNames: Array<string>): string {
+  if (groupNames.length === 1) {
+    return `Cannot book ${groupNames[0]}: the group has no items. Add items to it in inventory first.`
+  }
+  return `Cannot book ${groupNames.join(', ')}: these groups have no items. Add items to them in inventory first.`
+}
+
 export async function fetchGroupLineageIds(
   groupIds: Array<string>,
 ): Promise<Map<string, Array<string>>> {

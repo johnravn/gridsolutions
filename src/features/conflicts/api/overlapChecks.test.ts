@@ -3,6 +3,7 @@ import {
   collectGroupOverlapConflicts,
   formatOverlapDuration,
   overlapHoursBetweenPeriods,
+  personalEventOverlapConflict,
 } from './overlapChecks'
 import type { GroupOverlapRow } from './overlapChecks'
 
@@ -76,7 +77,8 @@ describe('collectGroupOverlapConflicts', () => {
 
     expect(result.get('g1')).toEqual([
       expect.objectContaining({
-        itemName: 'Kit',
+        itemName: null,
+        sourceGroupName: 'Kit',
         jobTitle: 'Job B',
         jobId: 'job-b',
       }),
@@ -93,7 +95,8 @@ describe('collectGroupOverlapConflicts', () => {
       endAt,
     })
 
-    expect(result.get('child')?.[0]?.itemName).toBe('Child kit')
+    expect(result.get('child')?.[0]?.sourceGroupName).toBe('Child kit')
+    expect(result.get('child')?.[0]?.itemName).toBeNull()
   })
 
   it('keeps group members as separate nested conflicts', () => {
@@ -170,5 +173,21 @@ describe('collectGroupOverlapConflicts', () => {
     })
 
     expect(result.size).toBe(0)
+  })
+})
+
+describe('personalEventOverlapConflict', () => {
+  it('labels personal holds as Personal: title', () => {
+    expect(
+      personalEventOverlapConflict({
+        title: 'Accounting',
+        start_at: '2026-01-01T08:00:00Z',
+        end_at: '2026-01-01T12:00:00Z',
+      }),
+    ).toEqual({
+      jobTitle: 'Personal: Accounting',
+      startAt: '2026-01-01T08:00:00Z',
+      endAt: '2026-01-01T12:00:00Z',
+    })
   })
 })

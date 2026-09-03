@@ -3,7 +3,14 @@ import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems
 import {
   dedupeOverlapConflicts,
   findGroupOverlaps,
+  findVehicleOverlaps,
 } from '@features/conflicts/api/overlapChecks'
+import {
+  formatGroupOverlapWarning,
+  formatItemCapacityWarning,
+  formatVehicleOverlapWarning,
+} from '@features/conflicts/utils/conflictCopy'
+import { resolveOfferTransportVehicles } from '@features/jobs/utils/resolveOfferTransportVehicles'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { OfferDetail } from '@features/jobs/types'
 
@@ -11,6 +18,7 @@ export type EquipmentConflictPreview = {
   summaryLines: Array<string>
   conflicts: Array<OverlapConflict>
   conflictingItemIds: Array<string>
+  conflictingVehicleIds: Array<string>
 }
 
 export type BasisBookingConflictPreview = EquipmentConflictPreview & {
@@ -150,7 +158,7 @@ export async function getEquipmentConflictsForOfferBooking({
       if (overlaps.length === 0) continue
       const groupName =
         overlaps[0]?.sourceGroupName ?? overlaps[0]?.itemName ?? 'Group'
-      summaryLines.push(`${groupName}: already booked in an overlapping period`)
+      summaryLines.push(formatGroupOverlapWarning(groupName, overlaps))
       const groupId = overlaps[0]?.sourceGroupId
       const groupQuantity = groupId
         ? (offerGroupQuantityById.get(groupId) ?? 1)
@@ -164,176 +172,289 @@ export async function getEquipmentConflictsForOfferBooking({
     }
   }
 
-  if (itemQuantityMap.size === 0) {
-    return {
-      summaryLines,
-      conflicts: dedupeOverlapConflicts(conflicts),
-      conflictingItemIds,
+  if (itemQuantityMap.size > 0) {
+    const allItemIds = Array.from(itemQuantityMap.keys())
+    const { data: inventoryRows, error: inventoryErr } = await supabase
+      .from('inventory_index')
+      .select('id, name, on_hand')
+      .eq('company_id', companyId)
+      .eq('is_group', false)
+      .in('id', allItemIds)
+
+    if (inventoryErr) throw inventoryErr
+
+    const itemNameMap = new Map<string, string>()
+    const itemOnHandMap = new Map<string, number>()
+    for (const row of inventoryRows ?? []) {
+      if (!row.id) continue
+      itemNameMap.set(row.id, row.name || 'Item')
+      itemOnHandMap.set(row.id, row.on_hand ?? 0)
     }
-  }
 
-  const allItemIds = Array.from(itemQuantityMap.keys())
-  const { data: inventoryRows, error: inventoryErr } = await supabase
-    .from('inventory_index')
-    .select('id, name, on_hand')
-    .eq('company_id', companyId)
-    .eq('is_group', false)
-    .in('id', allItemIds)
+    const { data: equipmentPeriods, error: periodsErr } = await supabase
+      .from('time_periods')
+      .select('id, start_at, end_at, job_id')
+      .eq('company_id', companyId)
+      .eq('category', 'equipment')
+      .eq('deleted', false)
+      .lt('start_at', endAt)
+      .gt('end_at', startAt)
 
-  if (inventoryErr) throw inventoryErr
+    if (periodsErr) throw periodsErr
 
-  const itemNameMap = new Map<string, string>()
-  const itemOnHandMap = new Map<string, number>()
-  for (const row of inventoryRows ?? []) {
-    if (!row.id) continue
-    itemNameMap.set(row.id, row.name || 'Item')
-    itemOnHandMap.set(row.id, row.on_hand ?? 0)
-  }
-
-  const { data: equipmentPeriods, error: periodsErr } = await supabase
-    .from('time_periods')
-    .select('id, start_at, end_at, job_id')
-    .eq('company_id', companyId)
-    .eq('category', 'equipment')
-    .eq('deleted', false)
-
-  if (periodsErr) throw periodsErr
-
-  const overlappingPeriodIds = new Set<string>()
-  for (const period of equipmentPeriods ?? []) {
-    if (
-      period.job_id !== jobId &&
-      periodsOverlap(startAt, endAt, period.start_at, period.end_at)
-    ) {
-      overlappingPeriodIds.add(period.id)
+    const overlappingPeriodIds = new Set<string>()
+    for (const period of equipmentPeriods ?? []) {
+      if (
+        period.job_id !== jobId &&
+        periodsOverlap(startAt, endAt, period.start_at, period.end_at)
+      ) {
+        overlappingPeriodIds.add(period.id)
+      }
     }
-  }
 
-  if (overlappingPeriodIds.size === 0) {
-    return {
-      summaryLines,
-      conflicts: dedupeOverlapConflicts(conflicts),
-      conflictingItemIds,
-    }
-  }
+    if (overlappingPeriodIds.size > 0) {
+      const { data: overlappingReservations, error: reservationsErr } =
+        await supabase
+          .from('reserved_items')
+          .select(
+            `
+            id,
+            item_id,
+            quantity,
+            time_period:time_period_id (
+              start_at,
+              end_at,
+              job_id
+            )
+          `,
+          )
+          .in('item_id', allItemIds)
+          .in('time_period_id', Array.from(overlappingPeriodIds))
 
-  const { data: overlappingReservations, error: reservationsErr } =
-    await supabase
-      .from('reserved_items')
-      .select(
-        `
-        id,
-        item_id,
-        quantity,
-        time_period:time_period_id (
-          start_at,
-          end_at,
-          job_id
+      if (reservationsErr) throw reservationsErr
+
+      const overlappingJobIds = new Set<string>()
+      for (const res of overlappingReservations ?? []) {
+        const tp = res.time_period as { job_id: string | null } | null
+        if (tp?.job_id) overlappingJobIds.add(tp.job_id)
+      }
+
+      const overlappingJobMap = new Map<
+        string,
+        {
+          title: string | null
+          customerName: string | null
+          projectLeadName: string | null
+        }
+      >()
+
+      if (overlappingJobIds.size > 0) {
+        const { data: overlappingJobs, error: jobsErr } = await supabase
+          .from('jobs')
+          .select(
+            `
+            id,
+            title,
+            customer:customer_id ( name ),
+            project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
+          `,
+          )
+          .in('id', Array.from(overlappingJobIds))
+
+        if (jobsErr) throw jobsErr
+
+        for (const row of overlappingJobs ?? []) {
+          overlappingJobMap.set(row.id, {
+            title: row.title,
+            customerName: row.customer?.name ?? null,
+            projectLeadName:
+              row.project_lead?.display_name ?? row.project_lead?.email ?? null,
+          })
+        }
+      }
+
+      const existingReservedMap = new Map<string, number>()
+      for (const res of overlappingReservations ?? []) {
+        const current = existingReservedMap.get(res.item_id) ?? 0
+        existingReservedMap.set(res.item_id, current + res.quantity)
+      }
+
+      for (const [itemId, newQty] of itemQuantityMap.entries()) {
+        const onHand = itemOnHandMap.get(itemId) ?? 0
+        const existingQty = existingReservedMap.get(itemId) ?? 0
+        const finalTotal = existingQty + newQty
+        const hasCapacityConflict = onHand > 0 && finalTotal > onHand
+
+        if (!hasCapacityConflict) continue
+
+        conflictingItemIds.push(itemId)
+        const itemName = itemNameMap.get(itemId) ?? 'Item'
+        const source = membership.get(itemId)
+
+        const itemReservations = (overlappingReservations ?? []).filter(
+          (res) => res.item_id === itemId,
         )
-      `,
-      )
-      .in('item_id', allItemIds)
-      .in('time_period_id', Array.from(overlappingPeriodIds))
 
-  if (reservationsErr) throw reservationsErr
+        const itemConflicts: Array<OverlapConflict> = []
+        for (const res of itemReservations) {
+          const tp = res.time_period as {
+            start_at: string
+            end_at: string
+            job_id: string | null
+          } | null
+          if (!tp?.start_at || !tp.end_at || !tp.job_id) continue
+          const conflictJob = overlappingJobMap.get(tp.job_id)
+          itemConflicts.push({
+            jobId: tp.job_id,
+            itemId,
+            itemName,
+            quantity: res.quantity,
+            jobTitle: conflictJob?.title ?? null,
+            startAt: tp.start_at,
+            endAt: tp.end_at,
+            customerName: conflictJob?.customerName ?? null,
+            projectLeadName: conflictJob?.projectLeadName ?? null,
+            sourceGroupId: source?.groupId ?? null,
+            sourceGroupName: source?.groupName ?? null,
+            sourceGroupQuantity: source?.quantity,
+          })
+        }
 
-  const overlappingJobIds = new Set<string>()
-  for (const res of overlappingReservations ?? []) {
-    const tp = res.time_period as { job_id: string | null } | null
-    if (tp?.job_id) overlappingJobIds.add(tp.job_id)
-  }
-
-  const overlappingJobMap = new Map<
-    string,
-    {
-      title: string | null
-      customerName: string | null
-      projectLeadName: string | null
-    }
-  >()
-
-  if (overlappingJobIds.size > 0) {
-    const { data: overlappingJobs, error: jobsErr } = await supabase
-      .from('jobs')
-      .select(
-        `
-        id,
-        title,
-        customer:customer_id ( name ),
-        project_lead:profiles!jobs_project_lead_user_id_fkey ( display_name, email )
-      `,
-      )
-      .in('id', Array.from(overlappingJobIds))
-
-    if (jobsErr) throw jobsErr
-
-    for (const row of overlappingJobs ?? []) {
-      overlappingJobMap.set(row.id, {
-        title: row.title,
-        customerName: row.customer?.name ?? null,
-        projectLeadName:
-          row.project_lead?.display_name ?? row.project_lead?.email ?? null,
-      })
+        if (!source) {
+          summaryLines.push(
+            formatItemCapacityWarning({
+              itemName,
+              newQty,
+              existingQty,
+              onHand,
+              conflicts: itemConflicts,
+            }),
+          )
+        }
+        conflicts.push(...itemConflicts)
+      }
     }
   }
 
-  const existingReservedMap = new Map<string, number>()
-  for (const res of overlappingReservations ?? []) {
-    const current = existingReservedMap.get(res.item_id) ?? 0
-    existingReservedMap.set(res.item_id, current + res.quantity)
-  }
-
-  for (const [itemId, newQty] of itemQuantityMap.entries()) {
-    const onHand = itemOnHandMap.get(itemId) ?? 0
-    const existingQty = existingReservedMap.get(itemId) ?? 0
-    const finalTotal = existingQty + newQty
-    const hasCapacityConflict = onHand > 0 && finalTotal > onHand
-
-    if (!hasCapacityConflict) continue
-
-    conflictingItemIds.push(itemId)
-    const itemName = itemNameMap.get(itemId) ?? 'Item'
-    const source = membership.get(itemId)
-    if (!source) {
-      const existingPart =
-        existingQty > 0 ? ` (${existingQty} already reserved)` : ''
-      summaryLines.push(
-        `${itemName}: Booking ${newQty}${existingPart}, but only ${onHand} available`,
-      )
-    }
-
-    const itemReservations = (overlappingReservations ?? []).filter(
-      (res) => res.item_id === itemId,
-    )
-
-    for (const res of itemReservations) {
-      const tp = res.time_period as {
-        start_at: string
-        end_at: string
-        job_id: string | null
-      } | null
-      if (!tp?.start_at || !tp.end_at || !tp.job_id) continue
-      const conflictJob = overlappingJobMap.get(tp.job_id)
-      conflicts.push({
-        jobId: tp.job_id,
-        itemId,
-        itemName,
-        quantity: res.quantity,
-        jobTitle: conflictJob?.title ?? null,
-        startAt: tp.start_at,
-        endAt: tp.end_at,
-        customerName: conflictJob?.customerName ?? null,
-        projectLeadName: conflictJob?.projectLeadName ?? null,
-        sourceGroupId: source?.groupId ?? null,
-        sourceGroupName: source?.groupName ?? null,
-        sourceGroupQuantity: source?.quantity,
-      })
-    }
-  }
+  const conflictingVehicleIds = await appendVehicleConflictsForOffer({
+    offer,
+    companyId,
+    jobId,
+    defaultStart: startAt,
+    defaultEnd: endAt,
+    summaryLines,
+    conflicts,
+  })
 
   return {
     summaryLines,
     conflicts: dedupeOverlapConflicts(conflicts),
     conflictingItemIds,
+    conflictingVehicleIds,
   }
+}
+
+async function appendVehicleConflictsForOffer({
+  offer,
+  companyId,
+  jobId,
+  defaultStart,
+  defaultEnd,
+  summaryLines,
+  conflicts,
+}: {
+  offer: OfferDetail
+  companyId: string
+  jobId: string
+  defaultStart: string
+  defaultEnd: string
+  summaryLines: Array<string>
+  conflicts: Array<OverlapConflict>
+}): Promise<Array<string>> {
+  const transportItems = offer.transport_items ?? []
+  if (transportItems.length === 0) return []
+
+  const { data: vehicleRows, error: vehiclesFetchError } = await supabase
+    .from('vehicles')
+    .select(
+      'id, name, internally_owned, external_owner_id, owner_user_id, vehicle_category, deleted',
+    )
+    .eq('company_id', companyId)
+    .or('deleted.is.null,deleted.eq.false')
+
+  if (vehiclesFetchError) throw vehiclesFetchError
+
+  const availableVehicles = (vehicleRows || [])
+    .filter((row) => !row.deleted)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      internally_owned: !!row.internally_owned,
+      external_owner_id: row.external_owner_id ?? null,
+      owner_user_id: row.owner_user_id ?? null,
+      vehicle_category: row.vehicle_category ?? null,
+    }))
+
+  const planned = resolveOfferTransportVehicles({
+    transportItems,
+    availableVehicles,
+    defaultStart,
+    defaultEnd,
+  }).filter((row): row is NonNullable<typeof row> => row != null)
+
+  if (planned.length === 0) return []
+
+  const conflictingVehicleIds = new Set<string>()
+  const seenSummary = new Set<string>()
+
+  for (let i = 0; i < planned.length; i++) {
+    const left = planned[i]
+    for (let j = i + 1; j < planned.length; j++) {
+      const right = planned[j]
+      if (left.vehicleId !== right.vehicleId) continue
+      if (!periodsOverlap(left.startAt, left.endAt, right.startAt, right.endAt))
+        continue
+      conflictingVehicleIds.add(left.vehicleId)
+      const selfConflict: OverlapConflict = {
+        jobId,
+        jobTitle: 'This offer (another transport line)',
+        startAt: right.startAt,
+        endAt: right.endAt,
+        itemId: left.vehicleId,
+        itemName: left.vehicleName,
+      }
+      conflicts.push(selfConflict)
+      const line = formatVehicleOverlapWarning(left.vehicleName, [selfConflict])
+      if (!seenSummary.has(line)) {
+        seenSummary.add(line)
+        summaryLines.push(line)
+      }
+    }
+  }
+
+  for (const booking of planned) {
+    const overlaps = await findVehicleOverlaps({
+      vehicleId: booking.vehicleId,
+      startAt: booking.startAt,
+      endAt: booking.endAt,
+      excludeJobId: jobId,
+    })
+    if (overlaps.length === 0) continue
+
+    conflictingVehicleIds.add(booking.vehicleId)
+    for (const overlap of overlaps) {
+      conflicts.push({
+        ...overlap,
+        itemId: booking.vehicleId,
+        itemName: booking.vehicleName,
+      })
+    }
+    const line = formatVehicleOverlapWarning(booking.vehicleName, overlaps)
+    if (!seenSummary.has(line)) {
+      seenSummary.add(line)
+      summaryLines.push(line)
+    }
+  }
+
+  return Array.from(conflictingVehicleIds)
 }

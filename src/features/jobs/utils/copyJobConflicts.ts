@@ -74,8 +74,8 @@ export function formatCopyJobConflictMessage(
   if (labels.length === 0) return ''
   const name = jobTitle?.trim()
   const prefix = name
-    ? `Copying "${name}" created conflicts`
-    : 'There are conflicts'
+    ? `Copying "${name}" created overlaps`
+    : 'There are overlaps'
   if (labels.length === 1) {
     return `${prefix} on ${labels[0]} bookings.`
   }

@@ -40,25 +40,25 @@ describe('copyJobConflictKinds', () => {
 describe('formatCopyJobConflictMessage', () => {
   it('names a single booking type', () => {
     expect(formatCopyJobConflictMessage(['equipment'])).toBe(
-      'There are conflicts on equipment bookings.',
+      'There are overlaps on equipment bookings.',
     )
   })
 
   it('joins two booking types with and', () => {
     expect(formatCopyJobConflictMessage(['equipment', 'vehicles'])).toBe(
-      'There are conflicts on equipment and vehicle bookings.',
+      'There are overlaps on equipment and vehicle bookings.',
     )
   })
 
   it('uses commas for three or more booking types', () => {
     expect(
       formatCopyJobConflictMessage(['equipment', 'groups', 'vehicles']),
-    ).toBe('There are conflicts on equipment, group, and vehicle bookings.')
+    ).toBe('There are overlaps on equipment, group, and vehicle bookings.')
   })
 
   it('names the copied job when a title is provided', () => {
     expect(formatCopyJobConflictMessage(['vehicles'], 'Better ONS')).toBe(
-      'Copying "Better ONS" created conflicts on vehicle bookings.',
+      'Copying "Better ONS" created overlaps on vehicle bookings.',
     )
   })
 })

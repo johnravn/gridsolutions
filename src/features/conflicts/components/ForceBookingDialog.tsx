@@ -1,5 +1,6 @@
 import { Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { WarningTriangle } from 'iconoir-react'
+import { formatForceBookingDescription } from '../utils/conflictCopy'
 import { ConflictGroupList } from './ConflictGroupList'
 import type { OverlapConflict } from '../api/overlapChecks'
 
@@ -22,6 +23,10 @@ export function ForceBookingDialog({
 }) {
   const lines = warningLines ?? []
   const conflictRows = conflicts ?? []
+  const description = formatForceBookingDescription(resourceLabel, conflictRows)
+  const descriptionRest = description.startsWith(resourceLabel)
+    ? description.slice(resourceLabel.length)
+    : ` ${description}`
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -34,10 +39,8 @@ export function ForceBookingDialog({
         <Dialog.Description size="2" color="gray">
           <Text as="span" weight="medium" color="amber">
             {resourceLabel}
-          </Text>{' '}
-          is already booked in an overlapping period. You can force this booking
-          if the overlap is intentional. Forced overlaps appear on the
-          dashboard.
+          </Text>
+          {descriptionRest}
         </Dialog.Description>
 
         <Flex direction="column" gap="2" mt="3">

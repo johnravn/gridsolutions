@@ -2,10 +2,12 @@
 import { queryOptions } from '@tanstack/react-query'
 import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
+import { crewDisplayName } from '../utils/canFollowCrewUser'
 import {
   buildFreelancerVisibleJobIds,
   isFreelancerVisibleCrewBooking,
 } from './freelancerCalendarVisibility'
+import { listPersonalCalendarEvents } from './personalCalendarEvents'
 import type { CalendarRecord } from '../components/domain'
 
 /** Fetch time periods for a specific vehicle (category = 'transport') */
@@ -474,11 +476,13 @@ export function companyCalendarQuery({
 
       if (error) throw error
 
-      if (!data || data.length === 0) return []
+      const periodRows = data ?? []
 
       // Get unique job IDs for fetching project lead info
       const jobIds = Array.from(
-        new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
+        new Set(
+          periodRows.map((tp) => tp.job_id).filter((id): id is string => !!id),
+        ),
       )
 
       // Fetch job project lead info and titles for all jobs
@@ -521,7 +525,7 @@ export function companyCalendarQuery({
       }
 
       // Now fetch related reservations to determine kind and refs
-      const timePeriodIds = data.map((tp) => tp.id)
+      const timePeriodIds = periodRows.map((tp) => tp.id)
 
       // Chunk `.in()` lists — a 120-day calendar window can include hundreds of
       // time periods, and a single GET URI will exceed Kong's ~8KB limit.
@@ -551,7 +555,7 @@ export function companyCalendarQuery({
         string,
         Array<{ user_id: string; status: string }>
       >()
-      data.forEach((tp) => {
+      periodRows.forEach((tp) => {
         if (!tp.job_id) return
         const jobId = tp.job_id
         const crewForPeriod = crewData.filter(
@@ -608,7 +612,7 @@ export function companyCalendarQuery({
       let invitedTimePeriodIds = new Set<string>()
       let freelancerVisibleJobIds = new Set<string>()
       if (companyRole === 'freelancer' && userId) {
-        const crewTimePeriodIds = data
+        const crewTimePeriodIds = periodRows
           .filter((tp) => tp.category === 'crew')
           .map((tp) => tp.id)
 
@@ -636,7 +640,7 @@ export function companyCalendarQuery({
         }
 
         const timePeriodJobById = new Map<string, string>()
-        data.forEach((tp) => {
+        periodRows.forEach((tp) => {
           if (tp.job_id) timePeriodJobById.set(tp.id, tp.job_id)
         })
 
@@ -652,7 +656,7 @@ export function companyCalendarQuery({
         })
       }
 
-      return data
+      const records = periodRows
         .map((tp: any): CalendarRecord => {
           // Determine kind based on category and what's reserved
           let kind: CalendarRecord['kind'] = 'job'
@@ -765,6 +769,45 @@ export function companyCalendarQuery({
 
           return true
         })
+
+      const personalRows = await listPersonalCalendarEvents({
+        companyId,
+        fromIso,
+        toIso,
+        userId:
+          companyRole === 'freelancer' ? (userId ?? undefined) : undefined,
+      })
+
+      const personalUserIds = Array.from(
+        new Set(personalRows.map((pe) => pe.user_id)),
+      )
+      const personalNameByUserId = new Map<string, string>()
+      if (personalUserIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, display_name, first_name, last_name, email')
+          .in('user_id', personalUserIds)
+        for (const p of profiles ?? []) {
+          personalNameByUserId.set(p.user_id, crewDisplayName(p))
+        }
+      }
+
+      const personalRecords: Array<CalendarRecord> = personalRows.map((pe) => {
+        const name = personalNameByUserId.get(pe.user_id) ?? 'Crew'
+        return {
+          id: pe.id,
+          title: `${name}: ${pe.title}`,
+          start: pe.start_at,
+          end: pe.end_at,
+          kind: 'personal',
+          ref: { userId: pe.user_id },
+          category: 'personal',
+          notes: pe.title,
+          crewUserIds: [pe.user_id],
+        }
+      })
+
+      return [...records, ...personalRecords]
     },
   })
 }

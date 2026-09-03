@@ -1,12 +1,13 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  Avatar,
   Box,
   Button,
   Dialog,
   Flex,
   RadioCards,
-  ScrollArea,
+  Switch,
   Text,
   TextField,
 } from '@radix-ui/themes'
@@ -20,16 +21,22 @@ import {
   NavArrowRight,
   Trash,
   Truck,
+  User,
 } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { supabase } from '@shared/api/supabase'
+import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
+import { crewIndexQuery } from '@features/crew/api/queries'
+import { canFollowCrewUser, crewDisplayName } from '../utils/canFollowCrewUser'
 import {
   createCalendarSubscription,
   deleteCalendarSubscription,
   getCalendarFeedUrl,
   getCalendarSubscriptions,
+  updateCalendarSubscription,
 } from '../api/calendarSubscription'
 import type {
   CalendarSubscriptionKind,
@@ -53,14 +60,23 @@ const PREMADE_OPTIONS: Array<{
   {
     kind: 'project_lead_jobs',
     label: 'Jobs where I am project lead',
-    description: 'Same as above, events start with "PROJECT LEAD".',
+    description:
+      'Same as above, events start with "PROJECT LEAD". Optional 1-hour reminder before the job starts.',
     Icon: Leaderboard,
   },
   {
     kind: 'crew_jobs',
     label: 'Jobs where I am crew',
-    description: 'Jobs you are assigned to as crew; events start with "CREW".',
+    description:
+      'Confirmed crew bookings and pending invitations. Pending items are labelled PENDING INVITATION.',
     Icon: Group,
+  },
+  {
+    kind: 'crew_user',
+    label: 'Crew: one person',
+    description:
+      'Pick a company member. Events start with CREW and their name. Includes their personal holds.',
+    Icon: User,
   },
   {
     kind: 'transport_all',
@@ -77,10 +93,23 @@ const PREMADE_OPTIONS: Array<{
   },
 ]
 
+const PICKER_GRID_STYLE: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: 'var(--space-2)',
+  width: '100%',
+}
+
+function crewAvatarUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+}
+
 const KIND_LABELS: Record<CalendarSubscriptionKind, string> = {
   all_jobs: 'All jobs in company',
   project_lead_jobs: 'My project lead jobs',
   crew_jobs: 'My crew jobs',
+  crew_user: 'Crew (one person)',
   transport_vehicle: 'Transport (one vehicle)',
   transport_all: 'All transport vehicles',
 }
@@ -102,6 +131,8 @@ export default function SubscribeToCalendarDialog({
     null,
   )
   const [addVehicleId, setAddVehicleId] = React.useState<string | null>(null)
+  const [addCrewUserId, setAddCrewUserId] = React.useState<string | null>(null)
+  const [addRemind1h, setAddRemind1h] = React.useState(true)
   const [instructionsOpen, setInstructionsOpen] = React.useState(false)
 
   const { data: subscriptions = [], isLoading } = useQuery({
@@ -119,10 +150,20 @@ export default function SubscribeToCalendarDialog({
     enabled: open && !!companyId && addKind === 'transport_vehicle',
   })
 
+  const { data: crewPeople = [] } = useQuery({
+    ...crewIndexQuery({
+      companyId: companyId ?? '',
+      kind: 'all',
+    }),
+    enabled: open && !!companyId && !isFreelancer,
+  })
+
   const createMutation = useMutation({
     mutationFn: async (params: {
       kind: CalendarSubscriptionKind
       vehicleId?: string | null
+      crewUserId?: string | null
+      remind1hBefore?: boolean
     }) => {
       if (!companyId || !userId) throw new Error('Not signed in')
       return createCalendarSubscription(companyId, userId, params)
@@ -137,6 +178,8 @@ export default function SubscribeToCalendarDialog({
       )
       setAddKind(null)
       setAddVehicleId(null)
+      setAddCrewUserId(null)
+      setAddRemind1h(true)
     },
     onError: (err: Error) => {
       toastError('Failed to add calendar', err.message)
@@ -156,6 +199,27 @@ export default function SubscribeToCalendarDialog({
     },
   })
 
+  const reminderMutation = useMutation({
+    mutationFn: (params: { id: string; remind1hBefore: boolean }) =>
+      updateCalendarSubscription(params.id, userId!, {
+        remind1hBefore: params.remind1hBefore,
+      }),
+    onSuccess: (_row, vars) => {
+      qc.invalidateQueries({
+        queryKey: ['calendar-subscriptions', companyId, userId],
+      })
+      success(
+        vars.remind1hBefore ? 'Reminder on' : 'Reminder off',
+        vars.remind1hBefore
+          ? 'Your calendar will alert you 1 hour before jobs you lead.'
+          : 'The 1-hour reminder was removed. Refresh the calendar on your device.',
+      )
+    },
+    onError: (err: Error) => {
+      toastError('Failed to update reminder', err.message)
+    },
+  })
+
   const handleCopy = (token: string) => {
     const url = getCalendarFeedUrl(token)
     navigator.clipboard.writeText(url).then(
@@ -170,9 +234,15 @@ export default function SubscribeToCalendarDialog({
       toastError('Pick a vehicle', 'Select a vehicle for this calendar.')
       return
     }
+    if (addKind === 'crew_user' && !addCrewUserId) {
+      toastError('Pick a person', 'Select whose crew calendar to follow.')
+      return
+    }
     createMutation.mutate({
       kind: addKind,
       vehicleId: addKind === 'transport_vehicle' ? addVehicleId : undefined,
+      crewUserId: addKind === 'crew_user' ? addCrewUserId : undefined,
+      remind1hBefore: addKind === 'project_lead_jobs' ? addRemind1h : false,
     })
   }
 
@@ -193,12 +263,40 @@ export default function SubscribeToCalendarDialog({
         ? `Transport: ${v.name}${v.registration_no ? ` (${v.registration_no})` : ''}`
         : KIND_LABELS[row.kind]
     }
+    if (row.kind === 'crew_user' && row.crew_user_id) {
+      const person = crewPeople.find((p) => p.user_id === row.crew_user_id)
+      return person ? `Crew: ${crewDisplayName(person)}` : KIND_LABELS[row.kind]
+    }
     return KIND_LABELS[row.kind]
   }
 
-  // Disable option if user already has a subscription of that kind (transport_vehicle can have multiple)
+  const followableCrew = React.useMemo(() => {
+    if (!userId || !companyRole) return []
+    return crewPeople.filter((p) =>
+      canFollowCrewUser({
+        subscriberUserId: userId,
+        subscriberRole: companyRole,
+        targetUserId: p.user_id,
+        targetRole: p.role,
+      }),
+    )
+  }, [crewPeople, userId, companyRole])
+
+  const alreadyFollowedCrewIds = React.useMemo(
+    () =>
+      new Set(
+        subscriptions
+          .filter((s) => s.kind === 'crew_user' && s.crew_user_id)
+          .map((s) => s.crew_user_id as string),
+      ),
+    [subscriptions],
+  )
+
+  // Disable option if user already has a subscription of that kind (transport_vehicle and crew_user can have multiple)
   const isOptionDisabled = (kind: CalendarSubscriptionKind) =>
-    kind !== 'transport_vehicle' && subscriptions.some((s) => s.kind === kind)
+    kind !== 'transport_vehicle' &&
+    kind !== 'crew_user' &&
+    subscriptions.some((s) => s.kind === kind)
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -209,7 +307,6 @@ export default function SubscribeToCalendarDialog({
           subscriptions. Choose a type below and copy the link.
         </Dialog.Description>
 
-        {/* Your calendar subscriptions – always visible, not inside scroll */}
         <Box mt="4">
           <Text size="2" weight="medium" as="p" mb="2">
             Your calendar subscriptions ({subscriptions.length}/10)
@@ -223,11 +320,7 @@ export default function SubscribeToCalendarDialog({
               No subscriptions yet. Add one below.
             </Text>
           ) : (
-            <Flex
-              direction="column"
-              gap="2"
-              style={{ maxHeight: 220, overflowY: 'auto' }}
-            >
+            <Flex direction="column" gap="2">
               {subscriptions.map((sub) => (
                 <Box
                   key={sub.id}
@@ -274,17 +367,30 @@ export default function SubscribeToCalendarDialog({
                       </Button>
                     </Flex>
                   </Flex>
+                  {sub.kind === 'project_lead_jobs' && (
+                    <Flex align="center" justify="between" gap="3" mt="2">
+                      <Text size="1" color="gray">
+                        Remind me 1 hour before the job starts
+                      </Text>
+                      <Switch
+                        size="1"
+                        checked={sub.remind_1h_before}
+                        disabled={reminderMutation.isPending}
+                        aria-label="Remind me 1 hour before the job starts"
+                        onCheckedChange={(checked) =>
+                          reminderMutation.mutate({
+                            id: sub.id,
+                            remind1hBefore: checked === true,
+                          })
+                        }
+                      />
+                    </Flex>
+                  )}
                 </Box>
               ))}
             </Flex>
           )}
-        </Box>
 
-        <ScrollArea
-          type="auto"
-          scrollbars="vertical"
-          style={{ maxHeight: '50vh' }}
-        >
           <Flex direction="column" gap="4" mt="4">
             {/* Add new subscription */}
             {canAddMore && (
@@ -298,6 +404,8 @@ export default function SubscribeToCalendarDialog({
                     const k = val as CalendarSubscriptionKind
                     setAddKind(k)
                     if (k !== 'transport_vehicle') setAddVehicleId(null)
+                    if (k !== 'crew_user') setAddCrewUserId(null)
+                    if (k === 'project_lead_jobs') setAddRemind1h(true)
                   }}
                 >
                   <Box
@@ -364,16 +472,7 @@ export default function SubscribeToCalendarDialog({
                       value={addVehicleId ?? ''}
                       onValueChange={(val) => setAddVehicleId(val)}
                     >
-                      <Box
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '1fr 1fr',
-                          gap: 'var(--space-2)',
-                          maxHeight: 200,
-                          overflowY: 'auto',
-                          width: '100%',
-                        }}
-                      >
+                      <Box style={PICKER_GRID_STYLE}>
                         {vehicles.map((v, index) => {
                           const isLastAndOdd =
                             vehicles.length % 2 === 1 &&
@@ -421,6 +520,109 @@ export default function SubscribeToCalendarDialog({
                   </Box>
                 )}
 
+                {addKind === 'crew_user' && (
+                  <Box mt="4">
+                    <Text size="2" weight="medium" as="p" mb="2">
+                      Choose person
+                    </Text>
+                    {followableCrew.length === 0 ? (
+                      <Text size="2" color="gray">
+                        No other company members to follow.
+                      </Text>
+                    ) : (
+                      <RadioCards.Root
+                        value={addCrewUserId ?? ''}
+                        onValueChange={(val) => setAddCrewUserId(val)}
+                      >
+                        <Box style={PICKER_GRID_STYLE}>
+                          {followableCrew.map((person, index) => {
+                            const isLastAndOdd =
+                              followableCrew.length % 2 === 1 &&
+                              index === followableCrew.length - 1
+                            const already = alreadyFollowedCrewIds.has(
+                              person.user_id,
+                            )
+                            const name = crewDisplayName(person)
+                            return (
+                              <Box
+                                key={person.user_id}
+                                style={
+                                  isLastAndOdd
+                                    ? {
+                                        gridColumn: '1 / -1',
+                                        width: '100%',
+                                        minWidth: 0,
+                                      }
+                                    : undefined
+                                }
+                              >
+                                <RadioCards.Item
+                                  value={person.user_id}
+                                  disabled={already}
+                                  style={
+                                    isLastAndOdd ? { width: '100%' } : undefined
+                                  }
+                                >
+                                  <Flex
+                                    gap="2"
+                                    align="center"
+                                    style={{ minWidth: 0 }}
+                                  >
+                                    <Avatar
+                                      size="2"
+                                      radius="full"
+                                      src={
+                                        crewAvatarUrl(person.avatar_url) ??
+                                        undefined
+                                      }
+                                      fallback={getInitials(name)}
+                                      style={{ flexShrink: 0 }}
+                                    />
+                                    <Text
+                                      size="2"
+                                      style={{
+                                        minWidth: 0,
+                                        overflow: 'hidden',
+                                        textOverflow: 'ellipsis',
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      {name}
+                                      {already ? ' (added)' : ''}
+                                    </Text>
+                                  </Flex>
+                                </RadioCards.Item>
+                              </Box>
+                            )
+                          })}
+                        </Box>
+                      </RadioCards.Root>
+                    )}
+                  </Box>
+                )}
+
+                {addKind === 'project_lead_jobs' &&
+                  !isOptionDisabled(addKind) && (
+                    <Flex align="center" justify="between" gap="3" mt="3">
+                      <Box>
+                        <Text size="2">
+                          Remind me 1 hour before the job starts
+                        </Text>
+                        <Text size="1" color="gray" as="p" mt="1" mb="0">
+                          Calendar alert on this feed only — not on jobs you do
+                          not lead.
+                        </Text>
+                      </Box>
+                      <Switch
+                        checked={addRemind1h}
+                        aria-label="Remind me 1 hour before the job starts"
+                        onCheckedChange={(checked) =>
+                          setAddRemind1h(checked === true)
+                        }
+                      />
+                    </Flex>
+                  )}
+
                 {addKind && !isOptionDisabled(addKind) && (
                   <Flex gap="2" mt="3" align="center">
                     <Button
@@ -428,7 +630,8 @@ export default function SubscribeToCalendarDialog({
                       onClick={handleAdd}
                       disabled={
                         createMutation.isPending ||
-                        (addKind === 'transport_vehicle' && !addVehicleId)
+                        (addKind === 'transport_vehicle' && !addVehicleId) ||
+                        (addKind === 'crew_user' && !addCrewUserId)
                       }
                     >
                       Add this calendar
@@ -439,6 +642,8 @@ export default function SubscribeToCalendarDialog({
                       onClick={() => {
                         setAddKind(null)
                         setAddVehicleId(null)
+                        setAddCrewUserId(null)
+                        setAddRemind1h(true)
                       }}
                     >
                       Cancel
@@ -487,7 +692,7 @@ export default function SubscribeToCalendarDialog({
               )}
             </Box>
           </Flex>
-        </ScrollArea>
+        </Box>
 
         <Flex gap="2" mt="4" justify="end">
           <Dialog.Close>

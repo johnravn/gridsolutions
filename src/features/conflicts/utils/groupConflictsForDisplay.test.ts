@@ -48,4 +48,51 @@ describe('groupConflictsForDisplay', () => {
       itemCount: 1,
     })
   })
+
+  it('does not list the same member as both a group item and a direct row', () => {
+    const grouped = makeOverlapConflict({
+      itemId: 'mic',
+      itemName: 'SM58',
+      sourceGroupId: 'kit-1',
+      sourceGroupName: 'Vocal package',
+    })
+    const duplicate = makeOverlapConflict({
+      itemId: 'mic',
+      itemName: 'SM58',
+    })
+
+    expect(groupConflictsForDisplay([duplicate, grouped])).toEqual([
+      {
+        kind: 'group',
+        groupId: 'kit-1',
+        groupName: 'Vocal package',
+        quantity: 1,
+        items: [grouped],
+      },
+    ])
+  })
+
+  it('drops placeholder rows that only repeat the group name', () => {
+    const placeholder = makeOverlapConflict({
+      itemName: 'Vocal package',
+      sourceGroupId: 'kit-1',
+      sourceGroupName: 'Vocal package',
+    })
+    const mic = makeOverlapConflict({
+      itemId: 'mic',
+      itemName: 'SM58',
+      sourceGroupId: 'kit-1',
+      sourceGroupName: 'Vocal package',
+    })
+
+    expect(groupConflictsForDisplay([placeholder, mic])).toEqual([
+      {
+        kind: 'group',
+        groupId: 'kit-1',
+        groupName: 'Vocal package',
+        quantity: 1,
+        items: [mic],
+      },
+    ])
+  })
 })

@@ -3,7 +3,7 @@ import { fuzzySearch } from '@shared/lib/generalFunctions'
 import type { EventInput } from '@fullcalendar/core'
 
 /** What kinds of things can appear in the calendar */
-export type CalendarKind = 'job' | 'item' | 'vehicle' | 'crew'
+export type CalendarKind = 'job' | 'item' | 'vehicle' | 'crew' | 'personal'
 
 /** Common shape we can normalize DB records into before turning into FullCalendar EventInput */
 export type CalendarRecord = {
@@ -44,7 +44,13 @@ export type CalendarRecord = {
       }
     | undefined
   // Category for coloring
-  category?: 'program' | 'equipment' | 'crew' | 'transport' | undefined
+  category?:
+    | 'program'
+    | 'equipment'
+    | 'crew'
+    | 'transport'
+    | 'personal'
+    | undefined
   // Job title for events that belong to a job
   jobTitle?: string | undefined
   // Crew user IDs on this time period (for "Crew" badge)

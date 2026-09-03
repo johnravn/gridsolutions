@@ -77,6 +77,13 @@
   --cursor-slider-thumb-active: grabbing;
 }
 
+/* Switches stay pill-shaped regardless of company theme radius (none/small → square thumbs). */
+.rt-SwitchRoot:where(.rt-r-size-1),
+.rt-SwitchRoot:where(.rt-r-size-2),
+.rt-SwitchRoot:where(.rt-r-size-3) {
+  --switch-border-radius: 9999px;
+}
+
 body {
   @apply m-0;
   font-family:
@@ -104,7 +111,7 @@ button:not(:disabled),
   overscroll-behavior-y: contain;
 }
 
-/* Calendar page — fill the AppShell content box without a wrapping Card */
+/* Calendar page — fill the AppShell content box. Desktop wraps in a Card. */
 .calendar-page {
   height: 100%;
   max-height: 100%;
@@ -114,6 +121,12 @@ button:not(:disabled),
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.calendar-page-card > .calendar-page {
+  flex: 1;
+  height: auto;
+  max-height: none;
 }
 
 /* Phone / tablet: hide vertical scrollbar (iOS-style; scroll still works) */
@@ -229,6 +242,17 @@ button:not(:disabled),
   .home-jobs-week-segments .rt-SegmentedControlItem {
     min-height: 44px;
     padding-block: 10px;
+  }
+
+  /*
+   * Switches: expand the tap target to ≥44px (Apple HIG / WCAG 2.5.5)
+   * without shrinking neighboring rows. Padding grows the hit area; the
+   * track stays Radix-sized inside the root.
+   */
+  .rt-SwitchRoot {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 4px;
   }
 }
 
@@ -562,7 +586,6 @@ button:not(:disabled),
 
 .app-mobile-bottom-action-bar .rt-BaseButton {
   pointer-events: auto;
-  flex: 1;
   min-width: 0;
   box-sizing: border-box;
   height: var(--app-menu-fab-size);
@@ -603,8 +626,36 @@ button:not(:disabled),
   padding-right: var(--space-5);
 }
 
-.app-mobile-bottom-action-bar .rt-IconButton {
+/* Flex sizing applies to bar children only — not nested menu triggers. */
+.app-mobile-bottom-action-bar > .rt-Button:not(.rt-IconButton),
+.app-mobile-bottom-action-bar > .rt-BaseButton:only-child {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.app-mobile-bottom-action-bar > .rt-IconButton {
   flex: 0 0 var(--app-menu-fab-size);
+  width: var(--app-menu-fab-size);
+  min-width: var(--app-menu-fab-size);
+  padding: 0;
+}
+
+.app-mobile-bottom-action-bar > .app-mobile-bottom-action-trailing {
+  flex: 0 0 var(--app-menu-fab-size);
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+}
+
+.app-mobile-bottom-action-bar
+  > .app-mobile-bottom-action-trailing
+  .rt-IconButton {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.app-mobile-bottom-action-bar .rt-IconButton {
   width: var(--app-menu-fab-size);
   min-width: var(--app-menu-fab-size);
   padding: 0;
@@ -613,6 +664,11 @@ button:not(:disabled),
 .app-mobile-bottom-action-bar .app-mobile-bottom-action-icon {
   padding-left: 0;
   padding-right: 0;
+}
+
+/* Pages without a right inspector FAB (e.g. Calendar) — extend to the edge. */
+.app-mobile-bottom-action-bar--extend-right {
+  right: calc(var(--app-menu-fab-inset) + var(--app-safe-right));
 }
 
 /* Tablet: no menu FAB; static sidebar is 200px (Sidebar SIDEBAR_WIDTH). */
@@ -885,7 +941,19 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   font-weight: 600;
 }
 
-/* Toasts — sit above dialogs */
+/*
+ * Toasts — own stacking context on document.body, above dialog overlays.
+ * Do not portal into .radix-themes: that root is a sibling of Dialog portals
+ * and any stacking context on #root / the theme root paints the overlay on top
+ * (toasts look faded behind the dim).
+ */
+.app-toast-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  pointer-events: none;
+}
+
 .app-toast-viewport,
 [data-radix-toast-viewport] {
   position: fixed;
@@ -1431,6 +1499,29 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
 @media (hover: hover) and (pointer: fine) {
   .index-table-row:not(.index-table-row--selected):hover {
     background-color: var(--gray-a2);
+  }
+}
+
+/* Matters list: bulk-actions arrow beside the header checkbox */
+.matters-select-actions {
+  opacity: 0;
+  transform: scale(0.65);
+  pointer-events: none;
+  transform-origin: center center;
+  transition:
+    opacity var(--motion-duration-reveal) var(--motion-ease-reveal),
+    transform var(--motion-duration-reveal) var(--motion-ease-reveal-out);
+}
+
+.matters-select-actions[data-visible] {
+  opacity: 1;
+  transform: scale(1);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .matters-select-actions {
+    transition: none;
   }
 }
 

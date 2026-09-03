@@ -179,3 +179,33 @@ describe('reorderInvoiceLinesByActiveOver', () => {
     )
   })
 })
+
+describe('accepted offer total check', () => {
+  it('warns when the invoice total differs from the accepted offer', () => {
+    renderWithProviders(
+      <InvoicePreview
+        {...bookingsPreviewProps}
+        editedLines={[line]}
+        acceptedOfferTotalExVat={1000}
+      />,
+    )
+
+    expect(
+      screen.getByText(/does not match the accepted offer/i),
+    ).toBeInTheDocument()
+  })
+
+  it('stays quiet when the invoice total matches the accepted offer', () => {
+    renderWithProviders(
+      <InvoicePreview
+        {...bookingsPreviewProps}
+        editedLines={[line]}
+        acceptedOfferTotalExVat={1600}
+      />,
+    )
+
+    expect(
+      screen.queryByText(/does not match the accepted offer/i),
+    ).not.toBeInTheDocument()
+  })
+})

@@ -179,9 +179,35 @@ export function TransportSection({
         if (g.id !== groupId) return g
         return {
           ...g,
-          items: g.items.map((it) =>
-            it.id === itemId ? { ...it, ...updates } : it,
-          ),
+          items: g.items.map((it) => {
+            if (it.id !== itemId) return it
+            const next = { ...it, ...updates }
+            // When dates change and days were still auto-derived, keep days in sync.
+            if (
+              (updates.start_date != null || updates.end_date != null) &&
+              !('days_used' in updates)
+            ) {
+              const prevDerived = Math.max(
+                1,
+                Math.ceil(
+                  (new Date(it.end_date).getTime() -
+                    new Date(it.start_date).getTime()) /
+                    (1000 * 60 * 60 * 24),
+                ),
+              )
+              if (it.days_used == null || it.days_used === prevDerived) {
+                next.days_used = Math.max(
+                  1,
+                  Math.ceil(
+                    (new Date(next.end_date).getTime() -
+                      new Date(next.start_date).getTime()) /
+                      (1000 * 60 * 60 * 24),
+                  ),
+                )
+              }
+            }
+            return next
+          }),
         }
       }),
     )

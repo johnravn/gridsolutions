@@ -76,15 +76,32 @@ export function withRecurringJobPrefix(
   return `${seriesName}: ${title}`
 }
 
-export function buildICS(
-  events: Array<{
-    id: string
-    title: string
-    start: string
-    end: string
-    description?: string
-  }>,
-): string {
+export type IcsEvent = {
+  id: string
+  title: string
+  start: string
+  end: string
+  description?: string
+  /** Minutes before DTSTART for a DISPLAY VALARM. Omitted = no alarm. */
+  alarmMinutesBefore?: number
+}
+
+/** ICS duration before DTSTART, e.g. 60 → `-PT1H`, 15 → `-PT15M`. */
+export function formatIcsTriggerBefore(minutes: number): string {
+  if (minutes > 0 && minutes % 60 === 0) return `-PT${minutes / 60}H`
+  return `-PT${minutes}M`
+}
+
+/** 1-hour DISPLAY alarm only for opted-in project-lead job feeds. */
+export function icsAlarmMinutesBefore(params: {
+  kind: string
+  remind1hBefore: boolean
+}): number | undefined {
+  if (params.kind === 'project_lead_jobs' && params.remind1hBefore) return 60
+  return undefined
+}
+
+export function buildICS(events: Array<IcsEvent>): string {
   const lines: Array<string> = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -97,6 +114,16 @@ export function buildICS(
     const desc = e.description
       ? foldLine('DESCRIPTION:' + icsEscape(e.description))
       : null
+    const alarm =
+      e.alarmMinutesBefore != null && e.alarmMinutesBefore > 0
+        ? [
+            'BEGIN:VALARM',
+            'ACTION:DISPLAY',
+            foldLine('DESCRIPTION:' + icsEscape('Job starts in 1 hour')),
+            'TRIGGER:' + formatIcsTriggerBefore(e.alarmMinutesBefore),
+            'END:VALARM',
+          ]
+        : []
     lines.push(
       'BEGIN:VEVENT',
       'UID:' + e.id + '@grid-calendar',
@@ -105,6 +132,7 @@ export function buildICS(
       'DTEND:' + formatICalDate(e.end),
       summary,
       ...(desc ? [desc] : []),
+      ...alarm,
       'END:VEVENT',
     )
   }

@@ -8,11 +8,28 @@ import { atHour, atTime, endOfDay, startOfDay } from './dateTimeUtils'
 describe('DateTimeRangePicker', () => {
   const originalTz = process.env.TZ
 
+  function setWideViewport(wide: boolean) {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: query.includes('min-width: 769px') ? wide : false,
+        media: query,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        addListener: () => {},
+        removeListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    })
+  }
+
   beforeEach(() => {
     process.env.TZ = 'UTC'
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-06-01T12:00:00.000Z'))
     Element.prototype.scrollIntoView = vi.fn()
+    setWideViewport(true)
   })
 
   afterEach(() => {
@@ -504,5 +521,39 @@ describe('DateTimeRangePicker', () => {
       startAt: startOfDay('2026-06-10'),
       endAt: endOfDay('2026-06-20'),
     })
+  })
+
+  it('renders an inline one-line trigger', () => {
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atTime('2026-06-10', 8, 0)}
+        endAt={atTime('2026-06-12', 18, 0)}
+        onChange={vi.fn()}
+        inline
+      />,
+    )
+
+    const trigger = screen.getByRole('button')
+    expect(trigger).toHaveTextContent('Start')
+    expect(trigger).toHaveTextContent('End')
+    expect(trigger).toHaveTextContent('10. jun 2026')
+    expect(trigger).toHaveTextContent('12. jun 2026')
+    expect(trigger).toHaveStyle({ height: 'var(--space-6)' })
+  })
+
+  it('keeps the stacked trigger on small screens when inline is set', () => {
+    setWideViewport(false)
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atTime('2026-06-10', 8, 0)}
+        endAt={atTime('2026-06-12', 18, 0)}
+        onChange={vi.fn()}
+        inline
+      />,
+    )
+
+    const trigger = screen.getByRole('button')
+    expect(trigger).toHaveStyle({ minHeight: '78px' })
+    expect(trigger).not.toHaveStyle({ height: 'var(--space-6)' })
   })
 })

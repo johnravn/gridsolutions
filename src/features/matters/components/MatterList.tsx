@@ -4,6 +4,7 @@ import {
   Badge,
   Box,
   Button,
+  Checkbox,
   Flex,
   Spinner,
   Text,
@@ -39,7 +40,13 @@ import {
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
 import { mattersIndexQueryAll } from '../api/queries'
+import { useMatterReadMutations } from '../hooks/useMatterReadMutations'
 import { crewInviteResponseKind } from '../utils/crewInviteResponse'
+import {
+  CrewInviteAnswerBadge,
+  crewInviteAnswerStatus,
+} from './CrewInviteAnswerStatus'
+import { MattersInboxMenu } from './MattersInboxMenu'
 import type { IndexColumn } from '@shared/ui/index-table'
 import type { Matter, MatterType } from '../types'
 
@@ -66,9 +73,9 @@ function formatMatterDate(dateInput: string | Date): string {
 type SortBy = 'type' | 'title' | 'created' | 'response' | 'company'
 
 const GRID_COLUMNS =
-  'minmax(100px, 1fr) minmax(140px, 2fr) minmax(80px, 1fr) 44px minmax(100px, 1fr) 24px'
+  '48px minmax(100px, 1fr) minmax(140px, 2fr) minmax(80px, 1fr) 44px minmax(100px, 1fr)'
 
-const COLUMNS: Array<IndexColumn<SortBy>> = [
+const BASE_COLUMNS: Array<IndexColumn<SortBy>> = [
   { id: 'type', header: 'Type', sortable: true, sortKey: 'type' },
   { id: 'title', header: 'Title', sortable: true, sortKey: 'title' },
   { id: 'created', header: 'Created', sortable: true, sortKey: 'created' },
@@ -79,7 +86,6 @@ const COLUMNS: Array<IndexColumn<SortBy>> = [
     sortKey: 'response',
   },
   { id: 'company', header: 'Company', sortable: true, sortKey: 'company' },
-  { id: 'unread', header: '' },
 ]
 
 const SEARCH_FIELDS = [
@@ -89,6 +95,8 @@ const SEARCH_FIELDS = [
   (m: Matter) => m.created_by?.display_name,
   (m: Matter) => m.created_by?.email,
   (m: Matter) => (m.created_as_company ? m.company?.name : null),
+  (m: Matter) => m.answered_by?.display_name,
+  (m: Matter) => m.answered_by?.email,
 ]
 
 function compareMatters(
@@ -125,6 +133,10 @@ function compareMatters(
 }
 
 function getResponseIcon(matter: Matter) {
+  const answerStatus = crewInviteAnswerStatus(matter.metadata)
+  if (answerStatus) {
+    return <CrewInviteAnswerBadge status={answerStatus} />
+  }
   if (matter.matter_type === 'crew_invite') {
     if (matter.my_response) {
       const kind = crewInviteResponseKind(matter.my_response.response)
@@ -192,6 +204,7 @@ export default function MatterList({
   selectedId,
   onSelect,
   unreadFilter,
+  onUnreadFilterChange,
   companyFilter,
   typeFilter,
   companies: _companies,
@@ -201,6 +214,7 @@ export default function MatterList({
   selectedId: string | null
   onSelect: (id: string | null) => void
   unreadFilter: boolean
+  onUnreadFilterChange: (v: boolean) => void
   companyFilter: Array<string>
   typeFilter: Array<MatterType>
   companies: Array<{ id: string; name: string }>
@@ -226,6 +240,12 @@ export default function MatterList({
   } = useQuery({
     ...mattersIndexQueryAll(userId),
   })
+  const { markSelectedRead, markSelectedUnread, markAllRead } =
+    useMatterReadMutations()
+  const unreadCount = allMatters.filter((m) => m.is_unread).length
+  const [checkedIds, setCheckedIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
 
   const filteredBySearch = useClientTableFilter(
     allMatters,
@@ -265,6 +285,209 @@ export default function MatterList({
   const emptyMessage =
     allMatters.length === 0 ? 'No matters yet' : 'No matters match your filters'
 
+  const selectableRows = React.useMemo(
+    () => rows.filter((matter) => matter.is_recipient),
+    [rows],
+  )
+  const visibleIdSet = React.useMemo(
+    () => new Set(rows.map((matter) => matter.id)),
+    [rows],
+  )
+
+  React.useEffect(() => {
+    setCheckedIds((prev) => {
+      let changed = false
+      const next = new Set<string>()
+      for (const id of prev) {
+        if (visibleIdSet.has(id)) next.add(id)
+        else changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [visibleIdSet])
+
+  const checkedMatters = React.useMemo(
+    () => rows.filter((matter) => checkedIds.has(matter.id)),
+    [rows, checkedIds],
+  )
+  const checkedUnreadCount = checkedMatters.filter(
+    (matter) => matter.is_unread,
+  ).length
+  const checkedReadCount = checkedMatters.filter(
+    (matter) => matter.is_recipient && !matter.is_unread,
+  ).length
+  const allSelectableChecked =
+    selectableRows.length > 0 &&
+    selectableRows.every((matter) => checkedIds.has(matter.id))
+  const someSelectableChecked = selectableRows.some((matter) =>
+    checkedIds.has(matter.id),
+  )
+  const headerChecked: boolean | 'indeterminate' = allSelectableChecked
+    ? true
+    : someSelectableChecked
+      ? 'indeterminate'
+      : false
+  const bulkPending =
+    markSelectedRead.isPending ||
+    markSelectedUnread.isPending ||
+    markAllRead.isPending
+
+  const toggleChecked = React.useCallback((matterId: string) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(matterId)) next.delete(matterId)
+      else next.add(matterId)
+      return next
+    })
+  }, [])
+
+  const selectAllVisible = React.useCallback(() => {
+    setCheckedIds(new Set(selectableRows.map((matter) => matter.id)))
+  }, [selectableRows])
+
+  const clearSelection = React.useCallback(() => {
+    setCheckedIds(new Set())
+  }, [])
+
+  const inboxMenu = (
+    <MattersInboxMenu
+      visible={checkedMatters.length > 0}
+      checkedCount={checkedMatters.length}
+      checkedUnreadCount={checkedUnreadCount}
+      checkedReadCount={checkedReadCount}
+      unreadCount={unreadCount}
+      unreadFilter={unreadFilter}
+      pending={bulkPending}
+      onMarkCheckedRead={() => {
+        const ids = checkedMatters
+          .filter((matter) => matter.is_unread)
+          .map((matter) => matter.id)
+        if (ids.length > 0) markSelectedRead.mutate(ids)
+      }}
+      onMarkCheckedUnread={() => {
+        const ids = checkedMatters
+          .filter((matter) => matter.is_recipient && !matter.is_unread)
+          .map((matter) => matter.id)
+        if (ids.length > 0) markSelectedUnread.mutate(ids)
+      }}
+      onShowUnread={() => onUnreadFilterChange(true)}
+      onShowAll={() => onUnreadFilterChange(false)}
+      onMarkAllUnreadAsRead={() => markAllRead.mutate()}
+      onSelectAll={selectAllVisible}
+      onClearSelection={clearSelection}
+    />
+  )
+
+  const headerSelect = (
+    <Flex
+      align="center"
+      justify="start"
+      gap="0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      style={{ width: '100%', height: '100%' }}
+    >
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 20,
+          flexShrink: 0,
+        }}
+      >
+        <Checkbox
+          checked={headerChecked}
+          disabled={selectableRows.length === 0}
+          onCheckedChange={() => {
+            if (allSelectableChecked) clearSelection()
+            else selectAllVisible()
+          }}
+          aria-label="Select all visible matters"
+        />
+      </Box>
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 18,
+          flexShrink: 0,
+        }}
+      >
+        {inboxMenu}
+      </Box>
+    </Flex>
+  )
+
+  const renderCheckbox = (matter: Matter) => (
+    <Flex
+      align="center"
+      justify="start"
+      gap="0"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onKeyDown={(e) => e.stopPropagation()}
+      style={{ width: '100%', height: '100%' }}
+    >
+      <Box
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 20,
+          flexShrink: 0,
+        }}
+      >
+        <Checkbox
+          checked={checkedIds.has(matter.id)}
+          disabled={!matter.is_recipient}
+          onCheckedChange={() => {
+            if (!matter.is_recipient) return
+            toggleChecked(matter.id)
+          }}
+          aria-label={`Select ${matter.title}`}
+        />
+      </Box>
+      <Box style={{ width: 18, flexShrink: 0 }} aria-hidden />
+    </Flex>
+  )
+
+  const columns: Array<IndexColumn<SortBy>> = [
+    {
+      id: 'select',
+      sortable: false,
+      align: 'center',
+      header: headerSelect,
+    },
+    ...BASE_COLUMNS,
+  ]
+
+  const createAnnouncementButton =
+    onCreateMatter && canCreateAnnouncement && !isMobile ? (
+      <Tooltip content="Send a manual announcement to selected people (uncommon)">
+        <Button
+          type="button"
+          variant="ghost"
+          size="3"
+          color="gray"
+          onClick={onCreateMatter}
+          style={
+            {
+              flexShrink: 0,
+              // Ghost buttons use negative margins for hover padding. Keep the
+              // right-edge bleed (panel clip), but don't pull into the search field.
+              '--margin-left': 'var(--button-ghost-padding-x)',
+            } as React.CSSProperties
+          }
+        >
+          <Plus width={18} height={18} />
+          New announcement
+        </Button>
+      </Tooltip>
+    ) : null
+
   const toolbar = (
     <Flex
       gap={isMobile ? '4' : '2'}
@@ -272,6 +495,8 @@ export default function MatterList({
       wrap="wrap"
       mb={isMobile ? undefined : '2'}
       justify={isMobile ? 'start' : 'between'}
+      // Room on the trailing edge for ghost hover (panel is overflow:hidden).
+      style={isMobile ? undefined : { paddingRight: 'var(--space-3)' }}
     >
       <Flex
         gap="3"
@@ -298,30 +523,7 @@ export default function MatterList({
         </TextField.Root>
         {isMobile ? toolbarExtra : null}
       </Flex>
-      {onCreateMatter && canCreateAnnouncement && !isMobile && (
-        <Tooltip content="Send a manual announcement to selected people (uncommon)">
-          <Button
-            type="button"
-            variant="ghost"
-            size="3"
-            color="gray"
-            onClick={onCreateMatter}
-            style={{
-              flexShrink: 0,
-              alignSelf: 'center',
-              height: 'var(--space-7)',
-              minHeight: 'var(--space-7)',
-              maxHeight: 'var(--space-7)',
-              paddingTop: 0,
-              paddingBottom: 0,
-              boxSizing: 'border-box',
-            }}
-          >
-            <Plus width={18} height={18} />
-            New announcement
-          </Button>
-        </Tooltip>
-      )}
+      {createAnnouncementButton}
     </Flex>
   )
 
@@ -400,6 +602,16 @@ export default function MatterList({
               gap="2"
               style={{ paddingBottom: MOBILE_LIST_BOTTOM_PAD }}
             >
+              <Flex
+                align="center"
+                gap="2"
+                style={{
+                  padding: '4px 12px',
+                  minHeight: 36,
+                }}
+              >
+                {headerSelect}
+              </Flex>
               {rows.map((matter) => {
                 const isSelected = matter.id === selectedId
                 return (
@@ -423,7 +635,7 @@ export default function MatterList({
                     }}
                     style={{
                       display: 'grid',
-                      gridTemplateColumns: 'auto minmax(0, 1fr) auto',
+                      gridTemplateColumns: 'auto auto minmax(0, 1fr) auto',
                       gap: 'var(--space-3)',
                       alignItems: 'center',
                       padding: '16px 12px',
@@ -432,6 +644,7 @@ export default function MatterList({
                       borderRadius: 'var(--radius-3)',
                     }}
                   >
+                    {renderCheckbox(matter)}
                     {getTypeBadge(matter.matter_type)}
                     {renderTitle(matter)}
                     <Text size="1" color="gray">
@@ -468,11 +681,13 @@ export default function MatterList({
   return (
     <VirtualIndexTable
       rows={rows}
-      columns={COLUMNS}
+      columns={columns}
       gridTemplateColumns={GRID_COLUMNS}
       getRowId={(m) => m.id}
       renderCell={(matter, colId) => {
         switch (colId) {
+          case 'select':
+            return renderCheckbox(matter)
           case 'type':
             return (
               <Flex align="center" gap="2">
@@ -500,16 +715,6 @@ export default function MatterList({
               <Text size="2" color="gray">
                 {matter.company?.name || '—'}
               </Text>
-            )
-          case 'unread':
-            return (
-              <Flex align="center" justify="end">
-                {matter.is_unread && (
-                  <Text size="1" color="blue" weight="medium">
-                    New
-                  </Text>
-                )}
-              </Flex>
             )
           default:
             return null

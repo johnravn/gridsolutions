@@ -10,7 +10,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Multi-step range picker: select start/end dates, then hours and minutes. Supports all-day ranges and per-minute precision via `minuteStep`.',
+          'Multi-step range picker: select start/end dates, then hours and minutes. Supports all-day ranges, per-minute precision via `minuteStep`, and an `inline` one-line trigger on large screens (stacked on small screens).',
       },
     },
   },
@@ -111,6 +111,17 @@ export const Disabled: Story = {
     <ControlledRangePicker
       label="Period"
       disabled
+      initialStart="2026-07-01T08:00:00.000Z"
+      initialEnd="2026-07-05T17:00:00.000Z"
+    />
+  ),
+}
+
+export const Inline: Story = {
+  render: () => (
+    <ControlledRangePicker
+      label="Crew period"
+      inline
       initialStart="2026-07-01T08:00:00.000Z"
       initialEnd="2026-07-05T17:00:00.000Z"
     />

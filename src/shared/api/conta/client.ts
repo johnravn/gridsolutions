@@ -6,15 +6,14 @@
  */
 
 import { supabase } from '../supabase'
+import { resolveContaGatewayUrls } from './gatewayUrls'
 
-// Get API base URL from environment
-const contaApiUrlProd =
-  import.meta.env.VITE_CONTA_API_URL_PROD ||
-  import.meta.env.VITE_CONTA_API_URL ||
-  'https://api.gateway.conta.no'
-const contaApiUrlSandbox =
-  import.meta.env.VITE_CONTA_API_URL_SANDBOX ||
-  'https://api.gateway.conta-sandbox.no'
+const { prod: contaApiUrlProd, sandbox: contaApiUrlSandbox } =
+  resolveContaGatewayUrls({
+    prod: import.meta.env.VITE_CONTA_API_URL_PROD,
+    sandbox: import.meta.env.VITE_CONTA_API_URL_SANDBOX,
+    fallback: import.meta.env.VITE_CONTA_API_URL,
+  })
 
 /** When true in local dev, use production Conta API key and URL regardless of company setting */
 const useProductionInDev =

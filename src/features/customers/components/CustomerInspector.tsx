@@ -46,6 +46,7 @@ import {
   normalizeCustomHex,
   sanitizeCustomHexInput,
 } from './CustomerBrandColorsFields'
+import { ContaLinkedBadge } from './ContaLinkedBadge'
 import EditCustomerDialog from './dialogs/EditCustomerDialog'
 import ContaCustomerCheckDialog from './dialogs/ContaCustomerCheckDialog'
 import AddContactDialog from './dialogs/AddContactDialog'
@@ -375,25 +376,12 @@ export default function CustomerInspector({
                 <Text as="div" size="2" weight="medium">
                   Conta
                 </Text>
-                {c.conta_customer_id != null ? (
-                  <Tooltip content="Synced with Conta">
-                    <Badge variant="soft" color="green" size="1">
-                      Linked
-                    </Badge>
-                  </Tooltip>
-                ) : (
-                  <Tooltip content="This customer is not yet linked to a Conta contact">
-                    <Badge variant="soft" color="amber" size="1">
-                      Not linked
-                    </Badge>
-                  </Tooltip>
-                )}
+                <ContaLinkedBadge linked={c.conta_customer_id != null} />
               </Flex>
               <Text size="1" color="gray" as="p" mb="2">
-                Look up this customer in Conta using their organization number.
-                You can link an existing Conta contact to pull in read-only
-                billing figures, create a new customer in Conta from Subb, or
-                refresh data after changes in Conta.
+                Search Conta by name, email, or organisation number. Link an
+                existing Conta customer — including private individuals — or
+                create a new one. Billing figures stay read-only in Grid.
               </Text>
               <Button
                 size="2"
@@ -402,7 +390,7 @@ export default function CustomerInspector({
               >
                 <Flex align="center" gap="2">
                   <CloudSync width={18} height={18} />
-                  Look up in Conta
+                  Sync with Conta
                 </Flex>
               </Button>
               {c.conta_customer_id != null ? (

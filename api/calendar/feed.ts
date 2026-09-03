@@ -5,17 +5,29 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import {
+  crewFeedEventTitle,
+  crewPersonalEventTitle,
+  isCrewFeedBookingVisible,
+  pendingInvitePeriodIdsFromMatters,
+} from '../_lib/crewCalendarFeed.js'
+import {
   buildICS,
+  icsAlarmMinutesBefore,
   parseTstzRange,
   rangesOverlap,
   withRecurringJobPrefix,
 } from '../_lib/icsHelpers.js'
+import {
+  canFollowCrewUser,
+  crewDisplayName,
+} from '../../src/features/calendar/utils/canFollowCrewUser.js'
 import type { Database } from '../../src/shared/types/database.types.js'
 
 type SubscriptionKind =
   | 'all_jobs'
   | 'project_lead_jobs'
   | 'crew_jobs'
+  | 'crew_user'
   | 'transport_vehicle'
   | 'transport_all'
 
@@ -88,7 +100,9 @@ export default async function handler(req: any, res: any) {
   try {
     const { data: sub, error: subErr } = await supabase
       .from('calendar_subscriptions')
-      .select('company_id, user_id, kind, vehicle_id')
+      .select(
+        'company_id, user_id, kind, vehicle_id, crew_user_id, remind_1h_before',
+      )
       .eq('token', token)
       .single()
 
@@ -105,6 +119,11 @@ export default async function handler(req: any, res: any) {
     const companyId = sub.company_id
     const userId = sub.user_id
     const vehicleId = sub.vehicle_id ?? null
+    const crewUserId = sub.crew_user_id ?? null
+    const alarmMinutesBefore = icsAlarmMinutesBefore({
+      kind,
+      remind1hBefore: Boolean(sub.remind_1h_before),
+    })
 
     // Freelancers may only use crew_jobs subscription
     const { data: cu } = await supabase
@@ -120,6 +139,50 @@ export default async function handler(req: any, res: any) {
       return res.end(
         JSON.stringify({ error: 'Invalid or expired calendar link' }),
       )
+    }
+
+    if (kind === 'crew_user') {
+      if (!crewUserId) {
+        res.statusCode = 403
+        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+        res.setHeader('Content-Type', 'application/json')
+        return res.end(
+          JSON.stringify({ error: 'Invalid or expired calendar link' }),
+        )
+      }
+      const { data: targetCu } = await supabase
+        .from('company_users')
+        .select('role')
+        .eq('company_id', companyId)
+        .eq('user_id', crewUserId)
+        .maybeSingle()
+      if (
+        !canFollowCrewUser({
+          subscriberUserId: userId,
+          subscriberRole:
+            (cu?.role as
+              | 'owner'
+              | 'employee'
+              | 'freelancer'
+              | 'super_user'
+              | null) ?? null,
+          targetUserId: crewUserId,
+          targetRole:
+            (targetCu?.role as
+              | 'owner'
+              | 'employee'
+              | 'freelancer'
+              | 'super_user'
+              | null) ?? null,
+        })
+      ) {
+        res.statusCode = 403
+        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+        res.setHeader('Content-Type', 'application/json')
+        return res.end(
+          JSON.stringify({ error: 'Invalid or expired calendar link' }),
+        )
+      }
     }
 
     const now = new Date()
@@ -313,15 +376,28 @@ export default async function handler(req: any, res: any) {
       return res.end(ics)
     }
 
-    // Job-based kinds: program (all_jobs, project_lead_jobs); crew_jobs uses crew time_periods
-    if (kind === 'crew_jobs') {
+    // Job-based kinds: program (all_jobs, project_lead_jobs); crew_jobs / crew_user use crew time_periods
+    if (kind === 'crew_jobs' || kind === 'crew_user') {
+      const crewMemberUserId =
+        kind === 'crew_user' && crewUserId ? crewUserId : userId
+      let personNameForTitle: string | null = null
+      if (kind === 'crew_user') {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('display_name, first_name, last_name, email')
+          .eq('user_id', crewMemberUserId)
+          .maybeSingle()
+        personNameForTitle = profile ? crewDisplayName(profile) : 'Crew'
+      }
+
       // Crew calendar: emit events per *reserved_crew row* and use reserved_crew.during
       // (the actual booking window for that person). Fall back to time_periods start/end.
+      // Only confirmed bookings and unanswered invitations belong on this feed.
       const { data: crewRes, error: crewResErr } = await supabase
         .from('reserved_crew')
         .select('id, time_period_id, during, status')
-        .eq('user_id', userId)
-        .neq('status', 'canceled')
+        .eq('user_id', crewMemberUserId)
+        .in('status', ['confirmed', 'planned'])
 
       if (crewResErr) {
         res.statusCode = 500
@@ -330,40 +406,75 @@ export default async function handler(req: any, res: any) {
         return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
       }
 
-      const crewRows = (crewRes ?? []) as Array<{
+      const crewRowsRaw = (crewRes ?? []) as Array<{
         id: string
         time_period_id: string
         during: unknown
         status: string
       }>
 
+      const plannedPeriodIds = Array.from(
+        new Set(
+          crewRowsRaw
+            .filter((r) => r.status === 'planned')
+            .map((r) => r.time_period_id),
+        ),
+      )
+      let pendingInvitePeriodIds = new Set<string>()
+      if (plannedPeriodIds.length > 0) {
+        const { data: inviteMatters } = await supabase
+          .from('matters')
+          .select('time_period_id, matter_recipients!inner(user_id, status)')
+          .eq('matter_type', 'crew_invite')
+          .in('time_period_id', plannedPeriodIds)
+          .eq('matter_recipients.user_id', crewMemberUserId)
+
+        pendingInvitePeriodIds = pendingInvitePeriodIdsFromMatters(
+          (inviteMatters ?? []) as Array<{
+            time_period_id: string | null
+            matter_recipients?:
+              | Array<{ status?: string | null }>
+              | { status?: string | null }
+              | null
+          }>,
+        )
+      }
+
+      const crewRows = crewRowsRaw.filter((r) =>
+        isCrewFeedBookingVisible(
+          r.status,
+          pendingInvitePeriodIds.has(r.time_period_id),
+        ),
+      )
+
       const crewPeriodIds = Array.from(
         new Set(crewRows.map((r) => r.time_period_id)),
       )
-      if (crewPeriodIds.length === 0) {
-        const ics = buildICS([])
-        res.statusCode = 200
-        res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
-        res.setHeader('Content-Disposition', 'inline; filename="calendar.ics"')
-        res.setHeader('Cache-Control', 'private, max-age=300')
-        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
-        return res.end(ics)
-      }
+      let crewPeriods: Array<{
+        id: string
+        title: string | null
+        start_at: string
+        end_at: string
+        job_id: string | null
+        category?: string
+      }> = []
+      if (crewPeriodIds.length > 0) {
+        const { data: crewPeriodRows, error: crewErr } = await supabase
+          .from('time_periods')
+          .select('id, title, start_at, end_at, job_id, category')
+          .eq('company_id', companyId)
+          .eq('category', 'crew')
+          .in('id', crewPeriodIds)
+          .eq('deleted', false)
+          .order('start_at', { ascending: true })
 
-      const { data: crewPeriods, error: crewErr } = await supabase
-        .from('time_periods')
-        .select('id, title, start_at, end_at, job_id, category')
-        .eq('company_id', companyId)
-        .eq('category', 'crew')
-        .in('id', crewPeriodIds)
-        .eq('deleted', false)
-        .order('start_at', { ascending: true })
-
-      if (crewErr) {
-        res.statusCode = 500
-        Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
-        res.setHeader('Content-Type', 'application/json')
-        return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
+        if (crewErr) {
+          res.statusCode = 500
+          Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v))
+          res.setHeader('Content-Type', 'application/json')
+          return res.end(JSON.stringify({ error: 'Failed to load calendar' }))
+        }
+        crewPeriods = crewPeriodRows || []
       }
 
       // Filter by subscription window using the most accurate time range we have:
@@ -428,6 +539,13 @@ export default async function handler(req: any, res: any) {
       ) as Array<string>
       const jobInfo = await fetchJobInfo(supabase, companyId, jobIds)
 
+      crewRowsWithPeriods = crewRowsWithPeriods.filter(({ period }) => {
+        const jobId = period?.job_id
+        if (!jobId) return true
+        const info = jobInfo.get(jobId)
+        return info?.status !== 'canceled'
+      })
+
       const events = crewRowsWithPeriods.map(({ row, period }) => {
         const p = period!
         const info = p.job_id ? jobInfo.get(p.job_id) : null
@@ -443,10 +561,18 @@ export default async function handler(req: any, res: any) {
         const start = parsed?.start ?? p.start_at
         const end = parsed?.end ?? p.end_at
 
+        if (row.status === 'planned') {
+          descParts.unshift('Status: Pending invitation')
+        }
+
         return {
           id: row.id, // unique per booking row (can be multiple crew on same period)
           title: withRecurringJobPrefix(
-            'CREW: ' + (jobTitle || 'Event'),
+            crewFeedEventTitle(
+              jobTitle || 'Event',
+              row.status,
+              personNameForTitle,
+            ),
             info?.recurringJobTitle,
           ),
           start,
@@ -455,7 +581,25 @@ export default async function handler(req: any, res: any) {
         }
       })
 
-      const ics = buildICS(events)
+      const { data: personalRows } = await supabase
+        .from('personal_calendar_events')
+        .select('id, title, start_at, end_at')
+        .eq('company_id', companyId)
+        .eq('user_id', crewMemberUserId)
+        .lt('start_at', toIso)
+        .gt('end_at', fromIso)
+        .order('start_at', { ascending: true })
+
+      const personalEvents = (personalRows ?? [])
+        .filter((pe) => rangesOverlap(pe.start_at, pe.end_at, fromIso, toIso))
+        .map((pe) => ({
+          id: `personal-${pe.id}`,
+          title: crewPersonalEventTitle(pe.title, personNameForTitle),
+          start: pe.start_at,
+          end: pe.end_at,
+        }))
+
+      const ics = buildICS([...events, ...personalEvents])
       res.statusCode = 200
       res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
       res.setHeader('Content-Disposition', 'inline; filename="calendar.ics"')
@@ -553,6 +697,7 @@ export default async function handler(req: any, res: any) {
             end: p.end_at,
             description:
               descLines.length > 0 ? descLines.join('\n') : undefined,
+            alarmMinutesBefore,
           }
         }
 
@@ -571,6 +716,7 @@ export default async function handler(req: any, res: any) {
           start: p.start_at,
           end: p.end_at,
           description: descParts.length > 0 ? descParts.join('\n') : undefined,
+          alarmMinutesBefore,
         }
       },
     )

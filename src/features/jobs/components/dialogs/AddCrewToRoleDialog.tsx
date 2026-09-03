@@ -14,7 +14,7 @@ import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
-import { Check, Mail, UserPlus } from 'iconoir-react'
+import { Check, CheckCircle, Mail, UserPlus } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
@@ -85,6 +85,12 @@ export default function AddCrewToRoleDialog({
     'placeholder' | 'invite' | null
   >(null)
   const [pendingInvite, setPendingInvite] = React.useState(false)
+  const [pendingStatus, setPendingStatus] = React.useState<
+    'planned' | 'confirmed'
+  >('planned')
+  const [pendingSelectedIds, setPendingSelectedIds] = React.useState<
+    Array<UUID>
+  >([])
 
   const form = useAppForm({
     defaultValues,
@@ -101,6 +107,8 @@ export default function AddCrewToRoleDialog({
       form.reset(defaultValues)
       setExpandedPanel(null)
       setPendingInvite(false)
+      setPendingStatus('planned')
+      setPendingSelectedIds([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
   }, [open])
@@ -170,6 +178,27 @@ export default function AddCrewToRoleDialog({
     [existingCrew],
   )
 
+  const canAddMyself = !!authUserId && !existingUserIds.has(authUserId)
+
+  const { data: currentUserPerson = null } = useQuery({
+    queryKey: ['crew-picker', 'me', authUserId],
+    enabled: open && canAddMyself,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('user_id, display_name, email')
+        .eq('user_id', authUserId!)
+        .maybeSingle()
+      if (error) throw error
+      if (!data) return null
+      return data as {
+        user_id: UUID
+        display_name: string | null
+        email: string
+      }
+    },
+  })
+
   const { data: people = [], isFetching } = useQuery({
     queryKey: ['crew-picker', search, timePeriodId, existingUserIds.size],
     enabled: open,
@@ -207,16 +236,61 @@ export default function AddCrewToRoleDialog({
     [people, suggestedForRole, search],
   )
 
+  const mePerson = React.useMemo((): CrewPickerPerson | null => {
+    if (!canAddMyself || !authUserId) return null
+    const fromLists =
+      suggested.find((p) => p.user_id === authUserId) ??
+      rest.find((p) => p.user_id === authUserId) ??
+      suggestedForRole.find((p) => p.user_id === authUserId) ??
+      people.find((p) => p.user_id === authUserId) ??
+      currentUserPerson
+    if (!fromLists) return null
+    const q = search.trim().toLowerCase()
+    if (q) {
+      const name = (fromLists.display_name ?? '').toLowerCase()
+      const email = fromLists.email.toLowerCase()
+      if (!name.includes(q) && !email.includes(q)) return null
+    }
+    return fromLists
+  }, [
+    canAddMyself,
+    authUserId,
+    suggested,
+    rest,
+    suggestedForRole,
+    people,
+    currentUserPerson,
+    search,
+  ])
+
+  const suggestedWithoutMe = React.useMemo(
+    () =>
+      mePerson
+        ? suggested.filter((p) => p.user_id !== mePerson.user_id)
+        : suggested,
+    [suggested, mePerson],
+  )
+
+  const restWithoutMe = React.useMemo(
+    () =>
+      mePerson ? rest.filter((p) => p.user_id !== mePerson.user_id) : rest,
+    [rest, mePerson],
+  )
+
   const pickerPeople = React.useMemo(() => {
     const seen = new Set<string>()
     const merged: Array<CrewPickerPerson> = []
-    for (const person of [...suggestedForRole, ...people]) {
+    for (const person of [
+      ...(mePerson ? [mePerson] : []),
+      ...suggestedForRole,
+      ...people,
+    ]) {
       if (seen.has(person.user_id)) continue
       seen.add(person.user_id)
       merged.push(person)
     }
     return merged
-  }, [suggestedForRole, people])
+  }, [mePerson, suggestedForRole, people])
 
   const toggleSelection = (userId: UUID) => {
     const current = form.state.values.selectedIds
@@ -231,10 +305,12 @@ export default function AddCrewToRoleDialog({
       force = false,
       invite = false,
       selectedIds: selectedIdsArg,
+      status = 'planned',
     }: {
       force?: boolean
       invite?: boolean
       selectedIds?: Array<UUID>
+      status?: 'planned' | 'confirmed'
     } = {}) => {
       const selectedIds = selectedIdsArg ?? [...form.state.values.selectedIds]
       if (selectedIds.length === 0) {
@@ -270,7 +346,7 @@ export default function AddCrewToRoleDialog({
       const payload = selectedIds.map((userId: UUID) => ({
         time_period_id: timePeriodId,
         user_id: userId,
-        status: 'planned' as const,
+        status,
         notes: null,
         ...forcedFields,
       }))
@@ -301,6 +377,7 @@ export default function AddCrewToRoleDialog({
         count: selectedIds.length,
         invited,
         inviteError,
+        status,
       }
     },
     onSuccess: (result) => {
@@ -321,6 +398,8 @@ export default function AddCrewToRoleDialog({
           'Success',
           `Added and invited ${result.count} crew member${result.count !== 1 ? 's' : ''}`,
         )
+      } else if (result.status === 'confirmed' && result.count === 1) {
+        success('Success', 'Added you as confirmed crew')
       } else {
         success(
           'Success',
@@ -346,8 +425,26 @@ export default function AddCrewToRoleDialog({
   const runAddCrew = async ({ invite }: { invite: boolean }) => {
     const selectedIds = [...form.state.values.selectedIds]
     setPendingInvite(invite)
+    setPendingStatus('planned')
+    setPendingSelectedIds(selectedIds)
     try {
-      await save.mutateAsync({ invite, selectedIds })
+      await save.mutateAsync({ invite, selectedIds, status: 'planned' })
+    } catch {
+      // Mutation onError handles toasts (including overlap → force dialog).
+    }
+  }
+
+  const runConfirmMyself = async () => {
+    if (!authUserId) return
+    setPendingInvite(false)
+    setPendingStatus('confirmed')
+    setPendingSelectedIds([authUserId])
+    try {
+      await save.mutateAsync({
+        invite: false,
+        selectedIds: [authUserId],
+        status: 'confirmed',
+      })
     } catch {
       // Mutation onError handles toasts (including overlap → force dialog).
     }
@@ -610,7 +707,39 @@ export default function AddCrewToRoleDialog({
                     >
                       {(selectedIds: Array<UUID>) => (
                         <>
-                          {suggested.length > 0 && (
+                          {mePerson && (
+                            <>
+                              <Text
+                                as="div"
+                                size="1"
+                                color="gray"
+                                weight="medium"
+                                mb="1"
+                              >
+                                You
+                              </Text>
+                              <CrewPickerPersonRow
+                                person={mePerson}
+                                internalNote={
+                                  internalNotesByUserId[mePerson.user_id]
+                                }
+                                isSelected={selectedIds.includes(
+                                  mePerson.user_id,
+                                )}
+                                onToggle={toggleSelection}
+                                showSeparator={
+                                  suggestedWithoutMe.length > 0 ||
+                                  restWithoutMe.length > 0 ||
+                                  isFetching
+                                }
+                                confirmMyself={{
+                                  onClick: () => void runConfirmMyself(),
+                                  pending: save.isPending,
+                                }}
+                              />
+                            </>
+                          )}
+                          {suggestedWithoutMe.length > 0 && (
                             <Text
                               as="div"
                               size="1"
@@ -621,7 +750,7 @@ export default function AddCrewToRoleDialog({
                               Last used for this customer
                             </Text>
                           )}
-                          {suggested.map((p, idx) => (
+                          {suggestedWithoutMe.map((p, idx) => (
                             <CrewPickerPersonRow
                               key={p.user_id}
                               person={p}
@@ -629,45 +758,47 @@ export default function AddCrewToRoleDialog({
                               isSelected={selectedIds.includes(p.user_id)}
                               onToggle={toggleSelection}
                               showSeparator={
-                                idx < suggested.length - 1 ||
-                                rest.length > 0 ||
+                                idx < suggestedWithoutMe.length - 1 ||
+                                restWithoutMe.length > 0 ||
                                 isFetching
                               }
                             />
                           ))}
-                          {suggested.length > 0 && rest.length > 0 && (
-                            <Text
-                              as="div"
-                              size="1"
-                              color="gray"
-                              weight="medium"
-                              mt="2"
-                              mb="1"
-                            >
-                              All crew
-                            </Text>
-                          )}
+                          {suggestedWithoutMe.length > 0 &&
+                            restWithoutMe.length > 0 && (
+                              <Text
+                                as="div"
+                                size="1"
+                                color="gray"
+                                weight="medium"
+                                mt="2"
+                                mb="1"
+                              >
+                                All crew
+                              </Text>
+                            )}
                           {isFetching && (
                             <Text size="2" color="gray">
                               Searching…
                             </Text>
                           )}
                           {!isFetching &&
-                            suggested.length === 0 &&
-                            rest.length === 0 && (
+                            !mePerson &&
+                            suggestedWithoutMe.length === 0 &&
+                            restWithoutMe.length === 0 && (
                               <Text size="2" color="gray">
                                 No crew members found
                               </Text>
                             )}
                           {!isFetching &&
-                            rest.map((p, idx) => (
+                            restWithoutMe.map((p, idx) => (
                               <CrewPickerPersonRow
                                 key={p.user_id}
                                 person={p}
                                 internalNote={internalNotesByUserId[p.user_id]}
                                 isSelected={selectedIds.includes(p.user_id)}
                                 onToggle={toggleSelection}
-                                showSeparator={idx < rest.length - 1}
+                                showSeparator={idx < restWithoutMe.length - 1}
                               />
                             ))}
                         </>
@@ -767,7 +898,8 @@ export default function AddCrewToRoleDialog({
           save.mutate({
             force: true,
             invite: pendingInvite,
-            selectedIds: [...form.state.values.selectedIds],
+            selectedIds: pendingSelectedIds,
+            status: pendingStatus,
           })
         }
       />
@@ -781,12 +913,17 @@ function CrewPickerPersonRow({
   isSelected,
   onToggle,
   showSeparator,
+  confirmMyself,
 }: {
   person: CrewPickerPerson
   internalNote?: string
   isSelected: boolean
   onToggle: (userId: UUID) => void
   showSeparator: boolean
+  confirmMyself?: {
+    onClick: () => void
+    pending: boolean
+  }
 }) {
   return (
     <>
@@ -799,16 +936,16 @@ function CrewPickerPersonRow({
         }}
         onClick={() => onToggle(person.user_id)}
       >
-        <Flex align="center" justify="between">
-          <Flex align="center" gap="2">
+        <Flex align="center" justify="between" gap="2">
+          <Flex align="center" gap="2" style={{ minWidth: 0 }}>
             {isSelected && (
               <Check
                 width={18}
                 height={18}
-                style={{ color: 'var(--blue-11)' }}
+                style={{ color: 'var(--blue-11)', flexShrink: 0 }}
               />
             )}
-            <div>
+            <div style={{ minWidth: 0 }}>
               <Text weight="medium">{person.display_name ?? person.email}</Text>
               {person.display_name && (
                 <Text size="1" color="gray" style={{ marginLeft: 6 }}>
@@ -822,11 +959,28 @@ function CrewPickerPersonRow({
               )}
             </div>
           </Flex>
-          {isSelected && (
-            <Text size="1" color="blue">
-              Selected
-            </Text>
-          )}
+          <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
+            {confirmMyself && (
+              <Button
+                type="button"
+                size="1"
+                variant="solid"
+                disabled={confirmMyself.pending}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  confirmMyself.onClick()
+                }}
+              >
+                <CheckCircle width={14} height={14} />
+                {confirmMyself.pending ? 'Adding…' : 'Confirm myself'}
+              </Button>
+            )}
+            {isSelected && (
+              <Text size="1" color="blue">
+                Selected
+              </Text>
+            )}
+          </Flex>
         </Flex>
       </Box>
       {showSeparator && <Separator my="2" />}

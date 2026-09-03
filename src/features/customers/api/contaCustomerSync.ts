@@ -7,6 +7,7 @@
 import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
 import {
+  buildContaCustomerCreateBody,
   makeContaFetch,
   syncCustomersWithContaCore,
 } from '@shared/conta/customerSyncCore'
@@ -32,57 +33,12 @@ type ContaCustomerHit = {
   sumRemainingInvoices?: number
 }
 
-function parseCustomerAddress(address: string) {
-  const normalized = address.replace(/\r/g, '').trim()
-  let addressLine1 = ''
-  let addressPostcode = ''
-  let addressCity = ''
-  let addressCountry = ''
-
-  const postcodeMatch = normalized.match(/\b(\d{4,5})\b/)
-  if (postcodeMatch && postcodeMatch.index !== undefined) {
-    addressPostcode = postcodeMatch[1]
-    const before = normalized.slice(0, postcodeMatch.index).trim()
-    const after = normalized
-      .slice(postcodeMatch.index + postcodeMatch[1].length)
-      .trim()
-    const beforeParts = before
-      .split(/[,\n]+/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-    addressLine1 = beforeParts[0] || before
-    const afterParts = after
-      .split(/[,\n]+/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-    addressCity = afterParts[0] || ''
-    if (afterParts.length > 1)
-      addressCountry = afterParts[afterParts.length - 1] || ''
-  } else {
-    const parts = normalized
-      .split(/[,\n]+/)
-      .map((p) => p.trim())
-      .filter(Boolean)
-    addressLine1 = parts[0] || ''
-    const zipPart = parts.find((p) => /\d{4,5}/.test(p))
-    if (zipPart) {
-      const m = zipPart.match(/\b(\d{4,5})\b/)
-      if (m) {
-        addressPostcode = m[1]
-        addressCity = zipPart.replace(m[1], '').trim()
-      }
-    }
-    if (!addressCity && parts.length > 1) addressCity = parts[1] || ''
-    if (parts.length > 2) addressCountry = parts[parts.length - 1] || ''
-  }
-  return { addressLine1, addressPostcode, addressCity, addressCountry }
-}
-
 /**
  * Sync customers for a company with Conta.
- * - Matches by orgNo (VAT)
+ * - Matches by orgNo, existing Conta id, or unique email
  * - Updates read-only fields from Conta for matched customers
- * - Creates in Conta only when customer doesn't exist
+ * - Creates organisations in Conta when they have an org number and don't exist
+ * - Private customers without an org number are linked in the customer dialog
  * @param contaOpt - When provided, use this for Conta API (cron/server). Otherwise use session-based contaClient.
  * @param supabaseClient - When provided (cron), use this; otherwise use session supabase.
  */
@@ -120,6 +76,22 @@ export async function fetchAndSyncContaCustomer(
     )) as ContaCustomerHit
 
     if (!full?.id) return { ok: false, error: 'Customer not found in Conta.' }
+
+    const { data: alreadyLinked, error: linkedError } = await supabase
+      .from('customers')
+      .select('id, name')
+      .eq('company_id', companyId)
+      .eq('conta_customer_id', full.id)
+      .neq('id', subbCustomerId)
+      .or('deleted.is.null,deleted.eq.false')
+      .maybeSingle()
+    if (linkedError) return { ok: false, error: linkedError.message }
+    if (alreadyLinked) {
+      return {
+        ok: false,
+        error: `Already linked to ${alreadyLinked.name || 'another Grid customer'}.`,
+      }
+    }
 
     let invoiceCount: number | null = full.numberOfInvoices ?? null
     if (invoiceCount == null) {
@@ -164,7 +136,8 @@ export async function fetchAndSyncContaCustomer(
 
 /**
  * Create a single customer in Conta and link in our DB.
- * Requires org number and valid address.
+ * Organisations need an org number; private (INDIVIDUAL) customers do not.
+ * A complete address is required either way.
  */
 export type CreateInContaResult =
   | { ok: true; contaCustomerId: number }
@@ -182,37 +155,13 @@ export async function createCustomerInConta(
     phone: string | null
   },
 ): Promise<CreateInContaResult> {
-  const orgNo = (customer.vat_number || '').replace(/\D/g, '').trim()
-  if (!orgNo || orgNo.length < 6) {
-    return {
-      ok: false,
-      error: 'Organization number is required to create in Conta.',
-    }
-  }
-
-  const addr = parseCustomerAddress(customer.address || '')
-  if (!addr.addressLine1 || !addr.addressPostcode || !addr.addressCity) {
-    return {
-      ok: false,
-      error:
-        'Valid address (street, postal code, city) is required to create in Conta.',
-    }
-  }
+  const createdBody = buildContaCustomerCreateBody(customer)
+  if (!createdBody.ok) return { ok: false, error: createdBody.error }
 
   try {
     const created = (await contaClient.post(
       `/invoice/organizations/${organizationId}/customers`,
-      {
-        name: customer.name?.trim() || 'Customer',
-        customerType: 'ORGANIZATION',
-        orgNo,
-        emailAddress: customer.email?.trim() || undefined,
-        phoneNo: customer.phone?.trim() || undefined,
-        customerAddressLine1: addr.addressLine1,
-        customerAddressPostcode: addr.addressPostcode,
-        customerAddressCity: addr.addressCity,
-        customerAddressCountry: addr.addressCountry || undefined,
-      },
+      createdBody.body,
     )) as { id?: number }
 
     const newId = created?.id
