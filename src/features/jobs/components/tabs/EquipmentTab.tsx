@@ -35,6 +35,7 @@ import { FixedTimePeriodEditor } from '@features/calendar/components/reservation
 import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
+import { ManageTimePeriodsButton } from '../dialogs/ManageTimePeriodsDialog'
 import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
 import {
   categoryBookingIds,
@@ -380,7 +381,6 @@ function InternalEquipmentTable({
         .eq('id', rowId)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       setEditingQty(null)
       setEditingQtyDrafts((prev) => {
         if (!(rowId in prev)) return prev
@@ -389,6 +389,7 @@ function InternalEquipmentTable({
         return next
       })
       success('Saved', 'Quantity updated')
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
     }
@@ -408,13 +409,13 @@ function InternalEquipmentTable({
         .in('id', ids)
       if (delErr) throw delErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       success(
         'Deleted',
         `Removed ${selectedRowCount} ${selectedRowCount === 1 ? 'booking' : 'bookings'}`,
       )
       setSelectedIds(new Set())
       setDeleteSelectedOpen(false)
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to delete', e?.message || 'Please try again.')
     }
@@ -439,6 +440,12 @@ function InternalEquipmentTable({
         <Heading size="3">Stock equipment</Heading>
         {companyRole !== 'freelancer' && (
           <Flex align="center" gap="3">
+            {canBook && (
+              <ManageTimePeriodsButton
+                jobId={jobId}
+                initialCategory="equipment"
+              />
+            )}
             {rows.length > 0 && (
               <Flex align="center" gap="2">
                 {editMode && (
@@ -1081,7 +1088,6 @@ function ExternalEquipmentTable({
         .eq('id', rowId)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       setEditingQty(null)
       setEditingQtyDrafts((prev) => {
         if (!(rowId in prev)) return prev
@@ -1090,6 +1096,7 @@ function ExternalEquipmentTable({
         return next
       })
       success('Saved', 'Quantity updated')
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
     }
@@ -1109,13 +1116,13 @@ function ExternalEquipmentTable({
         .in('id', ids)
       if (delErr) throw delErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       success(
         'Deleted',
         `Removed ${ids.length} ${ids.length === 1 ? 'booking' : 'bookings'}`,
       )
       setSelectedIds(new Set())
       setDeleteSelectedOpen(false)
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to delete', e?.message || 'Please try again.')
     }
@@ -1137,8 +1144,8 @@ function ExternalEquipmentTable({
         .in('id', itemIds)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       success('Updated', 'All items for this owner updated')
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
     }
@@ -1167,11 +1174,12 @@ function ExternalEquipmentTable({
         .eq('id', timePeriodId)
       if (tpErr) throw tpErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-
       success('Deleted', `Removed booking for ${deleteOwnerOpen.ownerName}`)
       setDeleteOwnerOpen(null)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+      ])
     } catch (e: any) {
       error('Failed to delete', e?.message || 'Please try again.')
     }
@@ -1188,8 +1196,8 @@ function ExternalEquipmentTable({
         .eq('id', rowId)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       success('Updated', 'Item status updated')
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
     }
@@ -1209,11 +1217,11 @@ function ExternalEquipmentTable({
         .in('id', itemIds)
       if (updateErr) throw updateErr
 
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
       success(
         'Updated',
         `Updated status for ${itemIds.length} item${itemIds.length !== 1 ? 's' : ''}`,
       )
+      void qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
     } catch (e: any) {
       error('Failed to update', e?.message || 'Please try again.')
     }

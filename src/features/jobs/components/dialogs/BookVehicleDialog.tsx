@@ -371,14 +371,16 @@ export default function BookVehicleDialog({
       const { error } = await supabase.from('reserved_vehicles').insert(payload)
       if (error) throw error
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setForceDialogOpen(false)
-      await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       success('Success', 'Vehicle booked successfully')
       form.reset(defaultValues, { keepDefaultValues: true })
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['conflicts'] }),
+      ])
     },
     onError: (err: Error) => {
       if (err.message === 'OVERLAP_NEEDS_FORCE') return

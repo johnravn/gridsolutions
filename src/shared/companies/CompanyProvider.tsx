@@ -3,6 +3,7 @@ import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompanyAppRealtimeSync } from '@shared/realtime/useCompanyAppRealtimeSync'
 import { supabase } from '@shared/api/supabase'
+import { authUserQueryOptions } from '@shared/auth/authUserQuery'
 
 type Company = { id: string; name: string; is_demo: boolean }
 type Ctx = {
@@ -37,12 +38,8 @@ function safeSetLS(key: string, value: string | null) {
 export function CompanyProvider({ children }: { children: React.ReactNode }) {
   const qc = useQueryClient()
 
-  // 1) Who am I?
-  const userQ = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => (await supabase.auth.getUser()).data.user ?? null,
-    staleTime: 60_000,
-  })
+  // 1) Who am I? (local session — AuthProvider seeds this cache)
+  const userQ = useQuery(authUserQueryOptions)
   const userId = userQ.data?.id ?? null
 
   // Track previous userId to detect user changes

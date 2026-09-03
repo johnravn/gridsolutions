@@ -313,8 +313,13 @@ export default function AddItemDialog({
         }
       }
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      form.reset(defaultValues)
+      resetLocalState()
+      onOpenChange(false)
+      success('Success!', 'Item was added to inventory')
+      onSaved?.()
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'inventory-index'],
           exact: false,
@@ -332,11 +337,6 @@ export default function AddItemDialog({
           exact: false,
         }),
       ])
-      form.reset(defaultValues)
-      resetLocalState()
-      onOpenChange(false)
-      success('Success!', 'Item was added to inventory')
-      onSaved?.()
     },
     onError: (e: any) => {
       toastError('Failed to create item', e?.message ?? 'Please try again.')
@@ -384,9 +384,12 @@ export default function AddItemDialog({
         if (phErr) throw phErr
       }
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setBrandName(null)
-      await Promise.all([
+      onOpenChange(false)
+      success('Saved', 'Item was updated.')
+      onSaved?.()
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'inventory-index'],
           exact: false,
@@ -404,9 +407,6 @@ export default function AddItemDialog({
           exact: false,
         }),
       ])
-      onOpenChange(false)
-      success('Saved', 'Item was updated.')
-      onSaved?.()
     },
     onError: (e: any) => {
       toastError('Failed to update item', e?.message ?? 'Please try again.')

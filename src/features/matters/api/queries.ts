@@ -102,18 +102,14 @@ export function mattersIndexQueryAll(userId?: string | null) {
   return {
     queryKey: ['matters', 'index', 'all', userId ?? 'anon'],
     queryFn: async (): Promise<Array<Matter>> => {
-      // Get current user ID
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return []
+      if (!userId) return []
 
       // Get all companies the user is a member of
       // Check if user is a superuser
       const { data: profile } = await supabase
         .from('profiles')
         .select('superuser')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle()
 
       const isSuperuser = profile?.superuser ?? false
@@ -130,7 +126,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
         const { data: memberships } = await supabase
           .from('company_users')
           .select('company_id')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
         companyIds = (memberships || []).map((m) => m.company_id)
       }
 
@@ -140,7 +136,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
         .select('matter_id, inbox_read_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
 
       if (recError) throw recError
 
@@ -211,7 +207,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
       const { data: myResponsesData } = await supabase
         .from('matter_responses')
         .select('matter_id, id, response, created_at, updated_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('matter_id', matterIds)
 
       const myResponseMap = new Map<string, any>()
@@ -220,7 +216,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
           myResponseMap.set(r.matter_id, {
             id: r.id,
             matter_id: r.matter_id,
-            user_id: user.id,
+            user_id: userId,
             response: r.response,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -243,21 +239,17 @@ export function mattersIndexQueryAll(userId?: string | null) {
 }
 
 // Legacy function - kept for backward compatibility, but uses single company
-export function mattersIndexQuery(companyId: string) {
+export function mattersIndexQuery(companyId: string, userId?: string | null) {
   return {
-    queryKey: ['matters', 'index', companyId],
+    queryKey: ['matters', 'index', companyId, userId ?? 'anon'],
     queryFn: async (): Promise<Array<Matter>> => {
-      // Get current user ID
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return []
+      if (!userId) return []
 
       // Get all matters where user is a recipient (with read status)
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
         .select('matter_id, inbox_read_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
 
       if (recError) throw recError
 
@@ -329,7 +321,7 @@ export function mattersIndexQuery(companyId: string) {
       const { data: myResponsesData } = await supabase
         .from('matter_responses')
         .select('matter_id, id, response, created_at, updated_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .in('matter_id', matterIds)
 
       const myResponseMap = new Map<string, any>()
@@ -338,7 +330,7 @@ export function mattersIndexQuery(companyId: string) {
           myResponseMap.set(r.matter_id, {
             id: r.id,
             matter_id: r.matter_id,
-            user_id: user.id,
+            user_id: userId,
             response: r.response,
             created_at: r.created_at,
             updated_at: r.updated_at,
@@ -360,7 +352,7 @@ export function mattersIndexQuery(companyId: string) {
   }
 }
 
-export function matterDetailQuery(matterId: string) {
+export function matterDetailQuery(matterId: string, userId?: string | null) {
   return {
     queryKey: ['matters', 'detail', matterId],
     queryFn: async (): Promise<Matter | null> => {
@@ -377,14 +369,11 @@ export function matterDetailQuery(matterId: string) {
 
       if (!data) return null
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
       let myResponse: MatterResponse | null = null
       let isUnread = false
       let isRecipient = false
 
-      if (user) {
+      if (userId) {
         const [{ data: responseData }, { data: recipientRow }] =
           await Promise.all([
             supabase
@@ -401,13 +390,13 @@ export function matterDetailQuery(matterId: string) {
           `,
               )
               .eq('matter_id', matterId)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .maybeSingle(),
             supabase
               .from('matter_recipients')
               .select('inbox_read_at')
               .eq('matter_id', matterId)
-              .eq('user_id', user.id)
+              .eq('user_id', userId)
               .maybeSingle(),
           ])
 
@@ -1252,16 +1241,13 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
   return {
     queryKey: ['matters', 'unread-count', 'all', userId ?? 'anon'],
     queryFn: async (): Promise<number> => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return 0
+      if (!userId) return 0
 
       // Get all companies the user is a member of
       const { data: profile } = await supabase
         .from('profiles')
         .select('superuser')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .maybeSingle()
 
       const isSuperuser = profile?.superuser ?? false
@@ -1278,7 +1264,7 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
         const { data: memberships } = await supabase
           .from('company_users')
           .select('company_id')
-          .eq('user_id', user.id)
+          .eq('user_id', userId)
         companyIds = (memberships || []).map((m) => m.company_id)
       }
 
@@ -1288,7 +1274,7 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
         .select('matter_id, inbox_read_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .is('inbox_read_at', null) // Only unread in the personal inbox
 
       if (recError) throw recError
@@ -1313,20 +1299,20 @@ export function unreadMattersCountQueryAll(userId?: string | null) {
 }
 
 // Legacy function - kept for backward compatibility
-export function unreadMattersCountQuery(companyId: string) {
+export function unreadMattersCountQuery(
+  companyId: string,
+  userId?: string | null,
+) {
   return {
-    queryKey: ['matters', 'unread-count', companyId],
+    queryKey: ['matters', 'unread-count', companyId, userId ?? 'anon'],
     queryFn: async (): Promise<number> => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      if (!user) return 0
+      if (!userId) return 0
 
       // Get all matters where user is a recipient
       const { data: recipientMatters, error: recError } = await supabase
         .from('matter_recipients')
         .select('matter_id, inbox_read_at')
-        .eq('user_id', user.id)
+        .eq('user_id', userId)
         .is('inbox_read_at', null) // Only unread in the personal inbox
 
       if (recError) throw recError

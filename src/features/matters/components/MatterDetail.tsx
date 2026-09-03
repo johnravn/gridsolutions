@@ -34,6 +34,10 @@ import {
 import { useMatterReadMutations } from '../hooks/useMatterReadMutations'
 import { resolveMatterCardAuthor } from '../utils/matterAuthor'
 import {
+  applyOptimisticMatterReadState,
+  invalidateMattersInBackground,
+} from '../utils/optimisticMatterRead'
+import {
   ROLE_FILLED_DETAIL,
   ROLE_FILLED_MESSAGE,
   crewInviteResponseKind,
@@ -59,7 +63,8 @@ export default function MatterDetail({
   const { markRead, markUnread } = useMatterReadMutations()
 
   const { data: matter } = useQuery({
-    ...matterDetailQuery(matterId),
+    ...matterDetailQuery(matterId, user?.id),
+    enabled: !!matterId,
   })
 
   const canSeeAnnouncementRecipients = React.useMemo(() => {
@@ -213,18 +218,16 @@ export default function MatterDetail({
     mutationFn: async () => {
       await deleteMatter(matterId)
     },
-    onSuccess: async () => {
-      // Invalidate all matters queries to ensure the table refreshes
-      await qc.invalidateQueries({ queryKey: ['matters'] })
-      // Specifically invalidate the index query if we have companyId
-      if (companyId) {
-        await qc.invalidateQueries({
-          queryKey: ['matters', 'index', companyId],
-        })
-      }
+    onSuccess: () => {
       success('Matter deleted', 'The matter has been deleted.')
       setDeleteOpen(false)
       onDeleted?.()
+      void qc.invalidateQueries({ queryKey: ['matters'] })
+      if (companyId) {
+        void qc.invalidateQueries({
+          queryKey: ['matters', 'index', companyId],
+        })
+      }
     },
     onError: (e: any) => {
       toastError('Failed to delete matter', e?.message || 'Please try again.')
@@ -262,22 +265,33 @@ export default function MatterDetail({
 
     hasMarkedAsViewedRef.current = matterId
 
+    // Clear unread UI immediately; persist in the background.
+    applyOptimisticMatterReadState(qc, {
+      matterIds: [matterId],
+      isUnread: false,
+    })
+
     // Always mark as viewed when opening: updates matter_recipients (if row exists) and
     // marks any notification for this matter as read so the bell and matters list stay in sync.
     markMatterAsViewed(matterId)
       .then(async () => {
         if (skipAutoViewRef.current === matterId) {
           await markMatterAsUnread(matterId)
+          applyOptimisticMatterReadState(qc, {
+            matterIds: [matterId],
+            isUnread: true,
+          })
         }
-        await Promise.all([
-          qc.invalidateQueries({ queryKey: ['matters'] }),
-          qc.invalidateQueries({ queryKey: ['notifications'] }),
-        ])
-        await qc.refetchQueries({ queryKey: ['matters'] })
+        invalidateMattersInBackground(qc)
       })
       .catch((error) => {
         console.error('Failed to mark matter as viewed:', error)
         hasMarkedAsViewedRef.current = null
+        applyOptimisticMatterReadState(qc, {
+          matterIds: [matterId],
+          isUnread: true,
+        })
+        invalidateMattersInBackground(qc)
       })
   }, [matterId, matterLoaded, qc])
 

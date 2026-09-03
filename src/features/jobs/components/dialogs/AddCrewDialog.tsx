@@ -178,12 +178,14 @@ export default function AddCrewDialog({
       })
       if (error) throw error
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setForceDialogOpen(false)
-      await qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
-      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       form.reset(defaultValues)
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] }),
+        qc.invalidateQueries({ queryKey: ['conflicts'] }),
+      ])
     },
     onError: (e: Error) => {
       if (e.message === 'OVERLAP_NEEDS_FORCE') return
@@ -343,9 +345,9 @@ export function EditCrewDialog({
         .eq('id', row.id)
       if (error) throw error
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
+    onSuccess: () => {
       onOpenChange(false)
+      void qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
     },
   })
 

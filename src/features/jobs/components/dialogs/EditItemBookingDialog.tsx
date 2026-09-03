@@ -115,11 +115,13 @@ export default function EditItemBookingDialog({
 
       if (error) throw error
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       setForceDialogOpen(false)
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] }),
+        qc.invalidateQueries({ queryKey: ['conflicts'] }),
+      ])
     },
     onError: (e: any) => {
       const msg = e?.hint || e?.message || 'Please try again.'

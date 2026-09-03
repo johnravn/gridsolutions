@@ -97,9 +97,9 @@ function TimePeriodsManager({
         category: 'program',
       })
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
+    onSuccess: () => {
       success('Created', 'Job duration time period created automatically')
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
     },
     onError: (e: any) => {
       error('Failed to create Job duration', e?.message || 'Please try again.')
@@ -193,10 +193,10 @@ function TimePeriodsManager({
       })
       return id
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
+    onSuccess: () => {
       setEditing(null)
       success('Success', 'Time period saved successfully')
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
     },
     onError: (e: any) => {
       error('Failed to save', e?.hint || e?.message || 'Please try again.')
@@ -241,16 +241,18 @@ function TimePeriodsManager({
         .eq('id', periodId)
       if (deleteErr) throw deleteErr
     },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
+    onSuccess: () => {
       setDeleting(null)
       success(
         'Deleted',
         'Time period deleted and items reassigned to Job duration',
       )
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] }),
+      ])
     },
     onError: (e: any) => {
       error('Failed to delete', e?.hint || e?.message || 'Please try again.')

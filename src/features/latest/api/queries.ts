@@ -11,11 +11,13 @@ import type {
 
 export function latestFeedQuery({
   companyId,
+  userId,
   activityTypes,
   limit = 50,
   offset = 0,
 }: {
   companyId: string
+  userId?: string | null
   activityTypes?: Array<ActivityType>
   limit?: number
   offset?: number
@@ -25,6 +27,7 @@ export function latestFeedQuery({
       'company',
       companyId,
       'latest-feed',
+      userId ?? 'anon',
       activityTypes,
       limit,
       offset,
@@ -62,11 +65,7 @@ export function latestFeedQuery({
         return { items: [], total: count ?? 0 }
       }
 
-      // Get current user ID for checking likes
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      const currentUserId = user?.id
+      const currentUserId = userId ?? undefined
 
       // Fetch like counts and user likes in batch
       const activityIds = data.map((a) => a.id)
@@ -128,14 +127,22 @@ export function latestFeedQuery({
 export function latestInspectorQuery({
   companyId,
   activityId,
+  userId,
 }: {
   companyId: string
   activityId: string
+  userId?: string | null
 }) {
   return queryOptions<
     LatestInspectorData | { groupedActivity: GroupedInventoryActivity } | null
   >({
-    queryKey: ['company', companyId, 'latest-inspector', activityId] as const,
+    queryKey: [
+      'company',
+      companyId,
+      'latest-inspector',
+      activityId,
+      userId ?? 'anon',
+    ] as const,
     queryFn: async () => {
       // Check if this is a grouped activity ID
       if (activityId.startsWith('grouped_')) {
@@ -164,11 +171,7 @@ export function latestInspectorQuery({
         if (activitiesError) throw activitiesError
         if (!activities || activities.length === 0) return null
 
-        // Get current user ID for checking likes
-        const {
-          data: { user },
-        } = await supabase.auth.getUser()
-        const currentUserId = user?.id
+        const currentUserId = userId ?? undefined
 
         // Fetch likes for all activities in the group
         const { data: likesData, error: likesError } = await supabase
@@ -288,11 +291,7 @@ export function latestInspectorQuery({
       if (activityError) throw activityError
       if (!activity) return null
 
-      // Get current user ID for checking likes
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-      const currentUserId = user?.id
+      const currentUserId = userId ?? undefined
 
       // Fetch like count and user like status
       const { data: likesData, error: likesError } = await supabase

@@ -35,16 +35,18 @@ DROP POLICY IF EXISTS "policy_name" ON table_name;
 ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;
 
 -- Always add RLS policies (SELECT, INSERT, UPDATE, DELETE)
+-- Wrap auth.uid() in (select ...) so Postgres evaluates it once (InitPlan),
+-- not once per row. See auth_rls_initplan advisor.
 CREATE POLICY "Users can view company data"
   ON table_name FOR SELECT
   USING (
     company_id IN (
       SELECT company_id FROM company_users
-      WHERE user_id = auth.uid()
+      WHERE user_id = (select auth.uid())
     )
     OR EXISTS (
       SELECT 1 FROM profiles
-      WHERE profiles.user_id = auth.uid()
+      WHERE profiles.user_id = (select auth.uid())
         AND profiles.superuser = true
     )
   );
@@ -72,7 +74,7 @@ npm run db:types:remote  # Regenerates TypeScript types
 USING (
   company_id IN (
     SELECT company_id FROM company_users
-    WHERE user_id = auth.uid()
+    WHERE user_id = (select auth.uid())
   )
 )
 ```
@@ -84,7 +86,7 @@ USING (
 USING (
   EXISTS (
     SELECT 1 FROM profiles
-    WHERE profiles.user_id = auth.uid()
+    WHERE profiles.user_id = (select auth.uid())
       AND profiles.primary_address_id = table_name.id
   )
 )
@@ -96,7 +98,7 @@ USING (
 -- Always allow superusers
 OR EXISTS (
   SELECT 1 FROM profiles
-  WHERE profiles.user_id = auth.uid()
+  WHERE profiles.user_id = (select auth.uid())
     AND profiles.superuser = true
 )
 ```

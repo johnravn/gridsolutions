@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { useQuery } from '@tanstack/react-query'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import {
@@ -22,6 +23,7 @@ import type { ActivityType } from '../types'
 
 export default function LatestPage() {
   const { companyId } = useCompany()
+  const { userId } = useAuthz()
   const { isLarge, hasSlots } = useSplitLayout()
   const location = useLocation()
   const search = location.search as { activityId?: string }
@@ -60,6 +62,7 @@ export default function LatestPage() {
   const { isLoading: latestFeedLoading } = useQuery({
     ...latestFeedQuery({
       companyId: companyId ?? '',
+      userId,
       limit: 100,
     }),
     enabled: !!companyId,

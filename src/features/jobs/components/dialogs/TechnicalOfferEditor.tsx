@@ -17,6 +17,7 @@ import { supabase } from '@shared/api/supabase'
 import { sendOfferByEmail } from '@shared/email/supabaseEdgeEmail'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import {
   companyExpansionQuery,
   crewPricingLevelsQuery,
@@ -582,9 +583,9 @@ export default function TechnicalOfferEditor({
         autosave: payload?.autosave === true,
       }
     },
-    onSuccess: async (result) => {
-      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      await qc.invalidateQueries({ queryKey: ['offer-detail', result.offerId] })
+    onSuccess: (result) => {
+      // Settle mutation + toast before cache refetch so Save never stays
+      // pending with no feedback while invalidateQueries awaits.
       setCurrentOfferId(result.offerId)
       setBaselineSerialized(
         serializeOfferEditorState({
@@ -603,6 +604,9 @@ export default function TechnicalOfferEditor({
       if (result.closeAfterSave) {
         onOpenChange(false)
       }
+
+      void qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
+      void qc.invalidateQueries({ queryKey: ['offer-detail', result.offerId] })
     },
     onError: (e: any) => {
       toastError(
@@ -615,13 +619,14 @@ export default function TechnicalOfferEditor({
   const lockOfferMutation = useMutation({
     mutationFn: lockOffer,
     onSuccess: async (_, lockedOfferId) => {
-      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      await qc.invalidateQueries({ queryKey: ['offer-detail', lockedOfferId] })
-      const updatedOffer = await qc.fetchQuery(offerDetailQuery(lockedOfferId))
       const stayOpen = lockOutcomeRef.current === 'stay_open'
       lockOutcomeRef.current = 'close'
-      if (updatedOffer?.access_token) {
-        const url = `${window.location.origin}/offer/${updatedOffer.access_token}`
+      // access_token is set at create time and does not change on lock
+      const cachedOffer = qc.getQueryData(
+        offerDetailQuery(lockedOfferId).queryKey,
+      )
+      if (cachedOffer?.access_token) {
+        const url = `${window.location.origin}/offer/${cachedOffer.access_token}`
         const copied = await copyTextToClipboard(url)
         if (copied) {
           success(
@@ -650,6 +655,10 @@ export default function TechnicalOfferEditor({
       if (!stayOpen) {
         onOpenChange(false)
       }
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['job-offers', jobId] }),
+        qc.invalidateQueries({ queryKey: ['offer-detail', lockedOfferId] }),
+      ])
     },
     onError: (e: any) => {
       lockOutcomeRef.current = 'close'
@@ -725,8 +734,6 @@ export default function TechnicalOfferEditor({
         await saveMutation.mutateAsync({ closeAfterSave: false })
       }
       await lockOffer(currentOfferId)
-      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
       const sent = await sendOfferByEmail({
         offerId: currentOfferId,
         toEmail: email,
@@ -738,8 +745,6 @@ export default function TechnicalOfferEditor({
             : sent.failure.message,
         )
       }
-      await qc.invalidateQueries({ queryKey: ['job-offers', jobId] })
-      await qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] })
       success('Offer emailed', `The offer link was sent to ${email}.`)
       setLockSendStep(null)
       setBaselineSerialized(
@@ -750,6 +755,10 @@ export default function TechnicalOfferEditor({
       )
       onSaved?.(currentOfferId)
       onOpenChange(false)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['job-offers', jobId] }),
+        qc.invalidateQueries({ queryKey: ['offer-detail', currentOfferId] }),
+      ])
     } catch (e: any) {
       toastError(
         'Could not send email',
@@ -761,7 +770,7 @@ export default function TechnicalOfferEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     closeGuardActionRef.current = true
     try {
       await saveMutation.mutateAsync({ closeAfterSave: true })
@@ -775,13 +784,13 @@ export default function TechnicalOfferEditor({
   }
 
   const discardFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     setCloseGuardOpen(false)
     onOpenChange(false)
   }
 
   const keepEditingFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     setCloseGuardOpen(false)
   }
 
@@ -830,7 +839,7 @@ export default function TechnicalOfferEditor({
         >
           <Flex justify="between" align="center" gap="3" wrap="wrap">
             <Dialog.Title style={{ margin: 0 }}>Technical Offer</Dialog.Title>
-            <Flex gap="2" wrap="wrap">
+            <Flex gap="2" wrap="wrap" align="center">
               {currentOfferId ? (
                 <Button
                   size="2"
@@ -860,9 +869,10 @@ export default function TechnicalOfferEditor({
                   onClick={handleSaveClick}
                   disabled={saveMutation.isPending || !canSave}
                 >
-                  Save
+                  {saveMutation.isPending ? 'Saving…' : 'Save'}
                 </Button>
               ) : null}
+              <DialogCloseIconButton />
             </Flex>
           </Flex>
 
@@ -1083,7 +1093,10 @@ export default function TechnicalOfferEditor({
         }}
       >
         <Dialog.Content maxWidth="520px" style={{ zIndex: 102 }}>
-          <Dialog.Title>Lock & send</Dialog.Title>
+          <Flex justify="between" align="center" gap="3">
+            <Dialog.Title style={{ margin: 0 }}>Lock & send</Dialog.Title>
+            <DialogCloseIconButton disabled={lockSendBusy} />
+          </Flex>
           <Separator my="3" />
           <Text size="2" mb="3">
             Locking prevents further edits. How do you want to deliver the offer
@@ -1121,7 +1134,12 @@ export default function TechnicalOfferEditor({
         }}
       >
         <Dialog.Content maxWidth="520px" style={{ zIndex: 102 }}>
-          <Dialog.Title>Send offer by email</Dialog.Title>
+          <Flex justify="between" align="center" gap="3">
+            <Dialog.Title style={{ margin: 0 }}>
+              Send offer by email
+            </Dialog.Title>
+            <DialogCloseIconButton disabled={lockSendBusy} />
+          </Flex>
           <Separator my="3" />
           <Text size="2" mb="2">
             We use the job’s main contact when available. Confirm or edit the

@@ -15,6 +15,7 @@ import {
 import { Heart, HeartSolid } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { authUserQueryOptions } from '@shared/auth/authUserQuery'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
@@ -124,14 +125,7 @@ export default function LatestInspector({
   })
 
   // Get current user ID for comment deletion (always call this hook)
-  const { data: authUser } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data, error } = await supabase.auth.getUser()
-      if (error) throw error
-      return data.user
-    },
-  })
+  const { data: authUser } = useQuery(authUserQueryOptions)
   const currentUserId = authUser?.id
 
   const enabled = Boolean(companyId && activityId)
@@ -140,6 +134,7 @@ export default function LatestInspector({
     ...latestInspectorQuery({
       companyId: companyId ?? '',
       activityId: activityId ?? '',
+      userId: currentUserId,
     }),
     enabled,
   })

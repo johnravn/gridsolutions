@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { capabilitiesFor } from './permissions'
+import { authUserQueryOptions } from './authUserQuery'
 import type { Capability, CapabilitySet, CompanyRole } from './permissions'
 
 type AuthzData = {
@@ -19,14 +20,8 @@ export function useAuthz() {
   // caps as "no access" or RequireCap will bounce every refresh to /dashboard.
   const companyUnresolved = Boolean(companyLoading && !companyId)
 
-  // Get user from shared query cache
-  const { data: user, isPending: userPending } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data } = await supabase.auth.getUser()
-      return data.user ?? null
-    },
-  })
+  // Get user from shared query cache (local session — no Auth HTTP)
+  const { data: user, isPending: userPending } = useQuery(authUserQueryOptions)
   const userId = user?.id ?? null
   const authzEnabled = !!userId && !companyUnresolved
 

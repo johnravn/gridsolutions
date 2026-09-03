@@ -475,8 +475,14 @@ export default function AddGroupDialog({
         }
       }
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      resetLocalState()
+      setSearch('')
+      form.reset(defaultValues)
+      onOpenChange(false)
+      success('Group created', 'Your group was added successfully.')
+      onSaved?.()
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'inventory-index'],
           exact: false,
@@ -494,12 +500,6 @@ export default function AddGroupDialog({
           exact: false,
         }),
       ])
-      resetLocalState()
-      setSearch('')
-      form.reset(defaultValues)
-      onOpenChange(false)
-      success('Group created', 'Your group was added successfully.')
-      onSaved?.()
     },
     onError: (e: any) => {
       toastError('Failed to create group', e?.message ?? 'Please try again.')
@@ -560,8 +560,11 @@ export default function AddGroupDialog({
         if (phErr) throw phErr
       }
     },
-    onSuccess: async () => {
-      await Promise.all([
+    onSuccess: () => {
+      onOpenChange(false)
+      success('Group updated', 'Your group was updated successfully.')
+      onSaved?.()
+      void Promise.all([
         qc.invalidateQueries({
           queryKey: ['company', companyId, 'inventory-index'],
           exact: false,
@@ -575,9 +578,6 @@ export default function AddGroupDialog({
           exact: false,
         }),
       ])
-      onOpenChange(false)
-      success('Group updated', 'Your group was updated successfully.')
-      onSaved?.()
     },
     onError: (e: any) => {
       toastError('Failed to update group', e?.message ?? 'Please try again.')

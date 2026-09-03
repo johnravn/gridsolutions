@@ -15,6 +15,7 @@ import { Import, Lock } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import {
   companyExpansionQuery,
@@ -539,16 +540,12 @@ export default function OfferBasisEditor({
         autosave: payload?.autosave === true,
       }
     },
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       const savedBasisId = result.basisId
-      await qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
-      await qc.invalidateQueries({
-        queryKey: ['offer-basis-detail', savedBasisId],
-      })
-      await qc.invalidateQueries({
-        queryKey: ['offer-basis-locked', savedBasisId],
-      })
 
+      // Update local state + toast before cache invalidation. Awaiting
+      // invalidateQueries kept isPending true (and blocked Discard) until
+      // every refetch finished — Save looked dead with no feedback.
       setCurrentBasisId(savedBasisId)
       initializedBasisIdRef.current = savedBasisId
       const current = editorFormRef.current
@@ -574,6 +571,14 @@ export default function OfferBasisEditor({
       if (result.closeAfterSave) {
         onOpenChange(false)
       }
+
+      void qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
+      void qc.invalidateQueries({
+        queryKey: ['offer-basis-detail', savedBasisId],
+      })
+      void qc.invalidateQueries({
+        queryKey: ['offer-basis-locked', savedBasisId],
+      })
     },
     onError: (e: any) => {
       toastError(
@@ -596,6 +601,9 @@ export default function OfferBasisEditor({
       if (savePromiseRef.current) {
         await savePromiseRef.current.catch(() => undefined)
         if (!hasUnsavedChanges()) {
+          if (!payload?.autosave) {
+            success('Saved', 'Your latest changes were already saved.')
+          }
           if (payload?.closeAfterSave) onOpenChange(false)
           return null
         }
@@ -611,12 +619,19 @@ export default function OfferBasisEditor({
       savePromiseRef.current = promise
       return promise
     },
-    [saveMutation, hasUnsavedChanges, onOpenChange],
+    [saveMutation, hasUnsavedChanges, onOpenChange, success],
   )
 
   const requestSave = React.useCallback(
     (payload?: { closeAfterSave?: boolean; autosave?: boolean }) => {
-      if (saveInFlightRef.current || savePromiseRef.current) return
+      // Autosave can skip when a write is already running. Manual Save must
+      // queue behind it via requestSaveAsync — never silently no-op.
+      if (
+        payload?.autosave &&
+        (saveInFlightRef.current || savePromiseRef.current)
+      ) {
+        return
+      }
       void requestSaveAsync(payload)
     },
     [requestSaveAsync],
@@ -631,18 +646,12 @@ export default function OfferBasisEditor({
       })
     },
     onSuccess: async (savedBasisId) => {
-      await qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] })
-      await qc.invalidateQueries({
-        queryKey: ['offer-basis-detail', savedBasisId],
+      // Force a fresh fetch so imported line items are available for the editor.
+      // Do not await invalidateQueries before updating UI / toast.
+      const detail = await qc.fetchQuery({
+        ...offerBasisDetailQuery(savedBasisId),
+        staleTime: 0,
       })
-      await qc.invalidateQueries({
-        queryKey: ['offer-basis-locked', savedBasisId],
-      })
-      await qc.invalidateQueries({
-        queryKey: ['offer-basis-details-batch'],
-      })
-
-      const detail = await qc.fetchQuery(offerBasisDetailQuery(savedBasisId))
       if (detail) {
         const parsed = lineItemsFromBasisDetail(detail, defaultCrewRatePerHour)
         setEquipmentGroups(parsed.equipmentGroups)
@@ -675,6 +684,18 @@ export default function OfferBasisEditor({
         'Equipment, crew, and transport were loaded from current job bookings.',
       )
       onSaved?.(savedBasisId)
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['job-offer-bases', jobId] }),
+        qc.invalidateQueries({
+          queryKey: ['offer-basis-detail', savedBasisId],
+        }),
+        qc.invalidateQueries({
+          queryKey: ['offer-basis-locked', savedBasisId],
+        }),
+        qc.invalidateQueries({
+          queryKey: ['offer-basis-details-batch'],
+        }),
+      ])
     },
     onError: (e: any) => {
       toastError(
@@ -751,20 +772,20 @@ export default function OfferBasisEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
-    if (closeGuardActionRef.current || saveInFlightRef.current) return
+    if (closeGuardActionRef.current) return
     closeGuardActionRef.current = true
     try {
       await requestSaveAsync({ closeAfterSave: true })
       setCloseGuardOpen(false)
     } catch {
-      // mutation shows error, or save already in progress
+      // mutation shows error
     } finally {
       closeGuardActionRef.current = false
     }
   }
 
   const discardFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     closeGuardActionRef.current = true
     setCloseGuardOpen(false)
     onOpenChange(false)
@@ -772,7 +793,7 @@ export default function OfferBasisEditor({
   }
 
   const keepEditingFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     setCloseGuardOpen(false)
   }
 
@@ -810,34 +831,37 @@ export default function OfferBasisEditor({
         >
           <Flex justify="between" align="center" gap="3" wrap="wrap">
             <Dialog.Title style={{ margin: 0 }}>Offer Basis</Dialog.Title>
-            {!isReadOnly ? (
-              <Flex gap="2" wrap="wrap">
-                <Button
-                  size="2"
-                  variant="soft"
-                  onClick={requestImportFromBookings}
-                  disabled={
-                    importFromBookingsMutation.isPending ||
-                    saveMutation.isPending ||
-                    isLoading
-                  }
-                >
-                  <Import width={16} height={16} />
-                  Import from bookings
-                </Button>
-                <Button
-                  size="2"
-                  onClick={() => requestSave({})}
-                  disabled={
-                    saveMutation.isPending ||
-                    importFromBookingsMutation.isPending ||
-                    isLoading
-                  }
-                >
-                  Save
-                </Button>
-              </Flex>
-            ) : null}
+            <Flex gap="2" wrap="wrap" align="center">
+              {!isReadOnly ? (
+                <>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={requestImportFromBookings}
+                    disabled={
+                      importFromBookingsMutation.isPending ||
+                      saveMutation.isPending ||
+                      isLoading
+                    }
+                  >
+                    <Import width={16} height={16} />
+                    Import from bookings
+                  </Button>
+                  <Button
+                    size="2"
+                    onClick={() => requestSave({})}
+                    disabled={
+                      saveMutation.isPending ||
+                      importFromBookingsMutation.isPending ||
+                      isLoading
+                    }
+                  >
+                    {saveMutation.isPending ? 'Saving…' : 'Save'}
+                  </Button>
+                </>
+              ) : null}
+              <DialogCloseIconButton />
+            </Flex>
           </Flex>
 
           {isReadOnly ? (

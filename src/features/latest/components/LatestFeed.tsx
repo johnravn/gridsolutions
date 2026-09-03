@@ -6,6 +6,7 @@ import { Avatar, Box, Flex, Text } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { IndexTableBodySkeleton } from '@shared/ui/index-table'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
@@ -64,12 +65,14 @@ export default function LatestFeed({
   toolbarExtra?: React.ReactNode
 }) {
   const { companyId } = useCompany()
+  const { userId } = useAuthz()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [hoveredId, setHoveredId] = React.useState<string | null>(null)
 
   const { data, isLoading, isError } = useQuery({
     ...latestFeedQuery({
       companyId: companyId ?? '',
+      userId,
       activityTypes,
       limit: 100,
     }),

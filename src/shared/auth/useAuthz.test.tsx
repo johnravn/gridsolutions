@@ -4,15 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useAuthz } from './useAuthz'
 
-const { getUserMock, fromMock } = vi.hoisted(() => ({
-  getUserMock: vi.fn(),
+const { getSessionMock, fromMock } = vi.hoisted(() => ({
+  getSessionMock: vi.fn(),
   fromMock: vi.fn(),
 }))
 
 vi.mock('@shared/api/supabase', () => ({
   supabase: {
     auth: {
-      getUser: () => getUserMock(),
+      getSession: () => getSessionMock(),
     },
     from: (table: string) => fromMock(table),
   },
@@ -45,12 +45,12 @@ function createWrapper() {
 
 describe('useAuthz', () => {
   beforeEach(() => {
-    getUserMock.mockReset()
+    getSessionMock.mockReset()
     fromMock.mockReset()
     companyState.companyId = 'company-1'
     companyState.loading = false
-    getUserMock.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+    getSessionMock.mockResolvedValue({
+      data: { session: { user: { id: 'user-1' } } },
       error: null,
     })
   })
@@ -131,7 +131,7 @@ describe('useAuthz', () => {
     })
 
     await waitFor(() => {
-      expect(getUserMock).toHaveBeenCalled()
+      expect(getSessionMock).toHaveBeenCalled()
     })
     expect(fromMock).not.toHaveBeenCalled()
     expect(result.current.loading).toBe(true)

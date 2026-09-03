@@ -56,14 +56,14 @@ export default function CreateAnnouncementDialog({
         forceEmailAll: value.forceEmailAll,
       })
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       form.reset(defaultValues)
-      await qc.invalidateQueries({ queryKey: ['matters'] })
       success(
         'Announcement sent',
         'Your announcement has been sent to everyone in the Matters inbox.',
       )
       onOpenChange(false)
+      void qc.invalidateQueries({ queryKey: ['matters'] })
     },
     onError: (err: Error) => {
       toastError('Failed to create announcement', err.message)

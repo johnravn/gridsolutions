@@ -908,15 +908,11 @@ export default function BookItemsDialog({
 
       return { warnings: force ? bookingWarnings : [] }
     },
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       setForceDialogOpen(false)
       setForceConflicts([])
       setForceSummaryLines([])
       lastItemNameMapRef.current = new Map()
-      await qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] })
-      await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
-      await qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] })
-      await qc.invalidateQueries({ queryKey: ['conflicts'] })
       // If we created a new equipment period, it will be auto-selected on next open
       // Reset custom times state
       setCustomStartTime(null)
@@ -929,6 +925,12 @@ export default function BookItemsDialog({
       if (result?.warnings?.length) {
         info('Booking warnings', result.warnings.join('\n'), 6000)
       }
+      void Promise.all([
+        qc.invalidateQueries({ queryKey: ['jobs.equipment', jobId] }),
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
+        qc.invalidateQueries({ queryKey: ['jobs-detail', jobId] }),
+        qc.invalidateQueries({ queryKey: ['conflicts'] }),
+      ])
     },
     onError: (e: any) => {
       if (e?.message === 'OVERLAP_NEEDS_FORCE') return

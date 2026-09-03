@@ -23,6 +23,12 @@ import {
   crewInviteAnswerStatus,
 } from '@features/matters/components/CrewInviteAnswerStatus'
 import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
+import {
+  applyOptimisticMarkAllMattersRead,
+  applyOptimisticMatterReadState,
+  invalidateMattersInBackground,
+  restoreOptimisticMatterReadSnapshot,
+} from '@features/matters/utils/optimisticMatterRead'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
@@ -211,11 +217,8 @@ export function MattersScrollContent({
   const visibleMatters = matters.filter((m) => resolveMatterCardAuthor(m))
   const [markingId, setMarkingId] = React.useState<string | null>(null)
 
-  const invalidateMatters = React.useCallback(async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ['matters'] }),
-      qc.invalidateQueries({ queryKey: ['matters', 'unread-count'] }),
-    ])
+  const invalidateMatters = React.useCallback(() => {
+    invalidateMattersInBackground(qc)
   }, [qc])
 
   const markOne = useMutation({
@@ -223,9 +226,20 @@ export function MattersScrollContent({
       setMarkingId(matterId)
       await markMatterAsRead(matterId)
     },
-    onSettled: async () => {
+    onMutate: async (matterId) => {
+      await qc.cancelQueries({ queryKey: ['matters'] })
+      const snapshot = applyOptimisticMatterReadState(qc, {
+        matterIds: [matterId],
+        isUnread: false,
+      })
+      return { snapshot }
+    },
+    onError: (_err, _id, ctx) => {
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
+    },
+    onSettled: () => {
       setMarkingId(null)
-      await invalidateMatters()
+      invalidateMatters()
     },
   })
 
@@ -287,17 +301,22 @@ export function MattersSection({
   const isMobile = presentation === 'mobile'
   const visibleMatters = matters.filter((m) => resolveMatterCardAuthor(m))
 
-  const invalidateMatters = React.useCallback(async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ['matters'] }),
-      qc.invalidateQueries({ queryKey: ['matters', 'unread-count'] }),
-    ])
+  const invalidateMatters = React.useCallback(() => {
+    invalidateMattersInBackground(qc)
   }, [qc])
 
   const markAll = useMutation({
     mutationFn: markAllMattersAsRead,
-    onSettled: async () => {
-      await invalidateMatters()
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ['matters'] })
+      const snapshot = applyOptimisticMarkAllMattersRead(qc)
+      return { snapshot }
+    },
+    onError: (_err, _vars, ctx) => {
+      restoreOptimisticMatterReadSnapshot(qc, ctx?.snapshot)
+    },
+    onSettled: () => {
+      invalidateMatters()
     },
   })
 
