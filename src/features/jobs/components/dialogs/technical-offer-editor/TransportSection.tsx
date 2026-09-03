@@ -13,6 +13,7 @@ import {
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
+import { useQuery } from '@tanstack/react-query'
 import {
   Box,
   Button,
@@ -25,23 +26,30 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
-import { DatePicker } from '@shared/ui/components/pickers'
+import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
+import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
+import { ManageTimePeriodsButton } from '../ManageTimePeriodsDialog'
 import { calculateTransportLineTotal } from '../../../utils/offerCalculations'
-import { formatVehicleCategory } from './utils'
+import {
+  VEHICLE_CATEGORY_OPTIONS,
+  countCompanyVehiclesByCategory,
+  formatVehicleCategory,
+} from './utils'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
 import type { LocalTransportGroup, LocalTransportItem } from './types'
 
 export function TransportSection({
   groups,
   onGroupsChange,
-  companyId: _companyId,
+  companyId,
   readOnly = false,
   jobStartAt,
   jobEndAt,
   vehicleDailyRate,
   vehicleDistanceRate,
   vehicleDistanceIncrement,
+  jobId,
 }: {
   groups: Array<LocalTransportGroup>
   onGroupsChange: (groups: Array<LocalTransportGroup>) => void
@@ -52,10 +60,25 @@ export function TransportSection({
   vehicleDailyRate?: number | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number
+  jobId?: string
 }) {
   const transportGroupNameSuggestions = React.useMemo(
     () => ['Delivery', 'Pickup', 'General', 'Delivery & pickup'],
     [],
+  )
+
+  const { data: companyVehicles = [] } = useQuery({
+    ...vehiclesIndexQuery({
+      companyId,
+      includeExternal: false,
+      search: '',
+    }),
+    enabled: !!companyId && !readOnly,
+  })
+
+  const vehicleCountsByCategory = React.useMemo(
+    () => countCompanyVehiclesByCategory(companyVehicles),
+    [companyVehicles],
   )
 
   const [daysUsedDrafts, setDaysUsedDrafts] = React.useState<
@@ -269,11 +292,21 @@ export function TransportSection({
     <Flex direction="column" gap="3">
       <Flex justify="between" align="center">
         <Heading size="3">Transport</Heading>
-        {!readOnly && (
-          <Button size="2" onClick={addGroup}>
-            <Plus width={16} height={16} /> Add group
-          </Button>
-        )}
+        <Flex align="center" gap="2">
+          {jobId && (
+            <ManageTimePeriodsButton
+              jobId={jobId}
+              initialCategory="transport"
+              readOnly={readOnly}
+              size="2"
+            />
+          )}
+          {!readOnly && (
+            <Button size="2" onClick={addGroup}>
+              <Plus width={16} height={16} /> Add group
+            </Button>
+          )}
+        </Flex>
       </Flex>
 
       {groups.length > 0 && (
@@ -321,10 +354,7 @@ export function TransportSection({
                             Days used
                           </Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>
-                            Start Date
-                          </Table.ColumnHeaderCell>
-                          <Table.ColumnHeaderCell>
-                            End Date
+                            Start and end
                           </Table.ColumnHeaderCell>
                           <Table.ColumnHeaderCell>
                             Daily Rate
@@ -413,34 +443,22 @@ export function TransportSection({
                                         <Select.Content
                                           style={{ zIndex: 10000 }}
                                         >
-                                          <Select.Item value="passenger_car_small">
-                                            Passenger Car - Small
-                                          </Select.Item>
-                                          <Select.Item value="passenger_car_medium">
-                                            Passenger Car - Medium
-                                          </Select.Item>
-                                          <Select.Item value="passenger_car_big">
-                                            Passenger Car - Big
-                                          </Select.Item>
-                                          <Select.Item value="van_small">
-                                            Van - Small
-                                          </Select.Item>
-                                          <Select.Item value="van_medium">
-                                            Van - Medium
-                                          </Select.Item>
-                                          <Select.Item value="van_big">
-                                            Van - Big
-                                          </Select.Item>
-                                          <Select.Item value="C1">
-                                            C1
-                                          </Select.Item>
-                                          <Select.Item value="C1E">
-                                            C1E
-                                          </Select.Item>
-                                          <Select.Item value="C">C</Select.Item>
-                                          <Select.Item value="CE">
-                                            CE
-                                          </Select.Item>
+                                          {VEHICLE_CATEGORY_OPTIONS.map(
+                                            (option) => {
+                                              const count =
+                                                vehicleCountsByCategory[
+                                                  option.value
+                                                ] ?? 0
+                                              return (
+                                                <Select.Item
+                                                  key={option.value}
+                                                  value={option.value}
+                                                >
+                                                  {option.label} ({count})
+                                                </Select.Item>
+                                              )
+                                            },
+                                          )}
                                         </Select.Content>
                                       </Select.Root>
                                     )}
@@ -614,47 +632,35 @@ export function TransportSection({
                                     )}
                                   </Table.Cell>
                                   <Table.Cell
-                                    style={{ verticalAlign: 'middle' }}
+                                    style={{
+                                      verticalAlign: 'middle',
+                                      minWidth: 280,
+                                    }}
                                   >
                                     {readOnly ? (
                                       <Text>
-                                        {item.start_date
-                                          ? new Date(
-                                              item.start_date,
-                                            ).toLocaleDateString('nb-NO')
+                                        {item.start_date && item.end_date
+                                          ? `${new Date(item.start_date).toLocaleString('nb-NO')} – ${new Date(item.end_date).toLocaleString('nb-NO')}`
                                           : '—'}
                                       </Text>
                                     ) : (
-                                      <DatePicker
-                                        value={item.start_date}
-                                        onChange={(value) =>
-                                          updateItem(group.id, item.id, {
-                                            start_date: value,
-                                          })
+                                      <div
+                                        onClick={(event) =>
+                                          event.stopPropagation()
                                         }
-                                      />
-                                    )}
-                                  </Table.Cell>
-                                  <Table.Cell
-                                    style={{ verticalAlign: 'middle' }}
-                                  >
-                                    {readOnly ? (
-                                      <Text>
-                                        {item.end_date
-                                          ? new Date(
-                                              item.end_date,
-                                            ).toLocaleDateString('nb-NO')
-                                          : '—'}
-                                      </Text>
-                                    ) : (
-                                      <DatePicker
-                                        value={item.end_date}
-                                        onChange={(value) =>
-                                          updateItem(group.id, item.id, {
-                                            end_date: value,
-                                          })
-                                        }
-                                      />
+                                      >
+                                        <DateTimeRangePicker
+                                          startAt={item.start_date}
+                                          endAt={item.end_date}
+                                          onChange={({ startAt, endAt }) =>
+                                            updateItem(group.id, item.id, {
+                                              start_date: startAt,
+                                              end_date: endAt,
+                                            })
+                                          }
+                                          inline
+                                        />
+                                      </div>
                                     )}
                                   </Table.Cell>
                                   <Table.Cell

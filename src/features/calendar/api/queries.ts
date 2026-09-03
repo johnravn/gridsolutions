@@ -4,6 +4,12 @@ import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
 import { crewDisplayName } from '../utils/canFollowCrewUser'
 import {
+  buildPendingInviteUserIdsByPeriod,
+  companyCrewPeriodIsVisible,
+  isActiveCrewBooking,
+  pendingInviteUserIdsForPeriod,
+} from './crewCalendarVisibility'
+import {
   buildFreelancerVisibleJobIds,
   isFreelancerVisibleCrewBooking,
 } from './freelancerCalendarVisibility'
@@ -315,17 +321,21 @@ export function crewCalendarQuery({
   return queryOptions<Array<CalendarRecord>>({
     queryKey: ['company', companyId, 'crew-calendar', userId] as const,
     queryFn: async () => {
-      // First, find all reserved_crew for this user
+      // Confirmed + planned only — declined/canceled bookings stay off the calendar
       const { data: reservations, error: resErr } = await supabase
         .from('reserved_crew')
-        .select('time_period_id')
+        .select('time_period_id, status')
         .eq('user_id', userId)
+        .in('status', ['confirmed', 'planned'])
 
       if (resErr) throw resErr
 
       if (!reservations || reservations.length === 0) return []
 
       const timePeriodIds = reservations.map((r) => r.time_period_id)
+      const statusByPeriod = new Map(
+        reservations.map((r) => [r.time_period_id, r.status as string]),
+      )
 
       // Then fetch the time_periods
       const { data, error } = await supabase
@@ -340,6 +350,35 @@ export function crewCalendarQuery({
       if (error) throw error
 
       if (!data || data.length === 0) return []
+
+      const plannedPeriodIds = data
+        .map((tp) => tp.id)
+        .filter((id) => statusByPeriod.get(id) === 'planned')
+
+      let pendingByPeriod = new Map<string, Set<string>>()
+      if (plannedPeriodIds.length > 0) {
+        const inviteMatters = await fetchAllInChunks(
+          plannedPeriodIds,
+          (chunk) =>
+            supabase
+              .from('matters')
+              .select(
+                'time_period_id, matter_recipients!inner(user_id, status)',
+              )
+              .eq('matter_type', 'crew_invite')
+              .in('time_period_id', chunk)
+              .eq('matter_recipients.user_id', userId),
+        )
+        pendingByPeriod = buildPendingInviteUserIdsByPeriod(
+          inviteMatters as Array<{
+            time_period_id: string | null
+            matter_recipients?:
+              | Array<{ user_id?: string | null; status?: string | null }>
+              | { user_id?: string | null; status?: string | null }
+              | null
+          }>,
+        )
+      }
 
       // Fetch job titles for display (user wants job title, not time period name)
       const jobIds = Array.from(
@@ -364,6 +403,12 @@ export function crewCalendarQuery({
         const jobTitle = tp.job_id
           ? jobTitles.get(tp.job_id) || undefined
           : undefined
+        const status = statusByPeriod.get(tp.id) || 'planned'
+        const pendingInviteUserIds = pendingInviteUserIdsForPeriod(
+          [{ user_id: userId, status }],
+          tp.id,
+          pendingByPeriod,
+        )
         return {
           id: tp.id,
           title: jobTitle || tp.title || 'Crew assignment',
@@ -375,7 +420,11 @@ export function crewCalendarQuery({
             jobId: tp.job_id || undefined,
           },
           notes: undefined,
+          category: 'crew',
           jobTitle: jobTitle || undefined,
+          crewUserIds: [userId],
+          crewStatusByUserId: { [userId]: status },
+          pendingInviteUserIds,
         }
       })
     },
@@ -608,10 +657,51 @@ export function companyCalendarQuery({
         })
       })
 
-      // Freelancer visibility: crew_invite matters for planned assignments
+      // Freelancer visibility + pending-invite labels (all roles)
       let invitedTimePeriodIds = new Set<string>()
       let freelancerVisibleJobIds = new Set<string>()
+      let pendingByPeriod = new Map<string, Set<string>>()
+
+      const plannedPeriodIds = Array.from(
+        new Set(
+          (
+            crewData as Array<{
+              time_period_id: string
+              status: string
+            }>
+          )
+            .filter((c) => c.status === 'planned')
+            .map((c) => c.time_period_id),
+        ),
+      )
+
+      if (plannedPeriodIds.length > 0) {
+        const inviteMatters = await fetchAllInChunks(
+          plannedPeriodIds,
+          (chunk) =>
+            supabase
+              .from('matters')
+              .select(
+                'time_period_id, matter_recipients!inner(user_id, status)',
+              )
+              .eq('matter_type', 'crew_invite')
+              .in('time_period_id', chunk),
+        )
+
+        pendingByPeriod = buildPendingInviteUserIdsByPeriod(
+          inviteMatters as Array<{
+            time_period_id: string | null
+            matter_recipients?:
+              | Array<{ user_id?: string | null; status?: string | null }>
+              | { user_id?: string | null; status?: string | null }
+              | null
+          }>,
+        )
+      }
+
       if (companyRole === 'freelancer' && userId) {
+        // Any crew_invite (including answered) still gates planned visibility
+        // for freelancers; canceled bookings are excluded separately.
         const crewTimePeriodIds = periodRows
           .filter((tp) => tp.category === 'crew')
           .map((tp) => tp.id)
@@ -656,6 +746,26 @@ export function companyCalendarQuery({
         })
       }
 
+      // Pending invite users aggregated per job (for job-duration events)
+      const jobPendingInviteUserIds = new Map<string, Set<string>>()
+      periodRows.forEach((tp) => {
+        if (!tp.job_id || tp.category !== 'crew') return
+        const pendingUsers = pendingInviteUserIdsForPeriod(
+          crewMap.get(tp.id) || [],
+          tp.id,
+          pendingByPeriod,
+        )
+        if (pendingUsers.length === 0) return
+        let set = jobPendingInviteUserIds.get(tp.job_id)
+        if (!set) {
+          set = new Set<string>()
+          jobPendingInviteUserIds.set(tp.job_id, set)
+        }
+        for (const id of pendingUsers) {
+          set.add(id)
+        }
+      })
+
       const records = periodRows
         .map((tp: any): CalendarRecord => {
           // Determine kind based on category and what's reserved
@@ -682,8 +792,11 @@ export function companyCalendarQuery({
           } else if (tp.category === 'crew') {
             kind = 'crew'
             const crewForPeriod = crewMap.get(tp.id)
-            if (crewForPeriod && crewForPeriod.length > 0) {
-              ref.userId = crewForPeriod[0].user_id
+            const activeCrew = (crewForPeriod || []).filter((c) =>
+              isActiveCrewBooking(c.status),
+            )
+            if (activeCrew.length > 0) {
+              ref.userId = activeCrew[0].user_id
             }
           } else {
             // For 'program' category, it's a job event
@@ -702,16 +815,33 @@ export function companyCalendarQuery({
             : undefined
 
           const crewForPeriod = crewMap.get(tp.id) || []
-          const crewUserIds = crewForPeriod.map((c) => c.user_id)
+          const activeCrewForPeriod = crewForPeriod.filter((c) =>
+            isActiveCrewBooking(c.status),
+          )
+          const crewUserIds = activeCrewForPeriod.map((c) => c.user_id)
           const crewStatusByUserId = Object.fromEntries(
             crewForPeriod.map((c) => [c.user_id, c.status]),
           )
 
           const jobCrew = tp.job_id ? jobCrewMap.get(tp.job_id) || [] : []
-          const jobCrewUserIds = jobCrew.map((c) => c.user_id)
+          const activeJobCrew = jobCrew.filter((c) =>
+            isActiveCrewBooking(c.status),
+          )
+          const jobCrewUserIds = activeJobCrew.map((c) => c.user_id)
           const jobCrewStatusByUserId = Object.fromEntries(
             jobCrew.map((c) => [c.user_id, c.status]),
           )
+
+          const pendingInviteUserIds =
+            tp.category === 'crew'
+              ? pendingInviteUserIdsForPeriod(
+                  crewForPeriod,
+                  tp.id,
+                  pendingByPeriod,
+                )
+              : tp.category === 'program' && tp.job_id
+                ? Array.from(jobPendingInviteUserIds.get(tp.job_id) ?? [])
+                : []
 
           return {
             id: tp.id,
@@ -729,9 +859,16 @@ export function companyCalendarQuery({
             crewStatusByUserId,
             jobCrewUserIds,
             jobCrewStatusByUserId,
+            pendingInviteUserIds,
           }
         })
         .filter((record) => {
+          // Hide crew periods where every booking was declined/canceled
+          if (record.category === 'crew') {
+            const crewForPeriod = crewMap.get(record.id) || []
+            if (!companyCrewPeriodIsVisible(crewForPeriod)) return false
+          }
+
           // For freelancers, filter to only show events they're part of
           if (companyRole === 'freelancer' && userId) {
             // Exclude canceled jobs

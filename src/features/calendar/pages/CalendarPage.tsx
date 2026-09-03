@@ -411,6 +411,7 @@ export default function CalendarPage() {
         hideCreateButton
         initialListMode={listMode}
         onListModeChange={setListMode}
+        focusUserId={category === 'crew' ? selectedEntityId : null}
         onPersonalEventClick={(payload) => {
           setPersonalEvent(payload)
           setPersonalDialogOpen(true)

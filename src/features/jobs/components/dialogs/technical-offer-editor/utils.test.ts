@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   calculateHoursPerDay,
+  countCompanyVehiclesByCategory,
   DEFAULT_CREW_HOURS_PER_DAY,
   postgrestIlikePatterns,
   resolveHourlyHoursPerDay,
@@ -92,5 +93,27 @@ describe('resolveHourlyHoursPerDay', () => {
     expect(
       resolveHourlyHoursPerDay(localIso(2026, 5, 1), localIso(2026, 5, 2), 24),
     ).toBe(DEFAULT_CREW_HOURS_PER_DAY)
+  })
+})
+
+describe('countCompanyVehiclesByCategory', () => {
+  it('counts company-owned vehicles per category and skips deleted/external', () => {
+    expect(
+      countCompanyVehiclesByCategory([
+        { vehicle_category: 'van_medium', internally_owned: true },
+        { vehicle_category: 'van_medium', internally_owned: true },
+        { vehicle_category: 'van_big', internally_owned: true },
+        { vehicle_category: 'van_medium', internally_owned: false },
+        {
+          vehicle_category: 'van_medium',
+          internally_owned: true,
+          deleted: true,
+        },
+        { vehicle_category: null, internally_owned: true },
+      ]),
+    ).toEqual({
+      van_medium: 2,
+      van_big: 1,
+    })
   })
 })

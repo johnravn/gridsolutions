@@ -11,6 +11,7 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, WarningTriangle } from 'iconoir-react'
 import { ConflictGroupList } from '@features/conflicts/components/ConflictGroupList'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import {
   conflictDisplayCounts,
   groupConflictsForDisplay,
@@ -60,11 +61,16 @@ export function SyncBasisBookingsDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="640px">
-        <Dialog.Title>Sync bookings from offer basis</Dialog.Title>
-        <Dialog.Description size="2" color="gray" mt="1">
-          Review changes for <strong>{basisTitle}</strong> before replacing
-          existing bookings.
-        </Dialog.Description>
+        <Flex justify="between" align="start" gap="3">
+          <Box style={{ minWidth: 0 }}>
+            <Dialog.Title>Sync bookings from offer basis</Dialog.Title>
+            <Dialog.Description size="2" color="gray" mt="1">
+              Review changes for <strong>{basisTitle}</strong> before replacing
+              existing bookings.
+            </Dialog.Description>
+          </Box>
+          <DialogCloseIconButton disabled={syncing} />
+        </Flex>
         <Separator my="3" />
 
         {loading ? (

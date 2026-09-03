@@ -207,8 +207,7 @@ export default function HomePage() {
     return mattersData.filter((matter) => matter.is_unread)
   }, [mattersData])
 
-  // Fetch all open conflicts, then keep unresolved ones even after the period
-  // ended. Forced overlaps drop off once both windows are in the past.
+  // Fetch all conflicts, then drop any whose booking windows have entirely ended.
   const { conflictFrom, conflictTo, attentionNow } = React.useMemo(() => {
     void companyId
     const now = startOfMinute(new Date())

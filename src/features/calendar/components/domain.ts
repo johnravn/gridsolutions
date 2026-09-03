@@ -60,6 +60,8 @@ export type CalendarRecord = {
   // Crew on any period for this job (for job duration events)
   jobCrewUserIds?: Array<string>
   jobCrewStatusByUserId?: Record<string, string>
+  /** Users with an unanswered crew invite on this period (or job for program). */
+  pendingInviteUserIds?: Array<string>
 }
 
 /** Convert our normalized records to FullCalendar EventInput[] */
@@ -83,6 +85,7 @@ export function toEventInputs(rows: Array<CalendarRecord>): Array<EventInput> {
       crewStatusByUserId: r.crewStatusByUserId,
       jobCrewUserIds: r.jobCrewUserIds,
       jobCrewStatusByUserId: r.jobCrewStatusByUserId,
+      pendingInviteUserIds: r.pendingInviteUserIds,
       ...r.meta,
     },
   }))
@@ -121,6 +124,12 @@ export function applyCalendarFilter(
         (Array.isArray(xp.ref?.itemIds) && xp.ref.itemIds.includes(itemId))
       : true
     const okVeh = vehicleId ? xp.ref?.vehicleId === vehicleId : true
+    const crewStatusByUserId = xp.crewStatusByUserId as
+      | Record<string, string>
+      | undefined
+    const userCrewStatus = userId ? crewStatusByUserId?.[userId] : undefined
+    // Declined/canceled crew bookings must not match a person filter
+    if (userId && userCrewStatus === 'canceled') return false
     const okUser = userId
       ? xp.ref?.userId === userId ||
         (Array.isArray(xp.crewUserIds) && xp.crewUserIds.includes(userId))

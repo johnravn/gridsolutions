@@ -12,6 +12,7 @@ export type BookingsSnapshot = {
     quantity: number
     source_kind: 'direct' | 'group'
     source_group_id: string | null
+    time_period_id?: string | null
   }>
   crewPeriods: Array<{
     title: string | null
@@ -32,6 +33,7 @@ export type OfferDiff = {
     item_id: string
     source_kind: 'direct' | 'group'
     source_group_id: string | null
+    time_period_id: string | null
     expected: number
     current: number
   }>
@@ -110,20 +112,24 @@ export function makeEquipmentKey(row: {
   item_id: string
   source_kind: 'direct' | 'group'
   source_group_id: string | null
+  time_period_id?: string | null
 }) {
-  return `${row.source_kind}:${row.source_group_id ?? ''}:${row.item_id}`
+  return `${row.source_kind}:${row.source_group_id ?? ''}:${row.item_id}:${row.time_period_id ?? ''}`
 }
 
 export function parseEquipmentKey(key: string): {
   source_kind: 'direct' | 'group'
   source_group_id: string | null
   item_id: string
+  time_period_id: string | null
 } {
-  const [source_kind, source_group_id_raw, item_id] = key.split(':')
+  const [source_kind, source_group_id_raw, item_id, time_period_id_raw] =
+    key.split(':')
   return {
     source_kind: source_kind === 'group' ? 'group' : 'direct',
     source_group_id: source_group_id_raw ? source_group_id_raw : null,
     item_id: item_id || '',
+    time_period_id: time_period_id_raw ? time_period_id_raw : null,
   }
 }
 
@@ -215,11 +221,13 @@ export function buildExpectedEquipmentMap(
   const m = new Map<string, number>()
   for (const group of detail.groups || []) {
     for (const item of group.items) {
+      const timePeriodId = item.time_period_id ?? null
       if (item.item_id) {
         const k = makeEquipmentKey({
           item_id: item.item_id,
           source_kind: 'direct',
           source_group_id: null,
+          time_period_id: timePeriodId,
         })
         m.set(k, (m.get(k) ?? 0) + item.quantity)
         continue
@@ -232,6 +240,7 @@ export function buildExpectedEquipmentMap(
             item_id: member.item_id,
             source_kind: 'group',
             source_group_id: item.group_id,
+            time_period_id: timePeriodId,
           })
           const qty = (member.quantity || 1) * Math.max(0, item.quantity)
           m.set(k, (m.get(k) ?? 0) + qty)
@@ -275,6 +284,7 @@ export function computeOfferDiff(
       item_id: parsed.item_id,
       source_kind: parsed.source_kind,
       source_group_id: parsed.source_group_id,
+      time_period_id: parsed.time_period_id,
       expected,
       current,
     })

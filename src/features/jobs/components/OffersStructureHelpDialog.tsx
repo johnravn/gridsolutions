@@ -11,6 +11,7 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { Calendar, QuestionMark, Sparks, Wrench } from 'iconoir-react'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 
 function DiagramCard({
   title,
@@ -521,13 +522,18 @@ export function OffersStructureHelpDialog() {
 
       <Dialog.Root open={open} onOpenChange={setOpen}>
         <Dialog.Content maxWidth="640px">
-          <Dialog.Title>How offers work</Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="3">
-            Offers are built around a shared <strong>offer basis</strong> — the
-            single place for equipment, crew, and transport. Technical and
-            pretty offers are different ways to present the same content, and
-            bookings always sync from the basis.
-          </Dialog.Description>
+          <Flex justify="between" align="start" gap="3">
+            <Box style={{ minWidth: 0 }}>
+              <Dialog.Title>How offers work</Dialog.Title>
+              <Dialog.Description size="2" color="gray" mb="3">
+                Offers are built around a shared <strong>offer basis</strong> —
+                the single place for equipment, crew, and transport. Technical
+                and pretty offers are different ways to present the same
+                content, and bookings always sync from the basis.
+              </Dialog.Description>
+            </Box>
+            <DialogCloseIconButton />
+          </Flex>
 
           <ScrollArea
             type="auto"
@@ -558,7 +564,7 @@ export function OffersStructureHelpDialog() {
                     color="accent"
                     icon={<Wrench width={16} height={16} />}
                     title="Offer basis"
-                    description="Where you add and edit equipment groups, crew roles, and transport. This is the source of truth for what the job needs."
+                    description="Where you add and edit equipment, crew, and transport against the job’s shared time periods. Manage periods once — bookings and the basis use the same windows."
                   />
                   <LegendRow
                     color="blue"

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { useLocation } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
+import { startOfMinute } from 'date-fns'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
@@ -25,6 +26,10 @@ import {
 import ConflictInspector from '../components/ConflictInspector'
 import ConflictsFilter from '../components/ConflictsFilter'
 import ConflictsList from '../components/ConflictsList'
+import {
+  keepAttentionEquipmentConflicts,
+  keepAttentionPairConflicts,
+} from '../utils/filterConflictsByProjectLead'
 import { buildConflictCards, filterConflictItems } from '../utils/conflictItems'
 import type { ConflictListFilters } from '../utils/conflictItems'
 
@@ -112,16 +117,15 @@ export default function ConflictsPage() {
     crewLoading || vehicleLoading || equipmentLoading || groupLoading
   const showInitialSkeleton = useInitialPageLoad(conflictsLoading)
 
-  const items = React.useMemo(
-    () =>
-      buildConflictCards(
-        crewConflicts,
-        vehicleConflicts,
-        equipmentConflicts,
-        groupConflicts,
-      ),
-    [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
-  )
+  const items = React.useMemo(() => {
+    const attentionNow = startOfMinute(new Date())
+    return buildConflictCards(
+      keepAttentionPairConflicts(crewConflicts, attentionNow),
+      keepAttentionPairConflicts(vehicleConflicts, attentionNow),
+      keepAttentionEquipmentConflicts(equipmentConflicts, attentionNow),
+      keepAttentionPairConflicts(groupConflicts, attentionNow),
+    )
+  }, [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts])
   const visibleItems = React.useMemo(
     () => filterConflictItems(items, filters),
     [items, filters],

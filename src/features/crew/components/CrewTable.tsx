@@ -182,7 +182,7 @@ export default function CrewTable({
     const internalNote =
       r.kind !== 'invite' ? internalNotesByUserId?.[r.id] : undefined
     return (
-      <>
+      <Box>
         <Text size="2" weight="medium">
           {r.title}
         </Text>
@@ -196,7 +196,7 @@ export default function CrewTable({
             <Text weight="medium">Internal:</Text> {internalNote}
           </Text>
         )}
-      </>
+      </Box>
     )
   }
 
@@ -349,11 +349,7 @@ export default function CrewTable({
                       borderRadius: 'var(--radius-3)',
                     }}
                   >
-                    <div style={{ minWidth: 0 }}>
-                      <Flex direction="column" gap="1">
-                        {renderNameCell(r)}
-                      </Flex>
-                    </div>
+                    <div style={{ minWidth: 0 }}>{renderNameCell(r)}</div>
                     {renderStatusCell(r)}
                     <div style={{ textAlign: 'right' }}>
                       {renderInviteAction(r)}

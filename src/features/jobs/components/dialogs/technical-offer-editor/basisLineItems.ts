@@ -32,6 +32,7 @@ export function lineItemsFromBasisDetail(
           unit_price: item.unit_price,
           is_internal: item.is_internal,
           sort_order: item.sort_order,
+          time_period_id: item.time_period_id ?? null,
           custom_line_description:
             (item as any).custom_line_description ?? null,
           custom_line_brand: (item as any).custom_line_brand ?? null,
@@ -93,6 +94,7 @@ export function lineItemsFromBasisDetail(
         billing_type: billingType,
         sort_order: item.sort_order,
         role_category: rawItem?.role_category ?? null,
+        time_period_id: item.time_period_id ?? null,
       }
     }) || []
 
@@ -118,6 +120,7 @@ export function lineItemsFromBasisDetail(
         distance_rate: item.distance_rate ?? null,
         is_internal: item.is_internal,
         sort_order: item.sort_order,
+        time_period_id: item.time_period_id ?? null,
         vehicle: item.vehicle ?? null,
       })),
     }))
@@ -143,6 +146,7 @@ export function lineItemsFromBasisDetail(
           distance_rate: item.distance_rate ?? null,
           is_internal: item.is_internal,
           sort_order: item.sort_order,
+          time_period_id: item.time_period_id ?? null,
           vehicle: item.vehicle ?? null,
         })),
       },
@@ -163,6 +167,7 @@ export function lineItemsFromLocalEditorState(
     group.items.map((item) => ({
       unit_price: item.unit_price,
       quantity: item.quantity,
+      time_period_id: item.time_period_id ?? null,
     })),
   )
 

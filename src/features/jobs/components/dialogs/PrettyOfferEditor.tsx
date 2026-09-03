@@ -23,6 +23,7 @@ import { Download, Eye, Lock, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import {
   exportOfferPDF,
@@ -570,7 +571,7 @@ export default function PrettyOfferEditor({
   }
 
   const saveFromCloseGuardAndExit = async () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     closeGuardActionRef.current = true
     try {
       await saveMutation.mutateAsync({ closeAfterSave: true })
@@ -583,13 +584,13 @@ export default function PrettyOfferEditor({
   }
 
   const discardFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     setCloseGuardOpen(false)
     onOpenChange(false)
   }
 
   const keepEditingFromCloseGuard = () => {
-    if (closeGuardActionRef.current || saveMutation.isPending) return
+    if (closeGuardActionRef.current) return
     setCloseGuardOpen(false)
   }
 
@@ -632,7 +633,12 @@ export default function PrettyOfferEditor({
             {!readOnly && !isLoading && !createMutation.isPending && (
               <PrettyOfferCompletionIndicator stats={moduleCompletionStats} />
             )}
-            <Flex gap="2" wrap="wrap" style={{ marginLeft: 'auto' }}>
+            <Flex
+              gap="2"
+              wrap="wrap"
+              align="center"
+              style={{ marginLeft: 'auto' }}
+            >
               {offer && (
                 <Button
                   size="2"
@@ -667,9 +673,10 @@ export default function PrettyOfferEditor({
                   }}
                   disabled={saveMutation.isPending || !activeOfferId}
                 >
-                  Save
+                  {saveMutation.isPending ? 'Saving…' : 'Save'}
                 </Button>
               )}
+              <DialogCloseIconButton />
             </Flex>
           </Flex>
 

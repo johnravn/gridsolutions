@@ -29,6 +29,11 @@ import {
   saveOfferBasis,
 } from '../../api/offerBasisQueries'
 import {
+  DEFAULT_EQUIPMENT_PERIOD_TITLE,
+  ensureDefaultEquipmentPeriod,
+  jobTimePeriodsQuery,
+} from '../../api/queries'
+import {
   calculateOfferTotals,
   calculateRentalFactor,
 } from '../../utils/offerCalculations'
@@ -230,6 +235,39 @@ export default function OfferBasisEditor({
     [jobData],
   )
 
+  const { data: timePeriods = [] } = useQuery({
+    ...jobTimePeriodsQuery({ jobId }),
+    enabled: open && !!jobId,
+  })
+
+  React.useEffect(() => {
+    if (!open || !companyId || !job.start_at || !job.end_at) return
+    const hasEquipmentPeriod = timePeriods.some(
+      (tp) =>
+        tp.category === 'equipment' &&
+        tp.title === DEFAULT_EQUIPMENT_PERIOD_TITLE,
+    )
+    if (hasEquipmentPeriod) return
+    void ensureDefaultEquipmentPeriod({
+      jobId,
+      companyId,
+      startAt: job.start_at,
+      endAt: job.end_at,
+    }).then(() => {
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
+    })
+  }, [open, companyId, job.start_at, job.end_at, jobId, timePeriods, qc])
+
+  const defaultEquipmentPeriodId = React.useMemo(() => {
+    const canonical = timePeriods.find(
+      (tp) =>
+        tp.category === 'equipment' &&
+        tp.title === DEFAULT_EQUIPMENT_PERIOD_TITLE,
+    )
+    if (canonical) return canonical.id
+    return timePeriods.find((tp) => tp.category === 'equipment')?.id ?? null
+  }, [timePeriods])
+
   const { data: crewPricingLevels } = useQuery({
     ...crewPricingLevelsQuery(companyId),
     enabled: open && !!companyId,
@@ -314,6 +352,22 @@ export default function OfferBasisEditor({
     [daysOfUse, rentalFactorConfig],
   )
 
+  const periodDaysById = React.useMemo(() => {
+    const map = new Map<string, number>()
+    for (const tp of timePeriods) {
+      if (!tp.start_at || !tp.end_at) continue
+      const days = Math.max(
+        1,
+        Math.ceil(
+          (new Date(tp.end_at).getTime() - new Date(tp.start_at).getTime()) /
+            (1000 * 60 * 60 * 24),
+        ),
+      )
+      map.set(tp.id, days)
+    }
+    return map
+  }, [timePeriods])
+
   const totals = React.useMemo(() => {
     const {
       equipmentItems,
@@ -336,6 +390,7 @@ export default function OfferBasisEditor({
       companyExpansion?.vehicle_distance_rate,
       companyExpansion?.vehicle_distance_increment,
       companyExpansion?.vehicle_daily_rate,
+      periodDaysById,
     )
 
     const round2 = (n: number) => Math.round(n * 100) / 100
@@ -360,6 +415,7 @@ export default function OfferBasisEditor({
     companyExpansion?.vehicle_daily_rate,
     companyExpansion?.vehicle_distance_rate,
     companyExpansion?.vehicle_distance_increment,
+    periodDaysById,
   ])
 
   const { data: existingBasis, isLoading: isLoadingBasis } = useQuery({
@@ -1003,6 +1059,9 @@ export default function OfferBasisEditor({
                       equipmentDaysOfUse={daysOfUse}
                       equipmentRentalFactor={equipmentRentalFactor}
                       readOnly={isReadOnly}
+                      jobId={jobId}
+                      timePeriods={timePeriods}
+                      defaultTimePeriodId={defaultEquipmentPeriodId}
                     />
                   </Tabs.Content>
 
@@ -1018,6 +1077,7 @@ export default function OfferBasisEditor({
                       defaultRatePerHour={defaultCrewRatePerHour}
                       defaultBillingUnit={defaultCrewBillingUnit}
                       defaultsLoading={!!jobId && isLoadingJob}
+                      jobId={jobId}
                     />
                   </Tabs.Content>
 
@@ -1027,6 +1087,7 @@ export default function OfferBasisEditor({
                       onGroupsChange={setTransportGroups}
                       companyId={companyId}
                       readOnly={isReadOnly}
+                      jobId={jobId}
                       jobStartAt={job.start_at}
                       jobEndAt={job.end_at}
                       vehicleDailyRate={

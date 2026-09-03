@@ -96,4 +96,33 @@ describe('applyCalendarFilter', () => {
     expect(result.length).toBeGreaterThanOrEqual(1)
     expect(result.some((e) => e.title?.includes('Festival'))).toBe(true)
   })
+
+  it('hides canceled crew bookings when filtering by person', () => {
+    const withCrew = toEventInputs([
+      makeCalendarRecord({
+        id: 'crew-active',
+        kind: 'crew',
+        title: 'Active shift',
+        category: 'crew',
+        crewUserIds: ['u1'],
+        crewStatusByUserId: { u1: 'confirmed' },
+        ref: { userId: 'u1' },
+      }),
+      makeCalendarRecord({
+        id: 'crew-declined',
+        kind: 'crew',
+        title: 'Declined shift',
+        category: 'crew',
+        crewUserIds: ['u1'],
+        crewStatusByUserId: { u1: 'canceled' },
+        ref: { userId: 'u1' },
+      }),
+    ])
+    const result = applyCalendarFilter(withCrew, {
+      kinds: ['crew'],
+      scope: { userId: 'u1' },
+    })
+    expect(result).toHaveLength(1)
+    expect(result[0].id).toBe('crew-active')
+  })
 })

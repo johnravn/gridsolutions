@@ -15,6 +15,7 @@ import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import { companyDetailQuery } from '@features/company/api/queries'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import {
@@ -476,13 +477,18 @@ export default function MultiJobInvoiceDialog({
             </Box>
           )}
 
-          <Dialog.Title>
-            Invoice preview ({selectedJobIds.length} jobs)
-          </Dialog.Title>
-          <Dialog.Description size="2" color="gray" mb="3">
-            One Conta invoice covering {selectedJobIds.length} member job
-            {selectedJobIds.length !== 1 ? 's' : ''}. Bookings basis only.
-          </Dialog.Description>
+          <Flex justify="between" align="start" gap="3">
+            <Box style={{ minWidth: 0 }}>
+              <Dialog.Title>
+                Invoice preview ({selectedJobIds.length} jobs)
+              </Dialog.Title>
+              <Dialog.Description size="2" color="gray" mb="3">
+                One Conta invoice covering {selectedJobIds.length} member job
+                {selectedJobIds.length !== 1 ? 's' : ''}. Bookings basis only.
+              </Dialog.Description>
+            </Box>
+            <DialogCloseIconButton disabled={isSending} />
+          </Flex>
 
           {loadingBookings && <Text>Loading bookings…</Text>}
 

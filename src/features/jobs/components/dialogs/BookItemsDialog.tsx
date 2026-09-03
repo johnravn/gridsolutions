@@ -406,8 +406,11 @@ export default function BookItemsDialog({
 
       const hasItemsToBook = itemRows.length > 0 || groupRows.length > 0
 
+      // Prefer the period the user selected in the picker.
+      let targetTimePeriodId = selectedTimePeriodId
+
       if (
-        !selectedTimePeriodId &&
+        !targetTimePeriodId &&
         customStartTime &&
         customEndTime &&
         hasItemsToBook
@@ -419,22 +422,40 @@ export default function BookItemsDialog({
           ? customEndTime
           : jobData.end_at || customEndTime || new Date().toISOString()
 
-        const { data: newTp, error: createErr } = await supabase
-          .from('time_periods')
-          .insert({
-            job_id: jobId,
-            company_id: companyId,
-            title: equipmentPeriodTitle,
-            start_at: startTime,
-            end_at: endTime,
-            category: 'equipment',
-          } as any)
-          .select('id, title')
-          .single()
-        if (createErr) throw createErr
-        equipmentPeriod = newTp
-        existingTimePeriods.push(newTp)
-      } else if (!equipmentPeriod && hasItemsToBook) {
+        // Custom times that match job span → default "Equipment period";
+        // otherwise create a distinct period for this window.
+        const matchesJobSpan =
+          !timesTouched ||
+          (jobData.start_at === startTime && jobData.end_at === endTime)
+        const title = matchesJobSpan
+          ? equipmentPeriodTitle
+          : `Equipment ${new Date(startTime).toLocaleDateString()}`
+
+        const existingMatch = existingTimePeriods.find((t) => t.title === title)
+        if (existingMatch && matchesJobSpan) {
+          equipmentPeriod = existingMatch
+          targetTimePeriodId = existingMatch.id
+        } else if (matchesJobSpan && equipmentPeriod) {
+          targetTimePeriodId = equipmentPeriod.id
+        } else {
+          const { data: newTp, error: createErr } = await supabase
+            .from('time_periods')
+            .insert({
+              job_id: jobId,
+              company_id: companyId,
+              title,
+              start_at: startTime,
+              end_at: endTime,
+              category: 'equipment',
+            } as any)
+            .select('id, title')
+            .single()
+          if (createErr) throw createErr
+          equipmentPeriod = newTp
+          existingTimePeriods.push(newTp)
+          targetTimePeriodId = newTp.id
+        }
+      } else if (!targetTimePeriodId && !equipmentPeriod && hasItemsToBook) {
         const { data: newTp, error: createErr } = await supabase
           .from('time_periods')
           .insert({
@@ -450,10 +471,11 @@ export default function BookItemsDialog({
         if (createErr) throw createErr
         equipmentPeriod = newTp
         existingTimePeriods.push(newTp)
+        targetTimePeriodId = newTp.id
       }
 
       const defaultTimePeriodId =
-        equipmentPeriod?.id ?? selectedTimePeriodId ?? null
+        targetTimePeriodId ?? equipmentPeriod?.id ?? null
       if (!defaultTimePeriodId) {
         throw new Error('No equipment time period available for booking')
       }
@@ -1057,11 +1079,15 @@ export default function BookItemsDialog({
                             size="1"
                             variant="soft"
                             onClick={() => {
-                              const equipmentPeriod = timePeriods.find(
-                                (tp) =>
-                                  tp.category === 'equipment' &&
-                                  tp.title === 'Equipment period',
-                              )
+                              const equipmentPeriod =
+                                timePeriods.find(
+                                  (tp) =>
+                                    tp.category === 'equipment' &&
+                                    tp.title === 'Equipment period',
+                                ) ||
+                                timePeriods.find(
+                                  (tp) => tp.category === 'equipment',
+                                )
                               if (equipmentPeriod) {
                                 setSelectedTimePeriodId(equipmentPeriod.id)
                               }

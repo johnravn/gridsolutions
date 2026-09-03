@@ -106,33 +106,62 @@ export function resolveHourlyHoursPerDay(
   return fromWindow ?? DEFAULT_CREW_HOURS_PER_DAY
 }
 
+export type VehicleCategoryValue =
+  | 'passenger_car_small'
+  | 'passenger_car_medium'
+  | 'passenger_car_big'
+  | 'van_small'
+  | 'van_medium'
+  | 'van_big'
+  | 'C1'
+  | 'C1E'
+  | 'C'
+  | 'CE'
+
+export const VEHICLE_CATEGORY_OPTIONS: Array<{
+  value: VehicleCategoryValue
+  label: string
+}> = [
+  { value: 'passenger_car_small', label: 'Passenger Car - Small' },
+  { value: 'passenger_car_medium', label: 'Passenger Car - Medium' },
+  { value: 'passenger_car_big', label: 'Passenger Car - Big' },
+  { value: 'van_small', label: 'Van - Small' },
+  { value: 'van_medium', label: 'Van - Medium' },
+  { value: 'van_big', label: 'Van - Big' },
+  { value: 'C1', label: 'C1' },
+  { value: 'C1E', label: 'C1E' },
+  { value: 'C', label: 'C' },
+  { value: 'CE', label: 'CE' },
+]
+
+const VEHICLE_CATEGORY_LABELS: Record<VehicleCategoryValue, string> =
+  Object.fromEntries(
+    VEHICLE_CATEGORY_OPTIONS.map((option) => [option.value, option.label]),
+  ) as Record<VehicleCategoryValue, string>
+
+/** Count company-owned (internally owned) vehicles per category. */
+export function countCompanyVehiclesByCategory(
+  vehicles: Array<{
+    vehicle_category: string | null
+    internally_owned?: boolean
+    deleted?: boolean | null
+  }>,
+): Record<string, number> {
+  const counts: Record<string, number> = {}
+  for (const vehicle of vehicles) {
+    if (vehicle.deleted) continue
+    if (vehicle.internally_owned === false) continue
+    const category = vehicle.vehicle_category
+    if (!category) continue
+    counts[category] = (counts[category] ?? 0) + 1
+  }
+  return counts
+}
+
 // Helper function to format vehicle category for display
 export function formatVehicleCategory(
-  category:
-    | 'passenger_car_small'
-    | 'passenger_car_medium'
-    | 'passenger_car_big'
-    | 'van_small'
-    | 'van_medium'
-    | 'van_big'
-    | 'C1'
-    | 'C1E'
-    | 'C'
-    | 'CE'
-    | null,
+  category: VehicleCategoryValue | null,
 ): string {
   if (!category) return '—'
-  const map: Record<string, string> = {
-    passenger_car_small: 'Passenger Car - Small',
-    passenger_car_medium: 'Passenger Car - Medium',
-    passenger_car_big: 'Passenger Car - Big',
-    van_small: 'Van - Small',
-    van_medium: 'Van - Medium',
-    van_big: 'Van - Big',
-    C1: 'C1',
-    C1E: 'C1E',
-    C: 'C',
-    CE: 'CE',
-  }
-  return map[category] || category
+  return VEHICLE_CATEGORY_LABELS[category] || category
 }

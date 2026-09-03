@@ -392,7 +392,9 @@ export default function OffersTab({
           ? await (async () => {
               const { data: rows, error: itemsErr } = await supabase
                 .from('reserved_items')
-                .select('item_id, quantity, source_kind, source_group_id')
+                .select(
+                  'item_id, quantity, source_kind, source_group_id, time_period_id',
+                )
                 .in('time_period_id', equipmentPeriodIds)
 
               if (itemsErr) throw itemsErr
@@ -407,6 +409,7 @@ export default function OffersTab({
                     source_kind: sourceKind,
                     source_group_id:
                       (r.source_group_id as string | null) ?? null,
+                    time_period_id: (r.time_period_id as string | null) ?? null,
                   }
                 },
               )

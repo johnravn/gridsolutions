@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { startOfMinute } from 'date-fns'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -10,6 +11,10 @@ import {
   groupConflictsQuery,
   vehicleConflictsQuery,
 } from '../api/queries'
+import {
+  keepAttentionEquipmentConflicts,
+  keepAttentionPairConflicts,
+} from '../utils/filterConflictsByProjectLead'
 import {
   buildConflictCards,
   countProjectLeadConflicts,
@@ -66,12 +71,13 @@ export function useProjectLeadConflictCount() {
 
   return React.useMemo(() => {
     if (projectLeadJobIds.length === 0) return 0
+    const attentionNow = startOfMinute(new Date())
     return countProjectLeadConflicts(
       buildConflictCards(
-        crewConflicts,
-        vehicleConflicts,
-        equipmentConflicts,
-        groupConflicts,
+        keepAttentionPairConflicts(crewConflicts, attentionNow),
+        keepAttentionPairConflicts(vehicleConflicts, attentionNow),
+        keepAttentionEquipmentConflicts(equipmentConflicts, attentionNow),
+        keepAttentionPairConflicts(groupConflicts, attentionNow),
       ),
       projectLeadJobIds,
     )

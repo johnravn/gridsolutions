@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Box, Flex, Text } from '@radix-ui/themes'
-import { format } from 'date-fns'
+import { format, startOfMinute } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { jobBookingConflictsQuery } from '../api/queries'
@@ -16,6 +16,10 @@ import {
   formatConflictCountLabel,
   formatPairOverlapLine,
 } from '../utils/conflictCopy'
+import {
+  keepAttentionEquipmentConflicts,
+  keepAttentionPairConflicts,
+} from '../utils/filterConflictsByProjectLead'
 import { formatEquipmentConflictJobs } from '../utils/mergeEquipmentConflicts'
 import type { EquipmentConflictRow } from '../api/queries'
 
@@ -40,10 +44,19 @@ export function JobBookingConflictsBanner({
   })
 
   const { unresolved, forced } = React.useMemo(() => {
-    const crew = splitCrewConflicts(data?.crew ?? [])
-    const vehicles = splitVehicleConflicts(data?.vehicles ?? [])
-    const equipment = splitEquipmentConflicts(data?.equipment ?? [])
-    const groups = splitGroupConflicts(data?.groups ?? [])
+    const attentionNow = startOfMinute(new Date())
+    const crew = splitCrewConflicts(
+      keepAttentionPairConflicts(data?.crew ?? [], attentionNow),
+    )
+    const vehicles = splitVehicleConflicts(
+      keepAttentionPairConflicts(data?.vehicles ?? [], attentionNow),
+    )
+    const equipment = splitEquipmentConflicts(
+      keepAttentionEquipmentConflicts(data?.equipment ?? [], attentionNow),
+    )
+    const groups = splitGroupConflicts(
+      keepAttentionPairConflicts(data?.groups ?? [], attentionNow),
+    )
     return {
       unresolved: {
         crew: crew.unresolved,

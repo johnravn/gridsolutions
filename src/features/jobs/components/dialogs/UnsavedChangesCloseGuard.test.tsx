@@ -33,20 +33,26 @@ describe('UnsavedChangesCloseGuard', () => {
     expect(onSaveAndClose).toHaveBeenCalledTimes(1)
   })
 
-  it('disables actions while saving and shows Saving…', () => {
+  it('keeps Discard available while saving and shows Saving… on Save & close', () => {
+    const onKeepEditing = vi.fn()
+    const onDiscard = vi.fn()
+
     renderWithProviders(
       <UnsavedChangesCloseGuard
         open
         isSaving
-        onKeepEditing={vi.fn()}
-        onDiscard={vi.fn()}
+        onKeepEditing={onKeepEditing}
+        onDiscard={onDiscard}
         onSaveAndClose={vi.fn()}
       />,
     )
 
-    expect(screen.getByRole('button', { name: 'Keep editing' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Discard' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    expect(onDiscard).toHaveBeenCalledTimes(1)
   })
 
   it('disables Save & close when canSave is false', () => {

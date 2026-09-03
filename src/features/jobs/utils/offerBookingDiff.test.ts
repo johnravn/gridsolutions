@@ -870,3 +870,129 @@ describe('buildSyncPreviewViewModel', () => {
     expect(preview.removalCrew).toEqual([])
   })
 })
+
+describe('multi-period equipment keys', () => {
+  it('treats the same item on two periods as distinct', () => {
+    const snapshot: BookingsSnapshot = {
+      ...emptySnapshot,
+      equipment: [
+        {
+          item_id: 'mixer',
+          quantity: 1,
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'period-3d',
+        },
+        {
+          item_id: 'mixer',
+          quantity: 1,
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'period-2d',
+        },
+      ],
+    }
+
+    const detail: SyncLineItems = {
+      ...baseDetail,
+      groups: [
+        {
+          id: 'g1',
+          offer_basis_id: 'b1',
+          group_name: 'PA',
+          sort_order: 0,
+          created_at: '',
+          items: [
+            {
+              id: 'l1',
+              offer_group_id: 'g1',
+              item_id: 'mixer',
+              group_id: null,
+              quantity: 1,
+              unit_price: 100,
+              total_price: 100,
+              is_internal: true,
+              sort_order: 0,
+              time_period_id: 'period-3d',
+            },
+            {
+              id: 'l2',
+              offer_group_id: 'g1',
+              item_id: 'mixer',
+              group_id: null,
+              quantity: 1,
+              unit_price: 100,
+              total_price: 100,
+              is_internal: true,
+              sort_order: 1,
+              time_period_id: 'period-2d',
+            },
+          ],
+        },
+      ],
+    }
+
+    const diff = computeOfferDiff(snapshot, detail, new Map())
+    expect(diff.equipmentChanges).toHaveLength(0)
+  })
+
+  it('flags a missing period window as an addition', () => {
+    const snapshot: BookingsSnapshot = {
+      ...emptySnapshot,
+      equipment: [
+        {
+          item_id: 'mixer',
+          quantity: 1,
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'period-3d',
+        },
+      ],
+    }
+
+    const detail: SyncLineItems = {
+      ...baseDetail,
+      groups: [
+        {
+          id: 'g1',
+          offer_basis_id: 'b1',
+          group_name: 'PA',
+          sort_order: 0,
+          created_at: '',
+          items: [
+            {
+              id: 'l1',
+              offer_group_id: 'g1',
+              item_id: 'mixer',
+              group_id: null,
+              quantity: 1,
+              unit_price: 100,
+              total_price: 100,
+              is_internal: true,
+              sort_order: 0,
+              time_period_id: 'period-3d',
+            },
+            {
+              id: 'l2',
+              offer_group_id: 'g1',
+              item_id: 'mixer',
+              group_id: null,
+              quantity: 1,
+              unit_price: 100,
+              total_price: 100,
+              is_internal: true,
+              sort_order: 1,
+              time_period_id: 'period-2d',
+            },
+          ],
+        },
+      ],
+    }
+
+    const diff = computeOfferDiff(snapshot, detail, new Map())
+    expect(diff.equipmentChanges).toHaveLength(1)
+    expect(diff.equipmentChanges[0].time_period_id).toBe('period-2d')
+    expect(diff.equipmentChanges[0].expected).toBe(1)
+    expect(diff.equipmentChanges[0].current).toBe(0)
+  })
+})

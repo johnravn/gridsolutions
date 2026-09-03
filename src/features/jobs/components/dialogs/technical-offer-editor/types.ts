@@ -15,6 +15,8 @@ export type LocalEquipmentItem = {
   unit_price: number
   is_internal: boolean
   sort_order: number
+  /** Job equipment time period this line is booked against. */
+  time_period_id?: string | null
   /** Free-text description for custom/one-off lines (when item_id and group_id are null). */
   custom_line_description?: string | null
   /** Free-text brand for custom lines (when item_id and group_id are null). */
@@ -54,6 +56,8 @@ export type LocalCrewItem = {
   billing_type: 'daily' | 'hourly'
   sort_order: number
   role_category?: string | null
+  /** Job crew time period (role) this line is tied to. */
+  time_period_id?: string | null
 }
 
 export type LocalTransportItem = {
@@ -82,6 +86,8 @@ export type LocalTransportItem = {
   distance_rate: number | null // Distance rate per increment (null means use default)
   is_internal: boolean
   sort_order: number
+  /** Job transport time period this line is tied to. */
+  time_period_id?: string | null
   vehicle?: {
     id: string
     name: string

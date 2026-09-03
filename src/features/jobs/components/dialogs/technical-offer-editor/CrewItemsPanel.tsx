@@ -24,6 +24,7 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
+import { ManageTimePeriodsButton } from '../ManageTimePeriodsDialog'
 import { CrewDateRangeField } from './CrewDateRangeField'
 import { resolveHourlyHoursPerDay } from './utils'
 import { SortableCrewCard } from './sortable'
@@ -40,6 +41,7 @@ export function CrewItemsPanel({
   defaultRatePerHour,
   defaultBillingUnit = 'hour',
   defaultsLoading = false,
+  jobId,
 }: {
   items: Array<LocalCrewItem>
   onItemsChange: (items: Array<LocalCrewItem>) => void
@@ -51,6 +53,7 @@ export function CrewItemsPanel({
   defaultRatePerHour?: number | null
   defaultBillingUnit?: 'day' | 'hour'
   defaultsLoading?: boolean
+  jobId?: string
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -272,16 +275,26 @@ export function CrewItemsPanel({
     <Flex direction="column" gap="3">
       <Flex justify="between" align="center">
         <Heading size="3">Crew</Heading>
-        {!readOnly && (
-          <Button
-            size="2"
-            onClick={addItem}
-            disabled={defaultsLoading}
-            title={defaultsLoading ? 'Loading customer pricing…' : undefined}
-          >
-            <Plus width={16} height={16} /> Add Crew Item
-          </Button>
-        )}
+        <Flex align="center" gap="2">
+          {jobId && (
+            <ManageTimePeriodsButton
+              jobId={jobId}
+              initialCategory="crew"
+              readOnly={readOnly}
+              size="2"
+            />
+          )}
+          {!readOnly && (
+            <Button
+              size="2"
+              onClick={addItem}
+              disabled={defaultsLoading}
+              title={defaultsLoading ? 'Loading customer pricing…' : undefined}
+            >
+              <Plus width={16} height={16} /> Add Crew Item
+            </Button>
+          )}
+        </Flex>
       </Flex>
 
       {items.length > 0 && (

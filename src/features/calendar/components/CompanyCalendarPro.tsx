@@ -28,6 +28,7 @@ import { MobileBottomDrawer } from '@app/layout/mobile'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
+import { eventHasPendingInviteLabel } from '@features/calendar/api/crewCalendarVisibility'
 import { applyCalendarFilter } from './domain'
 import type { CalendarFilter, CalendarKind } from './domain'
 import type {
@@ -138,6 +139,7 @@ type OverflowEvent = {
   displayTitle: string
   timeStr: string
   isCanceled: boolean
+  isPendingInvite: boolean
   bg: string
   text: string
   leadName: string | null
@@ -159,7 +161,10 @@ function formatTimeRange(start: Date | null, end: Date | null): string {
   return `${fmt(start)}–${fmt(end)}`
 }
 
-function snapshotOverflowEvent(event: EventApi): OverflowEvent {
+function snapshotOverflowEvent(
+  event: EventApi,
+  opts: { viewerUserId?: string | null; focusUserId?: string | null },
+): OverflowEvent {
   const props = event.extendedProps as {
     projectLead?: {
       display_name: string | null
@@ -178,9 +183,16 @@ function snapshotOverflowEvent(event: EventApi): OverflowEvent {
     ref?: { jobId?: string; userId?: string }
     kind?: string
     notes?: string
+    pendingInviteUserIds?: Array<string>
   }
   const projectLead = props.projectLead
   const isCanceled = props.status === 'canceled'
+  const isPendingInvite = eventHasPendingInviteLabel({
+    category: props.category,
+    pendingInviteUserIds: props.pendingInviteUserIds ?? [],
+    viewerUserId: opts.viewerUserId,
+    focusUserId: opts.focusUserId,
+  })
   const avatarUrl = projectLead?.avatar_url
     ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url).data
         .publicUrl
@@ -193,6 +205,7 @@ function snapshotOverflowEvent(event: EventApi): OverflowEvent {
     displayTitle: props.jobTitle || event.title,
     timeStr: formatTimeRange(event.start, event.end),
     isCanceled,
+    isPendingInvite,
     bg: isCanceled
       ? 'var(--gray-a3)'
       : event.backgroundColor || 'var(--indigo-a6)',
@@ -240,6 +253,11 @@ type Props = {
   // Control list mode externally
   initialListMode?: boolean
   onListModeChange?: (listMode: boolean) => void
+  /**
+   * When set (e.g. crew person filter), PENDING is shown only for that user's
+   * unanswered invite. When null on crew events, any pending invite is labelled.
+   */
+  focusUserId?: string | null
 }
 
 export default function CompanyCalendarPro({
@@ -253,6 +271,7 @@ export default function CompanyCalendarPro({
   onPersonalEventClick,
   initialListMode = false,
   onListModeChange,
+  focusUserId = null,
 }: Props) {
   const navigate = useNavigate()
   const { userId } = useAuthz()
@@ -460,7 +479,12 @@ export default function CompanyCalendarPro({
           return true
         })
         .sort((a, b) => (a.start?.getTime() ?? 0) - (b.start?.getTime() ?? 0))
-        .map(snapshotOverflowEvent)
+        .map((event) =>
+          snapshotOverflowEvent(event, {
+            viewerUserId: userId,
+            focusUserId,
+          }),
+        )
 
       // FullCalendar still opens its popover when the handler returns void.
       // A truthy non-string skips both the popover and view-zoom. Defer our
@@ -470,7 +494,7 @@ export default function CompanyCalendarPro({
       })
       return true as unknown as 'popover'
     },
-    [isSmallScreen],
+    [isSmallScreen, userId, focusUserId],
   )
 
   function overflowEventRow(event: OverflowEvent) {
@@ -535,7 +559,9 @@ export default function CompanyCalendarPro({
               minWidth: 0,
             }}
           >
-            {event.displayTitle}
+            {event.isPendingInvite
+              ? `PENDING · ${event.displayTitle}`
+              : event.displayTitle}
           </span>
           {event.leadName && (
             <Avatar
@@ -578,9 +604,21 @@ export default function CompanyCalendarPro({
       (props?.jobCrewUserIds as Array<string> | undefined) || []
     const jobCrewStatusByUserId =
       (props?.jobCrewStatusByUserId as Record<string, string> | undefined) || {}
+    const pendingInviteUserIds =
+      (props?.pendingInviteUserIds as Array<string> | undefined) || []
     const ref = props?.ref as { userId?: string } | undefined
 
+    const isPendingInvite = eventHasPendingInviteLabel({
+      category,
+      pendingInviteUserIds,
+      viewerUserId: userId,
+      focusUserId,
+    })
+
     const displayTitle = jobTitle || arg.event.title
+    const labelledTitle = isPendingInvite
+      ? `PENDING · ${displayTitle}`
+      : displayTitle
     const timeStr = formatTimeRange(
       arg.event.start ? new Date(arg.event.start) : null,
       arg.event.end ? new Date(arg.event.end) : null,
@@ -639,7 +677,7 @@ export default function CompanyCalendarPro({
             minWidth: 0,
           }}
         >
-          {displayTitle}
+          {labelledTitle}
         </span>
         {projectLead && (
           <Avatar
@@ -673,6 +711,11 @@ export default function CompanyCalendarPro({
             {displayTitle}
           </Text>
           <Flex direction="column" gap="2">
+            {isPendingInvite && (
+              <Badge size="1" color="amber" variant="solid">
+                PENDING
+              </Badge>
+            )}
             {arg.event.title && arg.event.title !== displayTitle && (
               <Text size="1" color="gray">
                 {arg.event.title}
@@ -709,7 +752,9 @@ export default function CompanyCalendarPro({
                   ? 'project lead'
                   : isConfirmedCrew
                     ? 'crew (confirmed)'
-                    : 'crew'}
+                    : isPendingInvite
+                      ? 'crew (pending invitation)'
+                      : 'crew'}
               </Badge>
             )}
             {status && (

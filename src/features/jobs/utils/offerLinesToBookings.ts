@@ -87,7 +87,6 @@ function equipmentLine(
   const lineTotal = roundMoney(item.total_price)
   // Bake rental factor into unit: total ÷ qty (= daily × factor).
   const unitPrice = roundMoney(lineTotal / quantity)
-  const rentalDays = offer.days_of_use > 0 ? offer.days_of_use : null
   const line: BookingInvoiceLine = {
     id: item.id,
     type: 'equipment',
@@ -96,12 +95,12 @@ function equipmentLine(
     model: item.custom_line_model ?? item.item?.model ?? null,
     groupName: inventoryGroupName,
     itemName,
-    rentalDays,
+    rentalDays: offer.days_of_use > 0 ? offer.days_of_use : null,
     quantity,
     unitPrice,
     totalPrice: lineTotal,
     vatPercent: offer.vat_percent,
-    timePeriodId: '',
+    timePeriodId: item.time_period_id ?? '',
     timePeriodTitle: null,
     startAt: '',
     endAt: '',

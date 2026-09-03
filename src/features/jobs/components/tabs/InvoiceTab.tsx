@@ -22,6 +22,7 @@ import {
 } from '@shared/api/conta/client'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { companyDetailQuery } from '@features/company/api/queries'
+import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButton'
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
@@ -1251,11 +1252,16 @@ export default function InvoiceTab({
                 )}
               </Box>
             )}
-            <Dialog.Title>Invoice Preview</Dialog.Title>
-            <Dialog.Description size="2" color="gray" mb="4">
-              Review the invoice details before creating it in your accounting
-              software.
-            </Dialog.Description>
+            <Flex justify="between" align="start" gap="3">
+              <Box style={{ minWidth: 0 }}>
+                <Dialog.Title>Invoice Preview</Dialog.Title>
+                <Dialog.Description size="2" color="gray" mb="4">
+                  Review the invoice details before creating it in your
+                  accounting software.
+                </Dialog.Description>
+              </Box>
+              <DialogCloseIconButton disabled={isSendingInvoice} />
+            </Flex>
 
             {previewOffer && (
               <InvoicePreview
@@ -1463,12 +1469,17 @@ export default function InvoiceTab({
                 )}
               </Box>
             )}
-            <Dialog.Title>Customer cannot receive EHF</Dialog.Title>
-            <Dialog.Description size="2" color="gray" mb="2">
-              This customer is not set up to receive invoices through the
-              Norwegian electronic invoicing network (EHF). Conta cannot deliver
-              the invoice to them automatically.
-            </Dialog.Description>
+            <Flex justify="between" align="start" gap="3">
+              <Box style={{ minWidth: 0 }}>
+                <Dialog.Title>Customer cannot receive EHF</Dialog.Title>
+                <Dialog.Description size="2" color="gray" mb="2">
+                  This customer is not set up to receive invoices through the
+                  Norwegian electronic invoicing network (EHF). Conta cannot
+                  deliver the invoice to them automatically.
+                </Dialog.Description>
+              </Box>
+              <DialogCloseIconButton disabled={isSendingInvoice} />
+            </Flex>
             {manualSendReason ? (
               <Box
                 mb="3"

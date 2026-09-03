@@ -521,6 +521,8 @@ export type OfferEquipmentItem = {
   total_price: number
   is_internal: boolean
   sort_order: number
+  /** Job equipment time period this line is booked against. */
+  time_period_id?: UUID | null
   /** Free-text description for custom/one-off lines when item_id and group_id are both null. */
   custom_line_description?: string | null
   custom_line_brand?: string | null
@@ -572,6 +574,8 @@ export type OfferCrewItem = {
   billing_type?: 'daily' | 'hourly' | null
   total_price: number
   sort_order: number
+  /** Job crew time period (role) this line is tied to. */
+  time_period_id?: UUID | null
 }
 
 export type OfferTransportItem = {
@@ -602,6 +606,8 @@ export type OfferTransportItem = {
   total_price: number
   is_internal: boolean
   sort_order: number
+  /** Job transport time period this line is tied to. */
+  time_period_id?: UUID | null
   // Joined relation
   vehicle?: {
     id: UUID

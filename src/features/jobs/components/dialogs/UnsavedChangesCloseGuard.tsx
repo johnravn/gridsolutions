@@ -43,15 +43,12 @@ export function UnsavedChangesCloseGuard({
           keep editing.
         </Dialog.Description>
         <Flex gap="2" mt="4" justify="end" wrap="wrap">
-          <Button variant="soft" onClick={onKeepEditing} disabled={isSaving}>
+          {/* Keep editing / Discard stay available while saving so a hung
+              write cannot trap the user behind a dead dialog. */}
+          <Button variant="soft" onClick={onKeepEditing}>
             Keep editing
           </Button>
-          <Button
-            variant="soft"
-            color="red"
-            onClick={onDiscard}
-            disabled={isSaving}
-          >
+          <Button variant="soft" color="red" onClick={onDiscard}>
             Discard
           </Button>
           <Button onClick={onSaveAndClose} disabled={isSaving || !canSave}>

@@ -75,26 +75,22 @@ function periodStillOpen(endAt: string, now: Date): boolean {
   return new Date(endAt).getTime() >= now.getTime()
 }
 
-/** Unresolved overlaps stay visible; forced overlaps drop off after they end. */
+/** Drop overlaps once both booking windows have ended (forced or unresolved). */
 export function keepAttentionPairConflicts<
   T extends {
-    forced_1: boolean
-    forced_2: boolean
     end_1: string
     end_2: string
   },
 >(rows: ReadonlyArray<T>, now: Date): Array<T> {
-  return rows.filter((row) => {
-    if (!row.forced_1 && !row.forced_2) return true
-    return periodStillOpen(row.end_1, now) || periodStillOpen(row.end_2, now)
-  })
+  return rows.filter(
+    (row) => periodStillOpen(row.end_1, now) || periodStillOpen(row.end_2, now),
+  )
 }
 
+/** Drop equipment over-capacity rows once their conflict window has ended. */
 export function keepAttentionEquipmentConflicts(
   rows: ReadonlyArray<EquipmentConflictRow>,
   now: Date,
 ): Array<EquipmentConflictRow> {
-  return rows.filter(
-    (row) => !row.has_forced || periodStillOpen(row.end_at, now),
-  )
+  return rows.filter((row) => periodStillOpen(row.end_at, now))
 }

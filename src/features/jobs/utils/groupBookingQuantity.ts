@@ -82,3 +82,52 @@ export function bookedGroupQuantitiesByGroupId(
   }
   return quantities
 }
+
+/**
+ * Same as bookedGroupQuantitiesByGroupId, but keeps period identity:
+ * key = `${groupId}:${time_period_id}`.
+ */
+export function bookedGroupQuantitiesByGroupAndPeriod(
+  bookings: Array<BookedGroupLine>,
+  groupItemsMap: Map<string, Array<{ item_id: string; quantity: number }>>,
+): Map<string, { groupId: string; time_period_id: string; quantity: number }> {
+  const chunks = new Map<
+    string,
+    {
+      groupId: string
+      time_period_id: string
+      lines: Array<{ item_id: string; quantity: number }>
+    }
+  >()
+
+  for (const booking of bookings) {
+    const groupId = booking.source_group_id
+    if (!groupId || !booking.item_id || !booking.time_period_id) continue
+    const key = `${groupId}:${booking.time_period_id}`
+    const chunk = chunks.get(key) ?? {
+      groupId,
+      time_period_id: booking.time_period_id,
+      lines: [],
+    }
+    chunk.lines.push({
+      item_id: booking.item_id,
+      quantity: booking.quantity ?? 0,
+    })
+    chunks.set(key, chunk)
+  }
+
+  const result = new Map<
+    string,
+    { groupId: string; time_period_id: string; quantity: number }
+  >()
+  for (const [key, chunk] of chunks.entries()) {
+    const template = groupItemsMap.get(chunk.groupId) ?? []
+    const count = impliedBookedGroupCount(template, chunk.lines)
+    result.set(key, {
+      groupId: chunk.groupId,
+      time_period_id: chunk.time_period_id,
+      quantity: count,
+    })
+  }
+  return result
+}

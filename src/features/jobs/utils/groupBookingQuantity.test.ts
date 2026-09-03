@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  bookedGroupQuantitiesByGroupAndPeriod,
   bookedGroupQuantitiesByGroupId,
   impliedBookedGroupCount,
 } from './groupBookingQuantity'
@@ -108,5 +109,47 @@ describe('bookedGroupQuantitiesByGroupId', () => {
       groupItemsMap,
     )
     expect(quantities.get('kit-a')).toBe(2)
+  })
+})
+
+describe('bookedGroupQuantitiesByGroupAndPeriod', () => {
+  const template = [
+    { item_id: 'mic', quantity: 2 },
+    { item_id: 'stand', quantity: 1 },
+  ]
+  const groupItemsMap = new Map([['kit-a', template]])
+
+  it('keeps separate quantities per period', () => {
+    const quantities = bookedGroupQuantitiesByGroupAndPeriod(
+      [
+        {
+          source_group_id: 'kit-a',
+          time_period_id: 'p1',
+          item_id: 'mic',
+          quantity: 2,
+        },
+        {
+          source_group_id: 'kit-a',
+          time_period_id: 'p1',
+          item_id: 'stand',
+          quantity: 1,
+        },
+        {
+          source_group_id: 'kit-a',
+          time_period_id: 'p2',
+          item_id: 'mic',
+          quantity: 4,
+        },
+        {
+          source_group_id: 'kit-a',
+          time_period_id: 'p2',
+          item_id: 'stand',
+          quantity: 2,
+        },
+      ],
+      groupItemsMap,
+    )
+    expect(quantities.get('kit-a:p1')?.quantity).toBe(1)
+    expect(quantities.get('kit-a:p2')?.quantity).toBe(2)
   })
 })

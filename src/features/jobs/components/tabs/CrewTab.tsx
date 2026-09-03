@@ -28,6 +28,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { sendCrewInvite, sendCrewInvites } from '../../../matters/api/queries'
 import { crewInternalNotesQuery } from '../../../crew/api/queries'
 import AddRoleDialog from '../dialogs/AddRoleDialog'
+import { ManageTimePeriodsButton } from '../dialogs/ManageTimePeriodsDialog'
 import EditRoleDialog from '../dialogs/EditRoleDialog'
 import AddCrewToRoleDialog from '../dialogs/AddCrewToRoleDialog'
 import SendInviteDialog from '../dialogs/SendInviteDialog'
@@ -549,6 +550,7 @@ export default function CrewTab({
         <Heading size="3">Roles</Heading>
         {!isReadOnly && (
           <Flex align="center" gap="3">
+            <ManageTimePeriodsButton jobId={jobId} initialCategory="crew" />
             <Button size="2" onClick={() => setAddRoleOpen(true)}>
               <Plus /> Add role
             </Button>
