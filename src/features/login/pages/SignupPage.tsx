@@ -17,6 +17,7 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
 
 interface PasswordRequirement {
   id: string
@@ -202,6 +203,16 @@ export default function SignupPage() {
           </Box>
 
           <Separator size="4" />
+
+          <OAuthProviderButtons onError={setError} />
+
+          <Flex align="center" gap="3">
+            <Separator style={{ flex: 1 }} />
+            <Text size="1" color="gray">
+              or continue with email
+            </Text>
+            <Separator style={{ flex: 1 }} />
+          </Flex>
 
           <form
             onSubmit={(e) => {

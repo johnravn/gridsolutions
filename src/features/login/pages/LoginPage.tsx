@@ -14,6 +14,8 @@ import {
 } from '@radix-ui/themes'
 import { NavArrowLeft } from 'iconoir-react'
 import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
+import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
 
 const defaultValues = {
   email: '',
@@ -41,6 +43,15 @@ export default function LoginPage() {
         password: value.password,
       })
       if (signInError) return setError(signInError.message)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const userId = sessionData.session?.user?.id
+      if (userId) {
+        const profile = await fetchProfileCompleteness(userId)
+        if (!isProfileComplete(profile)) {
+          navigate({ to: '/complete-profile' })
+          return
+        }
+      }
       navigate({ to: '/dashboard' })
     },
   })
@@ -124,6 +135,16 @@ export default function LoginPage() {
           </Box>
 
           <Separator size="4" />
+
+          <OAuthProviderButtons onError={setError} />
+
+          <Flex align="center" gap="3">
+            <Separator style={{ flex: 1 }} />
+            <Text size="1" color="gray">
+              or
+            </Text>
+            <Separator style={{ flex: 1 }} />
+          </Flex>
 
           {/* Form */}
           <form

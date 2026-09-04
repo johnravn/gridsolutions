@@ -10,7 +10,7 @@ import {
 } from '@radix-ui/themes'
 import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Plus, Search } from 'iconoir-react'
-import { HighlightedText } from '@shared/ui/components/SearchableSelect'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
 import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import type { IndexColumn } from '@shared/ui/index-table'

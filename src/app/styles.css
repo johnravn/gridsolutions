@@ -1345,6 +1345,61 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   cursor: col-resize !important;
 }
 
+/* Split panel header icon buttons (collapse + filter): kill Radix ghost
+   negative margins, and lock size so ghost ↔ solid (or hover) never shifts layout. */
+.split-header-icon-button.rt-IconButton {
+  box-sizing: border-box;
+  width: var(--base-button-height);
+  height: var(--base-button-height);
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  --margin-top-override: 0px;
+  --margin-right-override: 0px;
+  --margin-bottom-override: 0px;
+  --margin-left-override: 0px;
+}
+
+.split-header-icon-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: var(--space-7);
+  height: var(--space-7);
+  align-items: center;
+  justify-content: center;
+}
+
+.split-header-icon-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  z-index: 1;
+  box-sizing: border-box;
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: 999px;
+  background-color: var(--accent-9);
+  color: white;
+  font-size: var(--font-size-1);
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.split-header-icon-badge--orange {
+  background-color: var(--orange-9);
+}
+
+.split-header-icon-badge--on-solid {
+  background-color: var(--orange-1);
+  color: var(--orange-11);
+}
+
 /* Sidebar nav: Radix ghost uses content-box + negative margins — keep width
    under control, but allow the hover nudge to paint outside the rail. */
 .sidebar-nav-item {

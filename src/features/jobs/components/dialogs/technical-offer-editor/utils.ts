@@ -1,26 +1,7 @@
-export function escapeForPostgrestOr(value: string) {
-  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
-}
-
-/** ILIKE patterns that treat spaces as optional and allow a single-letter typo. */
-export function postgrestIlikePatterns(term: string): Array<string> {
-  const safe = escapeForPostgrestOr(term)
-  if (!safe) return []
-  const compact = safe.replace(/\s+/g, '')
-  const patterns = [`%${safe}%`]
-  if (compact && compact !== safe) patterns.push(`%${compact}%`)
-  if (compact.length > 2) {
-    patterns.push(`%${compact.split('').join('%')}%`)
-    for (let i = 0; i < compact.length; i++) {
-      patterns.push(`%${compact.slice(0, i)}_${compact.slice(i + 1)}%`)
-      const dropped = compact.slice(0, i) + compact.slice(i + 1)
-      if (dropped.length > 2) {
-        patterns.push(`%${dropped.split('').join('%')}%`)
-      }
-    }
-  }
-  return [...new Set(patterns)]
-}
+export {
+  escapeForPostgrestOr,
+  postgrestIlikePatterns,
+} from '@shared/api/fuzzySearch'
 
 export const DEFAULT_CREW_HOURS_PER_DAY = 8
 

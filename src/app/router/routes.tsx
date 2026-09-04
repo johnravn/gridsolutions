@@ -16,8 +16,10 @@ import LandingPage from '@features/home/pages/LandingPage'
 import LoginPage from '@features/login/pages/LoginPage'
 import SignupPage from '@features/login/pages/SignupPage'
 import AuthCallback from '@features/login/pages/AuthCallback'
+import CompleteProfilePage from '@features/login/pages/CompleteProfilePage'
 import TermsPrivacyPage from '@features/legal/pages/TermsPrivacyPage'
 import { supabase } from '@shared/api/supabase'
+import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
 import CompanyPage from '@features/company/pages/CompanyPage'
 import SuperPage from '@features/super/pages/SuperPage'
 import ProfilePage from '@features/profile/pages/ProfilePage'
@@ -56,6 +58,12 @@ const landingRoute = createRoute({
   beforeLoad: async () => {
     const { data } = await supabase.auth.getSession()
     if (data.session?.user) {
+      if (!data.session.user.is_anonymous) {
+        const profile = await fetchProfileCompleteness(data.session.user.id)
+        if (!isProfileComplete(profile)) {
+          throw redirect({ to: '/complete-profile' })
+        }
+      }
       throw redirect({ to: '/dashboard' })
     }
   },
@@ -83,6 +91,22 @@ const authCallbackRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/auth/callback',
   component: AuthCallback,
+})
+
+const completeProfileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/complete-profile',
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession()
+    if (!data.session?.user) {
+      throw redirect({ to: '/login' })
+    }
+    const profile = await fetchProfileCompleteness(data.session.user.id)
+    if (isProfileComplete(profile)) {
+      throw redirect({ to: '/dashboard' })
+    }
+  },
+  component: CompleteProfilePage,
 })
 
 const legalRoute = createRoute({
@@ -125,6 +149,15 @@ const authedRoute = createRoute({
         // After login, send the user back here:
         search: { redirect: location.href },
       })
+    }
+
+    // OAuth / incomplete profiles must finish required fields first
+    // (skip anonymous demo sessions — they use placeholder profiles)
+    if (!session.user.is_anonymous) {
+      const profile = await fetchProfileCompleteness(session.user.id)
+      if (!isProfileComplete(profile)) {
+        throw redirect({ to: '/complete-profile' })
+      }
     }
   },
   component: () => <Outlet />,
@@ -230,6 +263,9 @@ const latestRoute = createRoute({
 const profileRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'profile',
+  validateSearch: (search: Record<string, unknown>) => ({
+    tab: (search.tab as string | undefined) || undefined,
+  }),
   component: guarded('visit:profile', ProfilePage),
 })
 
@@ -269,6 +305,7 @@ const routeTree = rootRoute.addChildren([
   loginRoute,
   signupRoute,
   authCallbackRoute,
+  completeProfileRoute,
   legalRoute,
   contactRoute,
   publicOfferRoute,

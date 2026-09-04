@@ -3,6 +3,13 @@ import * as React from 'react'
 import { supabase } from '@shared/api/supabase'
 import { useNavigate } from '@tanstack/react-router'
 import { Card, Flex, Heading, Text } from '@radix-ui/themes'
+import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
+
+function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null
+  if (!raw.startsWith('/') || raw.startsWith('//')) return null
+  return raw
+}
 
 export default function AuthCallback() {
   const navigate = useNavigate()
@@ -15,6 +22,7 @@ export default function AuthCallback() {
       const url = new URL(window.location.href)
       const code =
         url.searchParams.get('code') || url.hash.match(/code=([^&]+)/)?.[1]
+      const next = safeNextPath(url.searchParams.get('next'))
 
       try {
         // 1) Try PKCE/OAuth session exchange first (works for many providers and some email links)
@@ -37,13 +45,44 @@ export default function AuthCallback() {
           }
         }
 
-        if (!cancelled) navigate({ to: '/dashboard' })
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message ?? 'Could not complete sign-in')
+        const { data: sessionData } = await supabase.auth.getSession()
+        const user = sessionData.session?.user
+        if (!user) throw new Error('No session after sign-in')
+
+        // Linking return: go back to profile Sign-in methods
+        if (next?.startsWith('/profile')) {
+          if (!cancelled) {
+            void navigate({
+              to: '/profile',
+              search: { tab: 'auth' },
+            })
+          }
+          return
+        }
+
+        if (user.is_anonymous) {
+          if (!cancelled) void navigate({ to: '/dashboard' })
+          return
+        }
+
+        const profile = await fetchProfileCompleteness(user.id)
+        if (!cancelled) {
+          if (!isProfileComplete(profile)) {
+            void navigate({ to: '/complete-profile' })
+          } else {
+            void navigate({ to: '/dashboard' })
+          }
+        }
+      } catch (e: unknown) {
+        if (!cancelled) {
+          setError(
+            e instanceof Error ? e.message : 'Could not complete sign-in',
+          )
+        }
       }
     }
 
-    run()
+    void run()
     return () => {
       cancelled = true
     }
@@ -64,10 +103,7 @@ export default function AuthCallback() {
 
   return (
     <Flex align="center" justify="center" style={{ minHeight: '100dvh' }}>
-      <Card size="3" style={{ width: 420, background: 'var(--gray-a2)' }}>
-        <Heading size="5">Completing sign-in…</Heading>
-        <Text color="gray">Please wait.</Text>
-      </Card>
+      <Text color="gray">Completing sign-in…</Text>
     </Flex>
   )
 }

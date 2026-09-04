@@ -48,6 +48,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { supabase } from '@shared/api/supabase'
 import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
 import {
@@ -551,6 +552,7 @@ export default function JobsList({
                   myRole={getMyJobRole(job)}
                   onSelect={() => onSelectJob(job.id)}
                   getAvatarUrl={getAvatarUrl}
+                  searchQuery={search}
                 />
               ))}
             </Flex>
@@ -659,6 +661,7 @@ export default function JobsList({
                       myRole={getMyJobRole(job)}
                       onSelect={() => onSelectJob(job.id)}
                       getAvatarUrl={getAvatarUrl}
+                      searchQuery={search}
                     />
                   ))}
                 </Flex>
@@ -756,6 +759,7 @@ export default function JobsList({
                     row={row}
                     compact
                     isSelected={selectedRecurringJobId === row.id}
+                    searchQuery={search}
                     onClick={() => onSelectRecurringJob(row.id, row.title)}
                   />
                 ))}
@@ -769,6 +773,7 @@ export default function JobsList({
                   row={row}
                   compact
                   isSelected={selectedRecurringJobId === row.id}
+                  searchQuery={search}
                   onClick={() => onSelectRecurringJob(row.id, row.title)}
                 />
               ))}
@@ -800,6 +805,7 @@ export default function JobsList({
                   myRole={getMyJobRole(job)}
                   onSelect={() => onSelectJob(job.id)}
                   getAvatarUrl={getAvatarUrl}
+                  searchQuery={search}
                 />
               ))}
               {hasNextPage && (
@@ -950,6 +956,7 @@ export default function JobsList({
                 row={row}
                 compact={compact}
                 isSelected={selectedRecurringJobId === row.id}
+                searchQuery={search}
                 onClick={() => onSelectRecurringJob(row.id, row.title)}
               />
             ))}
@@ -1039,6 +1046,7 @@ export default function JobsList({
                     row={row}
                     compact={compact}
                     isSelected={selectedRecurringJobId === row.id}
+                    searchQuery={search}
                     onClick={() => onSelectRecurringJob(row.id, row.title)}
                   />
                 ))}
@@ -1200,7 +1208,10 @@ export default function JobsList({
                                   minWidth: 0,
                                 }}
                               >
-                                {job.title}
+                                <HighlightedText
+                                  text={job.title}
+                                  query={search}
+                                />
                               </Text>
                               {showCrewBadge && (
                                 <Badge size="1" color="orange" variant="soft">
@@ -1223,7 +1234,10 @@ export default function JobsList({
                                   minWidth: 0,
                                 }}
                               >
-                                {customerName}
+                                <HighlightedText
+                                  text={customerName}
+                                  query={search}
+                                />
                               </Text>
                               <Text size="1" color="gray">
                                 •
@@ -1301,7 +1315,10 @@ export default function JobsList({
                                     minWidth: 0,
                                   }}
                                 >
-                                  {job.title}
+                                  <HighlightedText
+                                    text={job.title}
+                                    query={search}
+                                  />
                                 </Text>
                               </Tooltip>
                               {showCrewBadge && (
@@ -1328,7 +1345,10 @@ export default function JobsList({
                                   minWidth: 0,
                                 }}
                               >
-                                {customerName}
+                                <HighlightedText
+                                  text={customerName}
+                                  query={search}
+                                />
                               </Text>
                               <Text size="1" color="gray">
                                 •
@@ -1383,7 +1403,7 @@ export default function JobsList({
                                 minWidth: 0,
                               }}
                             >
-                              {leadName}
+                              <HighlightedText text={leadName} query={search} />
                             </Text>
                             <Avatar
                               size="2"
@@ -1423,6 +1443,7 @@ function JobIndexRow({
   onSelect,
   getAvatarUrl,
   compact = false,
+  searchQuery = '',
 }: {
   job: JobListRow
   isSelected: boolean
@@ -1431,6 +1452,7 @@ function JobIndexRow({
   onSelect: () => void
   getAvatarUrl: (avatarPath: string | null) => string | null
   compact?: boolean
+  searchQuery?: string
 }) {
   const displayStatus = getDisplayStatus(job.status, companyRole)
   const isCanceled = job.status === 'canceled'
@@ -1511,7 +1533,7 @@ function JobIndexRow({
                   minWidth: 0,
                 }}
               >
-                {job.title}
+                <HighlightedText text={job.title} query={searchQuery} />
               </Text>
               {showCrewBadge && (
                 <Badge size="1" color="orange" variant="soft">
@@ -1530,7 +1552,7 @@ function JobIndexRow({
                   minWidth: 0,
                 }}
               >
-                {customerName}
+                <HighlightedText text={customerName} query={searchQuery} />
               </Text>
               <Text size="1" color="gray">
                 •
@@ -1591,7 +1613,7 @@ function JobIndexRow({
                     minWidth: 0,
                   }}
                 >
-                  {job.title}
+                  <HighlightedText text={job.title} query={searchQuery} />
                 </Text>
               </Tooltip>
               {showCrewBadge && (
@@ -1618,7 +1640,7 @@ function JobIndexRow({
                   minWidth: 0,
                 }}
               >
-                {customerName}
+                <HighlightedText text={customerName} query={searchQuery} />
               </Text>
               <Text size="1" color="gray">
                 •
@@ -1669,7 +1691,7 @@ function JobIndexRow({
                 minWidth: 0,
               }}
             >
-              {leadName}
+              <HighlightedText text={leadName} query={searchQuery} />
             </Text>
             <Avatar
               size="2"

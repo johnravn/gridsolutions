@@ -16,12 +16,13 @@ import {
   calculateRentalFactor,
   calculateTransportLineTotal,
 } from '../utils/offerCalculations'
-import { bookedGroupQuantitiesByGroupAndPeriod } from '../utils/groupBookingQuantity'
+import { bookedGroupQuantitiesByGroupId } from '../utils/groupBookingQuantity'
 import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
 import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
+import { ensureDefaultEquipmentPeriod } from './queries'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type {
   LocalCrewItem,
@@ -687,7 +688,7 @@ export async function createOfferBasisFromBookings({
       ? await flattenGroupLeafItems(groupIds)
       : new Map<string, Array<{ item_id: string; quantity: number }>>()
 
-  const groupQuantityByPeriod = bookedGroupQuantitiesByGroupAndPeriod(
+  const groupQuantityByGroupId = bookedGroupQuantitiesByGroupId(
     equipmentGroupBookings,
     groupItemsMap,
   )
@@ -708,28 +709,34 @@ export async function createOfferBasisFromBookings({
     return equipmentByCategory.get(categoryName)!
   }
 
+  const defaultEquipmentPeriodId = await ensureDefaultEquipmentPeriod({
+    jobId,
+    companyId,
+    startAt: job.start_at || new Date().toISOString(),
+    endAt: job.end_at || new Date().toISOString(),
+  })
+
   for (const booking of equipmentDirectBookings || []) {
     if (!booking.item_id || !booking.time_period_id) continue
     const categoryName = itemCategoryMap.get(booking.item_id) ?? 'Uncategorized'
     const quantity = booking.quantity ?? 1
     const category = ensureCategory(categoryName)
-    const key = `${booking.time_period_id}:${booking.item_id}`
+    const key = booking.item_id
     const current = category.items.get(key)
     category.items.set(key, {
       quantity: (current?.quantity ?? 0) + quantity,
-      time_period_id: booking.time_period_id,
+      time_period_id: defaultEquipmentPeriodId,
     })
   }
 
-  for (const entry of groupQuantityByPeriod.values()) {
-    const info = groupInfoMap.get(entry.groupId)
+  for (const [groupId, quantity] of groupQuantityByGroupId.entries()) {
+    const info = groupInfoMap.get(groupId)
     if (!info) continue
     const categoryName = info.category_name ?? 'Uncategorized'
     const category = ensureCategory(categoryName)
-    const key = `${entry.time_period_id}:${entry.groupId}`
-    category.groups.set(key, {
-      quantity: entry.quantity,
-      time_period_id: entry.time_period_id,
+    category.groups.set(groupId, {
+      quantity,
+      time_period_id: defaultEquipmentPeriodId,
     })
   }
 
@@ -814,54 +821,40 @@ export async function createOfferBasisFromBookings({
       if (groupError) throw groupError
 
       const itemLines = Array.from(category.items.entries()).map(
-        ([key, entry], itemIndex) => {
-          const itemId = key.split(':').slice(1).join(':')
+        ([itemId, entry], itemIndex) => {
           const unitPrice = itemPriceMap.get(itemId) ?? 0
-          const factor = (() => {
-            const period = timePeriodMap.get(entry.time_period_id)
-            if (!period) return equipmentRentalFactor
-            return calculateRentalFactor(
-              offerDaySpanBetween(period.start_at, period.end_at),
-              rentalFactorConfig,
-            )
-          })()
           return {
             offer_group_id: group.id,
             item_id: itemId,
             group_id: null,
             quantity: entry.quantity,
             unit_price: unitPrice,
-            total_price: roundMoney(unitPrice * entry.quantity * factor),
+            total_price: roundMoney(
+              unitPrice * entry.quantity * equipmentRentalFactor,
+            ),
             is_internal: itemInternalMap.get(itemId) ?? true,
             sort_order: itemIndex,
-            time_period_id: entry.time_period_id,
+            time_period_id: defaultEquipmentPeriodId,
           }
         },
       )
 
       const groupLines = Array.from(category.groups.entries()).map(
-        ([key, entry], groupIndex) => {
-          const groupId = key.split(':').slice(1).join(':')
+        ([groupId, entry], groupIndex) => {
           const info = groupInfoMap.get(groupId)
           const unitPrice = info?.current_price ?? 0
-          const factor = (() => {
-            const period = timePeriodMap.get(entry.time_period_id)
-            if (!period) return equipmentRentalFactor
-            return calculateRentalFactor(
-              offerDaySpanBetween(period.start_at, period.end_at),
-              rentalFactorConfig,
-            )
-          })()
           return {
             offer_group_id: group.id,
             item_id: null,
             group_id: groupId,
             quantity: entry.quantity,
             unit_price: unitPrice,
-            total_price: roundMoney(unitPrice * entry.quantity * factor),
+            total_price: roundMoney(
+              unitPrice * entry.quantity * equipmentRentalFactor,
+            ),
             is_internal: info?.item_kind === 'stock',
             sort_order: itemLines.length + groupIndex,
-            time_period_id: entry.time_period_id,
+            time_period_id: defaultEquipmentPeriodId,
           }
         },
       )
@@ -1115,7 +1108,7 @@ export async function saveOfferBasis({
 
   const { data: basis, error: basisError } = await supabase
     .from('offer_bases')
-    .select('company_id')
+    .select('company_id, job_id')
     .eq('id', basisId)
     .single()
 
@@ -1139,6 +1132,20 @@ export async function saveOfferBasis({
     daysOfUse: normalizedDays,
     discountPercent: normalizedDiscount,
     vatPercent: normalizedVat,
+  })
+
+  const { data: jobRow, error: jobRowError } = await supabase
+    .from('jobs')
+    .select('start_at, end_at')
+    .eq('id', basis.job_id)
+    .single()
+  if (jobRowError) throw jobRowError
+
+  const equipmentPeriodId = await ensureDefaultEquipmentPeriod({
+    jobId: basis.job_id,
+    companyId: basis.company_id,
+    startAt: jobRow.start_at || new Date().toISOString(),
+    endAt: jobRow.end_at || new Date().toISOString(),
   })
 
   const { data: companyExpansion } = await supabase
@@ -1165,37 +1172,11 @@ export async function saveOfferBasis({
   const rewriteLineItems = async () => {
     await deleteOfferBasisLineItems(basisId)
 
-    const fallbackRentalFactor = calculateRentalFactor(
+    const equipmentRentalFactor = calculateRentalFactor(
       normalizedDays,
       rentalFactorConfig,
     )
     const roundMoney = (value: number) => Math.round(value * 100) / 100
-
-    const periodIds = [
-      ...new Set(
-        equipmentGroups
-          .flatMap((g) => g.items.map((i) => i.time_period_id))
-          .filter((id): id is string => !!id),
-      ),
-    ]
-    const periodDaysById = new Map<string, number>()
-    if (periodIds.length > 0) {
-      const { data: periods, error: periodsErr } = await supabase
-        .from('time_periods')
-        .select('id, start_at, end_at')
-        .in('id', periodIds)
-      if (periodsErr) throw periodsErr
-      for (const p of periods ?? []) {
-        periodDaysById.set(p.id, offerDaySpanBetween(p.start_at, p.end_at))
-      }
-    }
-
-    const factorForItem = (timePeriodId: string | null | undefined) => {
-      if (!timePeriodId) return fallbackRentalFactor
-      const days = periodDaysById.get(timePeriodId)
-      if (days == null || days <= 0) return fallbackRentalFactor
-      return calculateRentalFactor(days, rentalFactorConfig)
-    }
 
     for (const group of equipmentGroups) {
       const isExistingGroup = !group.id.startsWith('temp-')
@@ -1242,13 +1223,11 @@ export async function saveOfferBasis({
           quantity: item.quantity,
           unit_price: item.unit_price,
           total_price: roundMoney(
-            item.unit_price *
-              item.quantity *
-              factorForItem(item.time_period_id),
+            item.unit_price * item.quantity * equipmentRentalFactor,
           ),
           is_internal: item.is_internal,
           sort_order: item.sort_order,
-          time_period_id: item.time_period_id ?? null,
+          time_period_id: equipmentPeriodId,
         }
 
         if (isExistingItem) {
@@ -1818,12 +1797,12 @@ export async function createBookingsFromOfferBasis(
       }
     }
 
-    const defaultEquipmentPeriodId = await getOrCreateTimePeriod(
-      'Equipment period',
-      'equipment',
-      defaultStart,
-      defaultEnd,
-    )
+    const defaultEquipmentPeriodId = await ensureDefaultEquipmentPeriod({
+      jobId: basis.job_id,
+      companyId,
+      startAt: defaultStart,
+      endAt: defaultEnd,
+    })
 
     const reservedItems: Array<{
       time_period_id: string
@@ -1842,7 +1821,7 @@ export async function createBookingsFromOfferBasis(
     const excludeItemIds = new Set(options?.excludeItemIds ?? [])
 
     for (const entry of equipmentEntries) {
-      const periodId = entry.time_period_id || defaultEquipmentPeriodId
+      const periodId = defaultEquipmentPeriodId
       if (entry.kind === 'item') {
         if (excludeItemIds.has(entry.item_id)) continue
         reservedItems.push({

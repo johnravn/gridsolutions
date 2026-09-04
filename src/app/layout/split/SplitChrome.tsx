@@ -76,10 +76,10 @@ function CollapseButton({
   const button = (
     <Tooltip content={`Collapse sidebar (${label})`}>
       <IconButton
+        className="split-header-icon-button"
         size="3"
         variant="ghost"
         onClick={onClick}
-        style={{ flexShrink: 0 }}
       >
         <TransitionLeft width={22} height={22} />
       </IconButton>
@@ -164,7 +164,7 @@ function LeftHeader({
     <>
       <Flex align="center" justify="between" mb="3" wrap="wrap" gap="2">
         <TitleNode title={slots.leftTitle ?? ''} />
-        <Flex align="center" gap="2" wrap="wrap">
+        <Flex align="center" gap="0" wrap="wrap">
           {slots.leftToolbar}
           <CollapseButton onClick={onCollapse} label={collapseLabel} />
         </Flex>

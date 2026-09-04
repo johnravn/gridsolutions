@@ -2,7 +2,10 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import { Box, Spinner, Text, TextField, Theme } from '@radix-ui/themes'
-import { fuzzySearch, getFuzzyMatchRanges } from '@shared/lib/generalFunctions'
+import { fuzzySearch } from '@shared/lib/generalFunctions'
+import { HighlightedText } from './HighlightedText'
+
+export { HighlightedText }
 
 export type SearchableSelectOption = {
   value: string
@@ -49,31 +52,6 @@ type Props = {
     option: SearchableSelectOption,
     ctx: SearchableSelectRenderContext,
   ) => React.ReactNode
-}
-
-export function HighlightedText({
-  text,
-  query,
-}: {
-  text: string
-  query: string
-}) {
-  const ranges = getFuzzyMatchRanges(query, text)
-  if (ranges.length === 0 || !query.trim()) return <>{text}</>
-
-  const parts: Array<React.ReactNode> = []
-  let cursor = 0
-  ranges.forEach((range, i) => {
-    if (range.start > cursor) {
-      parts.push(text.slice(cursor, range.start))
-    }
-    parts.push(<strong key={i}>{text.slice(range.start, range.end)}</strong>)
-    cursor = range.end
-  })
-  if (cursor < text.length) {
-    parts.push(text.slice(cursor))
-  }
-  return <>{parts}</>
 }
 
 export const SEARCHABLE_SELECT_DROPDOWN_SELECTOR =

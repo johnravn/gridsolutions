@@ -188,8 +188,6 @@ export function calculateOfferTotals(
   vehicleDistanceRate?: number | null,
   vehicleDistanceIncrement?: number | null,
   vehicleDailyRate?: number | null,
-  /** Optional per-period day counts keyed by time_period_id. */
-  periodDaysById?: Map<string, number> | null,
 ): OfferTotals {
   const equipmentRentalFactor = calculateRentalFactor(
     daysOfUse,
@@ -197,17 +195,16 @@ export function calculateOfferTotals(
   )
 
   const equipmentSubtotal = roundMoney(
-    equipmentItems.reduce((sum, item) => {
-      const periodDays =
-        item.time_period_id && periodDaysById
-          ? periodDaysById.get(item.time_period_id)
-          : undefined
-      const factor =
-        periodDays != null && periodDays > 0
-          ? calculateRentalFactor(periodDays, rentalFactorConfig)
-          : equipmentRentalFactor
-      return sum + equipmentLineTotal(item.unit_price, item.quantity, factor)
-    }, 0),
+    equipmentItems.reduce(
+      (sum, item) =>
+        sum +
+        equipmentLineTotal(
+          item.unit_price,
+          item.quantity,
+          equipmentRentalFactor,
+        ),
+      0,
+    ),
   )
 
   const crewSubtotal = roundMoney(

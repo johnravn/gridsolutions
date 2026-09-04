@@ -1,4 +1,5 @@
 import { supabase } from '@shared/api/supabase'
+import { postgrestIlikePatterns } from '@shared/api/fuzzySearch'
 
 export type CrewPricingLevelInfo = {
   id: string
@@ -75,21 +76,12 @@ export function customersIndexQuery({
         .eq('company_id', companyId)
         .or('deleted.is.null,deleted.eq.false')
 
-      // Apply fuzzy search using expanded ilike patterns
+      // Pull typo-tolerant candidates; Fuse ranks client-side below.
       if (search && search.trim()) {
-        const term = search.trim()
-        // Use multiple patterns for fuzzy matching:
-        // 1. Exact substring match
-        // 2. Match with characters in order but possibly spaced (handles typos)
-        const patterns = [
-          `%${term}%`,
-          term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as Array<string>
-
-        const conditions = patterns
-          .map((pattern) => `name.ilike.${pattern}`)
-          .join(',')
-        q = q.or(conditions)
+        const patterns = postgrestIlikePatterns(search)
+        if (patterns.length > 0) {
+          q = q.or(patterns.map((pattern) => `name.ilike.${pattern}`).join(','))
+        }
       }
 
       q = q.order('name', { ascending: true })

@@ -28,7 +28,11 @@ import {
   flattenGroupLeafItems,
 } from '@features/inventory/api/flattenGroupItems'
 import { categoryNamesQuery } from '@features/inventory/api/queries'
-import { jobDetailQuery, jobTimePeriodsQuery } from '@features/jobs/api/queries'
+import {
+  ensureDefaultEquipmentPeriod,
+  jobDetailQuery,
+  jobTimePeriodsQuery,
+} from '@features/jobs/api/queries'
 import TimePeriodPicker from '@features/calendar/components/reservations/TimePeriodPicker'
 import {
   dedupeOverlapConflicts,
@@ -181,10 +185,9 @@ export default function BookItemsDialog({
         setCustomStartTime(job.start_at)
         setCustomEndTime(job.end_at)
       } else {
-        // For internal items, check for exact "Equipment period" match
+        // For internal items, use any existing equipment period
         const equipmentPeriod = timePeriods.find(
-          (tp) =>
-            tp.category === 'equipment' && tp.title === 'Equipment period',
+          (tp) => tp.category === 'equipment',
         )
 
         // If no equipment period exists, set default times from job duration
@@ -210,10 +213,11 @@ export default function BookItemsDialog({
     // For external-only mode, don't auto-select a period (each owner gets their own)
     if (subrentalOnly) return
 
-    // Find "Equipment period" (must be equipment category) for internal items
-    const equipmentPeriod = timePeriods.find(
-      (tp) => tp.category === 'equipment' && tp.title === 'Equipment period', // Exact match for internal
-    )
+    // Prefer the canonical equipment period, else any equipment period
+    const equipmentPeriod =
+      timePeriods.find(
+        (tp) => tp.category === 'equipment' && tp.title === 'Equipment period',
+      ) ?? timePeriods.find((tp) => tp.category === 'equipment')
 
     if (equipmentPeriod) {
       setSelectedTimePeriodId(equipmentPeriod.id)
@@ -390,92 +394,37 @@ export default function BookItemsDialog({
         jobData = data as { start_at: string | null; end_at: string | null }
       }
 
-      // Fetch all time periods for this job
-      const { data: existingTimePeriods, error: tpErr } = await supabase
-        .from('time_periods')
-        .select('id, title')
-        .eq('job_id', jobId)
-      if (tpErr) throw tpErr
-
       const itemKindMap = new Map<string, InventoryItemKind>()
-
-      const equipmentPeriodTitle = 'Equipment period'
-      let equipmentPeriod = existingTimePeriods.find(
-        (t) => t.title === equipmentPeriodTitle,
-      )
-
       const hasItemsToBook = itemRows.length > 0 || groupRows.length > 0
 
-      // Prefer the period the user selected in the picker.
-      let targetTimePeriodId = selectedTimePeriodId
+      let defaultTimePeriodId =
+        selectedTimePeriodId ||
+        (await ensureDefaultEquipmentPeriod({
+          jobId,
+          companyId,
+          startAt: jobData.start_at || new Date().toISOString(),
+          endAt: jobData.end_at || new Date().toISOString(),
+        }))
 
+      // If the user set custom times and no period was selected, apply them to
+      // the single equipment period instead of creating another window.
       if (
-        !targetTimePeriodId &&
+        !selectedTimePeriodId &&
         customStartTime &&
         customEndTime &&
+        timesTouched &&
         hasItemsToBook
       ) {
-        const startTime = timesTouched
-          ? customStartTime
-          : jobData.start_at || customStartTime || new Date().toISOString()
-        const endTime = timesTouched
-          ? customEndTime
-          : jobData.end_at || customEndTime || new Date().toISOString()
-
-        // Custom times that match job span → default "Equipment period";
-        // otherwise create a distinct period for this window.
-        const matchesJobSpan =
-          !timesTouched ||
-          (jobData.start_at === startTime && jobData.end_at === endTime)
-        const title = matchesJobSpan
-          ? equipmentPeriodTitle
-          : `Equipment ${new Date(startTime).toLocaleDateString()}`
-
-        const existingMatch = existingTimePeriods.find((t) => t.title === title)
-        if (existingMatch && matchesJobSpan) {
-          equipmentPeriod = existingMatch
-          targetTimePeriodId = existingMatch.id
-        } else if (matchesJobSpan && equipmentPeriod) {
-          targetTimePeriodId = equipmentPeriod.id
-        } else {
-          const { data: newTp, error: createErr } = await supabase
-            .from('time_periods')
-            .insert({
-              job_id: jobId,
-              company_id: companyId,
-              title,
-              start_at: startTime,
-              end_at: endTime,
-              category: 'equipment',
-            } as any)
-            .select('id, title')
-            .single()
-          if (createErr) throw createErr
-          equipmentPeriod = newTp
-          existingTimePeriods.push(newTp)
-          targetTimePeriodId = newTp.id
-        }
-      } else if (!targetTimePeriodId && !equipmentPeriod && hasItemsToBook) {
-        const { data: newTp, error: createErr } = await supabase
+        const { error: updateErr } = await supabase
           .from('time_periods')
-          .insert({
-            job_id: jobId,
-            company_id: companyId,
-            title: equipmentPeriodTitle,
-            start_at: jobData.start_at || new Date().toISOString(),
-            end_at: jobData.end_at || new Date().toISOString(),
-            category: 'equipment',
-          } as any)
-          .select('id, title')
-          .single()
-        if (createErr) throw createErr
-        equipmentPeriod = newTp
-        existingTimePeriods.push(newTp)
-        targetTimePeriodId = newTp.id
+          .update({
+            start_at: customStartTime,
+            end_at: customEndTime,
+          })
+          .eq('id', defaultTimePeriodId)
+        if (updateErr) throw updateErr
       }
 
-      const defaultTimePeriodId =
-        targetTimePeriodId ?? equipmentPeriod?.id ?? null
       if (!defaultTimePeriodId) {
         throw new Error('No equipment time period available for booking')
       }

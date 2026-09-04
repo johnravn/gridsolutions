@@ -218,8 +218,13 @@ function CrewFilter({
     <DropdownMenu.Root open={open} onOpenChange={setOpen}>
       <DropdownMenu.Trigger>
         <Box style={{ position: 'relative', display: 'inline-block' }}>
-          <IconButton variant="soft" size="2" aria-label="Filter crew">
-            <Filter width={16} height={16} />
+          <IconButton
+            className="split-header-icon-button"
+            variant="ghost"
+            size="3"
+            aria-label="Filter crew"
+          >
+            <Filter width={22} height={22} />
           </IconButton>
           {activeFiltersCount > 0 && (
             <Box

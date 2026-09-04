@@ -21,6 +21,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { vehiclesIndexQuery } from '../api/queries'
 import { vehicleOwnerBadge, vehicleOwnerLabel } from '../lib/ownership'
 import AddEditVehicleDialog from './dialogs/AddEditVehicleDialog'
@@ -255,10 +256,17 @@ export default function VehiclesView({
                   >
                     <div style={{ minWidth: 0 }}>
                       <Text size="2" weight="medium">
-                        {row.name}
+                        <HighlightedText text={row.name} query={search} />
                       </Text>
                       <Text as="div" size="1" color="gray">
-                        {row.registration_no ?? '—'}
+                        {row.registration_no ? (
+                          <HighlightedText
+                            text={row.registration_no}
+                            query={search}
+                          />
+                        ) : (
+                          '—'
+                        )}
                       </Text>
                     </div>
                     {renderFuel(row)}
@@ -297,13 +305,17 @@ export default function VehiclesView({
           case 'name':
             return (
               <Text size="2" weight="medium">
-                {row.name}
+                <HighlightedText text={row.name} query={search} />
               </Text>
             )
           case 'registration_no':
             return (
               <Text size="2" color="gray">
-                {row.registration_no ?? '—'}
+                {row.registration_no ? (
+                  <HighlightedText text={row.registration_no} query={search} />
+                ) : (
+                  '—'
+                )}
               </Text>
             )
           case 'fuel':

@@ -121,28 +121,17 @@ type Props = {
 
 function FilterTrigger({ activeCount }: { activeCount: number }) {
   return (
-    <Box style={{ position: 'relative', display: 'inline-block' }}>
-      <IconButton variant="soft" size="2" aria-label="Filters">
-        <Filter width={16} height={16} />
+    <Box className="split-header-icon-wrap">
+      <IconButton
+        className="split-header-icon-button"
+        variant="ghost"
+        size="3"
+        aria-label="Filters"
+      >
+        <Filter width={22} height={22} />
       </IconButton>
       {activeCount > 0 && (
-        <Box
-          aria-hidden
-          style={{
-            position: 'absolute',
-            top: '-4px',
-            right: '-4px',
-            width: '16px',
-            height: '16px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--accent-9)',
-            color: 'white',
-            fontSize: 'var(--font-size-1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
+        <Box aria-hidden className="split-header-icon-badge">
           {activeCount}
         </Box>
       )}

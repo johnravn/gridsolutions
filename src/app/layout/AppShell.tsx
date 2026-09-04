@@ -183,6 +183,8 @@ export default function AppShell() {
     currentPath === '/contact' ||
     currentPath === '/' ||
     currentPath === '/demo' ||
+    currentPath === '/complete-profile' ||
+    currentPath.startsWith('/auth/') ||
     isPublicOffer
   const showNoCompanyMessage =
     !isPublic && !companyLoading && !!authUser?.id && companies.length === 0
@@ -422,7 +424,7 @@ export default function AppShell() {
           </IconButton>
         )}
         {!isPublic && !isCompactChrome && <DemoModeBadge />}
-        {isLocal && (
+        {isLocal && !isPublic && (
           <Flex
             direction="column"
             gap="2"
@@ -433,6 +435,8 @@ export default function AppShell() {
                 ? 'calc(12px + var(--app-safe-bottom) + var(--app-menu-fab-clearance))'
                 : 'calc(12px + var(--app-safe-bottom))',
               zIndex: 50,
+              // Badges are informational only — never block clicks underneath.
+              pointerEvents: 'none',
             }}
           >
             {isProductionContaInDev && (

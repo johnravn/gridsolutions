@@ -141,7 +141,7 @@ export default function CustomerPage() {
     accountingConfig.accounting_organization_id ? (
       <Button
         size="2"
-        variant="soft"
+        variant="ghost"
         onClick={() => syncMutation.mutate()}
         disabled={syncMutation.isPending}
       >

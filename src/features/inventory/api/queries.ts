@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { postgrestIlikePatterns } from '@shared/api/fuzzySearch'
 
 export const inventoryIndexKey = (
   companyId: string,
@@ -70,12 +71,6 @@ export const inventoryIndexKeyAll = (
 
 export const inventoryDetailKey = (companyId: string, id: string) =>
   ['company', companyId, 'inventory-detail', id] as const
-
-function escapeForPostgrestOr(value: string) {
-  // PostgREST uses commas and parentheses to separate conditions.
-  // Strip or space them out so user input can't break the expression.
-  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
-}
 
 /* ------------ Types (aligned to the views) ------------ */
 
@@ -335,24 +330,14 @@ export const inventoryIndexQuery = ({
       if (category && category !== 'all') q = q.eq('category_name', category)
 
       if (search && search.trim()) {
-        const term = search.trim()
-        // Fuzzy search: use multiple patterns for better matching
-        const patterns: Array<string> = [
-          `%${escapeForPostgrestOr(term)}%`,
-          term.length > 2
-            ? `%${escapeForPostgrestOr(term.split('').join('%'))}%`
-            : null,
-        ].filter((p): p is string => p !== null)
-
-        // Build OR conditions for all columns with all patterns
-        const conditions: Array<string> = []
-        patterns.forEach((pattern) => {
-          conditions.push(`name.ilike.${pattern}`)
-          conditions.push(`category_name.ilike.${pattern}`)
-          conditions.push(`brand_name.ilike.${pattern}`)
-          conditions.push(`model.ilike.${pattern}`)
-          conditions.push(`nicknames.ilike.${pattern}`)
-        })
+        const patterns = postgrestIlikePatterns(search)
+        const conditions = patterns.flatMap((pattern) => [
+          `name.ilike.${pattern}`,
+          `category_name.ilike.${pattern}`,
+          `brand_name.ilike.${pattern}`,
+          `model.ilike.${pattern}`,
+          `nicknames.ilike.${pattern}`,
+        ])
 
         if (conditions.length > 0) {
           q = q.or(conditions.join(','))
@@ -500,22 +485,14 @@ export const inventoryIndexQueryAll = ({
         if (category && category !== 'all') q = q.eq('category_name', category)
 
         if (search && search.trim()) {
-          const term = search.trim()
-          const patterns: Array<string> = [
-            `%${escapeForPostgrestOr(term)}%`,
-            term.length > 2
-              ? `%${escapeForPostgrestOr(term.split('').join('%'))}%`
-              : null,
-          ].filter((p): p is string => p !== null)
-
-          const conditions: Array<string> = []
-          patterns.forEach((pattern) => {
-            conditions.push(`name.ilike.${pattern}`)
-            conditions.push(`category_name.ilike.${pattern}`)
-            conditions.push(`brand_name.ilike.${pattern}`)
-            conditions.push(`model.ilike.${pattern}`)
-            conditions.push(`nicknames.ilike.${pattern}`)
-          })
+          const patterns = postgrestIlikePatterns(search)
+          const conditions = patterns.flatMap((pattern) => [
+            `name.ilike.${pattern}`,
+            `category_name.ilike.${pattern}`,
+            `brand_name.ilike.${pattern}`,
+            `model.ilike.${pattern}`,
+            `nicknames.ilike.${pattern}`,
+          ])
 
           if (conditions.length > 0) {
             q = q.or(conditions.join(','))

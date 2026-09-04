@@ -29,7 +29,6 @@ import { NavArrowDown, NavArrowUp, Plus, Trash } from 'iconoir-react'
 import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
-import { ManageTimePeriodsButton } from '../ManageTimePeriodsDialog'
 import { calculateTransportLineTotal } from '../../../utils/offerCalculations'
 import {
   VEHICLE_CATEGORY_OPTIONS,
@@ -49,7 +48,6 @@ export function TransportSection({
   vehicleDailyRate,
   vehicleDistanceRate,
   vehicleDistanceIncrement,
-  jobId,
 }: {
   groups: Array<LocalTransportGroup>
   onGroupsChange: (groups: Array<LocalTransportGroup>) => void
@@ -60,7 +58,6 @@ export function TransportSection({
   vehicleDailyRate?: number | null
   vehicleDistanceRate?: number | null
   vehicleDistanceIncrement?: number
-  jobId?: string
 }) {
   const transportGroupNameSuggestions = React.useMemo(
     () => ['Delivery', 'Pickup', 'General', 'Delivery & pickup'],
@@ -292,21 +289,11 @@ export function TransportSection({
     <Flex direction="column" gap="3">
       <Flex justify="between" align="center">
         <Heading size="3">Transport</Heading>
-        <Flex align="center" gap="2">
-          {jobId && (
-            <ManageTimePeriodsButton
-              jobId={jobId}
-              initialCategory="transport"
-              readOnly={readOnly}
-              size="2"
-            />
-          )}
-          {!readOnly && (
-            <Button size="2" onClick={addGroup}>
-              <Plus width={16} height={16} /> Add group
-            </Button>
-          )}
-        </Flex>
+        {!readOnly && (
+          <Button size="2" onClick={addGroup}>
+            <Plus width={16} height={16} /> Add group
+          </Button>
+        )}
       </Flex>
 
       {groups.length > 0 && (

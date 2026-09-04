@@ -9,7 +9,7 @@ import {
   Separator,
   Text,
 } from '@radix-ui/themes'
-import { Edit, Trash } from 'iconoir-react'
+import { Combine, Edit, Trash } from 'iconoir-react'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
@@ -21,11 +21,13 @@ export default function UserInspector({
   onDeleted,
   onEdit,
   onDelete,
+  onMerge,
 }: {
   id: string | null
   onDeleted?: () => void
   onEdit?: () => void
   onDelete?: () => void
+  onMerge?: () => void
 }) {
   const { data, isLoading, isError, error } = useQuery({
     ...userDetailQuery({ userId: id ?? '__none__' }),
@@ -104,6 +106,16 @@ export default function UserInspector({
             }}
           >
             <Edit />
+          </Button>
+          <Button
+            size="2"
+            variant="soft"
+            onClick={() => {
+              onMerge?.()
+            }}
+          >
+            <Combine />
+            Merge
           </Button>
           <Button
             size="2"

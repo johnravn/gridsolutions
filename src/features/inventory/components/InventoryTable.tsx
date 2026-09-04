@@ -30,6 +30,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
 import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
@@ -233,7 +234,7 @@ export default function InventoryTable({
         return (
           <Flex align="center" gap="2">
             <Text size="2" weight="medium">
-              {row.name}
+              <HighlightedText text={row.name} query={search} />
             </Text>
             {row.is_group && (
               <Badge size="1" variant="soft" color="pink">
@@ -247,18 +248,24 @@ export default function InventoryTable({
             )}
           </Flex>
         )
-      case 'category_name':
+      case 'category_name': {
+        const category = String(row.category_name ?? '').toUpperCase()
         return (
           <Text size="2" color="gray">
-            {String(row.category_name ?? '').toUpperCase()}
+            {category ? (
+              <HighlightedText text={category} query={search} />
+            ) : null}
           </Text>
         )
-      case 'brand_name':
+      }
+      case 'brand_name': {
+        const brand = String(row.brand_name ?? '')
         return (
           <Text size="2" color="gray">
-            {String(row.brand_name ?? '')}
+            {brand ? <HighlightedText text={brand} query={search} /> : null}
           </Text>
         )
+      }
       case 'on_hand':
         return String(row.on_hand ?? '')
       case 'current_price':

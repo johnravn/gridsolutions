@@ -24,7 +24,6 @@ import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
 import { jobBookingConflictsQuery } from '@features/conflicts/api/queries'
 import { vehicleConflictToneByPeriodId } from '@features/conflicts/utils/conflictCategories'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
-import { ManageTimePeriodsButton } from '../dialogs/ManageTimePeriodsDialog'
 import type { ExternalReqStatus, ReservedVehicleRow } from '../../types'
 
 type TransportQueryResult = {
@@ -224,10 +223,6 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         <Heading size="3">Transportation</Heading>
         {!isReadOnly && (
           <Flex align="center" gap="3">
-            <ManageTimePeriodsButton
-              jobId={jobId}
-              initialCategory="transport"
-            />
             <Button
               size="2"
               disabled={!canBook}

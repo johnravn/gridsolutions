@@ -112,6 +112,20 @@ describe('fuzzy matching', () => {
     expect(result.map((item) => item.name)).toEqual(['Shure SM58'])
   })
 
+  it('matches transposed/missing letters like ungdsmfest → ungdomsfest', () => {
+    expect(fuzzyMatchScore('ungdsmfest', 'ungdomsfest')).toBeGreaterThanOrEqual(
+      0.25,
+    )
+    expect(
+      fuzzySearch(
+        [{ name: 'Other' }, { name: 'Ungdomsfest' }, { name: 'Wedding' }],
+        'ungdsmfest',
+        [(item) => item.name],
+        0.25,
+      ).map((item) => item.name),
+    ).toEqual(['Ungdomsfest'])
+  })
+
   it('highlights the typo window for a substituted letter', () => {
     expect(getFuzzyMatchRanges('share', 'Shure SM58')).toEqual([
       { start: 0, end: 2 },

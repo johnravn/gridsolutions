@@ -28,6 +28,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { customersIndexQuery } from '../api/queries'
 import AddCustomerDialog from './dialogs/AddCustomerDialog'
 import { ContaLinkedBadge } from './ContaLinkedBadge'
@@ -225,7 +226,7 @@ export default function CustomerTable({
                     }}
                   >
                     <Text size="2" weight="medium">
-                      {r.name}
+                      <HighlightedText text={r.name} query={search} />
                     </Text>
                     {renderType(r)}
                     {contaEnabled ? (
@@ -267,7 +268,7 @@ export default function CustomerTable({
           case 'name':
             return (
               <Text size="2" weight="medium">
-                {r.name}
+                <HighlightedText text={r.name} query={search} />
               </Text>
             )
           case 'type':

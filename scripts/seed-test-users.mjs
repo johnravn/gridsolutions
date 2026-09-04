@@ -133,6 +133,8 @@ async function upsertProfile(userId, email, displayName, selectedCompanyId) {
       display_name: displayName,
       first_name: displayName.split(' ')[0],
       last_name: displayName.split(' ').slice(1).join(' ') || 'User',
+      // Required by isProfileComplete /complete-profile gate after OAuth work.
+      phone: '+4712345678',
       selected_company_id: selectedCompanyId,
       superuser: false,
       // Mark current release as seen so WhatsNewPopover does not auto-open

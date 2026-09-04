@@ -25,6 +25,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import {
   buildCrewIndexRows,
   compareCrewIndexRows,
@@ -184,11 +185,11 @@ export default function CrewTable({
     return (
       <Box>
         <Text size="2" weight="medium">
-          {r.title}
+          <HighlightedText text={r.title} query={search} />
         </Text>
         {r.subtitle && (
           <Text as="div" size="1" color="gray">
-            {r.subtitle}
+            <HighlightedText text={r.subtitle} query={search} />
           </Text>
         )}
         {internalNote && (

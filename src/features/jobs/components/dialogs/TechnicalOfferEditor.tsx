@@ -23,7 +23,6 @@ import {
   crewPricingLevelsQuery,
 } from '@features/company/api/queries'
 import { offerBasisDetailQuery } from '../../api/offerBasisQueries'
-import { jobTimePeriodsQuery } from '../../api/queries'
 import {
   createOffer,
   exportOfferPDF,
@@ -222,19 +221,6 @@ export default function TechnicalOfferEditor({
       },
     [jobData],
   )
-
-  const { data: timePeriods = [] } = useQuery({
-    ...jobTimePeriodsQuery({ jobId }),
-    enabled: open && !!jobId,
-  })
-
-  const defaultEquipmentPeriodId = React.useMemo(() => {
-    const canonical = timePeriods.find(
-      (tp) => tp.category === 'equipment' && tp.title === 'Equipment period',
-    )
-    if (canonical) return canonical.id
-    return timePeriods.find((tp) => tp.category === 'equipment')?.id ?? null
-  }, [timePeriods])
 
   const { data: crewPricingLevels } = useQuery({
     ...crewPricingLevelsQuery(companyId),
@@ -1010,9 +996,6 @@ export default function TechnicalOfferEditor({
                                   equipmentDaysOfUse={basisPricing.daysOfUse}
                                   equipmentRentalFactor={equipmentRentalFactor}
                                   readOnly
-                                  jobId={jobId}
-                                  timePeriods={timePeriods}
-                                  defaultTimePeriodId={defaultEquipmentPeriodId}
                                 />
                               </Tabs.Content>
 

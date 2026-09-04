@@ -58,33 +58,36 @@ describe('jobsIndexSearchOrFilter', () => {
   })
 
   it('matches title and numeric job numbers', () => {
-    expect(jobsIndexSearchOrFilter({ search: '42' })).toBe(
-      'title.ilike.%42%,jobnr.eq.42',
-    )
+    const filter = jobsIndexSearchOrFilter({ search: '42' })
+    expect(filter).toContain('title.ilike.%42%')
+    expect(filter).toContain('jobnr.eq.42')
   })
 
   it('strips a leading # so job-number searches match', () => {
-    expect(jobsIndexSearchOrFilter({ search: '#42' })).toBe(
-      'title.ilike.%42%,jobnr.eq.42',
-    )
+    const filter = jobsIndexSearchOrFilter({ search: '#42' })
+    expect(filter).toContain('title.ilike.%42%')
+    expect(filter).toContain('jobnr.eq.42')
   })
 
   it('includes customer and customer-user ids so name search pages correctly', () => {
-    expect(
-      jobsIndexSearchOrFilter({
-        search: 'Acme',
-        customerIds: ['cust-1', 'cust-2'],
-        customerUserIds: ['user-1'],
-      }),
-    ).toBe(
-      'title.ilike.%Acme%,customer_id.in.(cust-1,cust-2),customer_user_id.in.(user-1)',
-    )
+    const filter = jobsIndexSearchOrFilter({
+      search: 'Acme',
+      customerIds: ['cust-1', 'cust-2'],
+      customerUserIds: ['user-1'],
+    })
+    expect(filter).toContain('title.ilike.%Acme%')
+    expect(filter).toContain('customer_id.in.(cust-1,cust-2)')
+    expect(filter).toContain('customer_user_id.in.(user-1)')
   })
 
   it('strips PostgREST separators from the search term', () => {
-    expect(jobsIndexSearchOrFilter({ search: 'Foo, (Bar)' })).toBe(
-      'title.ilike.%Foo Bar%',
-    )
+    const filter = jobsIndexSearchOrFilter({ search: 'Foo, (Bar)' })
+    expect(filter).toContain('title.ilike.%Foo Bar%')
+  })
+
+  it('includes typo-tolerant title patterns so ungdsmfest can reach ungdomsfest', () => {
+    const filter = jobsIndexSearchOrFilter({ search: 'ungdsmfest' })
+    expect(filter).toContain('title.ilike.%u%n%g%d%m%f%e%s%t%')
   })
 })
 

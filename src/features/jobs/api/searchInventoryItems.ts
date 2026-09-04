@@ -1,6 +1,6 @@
 import { supabase } from '@shared/api/supabase'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
-import { postgrestIlikePatterns } from '../components/dialogs/technical-offer-editor/utils'
+import { postgrestIlikePatterns } from '@shared/api/fuzzySearch'
 
 export type InventorySearchHit = {
   id: string

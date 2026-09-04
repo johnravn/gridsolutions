@@ -1,5 +1,6 @@
 // src/features/vehicles/api/queries.ts
 import { supabase } from '@shared/api/supabase'
+import { postgrestIlikePatterns } from '@shared/api/fuzzySearch'
 
 export type FuelType = 'electric' | 'diesel' | 'petrol'
 
@@ -90,26 +91,20 @@ export function vehiclesIndexQuery({
 
       const term = search.trim()
       if (term) {
-        // Fuzzy search: use multiple patterns for better matching
-        const patterns = [
-          `%${term}%`,
-          term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as Array<string>
-
-        const conditions = patterns
-          .flatMap((pattern) => [
-            `name.ilike.${pattern}`,
-            `registration_no.ilike.${pattern}`,
-          ])
-          .join(',')
-
-        q = q.or(conditions)
+        const patterns = postgrestIlikePatterns(term)
+        const conditions = patterns.flatMap((pattern) => [
+          `name.ilike.${pattern}`,
+          `registration_no.ilike.${pattern}`,
+        ])
+        if (conditions.length > 0) {
+          q = q.or(conditions.join(','))
+        }
       }
 
       const { data, error } = await q.order('name', { ascending: true })
       if (error) throw error
 
-      return data.map((r: any) => {
+      const rows = data.map((r: any) => {
         const ownerUser = Array.isArray(r.owner_user)
           ? r.owner_user[0]
           : r.owner_user
@@ -127,7 +122,24 @@ export function vehiclesIndexQuery({
           owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
           deleted: r.deleted ?? null,
         }
-      })
+      }) as Array<VehicleIndexRow>
+
+      if (term) {
+        const { fuzzySearch } = await import('@shared/lib/generalFunctions')
+        return fuzzySearch(
+          rows,
+          term,
+          [
+            (row) => row.name,
+            (row) => row.registration_no,
+            (row) => row.external_owner_name,
+            (row) => row.owner_user_name,
+          ],
+          0.25,
+        )
+      }
+
+      return rows
     },
   }
 }

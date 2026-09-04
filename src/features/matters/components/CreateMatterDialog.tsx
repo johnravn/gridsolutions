@@ -535,7 +535,13 @@ export default function CreateMatterDialog({
                           >
                             <Flex align="center" gap="2" justify="between">
                               <Flex align="center" gap="2">
-                                <Checkbox checked={isSelected} />
+                                <Checkbox
+                                  checked={isSelected}
+                                  onCheckedChange={() =>
+                                    toggleSelection(p.user_id)
+                                  }
+                                  onClick={(e) => e.stopPropagation()}
+                                />
                                 <div>
                                   <Flex align="center" gap="2">
                                     <Text weight="medium">

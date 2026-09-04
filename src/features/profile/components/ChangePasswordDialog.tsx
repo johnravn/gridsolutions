@@ -99,15 +99,22 @@ type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
   userEmail: string
+  /** `change` verifies current password first; `set` skips verify (OAuth-only users). */
+  mode?: 'change' | 'set'
+  onSuccess?: () => void
 }
 
 export default function ChangePasswordDialog({
   open,
   onOpenChange,
   userEmail,
+  mode = 'change',
+  onSuccess,
 }: Props) {
   const { success, error: toastError } = useToast()
-  const [step, setStep] = React.useState<'verify' | 'new'>('verify')
+  const [step, setStep] = React.useState<'verify' | 'new'>(
+    mode === 'set' ? 'new' : 'verify',
+  )
   const [verifyError, setVerifyError] = React.useState<string | null>(null)
 
   const verifyForm = useAppForm({
@@ -134,13 +141,13 @@ export default function ChangePasswordDialog({
 
   React.useEffect(() => {
     if (open) {
-      setStep('verify')
+      setStep(mode === 'set' ? 'new' : 'verify')
       setVerifyError(null)
       verifyForm.reset(verifyDefaults)
       changeForm.reset(changeDefaults)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [open])
+  }, [open, mode])
 
   const verifyCurrentPasswordMutation = useMutation({
     mutationFn: async (password: string) => {
@@ -166,16 +173,22 @@ export default function ChangePasswordDialog({
     },
     onSuccess: () => {
       onOpenChange(false)
-      setStep('verify')
+      setStep(mode === 'set' ? 'new' : 'verify')
       verifyForm.reset(verifyDefaults)
       changeForm.reset(changeDefaults)
       success(
-        'Password changed',
-        'Your password has been updated successfully.',
+        mode === 'set' ? 'Password set' : 'Password changed',
+        mode === 'set'
+          ? 'You can now sign in with email and password.'
+          : 'Your password has been updated successfully.',
       )
+      onSuccess?.()
     },
     onError: (e: Error) => {
-      toastError('Password change failed', e?.message ?? 'Please try again.')
+      toastError(
+        mode === 'set' ? 'Could not set password' : 'Password change failed',
+        e?.message ?? 'Please try again.',
+      )
     },
   })
 
@@ -185,11 +198,15 @@ export default function ChangePasswordDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="420px">
-        <Dialog.Title>Change password</Dialog.Title>
+        <Dialog.Title>
+          {mode === 'set' ? 'Set a password' : 'Change password'}
+        </Dialog.Title>
         <Dialog.Description size="2">
           {step === 'verify'
             ? 'Enter your current password to continue.'
-            : 'Choose a new password that meets the requirements below.'}
+            : mode === 'set'
+              ? 'Choose a password so you can also sign in with email.'
+              : 'Choose a new password that meets the requirements below.'}
         </Dialog.Description>
 
         {step === 'verify' ? (
@@ -260,35 +277,39 @@ export default function ChangePasswordDialog({
           >
             <changeForm.AppForm>
               <Flex direction="column" gap="4" mt="4">
-                <Flex
-                  align="center"
-                  gap="2"
-                  style={{
-                    padding: '8px 12px',
-                    background: 'var(--green-2)',
-                    borderRadius: '6px',
-                    color: 'var(--green-11)',
-                  }}
-                >
-                  <CheckCircle width={18} height={18} />
-                  <Text size="2" weight="medium">
-                    Current password verified
-                  </Text>
-                </Flex>
+                {mode === 'change' && (
+                  <>
+                    <Flex
+                      align="center"
+                      gap="2"
+                      style={{
+                        padding: '8px 12px',
+                        background: 'var(--green-2)',
+                        borderRadius: '6px',
+                        color: 'var(--green-11)',
+                      }}
+                    >
+                      <CheckCircle width={18} height={18} />
+                      <Text size="2" weight="medium">
+                        Current password verified
+                      </Text>
+                    </Flex>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="1"
-                  color="gray"
-                  onClick={() => {
-                    setStep('verify')
-                    changeForm.reset(changeDefaults)
-                  }}
-                  disabled={changeLoading}
-                >
-                  Use a different current password
-                </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="1"
+                      color="gray"
+                      onClick={() => {
+                        setStep('verify')
+                        changeForm.reset(changeDefaults)
+                      }}
+                      disabled={changeLoading}
+                    >
+                      Use a different current password
+                    </Button>
+                  </>
+                )}
 
                 <changeForm.AppField name="newPassword">
                   {(field) => {
@@ -301,7 +322,7 @@ export default function ChangePasswordDialog({
                     return (
                       <Flex direction="column" gap="2">
                         <Text size="2" weight="medium">
-                          New password
+                          {mode === 'set' ? 'Password' : 'New password'}
                         </Text>
                         <TextField.Root
                           type="password"
@@ -369,7 +390,9 @@ export default function ChangePasswordDialog({
                         return (
                           <Flex direction="column" gap="2">
                             <Text size="2" weight="medium">
-                              Confirm new password
+                              {mode === 'set'
+                                ? 'Confirm password'
+                                : 'Confirm new password'}
                             </Text>
                             <TextField.Root
                               type="password"
@@ -378,7 +401,11 @@ export default function ChangePasswordDialog({
                                 field.handleChange(e.target.value)
                               }
                               onBlur={field.handleBlur}
-                              placeholder="Confirm new password"
+                              placeholder={
+                                mode === 'set'
+                                  ? 'Confirm password'
+                                  : 'Confirm new password'
+                              }
                               disabled={changeLoading}
                               autoComplete="new-password"
                               color={
@@ -440,8 +467,12 @@ export default function ChangePasswordDialog({
                         )
                       return (
                         <changeForm.SubmitButton
-                          label="Change password"
-                          pendingLabel="Changing…"
+                          label={
+                            mode === 'set' ? 'Set password' : 'Change password'
+                          }
+                          pendingLabel={
+                            mode === 'set' ? 'Saving…' : 'Changing…'
+                          }
                           disabled={
                             !allRequirementsSatisfied ||
                             newPassword !== confirmPassword

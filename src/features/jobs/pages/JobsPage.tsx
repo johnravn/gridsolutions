@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Button, Flex, Text, Tooltip } from '@radix-ui/themes'
+import { Box, Flex, IconButton, Text, Tooltip } from '@radix-ui/themes'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
 import { LotOfCash, Sparks } from 'iconoir-react'
@@ -315,19 +315,31 @@ export default function JobsPage() {
   }
 
   const leftToolbar = (
-    <Flex align="center" gap="2" wrap="wrap">
+    <Flex align="center" gap="0" wrap="wrap">
       {showReadyToInvoiceButton && (
-        <Button
-          size="2"
-          variant={readyToInvoiceFilter ? 'solid' : 'soft'}
-          color="orange"
-          onClick={toggleReadyToInvoiceFilter}
-          title="Ready to invoice"
-          aria-label={`${readyToInvoiceCount} ready to invoice`}
-        >
-          <LotOfCash width={16} height={16} />
-          {readyToInvoiceCount}
-        </Button>
+        <Box className="split-header-icon-wrap">
+          <IconButton
+            className="split-header-icon-button"
+            size="3"
+            variant={readyToInvoiceFilter ? 'solid' : 'ghost'}
+            color="orange"
+            onClick={toggleReadyToInvoiceFilter}
+            title="Ready to invoice"
+            aria-label={`${readyToInvoiceCount} ready to invoice`}
+          >
+            <LotOfCash width={22} height={22} />
+          </IconButton>
+          <Box
+            aria-hidden
+            className={
+              readyToInvoiceFilter
+                ? 'split-header-icon-badge split-header-icon-badge--orange split-header-icon-badge--on-solid'
+                : 'split-header-icon-badge split-header-icon-badge--orange'
+            }
+          >
+            {readyToInvoiceCount}
+          </Box>
+        </Box>
       )}
       <JobsFilter
         statusFilter={statusFilter}

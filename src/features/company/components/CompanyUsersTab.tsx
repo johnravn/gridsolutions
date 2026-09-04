@@ -306,7 +306,7 @@ export default function CompanyUsersTab() {
           <>
             <Flex align="center" justify="between" mb="3">
               <Heading size="5">Users</Heading>
-              <Flex align="center" gap="2">
+              <Flex align="center" gap="0">
                 <CompanyUsersFilter
                   showEmployees={showEmployees}
                   showFreelancers={showFreelancers}
@@ -319,10 +319,10 @@ export default function CompanyUsersTab() {
                   content={`Collapse sidebar (${collapseShortcutLabel})`}
                 >
                   <IconButton
+                    className="split-header-icon-button"
                     size="3"
                     variant="ghost"
                     onClick={toggleMinimize}
-                    style={{ flexShrink: 0 }}
                   >
                     <TransitionLeft width={22} height={22} />
                   </IconButton>

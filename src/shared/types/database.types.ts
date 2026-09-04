@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: '14.5'
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -5139,6 +5134,10 @@ export type Database = {
       }
       mark_offer_basis_bookings_synced: {
         Args: { p_offer_basis_id: string }
+        Returns: undefined
+      }
+      merge_users: {
+        Args: { p_absorb_user_id: string; p_keep_user_id: string }
         Returns: undefined
       }
       notification_insert_allowed_for_actor: {

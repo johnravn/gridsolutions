@@ -1,4 +1,8 @@
 import { supabase } from '@shared/api/supabase'
+import {
+  escapeForPostgrestOr,
+  postgrestIlikePatterns,
+} from '@shared/api/fuzzySearch'
 import { parseCopyJobRpcResult } from '../utils/copyJobConflicts'
 import {
   jobsIndexDateOverlapFilters,
@@ -11,12 +15,6 @@ import type {
   JobListRow,
   TimePeriodLite,
 } from '../types'
-
-function escapeForPostgrestOr(value: string) {
-  // PostgREST uses commas and parentheses to separate conditions.
-  // Strip or space them out so user input can't break the expression.
-  return value.replace(/[(),]/g, ' ').replace(/\s+/g, ' ').trim()
-}
 
 const JOBS_LIST_SELECT = `
   id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
@@ -394,8 +392,9 @@ export function jobsIndexSearchOrFilter({
   const trimmed = search.trim().replace(/^#/, '')
   if (!trimmed) return null
 
-  const orSafe = escapeForPostgrestOr(escapePgLike(trimmed))
-  const parts = [`title.ilike.%${orSafe}%`]
+  const parts = postgrestIlikePatterns(trimmed).map(
+    (pattern) => `title.ilike.${pattern}`,
+  )
   if (/^\d+$/.test(trimmed)) {
     parts.push(`jobnr.eq.${trimmed}`)
   }
@@ -405,20 +404,21 @@ export function jobsIndexSearchOrFilter({
   if (customerUserIds.length > 0) {
     parts.push(`customer_user_id.in.(${customerUserIds.join(',')})`)
   }
-  return parts.join(',')
+  return parts.length > 0 ? parts.join(',') : null
 }
 
 async function findCustomerIdsByName(
   companyId: string,
   search: string,
 ): Promise<Array<string>> {
-  const orSafe = escapeForPostgrestOr(escapePgLike(search.trim()))
+  const patterns = postgrestIlikePatterns(search)
+  if (patterns.length === 0) return []
   const { data, error } = await supabase
     .from('customers')
     .select('id')
     .eq('company_id', companyId)
     .or('deleted.is.null,deleted.eq.false')
-    .ilike('name', `%${orSafe}%`)
+    .or(patterns.map((pattern) => `name.ilike.${pattern}`).join(','))
     .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
   if (error) throw error
   return data.map((row) => row.id)
@@ -427,11 +427,19 @@ async function findCustomerIdsByName(
 async function findCustomerUserIdsBySearch(
   search: string,
 ): Promise<Array<string>> {
-  const orSafe = escapeForPostgrestOr(escapePgLike(search.trim()))
+  const patterns = postgrestIlikePatterns(search)
+  if (patterns.length === 0) return []
   const { data, error } = await supabase
     .from('profiles')
     .select('user_id')
-    .or(`display_name.ilike.%${orSafe}%,email.ilike.%${orSafe}%`)
+    .or(
+      patterns
+        .flatMap((pattern) => [
+          `display_name.ilike.${pattern}`,
+          `email.ilike.${pattern}`,
+        ])
+        .join(','),
+    )
     .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
   if (error) throw error
   return data.map((row) => row.user_id)
@@ -899,8 +907,9 @@ export async function upsertTimePeriod(payload: {
 export const DEFAULT_EQUIPMENT_PERIOD_TITLE = 'Equipment period'
 
 /**
- * Ensure the job has a default equipment period spanning job start/end.
- * Returns the period id (existing or newly created).
+ * Ensure the job has a single default equipment period.
+ * Prefers the canonical "Equipment period" title; otherwise reuses any
+ * existing equipment period. Creates one spanning job start/end if none exist.
  */
 export async function ensureDefaultEquipmentPeriod(params: {
   jobId: string
@@ -908,7 +917,7 @@ export async function ensureDefaultEquipmentPeriod(params: {
   startAt: string
   endAt: string
 }): Promise<string> {
-  const { data: existing, error: existingErr } = await supabase
+  const { data: canonical, error: canonicalErr } = await supabase
     .from('time_periods')
     .select('id')
     .eq('job_id', params.jobId)
@@ -918,8 +927,20 @@ export async function ensureDefaultEquipmentPeriod(params: {
     .order('start_at', { ascending: true })
     .limit(1)
     .maybeSingle()
-  if (existingErr) throw existingErr
-  if (existing?.id) return existing.id
+  if (canonicalErr) throw canonicalErr
+  if (canonical?.id) return canonical.id
+
+  const { data: anyEquipment, error: anyErr } = await supabase
+    .from('time_periods')
+    .select('id')
+    .eq('job_id', params.jobId)
+    .eq('deleted', false)
+    .eq('category', 'equipment')
+    .order('start_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (anyErr) throw anyErr
+  if (anyEquipment?.id) return anyEquipment.id
 
   return upsertTimePeriod({
     job_id: params.jobId,

@@ -29,14 +29,15 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import ProfilePageSkeleton from '@shared/ui/components/ProfilePageSkeleton'
 import { DatePicker } from '@shared/ui/components/pickers'
-import { Camera, Lock } from 'iconoir-react'
+import { Camera } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
-import ChangePasswordDialog from '@features/profile/components/ChangePasswordDialog'
+import ProfileAuthTab from '@features/profile/components/ProfileAuthTab'
 import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatterEmailSettings'
 import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
 import ProfileShortcutsTab from '@features/profile/components/ProfileShortcutsTab'
+import { useNavigate, useSearch } from '@tanstack/react-router'
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
 import type { BibleVersion } from '@shared/lib/bibleVersion'
 
@@ -84,6 +85,7 @@ type AddressForm = {
 
 const PROFILE_TABS = [
   'general',
+  'auth',
   'notifications',
   'personalization',
   'shortcuts',
@@ -91,18 +93,45 @@ const PROFILE_TABS = [
 
 export default function ProfilePage() {
   const qc = useQueryClient()
+  const navigate = useNavigate()
+  const search = useSearch({ strict: false })
   const { info, success, error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
   const [uploading, setUploading] = React.useState(false)
-  const [changePasswordOpen, setChangePasswordOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState<string>('general')
+  const initialTab =
+    search.tab && (PROFILE_TABS as ReadonlyArray<string>).includes(search.tab)
+      ? search.tab
+      : 'general'
+  const [activeTab, setActiveTab] = React.useState<string>(initialTab)
+
+  React.useEffect(() => {
+    if (
+      search.tab &&
+      (PROFILE_TABS as ReadonlyArray<string>).includes(search.tab) &&
+      search.tab !== activeTab
+    ) {
+      setActiveTab(search.tab)
+    }
+  }, [search.tab, activeTab])
+
+  const handleTabChange = React.useCallback(
+    (tab: string) => {
+      setActiveTab(tab)
+      void navigate({
+        to: '/profile',
+        search: tab === 'general' ? {} : { tab },
+        replace: true,
+      })
+    },
+    [navigate],
+  )
 
   const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
   useTabKeyboardShortcuts({
     scopeRef,
     tabs: PROFILE_TABS,
     activeTab,
-    onTabChange: setActiveTab,
+    onTabChange: handleTabChange,
   })
 
   const [isLarge, setIsLarge] = React.useState<boolean>(() =>
@@ -433,9 +462,8 @@ export default function ProfilePage() {
       }}
     >
       <Tabs.Root
-        defaultValue="general"
         value={activeTab}
-        onValueChange={setActiveTab}
+        onValueChange={handleTabChange}
         style={{
           display: 'flex',
           flexDirection: 'column',
@@ -445,6 +473,7 @@ export default function ProfilePage() {
       >
         <AnimatedTabsList>
           <Tabs.Trigger value="general">General</Tabs.Trigger>
+          <Tabs.Trigger value="auth">Sign-in methods</Tabs.Trigger>
           <Tabs.Trigger value="notifications">
             Matter notifications
           </Tabs.Trigger>
@@ -480,13 +509,9 @@ export default function ProfilePage() {
                 overflow: 'hidden',
               }}
             >
-              {/* Header: identity + change password */}
+              {/* Header: identity + avatar */}
               <Box p="4" pb="3">
-                <Grid
-                  columns={{ initial: '1', md: '1fr auto' }}
-                  gap="4"
-                  align="start"
-                >
+                <Grid columns={{ initial: '1' }} gap="4" align="start">
                   <Flex direction="column" gap="3" style={{ minWidth: 0 }}>
                     <Flex align="center" gap="3" wrap="wrap">
                       <Avatar
@@ -548,20 +573,6 @@ export default function ProfilePage() {
                         </Box>
                       )}
                     </Flex>
-                  </Flex>
-
-                  <Flex direction="column" gap="2" style={{ minWidth: 0 }}>
-                    <Button
-                      size="2"
-                      variant="soft"
-                      onClick={() => setChangePasswordOpen(true)}
-                      style={{ width: '100%', minWidth: 160 }}
-                    >
-                      <Flex gap="2" align="center" justify="center">
-                        <Lock width={16} height={16} />
-                        Change password
-                      </Flex>
-                    </Button>
                   </Flex>
                 </Grid>
               </Box>
@@ -753,12 +764,29 @@ export default function ProfilePage() {
                   {mut.isPending ? 'Saving…' : 'Save'}
                 </Button>
               </Flex>
-              <ChangePasswordDialog
-                open={changePasswordOpen}
-                onOpenChange={setChangePasswordOpen}
-                userEmail={data.email}
-              />
             </Card>
+          </Tabs.Content>
+
+          <Tabs.Content
+            value="auth"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'auto',
+            }}
+          >
+            {authUser?.id && (
+              <ProfileAuthTab
+                userId={authUser.id}
+                email={data.email}
+                displayName={form.display_name || data.display_name}
+                firstName={form.first_name || data.first_name}
+                lastName={form.last_name || data.last_name}
+                avatarUrl={avatarUrl}
+              />
+            )}
           </Tabs.Content>
 
           <Tabs.Content

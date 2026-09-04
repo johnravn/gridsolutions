@@ -27,26 +27,10 @@ import {
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { AnimatedQuickSuggestions } from '@shared/ui/components/AnimatedQuickSuggestions'
-import { ManageTimePeriodsButton } from '../ManageTimePeriodsDialog'
 import { useInventoryItemSearch } from '../../../hooks/useInventoryItemSearch'
 import { ItemSearchField } from './ItemSearchField'
 import { SortableEquipmentGroupCard, SortableEquipmentRow } from './sortable'
-import type { TimePeriodLite } from '../../../types'
 import type { LocalEquipmentGroup, LocalEquipmentItem } from './types'
-
-function formatPeriodRange(startAt: string, endAt: string): string {
-  try {
-    const opts: Intl.DateTimeFormatOptions = {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    }
-    return `${new Date(startAt).toLocaleString(undefined, opts)} – ${new Date(endAt).toLocaleString(undefined, opts)}`
-  } catch {
-    return `${startAt} – ${endAt}`
-  }
-}
 
 export function EquipmentSection({
   groups,
@@ -57,9 +41,6 @@ export function EquipmentSection({
   equipmentDaysOfUse,
   equipmentRentalFactor,
   readOnly = false,
-  jobId,
-  timePeriods = [],
-  defaultTimePeriodId = null,
 }: {
   groups: Array<LocalEquipmentGroup>
   onGroupsChange: (groups: Array<LocalEquipmentGroup>) => void
@@ -69,9 +50,6 @@ export function EquipmentSection({
   equipmentDaysOfUse: number
   equipmentRentalFactor: number
   readOnly?: boolean
-  jobId?: string
-  timePeriods?: Array<TimePeriodLite>
-  defaultTimePeriodId?: string | null
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -129,24 +107,6 @@ export function EquipmentSection({
     setActiveSearchGroupId(groupId) // Track which group is being searched
   }
 
-  const [activePeriodId, setActivePeriodId] = React.useState<string | null>(
-    defaultTimePeriodId,
-  )
-
-  React.useEffect(() => {
-    if (defaultTimePeriodId && !activePeriodId) {
-      setActivePeriodId(defaultTimePeriodId)
-    }
-  }, [defaultTimePeriodId, activePeriodId])
-
-  const equipmentPeriods = React.useMemo(
-    () => timePeriods.filter((tp) => tp.category === 'equipment'),
-    [timePeriods],
-  )
-
-  const resolvePeriodId = () =>
-    activePeriodId || defaultTimePeriodId || equipmentPeriods[0]?.id || null
-
   const addGroup = () => {
     const newGroup: LocalEquipmentGroup = {
       id: `temp-${Date.now()}`,
@@ -189,7 +149,7 @@ export function EquipmentSection({
       unit_price: selectedItem.price ?? 0,
       is_internal: selectedItem.item_kind === 'stock',
       sort_order: group.items.length,
-      time_period_id: resolvePeriodId(),
+      time_period_id: null,
       item: !isGroup
         ? {
             id: selectedItem.id,
@@ -237,7 +197,7 @@ export function EquipmentSection({
       unit_price: 0,
       is_internal: true,
       sort_order: group.items.length,
-      time_period_id: resolvePeriodId(),
+      time_period_id: null,
     }
 
     updateGroup(groupId, {
@@ -433,79 +393,17 @@ export function EquipmentSection({
     >
       <Flex justify="between" align="center" style={{ flexShrink: 0 }}>
         <Heading size="3">Equipment</Heading>
-        <Flex align="center" gap="2">
-          {jobId && (
-            <ManageTimePeriodsButton
-              jobId={jobId}
-              initialCategory="equipment"
-              readOnly={readOnly}
-              size="2"
-            />
-          )}
-          {!readOnly && (
-            <Button size="2" onClick={addGroup}>
-              <Plus width={16} height={16} /> Add Group
-            </Button>
-          )}
-        </Flex>
+        {!readOnly && (
+          <Button size="2" onClick={addGroup}>
+            <Plus width={16} height={16} /> Add Group
+          </Button>
+        )}
       </Flex>
-
-      {equipmentPeriods.length > 0 && (
-        <Flex direction="column" gap="2">
-          <Text size="1" color="gray">
-            Lines are booked against job time periods. Select a period before
-            adding items.
-          </Text>
-          <Flex gap="2" wrap="wrap">
-            {equipmentPeriods.map((period) => {
-              const isActive =
-                (activePeriodId || defaultTimePeriodId) === period.id
-              const itemCount = groups.reduce(
-                (sum, g) =>
-                  sum +
-                  g.items.filter((i) => i.time_period_id === period.id).length,
-                0,
-              )
-              return (
-                <Box
-                  key={period.id}
-                  p="2"
-                  style={{
-                    border: isActive
-                      ? '2px solid var(--accent-9)'
-                      : '1px solid var(--gray-a6)',
-                    borderRadius: 8,
-                    background: isActive
-                      ? 'var(--accent-a3)'
-                      : 'var(--gray-a2)',
-                    cursor: readOnly ? 'default' : 'pointer',
-                    minWidth: 180,
-                  }}
-                  onClick={() => {
-                    if (!readOnly) setActivePeriodId(period.id)
-                  }}
-                >
-                  <Text size="2" weight="bold" as="div">
-                    {period.title || 'Untitled'}
-                  </Text>
-                  <Text size="1" color="gray" as="div">
-                    {formatPeriodRange(period.start_at, period.end_at)}
-                  </Text>
-                  <Text size="1" color="gray" as="div">
-                    {itemCount} line{itemCount === 1 ? '' : 's'}
-                  </Text>
-                </Box>
-              )
-            })}
-          </Flex>
-        </Flex>
-      )}
 
       <Text size="1" color="gray" style={{ fontStyle: 'italic' }}>
         Equipment totals are calculated as unit price × qty × rental factor (
         {equipmentDaysOfUse} day{equipmentDaysOfUse === 1 ? '' : 's'} →{' '}
-        {equipmentRentalFactor.toFixed(2)}x). Per-line days follow each item’s
-        time period when set.
+        {equipmentRentalFactor.toFixed(2)}x).
       </Text>
 
       {groups.length > 0 && (

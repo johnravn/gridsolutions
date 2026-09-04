@@ -6,12 +6,14 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import type { RecurringJobListRow } from '../types'
 
 type Props = {
   row: RecurringJobListRow
   isSelected: boolean
   compact?: boolean
+  searchQuery?: string
   onClick: () => void
 }
 
@@ -19,6 +21,7 @@ export default function RecurringJobListRow({
   row,
   isSelected,
   compact = false,
+  searchQuery = '',
   onClick,
 }: Props) {
   const customerName =
@@ -62,7 +65,7 @@ export default function RecurringJobListRow({
             <Flex gap="2" align="center" wrap="wrap">
               <Repeat width={14} height={14} />
               <Text weight={isSelected ? 'bold' : 'medium'} size="2">
-                {row.title}
+                <HighlightedText text={row.title} query={searchQuery} />
               </Text>
               <Badge size="1" color="violet" variant="soft">
                 Recurring
@@ -72,7 +75,7 @@ export default function RecurringJobListRow({
               </Badge>
             </Flex>
             <Text size="1" color="gray">
-              {customerName}
+              <HighlightedText text={customerName} query={searchQuery} />
             </Text>
           </Flex>
           <Avatar
@@ -98,7 +101,7 @@ export default function RecurringJobListRow({
                     minWidth: 0,
                   }}
                 >
-                  {row.title}
+                  <HighlightedText text={row.title} query={searchQuery} />
                 </Text>
               </Tooltip>
               <Badge size="1" color="violet" variant="soft">
@@ -109,12 +112,12 @@ export default function RecurringJobListRow({
               </Badge>
             </Flex>
             <Text size="1" color="gray" mt="1">
-              {customerName}
+              <HighlightedText text={customerName} query={searchQuery} />
             </Text>
           </Box>
           <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
             <Text size="1" color="gray">
-              {leadName}
+              <HighlightedText text={leadName} query={searchQuery} />
             </Text>
             <Avatar
               size="2"

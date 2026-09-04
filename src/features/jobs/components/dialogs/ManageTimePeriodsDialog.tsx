@@ -120,6 +120,9 @@ export default function ManageTimePeriodsDialog({
     [timePeriods, activeCategory],
   )
 
+  const canAddPeriod =
+    !readOnly && (activeCategory !== 'equipment' || filtered.length === 0)
+
   const invalidate = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
@@ -140,6 +143,15 @@ export default function ManageTimePeriodsDialog({
       role_category?: string | null
     }) => {
       if (!companyId) throw new Error('No companyId')
+      if (
+        !p.id &&
+        activeCategory === 'equipment' &&
+        timePeriods.some((tp) => tp.category === 'equipment')
+      ) {
+        throw new Error(
+          'This job already has an equipment period. Edit the existing one instead.',
+        )
+      }
       return upsertTimePeriod({
         id: p.id,
         job_id: jobId,
@@ -297,8 +309,8 @@ export default function ManageTimePeriodsDialog({
         >
           <Dialog.Title>Manage time periods</Dialog.Title>
           <Dialog.Description size="2" color="gray" mb="3">
-            These periods are shared by bookings and the offer basis on this
-            job.
+            Booking windows for this job. Equipment uses a single period; crew
+            and transport can have multiple.
           </Dialog.Description>
 
           <Tabs.Root
@@ -320,7 +332,7 @@ export default function ManageTimePeriodsDialog({
             <Heading size="3">
               {CATEGORY_LABELS[activeCategory]} periods
             </Heading>
-            {!readOnly && (
+            {canAddPeriod && (
               <Button
                 size="2"
                 onClick={() => {
@@ -332,6 +344,14 @@ export default function ManageTimePeriodsDialog({
               </Button>
             )}
           </Flex>
+
+          {activeCategory === 'equipment' && filtered.length > 0 && (
+            <Text size="1" color="gray" mb="2" as="div">
+              All equipment bookings use this one period. Change its dates to
+              move the booking window; rental pricing on offers uses the Days
+              field on the offer basis.
+            </Text>
+          )}
 
           <Box style={{ overflowX: 'auto' }}>
             <Table.Root variant="surface" size="2">

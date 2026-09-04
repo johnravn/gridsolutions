@@ -564,7 +564,7 @@ export function OffersStructureHelpDialog() {
                     color="accent"
                     icon={<Wrench width={16} height={16} />}
                     title="Offer basis"
-                    description="Where you add and edit equipment, crew, and transport against the job’s shared time periods. Manage periods once — bookings and the basis use the same windows."
+                    description="Where you add and edit equipment, crew, and transport. Equipment rental factor comes from the Days field at the top of the basis."
                   />
                   <LegendRow
                     color="blue"

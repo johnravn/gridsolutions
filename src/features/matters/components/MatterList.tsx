@@ -39,6 +39,7 @@ import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
+import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { mattersIndexQueryAll } from '../api/queries'
 import { useMatterReadMutations } from '../hooks/useMatterReadMutations'
 import { crewInviteResponseKind } from '../utils/crewInviteResponse'
@@ -563,7 +564,7 @@ export default function MatterList({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {matter.title}
+                <HighlightedText text={matter.title} query={search} />
               </Text>
             </Box>
           </Tooltip>
@@ -579,7 +580,7 @@ export default function MatterList({
               whiteSpace: 'nowrap',
             }}
           >
-            Job: {matter.job.title}
+            Job: <HighlightedText text={matter.job.title} query={search} />
           </Text>
         )}
       </Box>
@@ -713,7 +714,11 @@ export default function MatterList({
           case 'company':
             return (
               <Text size="2" color="gray">
-                {matter.company?.name || '—'}
+                {matter.company?.name ? (
+                  <HighlightedText text={matter.company.name} query={search} />
+                ) : (
+                  '—'
+                )}
               </Text>
             )
           default:

@@ -35,7 +35,6 @@ import { FixedTimePeriodEditor } from '@features/calendar/components/reservation
 import { flattenGroupLeafItems } from '@features/inventory/api/flattenGroupItems'
 import { jobDetailQuery } from '@features/jobs/api/queries'
 import BookItemsDialog from '../dialogs/BookItemsDialog'
-import { ManageTimePeriodsButton } from '../dialogs/ManageTimePeriodsDialog'
 import { impliedBookedGroupCount } from '../../utils/groupBookingQuantity'
 import {
   categoryBookingIds,
@@ -440,12 +439,6 @@ function InternalEquipmentTable({
         <Heading size="3">Stock equipment</Heading>
         {companyRole !== 'freelancer' && (
           <Flex align="center" gap="3">
-            {canBook && (
-              <ManageTimePeriodsButton
-                jobId={jobId}
-                initialCategory="equipment"
-              />
-            )}
             {rows.length > 0 && (
               <Flex align="center" gap="2">
                 {editMode && (
@@ -573,12 +566,6 @@ function InternalEquipmentTable({
                         <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Brand</Table.ColumnHeaderCell>
                         <Table.ColumnHeaderCell>Model</Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>
-                          Category
-                        </Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell>
-                          Time period
-                        </Table.ColumnHeaderCell>
                       </Table.Row>
                     </Table.Header>
                     <Table.Body>
@@ -593,11 +580,6 @@ function InternalEquipmentTable({
                             : firstRow?.source_group
                           const groupName =
                             sourceGroup?.name ?? `Group ${groupId.slice(0, 8)}`
-                          const groupCategory = Array.isArray(
-                            sourceGroup?.category,
-                          )
-                            ? sourceGroup?.category[0]?.name
-                            : sourceGroup?.category?.name
                           const expandKey = `${groupId}:${timePeriodId}`
                           const isExpanded = expandedGroups.has(expandKey)
                           const groupRowIds = groupRows.map(
@@ -682,11 +664,6 @@ function InternalEquipmentTable({
                                 </Table.Cell>
                                 <Table.Cell>—</Table.Cell>
                                 <Table.Cell>—</Table.Cell>
-                                <Table.Cell>{groupCategory ?? '—'}</Table.Cell>
-                                <Table.Cell>
-                                  {firstRow?.time_period?.title ??
-                                    `${fmtDate(firstRow?.time_period?.start_at)} – ${fmtDate(firstRow?.time_period?.end_at)}`}
-                                </Table.Cell>
                               </Table.Row>
 
                               {/* Expanded group items */}
@@ -713,10 +690,6 @@ function InternalEquipmentTable({
                                       <Table.Cell>
                                         {item?.model ?? '—'}
                                       </Table.Cell>
-                                      <Table.Cell>
-                                        {item?.category?.name ?? '—'}
-                                      </Table.Cell>
-                                      <Table.Cell>—</Table.Cell>
                                     </Table.Row>
                                   )
                                 })}
@@ -822,13 +795,6 @@ function InternalEquipmentTable({
                             </Table.Cell>
                             <Table.Cell>{item?.brand?.name ?? '—'}</Table.Cell>
                             <Table.Cell>{item?.model ?? '—'}</Table.Cell>
-                            <Table.Cell>
-                              {item?.category?.name ?? '—'}
-                            </Table.Cell>
-                            <Table.Cell>
-                              {r.time_period?.title ??
-                                `${fmtDate(r.time_period?.start_at)} – ${fmtDate(r.time_period?.end_at)}`}
-                            </Table.Cell>
                           </Table.Row>
                         )
                       })}
@@ -1952,9 +1918,6 @@ function firstItem(it: ReservedItemRow['item']): ItemLite | null {
 }
 function itemKind(it: ReservedItemRow['item']) {
   return firstItem(it)?.item_kind ?? 'stock'
-}
-function fmtDate(v?: string) {
-  return v ? new Date(v).toLocaleDateString() : ''
 }
 
 function BookingSelectCheckbox({

@@ -33,10 +33,18 @@ import UserDialog from '../components/UserDialog'
 import UserInspector from '../components/UserInspector'
 import SuperEmailTab from '../components/SuperEmailTab'
 import SuperMonitorTab from '../components/SuperMonitorTab'
+import SuperCalendarSubscriptionsTab from '../components/SuperCalendarSubscriptionsTab'
+import MergeUsersDialog from '../components/MergeUsersDialog'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
 
-const SUPER_TABS = ['monitor', 'companies', 'users', 'email'] as const
+const SUPER_TABS = [
+  'monitor',
+  'companies',
+  'users',
+  'calendar',
+  'email',
+] as const
 
 export default function SuperPage() {
   const { success, error: toastError } = useToast()
@@ -54,6 +62,9 @@ export default function SuperPage() {
     null,
   )
   const [deletingUser, setDeletingUser] = React.useState<UserIndexRow | null>(
+    null,
+  )
+  const [mergingUser, setMergingUser] = React.useState<UserIndexRow | null>(
     null,
   )
 
@@ -561,6 +572,7 @@ export default function SuperPage() {
           <Tabs.Trigger value="monitor">Monitor</Tabs.Trigger>
           <Tabs.Trigger value="companies">Companies</Tabs.Trigger>
           <Tabs.Trigger value="users">Users</Tabs.Trigger>
+          <Tabs.Trigger value="calendar">Calendar tokens</Tabs.Trigger>
           <Tabs.Trigger value="email">Email</Tabs.Trigger>
         </AnimatedTabsList>
 
@@ -786,10 +798,10 @@ export default function SuperPage() {
                             content={`Collapse sidebar (${collapseShortcutLabel})`}
                           >
                             <IconButton
+                              className="split-header-icon-button"
                               size="3"
                               variant="ghost"
                               onClick={toggleCompaniesMinimize}
-                              style={{ flexShrink: 0 }}
                             >
                               <TransitionLeft width={22} height={22} />
                             </IconButton>
@@ -1026,6 +1038,20 @@ export default function SuperPage() {
                           }
                         }
                       }}
+                      onMerge={() => {
+                        if (selectedId) {
+                          const users = qc.getQueryData<Array<UserIndexRow>>([
+                            'users',
+                            'index',
+                          ])
+                          const user = users?.find(
+                            (u) => u.user_id === selectedId,
+                          )
+                          if (user) {
+                            setMergingUser(user)
+                          }
+                        }
+                      }}
                     />
                   </Box>
                 </Card>
@@ -1123,10 +1149,10 @@ export default function SuperPage() {
                           content={`Collapse sidebar (${collapseShortcutLabel})`}
                         >
                           <IconButton
+                            className="split-header-icon-button"
                             size="3"
                             variant="ghost"
                             onClick={toggleUsersMinimize}
-                            style={{ flexShrink: 0 }}
                           >
                             <TransitionLeft width={22} height={22} />
                           </IconButton>
@@ -1250,11 +1276,37 @@ export default function SuperPage() {
                           }
                         }
                       }}
+                      onMerge={() => {
+                        if (selectedId) {
+                          const users = qc.getQueryData<Array<UserIndexRow>>([
+                            'users',
+                            'index',
+                          ])
+                          const user = users?.find(
+                            (u) => u.user_id === selectedId,
+                          )
+                          if (user) {
+                            setMergingUser(user)
+                          }
+                        }
+                      }}
                     />
                   </Box>
                 </Card>
               </Flex>
             )}
+          </Tabs.Content>
+
+          <Tabs.Content
+            value="calendar"
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <SuperCalendarSubscriptionsTab />
           </Tabs.Content>
 
           <Tabs.Content
@@ -1431,6 +1483,23 @@ export default function SuperPage() {
           </Flex>
         </AlertDialog.Content>
       </AlertDialog.Root>
+
+      <MergeUsersDialog
+        open={!!mergingUser}
+        onOpenChange={(open) => {
+          if (!open) setMergingUser(null)
+        }}
+        absorbUserId={mergingUser?.user_id ?? null}
+        absorbLabel={
+          mergingUser
+            ? mergingUser.display_name ||
+              [mergingUser.first_name, mergingUser.last_name]
+                .filter(Boolean)
+                .join(' ') ||
+              mergingUser.email
+            : null
+        }
+      />
     </section>
   )
 }

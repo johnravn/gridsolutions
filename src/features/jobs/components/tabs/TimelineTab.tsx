@@ -24,18 +24,21 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { DateTimeRangePicker } from '@shared/ui/components/pickers'
 import { supabase } from '@shared/api/supabase'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { ManageTimePeriodsButton } from '../dialogs/ManageTimePeriodsDialog'
 import type { TimePeriodLite } from '@features/jobs/types'
 
 export default function TimelineTab({ jobId }: { jobId: string }) {
   const { data: job } = useQuery(jobDetailQuery({ jobId }))
+  const { isReadOnly } = useCompanyWriteAccess()
 
   if (!job) return <Text>Loading...</Text>
 
   return (
     <Box>
-      <Heading size="3" mb="3">
-        Time Periods
-      </Heading>
+      <Flex justify="between" align="center" mb="3">
+        <Heading size="3">Time Periods</Heading>
+        {!isReadOnly && <ManageTimePeriodsButton jobId={jobId} />}
+      </Flex>
       <TimePeriodsManager
         jobId={jobId}
         jobStartAt={job.start_at}
