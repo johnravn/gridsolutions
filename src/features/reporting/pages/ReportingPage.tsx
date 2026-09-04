@@ -1,87 +1,53 @@
-// src/features/reporting/pages/ReportingPage.tsx
 import * as React from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import {
   Box,
-  Button,
   Card,
   Flex,
+  Heading,
   SegmentedControl,
-  Table,
   Text,
 } from '@radix-ui/themes'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Legend,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
-import { useCompany } from '@shared/companies/CompanyProvider'
-import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
-import ReportTableSkeleton from '@shared/ui/components/ReportTableSkeleton'
+import PageSkeleton from '@shared/ui/components/PageSkeleton'
+import { useCompany } from '@shared/companies/CompanyProvider'
 import {
   reportCustomerProfitabilityQuery,
+  reportInvoicePipelineQuery,
   reportJobProfitabilityQuery,
+  reportMonthlyTrendQuery,
   reportUtilizationQuery,
 } from '../api/queries'
-
-const DATE_RANGES = [
-  { label: 'Last 7 days', days: 7 },
-  { label: 'Last 30 days', days: 30 },
-  { label: 'Last 90 days', days: 90 },
-  { label: 'This year', days: -1 },
-] as const
-
-function formatCurrency(value: number) {
-  return new Intl.NumberFormat('no-NO', {
-    style: 'currency',
-    currency: 'NOK',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function formatDate(d: string | null) {
-  if (!d) return '—'
-  return new Date(d).toLocaleDateString('no-NO', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  })
-}
-
-type Segment = 'jobs' | 'customers' | 'utilization' | 'low-margin'
+import { CustomerProfitabilityTable } from '../components/CustomerProfitabilityTable'
+import { DateRangeControl } from '../components/DateRangeControl'
+import { ExportCsvButton } from '../components/ExportCsvButton'
+import { InvoicePipelineSection } from '../components/InvoicePipelineSection'
+import { JobProfitabilityTable } from '../components/JobProfitabilityTable'
+import { MonthlyTrendSection } from '../components/MonthlyTrendSection'
+import { ProfitabilityChart } from '../components/ProfitabilityChart'
+import { ReportError } from '../components/ReportError'
+import { SegmentTabs } from '../components/SegmentTabs'
+import { SummaryKpis } from '../components/SummaryKpis'
+import { UtilizationTable } from '../components/UtilizationTable'
+import { dateRangeFromIndex } from '../utils/dates'
+import { formatHours, formatPercent } from '../utils/format'
+import { financialKpis } from '../utils/kpis'
+import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
+import type { MarginThreshold, ReportSegment } from '../types'
 
 export default function ReportingPage() {
   const { companyId } = useCompany()
-  const navigate = useNavigate()
-  const [segment, setSegment] = React.useState<Segment>('jobs')
+  const [segment, setSegment] = React.useState<ReportSegment>('jobs')
   const [rangeIndex, setRangeIndex] = React.useState(1)
+  const [marginThreshold, setMarginThreshold] =
+    React.useState<MarginThreshold>(15)
 
-  const { fromDate, toDate } = React.useMemo(() => {
-    const to = new Date()
-    const days = DATE_RANGES[rangeIndex].days
-    const from = new Date(to)
-    if (days === -1) {
-      from.setMonth(0, 1)
-      from.setHours(0, 0, 0, 0)
-    } else {
-      from.setDate(from.getDate() - days)
-    }
-    to.setHours(23, 59, 59, 999)
-    return {
-      fromDate: from.toISOString().slice(0, 10),
-      toDate: to.toISOString().slice(0, 10),
-    }
-  }, [rangeIndex])
+  const { fromDate, toDate } = React.useMemo(
+    () => dateRangeFromIndex(rangeIndex),
+    [rangeIndex],
+  )
 
-  const { data: jobRows = [], isLoading: jobsLoading } = useQuery({
+  const jobsQuery = useQuery({
     ...reportJobProfitabilityQuery({
       companyId: companyId ?? '',
       fromDate,
@@ -94,7 +60,7 @@ export default function ReportingPage() {
         segment === 'low-margin'),
   })
 
-  const { data: customerRows = [], isLoading: customersLoading } = useQuery({
+  const customersQuery = useQuery({
     ...reportCustomerProfitabilityQuery({
       companyId: companyId ?? '',
       fromDate,
@@ -103,22 +69,43 @@ export default function ReportingPage() {
     enabled: !!companyId && segment === 'customers',
   })
 
-  const { data: utilizationRows = [], isLoading: utilizationLoading } =
-    useQuery({
-      ...reportUtilizationQuery({
-        companyId: companyId ?? '',
-        fromDate,
-        toDate,
-      }),
-      enabled: !!companyId && segment === 'utilization',
-    })
+  const utilizationQuery = useQuery({
+    ...reportUtilizationQuery({
+      companyId: companyId ?? '',
+      fromDate,
+      toDate,
+    }),
+    enabled: !!companyId && segment === 'utilization',
+  })
 
-  const lowMarginRows = React.useMemo(() => {
-    const withMargin = jobRows.filter((r) => r.margin_pct != null)
-    return [...withMargin].sort(
-      (a, b) => (a.margin_pct ?? 0) - (b.margin_pct ?? 0),
-    )
-  }, [jobRows])
+  const monthlyQuery = useQuery({
+    ...reportMonthlyTrendQuery({
+      companyId: companyId ?? '',
+      fromDate,
+      toDate,
+    }),
+    enabled: !!companyId && segment === 'monthly',
+  })
+
+  const invoiceQuery = useQuery({
+    ...reportInvoicePipelineQuery({
+      companyId: companyId ?? '',
+      fromDate,
+      toDate,
+    }),
+    enabled: !!companyId && segment === 'invoice',
+  })
+
+  const jobRows = jobsQuery.data ?? []
+  const customerRows = customersQuery.data ?? []
+  const utilizationRows = utilizationQuery.data ?? []
+  const monthlyRows = monthlyQuery.data ?? []
+  const invoiceData = invoiceQuery.data
+
+  const lowMarginRows = React.useMemo(
+    () => filterLowMarginJobs(jobRows, marginThreshold),
+    [jobRows, marginThreshold],
+  )
 
   const chartData = React.useMemo(() => {
     if (segment === 'customers') {
@@ -133,7 +120,7 @@ export default function ReportingPage() {
       const src =
         segment === 'low-margin'
           ? lowMarginRows.slice(0, 10)
-          : jobRows.slice(0, 10)
+          : [...jobRows].sort((a, b) => b.profit - a.profit).slice(0, 10)
       return src.map((r) => ({
         name: `#${r.job_number}`,
         income: r.income,
@@ -148,427 +135,395 @@ export default function ReportingPage() {
     return <PageSkeleton columns="1fr" showInspector={false} />
   }
 
+  const jobsLoading = jobsQuery.isLoading
+  const customersLoading = customersQuery.isLoading
+  const utilizationLoading = utilizationQuery.isLoading
+  const monthlyLoading = monthlyQuery.isLoading
+  const invoiceLoading = invoiceQuery.isLoading
+
   return (
     <Box p="4">
       <Flex direction="column" gap="4">
-        <Flex align="center" justify="between" wrap="wrap" gap="2">
-          <Flex gap="2" align="center">
-            <SegmentedControl.Root
-              value={DATE_RANGES[rangeIndex].label}
-              onValueChange={(v) => {
-                const i = DATE_RANGES.findIndex((r) => r.label === v)
-                if (i >= 0) setRangeIndex(i)
-              }}
-            >
-              {DATE_RANGES.map((r) => (
-                <SegmentedControl.Item key={r.label} value={r.label}>
-                  {r.label}
-                </SegmentedControl.Item>
-              ))}
-            </SegmentedControl.Root>
-          </Flex>
+        <Flex align="center" justify="between" wrap="wrap" gap="3">
+          <Heading size="6">Reporting</Heading>
+          <DateRangeControl rangeIndex={rangeIndex} onChange={setRangeIndex} />
         </Flex>
 
-        <SegmentedControl.Root
-          value={segment}
-          onValueChange={(v) => setSegment(v as Segment)}
-        >
-          <SegmentedControl.Item value="jobs">
-            Job profitability
-          </SegmentedControl.Item>
-          <SegmentedControl.Item value="customers">
-            Customer profitability
-          </SegmentedControl.Item>
-          <SegmentedControl.Item value="utilization">
-            Utilization
-          </SegmentedControl.Item>
-          <SegmentedControl.Item value="low-margin">
-            Low margin / unprofitable
-          </SegmentedControl.Item>
-        </SegmentedControl.Root>
+        <SegmentTabs value={segment} onChange={setSegment} />
 
         {segment === 'jobs' && (
           <>
-            {jobsLoading ? (
-              <Card size="3">
-                <ChartSkeleton />
-              </Card>
+            {jobsQuery.isError ? (
+              <ReportError
+                message={
+                  jobsQuery.error instanceof Error
+                    ? jobsQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void jobsQuery.refetch()}
+              />
             ) : (
-              chartData.length > 0 && (
-                <Card size="3">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                      />
-                      <YAxis
-                        tickFormatter={(v) =>
-                          v >= 1000 ? `${v / 1000}k` : String(v)
-                        }
-                      />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Legend />
-                      <Bar
-                        dataKey="income"
-                        fill="var(--green-9)"
-                        name="Income"
-                      />
-                      <Bar
-                        dataKey="expenses"
-                        fill="var(--red-9)"
-                        name="Expenses"
-                      />
-                      <Bar
-                        dataKey="profit"
-                        fill="var(--blue-9)"
-                        name="Profit"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )
+              <>
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  {!jobsLoading && jobRows.length > 0 ? (
+                    <SummaryKpis items={financialKpis(jobRows)} />
+                  ) : (
+                    <Box />
+                  )}
+                  <ExportCsvButton
+                    filename={`job-profitability-${fromDate}-${toDate}.csv`}
+                    headers={[
+                      'Job #',
+                      'Title',
+                      'Customer',
+                      'Start',
+                      'End',
+                      'Income',
+                      'Expenses',
+                      'Profit',
+                      'Margin %',
+                    ]}
+                    rows={jobRows.map((r) => [
+                      r.job_number,
+                      r.title,
+                      r.customer_name,
+                      r.start_at,
+                      r.end_at,
+                      r.income,
+                      r.expenses,
+                      r.profit,
+                      r.margin_pct,
+                    ])}
+                    disabled={jobsLoading}
+                  />
+                </Flex>
+                {jobsLoading ? (
+                  <Card size="3">
+                    <ChartSkeleton />
+                  </Card>
+                ) : (
+                  <ProfitabilityChart
+                    data={chartData}
+                    caption={
+                      jobRows.length > 10 ? 'Top 10 jobs by profit' : undefined
+                    }
+                  />
+                )}
+                <JobProfitabilityTable rows={jobRows} loading={jobsLoading} />
+              </>
             )}
-            <Card size="3">
-              {jobsLoading ? (
-                <ReportTableSkeleton columnCount={9} />
-              ) : jobRows.length === 0 ? (
-                <Text color="gray">No jobs in this period.</Text>
-              ) : (
-                <Table.Root>
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Job #</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Dates</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Income
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Expenses
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Profit
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Margin %
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {jobRows.map((row) => (
-                      <Table.Row key={row.job_id}>
-                        <Table.Cell>#{row.job_number}</Table.Cell>
-                        <Table.Cell>{row.title}</Table.Cell>
-                        <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                        <Table.Cell>
-                          {formatDate(row.start_at)} – {formatDate(row.end_at)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.income)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.expenses)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.profit)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() =>
-                              navigate({
-                                to: '/jobs',
-                                search: {
-                                  jobId: row.job_id,
-                                  recurringJobId: undefined,
-                                  tab: undefined,
-                                },
-                              })
-                            }
-                          >
-                            Open
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              )}
-            </Card>
           </>
         )}
 
         {segment === 'customers' && (
           <>
-            {customersLoading ? (
-              <Card size="3">
-                <ChartSkeleton />
-              </Card>
+            {customersQuery.isError ? (
+              <ReportError
+                message={
+                  customersQuery.error instanceof Error
+                    ? customersQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void customersQuery.refetch()}
+              />
             ) : (
-              chartData.length > 0 && (
-                <Card size="3">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                      />
-                      <YAxis
-                        tickFormatter={(v) =>
-                          v >= 1000 ? `${v / 1000}k` : String(v)
-                        }
-                      />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Legend />
-                      <Bar
-                        dataKey="income"
-                        fill="var(--green-9)"
-                        name="Income"
-                      />
-                      <Bar
-                        dataKey="expenses"
-                        fill="var(--red-9)"
-                        name="Expenses"
-                      />
-                      <Bar
-                        dataKey="profit"
-                        fill="var(--blue-9)"
-                        name="Profit"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )
+              <>
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  {!customersLoading && customerRows.length > 0 ? (
+                    <SummaryKpis items={financialKpis(customerRows)} />
+                  ) : (
+                    <Box />
+                  )}
+                  <ExportCsvButton
+                    filename={`customer-profitability-${fromDate}-${toDate}.csv`}
+                    headers={[
+                      'Customer',
+                      'Jobs',
+                      'Income',
+                      'Expenses',
+                      'Profit',
+                      'Margin %',
+                    ]}
+                    rows={customerRows.map((r) => [
+                      r.customer_name,
+                      r.job_count,
+                      r.income,
+                      r.expenses,
+                      r.profit,
+                      r.margin_pct,
+                    ])}
+                    disabled={customersLoading}
+                  />
+                </Flex>
+                {customersLoading ? (
+                  <Card size="3">
+                    <ChartSkeleton />
+                  </Card>
+                ) : (
+                  <ProfitabilityChart
+                    data={chartData}
+                    caption={
+                      customerRows.length > 10
+                        ? 'Top 10 customers by profit'
+                        : undefined
+                    }
+                  />
+                )}
+                <CustomerProfitabilityTable
+                  rows={customerRows}
+                  loading={customersLoading}
+                />
+              </>
             )}
-            <Card size="3">
-              {customersLoading ? (
-                <ReportTableSkeleton columnCount={6} />
-              ) : customerRows.length === 0 ? (
-                <Text color="gray">No customer data in this period.</Text>
-              ) : (
-                <Table.Root>
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Jobs</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Income
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Expenses
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Profit
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Margin %
-                      </Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {customerRows.map((row, i) => (
-                      <Table.Row key={row.customer_id ?? `no-customer-${i}`}>
-                        <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                        <Table.Cell>{row.job_count}</Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.income)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.expenses)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.profit)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              )}
-            </Card>
           </>
         )}
 
         {segment === 'utilization' && (
-          <Card size="3">
-            {utilizationLoading ? (
-              <ReportTableSkeleton columnCount={2} rowCount={6} />
-            ) : utilizationRows.length === 0 ? (
-              <Text color="gray">No crew bookings in this period.</Text>
+          <>
+            {utilizationQuery.isError ? (
+              <ReportError
+                message={
+                  utilizationQuery.error instanceof Error
+                    ? utilizationQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void utilizationQuery.refetch()}
+              />
             ) : (
-              <Table.Root>
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Person</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell align="right">
-                      Booked hours
-                    </Table.ColumnHeaderCell>
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
-                  {utilizationRows
-                    .slice()
-                    .sort((a, b) => b.booked_hours - a.booked_hours)
-                    .map((row) => (
-                      <Table.Row key={row.user_id}>
-                        <Table.Cell>
-                          {row.display_name ?? row.user_id}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {row.booked_hours.toFixed(1)} h
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                </Table.Body>
-              </Table.Root>
+              <>
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  {!utilizationLoading && utilizationRows.length > 0 ? (
+                    <SummaryKpis
+                      items={[
+                        {
+                          label: 'Total booked',
+                          value: formatHours(
+                            utilizationRows.reduce(
+                              (s, r) => s + r.booked_hours,
+                              0,
+                            ),
+                          ),
+                        },
+                        {
+                          label: 'People',
+                          value: String(utilizationRows.length),
+                        },
+                        {
+                          label: 'Avg utilization',
+                          value: formatPercent(
+                            utilizationRows.length > 0
+                              ? Math.round(
+                                  (utilizationRows.reduce(
+                                    (s, r) => s + (r.utilization_pct ?? 0),
+                                    0,
+                                  ) /
+                                    utilizationRows.length) *
+                                    100,
+                                ) / 100
+                              : null,
+                          ),
+                          hint: 'Assumes 7.5h weekdays',
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <Box />
+                  )}
+                  <ExportCsvButton
+                    filename={`utilization-${fromDate}-${toDate}.csv`}
+                    headers={[
+                      'Person',
+                      'Booked hours',
+                      'Capacity hours',
+                      'Utilization %',
+                    ]}
+                    rows={utilizationRows.map((r) => [
+                      r.display_name ?? r.user_id,
+                      r.booked_hours,
+                      r.capacity_hours,
+                      r.utilization_pct,
+                    ])}
+                    disabled={utilizationLoading}
+                  />
+                </Flex>
+                <UtilizationTable
+                  rows={utilizationRows}
+                  loading={utilizationLoading}
+                />
+              </>
             )}
-          </Card>
+          </>
         )}
 
         {segment === 'low-margin' && (
           <>
-            <Text size="2" color="gray">
-              Jobs sorted by margin (lowest first). Review unprofitable or
-              low-margin jobs.
-            </Text>
-            {jobsLoading ? (
-              <Card size="3">
-                <ChartSkeleton />
-              </Card>
+            {jobsQuery.isError ? (
+              <ReportError
+                message={
+                  jobsQuery.error instanceof Error
+                    ? jobsQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void jobsQuery.refetch()}
+              />
             ) : (
-              chartData.length > 0 && (
-                <Card size="3">
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart
-                      data={chartData}
-                      margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
+              <>
+                <Flex align="center" justify="between" wrap="wrap" gap="2">
+                  <Flex direction="column" gap="2">
+                    <Text size="2" color="gray">
+                      Jobs below the selected margin threshold, lowest first.
+                    </Text>
+                    <SegmentedControl.Root
+                      value={String(marginThreshold)}
+                      onValueChange={(v) =>
+                        setMarginThreshold(Number(v) as MarginThreshold)
+                      }
                     >
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        angle={-45}
-                        textAnchor="end"
-                        height={80}
-                      />
-                      <YAxis
-                        tickFormatter={(v) =>
-                          v >= 1000 ? `${v / 1000}k` : String(v)
-                        }
-                      />
-                      <Tooltip formatter={(v: number) => formatCurrency(v)} />
-                      <Legend />
-                      <Bar
-                        dataKey="income"
-                        fill="var(--green-9)"
-                        name="Income"
-                      />
-                      <Bar
-                        dataKey="expenses"
-                        fill="var(--red-9)"
-                        name="Expenses"
-                      />
-                      <Bar
-                        dataKey="profit"
-                        fill="var(--blue-9)"
-                        name="Profit"
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Card>
-              )
+                      {MARGIN_THRESHOLDS.map((t) => (
+                        <SegmentedControl.Item
+                          key={t.value}
+                          value={String(t.value)}
+                        >
+                          {t.label}
+                        </SegmentedControl.Item>
+                      ))}
+                    </SegmentedControl.Root>
+                  </Flex>
+                  <ExportCsvButton
+                    filename={`low-margin-${marginThreshold}-${fromDate}-${toDate}.csv`}
+                    headers={[
+                      'Job #',
+                      'Title',
+                      'Customer',
+                      'Income',
+                      'Expenses',
+                      'Profit',
+                      'Margin %',
+                    ]}
+                    rows={lowMarginRows.map((r) => [
+                      r.job_number,
+                      r.title,
+                      r.customer_name,
+                      r.income,
+                      r.expenses,
+                      r.profit,
+                      r.margin_pct,
+                    ])}
+                    disabled={jobsLoading}
+                  />
+                </Flex>
+                {!jobsLoading && lowMarginRows.length > 0 ? (
+                  <SummaryKpis items={financialKpis(lowMarginRows)} />
+                ) : null}
+                {jobsLoading ? (
+                  <Card size="3">
+                    <ChartSkeleton />
+                  </Card>
+                ) : (
+                  <ProfitabilityChart
+                    data={chartData}
+                    caption={
+                      lowMarginRows.length > 10
+                        ? '10 lowest margin jobs'
+                        : undefined
+                    }
+                  />
+                )}
+                <JobProfitabilityTable
+                  rows={lowMarginRows}
+                  loading={jobsLoading}
+                />
+              </>
             )}
-            <Card size="3">
-              {jobsLoading ? (
-                <ReportTableSkeleton columnCount={8} />
-              ) : lowMarginRows.length === 0 ? (
-                <Text color="gray">
-                  No jobs with margin data in this period.
-                </Text>
-              ) : (
-                <Table.Root>
-                  <Table.Header>
-                    <Table.Row>
-                      <Table.ColumnHeaderCell>Job #</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Income
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Expenses
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Profit
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell align="right">
-                        Margin %
-                      </Table.ColumnHeaderCell>
-                      <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
-                    </Table.Row>
-                  </Table.Header>
-                  <Table.Body>
-                    {lowMarginRows.map((row) => (
-                      <Table.Row key={row.job_id}>
-                        <Table.Cell>#{row.job_number}</Table.Cell>
-                        <Table.Cell>{row.title}</Table.Cell>
-                        <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.income)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.expenses)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {formatCurrency(row.profit)}
-                        </Table.Cell>
-                        <Table.Cell align="right">
-                          {row.margin_pct != null ? `${row.margin_pct}%` : '—'}
-                        </Table.Cell>
-                        <Table.Cell>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={() =>
-                              navigate({
-                                to: '/jobs',
-                                search: {
-                                  jobId: row.job_id,
-                                  recurringJobId: undefined,
-                                  tab: undefined,
-                                },
-                              })
-                            }
-                          >
-                            Open
-                          </Button>
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Table.Body>
-                </Table.Root>
-              )}
-            </Card>
+          </>
+        )}
+
+        {segment === 'monthly' && (
+          <>
+            {monthlyQuery.isError ? (
+              <ReportError
+                message={
+                  monthlyQuery.error instanceof Error
+                    ? monthlyQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void monthlyQuery.refetch()}
+              />
+            ) : (
+              <>
+                <Flex justify="between" align="center" wrap="wrap" gap="2">
+                  {!monthlyLoading && monthlyRows.length > 0 ? (
+                    <SummaryKpis items={financialKpis(monthlyRows)} />
+                  ) : (
+                    <Box />
+                  )}
+                  <ExportCsvButton
+                    filename={`monthly-pnl-${fromDate}-${toDate}.csv`}
+                    headers={['Month', 'Income', 'Expenses', 'Profit']}
+                    rows={monthlyRows.map((r) => [
+                      r.month_label,
+                      r.income,
+                      r.expenses,
+                      r.profit,
+                    ])}
+                    disabled={monthlyLoading}
+                  />
+                </Flex>
+                <MonthlyTrendSection
+                  rows={monthlyRows}
+                  loading={monthlyLoading}
+                />
+              </>
+            )}
+          </>
+        )}
+
+        {segment === 'invoice' && (
+          <>
+            {invoiceQuery.isError ? (
+              <ReportError
+                message={
+                  invoiceQuery.error instanceof Error
+                    ? invoiceQuery.error.message
+                    : undefined
+                }
+                onRetry={() => void invoiceQuery.refetch()}
+              />
+            ) : (
+              <>
+                <Flex justify="end">
+                  <ExportCsvButton
+                    filename={`invoice-pipeline-${fromDate}-${toDate}.csv`}
+                    headers={[
+                      'Job #',
+                      'Title',
+                      'Customer',
+                      'Status',
+                      'Bucket',
+                      'Start',
+                      'End',
+                      'Income',
+                    ]}
+                    rows={(invoiceData?.jobs ?? []).map((r) => [
+                      r.job_number,
+                      r.title,
+                      r.customer_name,
+                      r.status,
+                      r.bucket,
+                      r.start_at,
+                      r.end_at,
+                      r.income,
+                    ])}
+                    disabled={invoiceLoading}
+                  />
+                </Flex>
+                <InvoicePipelineSection
+                  summaries={invoiceData?.summaries ?? []}
+                  jobs={invoiceData?.jobs ?? []}
+                  loading={invoiceLoading}
+                />
+              </>
+            )}
           </>
         )}
       </Flex>

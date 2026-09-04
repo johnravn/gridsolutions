@@ -596,7 +596,6 @@ function SidebarContent({
                       currentPath={currentPath}
                       isMobile={isMobile}
                       onCloseMobile={() => onToggle(false)}
-                      tag={n.label === 'Reporting' ? <BetaBadge /> : undefined}
                       badge={
                         n.label === 'Matters' && unreadMatters > 0 ? (
                           <Badge

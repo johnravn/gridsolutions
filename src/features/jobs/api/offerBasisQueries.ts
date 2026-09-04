@@ -1679,53 +1679,6 @@ export async function createBookingsFromOfferBasis(
 
   const forcedFields = options?.force ? forcedBookingFields(userId) : {}
 
-  const getOrCreateTimePeriod = async (
-    title: string,
-    category: 'equipment' | 'crew' | 'transport',
-    startAt: string,
-    endAt: string,
-  ): Promise<string> => {
-    const { data: existing } = await supabase
-      .from('time_periods')
-      .select('id, deleted')
-      .eq('job_id', basis.job_id)
-      .eq('title', title)
-      .eq('category', category)
-      .eq('start_at', startAt)
-      .eq('end_at', endAt)
-      .maybeSingle()
-
-    if (existing) {
-      if (existing.deleted) {
-        const { error: reviveError } = await supabase
-          .from('time_periods')
-          .update({ deleted: false, reserved_by_user_id: userId })
-          .eq('id', existing.id)
-
-        if (reviveError) throw reviveError
-      }
-      return existing.id
-    }
-
-    const { data: newPeriod, error: periodError } = await supabase
-      .from('time_periods')
-      .insert({
-        job_id: basis.job_id,
-        company_id: companyId,
-        title,
-        category,
-        start_at: startAt,
-        end_at: endAt,
-        reserved_by_user_id: userId,
-        deleted: false,
-      })
-      .select('id')
-      .single()
-
-    if (periodError) throw periodError
-    return newPeriod.id
-  }
-
   if (basis.groups && basis.groups.length > 0) {
     type EquipmentEntry =
       | {

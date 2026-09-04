@@ -173,8 +173,7 @@ export default function AppShell() {
   }
 
   const title = getPageTitle(currentPath)
-  const showPageBeta =
-    currentPath.startsWith('/conflicts') || currentPath.startsWith('/reporting')
+  const showPageBeta = currentPath.startsWith('/conflicts')
   const isPublicOffer = currentPath.startsWith('/offer/')
   const isPublic =
     currentPath === '/login' ||
