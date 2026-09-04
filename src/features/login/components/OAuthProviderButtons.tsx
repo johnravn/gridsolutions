@@ -1,7 +1,4 @@
-import * as React from 'react'
-import { Button, Flex, Text } from '@radix-ui/themes'
-import { signInWithOAuthProvider } from '@shared/auth/oauth'
-import type { OAuthProvider } from '@shared/auth/oauth'
+import { Badge, Button, Flex, Text } from '@radix-ui/themes'
 
 type Props = {
   disabled?: boolean
@@ -38,59 +35,45 @@ function AppleGlyph() {
       height="18"
       viewBox="0 0 24 24"
       aria-hidden
-      fill="currentColor"
+      fill="#ffffff"
     >
       <path d="M16.365 1.43c0 1.14-.463 2.21-1.226 3.01-.8.84-2.14 1.49-3.27 1.4-.14-1.1.42-2.27 1.17-3.05.8-.84 2.2-1.45 3.33-1.36zM20.8 17.3c-.58 1.33-.86 1.92-1.61 3.1-1.05 1.63-2.53 3.66-4.37 3.68-1.63.02-2.05-1.06-4.27-1.05-2.22.01-2.68 1.07-4.31 1.05-1.84-.02-3.25-1.85-4.3-3.48C.3 17.54-.7 13.1.95 10.05c1.04-1.92 2.68-3.13 4.23-3.13 1.58 0 2.57 1.07 4.27 1.07 1.65 0 2.5-1.08 4.28-1.08 1.37 0 2.82.75 3.85 2.04-3.39 1.86-2.84 6.71.22 8.35z" />
     </svg>
   )
 }
 
-export function OAuthProviderButtons({ disabled, onError }: Props) {
-  const [pending, setPending] = React.useState<OAuthProvider | null>(null)
-
-  const start = async (provider: OAuthProvider) => {
-    setPending(provider)
-    try {
-      const { error } = await signInWithOAuthProvider(provider)
-      if (error) {
-        onError?.(error.message)
-        setPending(null)
-      }
-      // On success the browser navigates away to the provider.
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : 'Could not start sign-in'
-      onError?.(message)
-      setPending(null)
-    }
-  }
-
+/** OAuth providers are shown but disabled until providers are configured. */
+export function OAuthProviderButtons(_props: Props) {
   return (
     <Flex direction="column" gap="2" width="100%">
       <Button
         type="button"
         size="3"
         variant="outline"
-        disabled={disabled || pending !== null}
-        onClick={() => void start('google')}
+        disabled
         style={{ width: '100%', justifyContent: 'center', gap: 8 }}
       >
         <GoogleGlyph />
-        {pending === 'google' ? 'Redirecting…' : 'Continue with Google'}
+        Continue with Google
+        <Badge color="gray" variant="soft" size="1">
+          Coming soon
+        </Badge>
       </Button>
       <Button
         type="button"
         size="3"
         variant="outline"
-        disabled={disabled || pending !== null}
-        onClick={() => void start('apple')}
+        disabled
         style={{ width: '100%', justifyContent: 'center', gap: 8 }}
       >
         <AppleGlyph />
-        {pending === 'apple' ? 'Redirecting…' : 'Continue with Apple'}
+        Continue with Apple
+        <Badge color="gray" variant="soft" size="1">
+          Coming soon
+        </Badge>
       </Button>
       <Text size="1" color="gray" align="center">
-        Same Google or Apple email links to your existing Grid account when
-        verified.
+        Google and Apple sign-in are coming soon. Use email for now.
       </Text>
     </Flex>
   )
