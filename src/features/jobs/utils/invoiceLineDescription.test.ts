@@ -8,6 +8,8 @@ import {
   defaultDescriptionForLine,
   defaultTemplateForLineType,
   normalizeInvoiceLineTemplateStore,
+  restoreLineDescriptions,
+  snapshotChangedDescriptions,
   tokenOptionsForScope,
 } from './invoiceLineDescription'
 
@@ -334,6 +336,32 @@ describe('tokenOptionsForScope', () => {
     expect(other).toEqual(expect.arrayContaining(['name', 'date', 'time']))
     expect(other).not.toContain('brand')
     expect(other).not.toContain('model')
+  })
+})
+
+describe('snapshotChangedDescriptions', () => {
+  it('records previous text only for lines whose description changed', () => {
+    const before = [
+      makeLine({ id: 'a', description: 'Old A' }),
+      makeLine({ id: 'b', description: 'Same' }),
+    ]
+    const after = [
+      makeLine({ id: 'a', description: 'New A' }),
+      makeLine({ id: 'b', description: 'Same' }),
+    ]
+    expect(snapshotChangedDescriptions(before, after)).toEqual({ a: 'Old A' })
+    expect(countChangedDescriptions(before, after)).toBe(1)
+  })
+})
+
+describe('restoreLineDescriptions', () => {
+  it('restores snapshot descriptions and leaves other lines alone', () => {
+    const lines = [
+      makeLine({ id: 'a', description: 'New A' }),
+      makeLine({ id: 'b', description: 'Same' }),
+    ]
+    const restored = restoreLineDescriptions(lines, { a: 'Old A' })
+    expect(restored.map((line) => line.description)).toEqual(['Old A', 'Same'])
   })
 })
 

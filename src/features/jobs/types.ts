@@ -145,7 +145,7 @@ export type RecurringSeriesInvoiceJob = {
 export type RecurringSeriesInvoice = {
   id: UUID
   created_at: string
-  status: 'pending' | 'created' | 'failed'
+  status: 'pending' | 'created' | 'failed' | 'paid'
   invoice_basis: 'offer' | 'bookings'
   conta_invoice_id: string | null
   organization_id: string

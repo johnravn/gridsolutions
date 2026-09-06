@@ -36,10 +36,16 @@ test.describe('Customers', () => {
     await expect(dialog).toBeHidden({ timeout: 20_000 })
 
     const searchInput = page.getByPlaceholder('Search customers…')
-    await searchInput.fill(customerName)
-    const customerRow = page.getByText(customerName, { exact: true })
-    await expect(customerRow).toBeVisible({ timeout: 20_000 })
-    await customerRow.click()
-    await expect(customerRow.first()).toBeVisible({ timeout: 15_000 })
+    await expect(async () => {
+      await searchInput.fill(customerName)
+      const customerRow = page.getByText(customerName, { exact: true })
+      await expect(customerRow.first()).toBeVisible({ timeout: 5_000 })
+    }).toPass({ timeout: 30_000 })
+    await page.getByText(customerName, { exact: true }).first().click()
+    await expect(
+      page.getByText(customerName, { exact: true }).first(),
+    ).toBeVisible({
+      timeout: 15_000,
+    })
   })
 })

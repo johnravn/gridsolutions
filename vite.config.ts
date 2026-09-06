@@ -169,8 +169,17 @@ export default defineConfig(({ mode }) => {
       exclude: ['@tanstack/react-router-devtools'],
     },
     define: contaClientEnvDefine,
+    // Bind IPv4 explicitly. Default can be [::1] only on macOS, so
+    // http://127.0.0.1:3000 refuses while localhost works — and that
+    // breaks Google PKCE (verifier origin must match Supabase site_url).
+    server: {
+      host: '127.0.0.1',
+      port: 3000,
+      strictPort: true,
+    },
     preview: {
       // Ensure preview server handles SPA routing correctly
+      host: '127.0.0.1',
       port: 3000,
     },
     test: {

@@ -1,5 +1,8 @@
 import { supabase } from '@shared/api/supabase'
-import { postgrestIlikePatterns } from '@shared/api/fuzzySearch'
+import {
+  postgrestIlikeClause,
+  postgrestIlikePatterns,
+} from '@shared/api/fuzzySearch'
 
 export type CrewPricingLevelInfo = {
   id: string
@@ -80,7 +83,11 @@ export function customersIndexQuery({
       if (search && search.trim()) {
         const patterns = postgrestIlikePatterns(search)
         if (patterns.length > 0) {
-          q = q.or(patterns.map((pattern) => `name.ilike.${pattern}`).join(','))
+          q = q.or(
+            patterns
+              .map((pattern) => postgrestIlikeClause('name', pattern))
+              .join(','),
+          )
         }
       }
 

@@ -33,11 +33,19 @@ export type MonitorContaCompany = {
   last_customer_sync_at: string | null
   linked_customer_count: number
   stale_customer_count: number
+  open_conta_invoice_count: number
 }
 
 export type MonitorNotificationBacklog = {
   pendingCount: number
   oldestPendingAt: string | null
+}
+
+export type MonitorPendingNotification = {
+  id: string
+  created_at: string
+  type: string
+  title: string
 }
 
 export type MonitorPlatformCounts = {
@@ -51,6 +59,7 @@ export type SystemMonitorSnapshot = {
   recentRuns: Array<MonitorRecentRun>
   contaCompanies: Array<MonitorContaCompany>
   notificationBacklog: MonitorNotificationBacklog
+  pendingNotifications: Array<MonitorPendingNotification>
   platformCounts: MonitorPlatformCounts
 }
 
@@ -66,6 +75,13 @@ export const MONITOR_JOB_DEFINITIONS: Array<{
     schedule: 'Daily at 03:00 UTC (Vercel) + 03:15 UTC backup (GitHub Actions)',
     description:
       'Syncs Subb customers with Conta for all companies using Conta accounting.',
+  },
+  {
+    jobKey: 'conta_invoice_paid_sync',
+    name: 'Conta invoice paid sync',
+    schedule: 'Daily at 03:00 UTC (Vercel) + 03:15 UTC backup (GitHub Actions)',
+    description:
+      'Pulls Conta invoice paid status into Grid job_invoices and linked jobs (read-only).',
   },
   {
     jobKey: 'notification_email_dispatch',
@@ -90,19 +106,61 @@ export const MONITOR_JOB_DEFINITIONS: Array<{
   },
 ]
 
+function asObjectArray<T extends Record<string, unknown>>(
+  value: unknown,
+): Array<T> {
+  if (Array.isArray(value)) return value as Array<T>
+  return []
+}
+
 export function systemMonitorSnapshotQuery() {
   return {
     queryKey: ['super', 'monitor', 'snapshot'] as const,
     queryFn: async (): Promise<SystemMonitorSnapshot> => {
       const { data, error } = await supabase.rpc('get_system_monitor_snapshot')
       if (error) throw error
-      return data as SystemMonitorSnapshot
+
+      const raw =
+        typeof data === 'string'
+          ? (JSON.parse(data) as Record<string, unknown>)
+          : ((data ?? {}) as Record<string, unknown>)
+
+      const notificationBacklogRaw =
+        (raw.notificationBacklog as MonitorNotificationBacklog | null) ?? null
+      const platformCountsRaw =
+        (raw.platformCounts as MonitorPlatformCounts | null) ?? null
+
+      return {
+        jobs: asObjectArray<MonitorJobLastRun>(raw.jobs),
+        recentRuns: asObjectArray<MonitorRecentRun>(raw.recentRuns),
+        contaCompanies: asObjectArray<MonitorContaCompany>(
+          raw.contaCompanies,
+        ).map((row) => ({
+          ...row,
+          open_conta_invoice_count: Number(row.open_conta_invoice_count ?? 0),
+          linked_customer_count: Number(row.linked_customer_count ?? 0),
+          stale_customer_count: Number(row.stale_customer_count ?? 0),
+          api_key_active: Boolean(row.api_key_active ?? true),
+        })),
+        notificationBacklog: {
+          pendingCount: Number(notificationBacklogRaw?.pendingCount ?? 0),
+          oldestPendingAt: notificationBacklogRaw?.oldestPendingAt ?? null,
+        },
+        pendingNotifications: asObjectArray<MonitorPendingNotification>(
+          raw.pendingNotifications,
+        ),
+        platformCounts: {
+          companies: Number(platformCountsRaw?.companies ?? 0),
+          users: Number(platformCountsRaw?.users ?? 0),
+          inProgressJobs: Number(platformCountsRaw?.inProgressJobs ?? 0),
+        },
+      }
     },
     refetchInterval: 60_000,
   }
 }
 
-export type TriggerContaSyncResult = {
+export type ContaSyncLegResult = {
   ok: boolean
   runId: string | null
   status: ScheduledJobRunStatus
@@ -110,12 +168,28 @@ export type TriggerContaSyncResult = {
   syncedAt: string
   results: Array<{
     companyId: string
-    updated: number
-    created: number
+    updated?: number
+    created?: number
+    checked?: number
+    invoicesMarkedPaid?: number
+    jobsMarkedPaid?: number
     skipped: number
     skippedReason?: string
     errors: Array<string>
   }>
+  error?: string
+}
+
+export type TriggerContaSyncResult = {
+  ok: boolean
+  customerSync: ContaSyncLegResult
+  invoicePaidSync: ContaSyncLegResult
+  /** Back-compat top-level fields (customer sync) */
+  runId: string | null
+  status: ScheduledJobRunStatus
+  companies: number
+  syncedAt: string
+  results: ContaSyncLegResult['results']
   error?: string
 }
 
@@ -132,13 +206,20 @@ export type AdvanceDemoTimelineResult = {
   message?: string
 }
 
-export async function triggerDemoTimelineAdvance(): Promise<AdvanceDemoTimelineResult> {
-  const { data, error } = await supabase.rpc('advance_demo_company_timeline')
-  if (error) throw error
-  return data as AdvanceDemoTimelineResult
+export type TriggerJobStatusAutoUpdateResult = {
+  rowsUpdated: number
 }
 
-export async function triggerContaSyncNow(): Promise<TriggerContaSyncResult> {
+export type TriggerEmailDispatchResult = {
+  ok: true
+  runId?: string | null
+  scanned: number
+  attempted: number
+  sentOrProcessed: number
+  errors: number
+}
+
+async function getAccessToken(): Promise<string> {
   const {
     data: { session },
     error: sessionError,
@@ -146,11 +227,30 @@ export async function triggerContaSyncNow(): Promise<TriggerContaSyncResult> {
   if (sessionError || !session?.access_token) {
     throw new Error('Not signed in')
   }
+  return session.access_token
+}
+
+export async function triggerDemoTimelineAdvance(): Promise<AdvanceDemoTimelineResult> {
+  const { data, error } = await supabase.rpc('advance_demo_company_timeline')
+  if (error) {
+    throw new Error(error.message || 'Demo timeline advance failed')
+  }
+  return data as AdvanceDemoTimelineResult
+}
+
+export async function triggerJobStatusAutoUpdate(): Promise<TriggerJobStatusAutoUpdateResult> {
+  const { data, error } = await supabase.rpc('trigger_job_status_auto_update')
+  if (error) throw error
+  return data as TriggerJobStatusAutoUpdateResult
+}
+
+export async function triggerContaSyncNow(): Promise<TriggerContaSyncResult> {
+  const accessToken = await getAccessToken()
 
   const res = await fetch('/api/super/trigger-conta-sync', {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.access_token}`,
+      Authorization: `Bearer ${accessToken}`,
     },
   })
 
@@ -159,6 +259,46 @@ export async function triggerContaSyncNow(): Promise<TriggerContaSyncResult> {
     throw new Error(body.error ?? `Sync failed (${res.status})`)
   }
   return body
+}
+
+export async function triggerEmailDispatchNow(): Promise<TriggerEmailDispatchResult> {
+  const accessToken = await getAccessToken()
+
+  const res = await fetch('/api/super/trigger-email-dispatch', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  const body = (await res.json()) as TriggerEmailDispatchResult & {
+    error?: string
+  }
+  if (!res.ok) {
+    throw new Error(body.error ?? `Dispatch failed (${res.status})`)
+  }
+  return body
+}
+
+export function summarizeContaCustomerSyncResults(
+  results: ContaSyncLegResult['results'],
+): string {
+  const updated = results.reduce((n, r) => n + (r.updated ?? 0), 0)
+  const created = results.reduce((n, r) => n + (r.created ?? 0), 0)
+  const skipped = results.reduce((n, r) => n + r.skipped, 0)
+  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  return `${updated} updated, ${created} created, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
+}
+
+export function summarizeContaInvoicePaidSyncResults(
+  results: ContaSyncLegResult['results'],
+): string {
+  const checked = results.reduce((n, r) => n + (r.checked ?? 0), 0)
+  const invoices = results.reduce((n, r) => n + (r.invoicesMarkedPaid ?? 0), 0)
+  const jobs = results.reduce((n, r) => n + (r.jobsMarkedPaid ?? 0), 0)
+  const skipped = results.reduce((n, r) => n + r.skipped, 0)
+  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  return `${checked} checked, ${invoices} invoices paid, ${jobs} jobs paid, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
 }
 
 export function formatMonitorDateTime(iso: string | null | undefined): string {
@@ -202,10 +342,15 @@ export function summarizeRunDetails(
   details: Record<string, unknown> | null,
 ): string {
   if (!details) return '—'
-  if (jobKey === 'conta_customer_sync') {
+  if (
+    jobKey === 'conta_customer_sync' ||
+    jobKey === 'conta_invoice_paid_sync'
+  ) {
     const summary = details.summary
     if (typeof summary === 'string') return summary
-    return 'Conta sync completed'
+    return jobKey === 'conta_invoice_paid_sync'
+      ? 'Conta invoice paid sync completed'
+      : 'Conta sync completed'
   }
   if (jobKey === 'notification_email_dispatch') {
     const scanned = details.scanned
@@ -242,6 +387,12 @@ export function ageInMinutes(iso: string | null | undefined): number | null {
   return Math.floor((Date.now() - new Date(iso).getTime()) / 60_000)
 }
 
+export function shortenOrgId(orgId: string | null | undefined): string {
+  if (!orgId) return '—'
+  if (orgId.length <= 12) return orgId
+  return `${orgId.slice(0, 6)}…${orgId.slice(-4)}`
+}
+
 export type ResendSentEmail = {
   id: string
   message_id: string | null
@@ -269,23 +420,71 @@ export type ResendSentEmailsPage = {
 
 const RESEND_EMAILS_PAGE_SIZE = 50
 
+async function invokeListResendEmails(
+  body: Record<string, unknown>,
+): Promise<{ data: unknown; error: Error | null }> {
+  const { data: userData, error: userError } = await supabase.auth.getUser()
+  if (userError) return { data: null, error: new Error(userError.message) }
+  if (!userData.user) return { data: null, error: new Error('Not signed in') }
+
+  const { data: sessionData, error: sessionError } =
+    await supabase.auth.getSession()
+  if (sessionError)
+    return { data: null, error: new Error(sessionError.message) }
+  const token = sessionData.session?.access_token
+  if (!token) return { data: null, error: new Error('Not signed in') }
+
+  const baseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(
+    /\/$/,
+    '',
+  )
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  const response = await fetch(`${baseUrl}/functions/v1/list-resend-emails`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      apikey: anonKey,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  let data: unknown = null
+  try {
+    data = await response.json()
+  } catch {
+    data = null
+  }
+
+  if (!response.ok) {
+    const details =
+      data && typeof data === 'object'
+        ? ((data as { details?: string; error?: string }).details ??
+          (data as { error?: string }).error)
+        : null
+    return {
+      data,
+      error: new Error(
+        details
+          ? `list-resend-emails failed (${response.status}): ${details}`
+          : `list-resend-emails failed (${response.status})`,
+      ),
+    }
+  }
+
+  return { data, error: null }
+}
+
 export async function fetchResendSentEmails(params?: {
   after?: string
   limit?: number
 }): Promise<ResendSentEmailsPage> {
-  const { data, error } = await supabase.functions.invoke(
-    'list-resend-emails',
-    {
-      body: {
-        limit: params?.limit ?? RESEND_EMAILS_PAGE_SIZE,
-        ...(params?.after ? { after: params.after } : {}),
-      },
-    },
-  )
+  const { data, error } = await invokeListResendEmails({
+    limit: params?.limit ?? RESEND_EMAILS_PAGE_SIZE,
+    ...(params?.after ? { after: params.after } : {}),
+  })
 
-  if (error) {
-    throw new Error(error.message)
-  }
+  if (error) throw error
 
   const body = data as ResendSentEmailsPage & {
     error?: string
@@ -293,7 +492,9 @@ export async function fetchResendSentEmails(params?: {
   }
   if (!body || body.ok !== true) {
     throw new Error(
-      body?.details ?? body?.error ?? 'Failed to load Resend emails',
+      body?.details ??
+        body?.error ??
+        'Failed to load Resend emails. Check RESEND_API_KEY and docs/EMAIL.md.',
     )
   }
   return body
@@ -302,16 +503,9 @@ export async function fetchResendSentEmails(params?: {
 export async function fetchResendSentEmailDetail(
   emailId: string,
 ): Promise<ResendSentEmailDetail> {
-  const { data, error } = await supabase.functions.invoke(
-    'list-resend-emails',
-    {
-      body: { email_id: emailId },
-    },
-  )
+  const { data, error } = await invokeListResendEmails({ email_id: emailId })
 
-  if (error) {
-    throw new Error(error.message)
-  }
+  if (error) throw error
 
   const body = data as {
     ok?: boolean

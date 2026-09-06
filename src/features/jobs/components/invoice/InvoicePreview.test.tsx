@@ -126,6 +126,30 @@ describe('InvoicePreview quantity field', () => {
   })
 })
 
+describe('InvoicePreview line highlights', () => {
+  it('marks pattern-target rows so CSS can paint the highlight on cells', () => {
+    renderWithProviders(
+      <InvoicePreview
+        {...bookingsPreviewProps}
+        bookings={{
+          ...bookingsPreviewProps.bookings,
+          equipment: [line, line2],
+          all: [line, line2],
+        }}
+        editedLines={[line, line2]}
+        onLineChange={vi.fn()}
+        onReorderLines={vi.fn()}
+        highlightedLineIds={new Set(['line-1'])}
+      />,
+    )
+
+    const table = document.querySelector('[data-invoice-lines]')
+    const rows = table?.querySelectorAll('tbody tr')
+    expect(rows?.[0]).toHaveAttribute('data-invoice-line-highlighted')
+    expect(rows?.[1]).not.toHaveAttribute('data-invoice-line-highlighted')
+  })
+})
+
 describe('InvoicePreview line reorder', () => {
   it('shows drag handles when onReorderLines is provided', () => {
     renderWithProviders(

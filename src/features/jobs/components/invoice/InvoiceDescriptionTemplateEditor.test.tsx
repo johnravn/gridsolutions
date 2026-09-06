@@ -125,8 +125,48 @@ describe('InvoiceDescriptionTemplateEditor', () => {
   })
 })
 
+describe('invoice line pattern undo', () => {
+  beforeEach(() => {
+    window.localStorage.clear()
+  })
+
+  it('is disabled until a pattern changes lines, then restores them', async () => {
+    const user = userEvent.setup()
+    const onApply = vi.fn()
+    renderWithProviders(
+      <AppToastProvider>
+        <InvoiceDescriptionTemplateEditor
+          companyId="co-1"
+          lines={[equipmentLine, crewLine]}
+          manualOverrides={new Set()}
+          onApply={onApply}
+        />
+      </AppToastProvider>,
+    )
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: /^Equipment/ }))
+    await user.click(screen.getByRole('button', { name: /Apply pattern/ }))
+
+    const applied = onApply.mock.calls.at(-1)?.[0] as Array<BookingInvoiceLine>
+    const appliedEquipment = applied.find((line) => line.id === 'eq-1')
+    expect(appliedEquipment?.description).not.toBe(equipmentLine.description)
+    expect(screen.getByRole('button', { name: 'Undo (1)' })).toBeEnabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo (1)' }))
+    const undone = onApply.mock.calls.at(-1)?.[0] as Array<BookingInvoiceLine>
+    expect(undone.find((line) => line.id === 'eq-1')?.description).toBe(
+      equipmentLine.description,
+    )
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled()
+  })
+})
+
 describe('invoice line highlights', () => {
   beforeEach(() => {
+    window.localStorage.clear()
     vi.useFakeTimers()
   })
 

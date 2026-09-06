@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { applyFuzzySearch, postgrestIlikePatterns } from './fuzzySearch'
+import {
+  applyFuzzySearch,
+  postgrestIlikeClause,
+  postgrestIlikePatterns,
+} from './fuzzySearch'
 
 function createMockQuery() {
   const or = vi.fn().mockReturnThis()
@@ -32,6 +36,28 @@ describe('postgrestIlikePatterns', () => {
     const patterns = postgrestIlikePatterns('ungdsmfest')
     expect(patterns.some((pattern) => like(pattern, 'ungdomsfest'))).toBe(true)
   })
+
+  it('skips per-character typo expansion for long terms to keep URLs small', () => {
+    const name = `E2E Item ${Date.now()}`
+    const patterns = postgrestIlikePatterns(name)
+    expect(patterns).toEqual([`%${name}%`, `%${name.replace(/\s+/g, '')}%`])
+    const orLength = patterns
+      .flatMap((pattern) =>
+        ['name', 'category_name', 'brand_name', 'model', 'nicknames'].map(
+          (col) => `${col}.ilike."${pattern}"`,
+        ),
+      )
+      .join(',').length
+    expect(orLength).toBeLessThan(2000)
+  })
+})
+
+describe('postgrestIlikeClause', () => {
+  it('quotes patterns so spaces are valid in or filters', () => {
+    expect(postgrestIlikeClause('title', '%E2E Job 1%')).toBe(
+      'title.ilike."%E2E Job 1%"',
+    )
+  })
 })
 
 describe('applyFuzzySearch', () => {
@@ -53,15 +79,15 @@ describe('applyFuzzySearch', () => {
     applyFuzzySearch(query, 'john', ['name', 'email'])
     expect(query.or).toHaveBeenCalledOnce()
     const arg = query.or.mock.calls[0][0] as string
-    expect(arg).toContain('name.ilike.%john%')
-    expect(arg).toContain('email.ilike.%john%')
+    expect(arg).toContain('name.ilike."%john%"')
+    expect(arg).toContain('email.ilike."%john%"')
   })
 
   it('adds spaced and typo patterns for terms longer than 2 chars', () => {
     const query = createMockQuery()
     applyFuzzySearch(query, 'abc', ['title'])
     const arg = query.or.mock.calls[0][0] as string
-    expect(arg).toContain('title.ilike.%a%b%c%')
-    expect(arg).toContain('title.ilike.%_bc%')
+    expect(arg).toContain('title.ilike."%a%b%c%"')
+    expect(arg).toContain('title.ilike."%_bc%"')
   })
 })

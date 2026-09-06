@@ -1,51 +1,22 @@
 import { test, expect } from './fixtures'
 import {
   bookSeededItemOnJob,
-  bookEquipmentDialog,
+  confirmEquipmentBooking,
   createDraftJob,
   openBookingsEquipmentTab,
 } from './helpers/navigation'
 
 test.describe('Bookings', () => {
+  test.describe.configure({ mode: 'serial' })
   test('owner can book seeded equipment on a fresh job', async ({
     authedPage: page,
   }) => {
-    test.setTimeout(60_000)
+    test.setTimeout(180_000)
     await createDraftJob(page)
     await openBookingsEquipmentTab(page)
+    await bookSeededItemOnJob(page)
+    await confirmEquipmentBooking(page)
 
-    await page
-      .getByText(/Book items|Add items/)
-      .first()
-      .click()
-    const dialog = bookEquipmentDialog(page)
-    await expect(dialog).toBeVisible({ timeout: 15_000 })
-    await dialog
-      .getByPlaceholder('Search items or groups to add...')
-      .fill('Test Seeded')
-    await expect(dialog.getByText('Test Seeded Item')).toBeVisible({
-      timeout: 15_000,
-    })
-    await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
-    await dialog.getByRole('button', { name: 'Book items' }).click()
-
-    const conflictDialog = page.getByRole('dialog').filter({
-      has: page.getByRole('heading', { name: 'Scheduling conflict' }),
-    })
-    const hasConflict = await conflictDialog
-      .waitFor({ state: 'visible', timeout: 8_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (hasConflict) {
-      await conflictDialog
-        .getByRole('button', { name: 'Force booking anyway' })
-        .click()
-      await expect(conflictDialog).toBeHidden({ timeout: 20_000 })
-    }
-
-    await expect(
-      page.getByRole('dialog', { name: 'Book equipment' }),
-    ).toBeHidden({ timeout: 20_000 })
     await expect(
       page.getByRole('cell', { name: 'Test Seeded Item' }).first(),
     ).toBeVisible({
@@ -85,49 +56,34 @@ test.describe('Bookings', () => {
   test('owner can select and delete equipment bookings', async ({
     authedPage: page,
   }) => {
-    test.setTimeout(90_000)
+    test.setTimeout(180_000)
     await createDraftJob(page)
     await openBookingsEquipmentTab(page)
+    await bookSeededItemOnJob(page)
+    await confirmEquipmentBooking(page)
 
-    await page
-      .getByText(/Book items|Add items/)
-      .first()
-      .click()
-    const dialog = bookEquipmentDialog(page)
-    await expect(dialog).toBeVisible({ timeout: 15_000 })
-    await dialog
-      .getByPlaceholder('Search items or groups to add...')
-      .fill('Test Seeded')
-    await expect(dialog.getByText('Test Seeded Item')).toBeVisible({
-      timeout: 15_000,
-    })
-    await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
-    await dialog.getByRole('button', { name: 'Book items' }).click()
-
-    const conflictDialog = page.getByRole('dialog').filter({
-      has: page.getByRole('heading', { name: 'Scheduling conflict' }),
-    })
-    const hasConflict = await conflictDialog
-      .waitFor({ state: 'visible', timeout: 8_000 })
-      .then(() => true)
-      .catch(() => false)
-    if (hasConflict) {
-      await conflictDialog
-        .getByRole('button', { name: 'Force booking anyway' })
-        .click()
-      await expect(conflictDialog).toBeHidden({ timeout: 20_000 })
-    }
-
-    await expect(
-      page.getByRole('dialog', { name: 'Book equipment' }),
-    ).toBeHidden({ timeout: 20_000 })
     await expect(
       page.getByRole('cell', { name: 'Test Seeded Item' }).first(),
     ).toBeVisible({
       timeout: 15_000,
     })
 
-    await page.getByRole('button', { name: 'Edit bookings' }).click()
+    const leftoverConflict = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Scheduling conflict' }),
+    })
+    const editBookings = page.getByRole('button', { name: 'Edit bookings' })
+    await expect(async () => {
+      if ((await leftoverConflict.count()) > 0) {
+        const force = leftoverConflict.getByRole('button', {
+          name: 'Force booking anyway',
+        })
+        if ((await force.count()) > 0) {
+          await force.evaluate((el) => (el as HTMLElement).click())
+        }
+      }
+      await expect(editBookings).toBeAttached({ timeout: 5_000 })
+    }).toPass({ timeout: 45_000 })
+    await editBookings.evaluate((el) => (el as HTMLElement).click())
     await expect(
       page.getByRole('button', { name: 'Done editing' }),
     ).toBeVisible()

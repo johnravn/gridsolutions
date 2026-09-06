@@ -1,5 +1,6 @@
 // Supabase Edge Function: dispatch pending notification emails server-side.
-// Intended to be invoked by pg_cron + pg_net on a schedule.
+// Intended to be invoked by pg_cron + pg_net on a schedule, or manually via
+// POST /api/super/trigger-email-dispatch (trigger_source = manual).
 //
 // It scans for notifications that have not been processed (email_sent_at is null)
 // and calls the existing send-notification-email function for each.
@@ -19,15 +20,28 @@ type DispatchResult = {
 
 type JobRunStatus = 'running' | 'success' | 'partial' | 'failed'
 
+async function resolveTriggerSource(req: Request): Promise<string> {
+  const header = req.headers.get('x-trigger-source')
+  if (header === 'manual' || header === 'pg_cron') return header
+  try {
+    const body = (await req.clone().json()) as { trigger_source?: string }
+    if (body?.trigger_source === 'manual') return 'manual'
+  } catch {
+    // no body (cron) — default below
+  }
+  return 'pg_cron'
+}
+
 async function startJobRun(
   supabase: ReturnType<typeof createClient>,
+  triggerSource: string,
 ): Promise<string | null> {
   const { data, error } = await supabase
     .from('scheduled_job_runs')
     .insert({
       job_key: 'notification_email_dispatch',
       status: 'running',
-      trigger_source: 'pg_cron',
+      trigger_source: triggerSource,
       details: {},
     })
     .select('id')
@@ -82,8 +96,9 @@ Deno.serve(async (req) => {
     )
   }
 
+  const triggerSource = await resolveTriggerSource(req)
   const supabase = createClient(supabaseUrl, serviceKey)
-  const runId = await startJobRun(supabase)
+  const runId = await startJobRun(supabase, triggerSource)
 
   try {
     const { data: pending, error } = await supabase

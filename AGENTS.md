@@ -1,0 +1,177 @@
+# Project Rules for AI Agents
+
+This project is primarily developed using AI agents. Follow these rules strictly.
+
+## 🚨 CRITICAL: Database Migration Workflow
+
+**ALL database schema changes MUST go through the migration workflow. Never make changes directly in the Supabase Dashboard.**
+
+### Required Steps for ANY Database Change:
+
+1. **Create migration**: `npm run db:migrate descriptive_name`
+2. **Write SQL** in the generated migration file
+3. **Test locally**: `npm run db:reset` (applies migrations and repopulates from remote — do not use `db:reset:schema-only` unless you need an empty DB)
+4. **Regenerate types from local** (while iterating): `npm run db:types`
+5. **Push to production**: `npm run db:push`
+6. **Regenerate types from remote** (after push succeeds): `npm run db:types:remote`
+
+> Use `db:types` against the **local** DB while you're iterating on a migration.
+> Only run `db:types:remote` **after** `db:push` succeeds — otherwise the generated types won't match what's actually deployed.
+
+### RLS (Row Level Security) Requirements:
+
+- **Every table MUST have RLS enabled**: `ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;`
+- **Every table MUST have RLS policies** for SELECT, INSERT, UPDATE, DELETE
+- **Always use idempotent SQL**: `DROP POLICY IF EXISTS` before creating policies
+- **Follow the pattern**: Check `company_users` for company-scoped data, `profiles.user_id` for personal data, allow superusers
+
+### Migration Best Practices:
+
+- ✅ One logical change per migration
+- ✅ Use descriptive names (e.g., `add_rls_to_addresses`)
+- ✅ Test locally before pushing
+- ✅ Use `IF EXISTS` / `IF NOT EXISTS` for idempotency
+- ❌ Never edit applied migrations (create new one instead)
+- ❌ Never skip RLS policies
+- ❌ Never make schema changes in Dashboard without capturing as migration
+
+## Code Style
+
+- Use TypeScript for all new code
+- Follow existing patterns in the codebase
+- Use TanStack Query for data fetching
+- Use Radix UI Themes for components
+
+### TypeScript Strictness (tsconfig is strict — these break the build)
+
+`tsconfig.json` enables `verbatimModuleSyntax`, `noUnusedLocals`, `noUnusedParameters`, and `strict`. Common agent mistakes:
+
+- **Type-only imports must use `import type`** (because of `verbatimModuleSyntax`):
+
+  ```ts
+  // ❌ BAD — fails at build time
+  import { Matter } from '../types'
+
+  // ✅ GOOD
+  import type { Matter } from '../types'
+
+  // ✅ GOOD — mixed
+  import { createMatter, type Matter } from '../api/queries'
+  ```
+
+- **No unused imports, variables, or parameters.** Prefix intentionally-unused params with `_` (e.g. `(_event, value) => ...`).
+- **No implicit `any`**, no `// @ts-ignore` without a justification comment.
+
+### Path Aliases — never use long relative imports
+
+Aliases are configured in both `tsconfig.json` and `vite.config.ts`:
+
+| Alias         | Resolves to      |
+| ------------- | ---------------- |
+| `@app/*`      | `src/app/*`      |
+| `@shared/*`   | `src/shared/*`   |
+| `@features/*` | `src/features/*` |
+
+```ts
+// ❌ BAD
+import { supabase } from '../../../shared/api/supabase'
+
+// ✅ GOOD
+import { supabase } from '@shared/api/supabase'
+```
+
+Within the **same feature**, relative imports (`../types`, `./components/Foo`) are fine. Crossing feature or layer boundaries → use the alias.
+
+### Feature Folder Convention (`src/features/<feature>/`)
+
+Every feature follows the same shape. Don't invent new structures:
+
+```
+src/features/<feature>/
+  api/         # TanStack Query options + Supabase calls (queries.ts, fooQueries.ts, ...)
+  components/  # React components (dialogs/, tabs/, etc. as sub-folders)
+  hooks/       # Custom hooks (optional)
+  pages/       # Route-level page components
+  types.ts     # Feature-local types
+```
+
+When adding a new feature, mirror an existing one (e.g. `src/features/matters/`). Data fetching always lives in `api/` as TanStack Query option factories — don't call `supabase` from components directly.
+
+## Quality Gates (run before pushing)
+
+Before `git push` to `main`, verify the change passes:
+
+```bash
+npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
+npm run test         # vitest unit tests
+npm run build:check  # vite build + tsc (catches type errors CI will reject)
+```
+
+- `npm run build:check` is the single most important gate — Vercel runs the equivalent and will fail the production build if `tsc` errors exist. Run it whenever you've touched non-trivial TypeScript.
+- `npm run check` is safe to run on every change; it auto-fixes formatting and lint.
+- If `npm run check` reports lint errors it couldn't auto-fix, **fix them before committing** — don't silence them.
+
+## GitHub & Deployment Workflow
+
+**Work on `main`. Track work with GitHub issues. Do not use pull requests or feature branches.**
+
+See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
+
+1. **Issue first**: reuse an open GitHub issue, or `gh issue create` if none exists
+2. **Stay on `main`**: `git pull origin main` before starting
+3. **Make changes**: Code, test locally
+4. **Create migration** (if needed): `npm run db:migrate descriptive_name`, then `npm run db:reset`
+5. **Push migration** (if backward-compatible): `npm run db:push` before pushing code that depends on it
+6. **Commit with the issue**: `Closes #N` / `Fixes #N` / `Refs #N` — large commits are fine
+7. **Push to `main`**: `git push origin main` — deploys production (`gridsolutions.app`)
+
+### Vercel Deployments
+
+- **`main`** → Production (`gridsolutions.app`) on every push
+- Test locally before pushing. There is no PR preview step.
+
+### Git Best Practices
+
+- ✅ One GitHub issue per piece of work (search before creating)
+- ✅ Every commit references the issue it tackles
+- ✅ Test locally and run quality gates before pushing `main`
+- ✅ Document database changes in the issue and/or commit body
+- ❌ Never create pull requests or feature branches
+- ❌ Never commit without an issue reference
+- ❌ Never skip local testing before pushing `main`
+
+## Documentation
+
+- **Git & issues**: See `GITHUB_ISSUES.md` and `.cursor/rules/git-workflow.mdc`
+- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Vercel deployment, migration timing
+- **Vercel Deployments**: See `VERCEL_DEPLOYMENTS.md`
+- **Migration Workflow**: See `CONTRIBUTING.md`
+- **Supabase Development**: See `supabase/DEVELOPMENT_WORKFLOW.md`
+- **Migrations Directory**: See `supabase/migrations/README.md`
+
+## When Making Database Changes
+
+**Before writing any SQL that modifies schema:**
+
+1. Check `CONTRIBUTING.md` for the complete workflow
+2. Check `supabase/migrations/README.md` for RLS patterns
+3. Look at existing migrations for examples (e.g., `20250119000000_add_invoice_tracking.sql`)
+4. Always create a migration file - never modify schema directly
+
+## When Making Code Changes
+
+**Before writing any code:**
+
+1. Confirm or create a GitHub issue (`gh issue list` / `gh issue create`)
+2. Work on `main` (`git pull origin main`)
+3. Make your changes
+4. Test locally (`npm run dev`)
+5. Commit with `Closes #N` (or `Refs #N` if incomplete)
+6. Push to `origin main` after quality gates pass
+
+---
+
+**Remember**:
+
+- Database changes: Always create a migration file and test it locally first!
+- Code changes: Work on `main`, tie commits to GitHub issues, push after local testing!

@@ -1,9 +1,10 @@
 /**
- * Cron: Sync Subb customers with Conta.
+ * Cron: Sync Subb customers with Conta, then pull Conta paid invoice status into Grid.
  * Triggered daily by Vercel Cron (production). GET /api/cron/sync-conta
  */
 import { createClient } from '@supabase/supabase-js'
 import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron.js'
+import { runContaInvoicePaidSyncForAllCompanies } from '../../src/shared/conta/contaInvoicePaidSyncCron.js'
 import type { ContaSyncTriggerSource } from '../../src/shared/conta/contaCustomerSyncCron.js'
 import type { Database } from '../../src/shared/types/database.types.js'
 
@@ -53,21 +54,49 @@ export default async function handler(req: any, res: any) {
   })
 
   const triggerSource = resolveTriggerSource(req)
-  const outcome = await runContaCustomerSyncForAllCompanies(supabase, {
+  const customerOutcome = await runContaCustomerSyncForAllCompanies(supabase, {
     triggerSource,
   })
 
-  if (outcome.error && outcome.results.length === 0) {
-    res.status(500).json({ error: outcome.error, runId: outcome.runId })
+  if (customerOutcome.error && customerOutcome.results.length === 0) {
+    res.status(500).json({
+      error: customerOutcome.error,
+      runId: customerOutcome.runId,
+    })
     return
   }
 
+  const invoicePaidOutcome = await runContaInvoicePaidSyncForAllCompanies(
+    supabase,
+    { triggerSource },
+  )
+
+  const ok = customerOutcome.ok && invoicePaidOutcome.ok
+
   res.status(200).json({
-    ok: outcome.ok,
-    runId: outcome.runId,
-    status: outcome.status,
-    companies: outcome.companies,
-    syncedAt: outcome.syncedAt,
-    results: outcome.results,
+    ok,
+    customerSync: {
+      ok: customerOutcome.ok,
+      runId: customerOutcome.runId,
+      status: customerOutcome.status,
+      companies: customerOutcome.companies,
+      syncedAt: customerOutcome.syncedAt,
+      results: customerOutcome.results,
+    },
+    invoicePaidSync: {
+      ok: invoicePaidOutcome.ok,
+      runId: invoicePaidOutcome.runId,
+      status: invoicePaidOutcome.status,
+      companies: invoicePaidOutcome.companies,
+      syncedAt: invoicePaidOutcome.syncedAt,
+      results: invoicePaidOutcome.results,
+      error: invoicePaidOutcome.error,
+    },
+    // Back-compat top-level fields for existing monitors / tests
+    runId: customerOutcome.runId,
+    status: customerOutcome.status,
+    companies: customerOutcome.companies,
+    syncedAt: customerOutcome.syncedAt,
+    results: customerOutcome.results,
   })
 }

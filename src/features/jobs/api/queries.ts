@@ -1,6 +1,7 @@
 import { supabase } from '@shared/api/supabase'
 import {
   escapeForPostgrestOr,
+  postgrestIlikeClause,
   postgrestIlikePatterns,
 } from '@shared/api/fuzzySearch'
 import { parseCopyJobRpcResult } from '../utils/copyJobConflicts'
@@ -392,8 +393,8 @@ export function jobsIndexSearchOrFilter({
   const trimmed = search.trim().replace(/^#/, '')
   if (!trimmed) return null
 
-  const parts = postgrestIlikePatterns(trimmed).map(
-    (pattern) => `title.ilike.${pattern}`,
+  const parts = postgrestIlikePatterns(trimmed).map((pattern) =>
+    postgrestIlikeClause('title', pattern),
   )
   if (/^\d+$/.test(trimmed)) {
     parts.push(`jobnr.eq.${trimmed}`)
@@ -418,7 +419,11 @@ async function findCustomerIdsByName(
     .select('id')
     .eq('company_id', companyId)
     .or('deleted.is.null,deleted.eq.false')
-    .or(patterns.map((pattern) => `name.ilike.${pattern}`).join(','))
+    .or(
+      patterns
+        .map((pattern) => postgrestIlikeClause('name', pattern))
+        .join(','),
+    )
     .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
   if (error) throw error
   return data.map((row) => row.id)
@@ -435,8 +440,8 @@ async function findCustomerUserIdsBySearch(
     .or(
       patterns
         .flatMap((pattern) => [
-          `display_name.ilike.${pattern}`,
-          `email.ilike.${pattern}`,
+          postgrestIlikeClause('display_name', pattern),
+          postgrestIlikeClause('email', pattern),
         ])
         .join(','),
     )

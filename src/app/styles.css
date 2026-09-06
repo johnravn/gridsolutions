@@ -277,7 +277,9 @@ button:not(:disabled),
 }
 
 .app-sidebar-drawer {
-  transform: translateX(-100%);
+  /* Overshoot so the 1px right border + shadow cannot leave a hairline
+     after subpixel rounding (visible in dark mode as a gray sliver). */
+  transform: translateX(calc(-100% - 32px));
   pointer-events: none;
   transition: transform 380ms var(--motion-ease-ios);
 }
@@ -306,7 +308,7 @@ button:not(:disabled),
 .app-inspector-drawer {
   z-index: 104;
   box-sizing: border-box;
-  transform: translateX(100%);
+  transform: translateX(calc(100% + 32px));
   pointer-events: none;
   transition: transform 380ms var(--motion-ease-ios);
   padding-top: calc(20px + var(--app-safe-top)) !important;
@@ -886,6 +888,31 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   white-space: nowrap;
 }
 
+/* Generic horizontal scroller for SegmentedControl rows that overflow */
+.segmented-control-scroller {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.segmented-control-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+.segmented-control-scroller .rt-SegmentedControlRoot {
+  display: inline-grid;
+  width: max-content;
+  min-width: max-content;
+}
+
+.segmented-control-scroller .rt-SegmentedControlItem {
+  white-space: nowrap;
+}
+
 /* Override for cards that explicitly set background via inline styles in light mode */
 .light [data-radix-theme] [data-radix-card][style*='background'],
 .light [data-radix-theme] [class*='rt-Card'][style*='background'] {
@@ -1332,6 +1359,49 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   box-sizing: border-box;
   padding-left: 6px;
   padding-right: 6px;
+}
+
+/* Pattern-apply targets. Transition lives on every cell so highlight fades in and out. */
+[data-invoice-lines] tbody tr > * {
+  background-color: transparent;
+  background-repeat: no-repeat;
+  transition: background-color 500ms ease;
+}
+[data-invoice-lines] tbody tr > *:first-child {
+  background-image: linear-gradient(var(--amber-9), var(--amber-9));
+  background-size: 0 100%;
+  transition:
+    background-color 500ms ease,
+    background-size 500ms ease;
+}
+[data-invoice-lines] tr[data-invoice-line-highlighted] > * {
+  background-color: var(--amber-a3);
+}
+[data-invoice-lines] tr[data-invoice-line-highlighted] > *:first-child {
+  background-size: 3px 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-invoice-lines] tbody tr > * {
+    transition: none;
+  }
+}
+
+.invoice-settings-modules {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+}
+@media (min-width: 640px) {
+  .invoice-settings-modules {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--space-5);
+    align-items: start;
+  }
+  .invoice-settings-modules > :nth-child(2) {
+    padding-left: var(--space-4);
+    border-left: 1px solid var(--gray-a5);
+  }
 }
 
 /* Section resizer cursor - ensure cursor changes on hover */

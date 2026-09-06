@@ -4,14 +4,15 @@ import {
   Badge,
   Box,
   Button,
+  Callout,
   Card,
   Flex,
   Grid,
   Heading,
-  Table,
+  Spinner,
   Text,
 } from '@radix-ui/themes'
-import { CloudSync } from 'iconoir-react'
+import { CloudSync, Refresh, WarningCircle } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   MONITOR_JOB_DEFINITIONS,
@@ -19,14 +20,29 @@ import {
   formatDurationMs,
   formatMonitorDateTime,
   formatTriggerSource,
+  shortenOrgId,
   statusBadgeColor,
+  summarizeContaCustomerSyncResults,
+  summarizeContaInvoicePaidSyncResults,
   summarizeRunDetails,
   systemMonitorSnapshotQuery,
   triggerContaSyncNow,
   triggerDemoTimelineAdvance,
+  triggerEmailDispatchNow,
+  triggerJobStatusAutoUpdate,
 } from '../api/monitorQueries'
 import SuperResendEmailsSection from './SuperResendEmailsSection'
-import type { MonitorJobLastRun, MonitorRecentRun } from '../api/monitorQueries'
+import { MonitorVirtualList } from './MonitorVirtualList'
+import type {
+  MonitorContaCompany,
+  MonitorJobLastRun,
+  MonitorPendingNotification,
+  MonitorRecentRun,
+} from '../api/monitorQueries'
+
+const CONTA_LIST_MAX_HEIGHT = 320
+const PENDING_LIST_MAX_HEIGHT = 240
+const RECENT_RUNS_MAX_HEIGHT = 360
 
 function JobCard({
   name,
@@ -42,7 +58,7 @@ function JobCard({
   action?: React.ReactNode
 }) {
   return (
-    <Card size="2">
+    <Card size="2" style={{ flexShrink: 0 }}>
       <Flex direction="column" gap="2">
         <Flex align="start" justify="between" gap="3" wrap="wrap">
           <Box style={{ flex: '1 1 220px', minWidth: 0 }}>
@@ -67,27 +83,32 @@ function JobCard({
         <Text size="2" color="gray">
           {description}
         </Text>
-        <Grid columns={{ initial: '1', sm: '2' }} gap="2">
+        {!lastRun ? (
           <Text size="1" color="gray">
-            Last run: {formatMonitorDateTime(lastRun?.last_started_at)}
+            No runs logged yet. Status appears after the schedule fires or you
+            use Run now.
           </Text>
-          <Text size="1" color="gray">
-            Duration:{' '}
-            {formatDurationMs(
-              lastRun?.last_started_at,
-              lastRun?.last_finished_at,
-            )}
-          </Text>
-          <Text size="1" color="gray">
-            Trigger: {formatTriggerSource(lastRun?.last_trigger_source)}
-          </Text>
-          <Text size="1" color="gray">
-            Summary:{' '}
-            {lastRun
-              ? summarizeRunDetails(lastRun.job_key, lastRun.last_details)
-              : '—'}
-          </Text>
-        </Grid>
+        ) : (
+          <Grid columns={{ initial: '1', sm: '2' }} gap="2">
+            <Text size="1" color="gray">
+              Last run: {formatMonitorDateTime(lastRun.last_started_at)}
+            </Text>
+            <Text size="1" color="gray">
+              Duration:{' '}
+              {formatDurationMs(
+                lastRun.last_started_at,
+                lastRun.last_finished_at,
+              )}
+            </Text>
+            <Text size="1" color="gray">
+              Trigger: {formatTriggerSource(lastRun.last_trigger_source)}
+            </Text>
+            <Text size="1" color="gray">
+              Summary:{' '}
+              {summarizeRunDetails(lastRun.job_key, lastRun.last_details)}
+            </Text>
+          </Grid>
+        )}
         {lastRun?.last_error_message ? (
           <Text size="1" color="red">
             {lastRun.last_error_message}
@@ -98,63 +119,261 @@ function JobCard({
   )
 }
 
-function RecentRunRow({ run }: { run: MonitorRecentRun }) {
-  const [expanded, setExpanded] = React.useState(false)
-  const jobName =
-    MONITOR_JOB_DEFINITIONS.find((j) => j.jobKey === run.job_key)?.name ??
-    run.job_key
-
+function ContaCompanyHealthSection({
+  companies,
+}: {
+  companies: Array<MonitorContaCompany>
+}) {
   return (
-    <>
-      <Table.Row>
-        <Table.Cell>{formatMonitorDateTime(run.started_at)}</Table.Cell>
-        <Table.Cell>{jobName}</Table.Cell>
-        <Table.Cell>
-          <Badge color={statusBadgeColor(run.status)} variant="soft" size="1">
-            {run.status}
+    <Card size="3" style={{ flexShrink: 0 }}>
+      <Flex direction="column" gap="3">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
+          <Heading size="4">Conta company health</Heading>
+          <Badge variant="soft" size="1" color="gray">
+            {companies.length}{' '}
+            {companies.length === 1 ? 'company' : 'companies'}
           </Badge>
-        </Table.Cell>
-        <Table.Cell>{formatTriggerSource(run.trigger_source)}</Table.Cell>
-        <Table.Cell>{summarizeRunDetails(run.job_key, run.details)}</Table.Cell>
-        <Table.Cell>
-          {run.details && Object.keys(run.details).length > 0 ? (
-            <Button
-              type="button"
-              size="1"
-              variant="ghost"
-              onClick={() => setExpanded((v) => !v)}
-            >
-              {expanded ? 'Hide' : 'Details'}
-            </Button>
-          ) : (
-            '—'
-          )}
-        </Table.Cell>
-      </Table.Row>
-      {expanded ? (
-        <Table.Row>
-          <Table.Cell colSpan={6}>
-            <Text
-              size="1"
-              as="div"
-              style={{
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                margin: 0,
-                fontFamily: 'var(--font-mono, monospace)',
-              }}
-            >
-              {JSON.stringify(run.details, null, 2)}
+        </Flex>
+        {companies.length === 0 ? (
+          <Text size="2" color="gray">
+            No companies configured for Conta sync. Companies need
+            accounting_software = conta and an organization id.
+          </Text>
+        ) : (
+          <MonitorVirtualList
+            items={companies}
+            getItemKey={(row) => row.company_id}
+            estimateSize={112}
+            maxHeight={CONTA_LIST_MAX_HEIGHT}
+            renderItem={(row) => {
+              const stale = row.stale_customer_count > 0
+              const inactive = !row.api_key_active
+              const neverSynced = !row.last_customer_sync_at
+              const openInvoices = row.open_conta_invoice_count ?? 0
+              return (
+                <Box
+                  p="3"
+                  style={{
+                    borderRadius: 'var(--radius-3)',
+                    background: 'var(--gray-a2)',
+                  }}
+                >
+                  <Flex
+                    align="center"
+                    justify="between"
+                    gap="3"
+                    wrap="wrap"
+                    mb="2"
+                  >
+                    <Text weight="bold" size="3">
+                      {row.company_name}
+                    </Text>
+                    <Flex align="center" gap="2" wrap="wrap">
+                      <Badge variant="soft" size="1" color="gray">
+                        {row.accounting_api_environment ?? '—'}
+                      </Badge>
+                      <Badge
+                        color={inactive ? 'red' : 'green'}
+                        variant="soft"
+                        size="1"
+                      >
+                        {inactive ? 'API inactive' : 'API active'}
+                      </Badge>
+                    </Flex>
+                  </Flex>
+                  <Grid columns={{ initial: '2', sm: '4' }} gap="2">
+                    <Text size="1" color="gray">
+                      Org: {shortenOrgId(row.accounting_organization_id)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      Last sync:{' '}
+                      {neverSynced
+                        ? 'Never'
+                        : formatMonitorDateTime(row.last_customer_sync_at)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      Linked: {row.linked_customer_count}
+                      {stale ? ` · Stale: ${row.stale_customer_count}` : ''}
+                    </Text>
+                    <Text size="1" color="gray">
+                      Open invoices: {openInvoices}
+                    </Text>
+                  </Grid>
+                </Box>
+              )
+            }}
+          />
+        )}
+      </Flex>
+    </Card>
+  )
+}
+
+function EmailPipelineSection({
+  pendingCount,
+  oldestAge,
+  backlogWarning,
+  pendingNotifications,
+  dispatchPending,
+  onDispatch,
+}: {
+  pendingCount: number
+  oldestAge: number | null
+  backlogWarning: boolean
+  pendingNotifications: Array<MonitorPendingNotification>
+  dispatchPending: boolean
+  onDispatch: () => void
+}) {
+  return (
+    <Card size="3" style={{ flexShrink: 0 }}>
+      <Flex direction="column" gap="3">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
+          <Heading size="4">Email pipeline</Heading>
+          <Button
+            type="button"
+            size="2"
+            variant="soft"
+            disabled={dispatchPending}
+            onClick={onDispatch}
+          >
+            {dispatchPending ? 'Dispatching…' : 'Dispatch now'}
+          </Button>
+        </Flex>
+        <Text size="2" color="gray">
+          Pending notification emails waiting for send-notification-email.
+          Insert trigger + 5-min cron normally keep this clear.
+        </Text>
+        <Flex align="center" gap="3" wrap="wrap">
+          <Text size="2">
+            Pending:{' '}
+            <Text weight="bold" as="span">
+              {pendingCount}
             </Text>
-            {run.error_message ? (
-              <Text size="1" color="red" mt="2" as="div">
-                {run.error_message}
+          </Text>
+          {oldestAge != null && pendingCount > 0 ? (
+            <Text size="2" color="gray">
+              Oldest: {oldestAge}m ago
+            </Text>
+          ) : null}
+          {backlogWarning ? (
+            <Badge color="amber" variant="soft" size="1">
+              Backlog
+            </Badge>
+          ) : null}
+        </Flex>
+        {pendingCount === 0 ? (
+          <Text size="2" color="gray">
+            Queue empty — insert trigger + 5-min cron keep this clear.
+          </Text>
+        ) : (
+          <Flex direction="column" gap="2">
+            <MonitorVirtualList
+              items={pendingNotifications}
+              getItemKey={(n) => n.id}
+              estimateSize={64}
+              maxHeight={PENDING_LIST_MAX_HEIGHT}
+              renderItem={(n) => (
+                <Box
+                  p="2"
+                  style={{
+                    borderRadius: 'var(--radius-2)',
+                    background: 'var(--gray-a2)',
+                  }}
+                >
+                  <Text size="1" color="gray" as="div">
+                    {formatMonitorDateTime(n.created_at)} · {n.type}
+                  </Text>
+                  <Text size="2">{n.title}</Text>
+                </Box>
+              )}
+            />
+            {pendingCount > pendingNotifications.length ? (
+              <Text size="1" color="gray">
+                Showing oldest {pendingNotifications.length} of {pendingCount}.
               </Text>
             ) : null}
-          </Table.Cell>
-        </Table.Row>
-      ) : null}
-    </>
+          </Flex>
+        )}
+      </Flex>
+    </Card>
+  )
+}
+
+function RecentRunsSection({ runs }: { runs: Array<MonitorRecentRun> }) {
+  return (
+    <Card size="3" style={{ flexShrink: 0 }}>
+      <Flex direction="column" gap="3">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
+          <Heading size="4">Recent runs</Heading>
+          <Badge variant="soft" size="1" color="gray">
+            {runs.length} shown
+          </Badge>
+        </Flex>
+        {runs.length === 0 ? (
+          <Text size="2" color="gray">
+            No job runs recorded yet. Runs appear after scheduled jobs execute
+            (Vercel/GitHub/pg_cron) or after you use any Run now / Dispatch /
+            Advance button above.
+          </Text>
+        ) : (
+          <MonitorVirtualList
+            items={runs}
+            getItemKey={(run) => run.id}
+            estimateSize={96}
+            maxHeight={RECENT_RUNS_MAX_HEIGHT}
+            renderItem={(run) => {
+              const jobName =
+                MONITOR_JOB_DEFINITIONS.find((j) => j.jobKey === run.job_key)
+                  ?.name ?? run.job_key
+              return (
+                <Box
+                  p="3"
+                  style={{
+                    borderRadius: 'var(--radius-3)',
+                    background: 'var(--gray-a2)',
+                  }}
+                >
+                  <Flex
+                    align="center"
+                    justify="between"
+                    gap="2"
+                    wrap="wrap"
+                    mb="1"
+                  >
+                    <Text weight="medium" size="2">
+                      {jobName}
+                    </Text>
+                    <Badge
+                      color={statusBadgeColor(run.status)}
+                      variant="soft"
+                      size="1"
+                    >
+                      {run.status}
+                    </Badge>
+                  </Flex>
+                  <Grid columns={{ initial: '1', sm: '3' }} gap="1">
+                    <Text size="1" color="gray">
+                      {formatMonitorDateTime(run.started_at)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      Trigger: {formatTriggerSource(run.trigger_source)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      {summarizeRunDetails(run.job_key, run.details)}
+                    </Text>
+                  </Grid>
+                  {run.error_message ? (
+                    <Text size="1" color="red" mt="1" as="div">
+                      {run.error_message}
+                    </Text>
+                  ) : null}
+                </Box>
+              )
+            }}
+          />
+        )}
+      </Flex>
+    </Card>
   )
 }
 
@@ -165,19 +384,25 @@ export default function SuperMonitorTab() {
     systemMonitorSnapshotQuery(),
   )
 
+  const invalidateSnapshot = () => {
+    void qc.invalidateQueries({ queryKey: ['super', 'monitor', 'snapshot'] })
+  }
+
   const syncMutation = useMutation({
     mutationFn: triggerContaSyncNow,
     onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ['super', 'monitor', 'snapshot'] })
-      const msg = summarizeRunDetails('conta_customer_sync', {
-        summary: `${result.results.reduce((n, r) => n + r.updated, 0)} updated, ${result.results.reduce((n, r) => n + r.created, 0)} created`,
-      })
-      if (result.status === 'success') {
-        success('Conta sync completed', msg)
-      } else if (result.status === 'partial') {
-        toastError('Conta sync completed with issues', msg)
+      invalidateSnapshot()
+      const customerMsg = summarizeContaCustomerSyncResults(
+        result.customerSync?.results ?? result.results ?? [],
+      )
+      const invoiceMsg = summarizeContaInvoicePaidSyncResults(
+        result.invoicePaidSync?.results ?? [],
+      )
+      const combined = `Customers: ${customerMsg}. Invoices: ${invoiceMsg}.`
+      if (result.ok) {
+        success('Conta syncs completed', combined)
       } else {
-        toastError('Conta sync failed', msg)
+        toastError('Conta syncs completed with issues', combined)
       }
     },
     onError: (e: unknown) => {
@@ -191,15 +416,54 @@ export default function SuperMonitorTab() {
   const demoTimelineMutation = useMutation({
     mutationFn: triggerDemoTimelineAdvance,
     onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ['super', 'monitor', 'snapshot'] })
+      invalidateSnapshot()
       success(
         'Demo timeline advanced',
-        summarizeRunDetails('demo_timeline_advance', result),
+        summarizeRunDetails(
+          'demo_timeline_advance',
+          result as unknown as Record<string, unknown>,
+        ),
       )
     },
     onError: (e: unknown) => {
       toastError(
         'Demo timeline advance failed',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
+  const jobStatusMutation = useMutation({
+    mutationFn: triggerJobStatusAutoUpdate,
+    onSuccess: (result) => {
+      invalidateSnapshot()
+      success(
+        'Job status auto-update finished',
+        `${result.rowsUpdated} jobs updated`,
+      )
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Job status auto-update failed',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
+  const emailDispatchMutation = useMutation({
+    mutationFn: triggerEmailDispatchNow,
+    onSuccess: (result) => {
+      invalidateSnapshot()
+      const msg = `${result.scanned} scanned, ${result.sentOrProcessed} sent${result.errors > 0 ? `, ${result.errors} errors` : ''}`
+      if (result.errors > 0) {
+        toastError('Email dispatch completed with issues', msg)
+      } else {
+        success('Email dispatch completed', msg)
+      }
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Email dispatch failed',
         e instanceof Error ? e.message : 'Please try again.',
       )
     },
@@ -213,15 +477,27 @@ export default function SuperMonitorTab() {
     return map
   }, [data?.jobs])
 
-  const pendingCount = data?.notificationBacklog.pendingCount ?? 0
-  const oldestAge = ageInMinutes(data?.notificationBacklog.oldestPendingAt)
+  const pendingCount = data?.notificationBacklog?.pendingCount ?? 0
+  const oldestAge = ageInMinutes(data?.notificationBacklog?.oldestPendingAt)
   const backlogWarning =
     pendingCount > 10 || (oldestAge != null && oldestAge > 15)
+
+  const problemJobs = React.useMemo(() => {
+    return MONITOR_JOB_DEFINITIONS.filter((def) => {
+      const status = lastRunByKey.get(def.jobKey)?.last_status
+      return status === 'failed' || status === 'partial'
+    })
+  }, [lastRunByKey])
+
+  const showAlert = problemJobs.length > 0 || backlogWarning
 
   if (isLoading) {
     return (
       <Card size="3">
-        <Text color="gray">Loading system monitor…</Text>
+        <Flex align="center" gap="2">
+          <Spinner size="2" />
+          <Text color="gray">Loading system monitor…</Text>
+        </Flex>
       </Card>
     )
   }
@@ -239,213 +515,197 @@ export default function SuperMonitorTab() {
     )
   }
 
-  return (
-    <Flex
-      direction="column"
-      gap="4"
-      pb="4"
-      style={{ flex: 1, minHeight: 0, overflow: 'auto' }}
+  const renderContaSyncAction = () => (
+    <Button
+      type="button"
+      size="2"
+      variant="soft"
+      disabled={syncMutation.isPending}
+      onClick={() => syncMutation.mutate()}
     >
-      <Card size="3">
-        <Flex direction="column" gap="4">
-          <Flex align="center" justify="between" gap="3" wrap="wrap">
-            <Heading size="5">System monitor</Heading>
-            <Text size="1" color="gray">
-              {isFetching ? 'Refreshing…' : 'Auto-refreshes every 60s'}
+      <Flex align="center" gap="2">
+        <CloudSync width={16} height={16} />
+        {syncMutation.isPending ? 'Syncing…' : 'Run Conta syncs now'}
+      </Flex>
+    </Button>
+  )
+
+  const contaCompanies = data?.contaCompanies ?? []
+  const recentRuns = data?.recentRuns ?? []
+  const pendingNotifications = data?.pendingNotifications ?? []
+
+  return (
+    <Box style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+      <Flex direction="column" gap="4" pb="4">
+        <Card size="3" style={{ flexShrink: 0 }}>
+          <Flex direction="column" gap="4">
+            <Flex align="center" justify="between" gap="3" wrap="wrap">
+              <Heading size="5">System monitor</Heading>
+              <Flex align="center" gap="2">
+                <Text size="1" color="gray">
+                  {isFetching ? 'Refreshing…' : 'Auto-refreshes every 60s'}
+                </Text>
+                <Button
+                  type="button"
+                  size="1"
+                  variant="soft"
+                  disabled={isFetching}
+                  onClick={() => void refetch()}
+                >
+                  <Flex align="center" gap="1">
+                    <Refresh width={14} height={14} />
+                    Refresh
+                  </Flex>
+                </Button>
+              </Flex>
+            </Flex>
+            <Text size="2" color="gray">
+              Scheduled job health, Conta sync status, email pipeline backlog,
+              and platform snapshot. Superuser only.
             </Text>
-          </Flex>
-          <Text size="2" color="gray">
-            Scheduled job health, Conta sync status, email pipeline backlog, and
-            platform snapshot. Superuser only.
-          </Text>
 
-          {data?.platformCounts ? (
-            <Grid columns={{ initial: '2', sm: '4' }} gap="3">
-              <Box>
-                <Text size="1" color="gray">
-                  Companies
-                </Text>
-                <Text size="4" weight="bold" as="div">
-                  {data.platformCounts.companies}
-                </Text>
-              </Box>
-              <Box>
-                <Text size="1" color="gray">
-                  Users
-                </Text>
-                <Text size="4" weight="bold" as="div">
-                  {data.platformCounts.users}
-                </Text>
-              </Box>
-              <Box>
-                <Text size="1" color="gray">
-                  In-progress jobs
-                </Text>
-                <Text size="4" weight="bold" as="div">
-                  {data.platformCounts.inProgressJobs}
-                </Text>
-              </Box>
-              <Box>
-                <Text size="1" color="gray">
-                  Pending emails
-                </Text>
-                <Flex align="center" gap="2">
-                  <Text size="4" weight="bold" as="span">
-                    {pendingCount}
+            {showAlert ? (
+              <Callout.Root color="amber" variant="soft">
+                <Callout.Icon>
+                  <WarningCircle width={16} height={16} />
+                </Callout.Icon>
+                <Callout.Text>
+                  {problemJobs.length > 0
+                    ? `Attention: ${problemJobs.map((j) => j.name).join(', ')} reported ${problemJobs.length === 1 ? 'an issue' : 'issues'} on the last run.`
+                    : null}
+                  {problemJobs.length > 0 && backlogWarning ? ' ' : null}
+                  {backlogWarning
+                    ? `Email backlog warning: ${pendingCount} pending${oldestAge != null ? ` (oldest ${oldestAge}m ago)` : ''}.`
+                    : null}
+                </Callout.Text>
+              </Callout.Root>
+            ) : null}
+
+            {data?.platformCounts ? (
+              <Grid columns={{ initial: '2', sm: '4' }} gap="3">
+                <Box>
+                  <Text size="1" color="gray">
+                    Companies
                   </Text>
-                  {backlogWarning ? (
-                    <Badge color="amber" variant="soft" size="1">
-                      Backlog
-                    </Badge>
+                  <Text size="4" weight="bold" as="div">
+                    {data.platformCounts.companies}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text size="1" color="gray">
+                    Users
+                  </Text>
+                  <Text size="4" weight="bold" as="div">
+                    {data.platformCounts.users}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text size="1" color="gray">
+                    In-progress jobs
+                  </Text>
+                  <Text size="4" weight="bold" as="div">
+                    {data.platformCounts.inProgressJobs}
+                  </Text>
+                </Box>
+                <Box>
+                  <Text size="1" color="gray">
+                    Pending emails
+                  </Text>
+                  <Flex align="center" gap="2">
+                    <Text size="4" weight="bold" as="span">
+                      {pendingCount}
+                    </Text>
+                    {backlogWarning ? (
+                      <Badge color="amber" variant="soft" size="1">
+                        Backlog
+                      </Badge>
+                    ) : null}
+                  </Flex>
+                  {oldestAge != null && pendingCount > 0 ? (
+                    <Text size="1" color="gray" as="div">
+                      Oldest pending: {oldestAge}m ago
+                    </Text>
                   ) : null}
-                </Flex>
-                {oldestAge != null && pendingCount > 0 ? (
-                  <Text size="1" color="gray" as="div">
-                    Oldest pending: {oldestAge}m ago
-                  </Text>
-                ) : null}
-              </Box>
-            </Grid>
-          ) : null}
-        </Flex>
-      </Card>
+                </Box>
+              </Grid>
+            ) : null}
+          </Flex>
+        </Card>
 
-      <Box>
-        <Heading size="4" mb="3">
-          Scheduled jobs
-        </Heading>
-        <Flex direction="column" gap="3">
-          {MONITOR_JOB_DEFINITIONS.map((def) => (
-            <JobCard
-              key={def.jobKey}
-              name={def.name}
-              schedule={def.schedule}
-              description={def.description}
-              lastRun={lastRunByKey.get(def.jobKey)}
-              action={
-                def.jobKey === 'conta_customer_sync' ? (
-                  <Button
-                    type="button"
-                    size="2"
-                    variant="soft"
-                    disabled={syncMutation.isPending}
-                    onClick={() => syncMutation.mutate()}
-                  >
-                    <Flex align="center" gap="2">
-                      <CloudSync width={16} height={16} />
-                      {syncMutation.isPending ? 'Syncing…' : 'Run sync now'}
-                    </Flex>
-                  </Button>
-                ) : def.jobKey === 'demo_timeline_advance' ? (
-                  <Button
-                    type="button"
-                    size="2"
-                    variant="soft"
-                    disabled={demoTimelineMutation.isPending}
-                    onClick={() => demoTimelineMutation.mutate()}
-                  >
-                    {demoTimelineMutation.isPending
-                      ? 'Advancing…'
-                      : 'Advance +7 days now'}
-                  </Button>
-                ) : undefined
-              }
-            />
-          ))}
-        </Flex>
-      </Box>
+        <Box>
+          <Heading size="4" mb="3">
+            Scheduled jobs
+          </Heading>
+          <Flex direction="column" gap="3">
+            {MONITOR_JOB_DEFINITIONS.map((def) => (
+              <JobCard
+                key={def.jobKey}
+                name={def.name}
+                schedule={def.schedule}
+                description={def.description}
+                lastRun={lastRunByKey.get(def.jobKey)}
+                action={
+                  def.jobKey === 'conta_customer_sync' ||
+                  def.jobKey === 'conta_invoice_paid_sync' ? (
+                    renderContaSyncAction()
+                  ) : def.jobKey === 'demo_timeline_advance' ? (
+                    <Button
+                      type="button"
+                      size="2"
+                      variant="soft"
+                      disabled={demoTimelineMutation.isPending}
+                      onClick={() => demoTimelineMutation.mutate()}
+                    >
+                      {demoTimelineMutation.isPending
+                        ? 'Advancing…'
+                        : 'Advance +7 days now'}
+                    </Button>
+                  ) : def.jobKey === 'notification_email_dispatch' ? (
+                    <Button
+                      type="button"
+                      size="2"
+                      variant="soft"
+                      disabled={emailDispatchMutation.isPending}
+                      onClick={() => emailDispatchMutation.mutate()}
+                    >
+                      {emailDispatchMutation.isPending
+                        ? 'Dispatching…'
+                        : 'Dispatch now'}
+                    </Button>
+                  ) : def.jobKey === 'job_status_auto_update' ? (
+                    <Button
+                      type="button"
+                      size="2"
+                      variant="soft"
+                      disabled={jobStatusMutation.isPending}
+                      onClick={() => jobStatusMutation.mutate()}
+                    >
+                      {jobStatusMutation.isPending
+                        ? 'Updating…'
+                        : 'Run status update now'}
+                    </Button>
+                  ) : undefined
+                }
+              />
+            ))}
+          </Flex>
+        </Box>
 
-      <Card size="3">
-        <Heading size="4" mb="3">
-          Conta company health
-        </Heading>
-        {(data?.contaCompanies.length ?? 0) === 0 ? (
-          <Text size="2" color="gray">
-            No companies configured for Conta sync.
-          </Text>
-        ) : (
-          <Box style={{ overflowX: 'auto' }}>
-            <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Company</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>API key</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Last sync</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Linked</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Stale</Table.ColumnHeaderCell>
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {(data?.contaCompanies ?? []).map((row) => {
-                  const stale = row.stale_customer_count > 0
-                  const inactive = !row.api_key_active
-                  return (
-                    <Table.Row key={row.company_id}>
-                      <Table.Cell>{row.company_name}</Table.Cell>
-                      <Table.Cell>
-                        <Badge
-                          color={inactive ? 'red' : 'green'}
-                          variant="soft"
-                          size="1"
-                        >
-                          {inactive ? 'Inactive' : 'Active'}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {formatMonitorDateTime(row.last_customer_sync_at)}
-                      </Table.Cell>
-                      <Table.Cell>{row.linked_customer_count}</Table.Cell>
-                      <Table.Cell>
-                        {stale ? (
-                          <Badge color="amber" variant="soft" size="1">
-                            {row.stale_customer_count}
-                          </Badge>
-                        ) : (
-                          row.stale_customer_count
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  )
-                })}
-              </Table.Body>
-            </Table.Root>
-          </Box>
-        )}
-      </Card>
+        <ContaCompanyHealthSection companies={contaCompanies} />
 
-      <SuperResendEmailsSection />
+        <EmailPipelineSection
+          pendingCount={pendingCount}
+          oldestAge={oldestAge}
+          backlogWarning={backlogWarning}
+          pendingNotifications={pendingNotifications}
+          dispatchPending={emailDispatchMutation.isPending}
+          onDispatch={() => emailDispatchMutation.mutate()}
+        />
 
-      <Card size="3">
-        <Heading size="4" mb="3">
-          Recent runs
-        </Heading>
-        {(data?.recentRuns.length ?? 0) === 0 ? (
-          <Text size="2" color="gray">
-            No job runs recorded yet. Runs appear after scheduled jobs execute
-            or after you trigger Conta sync manually.
-          </Text>
-        ) : (
-          <Box style={{ overflowX: 'auto' }}>
-            <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Time</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Job</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Trigger</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Summary</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell />
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {(data?.recentRuns ?? []).map((run) => (
-                  <RecentRunRow key={run.id} run={run} />
-                ))}
-              </Table.Body>
-            </Table.Root>
-          </Box>
-        )}
-      </Card>
-    </Flex>
+        <SuperResendEmailsSection />
+
+        <RecentRunsSection runs={recentRuns} />
+      </Flex>
+    </Box>
   )
 }

@@ -397,7 +397,7 @@ export default function BookItemsDialog({
       const itemKindMap = new Map<string, InventoryItemKind>()
       const hasItemsToBook = itemRows.length > 0 || groupRows.length > 0
 
-      let defaultTimePeriodId =
+      const defaultTimePeriodId =
         selectedTimePeriodId ||
         (await ensureDefaultEquipmentPeriod({
           jobId,

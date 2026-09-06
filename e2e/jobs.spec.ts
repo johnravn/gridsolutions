@@ -9,10 +9,12 @@ import {
 test.describe('Jobs', () => {
   test('owner can create a draft job', async ({ authedPage: page }) => {
     const title = await createDraftJob(page)
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    // Mobile inspector heading can sit outside the viewport (drawer transform).
+    await expect(page.getByRole('heading', { name: title })).toBeAttached()
   })
 
   test('owner can navigate job tabs', async ({ authedPage: page }) => {
+    test.setTimeout(60_000)
     const title = await createDraftJob(page)
 
     await clickJobTab(page, 'Overview')
@@ -65,14 +67,22 @@ test.describe('Jobs', () => {
   test('owner can copy a job with the same start time and a new title', async ({
     authedPage: page,
   }) => {
+    test.setTimeout(90_000)
     const sourceTitle = await createDraftJob(page)
     const copiedTitle = `${sourceTitle} copy`
 
-    await page.getByRole('button', { name: 'Copy job' }).click()
+    // Mobile: inspector may be collapsed after create — reopen before Copy.
+    const openInspector = page.getByRole('button', { name: 'Open inspector' })
+    if (await openInspector.isVisible().catch(() => false)) {
+      await openInspector.evaluate((el) => (el as HTMLElement).click())
+    }
+    const copyJob = page.getByRole('button', { name: 'Copy job' })
+    await expect(copyJob).toBeVisible({ timeout: 15_000 })
+    await copyJob.click()
     const dialog = page.getByRole('dialog').filter({
       has: page.getByRole('heading', { name: 'Copy job' }),
     })
-    await expect(dialog).toBeVisible()
+    await expect(dialog).toBeVisible({ timeout: 15_000 })
 
     const titleInput = dialog.getByLabel('Title')
     await expect(titleInput).toHaveValue(sourceTitle)

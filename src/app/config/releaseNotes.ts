@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.17'
+export const APP_VERSION = '1.13.18'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -29,9 +29,9 @@ export const RELEASE_NOTES = {
   title: "What's new in Grid",
   highlights: [
     {
-      title: 'Google and Apple sign-in',
+      title: 'Google sign-in',
       description:
-        'Sign up or sign in with Google or Apple, link multiple methods to one Grid profile under Profile → Sign-in methods, and finish required name and phone after social signup. Superusers can merge accidental duplicate accounts.',
+        'Sign up or sign in with Google, link it to one Grid profile under Profile → Sign-in methods, and finish required name and phone after social signup. Superusers can merge accidental duplicate accounts.',
     },
     {
       title: 'My jobs on the Jobs list',

@@ -132,16 +132,18 @@ export function reorderInvoiceLinesByActiveOver<T extends { id: string }>(
   return arrayMove(items, oldIndex, newIndex)
 }
 
-function invoiceLineHighlightStyle(
-  highlighted: boolean,
-  base?: React.CSSProperties,
-): React.CSSProperties {
+function invoiceLineRowProps(highlighted: boolean): {
+  'data-invoice-line-highlighted'?: true
+} {
+  return highlighted ? { 'data-invoice-line-highlighted': true } : {}
+}
+
+function invoiceLineRowStyle(base?: React.CSSProperties): React.CSSProperties {
   return {
     ...base,
-    transition: [base?.transition, 'box-shadow 400ms ease']
+    transition: [base?.transition, 'background-color 400ms ease']
       .filter(Boolean)
       .join(', '),
-    boxShadow: highlighted ? 'inset 3px 0 0 var(--amber-9)' : base?.boxShadow,
   }
 }
 
@@ -164,7 +166,7 @@ function SortableInvoiceLineRow({
     isDragging,
   } = useSortable({ id })
 
-  const style: React.CSSProperties = invoiceLineHighlightStyle(highlighted, {
+  const style: React.CSSProperties = invoiceLineRowStyle({
     transform: CSS.Transform.toString(transform),
     transition: transition ?? undefined,
     opacity: isDragging ? 0.85 : undefined,
@@ -174,7 +176,11 @@ function SortableInvoiceLineRow({
   })
 
   return (
-    <Table.Row ref={setNodeRef as React.Ref<HTMLTableRowElement>} style={style}>
+    <Table.Row
+      ref={setNodeRef as React.Ref<HTMLTableRowElement>}
+      style={style}
+      {...invoiceLineRowProps(highlighted)}
+    >
       <Table.Cell
         style={{
           width: 40,
@@ -908,7 +914,8 @@ function BookingsInvoicePreview({
                     return (
                       <Table.Row
                         key={line.id}
-                        style={invoiceLineHighlightStyle(isHighlighted)}
+                        style={invoiceLineRowStyle()}
+                        {...invoiceLineRowProps(isHighlighted)}
                       >
                         {cells}
                       </Table.Row>

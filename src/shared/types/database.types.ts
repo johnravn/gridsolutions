@@ -4863,7 +4863,10 @@ export type Database = {
         Args: { p_interval?: string }
         Returns: Json
       }
-      auto_update_jobs_to_in_progress: { Args: never; Returns: undefined }
+      auto_update_jobs_to_in_progress: {
+        Args: { p_trigger_source?: string }
+        Returns: undefined
+      }
       can_freelancer_view_job: {
         Args: { p_company_id: string; p_job_id: string }
         Returns: boolean
@@ -5201,6 +5204,7 @@ export type Database = {
         }
         Returns: Json
       }
+      trigger_job_status_auto_update: { Args: never; Returns: Json }
       update_my_avatar: { Args: { p_path: string }; Returns: undefined }
       update_my_profile: {
         Args: {

@@ -15,7 +15,7 @@ import { Lock } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { linkOAuthProvider } from '@shared/auth/oauth'
+import { linkOAuthProvider, resumePendingOAuthLink } from '@shared/auth/oauth'
 import ChangePasswordDialog from '@features/profile/components/ChangePasswordDialog'
 import type { OAuthProvider } from '@shared/auth/oauth'
 import type { UserIdentity } from '@supabase/supabase-js'
@@ -50,13 +50,6 @@ const METHODS: Array<MethodRow> = [
     description: 'Use your Google account to sign in to this Grid profile.',
     kind: 'oauth',
     provider: 'google',
-  },
-  {
-    id: 'apple',
-    label: 'Apple',
-    description: 'Use Sign in with Apple for this Grid profile.',
-    kind: 'oauth',
-    provider: 'apple',
   },
   {
     id: 'vipps',
@@ -116,6 +109,18 @@ export default function ProfileAuthTab({
     },
   })
 
+  React.useEffect(() => {
+    void resumePendingOAuthLink().then((result) => {
+      if (!result) return
+      if (result.error) {
+        toastError('Could not connect', result.error.message)
+        setBusyProvider(null)
+        return
+      }
+      setBusyProvider('google')
+    })
+  }, [toastError])
+
   const unlinkMutation = useMutation({
     mutationFn: async (identity: UserIdentity) => {
       setBusyProvider(identity.provider)
@@ -163,10 +168,9 @@ export default function ProfileAuthTab({
             </Box>
           </Flex>
           <Text size="2" color="gray">
-            Sign-in methods below attach to this Grid profile. Linking Google or
-            Apple lets you open the same account with whichever method is
-            available — your jobs, companies, and settings stay with this
-            profile.
+            Sign-in methods below attach to this Grid profile. Linking Google
+            lets you open the same account with email or Google — your jobs,
+            companies, and settings stay with this profile.
           </Text>
         </Flex>
       </Card>
@@ -285,7 +289,7 @@ export default function ProfileAuthTab({
       <Separator size="4" />
       <Text size="1" color="gray">
         You need at least two connected methods to disconnect one. Password is
-        optional if you only use Google or Apple.
+        optional if you only use Google.
       </Text>
 
       <ChangePasswordDialog

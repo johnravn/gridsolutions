@@ -10,5 +10,6 @@ export async function openPublicOfferAction(
   })
   const actionButton = page.getByRole('button', { name: buttonName })
   await expect(actionButton).toBeVisible({ timeout: 15_000 })
-  await actionButton.click()
+  // Public offer chrome can keep animating; a DOM click avoids "not stable".
+  await actionButton.evaluate((el) => (el as HTMLElement).click())
 }

@@ -25,19 +25,20 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { DotsGrid3x3, Plus, Xmark } from 'iconoir-react'
+import { DotsGrid3x3, Plus, Undo, Xmark } from 'iconoir-react'
 import { DropdownMenuTrigger } from '@shared/ui/radixAsChild'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   COMMON_TOKEN_OPTIONS,
   applyTemplatesToLines,
   buildInvoiceLineDescription,
-  countChangedDescriptions,
   countLinesByScope,
   defaultTemplateForScope,
   getLinesAffectedByScope,
   loadInvoiceLineTemplates,
+  restoreLineDescriptions,
   saveInvoiceLineTemplates,
+  snapshotChangedDescriptions,
   tokenLabel,
   tokenOptionsForScope,
 } from '../../utils/invoiceLineDescription'
@@ -320,6 +321,12 @@ export default function InvoiceDescriptionTemplateEditor({
   const [highlightEnabled, setHighlightEnabled] = React.useState(false)
   const [highlightPulse, setHighlightPulse] = React.useState(0)
   const [highlightSecondsLeft, setHighlightSecondsLeft] = React.useState(0)
+  const [lastApply, setLastApply] = React.useState<Record<
+    string,
+    string
+  > | null>(null)
+  const [highlightIdsOverride, setHighlightIdsOverride] =
+    React.useState<ReadonlySet<string> | null>(null)
   const highlightExpiresAtRef = React.useRef<number | null>(null)
   const [store, setStore] = React.useState<InvoiceLineTemplateStore>(() =>
     loadInvoiceLineTemplates(companyId),
@@ -342,6 +349,7 @@ export default function InvoiceDescriptionTemplateEditor({
     const loaded = loadInvoiceLineTemplates(companyId)
     setStore(loaded)
     setDraftEntries(templateToEntries(loaded.other ?? emptyTemplate('other')))
+    setLastApply(null)
   }, [companyId])
 
   React.useEffect(() => {
@@ -371,12 +379,14 @@ export default function InvoiceDescriptionTemplateEditor({
     [affectedLines],
   )
 
+  const highlightIds = highlightIdsOverride ?? affectedIds
+
   const onHighlightChangeRef = React.useRef(onHighlightChange)
   onHighlightChangeRef.current = onHighlightChange
 
   React.useEffect(() => {
-    onHighlightChangeRef.current?.(highlightEnabled ? affectedIds : new Set())
-  }, [highlightEnabled, affectedIds])
+    onHighlightChangeRef.current?.(highlightEnabled ? highlightIds : new Set())
+  }, [highlightEnabled, highlightIds])
 
   React.useEffect(() => {
     if (!highlightEnabled) {
@@ -406,7 +416,8 @@ export default function InvoiceDescriptionTemplateEditor({
     return () => window.clearTimeout(timer)
   }, [highlightEnabled, highlightPulse])
 
-  const enableHighlights = () => {
+  const enableHighlights = (ids?: ReadonlySet<string>) => {
+    setHighlightIdsOverride(ids ?? null)
     highlightExpiresAtRef.current = Date.now() + INVOICE_LINE_HIGHLIGHT_HOLD_MS
     setHighlightEnabled(true)
     setHighlightPulse((n) => n + 1)
@@ -476,7 +487,8 @@ export default function InvoiceDescriptionTemplateEditor({
       manualOverrides,
       scope,
     )
-    const changedCount = countChangedDescriptions(lines, updated)
+    const previousDescriptions = snapshotChangedDescriptions(lines, updated)
+    const changedCount = Object.keys(previousDescriptions).length
     onApply(updated)
     enableHighlights()
     if (changedCount === 0) {
@@ -487,6 +499,7 @@ export default function InvoiceDescriptionTemplateEditor({
           : 'Descriptions already match this pattern.',
       )
     } else {
+      setLastApply(previousDescriptions)
       success(
         'Pattern applied',
         changedCount === 1
@@ -496,11 +509,33 @@ export default function InvoiceDescriptionTemplateEditor({
     }
   }
 
+  const handleUndo = () => {
+    if (!lastApply) return
+    const restoredIds = new Set(
+      lines
+        .filter((line) => lastApply[line.id] !== undefined)
+        .map((line) => line.id),
+    )
+    setLastApply(null)
+    if (restoredIds.size === 0) {
+      info('Nothing to undo', 'Those lines are no longer on this invoice.')
+      return
+    }
+    onApply(restoreLineDescriptions(lines, lastApply))
+    enableHighlights(restoredIds)
+    success(
+      'Pattern undone',
+      restoredIds.size === 1
+        ? '1 invoice line was restored.'
+        : `${restoredIds.size} invoice lines were restored.`,
+    )
+  }
+
   return (
     <Box
       mb={embedded ? '0' : '4'}
       p={embedded ? '0' : '3'}
-      pt={embedded ? '2' : '3'}
+      pt={embedded ? '0' : '3'}
       style={
         embedded
           ? undefined
@@ -637,6 +672,19 @@ export default function InvoiceDescriptionTemplateEditor({
               : 'Highlight lines'}
           </Button>
         )}
+        <Button
+          size="1"
+          variant="ghost"
+          color="gray"
+          highContrast
+          disabled={!lastApply}
+          onClick={handleUndo}
+          style={{ marginLeft: 'auto', opacity: lastApply ? 1 : 0.7 }}
+        >
+          <Undo width={14} height={14} />
+          Undo
+          {lastApply ? ` (${Object.keys(lastApply).length})` : ''}
+        </Button>
       </Flex>
 
       <Text size="1" color="gray" as="p">

@@ -33,6 +33,27 @@ export function getResendApiKey(): string | null {
   return null
 }
 
+/**
+ * Resend "Sending access" keys return 401 on list/retrieve. Never forward that as
+ * our HTTP 401 — callers treat 401 as app auth failure.
+ */
+export function describeResendUpstreamFailure(bodyText: string): {
+  error: string
+  details: string
+  httpStatus: number
+} | null {
+  const restricted =
+    bodyText.includes('restricted_api_key') ||
+    bodyText.includes('restricted to only send')
+  if (!restricted) return null
+  return {
+    error: 'Resend API key cannot list emails',
+    details:
+      'RESEND_API_KEY has Sending access only. In Resend, create a full-access API key (not “Sending access”), then for local put it in supabase/functions/.env and restart the edge runtime; for hosted run supabase secrets set RESEND_API_KEY=…',
+    httpStatus: 502,
+  }
+}
+
 /** Default "Name" part of the From header (falls back to app name). */
 export function getDefaultFromName(): string {
   return Deno.env.get('RESEND_FROM_NAME') ?? 'Grid'

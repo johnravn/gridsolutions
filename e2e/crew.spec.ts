@@ -10,20 +10,34 @@ test.describe('Crew', () => {
     await openBookingsCrewTab(page)
 
     await page.getByRole('button', { name: 'Add role' }).click()
-    const roleDialog = page.getByRole('dialog')
-    await expect(
-      roleDialog.getByRole('heading', { name: 'Add role' }),
-    ).toBeVisible()
+    const roleDialog = page.getByRole('dialog').filter({
+      has: page.getByRole('heading', { name: 'Add role' }),
+    })
+    await expect(roleDialog).toBeVisible({ timeout: 15_000 })
     await roleDialog
       .getByPlaceholder('e.g. FOH, Monitor, Loader')
       .fill('Technician')
+
+    // Submit is a no-op until job start/end are seeded into the period picker.
     await expect(
-      roleDialog.getByRole('button', { name: 'Add role' }),
-    ).toBeEnabled({
+      roleDialog.getByRole('button', { name: 'Select period' }),
+    ).toHaveCount(0, { timeout: 15_000 })
+
+    const addRole = roleDialog.getByRole('button', { name: 'Add role' })
+    await expect(addRole).toBeEnabled({ timeout: 15_000 })
+    const insert = page.waitForResponse(
+      (response) =>
+        response.url().includes('/rest/v1/time_periods') &&
+        response.request().method() === 'POST' &&
+        response.ok(),
+      { timeout: 15_000 },
+    )
+    await addRole.evaluate((el: HTMLButtonElement) => el.click())
+    await insert
+    await expect(roleDialog).toBeHidden({ timeout: 15_000 })
+    await expect(page.getByText('Technician').first()).toBeVisible({
       timeout: 15_000,
     })
-    await roleDialog.getByRole('button', { name: 'Add role' }).click()
-    await expect(roleDialog).toBeHidden({ timeout: 15_000 })
 
     const addCrew = page.getByRole('button', { name: 'Add crew' }).first()
     await expect(addCrew).toBeVisible({ timeout: 15_000 })

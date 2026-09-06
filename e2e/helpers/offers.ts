@@ -15,6 +15,37 @@ export async function expectOfferBasisSaved(page: Page) {
   ).toBeVisible({ timeout: 15_000 })
 }
 
+const OFFER_URL_RE = /https?:\/\/\S+\/offer\/[A-Za-z0-9._-]+/
+
+/**
+ * Mobile Chromium often times out on clipboard write, then readText() returns
+ * another worker's URL. Prefer the offers-tab copy button, then toast text.
+ */
+export async function readLockedOfferUrl(page: Page): Promise<string> {
+  const copyLink = page.getByRole('button', { name: 'Copy offer link' })
+  await expect(copyLink.first()).toBeAttached({ timeout: 15_000 })
+  const fromButton = await copyLink.first().getAttribute('data-offer-url')
+  if (fromButton && OFFER_URL_RE.test(fromButton)) return fromButton
+
+  const fromDom = await page.evaluate((source) => {
+    const match = document.body.innerText.match(new RegExp(source, 'i'))
+    return match?.[0] ?? ''
+  }, OFFER_URL_RE.source)
+  if (fromDom) return fromDom
+
+  const clipboard = await page.evaluate(async () => {
+    try {
+      return await navigator.clipboard.readText()
+    } catch {
+      return ''
+    }
+  })
+  const fromClipboard = clipboard.match(OFFER_URL_RE)?.[0]
+  if (fromClipboard) return fromClipboard
+
+  throw new Error('Could not find public offer URL after lock & send')
+}
+
 function unsavedChangesDialog(page: Page) {
   return page.getByRole('dialog').filter({
     has: page.getByRole('heading', { name: 'Unsaved changes' }),
@@ -99,11 +130,15 @@ export async function returnToOffersTabAfterBasisSave(
   await openJobsPage(page)
 
   const search = page.getByPlaceholder('Search')
-  await search.fill(jobTitle)
-  const jobRow = page.getByText(jobTitle, { exact: true }).first()
-  await expect(jobRow).toBeVisible({ timeout: 15_000 })
-  await jobRow.click()
-  await expect(page.getByRole('heading', { name: jobTitle })).toBeVisible({
+  await expect(search).toBeVisible({ timeout: 15_000 })
+  await expect(async () => {
+    if (await headingInViewport(page, jobTitle)) return
+    await search.fill(jobTitle)
+    const row = page.getByRole('button').filter({ hasText: jobTitle }).first()
+    await expect(row).toBeVisible({ timeout: 5_000 })
+    await row.evaluate((el) => (el as HTMLElement).click())
+  }).toPass({ timeout: 30_000 })
+  await expect(page.getByRole('heading', { name: jobTitle })).toBeAttached({
     timeout: 15_000,
   })
 

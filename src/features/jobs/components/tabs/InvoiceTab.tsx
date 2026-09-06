@@ -34,12 +34,15 @@ import {
   invoiceLinesHaveValidQuantities,
   markJobsInvoiced,
 } from '../../api/createContaInvoice'
-import { acceptedOfferInvoiceLineDescription } from '../../utils/offerNumber'
 import {
   equipmentDiscountOverridesFromOffer,
   offerLinesToBookings,
 } from '../../utils/offerLinesToBookings'
-import { invoiceLineNet, roundMoney } from '../../utils/invoiceMoney'
+import { roundMoney } from '../../utils/invoiceMoney'
+import {
+  buildBookingsForInvoiceSendPayload,
+  offerToBookingsForInvoice,
+} from '../../utils/invoiceSendPayload'
 import { calculateOfferTotalsFromStoredLines } from '../../utils/offerCalculations'
 import { offerDetailQuery } from '../../api/offerQueries'
 import type {
@@ -64,83 +67,6 @@ function withZeroVat(b: BookingsForInvoice): BookingsForInvoice {
     all: b.all.map((l) => ({ ...l, vatPercent: 0 })),
     totalVat: 0,
     totalWithVat: b.totalExVat,
-  }
-}
-
-/** Build a one-line BookingsForInvoice from an accepted offer for the unified preview. */
-function offerToBookingsForInvoice(offer: JobOffer): BookingsForInvoice {
-  const line: BookingInvoiceLine = {
-    id: offer.id,
-    type: 'equipment',
-    description: acceptedOfferInvoiceLineDescription(offer),
-    quantity: 1,
-    unitPrice: offer.total_after_discount,
-    totalPrice: offer.total_after_discount,
-    vatPercent: offer.vat_percent,
-    timePeriodId: '',
-    timePeriodTitle: null,
-    startAt: '',
-    endAt: '',
-  }
-  const totalExVat = line.totalPrice
-  const totalVat = (totalExVat * offer.vat_percent) / 100
-  return {
-    equipment: [line],
-    crew: [],
-    transport: [],
-    all: [line],
-    totalExVat,
-    totalVat,
-    totalWithVat: offer.total_with_vat,
-  }
-}
-
-/** Ex-VAT amount for one line after line discount (matches InvoicePreview). */
-function lineExVatAfterDiscount(
-  line: BookingInvoiceLine,
-  lineDiscountOverrides: Record<string, number>,
-): number {
-  const d = lineDiscountOverrides[line.id] ?? 0
-  return invoiceLineNet(line, d)
-}
-
-/**
- * Snapshot of lines + totals from the invoice preview state. Conta payload is
- * built from this so sent values match the preview tab.
- */
-function buildBookingsForInvoiceSendPayload(
-  previewBookings: BookingsForInvoice,
-  editedLines: Array<BookingInvoiceLine>,
-  lineDiscountOverrides: Record<string, number>,
-  vatIncluded: boolean,
-): BookingsForInvoice {
-  const lines = editedLines.length > 0 ? editedLines : previewBookings.all
-  const equipment = lines.filter((l) => l.type === 'equipment')
-  const crew = lines.filter((l) => l.type === 'crew')
-  const transport = lines.filter((l) => l.type === 'transport')
-
-  let totalExVat = 0
-  for (const line of lines) {
-    totalExVat += lineExVatAfterDiscount(line, lineDiscountOverrides)
-  }
-  let totalVat = 0
-  if (vatIncluded) {
-    for (const line of lines) {
-      const ex = lineExVatAfterDiscount(line, lineDiscountOverrides)
-      totalVat += (ex * line.vatPercent) / 100
-    }
-  }
-  const totalWithVat = totalExVat + totalVat
-
-  return {
-    ...previewBookings,
-    equipment,
-    crew,
-    transport,
-    all: lines,
-    totalExVat,
-    totalVat,
-    totalWithVat,
   }
 }
 
@@ -184,9 +110,7 @@ export default function InvoiceTab({
   const invoiceSendInFlightRef = React.useRef(false)
   const bookingsPreviewSyncRef = React.useRef<string | null>(null)
   const [expandOfferLines, setExpandOfferLines] = React.useState(false)
-  const [expandedSettingsCard, setExpandedSettingsCard] = React.useState<
-    'description' | 'offerLines' | null
-  >(null)
+  const [settingsExpanded, setSettingsExpanded] = React.useState(false)
 
   const beginInvoiceSend = (): boolean => {
     if (invoiceSendInFlightRef.current) return false
@@ -208,7 +132,7 @@ export default function InvoiceTab({
     bookingsPreviewSyncRef.current = null
     setHighlightedLineIds(new Set())
     setExpandOfferLines(false)
-    setExpandedSettingsCard(null)
+    setSettingsExpanded(false)
   }
 
   const closeManualSendDialog = () => {
@@ -1310,8 +1234,8 @@ export default function InvoiceTab({
                   </Box>
                 )}
                 <InvoiceSettingsCards
-                  expandedCard={expandedSettingsCard}
-                  onExpandedCardChange={setExpandedSettingsCard}
+                  expanded={settingsExpanded}
+                  onExpandedChange={setSettingsExpanded}
                   companyId={companyId}
                   lines={
                     editedInvoiceLines.length > 0

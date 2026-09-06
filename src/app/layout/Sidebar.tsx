@@ -398,7 +398,11 @@ function SidebarContent({
                 onClick={() => onToggle(false)}
                 aria-label="Go to profile"
               >
-                <Link to="/profile" style={{ textDecoration: 'none' }}>
+                <Link
+                  to="/profile"
+                  search={{ tab: undefined }}
+                  style={{ textDecoration: 'none' }}
+                >
                   <Flex align="center" gap="2">
                     <Avatar
                       size="3"
@@ -596,6 +600,7 @@ function SidebarContent({
                       currentPath={currentPath}
                       isMobile={isMobile}
                       onCloseMobile={() => onToggle(false)}
+                      tag={n.label === 'Reporting' ? <BetaBadge /> : undefined}
                       badge={
                         n.label === 'Matters' && unreadMatters > 0 ? (
                           <Badge

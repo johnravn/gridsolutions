@@ -4,10 +4,11 @@ import {
   Badge,
   Box,
   Button,
+  Callout,
   Card,
   Flex,
   Heading,
-  Table,
+  Spinner,
   Text,
 } from '@radix-ui/themes'
 import {
@@ -17,9 +18,20 @@ import {
   formatResendRecipients,
   resendEventBadgeColor,
 } from '../api/monitorQueries'
+import { MonitorVirtualList } from './MonitorVirtualList'
 import type { ResendSentEmail } from '../api/monitorQueries'
 
-function ResendEmailRow({ email }: { email: ResendSentEmail }) {
+const RESEND_LIST_MAX_HEIGHT = 420
+
+function ResendEmailCard({
+  email,
+  onExpandChange,
+  onContentSizeChange,
+}: {
+  email: ResendSentEmail
+  onExpandChange: (emailId: string, expanded: boolean) => void
+  onContentSizeChange: () => void
+}) {
   const [expanded, setExpanded] = React.useState(false)
   const detailQuery = useQuery({
     queryKey: ['super', 'monitor', 'resend-email', email.id],
@@ -27,22 +39,48 @@ function ResendEmailRow({ email }: { email: ResendSentEmail }) {
     enabled: expanded,
   })
 
+  React.useEffect(() => {
+    if (!expanded) return
+    onContentSizeChange()
+  }, [
+    expanded,
+    detailQuery.isFetching,
+    detailQuery.isSuccess,
+    detailQuery.isError,
+    detailQuery.dataUpdatedAt,
+    onContentSizeChange,
+  ])
+
+  const toggle = () => {
+    setExpanded((v) => {
+      const next = !v
+      onExpandChange(email.id, next)
+      return next
+    })
+  }
+
   return (
-    <>
-      <Table.Row>
-        <Table.Cell>{formatMonitorDateTime(email.created_at)}</Table.Cell>
-        <Table.Cell style={{ maxWidth: 220 }}>
+    <Box
+      p="3"
+      style={{
+        borderRadius: 'var(--radius-3)',
+        background: 'var(--gray-a2)',
+      }}
+    >
+      <Flex align="start" justify="between" gap="3" wrap="wrap">
+        <Box style={{ flex: '1 1 200px', minWidth: 0 }}>
           <Text size="2" weight="medium" as="div" truncate>
             {email.subject || '(no subject)'}
           </Text>
-        </Table.Cell>
-        <Table.Cell>{formatResendRecipients(email.to)}</Table.Cell>
-        <Table.Cell style={{ maxWidth: 180 }}>
-          <Text size="1" truncate>
-            {email.from}
+          <Text size="1" color="gray" as="div" mt="1">
+            {formatMonitorDateTime(email.created_at)} ·{' '}
+            {formatResendRecipients(email.to)}
           </Text>
-        </Table.Cell>
-        <Table.Cell>
+          <Text size="1" color="gray" as="div" truncate>
+            From: {email.from}
+          </Text>
+        </Box>
+        <Flex align="center" gap="2">
           {email.last_event ? (
             <Badge
               color={resendEventBadgeColor(email.last_event)}
@@ -51,98 +89,95 @@ function ResendEmailRow({ email }: { email: ResendSentEmail }) {
             >
               {email.last_event}
             </Badge>
-          ) : (
-            '—'
-          )}
-        </Table.Cell>
-        <Table.Cell>
-          <Button
-            type="button"
-            size="1"
-            variant="ghost"
-            onClick={() => setExpanded((v) => !v)}
-          >
+          ) : null}
+          <Button type="button" size="1" variant="ghost" onClick={toggle}>
             {expanded ? 'Hide' : 'View'}
           </Button>
-        </Table.Cell>
-      </Table.Row>
+        </Flex>
+      </Flex>
       {expanded ? (
-        <Table.Row>
-          <Table.Cell colSpan={6}>
-            {detailQuery.isLoading ? (
+        <Box mt="3">
+          {detailQuery.isLoading ? (
+            <Flex align="center" gap="2">
+              <Spinner size="1" />
               <Text size="2" color="gray">
                 Loading from Resend…
               </Text>
-            ) : detailQuery.isError ? (
-              <Text size="2" color="red">
-                {detailQuery.error instanceof Error
-                  ? detailQuery.error.message
-                  : 'Failed to load email'}
+            </Flex>
+          ) : detailQuery.isError ? (
+            <Text size="2" color="red">
+              {detailQuery.error instanceof Error
+                ? detailQuery.error.message
+                : 'Failed to load email'}
+            </Text>
+          ) : detailQuery.data ? (
+            <Flex direction="column" gap="2">
+              <Text size="1" color="gray" as="div">
+                Resend ID: {detailQuery.data.id}
+                {detailQuery.data.message_id
+                  ? ` · Message-ID: ${detailQuery.data.message_id}`
+                  : ''}
               </Text>
-            ) : detailQuery.data ? (
-              <Flex direction="column" gap="2">
-                <Text size="1" color="gray" as="div">
-                  Resend ID: {detailQuery.data.id}
-                  {detailQuery.data.message_id
-                    ? ` · Message-ID: ${detailQuery.data.message_id}`
-                    : ''}
-                </Text>
-                {detailQuery.data.text ? (
-                  <Box>
-                    <Text size="1" weight="medium" mb="1" as="div">
-                      Plain text
-                    </Text>
-                    <Text
-                      size="1"
-                      as="div"
-                      style={{
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        margin: 0,
-                        fontFamily: 'var(--font-mono, monospace)',
-                        maxHeight: 200,
-                        overflow: 'auto',
-                      }}
-                    >
-                      {detailQuery.data.text}
-                    </Text>
-                  </Box>
-                ) : null}
-                {detailQuery.data.html ? (
-                  <Box>
-                    <Text size="1" weight="medium" mb="1" as="div">
-                      HTML
-                    </Text>
-                    <Text
-                      size="1"
-                      as="div"
-                      style={{
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        margin: 0,
-                        fontFamily: 'var(--font-mono, monospace)',
-                        maxHeight: 240,
-                        overflow: 'auto',
-                      }}
-                    >
-                      {detailQuery.data.html}
-                    </Text>
-                  </Box>
-                ) : !detailQuery.data.text ? (
-                  <Text size="2" color="gray">
-                    No body content returned by Resend for this message.
+              {detailQuery.data.text ? (
+                <Box>
+                  <Text size="1" weight="medium" mb="1" as="div">
+                    Plain text
                   </Text>
-                ) : null}
-              </Flex>
-            ) : null}
-          </Table.Cell>
-        </Table.Row>
+                  <Text
+                    size="1"
+                    as="div"
+                    style={{
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      fontFamily: 'var(--font-mono, monospace)',
+                      maxHeight: 200,
+                      overflow: 'auto',
+                    }}
+                  >
+                    {detailQuery.data.text}
+                  </Text>
+                </Box>
+              ) : null}
+              {detailQuery.data.html ? (
+                <Box>
+                  <Text size="1" weight="medium" mb="1" as="div">
+                    HTML
+                  </Text>
+                  <Text
+                    size="1"
+                    as="div"
+                    style={{
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word',
+                      margin: 0,
+                      fontFamily: 'var(--font-mono, monospace)',
+                      maxHeight: 240,
+                      overflow: 'auto',
+                    }}
+                  >
+                    {detailQuery.data.html}
+                  </Text>
+                </Box>
+              ) : !detailQuery.data.text ? (
+                <Text size="2" color="gray">
+                  No body content returned by Resend for this message.
+                </Text>
+              ) : null}
+            </Flex>
+          ) : null}
+        </Box>
       ) : null}
-    </>
+    </Box>
   )
 }
 
 export default function SuperResendEmailsSection() {
+  const [expandedId, setExpandedId] = React.useState<string | null>(null)
+  const [sizeTick, setSizeTick] = React.useState(0)
+  const onContentSizeChange = React.useCallback(() => {
+    setSizeTick((n) => n + 1)
+  }, [])
   const {
     data,
     isLoading,
@@ -169,88 +204,93 @@ export default function SuperResendEmailsSection() {
     [data?.pages],
   )
 
-  return (
-    <Card size="3">
-      <Flex align="center" justify="between" gap="3" wrap="wrap" mb="2">
-        <Heading size="4">Resend sent emails</Heading>
-        <Flex align="center" gap="2">
-          {isFetching && !isFetchingNextPage ? (
-            <Text size="1" color="gray">
-              Refreshing…
-            </Text>
-          ) : null}
-          <Button
-            type="button"
-            size="1"
-            variant="soft"
-            onClick={() => void refetch()}
-          >
-            Refresh
-          </Button>
-        </Flex>
-      </Flex>
-      <Text size="2" color="gray" mb="4">
-        Live list from the Resend API — every email your team has sent through
-        Resend, not just rows tracked in Grid.
-      </Text>
+  const measureKey = `${expandedId ?? ''}:${emails.length}:${sizeTick}`
 
-      {isLoading ? (
-        <Text size="2" color="gray">
-          Loading emails from Resend…
-        </Text>
-      ) : isError ? (
-        <Flex direction="column" gap="2">
-          <Text size="2" color="red">
-            {error instanceof Error ? error.message : 'Failed to load emails'}
-          </Text>
-          <Button
-            type="button"
-            size="2"
-            variant="soft"
-            onClick={() => void refetch()}
-          >
-            Retry
-          </Button>
+  return (
+    <Card size="3" style={{ flexShrink: 0 }}>
+      <Flex direction="column" gap="3">
+        <Flex align="center" justify="between" gap="3" wrap="wrap">
+          <Heading size="4">Resend sent emails</Heading>
+          <Flex align="center" gap="2">
+            {isFetching && !isFetchingNextPage ? (
+              <Text size="1" color="gray">
+                Refreshing…
+              </Text>
+            ) : null}
+            <Button
+              type="button"
+              size="1"
+              variant="soft"
+              onClick={() => void refetch()}
+            >
+              Refresh
+            </Button>
+          </Flex>
         </Flex>
-      ) : emails.length === 0 ? (
         <Text size="2" color="gray">
-          No sent emails returned from Resend.
+          Live list from the Resend API — every email your team has sent through
+          Resend, not just rows tracked in Grid.
         </Text>
-      ) : (
-        <>
-          <Box style={{ overflowX: 'auto' }}>
-            <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Sent</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Subject</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>To</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>From</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell />
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {emails.map((email) => (
-                  <ResendEmailRow key={email.id} email={email} />
-                ))}
-              </Table.Body>
-            </Table.Root>
-          </Box>
-          {hasNextPage ? (
-            <Flex justify="center" mt="3">
-              <Button
-                type="button"
-                variant="soft"
-                disabled={isFetchingNextPage}
-                onClick={() => void fetchNextPage()}
-              >
-                {isFetchingNextPage ? 'Loading…' : 'Load more'}
-              </Button>
-            </Flex>
-          ) : null}
-        </>
-      )}
+
+        {isLoading ? (
+          <Flex align="center" gap="2">
+            <Spinner size="2" />
+            <Text size="2" color="gray">
+              Loading emails from Resend…
+            </Text>
+          </Flex>
+        ) : isError ? (
+          <Flex direction="column" gap="2">
+            <Callout.Root color="red" variant="soft">
+              <Callout.Text>
+                {error instanceof Error
+                  ? error.message
+                  : 'Failed to load emails'}
+              </Callout.Text>
+            </Callout.Root>
+            <Text size="1" color="gray">
+              Requires the list-resend-emails edge function and RESEND_API_KEY
+              on the Supabase project. See docs/EMAIL.md.
+            </Text>
+            <Button
+              type="button"
+              size="2"
+              variant="soft"
+              onClick={() => void refetch()}
+            >
+              Retry
+            </Button>
+          </Flex>
+        ) : emails.length === 0 ? (
+          <Text size="2" color="gray">
+            No sent emails returned from Resend yet. Sends from Grid appear here
+            after Resend accepts them (not the same as the pending notification
+            queue above).
+          </Text>
+        ) : (
+          <MonitorVirtualList
+            items={emails}
+            getItemKey={(email) => email.id}
+            estimateSize={88}
+            maxHeight={RESEND_LIST_MAX_HEIGHT}
+            measureKey={measureKey}
+            hasNextPage={Boolean(hasNextPage)}
+            isFetchingNextPage={isFetchingNextPage}
+            onLoadMore={() => {
+              void fetchNextPage()
+            }}
+            renderItem={(email) => (
+              <ResendEmailCard
+                email={email}
+                onExpandChange={(id, expanded) => {
+                  setExpandedId(expanded ? id : null)
+                }}
+                onContentSizeChange={onContentSizeChange}
+              />
+            )}
+          />
+        )}
+      </Flex>
     </Card>
   )
 }

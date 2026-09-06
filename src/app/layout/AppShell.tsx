@@ -173,7 +173,8 @@ export default function AppShell() {
   }
 
   const title = getPageTitle(currentPath)
-  const showPageBeta = currentPath.startsWith('/conflicts')
+  const showPageBeta =
+    currentPath.startsWith('/conflicts') || currentPath.startsWith('/reporting')
   const isPublicOffer = currentPath.startsWith('/offer/')
   const isPublic =
     currentPath === '/login' ||
@@ -299,7 +300,11 @@ export default function AppShell() {
                         myProfile?.last_seen_release_version
                       }
                     />
-                    <Link to="/profile" style={{ textDecoration: 'none' }}>
+                    <Link
+                      to="/profile"
+                      search={{ tab: undefined }}
+                      style={{ textDecoration: 'none' }}
+                    >
                       <Flex
                         align="center"
                         gap="2"

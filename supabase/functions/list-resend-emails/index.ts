@@ -3,7 +3,9 @@
 // When email_id is set, returns a single email with html/text.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUserFromBearer } from '../_shared/auth/requireUser.ts'
 import {
+  describeResendUpstreamFailure,
   emailFunctionCorsHeaders,
   getResendApiKey,
   listResendSentEmails,
@@ -67,39 +69,19 @@ Deno.serve(async (req) => {
       )
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
-
-    const supabaseUser = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
+    const auth = await requireUserFromBearer({
+      req,
+      supabaseUrl,
+      anonKey,
+      corsHeaders: emailFunctionCorsHeaders,
     })
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser()
-    if (userError || !user?.id) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
+    if (!auth.ok) return auth.response
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('superuser')
-      .eq('user_id', user.id)
+      .eq('user_id', auth.user.id)
       .maybeSingle()
 
     if (profileError) {
@@ -129,13 +111,21 @@ Deno.serve(async (req) => {
         id: body.email_id,
       })
       if (!detail.ok) {
+        const mapped = describeResendUpstreamFailure(detail.bodyText)
         return new Response(
           JSON.stringify({
-            error: 'Resend request failed',
-            details: detail.bodyText,
+            error: mapped?.error ?? 'Resend request failed',
+            details: mapped?.details ?? detail.bodyText,
           }),
           {
-            status: detail.status >= 400 ? detail.status : 502,
+            // Never proxy Resend 401 — that looks like caller auth failed.
+            status:
+              mapped?.httpStatus ??
+              (detail.status === 401
+                ? 502
+                : detail.status >= 400
+                  ? detail.status
+                  : 502),
             headers: {
               ...emailFunctionCorsHeaders,
               'Content-Type': 'application/json',
@@ -160,13 +150,20 @@ Deno.serve(async (req) => {
     })
 
     if (!list.ok) {
+      const mapped = describeResendUpstreamFailure(list.bodyText)
       return new Response(
         JSON.stringify({
-          error: 'Resend request failed',
-          details: list.bodyText,
+          error: mapped?.error ?? 'Resend request failed',
+          details: mapped?.details ?? list.bodyText,
         }),
         {
-          status: list.status >= 400 ? list.status : 502,
+          status:
+            mapped?.httpStatus ??
+            (list.status === 401
+              ? 502
+              : list.status >= 400
+                ? list.status
+                : 502),
           headers: {
             ...emailFunctionCorsHeaders,
             'Content-Type': 'application/json',

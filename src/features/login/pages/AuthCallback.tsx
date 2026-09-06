@@ -11,6 +11,9 @@ function safeNextPath(raw: string | null): string | null {
   return raw
 }
 
+/** Prevent React Strict Mode from exchanging the same PKCE code twice. */
+const exchangedCodes = new Set<string>()
+
 export default function AuthCallback() {
   const navigate = useNavigate()
   const [error, setError] = React.useState<string | null>(null)
@@ -22,26 +25,45 @@ export default function AuthCallback() {
       const url = new URL(window.location.href)
       const code =
         url.searchParams.get('code') || url.hash.match(/code=([^&]+)/)?.[1]
+      const tokenHash =
+        url.searchParams.get('token_hash') ||
+        url.hash.match(/token_hash=([^&]+)/)?.[1]
+      const type =
+        url.searchParams.get('type') || url.hash.match(/type=([^&]+)/)?.[1]
       const next = safeNextPath(url.searchParams.get('next'))
 
       try {
-        // 1) Try PKCE/OAuth session exchange first (works for many providers and some email links)
-        const { error: excErr } = await supabase.auth.exchangeCodeForSession(
-          window.location.href,
-        )
-
-        if (excErr) {
-          // 2) If that failed and we have a `code`, try email confirmation (signup) verify
-          if (code) {
-            const { error: verErr } = await supabase.auth.verifyOtp({
-              type: 'signup',
-              token_hash: code,
-            })
-            if (verErr) throw verErr
-          } else {
-            // 3) No code in URL; see if we already have a session
+        if (code) {
+          if (exchangedCodes.has(code)) {
             const { data: s } = await supabase.auth.getSession()
-            if (!s.session) throw excErr
+            if (!s.session) {
+              throw new Error(
+                'Sign-in already in progress. If this stuck, open http://127.0.0.1:3000 (not localhost) and try again.',
+              )
+            }
+          } else {
+            exchangedCodes.add(code)
+            const { error: excErr } =
+              await supabase.auth.exchangeCodeForSession(code)
+            if (excErr) {
+              exchangedCodes.delete(code)
+              const hint = /flow state|code verifier|pkce/i.test(excErr.message)
+                ? ' Use http://127.0.0.1:3000 (not localhost) so Google sign-in can finish.'
+                : ''
+              throw new Error(`${excErr.message}.${hint}`)
+            }
+          }
+        } else if (tokenHash && type) {
+          // Email confirmation / recovery links use token_hash, not OAuth PKCE.
+          const { error: verErr } = await supabase.auth.verifyOtp({
+            type: type as 'signup' | 'email' | 'recovery' | 'invite',
+            token_hash: tokenHash,
+          })
+          if (verErr) throw verErr
+        } else {
+          const { data: s } = await supabase.auth.getSession()
+          if (!s.session) {
+            throw new Error('Missing sign-in code. Try signing in again.')
           }
         }
 

@@ -107,8 +107,8 @@ export default function CompleteProfilePage() {
         p_first_name: value.firstName.trim(),
         p_last_name: value.lastName.trim(),
         p_phone: value.phone.trim(),
-        p_bio: existing?.bio ?? null,
-        p_avatar_path: existing?.avatar_url ?? null,
+        p_bio: existing?.bio ?? '',
+        p_avatar_path: existing?.avatar_url ?? '',
         p_preferences: existing?.preferences ?? {},
       })
       if (rpcError) throw rpcError

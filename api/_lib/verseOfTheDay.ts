@@ -13,7 +13,7 @@ type BookLabels = {
   msg: string
 }
 
-type HolyBibleVersion = 'bm11' | 'nn11'
+type NorwegianBibleVersion = 'bm11' | 'nn11'
 
 type BookMeta = {
   names: Array<string>
@@ -387,9 +387,79 @@ const BOOKS: Array<BookMeta> = [
   }),
 ]
 
-const HOLY_BIBLE_VERSION: Record<HolyBibleVersion, string> = {
-  bm11: 'n11bm',
-  nn11: 'n11nn',
+const YOUVERSION_NORWEGIAN: Record<NorwegianBibleVersion, number> = {
+  bm11: 29,
+  nn11: 119,
+}
+
+/** YouVersion USFM book ids keyed by our internal book slug. */
+const BOOK_USFM: Record<string, string> = {
+  genesis: 'GEN',
+  exodus: 'EXO',
+  leviticus: 'LEV',
+  numbers: 'NUM',
+  deuteronomy: 'DEU',
+  joshua: 'JOS',
+  judges: 'JDG',
+  ruth: 'RUT',
+  '1-samuel': '1SA',
+  '2-samuel': '2SA',
+  '1-kings': '1KI',
+  '2-kings': '2KI',
+  '1-chronicles': '1CH',
+  '2-chronicles': '2CH',
+  ezra: 'EZR',
+  nehemiah: 'NEH',
+  esther: 'EST',
+  job: 'JOB',
+  psalms: 'PSA',
+  proverbs: 'PRO',
+  ecclesiastes: 'ECC',
+  'song-of-solomon': 'SNG',
+  isaiah: 'ISA',
+  jeremiah: 'JER',
+  lamentations: 'LAM',
+  ezekiel: 'EZK',
+  daniel: 'DAN',
+  hosea: 'HOS',
+  joel: 'JOL',
+  amos: 'AMO',
+  obadiah: 'OBA',
+  jonah: 'JON',
+  micah: 'MIC',
+  nahum: 'NAM',
+  habakkuk: 'HAB',
+  zephaniah: 'ZEP',
+  haggai: 'HAG',
+  zechariah: 'ZEC',
+  malachi: 'MAL',
+  matthew: 'MAT',
+  mark: 'MRK',
+  luke: 'LUK',
+  john: 'JHN',
+  acts: 'ACT',
+  romans: 'ROM',
+  '1-corinthians': '1CO',
+  '2-corinthians': '2CO',
+  galatians: 'GAL',
+  ephesians: 'EPH',
+  philippians: 'PHP',
+  colossians: 'COL',
+  '1-thessalonians': '1TH',
+  '2-thessalonians': '2TH',
+  '1-timothy': '1TI',
+  '2-timothy': '2TI',
+  titus: 'TIT',
+  philemon: 'PHM',
+  hebrews: 'HEB',
+  james: 'JAS',
+  '1-peter': '1PE',
+  '2-peter': '2PE',
+  '1-john': '1JN',
+  '2-john': '2JN',
+  '3-john': '3JN',
+  jude: 'JUD',
+  revelation: 'REV',
 }
 
 const FETCH_HEADERS = {
@@ -437,6 +507,32 @@ export function formatVerseCitation(
   return `${bookName} ${parsed.chapter}${separator}${verses}`
 }
 
+export function extractYouVersionVerse(html: string, usfm: string): string {
+  const escapedUsfm = usfm.replace(/\./g, '\\.')
+  const openRe = new RegExp(
+    `<span\\b(?=[^>]*\\bclass="[^"]*\\bverse\\b)(?=[^>]*\\bdata-usfm="${escapedUsfm}")[^>]*>`,
+    'gi',
+  )
+  const chunks: Array<string> = []
+  let match: RegExpExecArray | null
+  while ((match = openRe.exec(html))) {
+    const verseHtml = sliceBalancedSpan(html, match.index)
+    const withoutNotes = removeSpansByClass(verseHtml, 'note')
+    const withoutLabels = removeSpansByClass(withoutNotes, 'label')
+    const text = decodeHtml(stripTags(withoutLabels))
+      .replace(/\s+([,.;:!?])/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (text) chunks.push(text)
+    openRe.lastIndex = match.index + verseHtml.length
+  }
+  if (chunks.length === 0) {
+    throw new Error(`YouVersion verse markup not found for ${usfm}`)
+  }
+  return chunks.join(' ')
+}
+
+/** @deprecated holybible.site is offline; kept for existing unit fixtures. */
 export function extractHolyBibleVerse(html: string): string {
   const match = html.match(/<p class="row-verse">\s*([\s\S]*?)<\/p>/i)
   if (!match) {
@@ -465,6 +561,43 @@ export function extractOremusVerse(html: string): string {
 
 function stripTags(value: string): string {
   return value.replace(/<[^>]+>/g, ' ')
+}
+
+function sliceBalancedSpan(html: string, openIndex: number): string {
+  const tagRe = /<\/?span\b[^>]*>/gi
+  tagRe.lastIndex = openIndex
+  let depth = 0
+  let match: RegExpExecArray | null
+  while ((match = tagRe.exec(html))) {
+    if (match[0].startsWith('</')) {
+      depth -= 1
+      if (depth === 0) {
+        return html.slice(openIndex, match.index + match[0].length)
+      }
+    } else {
+      depth += 1
+    }
+  }
+  throw new Error('Unbalanced span while parsing YouVersion markup')
+}
+
+function removeSpansByClass(html: string, className: string): string {
+  const openRe = new RegExp(
+    `<span\\b[^>]*\\bclass="[^"]*\\b${className}\\b[^"]*"[^>]*>`,
+    'i',
+  )
+  let result = html
+  while (true) {
+    const match = openRe.exec(result)
+    if (!match || match.index === undefined) break
+    const block = sliceBalancedSpan(result, match.index)
+    result =
+      result.slice(0, match.index) +
+      ' ' +
+      result.slice(match.index + block.length)
+    openRe.lastIndex = 0
+  }
+  return result
 }
 
 function decodeHtml(value: string): string {
@@ -523,18 +656,49 @@ async function fetchDailyReference(): Promise<string> {
   return reference
 }
 
-async function fetchHolyBibleVerses(
-  version: HolyBibleVersion,
+async function fetchNorwegianVerses(
+  version: NorwegianBibleVersion,
   parsed: ParsedReference,
 ): Promise<string> {
-  const edition = HOLY_BIBLE_VERSION[version]
-  const verses: Array<string> = []
-  for (let verse = parsed.verseStart; verse <= parsed.verseEnd; verse++) {
-    const html = await fetchUrl(
-      `https://holybible.site/verse.php?version=${edition}&book=${parsed.book.slug}&chapter=${parsed.chapter}&verse=${verse}`,
-    )
-    verses.push(extractHolyBibleVerse(html))
+  const versionId = YOUVERSION_NORWEGIAN[version]
+  const usfmBook = BOOK_USFM[parsed.book.slug]
+  if (!usfmBook) {
+    throw new Error(`Missing USFM mapping for ${parsed.book.slug}`)
   }
+
+  const params = new URLSearchParams()
+  params.set('id', String(versionId))
+  for (let verse = parsed.verseStart; verse <= parsed.verseEnd; verse++) {
+    params.append('references[]', `${usfmBook}.${parsed.chapter}.${verse}`)
+  }
+
+  const raw = await fetchUrl(
+    `https://bible.youversionapi.com/3.1/verses.json?${params.toString()}`,
+  )
+  const json = JSON.parse(raw) as {
+    response?: {
+      data?: {
+        verses?: Array<{
+          content?: string
+          reference?: { usfm?: Array<string> }
+        }>
+      }
+    }
+  }
+  const rows = json.response?.data?.verses
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error('YouVersion returned no Norwegian verses')
+  }
+
+  const verses = rows.map((row, index) => {
+    const usfm =
+      row.reference?.usfm?.[0] ??
+      `${usfmBook}.${parsed.chapter}.${parsed.verseStart + index}`
+    if (typeof row.content !== 'string' || row.content.length === 0) {
+      throw new Error(`YouVersion verse missing content for ${usfm}`)
+    }
+    return extractYouVersionVerse(row.content, usfm)
+  })
   return verses.join(' ')
 }
 
@@ -585,7 +749,7 @@ export async function fetchVerseOfTheDay(
       ? await fetchMessageVerses(parsed)
       : version === 'nrsv'
         ? await fetchNrsvVerses(parsed)
-        : await fetchHolyBibleVerses(version, parsed)
+        : await fetchNorwegianVerses(version, parsed)
   const shortLabel =
     BIBLE_VERSION_OPTIONS.find((option) => option.value === version)
       ?.shortLabel ?? version.toUpperCase()

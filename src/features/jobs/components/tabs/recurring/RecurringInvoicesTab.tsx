@@ -13,6 +13,7 @@ import {
 } from '@radix-ui/themes'
 import { CheckCircle, OpenNewWindow, XmarkCircle } from 'iconoir-react'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { isContaInvoicePaid } from '@shared/conta/contaInvoicePaid'
 import {
   recurringJobInvoiceSummaryQuery,
   recurringJobInvoicesOverviewQuery,
@@ -47,7 +48,7 @@ function getStatusLabel(invoice: RecurringSeriesInvoice): {
   } | null
   const status = response?.status
   const extendedStatus = response?.extendedStatus
-  if (status === 'CLOSED_BY_PAYMENT' || extendedStatus === 'PAID') {
+  if (invoice.status === 'paid' || isContaInvoicePaid(response)) {
     return { label: 'Paid', color: 'green' }
   }
   if (status === 'CLOSED_BY_CREDIT_NOTE' || extendedStatus === 'CREDIT_NOTE') {

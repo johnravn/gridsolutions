@@ -1,6 +1,7 @@
 // Supabase Edge Function: crew invite by email for placeholder slots (no user_id on reserved_crew).
 // Invoke with Authorization: Bearer <user JWT> and body: { reserved_crew_id: string, invitation_message?: string }
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUserFromBearer } from '../_shared/auth/requireUser.ts'
 import {
   emailDocument,
   hiddenPreheader,
@@ -70,33 +71,14 @@ Deno.serve(async (req) => {
       )
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
-
-    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
+    const auth = await requireUserFromBearer({
+      req,
+      supabaseUrl,
+      anonKey: supabaseAnonKey,
+      corsHeaders: emailFunctionCorsHeaders,
     })
-    const {
-      data: { user },
-      error: userErr,
-    } = await supabaseUser.auth.getUser()
-    if (userErr || !user) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
+    if (!auth.ok) return auth.response
+    const user = auth.user
 
     const body = await req.json().catch(() => ({}))
     const reservedCrewId = body?.reserved_crew_id

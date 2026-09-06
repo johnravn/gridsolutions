@@ -48,9 +48,20 @@ export const TEST_IDS = {
   revisionOfferId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd1',
   lockDraftOfferId: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeee1',
   testItemId: 'ffffffff-ffff-4fff-8fff-fffffffffff1',
+  testItemPriceId: 'ffffffff-ffff-4fff-8fff-fffffffffff2',
+  contaCustomerId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc4',
+  companyExpansionId: 'dddddddd-dddd-4ddd-8ddd-ddddddddddd4',
   conflictSeedJobId: '14141414-1414-4414-8414-141414141414',
   conflictTimePeriodId: '12121212-1212-4212-8212-121212121212',
   conflictReservedItemId: '13131313-1313-4313-8313-131313131313',
+}
+
+/** Conta-ready customer used by money-pipeline e2e / invoice preview. */
+export const TEST_CONTA_CUSTOMER = {
+  id: TEST_IDS.contaCustomerId,
+  name: 'E2E Conta Customer',
+  contaCustomerId: 424242,
+  organizationId: 'e2e-test-org',
 }
 
 /** Fixed overlap window on E2E Test Job for conflict / force-book tests. */
@@ -262,6 +273,66 @@ async function seedTestItem() {
     { onConflict: 'id' },
   )
   if (error) throw error
+
+  // Close any open price rows so the seeded list price is current.
+  await admin
+    .from('item_price_history')
+    .update({ effective_to: new Date().toISOString() })
+    .eq('item_id', TEST_IDS.testItemId)
+    .is('effective_to', null)
+
+  const { error: priceError } = await admin.from('item_price_history').upsert(
+    {
+      id: TEST_IDS.testItemPriceId,
+      company_id: TEST_IDS.companyId,
+      item_id: TEST_IDS.testItemId,
+      amount: 1000,
+      effective_from: new Date().toISOString(),
+      effective_to: null,
+    },
+    { onConflict: 'id' },
+  )
+  if (priceError) throw priceError
+}
+
+async function seedContaConfig() {
+  const { data: existingExpansion } = await admin
+    .from('company_expansions')
+    .select('id')
+    .eq('company_id', TEST_IDS.companyId)
+    .maybeSingle()
+
+  const { error: expansionError } = await admin
+    .from('company_expansions')
+    .upsert(
+      {
+        id: existingExpansion?.id ?? TEST_IDS.companyExpansionId,
+        company_id: TEST_IDS.companyId,
+        accounting_software: 'conta',
+        accounting_organization_id: TEST_CONTA_CUSTOMER.organizationId,
+        accounting_api_read_only: false,
+        accounting_api_environment: 'sandbox',
+        default_invoice_days_until_due: 14,
+        subcontractor_markup_percent: 0,
+      },
+      { onConflict: 'company_id' },
+    )
+  if (expansionError) throw expansionError
+
+  const { error: customerError } = await admin.from('customers').upsert(
+    {
+      id: TEST_CONTA_CUSTOMER.id,
+      company_id: TEST_IDS.companyId,
+      name: TEST_CONTA_CUSTOMER.name,
+      conta_customer_id: TEST_CONTA_CUSTOMER.contaCustomerId,
+      // No vat_number → invoice send uses manual PDF path (no live EHF check).
+      vat_number: null,
+      email: 'conta-customer@test.grid.local',
+      deleted: false,
+    },
+    { onConflict: 'id' },
+  )
+  if (customerError) throw customerError
 }
 
 async function seedEquipmentGroup(offerBasisId, groupId, itemId) {
@@ -412,6 +483,7 @@ async function main() {
   await upsertCompanyUser(TEST_IDS.companyId, employeeId, 'employee')
 
   await seedTestItem()
+  await seedContaConfig()
 
   await seedJob({
     id: TEST_IDS.jobId,

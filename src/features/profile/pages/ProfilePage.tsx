@@ -119,7 +119,7 @@ export default function ProfilePage() {
       setActiveTab(tab)
       void navigate({
         to: '/profile',
-        search: tab === 'general' ? {} : { tab },
+        search: { tab: tab === 'general' ? undefined : tab },
         replace: true,
       })
     },

@@ -1,13 +1,6 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  Box,
-  Card,
-  Flex,
-  Heading,
-  SegmentedControl,
-  Text,
-} from '@radix-ui/themes'
+import { Box, Card, Flex, SegmentedControl, Text } from '@radix-ui/themes'
 import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -142,10 +135,9 @@ export default function ReportingPage() {
   const invoiceLoading = invoiceQuery.isLoading
 
   return (
-    <Box p="4">
-      <Flex direction="column" gap="4">
-        <Flex align="center" justify="between" wrap="wrap" gap="3">
-          <Heading size="6">Reporting</Heading>
+    <Box p="4" style={{ minWidth: 0 }}>
+      <Flex direction="column" gap="4" style={{ minWidth: 0 }}>
+        <Flex justify="end" style={{ minWidth: 0 }}>
           <DateRangeControl rangeIndex={rangeIndex} onChange={setRangeIndex} />
         </Flex>
 

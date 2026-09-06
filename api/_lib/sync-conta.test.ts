@@ -1,10 +1,16 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 const mockRunSync = vi.fn()
+const mockRunInvoicePaidSync = vi.fn()
 
 vi.mock('../../src/shared/conta/contaCustomerSyncCron', () => ({
   runContaCustomerSyncForAllCompanies: (...args: Array<unknown>) =>
     mockRunSync(...args),
+}))
+
+vi.mock('../../src/shared/conta/contaInvoicePaidSyncCron', () => ({
+  runContaInvoicePaidSyncForAllCompanies: (...args: Array<unknown>) =>
+    mockRunInvoicePaidSync(...args),
 }))
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -12,7 +18,6 @@ vi.mock('@supabase/supabase-js', () => ({
 }))
 
 function createMockRes() {
-  const headers: Record<string, string> = {}
   let status = 200
   let body: unknown = null
 
@@ -33,6 +38,7 @@ function createMockRes() {
 describe('sync-conta cron handler', () => {
   beforeEach(() => {
     mockRunSync.mockReset()
+    mockRunInvoicePaidSync.mockReset()
     process.env.CRON_SECRET = 'test-secret'
     process.env.VITE_SUPABASE_URL = 'http://localhost:54321'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key'
@@ -55,7 +61,7 @@ describe('sync-conta cron handler', () => {
     expect(res.getStatus()).toBe(401)
   })
 
-  it('runs sync with valid cron secret', async () => {
+  it('runs customer and invoice paid sync with valid cron secret', async () => {
     mockRunSync.mockResolvedValue({
       ok: true,
       runId: 'run-1',
@@ -64,6 +70,15 @@ describe('sync-conta cron handler', () => {
       syncedAt: '2026-01-01',
       results: [{ companyId: 'c1' }],
       error: null,
+    })
+    mockRunInvoicePaidSync.mockResolvedValue({
+      ok: true,
+      runId: 'run-2',
+      status: 'success',
+      companies: 1,
+      syncedAt: '2026-01-01',
+      results: [{ companyId: 'c1', checked: 0, invoicesMarkedPaid: 0 }],
+      error: undefined,
     })
 
     const handler = (await import('../cron/sync-conta')).default
@@ -78,6 +93,11 @@ describe('sync-conta cron handler', () => {
 
     expect(res.getStatus()).toBe(200)
     expect(mockRunSync).toHaveBeenCalled()
-    expect(res.getBody()).toMatchObject({ ok: true })
+    expect(mockRunInvoicePaidSync).toHaveBeenCalled()
+    expect(res.getBody()).toMatchObject({
+      ok: true,
+      customerSync: { ok: true, runId: 'run-1' },
+      invoicePaidSync: { ok: true, runId: 'run-2' },
+    })
   })
 })

@@ -26,5 +26,14 @@ test.describe('Mobile PWA layout', () => {
     })
 
     expect(hasHorizontalOverflow).toBe(false)
+
+    const drawer = page.locator('.app-sidebar-drawer')
+    await expect(drawer).toBeAttached()
+    await expect(drawer).not.toHaveAttribute('data-open')
+    const drawerRight = await drawer.evaluate(
+      (el) => el.getBoundingClientRect().right,
+    )
+    // Overshoot past x=0 so the 1px border / shadow cannot leave a hairline.
+    expect(drawerRight).toBeLessThanOrEqual(-1)
   })
 })

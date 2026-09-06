@@ -5,6 +5,7 @@
 // Env: RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY, APP_URL (optional)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUserFromBearer } from '../_shared/auth/requireUser.ts'
 import { emailHeaderGridWordmark } from '../_shared/email/gridWordmarkSvg.ts'
 import {
   emailDocument,
@@ -58,16 +59,13 @@ Deno.serve(async (req) => {
       )
     }
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
+    const auth = await requireUserFromBearer({
+      req,
+      supabaseUrl,
+      anonKey,
+      corsHeaders: emailFunctionCorsHeaders,
+    })
+    if (!auth.ok) return auth.response
 
     const body = await req.json().catch(() => ({}))
     const companyId = body?.company_id
@@ -84,25 +82,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    const supabaseUser = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    })
-
-    const {
-      data: { user },
-      error: userError,
-    } = await supabaseUser.auth.getUser()
-
-    if (userError || !user?.id) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: {
-          ...emailFunctionCorsHeaders,
-          'Content-Type': 'application/json',
-        },
-      })
-    }
-
+    const user = auth.user
     const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
     const { data: membership, error: memError } = await supabase

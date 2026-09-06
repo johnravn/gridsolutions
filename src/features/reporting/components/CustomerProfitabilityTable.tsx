@@ -1,10 +1,35 @@
 import * as React from 'react'
-import { Card, Table, Text } from '@radix-ui/themes'
-import ReportTableSkeleton from '@shared/ui/components/ReportTableSkeleton'
+import { Text } from '@radix-ui/themes'
+import {
+  VirtualIndexTable,
+  useClientSort,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
 import { formatCurrency, formatPercent } from '../utils/format'
-import { compareValues, toggleSort } from '../utils/sort'
-import { SortableHeader } from './SortableHeader'
-import type { CustomerProfitabilityRow, SortDir } from '../types'
+import { compareValues } from '../utils/sort'
+import { ReportTableShell } from './ReportTableShell'
+import type { IndexColumn } from '@shared/ui/index-table'
+import type { CustomerProfitabilityRow } from '../types'
+
+type SortKey =
+  | 'customer_name'
+  | 'job_count'
+  | 'income'
+  | 'expenses'
+  | 'profit'
+  | 'margin_pct'
+
+const COLUMNS: Array<IndexColumn<SortKey>> = [
+  { id: 'customer_name', header: 'Customer', sortable: true },
+  { id: 'job_count', header: 'Jobs', sortable: true },
+  { id: 'income', header: 'Income', sortable: true, align: 'end' },
+  { id: 'expenses', header: 'Expenses', sortable: true, align: 'end' },
+  { id: 'profit', header: 'Profit', sortable: true, align: 'end' },
+  { id: 'margin_pct', header: 'Margin %', sortable: true, align: 'end' },
+]
+
+const GRID =
+  'minmax(140px, 2fr) minmax(60px, 0.6fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(90px, 1fr) minmax(80px, 0.8fr)'
 
 export function CustomerProfitabilityTable({
   rows,
@@ -13,106 +38,63 @@ export function CustomerProfitabilityTable({
   rows: Array<CustomerProfitabilityRow>
   loading: boolean
 }) {
-  const [sortKey, setSortKey] = React.useState<string | null>('profit')
-  const [sortDir, setSortDir] = React.useState<SortDir>('desc')
+  const { sortBy, sortDir, handleSort } = useClientSort<SortKey>(
+    'profit',
+    'desc',
+  )
 
   const sorted = React.useMemo(() => {
-    if (!sortKey) return rows
     return [...rows].sort((a, b) =>
-      compareValues(
-        a[sortKey as keyof CustomerProfitabilityRow],
-        b[sortKey as keyof CustomerProfitabilityRow],
-        sortDir,
-      ),
+      compareValues(a[sortBy], b[sortBy], sortDir),
     )
-  }, [rows, sortKey, sortDir])
+  }, [rows, sortBy, sortDir])
 
-  const onSort = (key: string) => {
-    const next = toggleSort(sortKey, sortDir, key)
-    setSortKey(next.key)
-    setSortDir(next.dir)
-  }
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows: sorted,
+    getRowId: (r) => r.customer_id ?? '__no_customer__',
+    estimateRowSize: 44,
+  })
 
   return (
-    <Card size="3">
-      {loading ? (
-        <ReportTableSkeleton columnCount={6} />
-      ) : rows.length === 0 ? (
-        <Text color="gray">No customer data in this period.</Text>
-      ) : (
-        <Table.Root>
-          <Table.Header>
-            <Table.Row>
-              <SortableHeader
-                label="Customer"
-                sortKey="customer_name"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-              />
-              <SortableHeader
-                label="Jobs"
-                sortKey="job_count"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-              />
-              <SortableHeader
-                label="Income"
-                sortKey="income"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="right"
-              />
-              <SortableHeader
-                label="Expenses"
-                sortKey="expenses"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="right"
-              />
-              <SortableHeader
-                label="Profit"
-                sortKey="profit"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="right"
-              />
-              <SortableHeader
-                label="Margin %"
-                sortKey="margin_pct"
-                activeKey={sortKey}
-                dir={sortDir}
-                onSort={onSort}
-                align="right"
-              />
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {sorted.map((row, i) => (
-              <Table.Row key={row.customer_id ?? `no-customer-${i}`}>
-                <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                <Table.Cell>{row.job_count}</Table.Cell>
-                <Table.Cell align="right">
-                  {formatCurrency(row.income)}
-                </Table.Cell>
-                <Table.Cell align="right">
-                  {formatCurrency(row.expenses)}
-                </Table.Cell>
-                <Table.Cell align="right">
-                  {formatCurrency(row.profit)}
-                </Table.Cell>
-                <Table.Cell align="right">
-                  {formatPercent(row.margin_pct)}
-                </Table.Cell>
-              </Table.Row>
-            ))}
-          </Table.Body>
-        </Table.Root>
-      )}
-    </Card>
+    <ReportTableShell>
+      <VirtualIndexTable
+        rows={sorted}
+        columns={COLUMNS}
+        gridTemplateColumns={GRID}
+        getRowId={(r) => r.customer_id ?? '__no_customer__'}
+        selectable={false}
+        renderCell={(row, colId) => {
+          switch (colId) {
+            case 'customer_name':
+              return (
+                <Text size="2" truncate>
+                  {row.customer_name ?? '—'}
+                </Text>
+              )
+            case 'job_count':
+              return <Text size="2">{row.job_count}</Text>
+            case 'income':
+              return <Text size="2">{formatCurrency(row.income)}</Text>
+            case 'expenses':
+              return <Text size="2">{formatCurrency(row.expenses)}</Text>
+            case 'profit':
+              return <Text size="2">{formatCurrency(row.profit)}</Text>
+            case 'margin_pct':
+              return <Text size="2">{formatPercent(row.margin_pct)}</Text>
+            default:
+              return null
+          }
+        }}
+        sortBy={sortBy}
+        sortDir={sortDir}
+        onSort={handleSort}
+        scrollRef={scrollRef}
+        rowVirtualizer={rowVirtualizer}
+        isLoading={loading}
+        emptyMessage="No customer data in this period."
+        footerCount={sorted.length}
+        horizontalScroll
+      />
+    </ReportTableShell>
   )
 }

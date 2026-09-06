@@ -46,15 +46,15 @@ Use **`@shared/email/supabaseEdgeEmail`** (or `@shared/email` if you add barrel 
 
 Set these in the **Supabase project** (Dashboard → Edge Functions → Secrets, or CLI secrets), not only in Vercel:
 
-| Variable                    | Required   | Notes                                                                                                                |
-| --------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------- |
-| `RESEND_API_KEY`            | Yes\*      | Resend dashboard. \*Optional when `RESEND_DRY_RUN=true` (local/staging).                                             |
-| `RESEND_DRY_RUN`            | No         | Set to `true` on a Supabase project to exercise email flows **without** calling Resend. **Never set on production.** |
-| `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default                       |
-| `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                                                     |
-| `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                                               |
-| `SUPABASE_URL`              | Yes        | Injected in hosted env                                                                                               |
-| `SUPABASE_SERVICE_ROLE_KEY` | Yes        | Edge Functions use service role for DB                                                                               |
+| Variable                    | Required   | Notes                                                                                                                                                                                   |
+| --------------------------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RESEND_API_KEY`            | Yes\*      | Resend dashboard — use a **full-access** key (not “Sending access” only). Listing emails on Super Monitor needs read permission. \*Optional when `RESEND_DRY_RUN=true` (local/staging). |
+| `RESEND_DRY_RUN`            | No         | Set to `true` on a Supabase project to exercise email flows **without** calling Resend. **Never set on production.**                                                                    |
+| `RESEND_FROM_EMAIL`         | Production | Must be a **verified sender/domain** in Resend; dev may use `notifications@resend.dev` default                                                                                          |
+| `RESEND_FROM_NAME`          | No         | Display name; defaults to `Grid`                                                                                                                                                        |
+| `APP_URL`                   | No         | Public links in emails; defaults to production app URL                                                                                                                                  |
+| `SUPABASE_URL`              | Yes        | Injected in hosted env                                                                                                                                                                  |
+| `SUPABASE_SERVICE_ROLE_KEY` | Yes        | Edge Functions use service role for DB                                                                                                                                                  |
 
 ## Development vs production
 
@@ -62,12 +62,12 @@ Email behavior is **not** controlled by Vite’s `DEV` / `PROD` alone. It follow
 
 ### Practical setups
 
-| Goal                           | Typical setup                                                                                                                                                                                                                                                                                          |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Local full stack**           | `VITE_SUPABASE_URL=http://127.0.0.1:54321` (see `LOCAL_SUPABASE_WORKFLOW.md`). Set Edge secrets on **local** Supabase: `supabase secrets set RESEND_API_KEY=…` (and optionally `RESEND_FROM_EMAIL`, `APP_URL`). Run `supabase functions serve` or rely on `supabase start` depending on your workflow. |
-| **Local UI → hosted Supabase** | Same as any remote consumer: secrets live in the **hosted** project (Dashboard → Edge Functions → Secrets). Emails are real for that project’s data; use a **non-production** Supabase project if you must avoid touching prod.                                                                        |
-| **Vercel preview / staging**   | Prefer a **dedicated Supabase project** (staging) + its own Resend key / verified sending domain (or Resend’s test domain for internal checks). Point preview env vars at that project so previews never use production `RESEND_*` or prod user data by accident.                                      |
-| **Production**                 | Production Supabase project only. `RESEND_FROM_EMAIL` must use your **verified** domain in Resend. `APP_URL` should match the public app URL (`https://gridsolutions.app` or your canonical host).                                                                                                     |
+| Goal                           | Typical setup                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Local full stack**           | `VITE_SUPABASE_URL=http://127.0.0.1:54321` (see `LOCAL_SUPABASE_WORKFLOW.md`). Put Edge secrets in **`supabase/functions/.env`** (`RESEND_API_KEY`, optionally `RESEND_FROM_EMAIL`, `APP_URL`) — local Docker loads that file. Use a **full-access** Resend key if you need Super Monitor’s sent-email list. Restart the edge runtime after changing it. |
+| **Local UI → hosted Supabase** | Same as any remote consumer: secrets live in the **hosted** project (Dashboard → Edge Functions → Secrets). Emails are real for that project’s data; use a **non-production** Supabase project if you must avoid touching prod.                                                                                                                          |
+| **Vercel preview / staging**   | Prefer a **dedicated Supabase project** (staging) + its own Resend key / verified sending domain (or Resend’s test domain for internal checks). Point preview env vars at that project so previews never use production `RESEND_*` or prod user data by accident.                                                                                        |
+| **Production**                 | Production Supabase project only. `RESEND_FROM_EMAIL` must use your **verified** domain in Resend. `APP_URL` should match the public app URL (`https://gridsolutions.app` or your canonical host).                                                                                                                                                       |
 
 ### `APP_URL` per environment
 
@@ -123,6 +123,8 @@ The app always calls **`@shared/email/supabaseEdgeEmail`**. Do not branch “rea
 
 With **`verify_jwt = false`**, the Edge endpoint does not authenticate the caller. Authorization must be enforced **inside** the function (service role + checks on rows the user is allowed to affect) or via a secret header for cron-only functions. When adding flows, review who can trigger the function and what data they can exfiltrate or spam.
 
+User-facing functions that need the caller identity should use **`_shared/auth/requireUser.ts`** (`requireUserFromBearer` → `auth.getUser(jwt)`). Do not call `getUser()` with no JWT on a fresh Edge client — with publishable `sb_…` keys, missing sessions fall back to the API key as `Authorization`, which Auth rejects as 401.
+
 ## Troubleshooting checklist
 
 1. **502 / `Resend failed`** — Read `details` in JSON; common causes: unverified `RESEND_FROM_EMAIL`, invalid API key, Resend account limits.
@@ -130,3 +132,4 @@ With **`verify_jwt = false`**, the Edge endpoint does not authenticate the calle
 3. **Welcome email never fires from DB** — Vault + `pg_net`; use client `fireAndForgetWelcomeEmail` path to verify Resend works independently.
 4. **Notification email skipped** — Expected when `notification_preferences` disables that channel; function returns `{ ok: true, skipped: 'preferences' }` and sets `email_sent_at`.
 5. **Emails to `@test.grid.local` / `@example.com` / `@grid.local` / `@demo.internal`** — Suppressed in `_shared/email/resend.ts` (`isNonDeliverableTestEmail`). Notification rows are marked processed so cron stops retrying. After `npm run db:copy-data`, pending notifications from the remote dump are marked processed so they are not re-sent locally.
+6. **`list-resend-emails` / Super Monitor fails** — If the UI says the API key is send-only / cannot list emails, create a **full-access** Resend API key. Local: put it in `supabase/functions/.env` and restart the edge runtime. Hosted: `supabase secrets set RESEND_API_KEY=…`. A browser `401` on this route was often Resend’s send-only key being proxied — app auth is separate (`requireUserFromBearer`).

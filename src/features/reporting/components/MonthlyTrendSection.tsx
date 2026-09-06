@@ -1,15 +1,32 @@
 import * as React from 'react'
-import { Card, Table, Text } from '@radix-ui/themes'
+import { Card, Text } from '@radix-ui/themes'
 import {
   ChartTypeSelector,
   IncomeExpensesChart,
 } from '@shared/ui/components/IncomeExpensesChart'
-import ReportTableSkeleton from '@shared/ui/components/ReportTableSkeleton'
 import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
+import {
+  VirtualIndexTable,
+  useClientSort,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
 import { formatCurrency } from '../utils/format'
-import { compareValues, toggleSort } from '../utils/sort'
-import { SortableHeader } from './SortableHeader'
-import type { MonthlyTrendRow, SortDir } from '../types'
+import { compareValues } from '../utils/sort'
+import { ReportTableShell } from './ReportTableShell'
+import type { IndexColumn } from '@shared/ui/index-table'
+import type { MonthlyTrendRow } from '../types'
+
+type SortKey = 'month_key' | 'income' | 'expenses' | 'profit'
+
+const COLUMNS: Array<IndexColumn<SortKey>> = [
+  { id: 'month_key', header: 'Month', sortable: true },
+  { id: 'income', header: 'Income', sortable: true, align: 'end' },
+  { id: 'expenses', header: 'Expenses', sortable: true, align: 'end' },
+  { id: 'profit', header: 'Profit', sortable: true, align: 'end' },
+]
+
+const GRID =
+  'minmax(120px, 1.5fr) minmax(100px, 1fr) minmax(100px, 1fr) minmax(100px, 1fr)'
 
 export function MonthlyTrendSection({
   rows,
@@ -21,8 +38,10 @@ export function MonthlyTrendSection({
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('area')
-  const [sortKey, setSortKey] = React.useState<string | null>('month_key')
-  const [sortDir, setSortDir] = React.useState<SortDir>('asc')
+  const { sortBy, sortDir, handleSort } = useClientSort<SortKey>(
+    'month_key',
+    'asc',
+  )
 
   const chartData = React.useMemo(
     () =>
@@ -36,21 +55,16 @@ export function MonthlyTrendSection({
   )
 
   const sorted = React.useMemo(() => {
-    if (!sortKey) return rows
     return [...rows].sort((a, b) =>
-      compareValues(
-        a[sortKey as keyof MonthlyTrendRow] as string | number | null,
-        b[sortKey as keyof MonthlyTrendRow] as string | number | null,
-        sortDir,
-      ),
+      compareValues(a[sortBy], b[sortBy], sortDir),
     )
-  }, [rows, sortKey, sortDir])
+  }, [rows, sortBy, sortDir])
 
-  const onSort = (key: string) => {
-    const next = toggleSort(sortKey, sortDir, key)
-    setSortKey(next.key)
-    setSortDir(next.dir)
-  }
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows: sorted,
+    getRowId: (r) => r.month_key,
+    estimateRowSize: 44,
+  })
 
   return (
     <>
@@ -73,67 +87,38 @@ export function MonthlyTrendSection({
         </Card>
       ) : null}
 
-      <Card size="3">
-        {loading ? (
-          <ReportTableSkeleton columnCount={4} />
-        ) : rows.length === 0 ? (
-          <Text color="gray">No money items in this period.</Text>
-        ) : (
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <SortableHeader
-                  label="Month"
-                  sortKey="month_key"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                />
-                <SortableHeader
-                  label="Income"
-                  sortKey="income"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                  align="right"
-                />
-                <SortableHeader
-                  label="Expenses"
-                  sortKey="expenses"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                  align="right"
-                />
-                <SortableHeader
-                  label="Profit"
-                  sortKey="profit"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                  align="right"
-                />
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {sorted.map((row) => (
-                <Table.Row key={row.month_key}>
-                  <Table.Cell>{row.month_label}</Table.Cell>
-                  <Table.Cell align="right">
-                    {formatCurrency(row.income)}
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    {formatCurrency(row.expenses)}
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    {formatCurrency(row.profit)}
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
-        )}
-      </Card>
+      <ReportTableShell>
+        <VirtualIndexTable
+          rows={sorted}
+          columns={COLUMNS}
+          gridTemplateColumns={GRID}
+          getRowId={(r) => r.month_key}
+          selectable={false}
+          renderCell={(row, colId) => {
+            switch (colId) {
+              case 'month_key':
+                return <Text size="2">{row.month_label}</Text>
+              case 'income':
+                return <Text size="2">{formatCurrency(row.income)}</Text>
+              case 'expenses':
+                return <Text size="2">{formatCurrency(row.expenses)}</Text>
+              case 'profit':
+                return <Text size="2">{formatCurrency(row.profit)}</Text>
+              default:
+                return null
+            }
+          }}
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSort={handleSort}
+          scrollRef={scrollRef}
+          rowVirtualizer={rowVirtualizer}
+          isLoading={loading}
+          emptyMessage="No money items in this period."
+          footerCount={sorted.length}
+          horizontalScroll={false}
+        />
+      </ReportTableShell>
     </>
   )
 }

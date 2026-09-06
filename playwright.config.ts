@@ -51,9 +51,13 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: resolveWorkerCount(),
+  // Login fixture + createDraftJob routinely exceed the 30s default under 4 workers.
+  timeout: 90_000,
   reporter: [['list']],
   use: {
-    baseURL: 'http://localhost:3000',
+    // Match vite `server.host` (127.0.0.1). `localhost` can prefer ::1 on macOS
+    // and fail or flap when the dev server is IPv4-only.
+    baseURL: 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
   },
   projects: [
@@ -68,7 +72,7 @@ export default defineConfig({
   ],
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: loadSupabaseEnv(),

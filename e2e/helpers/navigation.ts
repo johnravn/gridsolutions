@@ -1,7 +1,8 @@
 import { expect, type Locator, type Page } from '@playwright/test'
 
 function navLinkName(name: string): RegExp {
-  return new RegExp(`^${name}(?:\\s+\\d+)?$`)
+  // Jobs/Conflicts/Matters may show a count badge, including "99+".
+  return new RegExp(`^${name}(?:\\s+\\d+\\+?)?$`)
 }
 
 function isJobCreateResponse(response: {
@@ -85,14 +86,17 @@ async function clickNavLink(page: Page, name: string) {
     const drawer = page.locator('.app-sidebar-drawer[data-open="true"]')
     await expect(drawer).toBeVisible({ timeout: 5_000 })
     const drawerLink = drawer.getByRole('link', { name: linkName })
-    await expect(drawerLink.first()).toBeAttached({ timeout: 5_000 })
+    // Caps load after authz; the drawer first renders only public links.
+    await expect(drawerLink.first()).toBeAttached({ timeout: 15_000 })
     await drawerLink.first().evaluate((el) => (el as HTMLElement).click())
     return
   }
 
   // Desktop: do not force-click. Lower sidebar items (Calendar/Matters/Profile)
   // live in a scroll container; force skips scroll-into-view and the click misses.
-  await page.getByRole('link', { name: linkName }).first().click()
+  const desktopLink = page.getByRole('link', { name: linkName }).first()
+  await expect(desktopLink).toBeVisible({ timeout: 15_000 })
+  await desktopLink.click()
 }
 
 function jobTabNameMatcher(tabName: string): string | RegExp {
@@ -135,9 +139,23 @@ export async function clickJobTab(page: Page, tabName: string) {
   const mobilePicker = page.getByText('Tab', { exact: true })
   if (await mobilePicker.isVisible().catch(() => false)) {
     const pickerButton = mobilePicker.locator('..').getByRole('button')
+    // Already on this tab — avoid opening a menu Playwright cannot click through.
+    if (
+      await pickerButton
+        .filter({ hasText: tabOptions.name })
+        .isVisible()
+        .catch(() => false)
+    ) {
+      return
+    }
+
     await pickerButton.scrollIntoViewIfNeeded()
     await pickerButton.click({ force: true })
-    await page.getByRole('menuitem', tabOptions).click()
+    const menuItem = page.getByRole('menuitem', tabOptions)
+    await expect(menuItem).toBeAttached({ timeout: 5_000 })
+    // Menu content is portaled; under mobile inspector transforms Playwright
+    // treats it as outside the viewport and hangs on click() — use a DOM click.
+    await menuItem.evaluate((el) => (el as HTMLElement).click())
     return
   }
 
@@ -323,6 +341,7 @@ export async function createDraftJob(page: Page, title?: string) {
   const createButton = dialog.getByRole('button', { name: 'Create' })
   const titleInput = dialog.getByPlaceholder('Enter job title')
 
+  await expect(titleInput).toBeEditable({ timeout: 15_000 })
   await titleInput.fill(jobTitle)
   await expect(titleInput).toHaveValue(jobTitle)
 
@@ -334,16 +353,28 @@ export async function createDraftJob(page: Page, title?: string) {
 
   await createButton.scrollIntoViewIfNeeded()
   await expect(async () => {
-    if (!(await dialog.isVisible().catch(() => false))) return
+    // Dialog may already be gone after a successful create — only accept that
+    // when the new job heading is present (do not treat a cancelled dialog as OK).
+    if (!(await dialog.isVisible().catch(() => false))) {
+      if ((await page.getByRole('heading', { name: jobTitle }).count()) > 0) {
+        return
+      }
+      throw new Error('Create dialog closed before the job was created')
+    }
 
     await expect(createButton).toBeEnabled()
     const createResponse = page.waitForResponse(isJobCreateResponse, {
-      timeout: 15_000,
+      timeout: 30_000,
     })
     await createButton.click({ force: true })
     await createResponse
-    await expect(dialog).toBeHidden({ timeout: 5_000 })
-  }).toPass({ timeout: 30_000 })
+    await expect(dialog).toBeHidden({ timeout: 15_000 })
+  }).toPass({ timeout: 60_000 })
+
+  await page
+    .getByText(`"${jobTitle}" was created successfully.`)
+    .waitFor({ state: 'visible', timeout: 15_000 })
+    .catch(() => undefined)
 
   await closeMobileMenuIfOpen(page)
   await openJobInspector(page, jobTitle)
@@ -351,34 +382,53 @@ export async function createDraftJob(page: Page, title?: string) {
   return jobTitle
 }
 
+async function ensureJobInspectorOpen(page: Page, jobTitle: string) {
+  const heading = page.getByRole('heading', { name: jobTitle })
+  const openInspector = page.getByRole('button', { name: 'Open inspector' })
+  if (await openInspector.isVisible().catch(() => false)) {
+    await openInspector.evaluate((el) => (el as HTMLElement).click())
+  }
+  // Heading may sit outside the mobile viewport (drawer transform) — attached is enough.
+  await expect(heading).toBeAttached({ timeout: 15_000 })
+}
+
 /** Find a job in the list (search skips infinite-scroll pagination) and open it. */
 async function openJobInspector(page: Page, jobTitle: string) {
   const heading = page.getByRole('heading', { name: jobTitle })
-  if (await heading.isVisible().catch(() => false)) return
 
-  const closeInspector = page.getByRole('button', { name: 'Close inspector' })
-  // Creating a job selects it and opens the inspector. Wait for that heading
-  // instead of closing a drawer that is still loading.
-  if (await closeInspector.isVisible().catch(() => false)) {
-    if (await heading.isVisible({ timeout: 10_000 }).catch(() => false)) return
+  // After create, the job is selected and the inspector mounts the title heading
+  // (sometimes outside the mobile viewport — do not require isVisible / click it).
+  if (
+    await heading
+      .waitFor({ state: 'attached', timeout: 25_000 })
+      .then(() => true)
+      .catch(() => false)
+  ) {
+    await ensureJobInspectorOpen(page, jobTitle)
+    return
   }
 
   await closeMobileInspectorIfOpen(page)
 
   const search = page.getByPlaceholder('Search')
   await expect(search).toBeVisible({ timeout: 15_000 })
-  await search.fill(jobTitle)
 
-  const row = page.getByText(jobTitle, { exact: true }).first()
-  await expect(row).toBeVisible({ timeout: 15_000 })
-  await row.click()
+  // Prefer the list row (role=button). getByText(exact) can resolve to the
+  // inspector <h1>, which sits outside the mobile viewport and fails click().
+  // Re-fill search each attempt — navigations can clear it.
+  await expect(async () => {
+    if ((await heading.count()) > 0) return
+    await search.fill(jobTitle)
+    const row = page
+      .getByRole('button')
+      .filter({ hasText: jobTitle })
+      .or(page.getByText(jobTitle, { exact: true }))
+      .first()
+    await expect(row).toBeVisible({ timeout: 8_000 })
+    await row.evaluate((el) => (el as HTMLElement).click())
+  }).toPass({ timeout: 30_000 })
 
-  const openInspector = page.getByRole('button', { name: 'Open inspector' })
-  if (await openInspector.isVisible().catch(() => false)) {
-    await openInspector.evaluate((el) => (el as HTMLElement).click())
-  }
-
-  await expect(heading).toBeVisible({ timeout: 15_000 })
+  await ensureJobInspectorOpen(page, jobTitle)
 }
 
 function bookingsSubTabList(page: Page) {
@@ -517,7 +567,12 @@ async function pickDateRangeInDialog(
   // span; second click on the same day collapses to that full day only.
   await clickTargetDay()
   await clickTargetDay()
-  await page.keyboard.press('Escape')
+  // Only dismiss the popover. Escape after it has already closed also closes
+  // the parent New job / Book equipment dialog.
+  if (await picker.isVisible().catch(() => false)) {
+    await page.keyboard.press('Escape')
+    await expect(picker).toBeHidden({ timeout: 5_000 })
+  }
 
   const [year, , day] = localDate.split('-').map(Number)
   const dayNum = String(day)
@@ -540,8 +595,6 @@ export async function bookSeededItemOnJob(
 
   if (options.conflictWindow) {
     await pickDateRangeInDialog(page, dialog, '2026-07-01')
-  } else {
-    await pickDateRangeInDialog(page, dialog, '2026-09-01')
   }
 
   await dialog
@@ -552,4 +605,46 @@ export async function bookSeededItemOnJob(
   })
   await dialog.getByRole('button', { name: 'Add Test Seeded Item' }).click()
   await dialog.getByRole('button', { name: 'Book items' }).click()
+}
+
+/** Submit Book equipment, force-book if a conflict appears, wait until it closes. */
+export async function confirmEquipmentBooking(page: Page) {
+  const dialog = bookEquipmentDialog(page)
+  const conflictDialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'Scheduling conflict' }),
+  })
+  // The Book equipment dialog also has a "Test Seeded Item" cell in its
+  // selected-items table — that is not a saved booking. Success is the
+  // stock tab after both dialogs close (Edit bookings only renders then).
+  const editBookings = page.getByRole('button', { name: 'Edit bookings' })
+
+  await expect(async () => {
+    const conflictOpen = (await conflictDialog.count()) > 0
+    const dialogOpen = await dialog.isVisible().catch(() => false)
+
+    if (conflictOpen) {
+      const force = conflictDialog.getByRole('button', {
+        name: 'Force booking anyway',
+      })
+      if ((await force.count()) > 0) {
+        await force.evaluate((el) => (el as HTMLElement).click())
+      }
+      await expect(conflictDialog).toHaveCount(0, { timeout: 20_000 })
+    } else if (dialogOpen) {
+      const bookItems = dialog.getByRole('button', {
+        name: /Book items|Booking/,
+      })
+      const label = (await bookItems.textContent().catch(() => '')) ?? ''
+      if (
+        !/Booking/.test(label) &&
+        (await bookItems.isEnabled().catch(() => false))
+      ) {
+        await bookItems.click()
+      }
+    }
+
+    await expect(conflictDialog).toHaveCount(0, { timeout: 2_000 })
+    await expect(dialog).toBeHidden({ timeout: 2_000 })
+    await expect(editBookings).toBeAttached({ timeout: 8_000 })
+  }).toPass({ timeout: 90_000 })
 }

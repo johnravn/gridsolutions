@@ -1,15 +1,20 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Card, Flex, Table, Text } from '@radix-ui/themes'
+import { Button, Card, Flex, Text } from '@radix-ui/themes'
 import ReportTableSkeleton from '@shared/ui/components/ReportTableSkeleton'
+import {
+  VirtualIndexTable,
+  useClientSort,
+  useVirtualIndexTable,
+} from '@shared/ui/index-table'
 import { formatCurrency, formatDate } from '../utils/format'
-import { compareValues, toggleSort } from '../utils/sort'
-import { SortableHeader } from './SortableHeader'
+import { compareValues } from '../utils/sort'
+import { ReportTableShell } from './ReportTableShell'
+import type { IndexColumn } from '@shared/ui/index-table'
 import type {
   InvoicePipelineBucket,
   InvoicePipelineJobRow,
   InvoicePipelineSummary,
-  SortDir,
 } from '../types'
 
 const BUCKET_ORDER: Array<InvoicePipelineBucket> = [
@@ -19,6 +24,19 @@ const BUCKET_ORDER: Array<InvoicePipelineBucket> = [
   'paid',
   'canceled',
 ]
+
+type SortKey = 'job_number' | 'title' | 'customer_name' | 'income'
+
+const COLUMNS: Array<IndexColumn<SortKey>> = [
+  { id: 'job_number', header: 'Job #', sortable: true },
+  { id: 'title', header: 'Title', sortable: true },
+  { id: 'customer_name', header: 'Customer', sortable: true },
+  { id: 'dates', header: 'Dates' },
+  { id: 'income', header: 'Income', sortable: true, align: 'end' },
+]
+
+const GRID =
+  'minmax(72px, 0.7fr) minmax(140px, 1.6fr) minmax(120px, 1.2fr) minmax(120px, 1.2fr) minmax(90px, 0.9fr)'
 
 export function InvoicePipelineSection({
   summaries,
@@ -31,8 +49,10 @@ export function InvoicePipelineSection({
 }) {
   const navigate = useNavigate()
   const [bucket, setBucket] = React.useState<InvoicePipelineBucket>('ready')
-  const [sortKey, setSortKey] = React.useState<string | null>('income')
-  const [sortDir, setSortDir] = React.useState<SortDir>('desc')
+  const { sortBy, sortDir, handleSort } = useClientSort<SortKey>(
+    'income',
+    'desc',
+  )
 
   const filtered = React.useMemo(
     () => jobs.filter((j) => j.bucket === bucket),
@@ -40,21 +60,16 @@ export function InvoicePipelineSection({
   )
 
   const sorted = React.useMemo(() => {
-    if (!sortKey) return filtered
     return [...filtered].sort((a, b) =>
-      compareValues(
-        a[sortKey as keyof InvoicePipelineJobRow],
-        b[sortKey as keyof InvoicePipelineJobRow],
-        sortDir,
-      ),
+      compareValues(a[sortBy], b[sortBy], sortDir),
     )
-  }, [filtered, sortKey, sortDir])
+  }, [filtered, sortBy, sortDir])
 
-  const onSort = (key: string) => {
-    const next = toggleSort(sortKey, sortDir, key)
-    setSortKey(next.key)
-    setSortDir(next.dir)
-  }
+  const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
+    rows: sorted,
+    getRowId: (r) => r.job_id,
+    estimateRowSize: 44,
+  })
 
   return (
     <>
@@ -99,72 +114,72 @@ export function InvoicePipelineSection({
             })}
       </Flex>
 
-      <Card size="3">
-        {loading ? (
-          <ReportTableSkeleton columnCount={6} />
-        ) : sorted.length === 0 ? (
-          <Text color="gray">No jobs in this status bucket.</Text>
-        ) : (
-          <Table.Root>
-            <Table.Header>
-              <Table.Row>
-                <SortableHeader
-                  label="Job #"
-                  sortKey="job_number"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                />
-                <Table.ColumnHeaderCell>Title</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Customer</Table.ColumnHeaderCell>
-                <Table.ColumnHeaderCell>Dates</Table.ColumnHeaderCell>
-                <SortableHeader
-                  label="Income"
-                  sortKey="income"
-                  activeKey={sortKey}
-                  dir={sortDir}
-                  onSort={onSort}
-                  align="right"
-                />
-                <Table.ColumnHeaderCell></Table.ColumnHeaderCell>
-              </Table.Row>
-            </Table.Header>
-            <Table.Body>
-              {sorted.map((row) => (
-                <Table.Row key={row.job_id}>
-                  <Table.Cell>#{row.job_number}</Table.Cell>
-                  <Table.Cell>{row.title}</Table.Cell>
-                  <Table.Cell>{row.customer_name ?? '—'}</Table.Cell>
-                  <Table.Cell>
+      <ReportTableShell>
+        <VirtualIndexTable
+          rows={sorted}
+          columns={COLUMNS}
+          gridTemplateColumns={GRID}
+          getRowId={(r) => r.job_id}
+          selectable={false}
+          renderCell={(row, colId) => {
+            switch (colId) {
+              case 'job_number':
+                return <Text size="2">#{row.job_number}</Text>
+              case 'title':
+                return (
+                  <Text size="2" truncate>
+                    {row.title}
+                  </Text>
+                )
+              case 'customer_name':
+                return (
+                  <Text size="2" truncate>
+                    {row.customer_name ?? '—'}
+                  </Text>
+                )
+              case 'dates':
+                return (
+                  <Text size="2" color="gray">
                     {formatDate(row.start_at)} – {formatDate(row.end_at)}
-                  </Table.Cell>
-                  <Table.Cell align="right">
-                    {formatCurrency(row.income)}
-                  </Table.Cell>
-                  <Table.Cell>
-                    <Button
-                      size="1"
-                      variant="soft"
-                      onClick={() =>
-                        navigate({
-                          to: '/jobs',
-                          search: {
-                            jobId: row.job_id,
-                            recurringJobId: undefined,
-                            tab: undefined,
-                          },
-                        })
-                      }
-                    >
-                      Open
-                    </Button>
-                  </Table.Cell>
-                </Table.Row>
-              ))}
-            </Table.Body>
-          </Table.Root>
-        )}
-      </Card>
+                  </Text>
+                )
+              case 'income':
+                return <Text size="2">{formatCurrency(row.income)}</Text>
+              default:
+                return null
+            }
+          }}
+          renderRowActions={(row) => (
+            <Button
+              size="1"
+              variant="soft"
+              onClick={(e) => {
+                e.stopPropagation()
+                navigate({
+                  to: '/jobs',
+                  search: {
+                    jobId: row.job_id,
+                    recurringJobId: undefined,
+                    tab: undefined,
+                  },
+                })
+              }}
+            >
+              Open
+            </Button>
+          )}
+          actionsColumnWidth="72px"
+          sortBy={sortBy}
+          sortDir={sortDir}
+          onSort={handleSort}
+          scrollRef={scrollRef}
+          rowVirtualizer={rowVirtualizer}
+          isLoading={loading}
+          emptyMessage="No jobs in this status bucket."
+          footerCount={sorted.length}
+          horizontalScroll
+        />
+      </ReportTableShell>
     </>
   )
 }

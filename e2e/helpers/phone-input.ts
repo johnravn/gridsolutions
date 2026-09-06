@@ -13,8 +13,18 @@ export function phoneCountrySelect(page: Page) {
 }
 
 export async function openProfilePhoneInput(page: Page) {
-  await page.goto('/profile')
-  await expect(phoneNumberInput(page)).toBeVisible({ timeout: 15_000 })
+  await expect(async () => {
+    if (!/\/profile(?:\?|$)/.test(new URL(page.url()).pathname)) {
+      await page.goto('/profile')
+    }
+    const generalTab = page.getByRole('tab', { name: 'General' })
+    if (await generalTab.isVisible().catch(() => false)) {
+      if ((await generalTab.getAttribute('data-state')) !== 'active') {
+        await generalTab.click()
+      }
+    }
+    await expect(phoneNumberInput(page)).toBeVisible({ timeout: 10_000 })
+  }).toPass({ timeout: 45_000 })
 }
 
 export async function pasteIntoPhoneInput(

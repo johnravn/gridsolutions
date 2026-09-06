@@ -2,7 +2,7 @@ import * as React from 'react'
 import { Box, Flex, IconButton, Text, Tooltip } from '@radix-ui/themes'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation } from '@tanstack/react-router'
-import { LotOfCash, Sparks } from 'iconoir-react'
+import { CloudSync, LotOfCash, Sparks } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { companyExpansionQuery } from '@features/company/api/queries'
@@ -29,6 +29,7 @@ import JobsList from '../components/JobsList'
 import JobsFilter, { DEFAULT_STATUS_FILTER } from '../components/JobsFilter'
 import JobInspector from '../components/JobInspector'
 import RecurringJobInspector from '../components/RecurringJobInspector'
+import SyncContaPaidInvoicesDialog from '../components/dialogs/SyncContaPaidInvoicesDialog'
 import { jobsIndexInfiniteQuery } from '../api/queries'
 import { myJobIdsQuery } from '../api/myJobIdsQuery'
 import type { JobStatus, JobsListScope, JobsPageSelection } from '../types'
@@ -72,7 +73,7 @@ export default function JobsPage() {
     (search.recurringJobId as string | undefined) || undefined
   const tab = (search.tab as string | undefined) || undefined
 
-  useQuery({
+  const { data: expansion } = useQuery({
     ...(companyId
       ? companyExpansionQuery({ companyId })
       : {
@@ -82,6 +83,13 @@ export default function JobsPage() {
     enabled: !!companyId,
   })
 
+  const contaOrgId =
+    expansion?.accounting_software === 'conta' &&
+    expansion.accounting_organization_id &&
+    expansion.accounting_api_key_active !== false
+      ? expansion.accounting_organization_id
+      : null
+  const [syncPaidOpen, setSyncPaidOpen] = React.useState(false)
   const [selection, setSelection] = React.useState<JobsPageSelection>(() => {
     if (recurringJobId) return { kind: 'recurring_job', id: recurringJobId }
     if (jobId) return { kind: 'job', id: jobId }
@@ -341,6 +349,20 @@ export default function JobsPage() {
           </Box>
         </Box>
       )}
+      {contaOrgId && (
+        <Box className="split-header-icon-wrap">
+          <IconButton
+            className="split-header-icon-button"
+            size="3"
+            variant="ghost"
+            onClick={() => setSyncPaidOpen(true)}
+            title="Sync paid invoices from Conta"
+            aria-label="Sync paid invoices from Conta"
+          >
+            <CloudSync width={22} height={22} />
+          </IconButton>
+        </Box>
+      )}
       <JobsFilter
         statusFilter={statusFilter}
         onStatusFilterChange={handleStatusFilterChange}
@@ -358,6 +380,13 @@ export default function JobsPage() {
         onPeriodChange={handlePeriodChange}
         compact={!isLarge}
       />
+      {contaOrgId && (
+        <SyncContaPaidInvoicesDialog
+          open={syncPaidOpen}
+          onOpenChange={setSyncPaidOpen}
+          organizationId={contaOrgId}
+        />
+      )}
     </Flex>
   )
 

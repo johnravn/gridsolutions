@@ -1,4 +1,5 @@
-import { SegmentedControl } from '@radix-ui/themes'
+import { Tabs } from '@radix-ui/themes'
+import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
 import type { ReportSegment } from '../types'
 
 const SEGMENTS: Array<{ value: ReportSegment; label: string }> = [
@@ -18,15 +19,18 @@ export function SegmentTabs({
   onChange: (v: ReportSegment) => void
 }) {
   return (
-    <SegmentedControl.Root
+    <Tabs.Root
       value={value}
       onValueChange={(v) => onChange(v as ReportSegment)}
+      style={{ minWidth: 0 }}
     >
-      {SEGMENTS.map((s) => (
-        <SegmentedControl.Item key={s.value} value={s.value}>
-          {s.label}
-        </SegmentedControl.Item>
-      ))}
-    </SegmentedControl.Root>
+      <AnimatedTabsList>
+        {SEGMENTS.map((s) => (
+          <Tabs.Trigger key={s.value} value={s.value}>
+            {s.label}
+          </Tabs.Trigger>
+        ))}
+      </AnimatedTabsList>
+    </Tabs.Root>
   )
 }

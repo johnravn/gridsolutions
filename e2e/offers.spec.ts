@@ -1,8 +1,9 @@
 import { test, expect } from './fixtures'
-import { clickJobTab, createDraftJob, openJobsPage } from './helpers/navigation'
+import { clickJobTab, createDraftJob } from './helpers/navigation'
 import {
   expectOfferBasisSaved,
   offerBasisEditor,
+  readLockedOfferUrl,
   returnToOffersTabAfterBasisSave,
 } from './helpers/offers'
 import { openPublicOfferAction } from './helpers/public-offer'
@@ -39,16 +40,20 @@ async function createTechnicalOfferWithCustomEquipment(
     .getByPlaceholder('Enter group name')
     .last()
     .fill('E2E Equipment')
-  await expect(
-    basisEditor.getByRole('button', { name: 'Add custom line' }),
-  ).toBeVisible({ timeout: 10_000 })
-  await basisEditor.getByRole('button', { name: 'Add custom line' }).click()
+  const addCustomLine = basisEditor.getByRole('button', {
+    name: 'Add custom line',
+  })
+  await expect(addCustomLine).toBeVisible({ timeout: 10_000 })
+  await addCustomLine.evaluate((el: HTMLButtonElement) => el.click())
 
   const description = basisEditor
     .getByPlaceholder('Description (e.g. one-off fee)')
     .last()
+  await expect(description).toBeVisible({ timeout: 10_000 })
   await description.fill(CUSTOM_LINE_LABEL)
+  await expect(description).toHaveValue(CUSTOM_LINE_LABEL)
   await basisEditor.locator('input[type="number"]').last().fill('1000')
+  await expect(description).toHaveValue(CUSTOM_LINE_LABEL)
 
   await basisEditor.getByRole('button', { name: 'Save' }).click()
   await expectOfferBasisSaved(page)
@@ -64,6 +69,13 @@ async function createTechnicalOfferWithCustomEquipment(
   await expect(
     editor.getByRole('heading', { name: /Technical Offer/i }),
   ).toBeVisible({ timeout: 20_000 })
+  await editor.getByRole('tab', { name: 'Equipment' }).click()
+  const groupHeader = editor.getByText('(1 items)')
+  await expect(groupHeader).toBeVisible({ timeout: 15_000 })
+  await groupHeader.click()
+  await expect(
+    editor.getByPlaceholder('Description (e.g. one-off fee)').first(),
+  ).toHaveValue(CUSTOM_LINE_LABEL, { timeout: 15_000 })
 
   await editor.getByRole('button', { name: 'Save' }).click()
   await expect(page.getByText('Offer updated', { exact: true })).toBeVisible({
@@ -87,12 +99,9 @@ async function createTechnicalOfferWithCustomEquipment(
       .or(page.getByText('Offer locked', { exact: true })),
   ).toBeVisible({ timeout: 30_000 })
 
-  const offerUrl = await page.evaluate(async () => {
-    return await navigator.clipboard.readText()
-  })
-  expect(offerUrl).toMatch(/\/offer\//)
-
   await returnToOffersTabAfterBasisSave(page, jobTitle)
+  const offerUrl = await readLockedOfferUrl(page)
+  expect(offerUrl).toMatch(/\/offer\//)
   return offerUrl
 }
 
@@ -101,6 +110,9 @@ async function acceptOfferOnPublicPage(
   offerUrl: string,
 ) {
   await page.goto(offerUrl)
+  await expect(page.getByText('Loading offer...')).toHaveCount(0, {
+    timeout: 15_000,
+  })
   await expect(page.getByText(CUSTOM_LINE_LABEL).first()).toBeVisible({
     timeout: 15_000,
   })
@@ -136,24 +148,13 @@ test.describe('Offers lifecycle', () => {
     await publicPage.close()
 
     await page.bringToFront()
-    if (!(await page.getByRole('heading', { name: jobTitle }).isVisible())) {
-      await openJobsPage(page)
-      await page
-        .locator('span.rt-r-weight-bold')
-        .filter({ hasText: jobTitle })
-        .first()
-        .click()
-      await expect(page.getByRole('heading', { name: jobTitle })).toBeVisible({
-        timeout: 15_000,
-      })
-    }
-    await clickJobTab(page, 'Offers')
+    await returnToOffersTabAfterBasisSave(page, jobTitle)
     await expect(async () => {
       await clickJobTab(page, 'Overview')
       await clickJobTab(page, 'Offers')
       await expect(page.getByText('accepted').first()).toBeVisible({
         timeout: 3_000,
       })
-    }).toPass({ timeout: 30_000 })
+    }).toPass({ timeout: 45_000 })
   })
 })

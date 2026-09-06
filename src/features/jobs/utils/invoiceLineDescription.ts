@@ -379,12 +379,34 @@ export function countChangedDescriptions(
   before: Array<BookingInvoiceLine>,
   after: Array<BookingInvoiceLine>,
 ): number {
+  return Object.keys(snapshotChangedDescriptions(before, after)).length
+}
+
+/** Previous descriptions for lines that changed, keyed by line id. */
+export function snapshotChangedDescriptions(
+  before: Array<BookingInvoiceLine>,
+  after: Array<BookingInvoiceLine>,
+): Record<string, string> {
   const beforeById = new Map(before.map((line) => [line.id, line.description]))
-  let changed = 0
+  const previous: Record<string, string> = {}
   for (const line of after) {
-    if (beforeById.get(line.id) !== line.description) changed += 1
+    const prev = beforeById.get(line.id)
+    if (prev !== undefined && prev !== line.description) {
+      previous[line.id] = prev
+    }
   }
-  return changed
+  return previous
+}
+
+export function restoreLineDescriptions(
+  lines: Array<BookingInvoiceLine>,
+  previousDescriptions: Record<string, string>,
+): Array<BookingInvoiceLine> {
+  return lines.map((line) => {
+    const previous = previousDescriptions[line.id]
+    if (previous === undefined) return line
+    return { ...line, description: previous }
+  })
 }
 
 const STORAGE_KEY_PREFIX = 'invoice-line-templates:'

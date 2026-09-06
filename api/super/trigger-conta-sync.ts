@@ -1,9 +1,10 @@
 /**
- * Super admin: manually trigger Conta customer sync.
+ * Super admin: manually trigger Conta customer sync + invoice paid sync.
  * POST /api/super/trigger-conta-sync
  */
 import { createClient } from '@supabase/supabase-js'
 import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron.js'
+import { runContaInvoicePaidSyncForAllCompanies } from '../../src/shared/conta/contaInvoicePaidSyncCron.js'
 import type { Database } from '../../src/shared/types/database.types.js'
 
 export default async function handler(req: any, res: any) {
@@ -63,21 +64,48 @@ export default async function handler(req: any, res: any) {
     return
   }
 
-  const outcome = await runContaCustomerSyncForAllCompanies(serviceClient, {
-    triggerSource: 'manual',
-  })
+  const customerOutcome = await runContaCustomerSyncForAllCompanies(
+    serviceClient,
+    { triggerSource: 'manual' },
+  )
 
-  if (outcome.error && outcome.results.length === 0) {
-    res.status(500).json({ error: outcome.error, runId: outcome.runId })
+  if (customerOutcome.error && customerOutcome.results.length === 0) {
+    res.status(500).json({
+      error: customerOutcome.error,
+      runId: customerOutcome.runId,
+    })
     return
   }
 
+  const invoicePaidOutcome = await runContaInvoicePaidSyncForAllCompanies(
+    serviceClient,
+    { triggerSource: 'manual' },
+  )
+
   res.status(200).json({
-    ok: outcome.ok,
-    runId: outcome.runId,
-    status: outcome.status,
-    companies: outcome.companies,
-    syncedAt: outcome.syncedAt,
-    results: outcome.results,
+    ok: customerOutcome.ok && invoicePaidOutcome.ok,
+    customerSync: {
+      ok: customerOutcome.ok,
+      runId: customerOutcome.runId,
+      status: customerOutcome.status,
+      companies: customerOutcome.companies,
+      syncedAt: customerOutcome.syncedAt,
+      results: customerOutcome.results,
+    },
+    invoicePaidSync: {
+      ok: invoicePaidOutcome.ok,
+      runId: invoicePaidOutcome.runId,
+      status: invoicePaidOutcome.status,
+      companies: invoicePaidOutcome.companies,
+      syncedAt: invoicePaidOutcome.syncedAt,
+      results: invoicePaidOutcome.results,
+      error: invoicePaidOutcome.error,
+    },
+    // Back-compat top-level fields
+    runId: customerOutcome.runId,
+    status: customerOutcome.status,
+    companies: customerOutcome.companies,
+    syncedAt: customerOutcome.syncedAt,
+    results: customerOutcome.results,
   })
 }

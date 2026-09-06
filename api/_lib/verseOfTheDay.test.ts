@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import {
   extractHolyBibleVerse,
   extractOremusVerse,
+  extractYouVersionVerse,
   fetchVerseOfTheDay,
   formatVerseCitation,
   parseVerseReference,
@@ -99,6 +100,41 @@ describe('extractOremusVerse', () => {
   })
 })
 
+describe('extractYouVersionVerse', () => {
+  it('reads verse content and strips nested notes', () => {
+    const html = `
+      <div class="chapter" data-usfm="ISA.26.12">
+        <span class="verse v12" data-usfm="ISA.26.12">
+          <span class="label">12</span>
+          <span class="note x">
+            <span class="label">#</span>
+            <span class=" body">
+              <span class="ref" data-usfm="PHP.2.13">Fil 2,13</span>
+            </span>
+          </span>
+          <span class="nd"><span class="content">Herre</span></span>
+          <span class="content">, du gir oss fred,</span>
+        </span>
+        <span class="verse v12" data-usfm="ISA.26.12">
+          <span class="content">for alt vi har gjort,</span>
+        </span>
+        <span class="verse v12" data-usfm="ISA.26.12">
+          <span class="content">har du gjort for oss.</span>
+        </span>
+      </div>
+    `
+    expect(extractYouVersionVerse(html, 'ISA.26.12')).toBe(
+      'Herre, du gir oss fred, for alt vi har gjort, har du gjort for oss.',
+    )
+  })
+
+  it('throws when the verse markup is missing', () => {
+    expect(() =>
+      extractYouVersionVerse('<p>No verse</p>', 'ISA.26.12'),
+    ).toThrow(/not found/i)
+  })
+})
+
 describe('extractHolyBibleVerse', () => {
   it('reads the first row-verse paragraph', () => {
     const html = `
@@ -139,9 +175,25 @@ describe('fetchVerseOfTheDay', () => {
             { status: 200 },
           )
         }
-        if (url.includes('holybible.site')) {
+        if (url.includes('bible.youversionapi.com')) {
+          const versionId = url.includes('id=119') ? 119 : 29
+          const text =
+            versionId === 119
+              ? 'For så høgt har Gud elska verda.'
+              : 'For så høyt har Gud elsket verden.'
           return new Response(
-            '<p class="row-verse">For så høyt har Gud elsket verden.</p>',
+            JSON.stringify({
+              response: {
+                data: {
+                  verses: [
+                    {
+                      reference: { usfm: ['JHN.3.16'] },
+                      content: `<span class="verse v16" data-usfm="JHN.3.16"><span class="label">16</span><span class="content">${text}</span></span>`,
+                    },
+                  ],
+                },
+              },
+            }),
             { status: 200 },
           )
         }
@@ -169,6 +221,13 @@ describe('fetchVerseOfTheDay', () => {
     expect(data.citation).toBe('Johannes 3,16')
     expect(data.passage).toContain('elsket verden')
     expect(data.version).toBe('BM11')
+  })
+
+  it('returns NN11 text for the daily reference', async () => {
+    const data = await fetchVerseOfTheDay('nn11')
+    expect(data.citation).toBe('Johannes 3,16')
+    expect(data.passage).toContain('elska verda')
+    expect(data.version).toBe('NN11')
   })
 
   it('returns The Message from bolls', async () => {

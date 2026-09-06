@@ -1,6 +1,6 @@
 // src/features/jobs/components/invoice/InvoiceHistory.tsx
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Badge,
   Box,
@@ -14,6 +14,12 @@ import {
 import { CheckCircle, OpenNewWindow, XmarkCircle } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
+import { isContaInvoicePaid } from '@shared/conta/contaInvoicePaid'
+import {
+  applyContaInvoicePaidSync,
+  fetchContaInvoice,
+} from '@shared/conta/invoicePaidSyncCore'
+import type { JobInvoiceSyncRow } from '@shared/conta/invoicePaidSyncCore'
 
 type InvoiceRecord = {
   id: string
@@ -24,13 +30,14 @@ type InvoiceRecord = {
   conta_customer_id: number | null
   invoice_basis: 'offer' | 'bookings'
   invoice_data: any
-  status: 'pending' | 'created' | 'failed'
+  status: 'pending' | 'created' | 'failed' | 'paid'
   error_message: string | null
   created_at: string
   conta_response: any
 }
 
 export default function InvoiceHistory({ jobId }: { jobId: string }) {
+  const queryClient = useQueryClient()
   const { data: invoices = [], isLoading } = useQuery({
     queryKey: ['jobs', jobId, 'invoices'],
     queryFn: async (): Promise<Array<InvoiceRecord>> => {
@@ -67,12 +74,6 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
   })
   const syncInFlightRef = React.useRef(false)
 
-  const isContaInvoicePaid = (contaInvoice: any) => {
-    const status = contaInvoice?.status
-    const extendedStatus = contaInvoice?.extendedStatus
-    return status === 'CLOSED_BY_PAYMENT' || extendedStatus === 'PAID'
-  }
-
   type StatusColor = 'green' | 'orange' | 'blue' | 'red' | 'gray'
 
   const getInvoiceStatusPresentation = (
@@ -84,7 +85,10 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
   } => {
     const contaStatus = invoice.conta_response?.status
     const extendedStatus = invoice.conta_response?.extendedStatus
-    if (isContaInvoicePaid(invoice.conta_response)) {
+    if (
+      invoice.status === 'paid' ||
+      isContaInvoicePaid(invoice.conta_response)
+    ) {
       return { label: 'Paid', color: 'green', icon: CheckCircle }
     }
     if (
@@ -165,25 +169,6 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
     return 'Manual'
   }
 
-  const fetchContaInvoiceByNumber = async (
-    organizationId: string,
-    invoiceNo: string,
-  ) => {
-    const searchResponse = (await contaClient.get(
-      `/invoice/organizations/${organizationId}/invoices?invoiceNo=${encodeURIComponent(invoiceNo)}`,
-    )) as { hits?: Array<{ id?: number | string }> } | Array<any>
-    const hits = Array.isArray(searchResponse)
-      ? searchResponse
-      : Array.isArray((searchResponse as { hits?: Array<any> }).hits)
-        ? (searchResponse as { hits: Array<any> }).hits
-        : []
-    const hitId = hits[0]?.id
-    if (!hitId) return null
-    return contaClient.get(
-      `/invoice/organizations/${organizationId}/invoices/${hitId}`,
-    )
-  }
-
   const syncContaInvoiceStatuses = React.useCallback(async () => {
     const invoicesToSync = invoices.filter(
       (invoice) => invoice.conta_invoice_id,
@@ -191,25 +176,23 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
     if (invoicesToSync.length === 0 || syncInFlightRef.current) return
 
     syncInFlightRef.current = true
+    let anyPaid = false
     try {
-      let hasPaidInvoice = false
-
       for (const invoice of invoicesToSync) {
         try {
-          const invoiceNo = invoice.conta_invoice_id
-          if (!invoiceNo) {
-            continue
+          const syncRow: JobInvoiceSyncRow = {
+            id: invoice.id,
+            job_id: invoice.job_id,
+            organization_id: invoice.organization_id,
+            conta_invoice_id: invoice.conta_invoice_id,
+            status: invoice.status,
+            conta_response: invoice.conta_response,
           }
-          const preferredInvoiceId =
-            invoice.conta_response?.id || invoice.conta_response?.invoiceId
-          const contaInvoice = preferredInvoiceId
-            ? await contaClient.get(
-                `/invoice/organizations/${invoice.organization_id}/invoices/${preferredInvoiceId}`,
-              )
-            : await fetchContaInvoiceByNumber(
-                invoice.organization_id,
-                invoiceNo,
-              )
+          const contaInvoice = await fetchContaInvoice(
+            contaClient,
+            invoice.organization_id,
+            syncRow,
+          )
           if (!contaInvoice) {
             console.warn('Conta invoice not found for number', {
               invoiceId: invoice.id,
@@ -217,28 +200,16 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
             })
             continue
           }
-          const { error: updateError } = await supabase
-            .from('job_invoices')
-            .update({
-              conta_response: contaInvoice,
-              conta_invoice_id:
-                invoice.conta_invoice_id ||
-                contaInvoice?.invoiceNo?.toString() ||
-                contaInvoice?.id?.toString() ||
-                contaInvoice?.invoiceId?.toString() ||
-                null,
-            })
-            .eq('id', invoice.id)
-          if (updateError) {
-            console.warn('Failed to persist Conta invoice response', {
-              invoiceId: invoice.id,
-              contaInvoiceId: invoice.conta_invoice_id,
-              error: updateError,
-            })
-          }
 
-          if (isContaInvoicePaid(contaInvoice)) {
-            hasPaidInvoice = true
+          const applied = await applyContaInvoicePaidSync(
+            supabase,
+            syncRow,
+            contaInvoice,
+          )
+          if (applied.invoiceMarkedPaid || applied.jobsMarkedPaid > 0) {
+            anyPaid = true
+          } else if (isContaInvoicePaid(contaInvoice)) {
+            anyPaid = true
           }
         } catch (error) {
           console.warn('Failed to sync Conta invoice status', {
@@ -249,17 +220,18 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
         }
       }
 
-      if (hasPaidInvoice) {
-        await supabase
-          .from('jobs')
-          .update({ status: 'paid' })
-          .eq('id', jobId)
-          .in('status', ['invoiced'])
+      if (anyPaid) {
+        await queryClient.invalidateQueries({
+          queryKey: ['jobs', jobId, 'invoices'],
+        })
+        await queryClient.invalidateQueries({
+          queryKey: ['jobs', 'detail', jobId],
+        })
       }
     } finally {
       syncInFlightRef.current = false
     }
-  }, [invoices, jobId])
+  }, [invoices, jobId, queryClient])
 
   React.useEffect(() => {
     if (invoices.length === 0) return

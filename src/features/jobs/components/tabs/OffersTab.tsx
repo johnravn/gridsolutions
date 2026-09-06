@@ -1780,6 +1780,7 @@ export default function OffersTab({
                 size="1"
                 variant="soft"
                 aria-label="Copy offer link"
+                data-offer-url={getOfferLink(offer)}
                 onClick={() => handleCopyLink(offer)}
               >
                 <Link width={14} height={14} />

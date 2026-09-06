@@ -272,9 +272,9 @@ max_frequency = "5s"
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `slack`, `spotify`, `workos`, `zoom`.
 #
-# Production: enable Google + Apple in the Supabase Dashboard and set secrets there.
-# Local: set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET and
-# SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID / _SECRET in the environment before `supabase start`.
+# Production: enable Google in the Supabase Dashboard and set secrets there.
+# Local: set SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID / _SECRET in the environment
+# before `supabase start`.
 [auth.external.google]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
@@ -286,10 +286,10 @@ skip_nonce_check = true
 email_optional = false
 
 [auth.external.apple]
-enabled = true
-client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
+enabled = false
+client_id = ""
 # DO NOT commit your OAuth provider secret to git. Use environment variable substitution instead:
-secret = "env(SUPABASE_AUTH_EXTERNAL_APPLE_SECRET)"
+secret = ""
 # Overrides the default auth redirectUrl.
 redirect_uri = ""
 # Overrides the default auth provider URL. Used to support self-hosted gitlab, single-tenant Azure,
