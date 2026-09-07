@@ -245,6 +245,33 @@ export function companyUsersQuery({ companyId }: { companyId: string }) {
   }
 }
 
+export async function adminUpdateProfile({
+  userId,
+  displayName,
+  firstName,
+  lastName,
+  phone,
+  superuser,
+}: {
+  userId: string
+  displayName: string
+  firstName: string
+  lastName: string
+  phone: string
+  superuser: boolean
+}) {
+  const { data, error } = await supabase.rpc('admin_update_profile', {
+    p_user_id: userId,
+    p_display_name: displayName,
+    p_first_name: firstName,
+    p_last_name: lastName,
+    p_phone: phone,
+    p_superuser: superuser,
+  })
+  if (error) throw error
+  return data
+}
+
 // Assign user to company with role (for superusers)
 export async function assignUserToCompany({
   companyId,

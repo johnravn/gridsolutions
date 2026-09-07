@@ -37,6 +37,7 @@ describe('trigger-email-dispatch handler', () => {
     process.env.VITE_SUPABASE_URL = 'http://localhost:54321'
     process.env.VITE_SUPABASE_ANON_KEY = 'anon-key'
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key'
+    process.env.CRON_SECRET = 'test-cron-secret'
     vi.resetModules()
   })
 
@@ -95,6 +96,7 @@ describe('trigger-email-dispatch handler', () => {
       expect.objectContaining({
         method: 'POST',
         headers: expect.objectContaining({
+          Authorization: 'Bearer test-cron-secret',
           'x-trigger-source': 'manual',
         }),
       }),
@@ -104,5 +106,34 @@ describe('trigger-email-dispatch handler', () => {
       scanned: 2,
       errors: 0,
     })
+  })
+
+  it('returns 500 when CRON_SECRET is missing', async () => {
+    delete process.env.CRON_SECRET
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    })
+    mockFrom.mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { superuser: true },
+            error: null,
+          }),
+        }),
+      }),
+    })
+
+    const handler = (await import('../super/trigger-email-dispatch')).default
+    const res = createMockRes()
+    await handler(
+      { method: 'POST', headers: { authorization: 'Bearer token' } },
+      res,
+    )
+
+    expect(res.getStatus()).toBe(500)
+    expect(res.getBody()).toMatchObject({ error: 'Missing CRON_SECRET' })
+    expect(mockFetch).not.toHaveBeenCalled()
   })
 })

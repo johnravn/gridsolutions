@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { capabilitiesFor, canVisit, type Capability } from './permissions'
+import {
+  capabilitiesFor,
+  canAssignCompanyRole,
+  canChangeCompanyUserRoles,
+  canChangeMemberRole,
+  canVisit,
+  type Capability,
+} from './permissions'
 
 const ALL_CAPS: Array<Capability> = [
   'visit:home',
@@ -101,5 +108,207 @@ describe('canVisit', () => {
     })
     expect(canVisit(caps, 'visit:jobs')).toBe(true)
     expect(canVisit(caps, 'visit:inventory')).toBe(false)
+  })
+})
+
+describe('canAssignCompanyRole', () => {
+  it('lets employees invite only freelancers', () => {
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        targetRole: 'freelancer',
+      }),
+    ).toBe(true)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        targetRole: 'employee',
+      }),
+    ).toBe(false)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        targetRole: 'owner',
+      }),
+    ).toBe(false)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        targetRole: 'super_user',
+      }),
+    ).toBe(false)
+  })
+
+  it('lets company super_user assign employee and freelancer only', () => {
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        targetRole: 'employee',
+      }),
+    ).toBe(true)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        targetRole: 'freelancer',
+      }),
+    ).toBe(true)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        targetRole: 'owner',
+      }),
+    ).toBe(false)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        targetRole: 'super_user',
+      }),
+    ).toBe(false)
+  })
+
+  it('lets owner and global superuser assign any role', () => {
+    for (const targetRole of [
+      'owner',
+      'employee',
+      'freelancer',
+      'super_user',
+    ] as const) {
+      expect(
+        canAssignCompanyRole({
+          isGlobalSuperuser: false,
+          companyRole: 'owner',
+          targetRole,
+        }),
+      ).toBe(true)
+      expect(
+        canAssignCompanyRole({
+          isGlobalSuperuser: true,
+          companyRole: 'freelancer',
+          targetRole,
+        }),
+      ).toBe(true)
+    }
+  })
+
+  it('denies freelancers and callers without a company role', () => {
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: 'freelancer',
+        targetRole: 'freelancer',
+      }),
+    ).toBe(false)
+    expect(
+      canAssignCompanyRole({
+        isGlobalSuperuser: false,
+        companyRole: null,
+        targetRole: 'employee',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('canChangeCompanyUserRoles', () => {
+  it('allows owner, company super_user, and global superuser', () => {
+    expect(
+      canChangeCompanyUserRoles({
+        isGlobalSuperuser: false,
+        companyRole: 'owner',
+      }),
+    ).toBe(true)
+    expect(
+      canChangeCompanyUserRoles({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+      }),
+    ).toBe(true)
+    expect(
+      canChangeCompanyUserRoles({
+        isGlobalSuperuser: true,
+        companyRole: 'employee',
+      }),
+    ).toBe(true)
+  })
+
+  it('denies employees and freelancers', () => {
+    expect(
+      canChangeCompanyUserRoles({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+      }),
+    ).toBe(false)
+    expect(
+      canChangeCompanyUserRoles({
+        isGlobalSuperuser: false,
+        companyRole: 'freelancer',
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('canChangeMemberRole', () => {
+  it('blocks employees from changing anyone', () => {
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        currentRole: 'freelancer',
+        targetRole: 'freelancer',
+      }),
+    ).toBe(false)
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'employee',
+        currentRole: 'freelancer',
+        targetRole: 'owner',
+      }),
+    ).toBe(false)
+  })
+
+  it('blocks company super_user from promoting to owner or editing owners', () => {
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        currentRole: 'freelancer',
+        targetRole: 'owner',
+      }),
+    ).toBe(false)
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        currentRole: 'owner',
+        targetRole: 'employee',
+      }),
+    ).toBe(false)
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'super_user',
+        currentRole: 'freelancer',
+        targetRole: 'employee',
+      }),
+    ).toBe(true)
+  })
+
+  it('lets owner change employee to owner', () => {
+    expect(
+      canChangeMemberRole({
+        isGlobalSuperuser: false,
+        companyRole: 'owner',
+        currentRole: 'employee',
+        targetRole: 'owner',
+      }),
+    ).toBe(true)
   })
 })

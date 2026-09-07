@@ -1,6 +1,7 @@
 /**
  * Cron: Sync Subb customers with Conta, then pull Conta paid invoice status into Grid.
  * Triggered daily by Vercel Cron (production). GET /api/cron/sync-conta
+ * Requires Authorization: Bearer ${CRON_SECRET}. User-Agent is logging only.
  */
 import { createClient } from '@supabase/supabase-js'
 import { runContaCustomerSyncForAllCompanies } from '../../src/shared/conta/contaCustomerSyncCron.js'
@@ -27,13 +28,13 @@ export default async function handler(req: any, res: any) {
   const cronSecret = process.env.CRON_SECRET
   const auth = req.headers?.authorization
   const bearer = auth?.startsWith('Bearer ') ? auth.slice(7) : null
-  const isVercelCron = req.headers?.['user-agent']?.includes('vercel-cron')
 
-  if (!cronSecret && !isVercelCron) {
+  // Fail closed: User-Agent is not auth (vercel-cron is trivial to forge).
+  if (!cronSecret) {
     res.status(401).json({ error: 'Unauthorized' })
     return
   }
-  if (cronSecret && bearer !== cronSecret && !isVercelCron) {
+  if (bearer !== cronSecret) {
     res.status(401).json({ error: 'Invalid CRON_SECRET' })
     return
   }

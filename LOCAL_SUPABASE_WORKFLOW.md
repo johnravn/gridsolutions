@@ -64,7 +64,7 @@ This shows you:
 
 ### Other Services
 
-- **Inbucket** (Email testing): http://localhost:54324
+- **Mailpit** (Email testing): http://localhost:54324
 - **Analytics**: Port 54327
 
 ## 🔄 Daily Workflow with Local Supabase

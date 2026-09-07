@@ -300,7 +300,14 @@ export async function addMemberOrInvite({
     p_inviter_id: inviterId,
     p_role: role,
   })
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('role_not_assignable')) {
+      throw new Error(
+        error.hint || 'You cannot invite someone with that company role.',
+      )
+    }
+    throw error
+  }
 
   const res = data as any
 

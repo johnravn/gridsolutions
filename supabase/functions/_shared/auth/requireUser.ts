@@ -1,7 +1,7 @@
 import { createRemoteJWKSet, jwtVerify } from 'https://esm.sh/jose@5.9.6'
 import type { User } from 'https://esm.sh/@supabase/supabase-js@2'
 
-function unauthorized(
+export function unauthorized(
   jsonHeaders: Record<string, string>,
   details?: string,
 ): Response {
@@ -12,6 +12,85 @@ function unauthorized(
     }),
     { status: 401, headers: jsonHeaders },
   )
+}
+
+export function getBearerToken(req: Request): string | null {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader?.startsWith('Bearer ')) return null
+  const token = authHeader.slice('Bearer '.length).trim()
+  return token || null
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  const encoder = new TextEncoder()
+  const aa = encoder.encode(a)
+  const bb = encoder.encode(b)
+  if (aa.length !== bb.length) return false
+  let out = 0
+  for (let i = 0; i < aa.length; i++) out |= aa[i] ^ bb[i]
+  return out === 0
+}
+
+/** Shared secret for pg_cron / pg_net / Super Monitor dispatch. */
+export function getCronSecret(): string | null {
+  const secret = Deno.env.get('CRON_SECRET')?.trim() ?? ''
+  return secret || null
+}
+
+/**
+ * Require Authorization: Bearer $CRON_SECRET.
+ * Missing or wrong secret → 401. Unconfigured secret also 401 (fail closed).
+ */
+export function requireCronSecret(params: {
+  req: Request
+  corsHeaders?: Record<string, string>
+}): { ok: true } | { ok: false; response: Response } {
+  const jsonHeaders = {
+    ...(params.corsHeaders ?? {}),
+    'Content-Type': 'application/json',
+  }
+  const secret = getCronSecret()
+  const token = getBearerToken(params.req)
+  if (!secret || !token || !timingSafeEqual(token, secret)) {
+    return { ok: false, response: unauthorized(jsonHeaders) }
+  }
+  return { ok: true }
+}
+
+/**
+ * User JWT (browser invoke) or CRON_SECRET (pg_net / dispatch).
+ */
+export async function requireUserOrCronSecret(params: {
+  req: Request
+  supabaseUrl: string
+  anonKey: string
+  corsHeaders?: Record<string, string>
+}): Promise<
+  | { ok: true; mode: 'user'; user: User; authHeader: string }
+  | { ok: true; mode: 'cron' }
+  | { ok: false; response: Response }
+> {
+  const cron = requireCronSecret({
+    req: params.req,
+    corsHeaders: params.corsHeaders,
+  })
+  if (cron.ok) return { ok: true, mode: 'cron' }
+
+  const user = await requireUserFromBearer({
+    req: params.req,
+    supabaseUrl: params.supabaseUrl,
+    anonKey: params.anonKey,
+    corsHeaders: params.corsHeaders,
+  })
+  if (user.ok) {
+    return {
+      ok: true,
+      mode: 'user',
+      user: user.user,
+      authHeader: user.authHeader,
+    }
+  }
+  return user
 }
 
 function base64UrlJson(segment: string): Record<string, unknown> | null {

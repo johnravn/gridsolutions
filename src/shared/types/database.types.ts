@@ -4859,6 +4859,40 @@ export type Database = {
         }
         Returns: Json
       }
+      admin_update_profile: {
+        Args: {
+          p_display_name: string
+          p_first_name: string
+          p_last_name: string
+          p_phone: string
+          p_superuser: boolean
+          p_user_id: string
+        }
+        Returns: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          display_name: string | null
+          email: string
+          first_name: string | null
+          last_name: string | null
+          last_seen_release_version: string | null
+          locale: string | null
+          phone: string | null
+          preferences: Json | null
+          primary_address_id: string | null
+          selected_company_id: string | null
+          superuser: boolean
+          timezone: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: '*'
+          to: 'profiles'
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       advance_demo_company_timeline: {
         Args: { p_interval?: string }
         Returns: Json

@@ -27,6 +27,10 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { useAuthz } from '@shared/auth/useAuthz'
 import {
+  canChangeCompanyUserRoles,
+  canChangeMemberRole,
+} from '@shared/auth/permissions'
+import {
   crewDetailQuery,
   crewIndexQuery,
   setCrewInternalNote,
@@ -219,6 +223,30 @@ export default function CrewInspector({
           ? 'amber'
           : 'green'
 
+  const currentRole = data.role as CompanyRole
+  const canEditThisMember =
+    canChangeCompanyUserRoles({ isGlobalSuperuser, companyRole }) &&
+    currentRole !== 'super_user' &&
+    (currentRole !== 'owner' || isGlobalSuperuser || companyRole === 'owner')
+  const canSetFreelancer = canChangeMemberRole({
+    isGlobalSuperuser,
+    companyRole,
+    currentRole,
+    targetRole: 'freelancer',
+  })
+  const canSetEmployee = canChangeMemberRole({
+    isGlobalSuperuser,
+    companyRole,
+    currentRole,
+    targetRole: 'employee',
+  })
+  const canSetOwner = canChangeMemberRole({
+    isGlobalSuperuser,
+    companyRole,
+    currentRole,
+    targetRole: 'owner',
+  })
+
   return (
     <Box>
       {/* Header */}
@@ -247,8 +275,7 @@ export default function CrewInspector({
           <Badge variant="soft" color={roleColor}>
             {data.role}
           </Badge>
-          {/* Only show role change for employees, freelancers, and owners (not super_user) */}
-          {data.role !== 'super_user' && (
+          {canEditThisMember && (
             <DropdownMenu.Root>
               <DropdownMenu.Trigger>
                 <EditPencil
@@ -257,55 +284,65 @@ export default function CrewInspector({
               </DropdownMenu.Trigger>
               <DropdownMenu.Content align="start" side="bottom">
                 <DropdownMenu.Label>Set role</DropdownMenu.Label>
-                <DropdownMenu.Item
-                  disabled={data.role === 'owner' || isLastOwner}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    setRoleChangeInfo({
-                      userId: data.user_id,
-                      userName: fullName || data.email,
-                      userEmail: data.email,
-                      currentRole: data.role as CompanyRole,
-                      newRole: 'freelancer',
-                    })
-                    setChangeRoleOpen(true)
-                  }}
-                >
-                  Freelancer
-                </DropdownMenu.Item>
-                <DropdownMenu.Item
-                  disabled={data.role === 'employee'}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    setRoleChangeInfo({
-                      userId: data.user_id,
-                      userName: fullName || data.email,
-                      userEmail: data.email,
-                      currentRole: data.role as CompanyRole,
-                      newRole: 'employee',
-                    })
-                    setChangeRoleOpen(true)
-                  }}
-                >
-                  Employee
-                </DropdownMenu.Item>
-                <DropdownMenu.Separator />
-                <DropdownMenu.Item
-                  disabled={data.role === 'owner'}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    setRoleChangeInfo({
-                      userId: data.user_id,
-                      userName: fullName || data.email,
-                      userEmail: data.email,
-                      currentRole: data.role as CompanyRole,
-                      newRole: 'owner',
-                    })
-                    setChangeRoleOpen(true)
-                  }}
-                >
-                  Owner
-                </DropdownMenu.Item>
+                {canSetFreelancer && (
+                  <DropdownMenu.Item
+                    disabled={data.role === 'freelancer' || isLastOwner}
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setRoleChangeInfo({
+                        userId: data.user_id,
+                        userName: fullName || data.email,
+                        userEmail: data.email,
+                        currentRole: data.role as CompanyRole,
+                        newRole: 'freelancer',
+                      })
+                      setChangeRoleOpen(true)
+                    }}
+                  >
+                    Freelancer
+                  </DropdownMenu.Item>
+                )}
+                {canSetEmployee && (
+                  <DropdownMenu.Item
+                    disabled={data.role === 'employee' || isLastOwner}
+                    onSelect={(e) => {
+                      e.preventDefault()
+                      setRoleChangeInfo({
+                        userId: data.user_id,
+                        userName: fullName || data.email,
+                        userEmail: data.email,
+                        currentRole: data.role as CompanyRole,
+                        newRole: 'employee',
+                      })
+                      setChangeRoleOpen(true)
+                    }}
+                  >
+                    Employee
+                  </DropdownMenu.Item>
+                )}
+                {canSetOwner && (
+                  <>
+                    {(canSetFreelancer || canSetEmployee) && (
+                      <DropdownMenu.Separator />
+                    )}
+                    <DropdownMenu.Item
+                      disabled={data.role === 'owner'}
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        setRoleChangeInfo({
+                          userId: data.user_id,
+                          userName: fullName || data.email,
+                          userEmail: data.email,
+                          currentRole: data.role as CompanyRole,
+                          newRole: 'owner',
+                        })
+                        setChangeRoleOpen(true)
+                      }}
+                    >
+                      Owner
+                    </DropdownMenu.Item>
+                  </>
+                )}
                 {isLastOwner && (
                   <>
                     <DropdownMenu.Separator />

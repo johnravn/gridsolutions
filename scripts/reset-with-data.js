@@ -75,7 +75,10 @@ async function resetWithData() {
     )
     try {
       execSync('npm run db:seed-email-vault-local', { stdio: 'inherit' })
-      log('   ✅ Vault secrets project_url + anon_key updated', 'green')
+      log(
+        '   ✅ Vault secrets project_url + anon_key + cron_secret updated',
+        'green',
+      )
     } catch {
       log(
         '   ⚠️  Vault seed failed or skipped (Supabase must be running)',

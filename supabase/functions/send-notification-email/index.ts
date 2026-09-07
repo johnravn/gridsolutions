@@ -1,8 +1,16 @@
 // Supabase Edge Function: send a single notification by email via Resend.
-// Invoke with body: { notification_id: string, force_email?: boolean }
-// Requires RESEND_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY.
+// Invoke with Authorization: Bearer <user JWT> or Bearer $CRON_SECRET
+// and body: { notification_id: string, force_email?: boolean }.
+// User callers must be company staff (or superuser) for the notification's company.
+// pg_net and dispatch-notification-emails use CRON_SECRET.
+// Requires RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  forbiddenResponse,
+  userIsCompanyMemberOrSuperuser,
+} from '../_shared/auth/companyAccess.ts'
+import { requireUserOrCronSecret } from '../_shared/auth/requireUser.ts'
 import {
   emailDocument,
   greetingFirstName,
@@ -26,13 +34,19 @@ Deno.serve(async (req) => {
   try {
     const resendApiKey = getResendApiKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
+    if (
+      !resendApiKey ||
+      !supabaseUrl ||
+      !supabaseServiceKey ||
+      !supabaseAnonKey
+    ) {
       return new Response(
         JSON.stringify({
           error:
-            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+            'Missing RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY',
         }),
         {
           status: 500,
@@ -43,6 +57,14 @@ Deno.serve(async (req) => {
         },
       )
     }
+
+    const auth = await requireUserOrCronSecret({
+      req,
+      supabaseUrl,
+      anonKey: supabaseAnonKey,
+      corsHeaders: emailFunctionCorsHeaders,
+    })
+    if (!auth.ok) return auth.response
 
     const body = await req.json().catch(() => ({}))
     const notificationId = body?.notification_id
@@ -78,6 +100,15 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json',
         },
       })
+    }
+
+    if (auth.mode === 'user') {
+      const allowed = await userIsCompanyMemberOrSuperuser(
+        supabase,
+        auth.user.id,
+        String(notification.company_id),
+      )
+      if (!allowed) return forbiddenResponse(emailFunctionCorsHeaders)
     }
 
     const forceEmail =

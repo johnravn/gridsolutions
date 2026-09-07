@@ -1,6 +1,14 @@
 // Supabase Edge Function: send welcome email for a pending invite via Resend.
-// Invoke with body: { pending_invite_id: string }
+// Invoke with Authorization: Bearer <user JWT> or Bearer $CRON_SECRET
+// and body: { pending_invite_id: string }.
+// User callers must be company staff (or superuser) for the invite's company.
+// pg_net uses CRON_SECRET from vault `cron_secret`.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  forbiddenResponse,
+  userIsCompanyMemberOrSuperuser,
+} from '../_shared/auth/companyAccess.ts'
+import { requireUserOrCronSecret } from '../_shared/auth/requireUser.ts'
 import {
   emailDocument,
   hiddenPreheader,
@@ -20,13 +28,19 @@ Deno.serve(async (req) => {
   try {
     const resendApiKey = getResendApiKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
+    if (
+      !resendApiKey ||
+      !supabaseUrl ||
+      !supabaseServiceKey ||
+      !supabaseAnonKey
+    ) {
       return new Response(
         JSON.stringify({
           error:
-            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+            'Missing RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY',
         }),
         {
           status: 500,
@@ -37,6 +51,14 @@ Deno.serve(async (req) => {
         },
       )
     }
+
+    const auth = await requireUserOrCronSecret({
+      req,
+      supabaseUrl,
+      anonKey: supabaseAnonKey,
+      corsHeaders: emailFunctionCorsHeaders,
+    })
+    if (!auth.ok) return auth.response
 
     const body = await req.json().catch(() => ({}))
     const pendingInviteId = body?.pending_invite_id
@@ -74,6 +96,15 @@ Deno.serve(async (req) => {
           },
         },
       )
+    }
+
+    if (auth.mode === 'user') {
+      const allowed = await userIsCompanyMemberOrSuperuser(
+        supabase,
+        auth.user.id,
+        String(invite.company_id),
+      )
+      if (!allowed) return forbiddenResponse(emailFunctionCorsHeaders)
     }
 
     const [{ data: company }, { data: inviterProfile }] = await Promise.all([

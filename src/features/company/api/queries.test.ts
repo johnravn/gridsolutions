@@ -66,6 +66,25 @@ describe('company api mutations', () => {
     ).rejects.toThrow(/Not authenticated|null/)
   })
 
+  it('setCompanyUserRole maps role_not_assignable to a clear error', async () => {
+    getUserMock.mockResolvedValue({ data: { user: { id: 'actor-1' } } })
+    rpcMock.mockResolvedValue({
+      data: null,
+      error: {
+        message: 'role_not_assignable',
+        hint: 'You cannot assign that company role.',
+      },
+    })
+
+    await expect(
+      setCompanyUserRole({
+        companyId: 'company-1',
+        userId: 'user-2',
+        role: 'owner',
+      }),
+    ).rejects.toThrow('You cannot assign that company role.')
+  })
+
   it('removeCompanyUser deletes company_users row', async () => {
     getUserMock.mockResolvedValue({ data: { user: { id: 'actor-1' } } })
     deleteMock.mockResolvedValue({ error: null })

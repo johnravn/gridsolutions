@@ -23,7 +23,12 @@ export async function setCompanyUserRole({
     p_new_role: role,
     p_actor_user_id: actorId,
   })
-  if (error) throw error
+  if (error) {
+    if (error.message?.includes('role_not_assignable')) {
+      throw new Error(error.hint || 'You cannot assign that company role.')
+    }
+    throw error
+  }
   return data
 }
 

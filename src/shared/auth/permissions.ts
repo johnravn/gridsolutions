@@ -105,3 +105,74 @@ export function capabilitiesFor({
 export function canVisit(caps: CapabilitySet, need: Capability) {
   return caps.has(need)
 }
+
+/**
+ * Who may change an existing member's role (set_company_user_role).
+ * Employees can invite freelancers but cannot change roles.
+ */
+export function canChangeCompanyUserRoles({
+  isGlobalSuperuser,
+  companyRole,
+}: {
+  isGlobalSuperuser: boolean
+  companyRole: CompanyRole | null
+}): boolean {
+  return (
+    isGlobalSuperuser || companyRole === 'owner' || companyRole === 'super_user'
+  )
+}
+
+/**
+ * Role-assignment matrix shared with add_member_or_invite /
+ * set_company_user_role (see migration restrict_company_role_assignment).
+ *
+ * - employee → freelancer
+ * - company super_user → employee, freelancer
+ * - owner / global superuser → any role
+ */
+export function canAssignCompanyRole({
+  isGlobalSuperuser,
+  companyRole,
+  targetRole,
+}: {
+  isGlobalSuperuser: boolean
+  companyRole: CompanyRole | null
+  targetRole: CompanyRole
+}): boolean {
+  if (isGlobalSuperuser || companyRole === 'owner') return true
+  if (companyRole === 'super_user') {
+    return targetRole === 'employee' || targetRole === 'freelancer'
+  }
+  if (companyRole === 'employee') return targetRole === 'freelancer'
+  return false
+}
+
+/** Whether the actor may set `targetRole` on a member who currently has `currentRole`. */
+export function canChangeMemberRole({
+  isGlobalSuperuser,
+  companyRole,
+  currentRole,
+  targetRole,
+}: {
+  isGlobalSuperuser: boolean
+  companyRole: CompanyRole | null
+  currentRole: CompanyRole
+  targetRole: CompanyRole
+}): boolean {
+  if (currentRole === targetRole) return false
+  if (!canChangeCompanyUserRoles({ isGlobalSuperuser, companyRole })) {
+    return false
+  }
+  if (
+    (currentRole === 'owner' || currentRole === 'super_user') &&
+    !isGlobalSuperuser &&
+    companyRole !== 'owner'
+  ) {
+    return false
+  }
+  return canAssignCompanyRole({
+    isGlobalSuperuser,
+    companyRole,
+    targetRole,
+  })
+}

@@ -106,7 +106,9 @@ CRON_SECRET=generate-a-long-random-string
 
 `SUPABASE_SERVICE_ROLE_KEY` is required for serverless API routes (`/api/calendar/feed`, `/api/cron/sync-conta`). Without it, scheduled Conta sync will fail silently in production.
 
-`CRON_SECRET` protects manual cron triggers. Vercel's built-in cron uses the `vercel-cron` user agent; GitHub Actions (`.github/workflows/sync-conta.yml`) sends `Authorization: Bearer <CRON_SECRET>`.
+`CRON_SECRET` is required for `/api/cron/sync-conta` and for notification email dispatch. When it is set, Vercel Cron automatically sends `Authorization: Bearer <CRON_SECRET>`. GitHub Actions (`.github/workflows/sync-conta.yml`) sends the same header. Requests without a matching bearer — including a forged `vercel-cron` User-Agent — are rejected.
+
+Use the **same** `CRON_SECRET` as a Supabase Edge Function secret and as Vault secret `cron_secret` so `dispatch-notification-emails` / pg_net welcome+notification triggers are not publicly invokable. See `docs/EMAIL.md`.
 
 5. Preview environment variables are unused (this repo ships only on `main`).
 

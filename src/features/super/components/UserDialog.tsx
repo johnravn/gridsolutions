@@ -11,6 +11,7 @@ import {
 } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
+import { adminUpdateProfile } from '../api/queries'
 
 type FormState = {
   email: string
@@ -89,18 +90,14 @@ export default function UserDialog({
     mutationFn: async (f: FormState) => {
       if (!initialData?.user_id) throw new Error('Missing user id')
 
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          display_name: f.display_name.trim() || null,
-          first_name: f.first_name.trim() || null,
-          last_name: f.last_name.trim() || null,
-          phone: f.phone.trim() || null,
-          superuser: f.superuser,
-        })
-        .eq('user_id', initialData.user_id)
-
-      if (error) throw error
+      await adminUpdateProfile({
+        userId: initialData.user_id,
+        displayName: f.display_name.trim(),
+        firstName: f.first_name.trim(),
+        lastName: f.last_name.trim(),
+        phone: f.phone.trim(),
+        superuser: f.superuser,
+      })
     },
     onSuccess: () => {
       onOpenChange(false)
@@ -113,8 +110,8 @@ export default function UserDialog({
         }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to update user', e?.message ?? 'Please try again.')
+    onError: (e: Error) => {
+      toastError('Failed to update user', e.message ?? 'Please try again.')
     },
   })
 

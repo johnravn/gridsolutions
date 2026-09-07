@@ -71,13 +71,19 @@ export default async function handler(req: any, res: any) {
     return
   }
 
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret) {
+    res.status(500).json({ error: 'Missing CRON_SECRET' })
+    return
+  }
+
   const fnUrl = `${supabaseUrl.replace(/\/$/, '')}/functions/v1/dispatch-notification-emails`
   try {
     const response = await fetch(fnUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${serviceRoleKey}`,
+        Authorization: `Bearer ${cronSecret}`,
         'x-trigger-source': 'manual',
       },
       body: JSON.stringify({ trigger_source: 'manual' }),

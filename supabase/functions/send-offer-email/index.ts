@@ -1,15 +1,22 @@
 // Supabase Edge Function: send a job offer link by email via Resend.
-// Invoke with body: { offer_id: string, to_email: string }
+// Invoke with Authorization: Bearer <user JWT> and body: { offer_id: string, to_email: string }
+// Caller must be company staff (or superuser) for the offer's company.
 //
 // Env:
 // - RESEND_API_KEY
 // - SUPABASE_URL
+// - SUPABASE_ANON_KEY
 // - SUPABASE_SERVICE_ROLE_KEY
 // - APP_URL (optional)
 // - RESEND_FROM_EMAIL (optional)
 // - RESEND_FROM_NAME (optional)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  forbiddenResponse,
+  userIsCompanyMemberOrSuperuser,
+} from '../_shared/auth/companyAccess.ts'
+import { requireUserFromBearer } from '../_shared/auth/requireUser.ts'
 import {
   emailDocument,
   hiddenPreheader,
@@ -30,13 +37,19 @@ Deno.serve(async (req) => {
   try {
     const resendApiKey = getResendApiKey()
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-    if (!resendApiKey || !supabaseUrl || !supabaseServiceKey) {
+    if (
+      !resendApiKey ||
+      !supabaseUrl ||
+      !supabaseServiceKey ||
+      !supabaseAnonKey
+    ) {
       return new Response(
         JSON.stringify({
           error:
-            'Missing RESEND_API_KEY, SUPABASE_URL, or SUPABASE_SERVICE_ROLE_KEY',
+            'Missing RESEND_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY, or SUPABASE_SERVICE_ROLE_KEY',
         }),
         {
           status: 500,
@@ -47,6 +60,14 @@ Deno.serve(async (req) => {
         },
       )
     }
+
+    const auth = await requireUserFromBearer({
+      req,
+      supabaseUrl,
+      anonKey: supabaseAnonKey,
+      corsHeaders: emailFunctionCorsHeaders,
+    })
+    if (!auth.ok) return auth.response
 
     const body = await req.json().catch(() => ({}))
     const offerId = body?.offer_id
@@ -88,6 +109,7 @@ Deno.serve(async (req) => {
           access_token,
           locked,
           job_id,
+          company_id,
           sent_via_email_at,
           job:jobs!job_offers_job_id_fkey (
             id,
@@ -109,6 +131,17 @@ Deno.serve(async (req) => {
         },
       })
     }
+
+    const companyId =
+      typeof (offer as { company_id?: unknown }).company_id === 'string'
+        ? (offer as { company_id: string }).company_id
+        : ''
+    const allowed = await userIsCompanyMemberOrSuperuser(
+      supabase,
+      auth.user.id,
+      companyId,
+    )
+    if (!allowed) return forbiddenResponse(emailFunctionCorsHeaders)
 
     if (!offer.locked) {
       return new Response(

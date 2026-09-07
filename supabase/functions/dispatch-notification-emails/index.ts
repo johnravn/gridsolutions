@@ -1,10 +1,13 @@
 // Supabase Edge Function: dispatch pending notification emails server-side.
-// Intended to be invoked by pg_cron + pg_net on a schedule, or manually via
-// POST /api/super/trigger-email-dispatch (trigger_source = manual).
+// Requires Authorization: Bearer $CRON_SECRET (pg_cron / vault, or Super Monitor).
 //
 // It scans for notifications that have not been processed (email_sent_at is null)
 // and calls the existing send-notification-email function for each.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import {
+  getCronSecret,
+  requireCronSecret,
+} from '../_shared/auth/requireUser.ts'
 import { emailFunctionCorsHeaders } from '../_shared/email/resend.ts'
 
 const corsHeaders = emailFunctionCorsHeaders
@@ -82,9 +85,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS')
     return new Response('ok', { headers: corsHeaders })
 
+  const cronAuth = requireCronSecret({ req, corsHeaders })
+  if (!cronAuth.ok) return cronAuth.response
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-  if (!supabaseUrl || !serviceKey) {
+  const cronSecret = getCronSecret()
+  if (!supabaseUrl || !serviceKey || !cronSecret) {
     return new Response(
       JSON.stringify({
         error: 'Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY',
@@ -122,7 +129,7 @@ Deno.serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${serviceKey}`,
+          Authorization: `Bearer ${cronSecret}`,
         },
         body: JSON.stringify({
           notification_id: n.id,
