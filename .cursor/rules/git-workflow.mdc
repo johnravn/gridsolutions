@@ -7,9 +7,11 @@ alwaysApply: true
 
 This repo ships on `main`. Do not use pull requests or feature branches.
 
+**Do not commit or push unless the user explicitly asks in this conversation.** See `.cursor/rules/no-unsolicited-ship.mdc`. The rest of this file is how to commit when they do ask.
+
 ## Issues first
 
-Track work with GitHub issues (`gh`). Before committing:
+Track work with GitHub issues (`gh`). Before committing (only after the user asked to commit):
 
 1. If the user named an issue (`#123`, a URL, or a title), use that.
 2. Otherwise search: `gh issue list --state open --limit 30`
@@ -22,7 +24,7 @@ Do not open a second issue for work already covered by an open one.
 
 - Stay on `main`. `git pull origin main` before starting.
 - Never `git checkout -b`, never `gh pr create`.
-- If asked to open a PR, do not. Commit and push to `main` instead.
+- If asked to open a PR, do not. Stay on `main` and wait until they explicitly ask to commit/push.
 
 ## Commits
 
@@ -42,9 +44,9 @@ Closes #142
 
 Subject line: what changed and why. Not a file list.
 
-## Push
+## Push (only when the user asks)
 
-Push to `origin main`. That deploys production (Vercel → gridsolutions.app).
+When the user explicitly asks to push: `git push origin main`. That deploys production (Vercel → gridsolutions.app).
 
 Before push, run quality gates: `npm run check`, `npm run test`, `npm run build:check`.
 

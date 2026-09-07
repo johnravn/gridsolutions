@@ -2,6 +2,12 @@
 
 This project is primarily developed using AI agents. Follow these rules strictly.
 
+## 🚨 CRITICAL: Do not ship unless asked
+
+**Never `git commit`, `git push`, or `npm run db:push` unless the user explicitly asks in this conversation.** Finishing a task is not permission. See `.cursor/rules/no-unsolicited-ship.mdc`.
+
+Local work is fine (code, tests, `db:migrate`, `db:reset`, `db:types`). Remote GitHub and database pushes wait for a direct request.
+
 ## 🚨 CRITICAL: Database Migration Workflow
 
 **ALL database schema changes MUST go through the migration workflow. Never make changes directly in the Supabase Dashboard.**
@@ -12,11 +18,12 @@ This project is primarily developed using AI agents. Follow these rules strictly
 2. **Write SQL** in the generated migration file
 3. **Test locally**: `npm run db:reset` (applies migrations and repopulates from remote — do not use `db:reset:schema-only` unless you need an empty DB)
 4. **Regenerate types from local** (while iterating): `npm run db:types`
-5. **Push to production**: `npm run db:push`
-6. **Regenerate types from remote** (after push succeeds): `npm run db:types:remote`
+5. **Push to production** (only if the user explicitly asks): `npm run db:push`
+6. **Regenerate types from remote** (after a requested push succeeds): `npm run db:types:remote`
 
 > Use `db:types` against the **local** DB while you're iterating on a migration.
-> Only run `db:types:remote` **after** `db:push` succeeds — otherwise the generated types won't match what's actually deployed.
+> Do not run `db:push` or `db:types:remote` unless the user asked to push the database.
+> After a requested `db:push` succeeds, regenerate types from remote so they match what's deployed.
 
 ### RLS (Row Level Security) Requirements:
 
@@ -119,9 +126,10 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 2. **Stay on `main`**: `git pull origin main` before starting
 3. **Make changes**: Code, test locally
 4. **Create migration** (if needed): `npm run db:migrate descriptive_name`, then `npm run db:reset`
-5. **Push migration** (if backward-compatible): `npm run db:push` before pushing code that depends on it
-6. **Commit with the issue**: `Closes #N` / `Fixes #N` / `Refs #N` — large commits are fine
-7. **Push to `main`**: `git push origin main` — deploys production (`gridsolutions.app`)
+5. **Stop here** unless the user explicitly asks to commit, push GitHub, or push the database
+6. **If asked to push the DB** (and the migration is backward-compatible): `npm run db:push` before pushing code that depends on it
+7. **If asked to commit**: include `Closes #N` / `Fixes #N` / `Refs #N` — large commits are fine
+8. **If asked to push GitHub**: `git push origin main` — deploys production (`gridsolutions.app`)
 
 ### Vercel Deployments
 
@@ -134,6 +142,7 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 - ✅ Every commit references the issue it tackles
 - ✅ Test locally and run quality gates before pushing `main`
 - ✅ Document database changes in the issue and/or commit body
+- ❌ Never commit, `git push`, or `db:push` unless the user explicitly asks
 - ❌ Never create pull requests or feature branches
 - ❌ Never commit without an issue reference
 - ❌ Never skip local testing before pushing `main`
@@ -164,12 +173,11 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 2. Work on `main` (`git pull origin main`)
 3. Make your changes
 4. Test locally (`npm run dev`)
-5. Commit with `Closes #N` (or `Refs #N` if incomplete)
-6. Push to `origin main` after quality gates pass
+5. Do **not** commit or push unless the user explicitly asks. If they do: commit with `Closes #N` (or `Refs #N` if incomplete), then push only if they also asked to push.
 
 ---
 
 **Remember**:
-- Database changes: Always create a migration file and test it locally first!
-- Code changes: Work on `main`, tie commits to GitHub issues, push after local testing!
+- Database changes: Always create a migration file and test it locally first. Do not `db:push` unless asked.
+- Code changes: Work on `main` and tie work to GitHub issues. Do not commit or push unless asked.
 

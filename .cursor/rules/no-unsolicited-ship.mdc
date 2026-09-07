@@ -1,0 +1,31 @@
+---
+description: Never commit, push to GitHub, or push the database unless the user asks directly
+alwaysApply: true
+---
+
+# Do not ship unless asked
+
+Never commit, push to GitHub, or push the database unless the user **explicitly asks** in this conversation.
+
+Forbidden without a direct request:
+
+- `git commit`
+- `git push` (including `origin main`)
+- `npm run db:push` or any other remote database schema/data push
+
+Allowed without asking: local work — code, tests, local migrations (`db:migrate`), local reset (`db:reset`), local types (`db:types`).
+
+## What counts as asking
+
+Only a clear instruction in the current conversation, for example: "commit this", "push to GitHub", "push the migration", "ship it".
+
+These are **not** permission:
+
+- Finishing a task, fixing a bug, or passing quality gates
+- Workflow docs that say to commit/push as the last step
+- Creating or closing a GitHub issue
+- The user saying the work looks good, unless they also say to commit or push
+
+If they ask to commit but not push, commit only. If they ask to push the DB but not GitHub, push the DB only.
+
+When they do ask: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates) and the database migration workflow for `db:push`.
