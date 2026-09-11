@@ -9,6 +9,7 @@ import {
   Heading,
   SegmentedControl,
   Select,
+  Spinner,
   Table,
   Text,
 } from '@radix-ui/themes'
@@ -31,6 +32,7 @@ import AddRoleDialog from '../dialogs/AddRoleDialog'
 import EditRoleDialog from '../dialogs/EditRoleDialog'
 import AddCrewToRoleDialog from '../dialogs/AddCrewToRoleDialog'
 import SendInviteDialog from '../dialogs/SendInviteDialog'
+import { FetchingBookingsStatus } from './FetchingBookingsStatus'
 import type { BookingStatus, ReservedCrewRow } from '../../types'
 
 type ReservedCrewRowWithInvite = ReservedCrewRow & {
@@ -97,7 +99,7 @@ export default function CrewTab({
   } | null>(null)
 
   const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { progress } = useToast()
 
   const canSeeInternalNotes =
     !!isGlobalSuperuser ||
@@ -118,7 +120,11 @@ export default function CrewTab({
     return m
   }, [internalNotes])
 
-  const { data } = useQuery({
+  const {
+    data,
+    isLoading: crewBookingsLoading,
+    isFetching: crewBookingsFetching,
+  } = useQuery({
     queryKey: ['jobs.crew', jobId],
     queryFn: async () => {
       const { data: timePeriods, error: rErr } = await supabase
@@ -176,7 +182,11 @@ export default function CrewTab({
   })
 
   // Roles (time periods) with counts per status
-  const { data: roles = [] } = useQuery({
+  const {
+    data: roles = [],
+    isLoading: rolesLoading,
+    isFetching: rolesFetching,
+  } = useQuery({
     queryKey: ['jobs', jobId, 'time_periods', 'crew'],
     queryFn: async () => {
       const { data: tps, error } = await supabase
@@ -236,11 +246,19 @@ export default function CrewTab({
         .eq('id', id)
       if (error) throw error
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Updating booking…') }),
+    onSuccess: (_data, _vars, ctx) => {
+      ctx?.progressToast.success('Updated', 'Crew status saved')
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
+    },
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to update',
+        e.message || 'Please try again.',
+      )
     },
   })
 
@@ -283,17 +301,21 @@ export default function CrewTab({
 
       if (deleteRoleError) throw deleteRoleError
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Deleting role…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Role and all crew members removed')
+      ctx?.progressToast.success('Deleted', 'Role and all crew members removed')
       setDeleteRoleConfirm(null)
     },
-    onError: (e: any) => {
-      toastError('Failed to remove role', e?.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to remove role',
+        e.message || 'Please try again.',
+      )
     },
   })
 
@@ -349,18 +371,19 @@ export default function CrewTab({
 
       if (error) throw error
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Removing crew…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Crew member removed')
+      ctx?.progressToast.success('Removed', 'Crew member removed')
     },
-    onError: (e: any) => {
-      toastError(
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
         'Failed to remove crew member',
-        e?.message || 'Please try again.',
+        e.message || 'Please try again.',
       )
     },
   })
@@ -384,19 +407,20 @@ export default function CrewTab({
     }) => {
       await sendCrewInvites(jobId, timePeriodId, companyId, message)
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Sending invitations…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Invitations sent')
+      ctx?.progressToast.success('Sent', 'Invitations sent')
       setSendInviteDialog(null)
     },
-    onError: (e: any) => {
-      toastError(
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
         'Failed to send invitations',
-        e?.message || 'Please try again.',
+        e.message || 'Please try again.',
       )
     },
   })
@@ -428,17 +452,21 @@ export default function CrewTab({
     }) => {
       await sendCrewInvite(jobId, timePeriodId, userId, companyId, message)
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Sending invitation…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
       qc.invalidateQueries({ queryKey: ['matters'] })
-      success('Success', 'Invitation sent and matter created')
+      ctx?.progressToast.success('Sent', 'Invitation sent and matter created')
       setSendInviteDialog(null)
     },
-    onError: (e: any) => {
-      toastError('Failed to send invitation', e?.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to send invitation',
+        e.message || 'Please try again.',
+      )
     },
   })
 
@@ -471,6 +499,9 @@ export default function CrewTab({
 
     return result
   }, [roles])
+
+  const isLoadingBookings = crewBookingsLoading || rolesLoading
+  const isFetchingBookings = crewBookingsFetching || rolesFetching
 
   // Get crew for a specific role
   const crewByRoleId = React.useMemo(() => {
@@ -546,7 +577,10 @@ export default function CrewTab({
           alignItems: 'center',
         }}
       >
-        <Heading size="3">Roles</Heading>
+        <Flex align="center" gap="2">
+          <Heading size="3">Roles</Heading>
+          {isFetchingBookings && !isLoadingBookings && <Spinner size="2" />}
+        </Flex>
         {!isReadOnly && (
           <Flex align="center" gap="3">
             <Button size="2" onClick={() => setAddRoleOpen(true)}>
@@ -562,445 +596,471 @@ export default function CrewTab({
       </Box>
 
       <Box style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {groupedRoles.length === 0 && !isReadOnly && (
-          <Box
-            p="4"
-            style={{
-              border: '2px dashed var(--gray-a6)',
-              borderRadius: 8,
-              textAlign: 'center',
-              cursor: 'pointer',
-              transition: 'all 100ms',
-            }}
-            onClick={() => setAddRoleOpen(true)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = 'var(--gray-a8)'
-              e.currentTarget.style.background = 'var(--gray-a2)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.borderColor = 'var(--gray-a6)'
-              e.currentTarget.style.background = 'transparent'
-            }}
-          >
-            <Flex direction="column" align="center" gap="2">
-              <Plus width={24} height={24} />
-              <Text size="2" color="gray">
-                Add role
-              </Text>
-            </Flex>
-          </Box>
-        )}
-        {groupedRoles.length === 0 && isReadOnly && (
-          <Text color="gray">No roles yet</Text>
-        )}
-        {groupedRoles.map((group) => (
-          <React.Fragment key={group.category || 'no-category'}>
-            {group.roles.map((role) => {
-              const isExpanded = expandedRoles.has(role.id)
-              const counts = role.counts ?? {}
-              const roleCrew = crewByRoleId.get(role.id) || []
-              const plannedInvitableCount = roleCrew.filter(
-                (crew) => crew.status === 'planned' && !!crew.user_id,
-              ).length
-              const roleStatus = getRoleStatus(
-                roleCrew,
-                counts,
-                role.needed_count,
-              )
-              return (
-                <Box
-                  key={role.id}
-                  p="3"
-                  style={{
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 8,
-                    background: 'var(--gray-a2)',
-                  }}
-                >
-                  <Box
-                    style={{
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'stretch',
-                      justifyContent: 'space-between',
-                      gap: 12,
-                      minWidth: 0,
-                    }}
-                    onClick={() => toggleRole(role.id)}
-                  >
-                    <Flex
-                      align="center"
-                      gap="2"
-                      style={{ minWidth: 0, flex: '1 1 auto' }}
+        {isLoadingBookings ? (
+          <FetchingBookingsStatus />
+        ) : (
+          <>
+            {groupedRoles.length === 0 && !isReadOnly && (
+              <Box
+                p="4"
+                style={{
+                  border: '2px dashed var(--gray-a6)',
+                  borderRadius: 8,
+                  textAlign: 'center',
+                  cursor: 'pointer',
+                  transition: 'all 100ms',
+                }}
+                onClick={() => setAddRoleOpen(true)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--gray-a8)'
+                  e.currentTarget.style.background = 'var(--gray-a2)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--gray-a6)'
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                <Flex direction="column" align="center" gap="2">
+                  <Plus width={24} height={24} />
+                  <Text size="2" color="gray">
+                    Add role
+                  </Text>
+                </Flex>
+              </Box>
+            )}
+            {groupedRoles.length === 0 && isReadOnly && (
+              <Text color="gray">No roles yet</Text>
+            )}
+            {groupedRoles.map((group) => (
+              <React.Fragment key={group.category || 'no-category'}>
+                {group.roles.map((role) => {
+                  const isExpanded = expandedRoles.has(role.id)
+                  const counts = role.counts ?? {}
+                  const roleCrew = crewByRoleId.get(role.id) || []
+                  const plannedInvitableCount = roleCrew.filter(
+                    (crew) => crew.status === 'planned' && !!crew.user_id,
+                  ).length
+                  const roleStatus = getRoleStatus(
+                    roleCrew,
+                    counts,
+                    role.needed_count,
+                  )
+                  return (
+                    <Box
+                      key={role.id}
+                      p="3"
+                      style={{
+                        border: '1px solid var(--gray-a6)',
+                        borderRadius: 8,
+                        background: 'var(--gray-a2)',
+                      }}
                     >
-                      {isExpanded ? (
-                        <NavArrowDown
-                          width={18}
-                          height={18}
-                          style={{ flexShrink: 0 }}
-                        />
-                      ) : (
-                        <NavArrowRight
-                          width={18}
-                          height={18}
-                          style={{ flexShrink: 0 }}
-                        />
-                      )}
-                      <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-                        <Flex align="center" gap="2" wrap="wrap">
-                          <Text
-                            weight="bold"
-                            style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
+                      <Box
+                        style={{
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'stretch',
+                          justifyContent: 'space-between',
+                          gap: 12,
+                          minWidth: 0,
+                        }}
+                        onClick={() => toggleRole(role.id)}
+                      >
+                        <Flex
+                          align="center"
+                          gap="2"
+                          style={{ minWidth: 0, flex: '1 1 auto' }}
+                        >
+                          {isExpanded ? (
+                            <NavArrowDown
+                              width={18}
+                              height={18}
+                              style={{ flexShrink: 0 }}
+                            />
+                          ) : (
+                            <NavArrowRight
+                              width={18}
+                              height={18}
+                              style={{ flexShrink: 0 }}
+                            />
+                          )}
+                          <Flex
+                            direction="column"
+                            gap="1"
+                            style={{ minWidth: 0 }}
                           >
-                            {role.title ?? '—'}
-                          </Text>
-                          {role.role_category && (
-                            <Badge
-                              size="1"
-                              variant="outline"
-                              color={getCategoryColor(role.role_category)}
+                            <Flex align="center" gap="2" wrap="wrap">
+                              <Text
+                                weight="bold"
+                                style={{
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {role.title ?? '—'}
+                              </Text>
+                              {role.role_category && (
+                                <Badge
+                                  size="1"
+                                  variant="outline"
+                                  color={getCategoryColor(role.role_category)}
+                                  style={{
+                                    textTransform: 'capitalize',
+                                    flexShrink: 0,
+                                  }}
+                                >
+                                  {role.role_category}
+                                </Badge>
+                              )}
+                            </Flex>
+                            <Text
+                              size="2"
+                              color="gray"
                               style={{
-                                textTransform: 'capitalize',
-                                flexShrink: 0,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
                               }}
                             >
-                              {role.role_category}
-                            </Badge>
+                              {role.start_at && role.end_at
+                                ? `${formatDateTime(role.start_at)} - ${formatDateTime(role.end_at)}`
+                                : '—'}
+                            </Text>
+                          </Flex>
+                        </Flex>
+                        <Flex
+                          direction="column"
+                          align="end"
+                          gap="2"
+                          style={{ flexShrink: 0 }}
+                        >
+                          <Badge
+                            radius="full"
+                            highContrast
+                            color={roleStatus.color}
+                          >
+                            {roleStatus.label}
+                          </Badge>
+                          {!isReadOnly && (
+                            <Flex gap="2">
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setAddCrewToRole(role.id)
+                                }}
+                              >
+                                <Plus width={14} height={14} /> Add crew
+                              </Button>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setEditRole({
+                                    id: role.id,
+                                    title: role.title ?? null,
+                                    start_at: role.start_at ?? null,
+                                    end_at: role.end_at ?? null,
+                                    needed_count: role.needed_count ?? 1,
+                                    role_category: role.role_category ?? null,
+                                  })
+                                }}
+                              >
+                                <Edit width={14} height={14} />
+                              </Button>
+                              <Button
+                                size="1"
+                                variant="soft"
+                                color="red"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setDeleteRoleConfirm({
+                                    roleId: role.id,
+                                    roleTitle: role.title || 'Untitled Role',
+                                    crewCount: roleCrew.length,
+                                  })
+                                }}
+                                disabled={removeRole.isPending}
+                              >
+                                <Trash width={14} height={14} />
+                              </Button>
+                            </Flex>
                           )}
                         </Flex>
-                        <Text
-                          size="2"
-                          color="gray"
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                          }}
+                      </Box>
+
+                      {isExpanded && (
+                        <Box
+                          mt="3"
+                          pt="3"
+                          style={{ borderTop: '1px solid var(--gray-a6)' }}
                         >
-                          {role.start_at && role.end_at
-                            ? `${formatDateTime(role.start_at)} - ${formatDateTime(role.end_at)}`
-                            : '—'}
-                        </Text>
-                      </Flex>
-                    </Flex>
-                    <Flex
-                      direction="column"
-                      align="end"
-                      gap="2"
-                      style={{ flexShrink: 0 }}
-                    >
-                      <Badge
-                        radius="full"
-                        highContrast
-                        color={roleStatus.color}
-                      >
-                        {roleStatus.label}
-                      </Badge>
-                      {!isReadOnly && (
-                        <Flex gap="2">
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setAddCrewToRole(role.id)
-                            }}
-                          >
-                            <Plus width={14} height={14} /> Add crew
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setEditRole({
-                                id: role.id,
-                                title: role.title ?? null,
-                                start_at: role.start_at ?? null,
-                                end_at: role.end_at ?? null,
-                                needed_count: role.needed_count ?? 1,
-                                role_category: role.role_category ?? null,
-                              })
-                            }}
-                          >
-                            <Edit width={14} height={14} />
-                          </Button>
-                          <Button
-                            size="1"
-                            variant="soft"
-                            color="red"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteRoleConfirm({
-                                roleId: role.id,
-                                roleTitle: role.title || 'Untitled Role',
-                                crewCount: roleCrew.length,
-                              })
-                            }}
-                            disabled={removeRole.isPending}
-                          >
-                            <Trash width={14} height={14} />
-                          </Button>
-                        </Flex>
-                      )}
-                    </Flex>
-                  </Box>
+                          {/* Stats section */}
+                          <Flex mb="3" gap="4" wrap="wrap">
+                            <Text size="2" color="gray">
+                              Needed: {role.needed_count ?? 1}
+                            </Text>
+                            <Text size="2" color="gray">
+                              • Planned: {counts['planned'] ?? 0}
+                            </Text>
+                            <Text size="2" color="gray">
+                              • Confirmed: {counts['confirmed'] ?? 0}
+                            </Text>
+                            <Text size="2" color="gray">
+                              • Canceled: {counts['canceled'] ?? 0}
+                            </Text>
+                          </Flex>
 
-                  {isExpanded && (
-                    <Box
-                      mt="3"
-                      pt="3"
-                      style={{ borderTop: '1px solid var(--gray-a6)' }}
-                    >
-                      {/* Stats section */}
-                      <Flex mb="3" gap="4" wrap="wrap">
-                        <Text size="2" color="gray">
-                          Needed: {role.needed_count ?? 1}
-                        </Text>
-                        <Text size="2" color="gray">
-                          • Planned: {counts['planned'] ?? 0}
-                        </Text>
-                        <Text size="2" color="gray">
-                          • Confirmed: {counts['confirmed'] ?? 0}
-                        </Text>
-                        <Text size="2" color="gray">
-                          • Canceled: {counts['canceled'] ?? 0}
-                        </Text>
-                      </Flex>
-
-                      <Flex mb="2" justify="between" align="center">
-                        <Text size="2" weight="medium">
-                          Crew ({roleCrew.length})
-                        </Text>
-                        {!isReadOnly && plannedInvitableCount > 0 && (
-                          <Button
-                            size="1"
-                            variant="soft"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSendInviteDialog({
-                                timePeriodId: role.id,
-                                crewName: `${plannedInvitableCount} crew members`,
-                                roleTitle: role.title || 'Role',
-                                isSendToAll: true,
-                              })
-                            }}
-                            disabled={sendInvites.isPending}
-                          >
-                            <Mail width={14} height={14} /> Send to all (
-                            {plannedInvitableCount})
-                          </Button>
-                        )}
-                      </Flex>
-                      {roleCrew.length === 0 && (
-                        <Text size="2" color="gray">
-                          No crew assigned yet
-                        </Text>
-                      )}
-                      {roleCrew.length > 0 && (
-                        <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
-                          <Table.Root variant="surface" size="1">
-                            <Table.Header>
-                              <Table.Row>
-                                <Table.ColumnHeaderCell>
-                                  Name
-                                </Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>
-                                  Status
-                                </Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>
-                                  Actions
-                                </Table.ColumnHeaderCell>
-                              </Table.Row>
-                            </Table.Header>
-                            <Table.Body>
-                              {roleCrew.map((crew) => {
-                                const crewName =
-                                  crew.user?.display_name ??
-                                  crew.user?.email ??
-                                  crew.placeholder_name ??
-                                  'Unknown'
-                                const internalNote = crew.user_id
-                                  ? internalNotesByUserId[crew.user_id]
-                                  : undefined
-                                return (
-                                  <Table.Row key={crew.id}>
-                                    <Table.Cell>
-                                      <Flex align="center" gap="2" wrap="wrap">
-                                        <Box>
-                                          <Text>{crewName}</Text>
-                                          {internalNote && (
-                                            <Text
-                                              as="div"
-                                              size="1"
-                                              color="gray"
-                                            >
-                                              <Text weight="medium">
-                                                Internal:
-                                              </Text>{' '}
-                                              {internalNote}
-                                            </Text>
-                                          )}
-                                        </Box>
-                                        {!crew.user_id && (
-                                          <Badge size="1" color="amber">
-                                            Placeholder
-                                          </Badge>
-                                        )}
-                                        {crew.forced && (
-                                          <Badge size="1" color="amber">
-                                            Forced
-                                          </Badge>
-                                        )}
-                                      </Flex>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <Flex align="center" gap="2" wrap="wrap">
-                                        {isReadOnly ? (
-                                          <Badge
-                                            radius="full"
-                                            highContrast
-                                            color={
-                                              crew.status === 'confirmed'
-                                                ? 'green'
-                                                : crew.status === 'canceled'
-                                                  ? 'red'
-                                                  : 'gray'
-                                            }
-                                          >
-                                            {crew.status}
-                                          </Badge>
-                                        ) : isSmallScreen ? (
-                                          <Select.Root
-                                            value={crew.status}
-                                            onValueChange={(v) =>
-                                              handleStatusChange(
-                                                crew.id,
-                                                crew.status,
-                                                v as BookingStatus,
-                                              )
-                                            }
-                                          >
-                                            <Select.Trigger
-                                              style={{ minWidth: 100 }}
-                                            />
-                                            <Select.Content>
-                                              <Select.Item value="planned">
-                                                Planned
-                                              </Select.Item>
-                                              <Select.Item value="confirmed">
-                                                Confirmed
-                                              </Select.Item>
-                                              <Select.Item value="canceled">
-                                                Canceled
-                                              </Select.Item>
-                                            </Select.Content>
-                                          </Select.Root>
-                                        ) : (
-                                          <SegmentedControl.Root
-                                            size="1"
-                                            value={crew.status}
-                                            onValueChange={(v) =>
-                                              handleStatusChange(
-                                                crew.id,
-                                                crew.status,
-                                                v as BookingStatus,
-                                              )
-                                            }
-                                          >
-                                            {(
-                                              [
-                                                'planned',
-                                                'confirmed',
-                                                'canceled',
-                                              ] as Array<BookingStatus>
-                                            ).map((s) => (
-                                              <SegmentedControl.Item
-                                                key={s}
-                                                value={s}
-                                                style={{
-                                                  color:
-                                                    s === 'confirmed'
-                                                      ? 'var(--green-9)'
-                                                      : s === 'canceled'
-                                                        ? 'var(--red-9)'
-                                                        : undefined,
-                                                }}
-                                              >
-                                                {s}
-                                              </SegmentedControl.Item>
-                                            ))}
-                                          </SegmentedControl.Root>
-                                        )}
-                                        {crew.invited && (
-                                          <Badge size="1" color="blue">
-                                            Invited
-                                          </Badge>
-                                        )}
-                                      </Flex>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                      <Flex gap="2">
-                                        {!isReadOnly &&
-                                          crew.status === 'planned' &&
-                                          crew.user_id && (
-                                            <Button
-                                              size="1"
-                                              variant="soft"
-                                              onClick={(e) => {
-                                                e.stopPropagation()
-                                                setSendInviteDialog({
-                                                  userId:
-                                                    crew.user_id ?? undefined,
-                                                  timePeriodId: role.id,
-                                                  crewName: crewName,
-                                                  roleTitle:
-                                                    role.title || 'Role',
-                                                })
-                                              }}
-                                              disabled={sendInvite.isPending}
-                                            >
-                                              <Mail width={14} height={14} />{' '}
-                                              Send invite
-                                            </Button>
-                                          )}
-                                        {!isReadOnly && (
-                                          <Button
-                                            size="1"
-                                            variant="soft"
-                                            color="red"
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              removeCrew.mutate({
-                                                crewId: crew.id,
-                                                timePeriodId: role.id,
-                                                userId: crew.user_id,
-                                              })
-                                            }}
-                                            disabled={removeCrew.isPending}
-                                          >
-                                            <Trash width={14} height={14} />
-                                          </Button>
-                                        )}
-                                      </Flex>
-                                    </Table.Cell>
+                          <Flex mb="2" justify="between" align="center">
+                            <Text size="2" weight="medium">
+                              Crew ({roleCrew.length})
+                            </Text>
+                            {!isReadOnly && plannedInvitableCount > 0 && (
+                              <Button
+                                size="1"
+                                variant="soft"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSendInviteDialog({
+                                    timePeriodId: role.id,
+                                    crewName: `${plannedInvitableCount} crew members`,
+                                    roleTitle: role.title || 'Role',
+                                    isSendToAll: true,
+                                  })
+                                }}
+                                disabled={sendInvites.isPending}
+                              >
+                                <Mail width={14} height={14} /> Send to all (
+                                {plannedInvitableCount})
+                              </Button>
+                            )}
+                          </Flex>
+                          {roleCrew.length === 0 && (
+                            <Text size="2" color="gray">
+                              No crew assigned yet
+                            </Text>
+                          )}
+                          {roleCrew.length > 0 && (
+                            <Box
+                              style={{ overflowX: 'auto', maxWidth: '100%' }}
+                            >
+                              <Table.Root variant="surface" size="1">
+                                <Table.Header>
+                                  <Table.Row>
+                                    <Table.ColumnHeaderCell>
+                                      Name
+                                    </Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell>
+                                      Status
+                                    </Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell>
+                                      Actions
+                                    </Table.ColumnHeaderCell>
                                   </Table.Row>
-                                )
-                              })}
-                            </Table.Body>
-                          </Table.Root>
+                                </Table.Header>
+                                <Table.Body>
+                                  {roleCrew.map((crew) => {
+                                    const crewName =
+                                      crew.user?.display_name ??
+                                      crew.user?.email ??
+                                      crew.placeholder_name ??
+                                      'Unknown'
+                                    const internalNote = crew.user_id
+                                      ? internalNotesByUserId[crew.user_id]
+                                      : undefined
+                                    return (
+                                      <Table.Row key={crew.id}>
+                                        <Table.Cell>
+                                          <Flex
+                                            align="center"
+                                            gap="2"
+                                            wrap="wrap"
+                                          >
+                                            <Box>
+                                              <Text>{crewName}</Text>
+                                              {internalNote && (
+                                                <Text
+                                                  as="div"
+                                                  size="1"
+                                                  color="gray"
+                                                >
+                                                  <Text weight="medium">
+                                                    Internal:
+                                                  </Text>{' '}
+                                                  {internalNote}
+                                                </Text>
+                                              )}
+                                            </Box>
+                                            {!crew.user_id && (
+                                              <Badge size="1" color="amber">
+                                                Placeholder
+                                              </Badge>
+                                            )}
+                                            {crew.forced && (
+                                              <Badge size="1" color="amber">
+                                                Forced
+                                              </Badge>
+                                            )}
+                                          </Flex>
+                                        </Table.Cell>
+                                        <Table.Cell>
+                                          <Flex
+                                            align="center"
+                                            gap="2"
+                                            wrap="wrap"
+                                          >
+                                            {isReadOnly ? (
+                                              <Badge
+                                                radius="full"
+                                                highContrast
+                                                color={
+                                                  crew.status === 'confirmed'
+                                                    ? 'green'
+                                                    : crew.status === 'canceled'
+                                                      ? 'red'
+                                                      : 'gray'
+                                                }
+                                              >
+                                                {crew.status}
+                                              </Badge>
+                                            ) : isSmallScreen ? (
+                                              <Select.Root
+                                                value={crew.status}
+                                                onValueChange={(v) =>
+                                                  handleStatusChange(
+                                                    crew.id,
+                                                    crew.status,
+                                                    v as BookingStatus,
+                                                  )
+                                                }
+                                              >
+                                                <Select.Trigger
+                                                  style={{ minWidth: 100 }}
+                                                />
+                                                <Select.Content>
+                                                  <Select.Item value="planned">
+                                                    Planned
+                                                  </Select.Item>
+                                                  <Select.Item value="confirmed">
+                                                    Confirmed
+                                                  </Select.Item>
+                                                  <Select.Item value="canceled">
+                                                    Canceled
+                                                  </Select.Item>
+                                                </Select.Content>
+                                              </Select.Root>
+                                            ) : (
+                                              <SegmentedControl.Root
+                                                size="1"
+                                                value={crew.status}
+                                                onValueChange={(v) =>
+                                                  handleStatusChange(
+                                                    crew.id,
+                                                    crew.status,
+                                                    v as BookingStatus,
+                                                  )
+                                                }
+                                              >
+                                                {(
+                                                  [
+                                                    'planned',
+                                                    'confirmed',
+                                                    'canceled',
+                                                  ] as Array<BookingStatus>
+                                                ).map((s) => (
+                                                  <SegmentedControl.Item
+                                                    key={s}
+                                                    value={s}
+                                                    style={{
+                                                      color:
+                                                        s === 'confirmed'
+                                                          ? 'var(--green-9)'
+                                                          : s === 'canceled'
+                                                            ? 'var(--red-9)'
+                                                            : undefined,
+                                                    }}
+                                                  >
+                                                    {s}
+                                                  </SegmentedControl.Item>
+                                                ))}
+                                              </SegmentedControl.Root>
+                                            )}
+                                            {crew.invited && (
+                                              <Badge size="1" color="blue">
+                                                Invited
+                                              </Badge>
+                                            )}
+                                          </Flex>
+                                        </Table.Cell>
+                                        <Table.Cell>
+                                          <Flex gap="2">
+                                            {!isReadOnly &&
+                                              crew.status === 'planned' &&
+                                              crew.user_id && (
+                                                <Button
+                                                  size="1"
+                                                  variant="soft"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    setSendInviteDialog({
+                                                      userId:
+                                                        crew.user_id ??
+                                                        undefined,
+                                                      timePeriodId: role.id,
+                                                      crewName: crewName,
+                                                      roleTitle:
+                                                        role.title || 'Role',
+                                                    })
+                                                  }}
+                                                  disabled={
+                                                    sendInvite.isPending
+                                                  }
+                                                >
+                                                  <Mail
+                                                    width={14}
+                                                    height={14}
+                                                  />{' '}
+                                                  Send invite
+                                                </Button>
+                                              )}
+                                            {!isReadOnly && (
+                                              <Button
+                                                size="1"
+                                                variant="soft"
+                                                color="red"
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  removeCrew.mutate({
+                                                    crewId: crew.id,
+                                                    timePeriodId: role.id,
+                                                    userId: crew.user_id,
+                                                  })
+                                                }}
+                                                disabled={removeCrew.isPending}
+                                              >
+                                                <Trash width={14} height={14} />
+                                              </Button>
+                                            )}
+                                          </Flex>
+                                        </Table.Cell>
+                                      </Table.Row>
+                                    )
+                                  })}
+                                </Table.Body>
+                              </Table.Root>
+                            </Box>
+                          )}
                         </Box>
                       )}
                     </Box>
-                  )}
-                </Box>
-              )
-            })}
-          </React.Fragment>
-        ))}
+                  )
+                })}
+              </React.Fragment>
+            ))}
+          </>
+        )}
       </Box>
 
       {addCrewToRole && (

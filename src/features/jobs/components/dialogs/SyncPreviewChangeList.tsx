@@ -1,7 +1,9 @@
 import * as React from 'react'
-import { Badge, Box, Checkbox, Flex, Text } from '@radix-ui/themes'
+import { Badge, Box, Flex, IconButton, Text } from '@radix-ui/themes'
+import { useDraggable } from '@dnd-kit/core'
 import {
   Community,
+  DotsGrid3x3,
   NavArrowDown,
   NavArrowRight,
   Package,
@@ -9,26 +11,26 @@ import {
 } from 'iconoir-react'
 import { JobBookingRecap } from '../JobBookingRecap'
 import {
-  selectionState,
-  setIdsSelected,
-} from '../../utils/equipmentBookingSelection'
-import {
+  syncPreviewEquipmentKeys,
   syncPreviewGroupKeys,
   syncPreviewLineKeys,
-  syncPreviewRemovalEquipmentKeys,
 } from '../../utils/offerBookingDiff'
 import type { JobBookingSummary } from '../../utils/bookingSummary'
 import type {
+  SyncIgnoreNode,
   SyncPreviewCompact,
   SyncPreviewCrew,
   SyncPreviewItem,
   SyncPreviewLine,
   SyncPreviewOfferGroup,
+  SyncPreviewVehicle,
 } from '../../utils/offerBookingDiff'
 
-type KeepSelection = {
-  keptKeys: Set<string>
-  onKeptKeysChange: (next: Set<string>) => void
+export type SyncPreviewDragColumn = 'left' | 'right'
+
+export type SyncPreviewDragContext = {
+  column: SyncPreviewDragColumn
+  side: 'add' | 'remove'
   disabled?: boolean
 }
 
@@ -56,31 +58,44 @@ function toggleOnActivate(event: React.KeyboardEvent, toggle: () => void) {
   }
 }
 
-function KeepCheckbox({
-  ids,
-  selection,
-  label,
+function DragHandle({
+  id,
+  node,
+  disabled,
 }: {
-  ids: Array<string>
-  selection: KeepSelection
-  label: string
+  id: string
+  node: SyncIgnoreNode
+  disabled?: boolean
 }) {
-  const checked = selectionState(selection.keptKeys, ids)
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id,
+    data: node,
+    disabled,
+  })
+
   return (
-    <Checkbox
+    <IconButton
+      ref={setNodeRef as React.Ref<HTMLButtonElement>}
       size="1"
-      checked={checked}
-      disabled={selection.disabled || ids.length === 0}
-      aria-label={label}
+      variant="ghost"
+      color="gray"
+      disabled={disabled}
+      aria-label={`Move ${node.label}`}
       onClick={(event) => event.stopPropagation()}
-      onPointerDown={(event) => event.stopPropagation()}
-      onKeyDown={(event) => event.stopPropagation()}
-      onCheckedChange={() => {
-        selection.onKeptKeysChange(
-          setIdsSelected(selection.keptKeys, ids, checked !== true),
-        )
+      style={{
+        cursor: disabled ? 'default' : isDragging ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.4 : 1,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 24,
+        height: 24,
       }}
-    />
+      {...attributes}
+      {...listeners}
+    >
+      <DotsGrid3x3 width={14} height={14} />
+    </IconButton>
   )
 }
 
@@ -201,20 +216,26 @@ function CollapsibleBox({
 function PreviewItemRow({
   item,
   nested = false,
-  keepSelection,
+  drag,
 }: {
   item: SyncPreviewItem
   nested?: boolean
-  keepSelection?: KeepSelection
+  drag?: SyncPreviewDragContext
 }) {
   return (
     <Box pl={nested ? '4' : '0'} py="1">
       <Flex align="start" gap="2">
-        {keepSelection ? (
-          <KeepCheckbox
-            ids={[item.key]}
-            selection={keepSelection}
-            label={`Keep ${item.name} booked`}
+        {drag ? (
+          <DragHandle
+            id={`${drag.column}:${drag.side}:item:${item.key}`}
+            node={{
+              side: drag.side,
+              equipmentKeys: [item.key],
+              crewKeys: [],
+              transportKeys: [],
+              label: item.name,
+            }}
+            disabled={drag.disabled}
           />
         ) : null}
         <Box>
@@ -233,11 +254,11 @@ function PreviewItemRow({
 function InventoryGroupLine({
   line,
   sectionKey,
-  keepSelection,
+  drag,
 }: {
   line: Extract<SyncPreviewLine, { kind: 'group' }>
   sectionKey: string
-  keepSelection?: KeepSelection
+  drag?: SyncPreviewDragContext
 }) {
   const [expanded, setExpanded] = React.useState(false)
   const itemKeys = syncPreviewLineKeys(line)
@@ -255,11 +276,17 @@ function InventoryGroupLine({
         style={{ cursor: 'pointer' }}
       >
         <Flex align="center" gap="2">
-          {keepSelection ? (
-            <KeepCheckbox
-              ids={itemKeys}
-              selection={keepSelection}
-              label={`Keep ${line.groupName} booked`}
+          {drag ? (
+            <DragHandle
+              id={`${drag.column}:${drag.side}:inv:${sectionKey}:${line.group_id}`}
+              node={{
+                side: drag.side,
+                equipmentKeys: itemKeys,
+                crewKeys: [],
+                transportKeys: [],
+                label: line.groupName,
+              }}
+              disabled={drag.disabled}
             />
           ) : null}
           {expanded ? (
@@ -285,7 +312,7 @@ function InventoryGroupLine({
               key={`${sectionKey}:${item.key}`}
               item={item}
               nested
-              keepSelection={keepSelection}
+              drag={drag}
             />
           ))}
         </Box>
@@ -297,11 +324,11 @@ function InventoryGroupLine({
 function OfferGroupBlock({
   group,
   sectionKey,
-  keepSelection,
+  drag,
 }: {
   group: SyncPreviewOfferGroup
   sectionKey: string
-  keepSelection?: KeepSelection
+  drag?: SyncPreviewDragContext
 }) {
   const groupKeys = syncPreviewGroupKeys(group)
   return (
@@ -309,28 +336,30 @@ function OfferGroupBlock({
       title={group.name}
       hasContent={group.lines.length > 0}
       leading={
-        keepSelection ? (
-          <KeepCheckbox
-            ids={groupKeys}
-            selection={keepSelection}
-            label={`Keep ${group.name} booked`}
+        drag ? (
+          <DragHandle
+            id={`${drag.column}:${drag.side}:group:${group.id}`}
+            node={{
+              side: drag.side,
+              equipmentKeys: groupKeys,
+              crewKeys: [],
+              transportKeys: [],
+              label: group.name,
+            }}
+            disabled={drag.disabled}
           />
         ) : undefined
       }
     >
       {group.lines.map((line) =>
         line.kind === 'direct' ? (
-          <PreviewItemRow
-            key={line.item.key}
-            item={line.item}
-            keepSelection={keepSelection}
-          />
+          <PreviewItemRow key={line.item.key} item={line.item} drag={drag} />
         ) : (
           <InventoryGroupLine
             key={`${sectionKey}:${line.group_id}`}
             line={line}
             sectionKey={`${sectionKey}:${group.id}`}
-            keepSelection={keepSelection}
+            drag={drag}
           />
         ),
       )}
@@ -341,11 +370,11 @@ function OfferGroupBlock({
 function UngroupedBlock({
   items,
   title,
-  keepSelection,
+  drag,
 }: {
   items: Array<SyncPreviewItem>
   title: string
-  keepSelection?: KeepSelection
+  drag?: SyncPreviewDragContext
 }) {
   if (items.length === 0) return null
 
@@ -357,21 +386,23 @@ function UngroupedBlock({
       countLabel={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
       hasContent
       leading={
-        keepSelection ? (
-          <KeepCheckbox
-            ids={itemKeys}
-            selection={keepSelection}
-            label={`Keep ${title} booked`}
+        drag ? (
+          <DragHandle
+            id={`${drag.column}:${drag.side}:ungrouped:${title}`}
+            node={{
+              side: drag.side,
+              equipmentKeys: itemKeys,
+              crewKeys: [],
+              transportKeys: [],
+              label: title,
+            }}
+            disabled={drag.disabled}
           />
         ) : undefined
       }
     >
       {items.map((item) => (
-        <PreviewItemRow
-          key={item.key}
-          item={item}
-          keepSelection={keepSelection}
-        />
+        <PreviewItemRow key={item.key} item={item} drag={drag} />
       ))}
     </CollapsibleBox>
   )
@@ -417,12 +448,33 @@ function groupCrewByCategory(
     .map(([category, roles]) => ({ category, roles }))
 }
 
-function CrewRoleBlock({ row }: { row: SyncPreviewCrew }) {
+function CrewRoleBlock({
+  row,
+  drag,
+}: {
+  row: SyncPreviewCrew
+  drag?: SyncPreviewDragContext
+}) {
   return (
     <CollapsibleBox
       title={row.title}
       countLabel={row.quantity > 1 ? `${row.quantity}×` : undefined}
       hasContent
+      leading={
+        drag ? (
+          <DragHandle
+            id={`${drag.column}:${drag.side}:crew:${row.key}`}
+            node={{
+              side: drag.side,
+              equipmentKeys: [],
+              crewKeys: [row.key],
+              transportKeys: [],
+              label: row.title,
+            }}
+            disabled={drag.disabled}
+          />
+        ) : undefined
+      }
     >
       <Text size="1" color="gray" as="div">
         {formatCrewDateTime(row.start_at)} – {formatCrewDateTime(row.end_at)}
@@ -446,9 +498,11 @@ function CrewRoleBlock({ row }: { row: SyncPreviewCrew }) {
 function CrewCategoryBlock({
   category,
   roles,
+  drag,
 }: {
   category: string
   roles: Array<SyncPreviewCrew>
+  drag?: SyncPreviewDragContext
 }) {
   const totalQuantity = roles.reduce((sum, row) => sum + row.quantity, 0)
 
@@ -457,9 +511,24 @@ function CrewCategoryBlock({
       title={category}
       countLabel={totalQuantity > 0 ? `${totalQuantity}×` : undefined}
       hasContent={roles.length > 0}
+      leading={
+        drag ? (
+          <DragHandle
+            id={`${drag.column}:${drag.side}:crew-cat:${category}`}
+            node={{
+              side: drag.side,
+              equipmentKeys: [],
+              crewKeys: roles.map((row) => row.key),
+              transportKeys: [],
+              label: category,
+            }}
+            disabled={drag.disabled}
+          />
+        ) : undefined
+      }
     >
       {roles.map((row) => (
-        <CrewRoleBlock key={row.key} row={row} />
+        <CrewRoleBlock key={row.key} row={row} drag={drag} />
       ))}
     </CollapsibleBox>
   )
@@ -473,7 +542,8 @@ export function SyncPreviewChangeList({
   ungroupedTitle,
   extraSummary,
   crew,
-  keepSelection,
+  vehicles,
+  drag,
   defaultExpanded = false,
 }: {
   title: string
@@ -483,22 +553,22 @@ export function SyncPreviewChangeList({
   ungroupedTitle: string
   extraSummary?: string | null
   crew?: Array<SyncPreviewCrew>
-  keepSelection?: KeepSelection
+  vehicles?: Array<SyncPreviewVehicle>
+  drag?: SyncPreviewDragContext
   defaultExpanded?: boolean
 }) {
   const [expanded, setExpanded] = React.useState(defaultExpanded)
   const summary = asBookingSummary(compact)
   const crewRows = crew ?? []
+  const vehicleRows = vehicles ?? []
   const hasEquipment = groups.length > 0 || ungrouped.length > 0
   const hasCrew = crewRows.length > 0
-  const hasTransport = compact.vehicleNames.length > 0 || !!extraSummary
+  const hasTransport =
+    vehicleRows.length > 0 || compact.vehicleNames.length > 0 || !!extraSummary
   const hasDetail = hasEquipment || hasCrew || hasTransport
-  const equipmentKeepKeys = keepSelection
-    ? syncPreviewRemovalEquipmentKeys({
-        removalGroups: groups,
-        removalUngrouped: ungrouped,
-      })
-    : []
+  const equipmentKeys = syncPreviewEquipmentKeys(groups, ungrouped)
+  const crewKeys = crewRows.map((row) => row.key)
+  const transportKeys = vehicleRows.map((row) => row.key)
 
   const equipmentSummary = summary.equipmentByCategory
     .filter((row) => row.quantity > 0)
@@ -526,6 +596,19 @@ export function SyncPreviewChangeList({
         style={{ cursor: hasDetail ? 'pointer' : 'default' }}
       >
         <Flex align="center" gap="1">
+          {drag && hasDetail ? (
+            <DragHandle
+              id={`${drag.column}:${drag.side}:section:${title}`}
+              node={{
+                side: drag.side,
+                equipmentKeys,
+                crewKeys,
+                transportKeys,
+                label: title,
+              }}
+              disabled={drag.disabled}
+            />
+          ) : null}
           {hasDetail ? (
             expanded ? (
               <NavArrowDown width={14} height={14} />
@@ -551,74 +634,143 @@ export function SyncPreviewChangeList({
 
       {expanded && hasDetail ? (
         <Flex direction="column" gap="2" mt="3">
-          {keepSelection && hasEquipment ? (
+          {drag && hasDetail && drag.column === 'left' ? (
             <Text size="1" color="gray" as="div">
-              Check items or groups to keep them booked.
+              Drag items or groups to the right to ignore them.
+            </Text>
+          ) : drag && hasDetail && drag.column === 'right' ? (
+            <Text size="1" color="gray" as="div">
+              Drag back to the left to include them in this sync.
             </Text>
           ) : null}
-          <CollapsibleBox
-            title="Equipment"
-            icon={<Package width={16} height={16} />}
-            countLabel={equipmentSummary || 'None'}
-            hasContent={hasEquipment}
-            defaultExpanded={!!keepSelection && hasEquipment}
-            leading={
-              keepSelection && hasEquipment ? (
-                <KeepCheckbox
-                  ids={equipmentKeepKeys}
-                  selection={keepSelection}
-                  label="Keep all equipment booked"
+          {hasEquipment ? (
+            <CollapsibleBox
+              title="Equipment"
+              icon={<Package width={16} height={16} />}
+              countLabel={equipmentSummary || undefined}
+              hasContent={hasEquipment}
+              defaultExpanded={!!drag && hasEquipment}
+              leading={
+                drag ? (
+                  <DragHandle
+                    id={`${drag.column}:${drag.side}:equipment`}
+                    node={{
+                      side: drag.side,
+                      equipmentKeys,
+                      crewKeys: [],
+                      transportKeys: [],
+                      label: 'Equipment',
+                    }}
+                    disabled={drag.disabled}
+                  />
+                ) : undefined
+              }
+            >
+              {groups.map((group) => (
+                <OfferGroupBlock
+                  key={group.id}
+                  group={group}
+                  sectionKey={title}
+                  drag={drag}
                 />
-              ) : undefined
-            }
-          >
-            {groups.map((group) => (
-              <OfferGroupBlock
-                key={group.id}
-                group={group}
-                sectionKey={title}
-                keepSelection={keepSelection}
+              ))}
+              <UngroupedBlock
+                items={ungrouped}
+                title={ungroupedTitle}
+                drag={drag}
               />
-            ))}
-            <UngroupedBlock
-              items={ungrouped}
-              title={ungroupedTitle}
-              keepSelection={keepSelection}
-            />
-          </CollapsibleBox>
+            </CollapsibleBox>
+          ) : null}
 
-          <CollapsibleBox
-            title="Crew"
-            icon={<Community width={16} height={16} />}
-            countLabel={crewSummary || 'None'}
-            hasContent={hasCrew}
-          >
-            {groupCrewByCategory(crewRows).map((group) => (
-              <CrewCategoryBlock
-                key={group.category}
-                category={group.category}
-                roles={group.roles}
-              />
-            ))}
-          </CollapsibleBox>
+          {hasCrew ? (
+            <CollapsibleBox
+              title="Crew"
+              icon={<Community width={16} height={16} />}
+              countLabel={crewSummary || undefined}
+              hasContent={hasCrew}
+              leading={
+                drag ? (
+                  <DragHandle
+                    id={`${drag.column}:${drag.side}:crew-section`}
+                    node={{
+                      side: drag.side,
+                      equipmentKeys: [],
+                      crewKeys,
+                      transportKeys: [],
+                      label: 'Crew',
+                    }}
+                    disabled={drag.disabled}
+                  />
+                ) : undefined
+              }
+            >
+              {groupCrewByCategory(crewRows).map((group) => (
+                <CrewCategoryBlock
+                  key={group.category}
+                  category={group.category}
+                  roles={group.roles}
+                  drag={drag}
+                />
+              ))}
+            </CollapsibleBox>
+          ) : null}
 
-          <CollapsibleBox
-            title="Transport"
-            icon={<Truck width={16} height={16} />}
-            countLabel={transportSummary || extraSummary || 'None'}
-            hasContent={hasTransport}
-          >
-            {compact.vehicleNames.map((name) => (
-              <Text key={name} size="2" weight="medium" as="div">
-                {name}
-              </Text>
-            ))}
-            {extraSummary ? (
-              <Text size="1" color="gray" as="div">
-                {extraSummary}
-              </Text>
-            ) : null}
-          </CollapsibleBox>
+          {hasTransport ? (
+            <CollapsibleBox
+              title="Transport"
+              icon={<Truck width={16} height={16} />}
+              countLabel={transportSummary || extraSummary || undefined}
+              hasContent={hasTransport}
+              leading={
+                drag ? (
+                  <DragHandle
+                    id={`${drag.column}:${drag.side}:transport`}
+                    node={{
+                      side: drag.side,
+                      equipmentKeys: [],
+                      crewKeys: [],
+                      transportKeys,
+                      label: 'Transport',
+                    }}
+                    disabled={drag.disabled}
+                  />
+                ) : undefined
+              }
+            >
+              {vehicleRows.map((vehicle) => (
+                <Flex key={vehicle.key} align="center" gap="2">
+                  {drag ? (
+                    <DragHandle
+                      id={`${drag.column}:${drag.side}:vehicle:${vehicle.key}`}
+                      node={{
+                        side: drag.side,
+                        equipmentKeys: [],
+                        crewKeys: [],
+                        transportKeys: [vehicle.key],
+                        label: vehicle.name,
+                      }}
+                      disabled={drag.disabled}
+                    />
+                  ) : null}
+                  <Text size="2" weight="medium" as="div">
+                    {vehicle.name}
+                  </Text>
+                </Flex>
+              ))}
+              {compact.vehicleNames.length > 0 && vehicleRows.length === 0
+                ? compact.vehicleNames.map((name) => (
+                    <Text key={name} size="2" weight="medium" as="div">
+                      {name}
+                    </Text>
+                  ))
+                : null}
+              {extraSummary ? (
+                <Text size="1" color="gray" as="div">
+                  {extraSummary}
+                </Text>
+              ) : null}
+            </CollapsibleBox>
+          ) : null}
         </Flex>
       ) : null}
     </Box>

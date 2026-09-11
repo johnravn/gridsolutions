@@ -9,6 +9,7 @@ import {
   Flex,
   Heading,
   IconButton,
+  Spinner,
   Text,
   TextField,
 } from '@radix-ui/themes'
@@ -24,6 +25,7 @@ import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
 import { jobBookingConflictsQuery } from '@features/conflicts/api/queries'
 import { vehicleConflictToneByPeriodId } from '@features/conflicts/utils/conflictCategories'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
+import { FetchingBookingsStatus } from './FetchingBookingsStatus'
 import type { ExternalReqStatus, ReservedVehicleRow } from '../../types'
 
 type TransportQueryResult = {
@@ -48,7 +50,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
   const canBook = !!companyId && companyRole !== 'freelancer'
 
   const qc = useQueryClient()
-  const { success, error: showError } = useToast()
+  const { progress } = useToast()
   const [editingNotes, setEditingNotes] = React.useState<Map<string, string>>(
     new Map(),
   )
@@ -56,7 +58,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
     new Set(),
   )
 
-  const { data } = useQuery<TransportQueryResult>({
+  const { data, isLoading, isFetching } = useQuery<TransportQueryResult>({
     queryKey: ['jobs.transport', jobId],
     queryFn: async () => {
       const { data: timePeriods, error: rErr } = await supabase
@@ -143,6 +145,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
       external_note?: string
     },
   ) => {
+    const p = progress('Updating booking…')
     try {
       const { error: updateErr } = await supabase
         .from('reserved_vehicles')
@@ -150,7 +153,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         .eq('id', bookingId)
       if (updateErr) throw updateErr
 
-      success('Updated', 'Vehicle booking updated')
+      p.success('Updated', 'Vehicle booking updated')
       void qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
 
       // Clear the edited note
@@ -160,11 +163,12 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         setEditingNotes(newNotes)
       }
     } catch (e: any) {
-      showError('Failed to update', e?.message || 'Please try again.')
+      p.error('Failed to update', e?.message || 'Please try again.')
     }
   }
 
   const deleteBooking = async (bookingId: string) => {
+    const p = progress('Deleting booking…')
     try {
       // First, get the time_period_id to check if we should delete it
       const { data: booking, error: fetchErr } = await supabase
@@ -198,7 +202,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         if (tpDeleteErr) throw tpDeleteErr
       }
 
-      success('Deleted', 'Vehicle booking deleted')
+      p.success('Deleted', 'Vehicle booking deleted')
       setDeletingBooking(null)
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] }),
@@ -206,7 +210,7 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         qc.invalidateQueries({ queryKey: ['conflicts'] }),
       ])
     } catch (e: any) {
-      showError('Failed to delete', e?.message || 'Please try again.')
+      p.error('Failed to delete', e?.message || 'Please try again.')
     }
   }
 
@@ -220,7 +224,10 @@ export default function TransportTab({ jobId }: { jobId: string }) {
           alignItems: 'center',
         }}
       >
-        <Heading size="3">Transportation</Heading>
+        <Flex align="center" gap="2">
+          <Heading size="3">Transportation</Heading>
+          {isFetching && !isLoading && <Spinner size="2" />}
+        </Flex>
         {!isReadOnly && (
           <Flex align="center" gap="3">
             <Button
@@ -242,131 +249,137 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         )}
       </Box>
 
-      {/* Notices for missing vehicle proposals */}
-      {notices.length > 0 && (
-        <Flex direction="column" gap="2" mb="3">
-          {notices.map((notice) => (
-            <Card
-              key={notice.id}
-              variant="surface"
-              style={{ border: '1px solid var(--amber-a5)' }}
-            >
-              <Flex direction="column" gap="2">
-                <Flex align="center" gap="2">
-                  <Text weight="medium" color="amber">
-                    Vehicle proposal missing
-                  </Text>
-                  {notice.title && (
-                    <Badge variant="soft" color="amber">
-                      {notice.title}
-                    </Badge>
-                  )}
-                </Flex>
-                <Text size="2">{notice.notes}</Text>
-              </Flex>
-            </Card>
-          ))}
-        </Flex>
-      )}
-
-      {/* Vehicle Cards List */}
-      {bookings.length > 0 ? (
-        <Flex direction="column" gap="3">
-          {bookings.map((row) => {
-            const vehicle = row.vehicle as any
-            const vehicleObj = Array.isArray(vehicle) ? vehicle[0] : vehicle
-            const ownerUser = Array.isArray(vehicleObj?.owner_user)
-              ? vehicleObj?.owner_user[0]
-              : vehicleObj?.owner_user
-            const ownerBadge = vehicleOwnerBadge({
-              internally_owned: !!vehicleObj?.internally_owned,
-              external_owner_id: vehicleObj?.external_owner_id ?? null,
-              owner_user_id: vehicleObj?.owner_user_id ?? null,
-              external_owner_name: Array.isArray(vehicleObj?.external_owner)
-                ? vehicleObj?.external_owner[0]?.name
-                : vehicleObj?.external_owner?.name,
-              owner_user_name:
-                ownerUser?.display_name ?? ownerUser?.email ?? null,
-            })
-            const isInternal = !!vehicleObj?.internally_owned
-            const currentNote = row.external_note ?? ''
-            const editedNote = editingNotes.get(row.id) ?? currentNote
-            const noteChanged = editedNote !== currentNote
-
-            return (
-              <VehicleBookingCard
-                key={row.id}
-                row={row}
-                vehicle={vehicleObj}
-                ownerBadge={ownerBadge}
-                isInternal={isInternal}
-                editedNote={editedNote}
-                noteChanged={noteChanged}
-                isReadOnly={isReadOnly}
-                jobId={jobId}
-                conflictTone={
-                  conflictToneByPeriod.get(row.time_period_id) ??
-                  (row.forced ? 'forced' : null)
-                }
-                isExpanded={expandedCards.has(row.id)}
-                onToggleExpand={() => {
-                  setExpandedCards((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(row.id)) {
-                      next.delete(row.id)
-                    } else {
-                      next.add(row.id)
-                    }
-                    return next
-                  })
-                }}
-                onNoteChange={(note) => {
-                  const newNotes = new Map(editingNotes)
-                  newNotes.set(row.id, note)
-                  setEditingNotes(newNotes)
-                }}
-                onSaveNote={() => {
-                  handleUpdateBooking(row.id, {
-                    external_note: editedNote,
-                  })
-                }}
-                onDelete={() => setDeletingBooking(row.id)}
-              />
-            )
-          })}
-        </Flex>
+      {isLoading ? (
+        <FetchingBookingsStatus />
       ) : (
-        /* Empty State */
-        <Box
-          p="4"
-          style={{
-            border: '2px dashed var(--gray-a6)',
-            borderRadius: 8,
-            textAlign: 'center',
-            cursor: canBook ? 'pointer' : 'default',
-            transition: 'all 100ms',
-          }}
-          onClick={() => canBook && setBookVehOpen(true)}
-          onMouseEnter={(e) => {
-            if (canBook) {
-              e.currentTarget.style.borderColor = 'var(--gray-a8)'
-              e.currentTarget.style.background = 'var(--gray-a2)'
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (canBook) {
-              e.currentTarget.style.borderColor = 'var(--gray-a6)'
-              e.currentTarget.style.background = 'transparent'
-            }
-          }}
-        >
-          <Flex direction="column" align="center" gap="2">
-            <Truck width={24} height={24} />
-            <Text size="2" color="gray">
-              {canBook ? 'Book vehicle' : 'No vehicles'}
-            </Text>
-          </Flex>
-        </Box>
+        <>
+          {/* Notices for missing vehicle proposals */}
+          {notices.length > 0 && (
+            <Flex direction="column" gap="2" mb="3">
+              {notices.map((notice) => (
+                <Card
+                  key={notice.id}
+                  variant="surface"
+                  style={{ border: '1px solid var(--amber-a5)' }}
+                >
+                  <Flex direction="column" gap="2">
+                    <Flex align="center" gap="2">
+                      <Text weight="medium" color="amber">
+                        Vehicle proposal missing
+                      </Text>
+                      {notice.title && (
+                        <Badge variant="soft" color="amber">
+                          {notice.title}
+                        </Badge>
+                      )}
+                    </Flex>
+                    <Text size="2">{notice.notes}</Text>
+                  </Flex>
+                </Card>
+              ))}
+            </Flex>
+          )}
+
+          {/* Vehicle Cards List */}
+          {bookings.length > 0 ? (
+            <Flex direction="column" gap="3">
+              {bookings.map((row) => {
+                const vehicle = row.vehicle as any
+                const vehicleObj = Array.isArray(vehicle) ? vehicle[0] : vehicle
+                const ownerUser = Array.isArray(vehicleObj?.owner_user)
+                  ? vehicleObj?.owner_user[0]
+                  : vehicleObj?.owner_user
+                const ownerBadge = vehicleOwnerBadge({
+                  internally_owned: !!vehicleObj?.internally_owned,
+                  external_owner_id: vehicleObj?.external_owner_id ?? null,
+                  owner_user_id: vehicleObj?.owner_user_id ?? null,
+                  external_owner_name: Array.isArray(vehicleObj?.external_owner)
+                    ? vehicleObj?.external_owner[0]?.name
+                    : vehicleObj?.external_owner?.name,
+                  owner_user_name:
+                    ownerUser?.display_name ?? ownerUser?.email ?? null,
+                })
+                const isInternal = !!vehicleObj?.internally_owned
+                const currentNote = row.external_note ?? ''
+                const editedNote = editingNotes.get(row.id) ?? currentNote
+                const noteChanged = editedNote !== currentNote
+
+                return (
+                  <VehicleBookingCard
+                    key={row.id}
+                    row={row}
+                    vehicle={vehicleObj}
+                    ownerBadge={ownerBadge}
+                    isInternal={isInternal}
+                    editedNote={editedNote}
+                    noteChanged={noteChanged}
+                    isReadOnly={isReadOnly}
+                    jobId={jobId}
+                    conflictTone={
+                      conflictToneByPeriod.get(row.time_period_id) ??
+                      (row.forced ? 'forced' : null)
+                    }
+                    isExpanded={expandedCards.has(row.id)}
+                    onToggleExpand={() => {
+                      setExpandedCards((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(row.id)) {
+                          next.delete(row.id)
+                        } else {
+                          next.add(row.id)
+                        }
+                        return next
+                      })
+                    }}
+                    onNoteChange={(note) => {
+                      const newNotes = new Map(editingNotes)
+                      newNotes.set(row.id, note)
+                      setEditingNotes(newNotes)
+                    }}
+                    onSaveNote={() => {
+                      handleUpdateBooking(row.id, {
+                        external_note: editedNote,
+                      })
+                    }}
+                    onDelete={() => setDeletingBooking(row.id)}
+                  />
+                )
+              })}
+            </Flex>
+          ) : (
+            /* Empty State */
+            <Box
+              p="4"
+              style={{
+                border: '2px dashed var(--gray-a6)',
+                borderRadius: 8,
+                textAlign: 'center',
+                cursor: canBook ? 'pointer' : 'default',
+                transition: 'all 100ms',
+              }}
+              onClick={() => canBook && setBookVehOpen(true)}
+              onMouseEnter={(e) => {
+                if (canBook) {
+                  e.currentTarget.style.borderColor = 'var(--gray-a8)'
+                  e.currentTarget.style.background = 'var(--gray-a2)'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (canBook) {
+                  e.currentTarget.style.borderColor = 'var(--gray-a6)'
+                  e.currentTarget.style.background = 'transparent'
+                }
+              }}
+            >
+              <Flex direction="column" align="center" gap="2">
+                <Truck width={24} height={24} />
+                <Text size="2" color="gray">
+                  {canBook ? 'Book vehicle' : 'No vehicles'}
+                </Text>
+              </Flex>
+            </Box>
+          )}
+        </>
       )}
 
       {/* Delete Confirmation Dialog */}

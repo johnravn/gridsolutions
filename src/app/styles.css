@@ -1007,11 +1007,12 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   --app-toast-icon: var(--gray-11);
   box-sizing: border-box;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
   width: fit-content;
   max-width: 100%;
-  padding: 10px 8px 10px 12px;
+  padding: 0;
+  overflow: hidden;
   border-radius: 10px;
   border: 1px solid var(--gray-6);
   border-left: 3px solid var(--app-toast-accent);
@@ -1020,6 +1021,13 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   -webkit-backdrop-filter: blur(12px) saturate(160%);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
   color: var(--gray-12);
+}
+
+.app-toast-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 8px 10px 12px;
 }
 
 .app-toast[data-kind='success'] {
@@ -1035,6 +1043,47 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
 .app-toast[data-kind='info'] {
   --app-toast-accent: var(--blue-9);
   --app-toast-icon: var(--blue-11);
+}
+
+.app-toast[data-kind='progress'] {
+  --app-toast-accent: var(--accent-9);
+  --app-toast-icon: var(--accent-11);
+  width: 100%;
+}
+
+.app-toast-progress {
+  height: 3px;
+  width: 100%;
+  overflow: hidden;
+  background: var(--gray-a4);
+  flex-shrink: 0;
+}
+
+.app-toast-progress-bar {
+  height: 100%;
+  width: 0;
+  background: var(--app-toast-accent);
+  transition: width 200ms ease-out;
+}
+
+.app-toast-progress-bar[data-indeterminate='true'] {
+  width: 36%;
+  transition: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .app-toast-progress-bar[data-indeterminate='true'] {
+    animation: app-toast-progress-indeterminate 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes app-toast-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(380%);
+  }
 }
 
 .app-toast-icon {
@@ -1125,9 +1174,12 @@ aside .rt-SelectTrigger:where(.rt-variant-ghost) {
   .app-toast {
     width: 100%;
     max-width: none;
+    border-radius: 12px;
+  }
+
+  .app-toast-row {
     gap: 12px;
     padding: 14px 12px 14px 16px;
-    border-radius: 12px;
   }
 
   .app-toast .app-toast-title {

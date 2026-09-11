@@ -66,7 +66,7 @@ export default function EditRoleDialog({
   initial: InitialRole | null
 }) {
   const qc = useQueryClient()
-  const { error: toastError, success } = useToast()
+  const { progress } = useToast()
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
   const [focusedField, setFocusedField] = React.useState<
     'title' | 'category' | null
@@ -108,8 +108,9 @@ export default function EditRoleDialog({
         .eq('id', initial.id)
       if (error) throw error
     },
-    onSuccess: () => {
-      success('Role updated', 'Role details saved.')
+    onMutate: () => ({ progressToast: progress('Updating role…') }),
+    onSuccess: (_data, _vars, ctx) => {
+      ctx?.progressToast.success('Role updated', 'Role details saved.')
       onOpenChange(false)
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
@@ -119,8 +120,8 @@ export default function EditRoleDialog({
         qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] }),
       ])
     },
-    onError: (e: unknown) => {
-      toastError(
+    onError: (e: unknown, _vars, ctx) => {
+      ctx?.progressToast.error(
         'Failed to update role',
         e instanceof Error ? e.message : 'Please try again.',
       )

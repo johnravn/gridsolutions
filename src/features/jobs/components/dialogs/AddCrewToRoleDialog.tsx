@@ -38,6 +38,7 @@ import {
   selectedUserIdsToInvite,
 } from '../../utils/addCrewActionLabels'
 import { splitCrewPickerPeople } from '../../utils/rankRecentCustomerCrew'
+import type { ProgressToastHandle } from '@shared/ui/toast/ToastProvider'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { RecentCustomerCrewPerson } from '../../utils/rankRecentCustomerCrew'
 import type { UUID } from '../../types'
@@ -74,7 +75,8 @@ export default function AddCrewToRoleDialog({
   companyId: UUID
 }) {
   const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { progress, error: toastError } = useToast()
+  const addCrewProgressRef = React.useRef<ProgressToastHandle | null>(null)
   const { companyRole, isGlobalSuperuser, userId: authUserId } = useAuthz()
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceConflicts, setForceConflicts] = React.useState<
@@ -313,7 +315,14 @@ export default function AddCrewToRoleDialog({
       status?: 'planned' | 'confirmed'
     } = {}) => {
       const selectedIds = selectedIdsArg ?? [...form.state.values.selectedIds]
+      addCrewProgressRef.current?.dismiss()
+      const progressToast = progress(
+        invite ? 'Adding and inviting crew…' : 'Adding crew…',
+      )
+      addCrewProgressRef.current = progressToast
       if (selectedIds.length === 0) {
+        progressToast.dismiss()
+        addCrewProgressRef.current = null
         throw new Error('Please select at least one crew member')
       }
 
@@ -336,6 +345,8 @@ export default function AddCrewToRoleDialog({
           setForceResourceLabel(names.join(', '))
           setForceConflicts(allConflicts)
           setForceDialogOpen(true)
+          progressToast.dismiss()
+          addCrewProgressRef.current = null
           throw new Error('OVERLAP_NEEDS_FORCE')
         }
       }
@@ -392,20 +403,27 @@ export default function AddCrewToRoleDialog({
         qc.invalidateQueries({ queryKey: ['matters'] })
       }
       if (result.inviteError) {
-        toastError('Crew added, but invite failed', result.inviteError)
+        addCrewProgressRef.current?.error(
+          'Crew added, but invite failed',
+          result.inviteError,
+        )
       } else if (result.invited) {
-        success(
-          'Success',
+        addCrewProgressRef.current?.success(
+          'Added',
           `Added and invited ${result.count} crew member${result.count !== 1 ? 's' : ''}`,
         )
       } else if (result.status === 'confirmed' && result.count === 1) {
-        success('Success', 'Added you as confirmed crew')
+        addCrewProgressRef.current?.success(
+          'Added',
+          'Added you as confirmed crew',
+        )
       } else {
-        success(
-          'Success',
+        addCrewProgressRef.current?.success(
+          'Added',
           `Added ${result.count} crew member${result.count !== 1 ? 's' : ''} to role`,
         )
       }
+      addCrewProgressRef.current = null
       form.reset(defaultValues)
       onOpenChange(false)
     },
@@ -413,12 +431,15 @@ export default function AddCrewToRoleDialog({
       if (e.message === 'OVERLAP_NEEDS_FORCE') return
       const msg = e.message || 'Please try again.'
       if (isCrewOverlapError(msg) && !forceDialogOpen) {
+        addCrewProgressRef.current?.dismiss()
+        addCrewProgressRef.current = null
         setForceResourceLabel('Selected crew')
         setForceConflicts([])
         setForceDialogOpen(true)
         return
       }
-      toastError('Failed to add crew', msg)
+      addCrewProgressRef.current?.error('Failed to add crew', msg)
+      addCrewProgressRef.current = null
     },
   })
 
@@ -462,16 +483,20 @@ export default function AddCrewToRoleDialog({
       })
       if (error) throw error
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Adding placeholder…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
-      success('Success', 'Placeholder crew member added')
+      ctx?.progressToast.success('Added', 'Placeholder crew member added')
       form.setFieldValue('placeholderName', '')
     },
-    onError: (e: Error) => {
-      toastError('Failed to add placeholder', e.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to add placeholder',
+        e.message || 'Please try again.',
+      )
     },
   })
 
@@ -508,20 +533,24 @@ export default function AddCrewToRoleDialog({
 
       if (error) throw error
     },
-    onSuccess: () => {
+    onMutate: () => ({ progressToast: progress('Inviting crew…') }),
+    onSuccess: (_data, _vars, ctx) => {
       qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] })
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
-      success(
+      ctx?.progressToast.success(
         'Invite created',
         'They’ll get an email to join the company. The booking has been added to this role.',
       )
       form.setFieldValue('placeholderEmail', '')
       form.setFieldValue('placeholderName', '')
     },
-    onError: (e: Error) => {
-      toastError('Failed to invite', e.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to invite',
+        e.message || 'Please try again.',
+      )
     },
   })
 

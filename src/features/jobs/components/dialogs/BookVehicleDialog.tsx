@@ -39,6 +39,7 @@ import {
   forcedBookingFields,
   isVehicleOverlapError,
 } from '@features/conflicts/api/forceBooking'
+import type { ProgressToastHandle } from '@shared/ui/toast/ToastProvider'
 import type { VehicleOwnerKind } from '@features/vehicles/lib/ownership'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { ExternalReqStatus, UUID } from '../../types'
@@ -106,8 +107,9 @@ export default function BookVehicleDialog({
   companyId: UUID
 }) {
   const qc = useQueryClient()
-  const { success, error: showError } = useToast()
+  const { progress } = useToast()
   const { userId: authUserId } = useAuthz()
+  const bookingProgressRef = React.useRef<ProgressToastHandle | null>(null)
 
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceConflicts, setForceConflicts] = React.useState<
@@ -296,6 +298,9 @@ export default function BookVehicleDialog({
 
   const save = useMutation({
     mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
+      bookingProgressRef.current?.dismiss()
+      const p = progress('Booking vehicle…')
+      bookingProgressRef.current = p
       const value = form.state.values
       if (!value.vehicleId) throw new Error('Choose a vehicle')
       if (!job) throw new Error('Job not loaded')
@@ -348,6 +353,8 @@ export default function BookVehicleDialog({
           setForceResourceLabel(selectedV.name)
           setForceConflicts(overlaps)
           setForceDialogOpen(true)
+          p.dismiss()
+          bookingProgressRef.current = null
           throw new Error('OVERLAP_NEEDS_FORCE')
         }
       }
@@ -373,7 +380,11 @@ export default function BookVehicleDialog({
     },
     onSuccess: () => {
       setForceDialogOpen(false)
-      success('Success', 'Vehicle booked successfully')
+      bookingProgressRef.current?.success(
+        'Booked',
+        'Vehicle booked successfully',
+      )
+      bookingProgressRef.current = null
       form.reset(defaultValues, { keepDefaultValues: true })
       onOpenChange(false)
       void Promise.all([
@@ -387,17 +398,20 @@ export default function BookVehicleDialog({
       const msg = err.message || 'Please try again.'
       const isOverlap = isVehicleOverlapError(msg)
       if (isOverlap && !forceDialogOpen) {
+        bookingProgressRef.current?.dismiss()
+        bookingProgressRef.current = null
         setForceResourceLabel(selectedVehicle?.name ?? 'Vehicle')
         setForceConflicts([])
         setForceDialogOpen(true)
         return
       }
-      showError(
+      bookingProgressRef.current?.error(
         'Failed to book vehicle',
         isOverlap
           ? 'This vehicle is already booked for this period (including personal bookings).'
           : msg,
       )
+      bookingProgressRef.current = null
     },
   })
 

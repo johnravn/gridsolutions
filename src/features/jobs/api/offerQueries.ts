@@ -19,6 +19,7 @@ import {
   isOfferBasisLocked,
   syncBookingsFromOfferBasis,
 } from './offerBasisQueries'
+import type { BookingSyncIgnoreSets } from '../utils/offerBookingDiff'
 import type {
   JobOffer,
   OfferAcceptance,
@@ -942,7 +943,7 @@ export async function syncBookingsFromOffer(
   options?: {
     force?: boolean
     skipConflictingEquipment?: boolean
-    keepEquipmentKeys?: Array<string>
+    ignores?: BookingSyncIgnoreSets
   },
 ): Promise<Array<string>> {
   const { data: offer, error } = await supabase

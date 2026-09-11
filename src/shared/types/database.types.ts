@@ -2571,6 +2571,7 @@ export type Database = {
       }
       offer_bases: {
         Row: {
+          booking_sync_ignores: Json
           bookings_synced_at: string | null
           company_id: string
           created_at: string
@@ -2583,6 +2584,7 @@ export type Database = {
           vat_percent: number
         }
         Insert: {
+          booking_sync_ignores?: Json
           bookings_synced_at?: string | null
           company_id: string
           created_at?: string
@@ -2595,6 +2597,7 @@ export type Database = {
           vat_percent?: number
         }
         Update: {
+          booking_sync_ignores?: Json
           bookings_synced_at?: string | null
           company_id?: string
           created_at?: string

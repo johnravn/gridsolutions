@@ -43,7 +43,7 @@ export default function EditVehicleBookingDialog({
   jobId: string
 }) {
   const qc = useQueryClient()
-  const { success, error: showError } = useToast()
+  const { progress } = useToast()
 
   const form = useAppForm({
     defaultValues,
@@ -81,13 +81,17 @@ export default function EditVehicleBookingDialog({
 
       if (error) throw error
     },
-    onSuccess: () => {
-      success('Updated', 'Vehicle booking updated')
+    onMutate: () => ({ progressToast: progress('Updating booking…') }),
+    onSuccess: (_data, _vars, ctx) => {
+      ctx?.progressToast.success('Updated', 'Vehicle booking updated')
       onOpenChange(false)
       void qc.invalidateQueries({ queryKey: ['jobs.transport', jobId] })
     },
-    onError: (err: any) => {
-      showError('Failed to update', err?.message || 'Please try again.')
+    onError: (err: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to update',
+        err.message || 'Please try again.',
+      )
     },
   })
 

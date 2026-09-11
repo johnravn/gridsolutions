@@ -1,17 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import {
+  activeIgnoresAgainstDiff,
   buildSyncPreviewViewModel,
   catalogFromOfferDetail,
+  classifyOfferBasisSyncStatus,
   computeOfferDiff,
+  emptyBookingSyncIgnoreSets,
   formatOfferDiffForPreview,
   labelForId,
   makeEquipmentKey,
   namesFromOfferDetail,
+  parseBookingSyncIgnores,
+  pruneBookingSyncIgnores,
+  bookingSyncIgnoreSetsIsEmpty,
   reservationMatchesKeepKeys,
+  serializeBookingSyncIgnores,
+  setIgnoreNode,
+  splitSyncPreviewByIgnores,
+  subtractIgnoresFromDiff,
   syncPreviewRemovalEquipmentKeys,
   type BookingsSnapshot,
   type ItemCatalogEntry,
   type SyncLineItems,
+  type SyncPreviewViewModel,
 } from './offerBookingDiff'
 
 const emptySnapshot: BookingsSnapshot = {
@@ -1110,5 +1121,312 @@ describe('syncPreviewRemovalEquipmentKeys', () => {
         ],
       }),
     ).toEqual(['direct::mixer:', 'group:ig1:mic:', 'direct::extra:'])
+  })
+})
+
+function previewFixture(): SyncPreviewViewModel {
+  return {
+    equipmentAdditions: ['Mixer (+1)'],
+    equipmentRemovals: ['Extra (-1)'],
+    crewAdditions: ['Sound (0 → 1)'],
+    crewRemovals: ['Driver (1 → 0)'],
+    transportAdditions: ['Van'],
+    transportRemovals: ['Truck'],
+    transportSummary: null,
+    hasChanges: true,
+    additionCompact: {
+      equipmentByCategory: [{ categoryName: 'Audio', quantity: 1 }],
+      vehicleNames: ['Van'],
+      crewLabels: ['Sound'],
+    },
+    removalCompact: {
+      equipmentByCategory: [{ categoryName: 'Other', quantity: 1 }],
+      vehicleNames: ['Truck'],
+      crewLabels: ['Driver'],
+    },
+    additionGroups: [
+      {
+        id: 'og1',
+        name: 'PA',
+        lines: [
+          {
+            kind: 'direct',
+            item: {
+              key: 'direct::mixer:',
+              item_id: 'mixer',
+              name: 'Mixer',
+              brand: null,
+              model: null,
+              category: 'Audio',
+              quantity: 1,
+            },
+          },
+          {
+            kind: 'group',
+            group_id: 'ig1',
+            groupName: 'Mics',
+            category: 'Audio',
+            quantity: 1,
+            items: [
+              {
+                key: 'group:ig1:mic:',
+                item_id: 'mic',
+                name: 'Mic',
+                brand: null,
+                model: null,
+                category: 'Audio',
+                quantity: 2,
+              },
+              {
+                key: 'group:ig1:stand:',
+                item_id: 'stand',
+                name: 'Stand',
+                brand: null,
+                model: null,
+                category: 'Audio',
+                quantity: 1,
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    removalGroups: [],
+    additionUngrouped: [],
+    removalUngrouped: [
+      {
+        key: 'direct::extra:',
+        item_id: 'extra',
+        name: 'Extra',
+        brand: null,
+        model: null,
+        category: 'Other',
+        quantity: 1,
+      },
+    ],
+    additionCrew: [
+      {
+        key: 'crew-sound',
+        title: 'Sound',
+        category: 'tech',
+        quantity: 1,
+        start_at: '2026-01-01T00:00:00.000Z',
+        end_at: '2026-01-02T00:00:00.000Z',
+        confirmedCount: 0,
+      },
+    ],
+    removalCrew: [
+      {
+        key: 'crew-driver',
+        title: 'Driver',
+        category: 'logistics',
+        quantity: 1,
+        start_at: '2026-01-01T00:00:00.000Z',
+        end_at: '2026-01-02T00:00:00.000Z',
+        confirmedCount: 1,
+      },
+    ],
+    additionVehicles: [{ key: 'van-1', name: 'Van' }],
+    removalVehicles: [{ key: 'truck-1', name: 'Truck' }],
+  }
+}
+
+describe('booking sync ignores', () => {
+  it('round-trips serialize and parse', () => {
+    const sets = emptyBookingSyncIgnoreSets()
+    sets.equipment.remove.add('direct::extra:')
+    sets.crew.add.add('crew-sound')
+    expect(parseBookingSyncIgnores(serializeBookingSyncIgnores(sets))).toEqual(
+      sets,
+    )
+  })
+
+  it('ignores malformed stored json', () => {
+    expect(bookingSyncIgnoreSetsIsEmpty(parseBookingSyncIgnores(null))).toBe(
+      true,
+    )
+    expect(
+      parseBookingSyncIgnores([{ kind: 'nope', side: 'add', key: 'x' }])
+        .equipment.add.size,
+    ).toBe(0)
+  })
+
+  it('splits a parent node so only ignored leaves move right', () => {
+    const preview = previewFixture()
+    const ignores = setIgnoreNode(
+      emptyBookingSyncIgnoreSets(),
+      {
+        side: 'add',
+        equipmentKeys: ['group:ig1:mic:'],
+        crewKeys: [],
+        transportKeys: [],
+        label: 'Mic',
+      },
+      true,
+    )
+    const { remaining, ignored } = splitSyncPreviewByIgnores(preview, ignores)
+    expect(remaining.additionGroups[0]?.lines).toHaveLength(2)
+    const remainingGroup = remaining.additionGroups[0]?.lines.find(
+      (line) => line.kind === 'group',
+    )
+    expect(remainingGroup?.kind === 'group' && remainingGroup.items).toEqual([
+      expect.objectContaining({ key: 'group:ig1:stand:' }),
+    ])
+    const ignoredGroup = ignored.additionGroups[0]?.lines.find(
+      (line) => line.kind === 'group',
+    )
+    expect(ignoredGroup?.kind === 'group' && ignoredGroup.items).toEqual([
+      expect.objectContaining({ key: 'group:ig1:mic:' }),
+    ])
+    expect(remaining.hasChanges).toBe(true)
+    expect(ignored.hasChanges).toBe(true)
+  })
+
+  it('moves a whole removal item to the ignored column', () => {
+    const preview = previewFixture()
+    const ignores = setIgnoreNode(
+      emptyBookingSyncIgnoreSets(),
+      {
+        side: 'remove',
+        equipmentKeys: ['direct::extra:'],
+        crewKeys: [],
+        transportKeys: [],
+        label: 'Extra',
+      },
+      true,
+    )
+    const { remaining, ignored } = splitSyncPreviewByIgnores(preview, ignores)
+    expect(remaining.removalUngrouped).toEqual([])
+    expect(ignored.removalUngrouped.map((item) => item.key)).toEqual([
+      'direct::extra:',
+    ])
+  })
+
+  it('prunes stale ignore keys that are no longer in the preview', () => {
+    const ignores = emptyBookingSyncIgnoreSets()
+    ignores.equipment.remove.add('direct::extra:')
+    ignores.equipment.remove.add('direct::gone:')
+    const pruned = pruneBookingSyncIgnores(
+      ignores,
+      parseBookingSyncIgnores([
+        { kind: 'equipment', side: 'remove', key: 'direct::extra:' },
+      ]),
+    )
+    expect([...pruned.equipment.remove]).toEqual(['direct::extra:'])
+  })
+
+  it('subtracts ignored additions and removals from a live diff', () => {
+    const mixerKey = makeEquipmentKey({
+      item_id: 'mixer',
+      source_kind: 'direct',
+      source_group_id: null,
+    })
+    const extraKey = makeEquipmentKey({
+      item_id: 'extra',
+      source_kind: 'direct',
+      source_group_id: null,
+    })
+    const diff = {
+      equipmentChanges: [
+        {
+          key: mixerKey,
+          item_id: 'mixer',
+          source_kind: 'direct' as const,
+          source_group_id: null,
+          time_period_id: null,
+          expected: 3,
+          current: 1,
+        },
+        {
+          key: extraKey,
+          item_id: 'extra',
+          source_kind: 'direct' as const,
+          source_group_id: null,
+          time_period_id: null,
+          expected: 0,
+          current: 1,
+        },
+      ],
+      crewChanges: [],
+      expectedTransport: ['van-1'],
+      currentTransport: ['truck-1'],
+      unassignedTransport: [],
+    }
+    const ignores = emptyBookingSyncIgnoreSets()
+    ignores.equipment.add.add(mixerKey)
+    ignores.equipment.remove.add(extraKey)
+    ignores.transport.add.add('van-1')
+    ignores.transport.remove.add('truck-1')
+
+    const remaining = subtractIgnoresFromDiff(diff, ignores)
+    expect(remaining.equipmentChanges).toEqual([])
+    expect(remaining.expectedTransport).toEqual([])
+    expect(remaining.currentTransport).toEqual([])
+    expect(formatOfferDiffForPreview(remaining, (id) => id).hasChanges).toBe(
+      false,
+    )
+    expect(
+      bookingSyncIgnoreSetsIsEmpty(activeIgnoresAgainstDiff(ignores, diff)),
+    ).toBe(false)
+    expect(
+      classifyOfferBasisSyncStatus({
+        remainingHasChanges: false,
+        hasActiveIgnores: true,
+      }),
+    ).toEqual(
+      expect.objectContaining({
+        label: 'Partially synced',
+        color: 'amber',
+      }),
+    )
+  })
+
+  it('treats an ignored quantity increase as still currently booked', () => {
+    const key = makeEquipmentKey({
+      item_id: 'mixer',
+      source_kind: 'direct',
+      source_group_id: null,
+      time_period_id: 'p1',
+    })
+    const previewKey = makeEquipmentKey({
+      item_id: 'mixer',
+      source_kind: 'direct',
+      source_group_id: null,
+    })
+    const ignores = emptyBookingSyncIgnoreSets()
+    ignores.equipment.add.add(previewKey)
+    expect(
+      reservationMatchesKeepKeys(
+        {
+          item_id: 'mixer',
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'p1',
+        },
+        ignores.equipment.add,
+      ),
+    ).toBe(true)
+    expect(
+      subtractIgnoresFromDiff(
+        {
+          equipmentChanges: [
+            {
+              key,
+              item_id: 'mixer',
+              source_kind: 'direct',
+              source_group_id: null,
+              time_period_id: 'p1',
+              expected: 3,
+              current: 1,
+            },
+          ],
+          crewChanges: [],
+          expectedTransport: [],
+          currentTransport: [],
+          unassignedTransport: [],
+        },
+        ignores,
+      ).equipmentChanges,
+    ).toEqual([])
   })
 })

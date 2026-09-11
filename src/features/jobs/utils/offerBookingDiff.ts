@@ -133,6 +133,22 @@ export function parseEquipmentKey(key: string): {
   }
 }
 
+export function equipmentKeyMatchesSet(
+  key: string,
+  keys: ReadonlySet<string>,
+): boolean {
+  if (keys.size === 0) return false
+  if (keys.has(key)) return true
+  const parsed = parseEquipmentKey(key)
+  if (
+    parsed.time_period_id &&
+    keys.has(makeEquipmentKey({ ...parsed, time_period_id: null }))
+  ) {
+    return true
+  }
+  return keys.has(makeEquipmentKey(parsed))
+}
+
 export function reservationMatchesKeepKeys(
   row: {
     item_id: string
@@ -150,13 +166,159 @@ export function reservationMatchesKeepKeys(
     source_group_id: row.source_group_id,
     time_period_id: row.time_period_id ?? null,
   }
-  if (keepKeys.has(makeEquipmentKey(normalized))) return true
-  return keepKeys.has(
-    makeEquipmentKey({
-      ...normalized,
-      time_period_id: null,
-    }),
+  return equipmentKeyMatchesSet(makeEquipmentKey(normalized), keepKeys)
+}
+
+export type BookingSyncIgnoreSide = 'add' | 'remove'
+export type BookingSyncIgnoreKind = 'equipment' | 'crew' | 'transport'
+
+export type BookingSyncIgnoreEntry = {
+  kind: BookingSyncIgnoreKind
+  side: BookingSyncIgnoreSide
+  key: string
+}
+
+export type BookingSyncIgnoreSets = {
+  equipment: { add: Set<string>; remove: Set<string> }
+  crew: { add: Set<string>; remove: Set<string> }
+  transport: { add: Set<string>; remove: Set<string> }
+}
+
+export type SyncIgnoreNode = {
+  side: BookingSyncIgnoreSide
+  equipmentKeys: Array<string>
+  crewKeys: Array<string>
+  transportKeys: Array<string>
+  label: string
+}
+
+export function emptyBookingSyncIgnoreSets(): BookingSyncIgnoreSets {
+  return {
+    equipment: { add: new Set(), remove: new Set() },
+    crew: { add: new Set(), remove: new Set() },
+    transport: { add: new Set(), remove: new Set() },
+  }
+}
+
+export function cloneBookingSyncIgnoreSets(
+  sets: BookingSyncIgnoreSets,
+): BookingSyncIgnoreSets {
+  return {
+    equipment: {
+      add: new Set(sets.equipment.add),
+      remove: new Set(sets.equipment.remove),
+    },
+    crew: { add: new Set(sets.crew.add), remove: new Set(sets.crew.remove) },
+    transport: {
+      add: new Set(sets.transport.add),
+      remove: new Set(sets.transport.remove),
+    },
+  }
+}
+
+export function bookingSyncIgnoreSetsIsEmpty(
+  sets: BookingSyncIgnoreSets,
+): boolean {
+  return (
+    sets.equipment.add.size === 0 &&
+    sets.equipment.remove.size === 0 &&
+    sets.crew.add.size === 0 &&
+    sets.crew.remove.size === 0 &&
+    sets.transport.add.size === 0 &&
+    sets.transport.remove.size === 0
   )
+}
+
+export function unionIgnoreKindKeys(
+  sets: BookingSyncIgnoreSets,
+  kind: BookingSyncIgnoreKind,
+): Set<string> {
+  return new Set([...sets[kind].add, ...sets[kind].remove])
+}
+
+const IGNORE_KINDS: Array<BookingSyncIgnoreKind> = [
+  'equipment',
+  'crew',
+  'transport',
+]
+const IGNORE_SIDES: Array<BookingSyncIgnoreSide> = ['add', 'remove']
+
+export function parseBookingSyncIgnores(raw: unknown): BookingSyncIgnoreSets {
+  const sets = emptyBookingSyncIgnoreSets()
+  if (!Array.isArray(raw)) return sets
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue
+    const record = entry as Record<string, unknown>
+    const kind = record.kind
+    const side = record.side
+    const key = record.key
+    if (
+      (kind === 'equipment' || kind === 'crew' || kind === 'transport') &&
+      (side === 'add' || side === 'remove') &&
+      typeof key === 'string' &&
+      key.length > 0
+    ) {
+      sets[kind][side].add(key)
+    }
+  }
+  return sets
+}
+
+export function serializeBookingSyncIgnores(
+  sets: BookingSyncIgnoreSets,
+): Array<BookingSyncIgnoreEntry> {
+  const entries: Array<BookingSyncIgnoreEntry> = []
+  for (const kind of IGNORE_KINDS) {
+    for (const side of IGNORE_SIDES) {
+      for (const key of sets[kind][side]) {
+        entries.push({ kind, side, key })
+      }
+    }
+  }
+  return entries.sort((a, b) =>
+    `${a.kind}:${a.side}:${a.key}`.localeCompare(
+      `${b.kind}:${b.side}:${b.key}`,
+    ),
+  )
+}
+
+export function setIgnoreNode(
+  sets: BookingSyncIgnoreSets,
+  node: SyncIgnoreNode,
+  ignored: boolean,
+): BookingSyncIgnoreSets {
+  const next = cloneBookingSyncIgnoreSets(sets)
+  const apply = (kind: BookingSyncIgnoreKind, keys: Array<string>) => {
+    const bucket = next[kind][node.side]
+    for (const key of keys) {
+      if (ignored) bucket.add(key)
+      else bucket.delete(key)
+    }
+  }
+  apply('equipment', node.equipmentKeys)
+  apply('crew', node.crewKeys)
+  apply('transport', node.transportKeys)
+  return next
+}
+
+export function unassignedTransportKey(label: string): string {
+  return `unassigned:${label}`
+}
+
+export function equipmentKeysToPreserve(
+  sets: BookingSyncIgnoreSets,
+): Set<string> {
+  return unionIgnoreKindKeys(sets, 'equipment')
+}
+
+export function crewKeysToPreserve(sets: BookingSyncIgnoreSets): Set<string> {
+  return unionIgnoreKindKeys(sets, 'crew')
+}
+
+export function transportKeysToPreserve(
+  sets: BookingSyncIgnoreSets,
+): Set<string> {
+  return unionIgnoreKindKeys(sets, 'transport')
 }
 
 export function syncPreviewLineKeys(line: SyncPreviewLine): Array<string> {
@@ -177,6 +339,357 @@ export function syncPreviewRemovalEquipmentKeys(
     ...preview.removalGroups.flatMap(syncPreviewGroupKeys),
     ...preview.removalUngrouped.map((item) => item.key),
   ]
+}
+
+export function syncPreviewEquipmentKeys(
+  groups: Array<SyncPreviewOfferGroup>,
+  ungrouped: Array<SyncPreviewItem>,
+): Array<string> {
+  return [
+    ...groups.flatMap(syncPreviewGroupKeys),
+    ...ungrouped.map((item) => item.key),
+  ]
+}
+
+function keepKey(key: string, keys: ReadonlySet<string>, keepIfInSet: boolean) {
+  return keys.has(key) === keepIfInSet
+}
+
+function filterPreviewLines(
+  lines: Array<SyncPreviewLine>,
+  keys: ReadonlySet<string>,
+  keepIfInSet: boolean,
+): Array<SyncPreviewLine> {
+  const next: Array<SyncPreviewLine> = []
+  for (const line of lines) {
+    if (line.kind === 'direct') {
+      if (keepKey(line.item.key, keys, keepIfInSet)) next.push(line)
+      continue
+    }
+    const items = line.items.filter((item) =>
+      keepKey(item.key, keys, keepIfInSet),
+    )
+    if (items.length === 0) continue
+    next.push({ ...line, items })
+  }
+  return next
+}
+
+function filterPreviewGroups(
+  groups: Array<SyncPreviewOfferGroup>,
+  keys: ReadonlySet<string>,
+  keepIfInSet: boolean,
+): Array<SyncPreviewOfferGroup> {
+  const next: Array<SyncPreviewOfferGroup> = []
+  for (const group of groups) {
+    const lines = filterPreviewLines(group.lines, keys, keepIfInSet)
+    if (lines.length === 0) continue
+    next.push({ ...group, lines })
+  }
+  return next
+}
+
+function crewCompactLabelsFromRows(
+  rows: Array<SyncPreviewCrew>,
+): Array<string> {
+  return rows.map((row) =>
+    row.quantity > 1 ? `${row.title} ×${row.quantity}` : row.title,
+  )
+}
+
+function previewSliceHasChanges(
+  groups: Array<SyncPreviewOfferGroup>,
+  ungrouped: Array<SyncPreviewItem>,
+  crew: Array<SyncPreviewCrew>,
+  vehicles: Array<SyncPreviewVehicle>,
+): boolean {
+  return (
+    groups.length > 0 ||
+    ungrouped.length > 0 ||
+    crew.length > 0 ||
+    vehicles.length > 0
+  )
+}
+
+function filterPreviewByIgnores(
+  preview: SyncPreviewViewModel,
+  ignores: BookingSyncIgnoreSets,
+  keepIfIgnored: boolean,
+): SyncPreviewViewModel {
+  const additionGroups = filterPreviewGroups(
+    preview.additionGroups,
+    ignores.equipment.add,
+    keepIfIgnored,
+  )
+  const additionUngrouped = preview.additionUngrouped.filter((item) =>
+    keepKey(item.key, ignores.equipment.add, keepIfIgnored),
+  )
+  const additionCrew = preview.additionCrew.filter((row) =>
+    keepKey(row.key, ignores.crew.add, keepIfIgnored),
+  )
+  const additionVehicles = preview.additionVehicles.filter((row) =>
+    keepKey(row.key, ignores.transport.add, keepIfIgnored),
+  )
+  const removalGroups = filterPreviewGroups(
+    preview.removalGroups,
+    ignores.equipment.remove,
+    keepIfIgnored,
+  )
+  const removalUngrouped = preview.removalUngrouped.filter((item) =>
+    keepKey(item.key, ignores.equipment.remove, keepIfIgnored),
+  )
+  const removalCrew = preview.removalCrew.filter((row) =>
+    keepKey(row.key, ignores.crew.remove, keepIfIgnored),
+  )
+  const removalVehicles = preview.removalVehicles.filter((row) =>
+    keepKey(row.key, ignores.transport.remove, keepIfIgnored),
+  )
+
+  const additionHasChanges = previewSliceHasChanges(
+    additionGroups,
+    additionUngrouped,
+    additionCrew,
+    additionVehicles,
+  )
+  const removalHasChanges = previewSliceHasChanges(
+    removalGroups,
+    removalUngrouped,
+    removalCrew,
+    removalVehicles,
+  )
+
+  return {
+    ...preview,
+    additionGroups,
+    additionUngrouped,
+    additionCrew,
+    additionVehicles,
+    removalGroups,
+    removalUngrouped,
+    removalCrew,
+    removalVehicles,
+    additionCompact: compactFromPreview(
+      additionGroups,
+      additionUngrouped,
+      additionVehicles.map((row) => row.name),
+      crewCompactLabelsFromRows(additionCrew),
+    ),
+    removalCompact: compactFromPreview(
+      removalGroups,
+      removalUngrouped,
+      removalVehicles.map((row) => row.name),
+      crewCompactLabelsFromRows(removalCrew),
+    ),
+    hasChanges: additionHasChanges || removalHasChanges,
+  }
+}
+
+export function splitSyncPreviewByIgnores(
+  preview: SyncPreviewViewModel,
+  ignores: BookingSyncIgnoreSets,
+): { remaining: SyncPreviewViewModel; ignored: SyncPreviewViewModel } {
+  return {
+    remaining: filterPreviewByIgnores(preview, ignores, false),
+    ignored: filterPreviewByIgnores(preview, ignores, true),
+  }
+}
+
+export function collectPreviewIgnoreSets(
+  preview: SyncPreviewViewModel,
+): BookingSyncIgnoreSets {
+  const sets = emptyBookingSyncIgnoreSets()
+  for (const key of syncPreviewEquipmentKeys(
+    preview.additionGroups,
+    preview.additionUngrouped,
+  )) {
+    sets.equipment.add.add(key)
+  }
+  for (const key of syncPreviewEquipmentKeys(
+    preview.removalGroups,
+    preview.removalUngrouped,
+  )) {
+    sets.equipment.remove.add(key)
+  }
+  for (const row of preview.additionCrew) sets.crew.add.add(row.key)
+  for (const row of preview.removalCrew) sets.crew.remove.add(row.key)
+  for (const row of preview.additionVehicles) sets.transport.add.add(row.key)
+  for (const row of preview.removalVehicles) sets.transport.remove.add(row.key)
+  return sets
+}
+
+function intersectSets(a: ReadonlySet<string>, b: ReadonlySet<string>) {
+  const next = new Set<string>()
+  for (const key of a) {
+    if (b.has(key)) next.add(key)
+  }
+  return next
+}
+
+export function pruneBookingSyncIgnores(
+  ignores: BookingSyncIgnoreSets,
+  live: BookingSyncIgnoreSets,
+): BookingSyncIgnoreSets {
+  return {
+    equipment: {
+      add: intersectSets(ignores.equipment.add, live.equipment.add),
+      remove: intersectSets(ignores.equipment.remove, live.equipment.remove),
+    },
+    crew: {
+      add: intersectSets(ignores.crew.add, live.crew.add),
+      remove: intersectSets(ignores.crew.remove, live.crew.remove),
+    },
+    transport: {
+      add: intersectSets(ignores.transport.add, live.transport.add),
+      remove: intersectSets(ignores.transport.remove, live.transport.remove),
+    },
+  }
+}
+
+export function subtractIgnoresFromDiff(
+  diff: OfferDiff,
+  ignores: BookingSyncIgnoreSets,
+): OfferDiff {
+  return {
+    equipmentChanges: diff.equipmentChanges.filter((change) => {
+      if (change.expected > change.current) {
+        return !equipmentKeyMatchesSet(change.key, ignores.equipment.add)
+      }
+      if (change.current > change.expected) {
+        return !equipmentKeyMatchesSet(change.key, ignores.equipment.remove)
+      }
+      return true
+    }),
+    crewChanges: diff.crewChanges.filter((change) => {
+      if (change.expected > change.current) {
+        return !ignores.crew.add.has(change.key)
+      }
+      if (change.current > change.expected) {
+        return !ignores.crew.remove.has(change.key)
+      }
+      return true
+    }),
+    expectedTransport: diff.expectedTransport.filter(
+      (id) => !ignores.transport.add.has(id),
+    ),
+    currentTransport: diff.currentTransport.filter(
+      (id) => !ignores.transport.remove.has(id),
+    ),
+    unassignedTransport: diff.unassignedTransport.filter(
+      (label) => !ignores.transport.add.has(unassignedTransportKey(label)),
+    ),
+  }
+}
+
+export function isolateIgnoredDiff(
+  diff: OfferDiff,
+  ignores: BookingSyncIgnoreSets,
+): OfferDiff {
+  const remaining = subtractIgnoresFromDiff(diff, ignores)
+  const remainingEquipment = new Set(
+    remaining.equipmentChanges.map((change) => change.key),
+  )
+  const remainingCrew = new Set(
+    remaining.crewChanges.map((change) => change.key),
+  )
+  return {
+    equipmentChanges: diff.equipmentChanges.filter(
+      (change) => !remainingEquipment.has(change.key),
+    ),
+    crewChanges: diff.crewChanges.filter(
+      (change) => !remainingCrew.has(change.key),
+    ),
+    expectedTransport: diff.expectedTransport.filter((id) =>
+      ignores.transport.add.has(id),
+    ),
+    currentTransport: diff.currentTransport.filter((id) =>
+      ignores.transport.remove.has(id),
+    ),
+    unassignedTransport: diff.unassignedTransport.filter((label) =>
+      ignores.transport.add.has(unassignedTransportKey(label)),
+    ),
+  }
+}
+
+export function activeIgnoresAgainstDiff(
+  ignores: BookingSyncIgnoreSets,
+  diff: OfferDiff,
+): BookingSyncIgnoreSets {
+  const live = emptyBookingSyncIgnoreSets()
+  for (const change of diff.equipmentChanges) {
+    if (
+      change.expected > change.current &&
+      equipmentKeyMatchesSet(change.key, ignores.equipment.add)
+    ) {
+      live.equipment.add.add(change.key)
+      for (const key of ignores.equipment.add) {
+        if (equipmentKeyMatchesSet(change.key, new Set([key]))) {
+          live.equipment.add.add(key)
+        }
+      }
+    }
+    if (
+      change.current > change.expected &&
+      equipmentKeyMatchesSet(change.key, ignores.equipment.remove)
+    ) {
+      live.equipment.remove.add(change.key)
+      for (const key of ignores.equipment.remove) {
+        if (equipmentKeyMatchesSet(change.key, new Set([key]))) {
+          live.equipment.remove.add(key)
+        }
+      }
+    }
+  }
+  for (const change of diff.crewChanges) {
+    if (change.expected > change.current && ignores.crew.add.has(change.key)) {
+      live.crew.add.add(change.key)
+    }
+    if (
+      change.current > change.expected &&
+      ignores.crew.remove.has(change.key)
+    ) {
+      live.crew.remove.add(change.key)
+    }
+  }
+  for (const id of diff.expectedTransport) {
+    if (ignores.transport.add.has(id)) live.transport.add.add(id)
+  }
+  for (const id of diff.currentTransport) {
+    if (ignores.transport.remove.has(id)) live.transport.remove.add(id)
+  }
+  for (const label of diff.unassignedTransport) {
+    const key = unassignedTransportKey(label)
+    if (ignores.transport.add.has(key)) live.transport.add.add(key)
+  }
+  return live
+}
+
+export function classifyOfferBasisSyncStatus(args: {
+  remainingHasChanges: boolean
+  hasActiveIgnores: boolean
+}): {
+  label: 'Synced' | 'Partially synced' | 'Not synced'
+  color: 'green' | 'amber' | 'gray'
+  title: string
+} {
+  if (args.remainingHasChanges) {
+    return {
+      label: 'Not synced',
+      color: 'gray',
+      title: 'Offer basis does not match current bookings.',
+    }
+  }
+  if (args.hasActiveIgnores) {
+    return {
+      label: 'Partially synced',
+      color: 'amber',
+      title: 'Bookings match except for items that were manually ignored.',
+    }
+  }
+  return {
+    label: 'Synced',
+    color: 'green',
+    title: 'Offer basis matches current bookings.',
+  }
 }
 
 export function mapsEqual(a: Map<string, number>, b: Map<string, number>) {
@@ -562,6 +1075,11 @@ export type SyncPreviewCrew = {
   confirmedCount: number
 }
 
+export type SyncPreviewVehicle = {
+  key: string
+  name: string
+}
+
 export type SyncPreviewViewModel = FormattedOfferDiff & {
   additionCompact: SyncPreviewCompact
   removalCompact: SyncPreviewCompact
@@ -571,6 +1089,8 @@ export type SyncPreviewViewModel = FormattedOfferDiff & {
   removalUngrouped: Array<SyncPreviewItem>
   additionCrew: Array<SyncPreviewCrew>
   removalCrew: Array<SyncPreviewCrew>
+  additionVehicles: Array<SyncPreviewVehicle>
+  removalVehicles: Array<SyncPreviewVehicle>
 }
 
 function offerGroupTitle(
@@ -849,18 +1369,38 @@ export function buildSyncPreviewViewModel(
     }
   }
 
+  const formatV = formatVehicle ?? ((id: string) => id)
+  const { unmatchedExpected, leftoverCurrent } = consumeIdMultiset(
+    diff.expectedTransport,
+    diff.currentTransport,
+  )
+  const unassigned = [...diff.unassignedTransport]
+  const pairCount = Math.min(leftoverCurrent.length, unassigned.length)
+  const leftoverAfterPair = leftoverCurrent.slice(pairCount)
+  const unassignedAfterPair = unassigned.slice(pairCount)
+  const additionVehicles: Array<SyncPreviewVehicle> = [
+    ...unmatchedExpected.map((id) => ({ key: id, name: formatV(id) })),
+    ...unassignedAfterPair.map((label) => ({
+      key: unassignedTransportKey(label),
+      name: label,
+    })),
+  ]
+  const removalVehicles: Array<SyncPreviewVehicle> = leftoverAfterPair.map(
+    (id) => ({ key: id, name: formatV(id) }),
+  )
+
   return {
     ...formatted,
     additionCompact: compactFromPreview(
       additions.groups,
       additionUngrouped,
-      formatted.transportAdditions,
+      additionVehicles.map((row) => row.name),
       crewCompactLabels(diff, 'add'),
     ),
     removalCompact: compactFromPreview(
       removals.groups,
       removalUngrouped,
-      formatted.transportRemovals,
+      removalVehicles.map((row) => row.name),
       crewCompactLabels(diff, 'remove'),
     ),
     additionGroups: additions.groups,
@@ -869,5 +1409,7 @@ export function buildSyncPreviewViewModel(
     removalUngrouped,
     additionCrew: crewPreviewRows(diff, detail, snapshot, 'add'),
     removalCrew: crewPreviewRows(diff, detail, snapshot, 'remove'),
+    additionVehicles,
+    removalVehicles,
   }
 }

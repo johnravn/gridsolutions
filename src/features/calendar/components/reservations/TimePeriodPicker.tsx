@@ -32,7 +32,7 @@ export default function TimePeriodPicker({
   const qc = useQueryClient()
   const { companyId } = useCompany()
   const { data: allTimePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))
-  const { success, error } = useToast()
+  const { progress } = useToast()
 
   // Filter time periods by category if categoryFilter is provided
   const timePeriods = React.useMemo(() => {
@@ -61,14 +61,18 @@ export default function TimePeriodPicker({
       })
       return id
     },
-    onSuccess: async (id) => {
+    onMutate: () => ({ progressToast: progress('Saving time period…') }),
+    onSuccess: async (id, _vars, ctx) => {
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
       onChange(id)
       setEditing(null)
-      success('Success', 'Time period saved successfully')
+      ctx?.progressToast.success('Saved', 'Time period saved successfully')
     },
-    onError: (e: any) => {
-      error('Failed to update', e?.hint || e?.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to update',
+        e.message || 'Please try again.',
+      )
     },
   })
 
@@ -231,7 +235,7 @@ export function FixedTimePeriodEditor({
   const qc = useQueryClient()
   const { companyId } = useCompany()
   const { data: timePeriods = [] } = useQuery(jobTimePeriodsQuery({ jobId }))
-  const { success, error } = useToast()
+  const { progress } = useToast()
 
   const [editing, setEditing] = React.useState(false)
   const [editData, setEditData] = React.useState<{
@@ -264,14 +268,18 @@ export function FixedTimePeriodEditor({
         end_at: editData.end_at,
       })
     },
-    onSuccess: async () => {
+    onMutate: () => ({ progressToast: progress('Updating time period…') }),
+    onSuccess: async (_data, _vars, ctx) => {
       await qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] })
       setEditing(false)
       setEditData(null)
-      success('Success', 'Time period updated successfully')
+      ctx?.progressToast.success('Updated', 'Time period updated successfully')
     },
-    onError: (e: any) => {
-      error('Failed to update', e?.hint || e?.message || 'Please try again.')
+    onError: (e: Error, _vars, ctx) => {
+      ctx?.progressToast.error(
+        'Failed to update',
+        e.message || 'Please try again.',
+      )
     },
   })
 

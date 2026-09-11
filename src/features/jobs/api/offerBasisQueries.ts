@@ -21,10 +21,22 @@ import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
-import { reservationMatchesKeepKeys } from '../utils/offerBookingDiff'
+import {
+  
+  crewKeysToPreserve,
+  emptyBookingSyncIgnoreSets,
+  equipmentKeysToPreserve,
+  makeCrewKey,
+  reservationMatchesKeepKeys,
+  serializeBookingSyncIgnores,
+  transportKeysToPreserve,
+  unassignedTransportKey,
+  unassignedTransportLabel
+} from '../utils/offerBookingDiff'
 import { timePeriodIdsSafeToDelete } from '../utils/timePeriodDeleteSafety'
 import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
 import { ensureDefaultEquipmentPeriod } from './queries'
+import type {BookingSyncIgnoreSets} from '../utils/offerBookingDiff';
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type {
   LocalCrewItem,
@@ -200,6 +212,7 @@ export function jobOfferBasesQuery(jobId: string) {
           discount_percent: offer.discount_percent,
           vat_percent: offer.vat_percent,
           bookings_synced_at: offer.bookings_synced_at,
+          booking_sync_ignores: [],
           created_at: offer.created_at,
           updated_at: offer.updated_at,
           offers: [offer],
@@ -1728,6 +1741,19 @@ async function referencedOfferLineTimePeriodIds(
   return referenced
 }
 
+export async function saveOfferBasisBookingSyncIgnores(
+  basisId: string,
+  ignores: BookingSyncIgnoreSets,
+): Promise<void> {
+  const { error } = await supabase
+    .from('offer_bases')
+    .update({
+      booking_sync_ignores: serializeBookingSyncIgnores(ignores),
+    })
+    .eq('id', basisId)
+  if (error) throw error
+}
+
 export async function createBookingsFromOfferBasis(
   basisId: string,
   userId: string,
@@ -1736,7 +1762,7 @@ export async function createBookingsFromOfferBasis(
     skipConflictCheck?: boolean
     excludeItemIds?: Array<string>
     excludeVehicleIds?: Array<string>
-    keepEquipmentKeys?: Array<string>
+    ignores?: BookingSyncIgnoreSets
     onBookingProgress?: (progress: { current: number; total: number }) => void
   },
 ): Promise<void> {
@@ -1773,6 +1799,10 @@ export async function createBookingsFromOfferBasis(
   }
 
   const forcedFields = options?.force ? forcedBookingFields(userId) : {}
+  const ignores = options?.ignores ?? emptyBookingSyncIgnoreSets()
+  const keepEquipment = equipmentKeysToPreserve(ignores)
+  const keepCrew = crewKeysToPreserve(ignores)
+  const keepTransport = transportKeysToPreserve(ignores)
   const laterBookingCount =
     countCrewBookingUnits(basis.crew_items || [], defaultStart, defaultEnd) +
     (basis.transport_items?.length ?? 0)
@@ -1891,7 +1921,6 @@ export async function createBookingsFromOfferBasis(
     }> = []
 
     const excludeItemIds = new Set(options?.excludeItemIds ?? [])
-    const keepSet = new Set(options?.keepEquipmentKeys ?? [])
 
     for (const entry of equipmentEntries) {
       const periodId = entry.time_period_id ?? defaultEquipmentPeriodId
@@ -1905,7 +1934,7 @@ export async function createBookingsFromOfferBasis(
               source_group_id: null,
               time_period_id: periodId,
             },
-            keepSet,
+            keepEquipment,
           )
         ) {
           continue
@@ -1938,7 +1967,7 @@ export async function createBookingsFromOfferBasis(
               source_group_id: entry.group_id,
               time_period_id: periodId,
             },
-            keepSet,
+            keepEquipment,
           )
         ) {
           continue
@@ -2029,6 +2058,16 @@ export async function createBookingsFromOfferBasis(
     }
 
     for (const aggregate of crewAggregates.values()) {
+      const crewKey = makeCrewKey(
+        aggregate.title,
+        aggregate.start_at,
+        aggregate.end_at,
+      )
+      if (keepCrew.has(crewKey)) {
+        bookingCurrent += 1
+        reportBooking()
+        continue
+      }
       let existingPeriod: { id: string } | null = null
 
       if (aggregate.time_period_id) {
@@ -2139,6 +2178,18 @@ export async function createBookingsFromOfferBasis(
 
     for (let index = 0; index < basis.transport_items.length; index++) {
       const transportItem = basis.transport_items[index]
+      const chosenVehicle = resolvedVehicles[index] ?? null
+      const unassignedKey = unassignedTransportKey(
+        unassignedTransportLabel(transportItem),
+      )
+      if (
+        (chosenVehicle && keepTransport.has(chosenVehicle.vehicleId)) ||
+        (!chosenVehicle && keepTransport.has(unassignedKey))
+      ) {
+        bookingCurrent += 1
+        reportBooking()
+        continue
+      }
       const startAt = transportItem.start_date || defaultStart
       const endAt = transportItem.end_date || defaultEnd
       const category = transportItem.vehicle_category ?? null
@@ -2218,8 +2269,6 @@ export async function createBookingsFromOfferBasis(
           timePeriodId,
         )
       }
-
-      const chosenVehicle = resolvedVehicles[index] ?? null
 
       if (chosenVehicle && !excludeVehicleIds.has(chosenVehicle.vehicleId)) {
         const { data: existingReservation, error: reservationLookupError } =
@@ -2328,7 +2377,7 @@ export async function syncBookingsFromOfferBasis(
   options?: {
     force?: boolean
     skipConflictingEquipment?: boolean
-    keepEquipmentKeys?: Array<string>
+    ignores?: BookingSyncIgnoreSets
     onProgress?: (progress: SyncBookingsProgress) => void
   },
 ): Promise<Array<string>> {
@@ -2374,7 +2423,10 @@ export async function syncBookingsFromOfferBasis(
     warnings.push(...preview.summaryLines.map((line) => `Skipped: ${line}`))
   }
 
-  const keepSet = new Set(options?.keepEquipmentKeys ?? [])
+  const ignores = options?.ignores ?? emptyBookingSyncIgnoreSets()
+  const keepEquipment = equipmentKeysToPreserve(ignores)
+  const keepCrew = crewKeysToPreserve(ignores)
+  const keepTransport = transportKeysToPreserve(ignores)
   let removing = { current: 0, total: 0 }
   let booking = { current: 0, total: 0 }
   const report = () => options?.onProgress?.({ removing, booking })
@@ -2382,13 +2434,18 @@ export async function syncBookingsFromOfferBasis(
 
   const { data: timePeriods, error: timePeriodsError } = await supabase
     .from('time_periods')
-    .select('id')
+    .select('id, title, start_at, end_at, category')
     .eq('job_id', basis.job_id)
     .in('category', ['equipment', 'crew', 'transport'])
 
   if (timePeriodsError) throw timePeriodsError
 
   const timePeriodIds = (timePeriods || []).map((period) => period.id)
+  const crewPeriodById = new Map(
+    (timePeriods || [])
+      .filter((period) => period.category === 'crew')
+      .map((period) => [period.id, period]),
+  )
 
   if (timePeriodIds.length > 0) {
     const [reservedItemsLookup, reservedCrewLookup, reservedVehiclesLookup] =
@@ -2399,11 +2456,11 @@ export async function syncBookingsFromOfferBasis(
           .in('time_period_id', timePeriodIds),
         supabase
           .from('reserved_crew')
-          .select('id')
+          .select('id, time_period_id')
           .in('time_period_id', timePeriodIds),
         supabase
           .from('reserved_vehicles')
-          .select('id')
+          .select('id, vehicle_id, time_period_id')
           .in('time_period_id', timePeriodIds),
       ])
 
@@ -2412,18 +2469,34 @@ export async function syncBookingsFromOfferBasis(
     if (reservedVehiclesLookup.error) throw reservedVehiclesLookup.error
 
     const itemIdsToDelete: Array<string> = []
+    const crewIdsToDelete: Array<string> = []
+    const vehicleIdsToDelete: Array<string> = []
     const keptPeriodIds = new Set<string>()
     for (const row of reservedItemsLookup.data ?? []) {
-      if (reservationMatchesKeepKeys(row, keepSet)) {
+      if (reservationMatchesKeepKeys(row, keepEquipment)) {
         keptPeriodIds.add(row.time_period_id)
         continue
       }
       itemIdsToDelete.push(row.id)
     }
-    const crewIdsToDelete = (reservedCrewLookup.data ?? []).map((row) => row.id)
-    const vehicleIdsToDelete = (reservedVehiclesLookup.data ?? []).map(
-      (row) => row.id,
-    )
+    for (const row of reservedCrewLookup.data ?? []) {
+      const period = crewPeriodById.get(row.time_period_id)
+      const crewKey = period
+        ? makeCrewKey(period.title ?? '', period.start_at, period.end_at)
+        : ''
+      if (crewKey && keepCrew.has(crewKey)) {
+        keptPeriodIds.add(row.time_period_id)
+        continue
+      }
+      crewIdsToDelete.push(row.id)
+    }
+    for (const row of reservedVehiclesLookup.data ?? []) {
+      if (keepTransport.has(row.vehicle_id)) {
+        keptPeriodIds.add(row.time_period_id)
+        continue
+      }
+      vehicleIdsToDelete.push(row.id)
+    }
 
     removing = {
       current: 0,
@@ -2473,7 +2546,7 @@ export async function syncBookingsFromOfferBasis(
     excludeVehicleIds: options?.skipConflictingEquipment
       ? preview.conflictingVehicleIds
       : undefined,
-    keepEquipmentKeys: options?.keepEquipmentKeys,
+    ignores,
     onBookingProgress: options?.onProgress
       ? (next) => {
           booking = next
@@ -2481,5 +2554,10 @@ export async function syncBookingsFromOfferBasis(
         }
       : undefined,
   })
+  try {
+    await saveOfferBasisBookingSyncIgnores(basisId, ignores)
+  } catch (error) {
+    console.warn('Failed to persist booking sync ignores:', error)
+  }
   return options?.force ? preview.summaryLines : warnings
 }

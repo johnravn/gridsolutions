@@ -9,7 +9,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'App toasts for success, error, and info. Desktop sits bottom-right; phone uses a top banner.',
+          'App toasts for success, error, info, and in-progress work. Desktop sits bottom-right; phone uses a top banner. Progress toasts stay until they succeed, fail, or are dismissed.',
       },
     },
   },
@@ -46,6 +46,33 @@ function ToastPlayground() {
         }
       >
         Success with undo
+      </Button>
+      <Button
+        variant="soft"
+        onClick={() => {
+          const handle = toast.progress('Booking items…', 'Reserving equipment')
+          window.setTimeout(() => handle.update({ current: 1, total: 3 }), 400)
+          window.setTimeout(() => handle.update({ current: 2, total: 3 }), 900)
+          window.setTimeout(
+            () => handle.success('Items reserved', '3 bookings saved'),
+            1400,
+          )
+        }}
+      >
+        Progress then success
+      </Button>
+      <Button
+        color="red"
+        variant="outline"
+        onClick={() => {
+          const handle = toast.progress('Updating booking…')
+          window.setTimeout(
+            () => handle.error('Failed to update', 'Please try again.'),
+            1200,
+          )
+        }}
+      >
+        Progress then error
       </Button>
     </Flex>
   )

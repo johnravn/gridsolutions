@@ -489,6 +489,11 @@ export type OfferBasis = {
   discount_percent: number
   vat_percent: number
   bookings_synced_at: string | null
+  booking_sync_ignores: Array<{
+    kind: 'equipment' | 'crew' | 'transport'
+    side: 'add' | 'remove'
+    key: string
+  }>
   created_at: string
   updated_at: string
 }

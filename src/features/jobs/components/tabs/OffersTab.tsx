@@ -83,25 +83,35 @@ import {
   buildOfferBasisBookingSummary,
 } from '../../utils/bookingSummary'
 import {
+  activeIgnoresAgainstDiff,
+  bookingSyncIgnoreSetsIsEmpty,
   buildSyncPreviewViewModel,
   catalogFromOfferDetail,
+  classifyOfferBasisSyncStatus,
   computeOfferDiff,
   formatOfferDiffForPreview,
+  isolateIgnoredDiff,
   labelForId,
   namesFromOfferDetail,
+  parseBookingSyncIgnores,
+  subtractIgnoresFromDiff,
 } from '../../utils/offerBookingDiff'
 import { OffersStructureHelpDialog } from '../OffersStructureHelpDialog'
 import { PrettyOfferBetaBadge } from '../PrettyOfferBetaBadge'
 import { SyncBasisBookingsDialog } from '../dialogs/SyncBasisBookingsDialog'
 import type { SyncBasisConfirmMode } from '../dialogs/SyncBasisBookingsDialog'
 import type {
+  BookingSyncIgnoreSets,
   BookingsSnapshot,
   ItemCatalogEntry,
   SyncLineItems,
   SyncPreviewViewModel,
 } from '../../utils/offerBookingDiff'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
-import type { JobOfferBasisRow, SyncBookingsProgress } from '../../api/offerBasisQueries'
+import type {
+  JobOfferBasisRow,
+  SyncBookingsProgress,
+} from '../../api/offerBasisQueries'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { JobOffer, OfferType } from '../../types'
 
@@ -242,6 +252,7 @@ export default function OffersTab({
     preview: SyncPreviewViewModel | null
     conflicts: BasisBookingConflictPreview | null
     loading: boolean
+    initialIgnores: BookingSyncIgnoreSets
   } | null>(null)
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceSummaryLines, setForceSummaryLines] = React.useState<
@@ -256,7 +267,7 @@ export default function OffersTab({
     basisId: string
     action: 'sync' | 'create'
     skipConflictingEquipment?: boolean
-    keepEquipmentKeys?: Array<string>
+    ignores?: BookingSyncIgnoreSets
   } | null>(null)
   const [deleteOpen, setDeleteOpen] = React.useState<JobOffer | null>(null)
   const [deleteBasisOpen, setDeleteBasisOpen] =
@@ -820,6 +831,14 @@ export default function OffersTab({
     [vehicleNamesQuery.data],
   )
 
+  const getBasisIgnores = React.useCallback(
+    (basisId: string): BookingSyncIgnoreSets => {
+      const row = bases.find((basis) => basis.id === basisId)
+      return parseBookingSyncIgnores(row?.booking_sync_ignores)
+    },
+    [bases],
+  )
+
   const buildDiffTooltip = (basisId: string) => {
     const diff = getBasisDiff(basisId)
     if (!diff) {
@@ -830,7 +849,20 @@ export default function OffersTab({
       )
     }
 
-    const formatted = formatOfferDiffForPreview(diff, formatItem, formatVehicle)
+    const ignores = getBasisIgnores(basisId)
+    const active = activeIgnoresAgainstDiff(ignores, diff)
+    const remaining = subtractIgnoresFromDiff(diff, active)
+    const formatted = formatOfferDiffForPreview(
+      remaining,
+      formatItem,
+      formatVehicle,
+    )
+    const ignoredFormatted = formatOfferDiffForPreview(
+      isolateIgnoredDiff(diff, active),
+      formatItem,
+      formatVehicle,
+    )
+    const hasActiveIgnores = !bookingSyncIgnoreSetsIsEmpty(active)
 
     const lines: Array<React.ReactNode> = []
 
@@ -869,23 +901,41 @@ export default function OffersTab({
       lines.push(<Box key={`${title}-spacer`} height="6px" />)
     }
 
-    pushSection(
-      'Removed from bookings (present now, not in basis)',
-      formatted.equipmentRemovals,
-      'None',
-    )
+    if (hasActiveIgnores) {
+      pushSection(
+        'Kept booked (ignored removals)',
+        [
+          ...ignoredFormatted.equipmentRemovals,
+          ...ignoredFormatted.crewRemovals,
+          ...ignoredFormatted.transportRemovals,
+        ],
+        'None',
+      )
+      pushSection(
+        'Not added (ignored additions)',
+        [
+          ...ignoredFormatted.equipmentAdditions,
+          ...ignoredFormatted.crewAdditions,
+          ...ignoredFormatted.transportAdditions,
+        ],
+        'None',
+      )
+    }
 
-    pushSection(
-      'Added to bookings (in basis, missing now)',
-      formatted.equipmentAdditions,
-      'None',
-    )
-
-    pushSection(
-      'Crew role changes',
-      [...formatted.crewRemovals, ...formatted.crewAdditions],
-      'None',
-    )
+    if (formatted.hasChanges) {
+      pushSection(
+        'Still out of sync',
+        [
+          ...formatted.equipmentRemovals,
+          ...formatted.equipmentAdditions,
+          ...formatted.crewRemovals,
+          ...formatted.crewAdditions,
+          ...formatted.transportRemovals,
+          ...formatted.transportAdditions,
+        ],
+        'None',
+      )
+    }
 
     if (formatted.transportSummary) {
       lines.push(
@@ -901,7 +951,11 @@ export default function OffersTab({
   const getBasisSyncStatus = React.useCallback(
     (
       basisId: string,
-    ): { label: string; color: 'green' | 'gray'; title: string } => {
+    ): {
+      label: string
+      color: 'green' | 'amber' | 'gray'
+      title: string
+    } => {
       if (syncingBasisId === basisId) {
         return {
           label: 'Checking…',
@@ -919,47 +973,45 @@ export default function OffersTab({
         }
       }
 
-      const formatted = formatOfferDiffForPreview(
-        diff,
+      const active = activeIgnoresAgainstDiff(getBasisIgnores(basisId), diff)
+      const remaining = formatOfferDiffForPreview(
+        subtractIgnoresFromDiff(diff, active),
         formatItem,
         formatVehicle,
       )
+      const classified = classifyOfferBasisSyncStatus({
+        remainingHasChanges: remaining.hasChanges,
+        hasActiveIgnores: !bookingSyncIgnoreSetsIsEmpty(active),
+      })
 
-      if (!formatted.hasChanges) {
-        return {
-          label: 'Synced',
-          color: 'green',
-          title: 'Offer basis matches current bookings.',
-        }
-      }
+      if (classified.label !== 'Not synced') return classified
 
       const reasons: Array<string> = []
       if (
-        formatted.equipmentAdditions.length > 0 ||
-        formatted.equipmentRemovals.length > 0
+        remaining.equipmentAdditions.length > 0 ||
+        remaining.equipmentRemovals.length > 0
       ) {
         reasons.push('Equipment differs')
       }
       if (
-        formatted.crewAdditions.length > 0 ||
-        formatted.crewRemovals.length > 0
+        remaining.crewAdditions.length > 0 ||
+        remaining.crewRemovals.length > 0
       ) {
         reasons.push('Crew differs')
       }
       if (
-        formatted.transportAdditions.length > 0 ||
-        formatted.transportRemovals.length > 0
+        remaining.transportAdditions.length > 0 ||
+        remaining.transportRemovals.length > 0
       ) {
         reasons.push('Transport differs')
       }
 
       return {
-        label: 'Not synced',
-        color: 'gray',
+        ...classified,
         title: `Offer basis does not match current bookings. ${reasons.join(' • ')}`,
       }
     },
-    [formatItem, formatVehicle, getBasisDiff, syncingBasisId],
+    [formatItem, formatVehicle, getBasisDiff, getBasisIgnores, syncingBasisId],
   )
 
   const prevIsActiveRef = React.useRef<boolean>(false)
@@ -1038,18 +1090,18 @@ export default function OffersTab({
       basisId,
       force = false,
       skipConflictingEquipment = false,
-      keepEquipmentKeys,
+      ignores,
     }: {
       basisId: string
       force?: boolean
       skipConflictingEquipment?: boolean
-      keepEquipmentKeys?: Array<string>
+      ignores?: BookingSyncIgnoreSets
     }) => {
       if (!user?.id) throw new Error('User not authenticated')
       return await syncBookingsFromOfferBasis(basisId, user.id, {
         force,
         skipConflictingEquipment,
-        keepEquipmentKeys,
+        ignores,
         onProgress: setSyncProgress,
       })
     },
@@ -1345,14 +1397,14 @@ export default function OffersTab({
       options: {
         force?: boolean
         skipConflictingEquipment?: boolean
-        keepEquipmentKeys?: Array<string>
+        ignores?: BookingSyncIgnoreSets
       } = {},
     ): Promise<'overlap' | 'done'> => {
       pendingForceBookingRef.current = {
         basisId,
         action,
         skipConflictingEquipment: options.skipConflictingEquipment,
-        keepEquipmentKeys: options.keepEquipmentKeys,
+        ignores: options.ignores,
       }
       try {
         if (action === 'sync') {
@@ -1360,7 +1412,7 @@ export default function OffersTab({
             basisId,
             force: options.force,
             skipConflictingEquipment: options.skipConflictingEquipment,
-            keepEquipmentKeys: options.keepEquipmentKeys,
+            ignores: options.ignores,
           })
         } else {
           await createBookingsMutation.mutateAsync({
@@ -1424,6 +1476,7 @@ export default function OffersTab({
         preview: null,
         conflicts: null,
         loading: true,
+        initialIgnores: parseBookingSyncIgnores(basis.booking_sync_ignores),
       })
 
       try {
@@ -1484,6 +1537,7 @@ export default function OffersTab({
           preview,
           conflicts,
           loading: false,
+          initialIgnores: parseBookingSyncIgnores(basis.booking_sync_ignores),
         })
       } catch (e: unknown) {
         setSyncPreview({
@@ -1492,6 +1546,7 @@ export default function OffersTab({
           preview: null,
           conflicts: null,
           loading: false,
+          initialIgnores: parseBookingSyncIgnores(basis.booking_sync_ignores),
         })
         toastError(
           'Failed to load sync preview',
@@ -1513,14 +1568,14 @@ export default function OffersTab({
   const handleSyncPreviewConfirm = React.useCallback(
     async (
       mode: SyncBasisConfirmMode,
-      options: { keepEquipmentKeys: Array<string> },
+      options: { ignores: BookingSyncIgnoreSets },
     ) => {
       if (!syncPreview) return
       try {
         await startBasisBooking(syncPreview.basisId, 'sync', {
           force: mode === 'force',
           skipConflictingEquipment: mode === 'skip-conflicts',
-          keepEquipmentKeys: options.keepEquipmentKeys,
+          ignores: options.ignores,
         })
         setSyncPreview(null)
       } catch {
@@ -1851,7 +1906,9 @@ export default function OffersTab({
     const basisVersion = basisVersionById.get(basis.id) ?? 1
     const offerSubVersionById = buildOfferSubVersionById(basis.offers)
     const syncStatus = getBasisSyncStatus(basis.id)
-    const showSyncInfo = syncStatus.label === 'Not synced'
+    const showSyncInfo =
+      syncStatus.label === 'Not synced' ||
+      syncStatus.label === 'Partially synced'
     const isBasisLocked = basis.offers.some((offer) => offer.locked)
     const pdfOffer = getBasisPdfOffer(basis)
     const syncPending =
@@ -1981,7 +2038,8 @@ export default function OffersTab({
                       )}
                       <Tooltip
                         content={
-                          syncStatus.label === 'Not synced'
+                          syncStatus.label === 'Not synced' ||
+                          syncStatus.label === 'Partially synced'
                             ? buildDiffTooltip(basis.id)
                             : syncStatus.title
                         }
@@ -1994,13 +2052,17 @@ export default function OffersTab({
                             color:
                               syncStatus.label === 'Synced'
                                 ? 'var(--green-9)'
-                                : syncStatus.label === 'Not synced'
-                                  ? 'var(--gray-9)'
-                                  : 'var(--gray-9)',
+                                : syncStatus.label === 'Partially synced'
+                                  ? 'var(--amber-9)'
+                                  : syncStatus.label === 'Not synced'
+                                    ? 'var(--gray-9)'
+                                    : 'var(--gray-9)',
                           }}
                         >
                           {syncStatus.label === 'Synced' ? (
                             <CheckCircle width={14} height={14} />
+                          ) : syncStatus.label === 'Partially synced' ? (
+                            <InfoCircle width={14} height={14} />
                           ) : syncStatus.label === 'Not synced' ? (
                             <WarningTriangle width={14} height={14} />
                           ) : (
@@ -2586,6 +2648,7 @@ export default function OffersTab({
           loading={syncPreview.loading}
           syncing={syncBookingsMutation.isPending}
           progress={syncProgress}
+          initialIgnores={syncPreview.initialIgnores}
           onConfirm={(mode, options) => {
             void handleSyncPreviewConfirm(mode, options)
           }}
@@ -2824,7 +2887,7 @@ export default function OffersTab({
               basisId: pending.basisId,
               force: true,
               skipConflictingEquipment: pending.skipConflictingEquipment,
-              keepEquipmentKeys: pending.keepEquipmentKeys,
+              ignores: pending.ignores,
             })
             return
           }

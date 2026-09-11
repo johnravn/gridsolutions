@@ -44,6 +44,7 @@ import {
 } from '@features/conflicts/utils/conflictCopy'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
 import BookEquipmentPickerList from './BookEquipmentPickerList'
+import type { ProgressToastHandle } from '@shared/ui/toast/ToastProvider'
 import type {
   InventoryIndexRow,
   InventoryItemKind,
@@ -129,7 +130,8 @@ export default function BookItemsDialog({
     text: string
   } | null>(null)
   const lastItemNameMapRef = React.useRef<Map<string, string>>(new Map())
-  const { success, error, info } = useToast()
+  const bookingProgressRef = React.useRef<ProgressToastHandle | null>(null)
+  const { info, progress } = useToast()
   const { userId: authUserId } = useAuthz()
   const [forceDialogOpen, setForceDialogOpen] = React.useState(false)
   const [forceConflicts, setForceConflicts] = React.useState<
@@ -367,7 +369,17 @@ export default function BookItemsDialog({
 
   const save = useMutation({
     mutationFn: async ({ force = false }: { force?: boolean } = {}) => {
-      if (rows.length === 0) return
+      bookingProgressRef.current?.dismiss()
+      const p = progress(
+        'Booking items…',
+        'Checking availability and reserving',
+      )
+      bookingProgressRef.current = p
+      if (rows.length === 0) {
+        p.dismiss()
+        bookingProgressRef.current = null
+        return
+      }
 
       // If no time period selected but custom times are set, we'll create one
       if (!selectedTimePeriodId && !customStartTime && !customEndTime) {
@@ -847,6 +859,8 @@ export default function BookItemsDialog({
         setForceSummaryLines(bookingWarnings)
         setForceConflicts(dedupeOverlapConflicts(bookingConflicts))
         setForceDialogOpen(true)
+        p.dismiss()
+        bookingProgressRef.current = null
         throw new Error('OVERLAP_NEEDS_FORCE')
       }
 
@@ -892,7 +906,8 @@ export default function BookItemsDialog({
       onOpenChange(false)
       onSaved?.()
       setRows([])
-      success('Success', 'Items are reserved')
+      bookingProgressRef.current?.success('Reserved', 'Items are reserved')
+      bookingProgressRef.current = null
       if (result?.warnings?.length) {
         info('Booking warnings', result.warnings.join('\n'), 6000)
       }
@@ -922,13 +937,16 @@ export default function BookItemsDialog({
           isGroupOverlapError(rawMessage)) &&
         !forceDialogOpen
       ) {
+        bookingProgressRef.current?.dismiss()
+        bookingProgressRef.current = null
         setForceSummaryLines([friendlyMessage])
         setForceConflicts([])
         setForceDialogOpen(true)
         return
       }
 
-      error('Failed to update', friendlyMessage)
+      bookingProgressRef.current?.error('Failed to book items', friendlyMessage)
+      bookingProgressRef.current = null
     },
   })
 

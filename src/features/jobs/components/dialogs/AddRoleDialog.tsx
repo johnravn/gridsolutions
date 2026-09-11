@@ -24,6 +24,7 @@ import {
   isCrewOverlapError,
 } from '@features/conflicts/api/forceBooking'
 import { jobDetailQuery } from '@features/jobs/api/queries'
+import type { ProgressToastHandle } from '@shared/ui/toast/ToastProvider'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 
 const TITLE_SUGGESTIONS = [
@@ -65,7 +66,7 @@ export default function AddRoleDialog({
   jobId: string
 }) {
   const qc = useQueryClient()
-  const { success, error: toastError } = useToast()
+  const { progress } = useToast()
   const { userId: currentUserId } = useAuthz()
   const [neededDraft, setNeededDraft] = React.useState<string | null>(null)
   const [focusedField, setFocusedField] = React.useState<
@@ -76,6 +77,7 @@ export default function AddRoleDialog({
     Array<OverlapConflict>
   >([])
   const createdPeriodIdRef = React.useRef<string | null>(null)
+  const addRoleProgressRef = React.useRef<ProgressToastHandle | null>(null)
 
   // Prefer the job-page cache so start/end are available on first open render.
   const { data: job } = useQuery({
@@ -129,6 +131,9 @@ export default function AddRoleDialog({
 
   const save = useMutation({
     mutationFn: async (vars?: { force?: boolean }) => {
+      addRoleProgressRef.current?.dismiss()
+      const p = progress('Adding role…')
+      addRoleProgressRef.current = p
       const force = vars?.force ?? false
       const value = form.state.values
       if (!job?.company_id) throw new Error('Missing company')
@@ -145,6 +150,8 @@ export default function AddRoleDialog({
         if (conflicts.length > 0) {
           setForceConflicts(conflicts)
           setForceDialogOpen(true)
+          p.dismiss()
+          addRoleProgressRef.current = null
           throw new Error(OVERLAP_NEEDS_FORCE)
         }
       }
@@ -196,9 +203,13 @@ export default function AddRoleDialog({
       setNeededDraft(null)
       setFocusedField(null)
       onOpenChange(false)
-      if (result?.confirmed) {
-        success('Success', 'Role added with you as confirmed crew')
-      }
+      addRoleProgressRef.current?.success(
+        'Role added',
+        result?.confirmed
+          ? 'Role added with you as confirmed crew'
+          : 'Role saved',
+      )
+      addRoleProgressRef.current = null
       void Promise.all([
         qc.invalidateQueries({ queryKey: ['jobs.crew', jobId] }),
         qc.invalidateQueries({ queryKey: ['jobs', jobId, 'time_periods'] }),
@@ -212,11 +223,14 @@ export default function AddRoleDialog({
       if (e.message === OVERLAP_NEEDS_FORCE) return
       const msg = e.message || 'Please try again.'
       if (isCrewOverlapError(msg) && !forceDialogOpen) {
+        addRoleProgressRef.current?.dismiss()
+        addRoleProgressRef.current = null
         setForceConflicts([])
         setForceDialogOpen(true)
         return
       }
-      toastError('Failed to add role', msg)
+      addRoleProgressRef.current?.error('Failed to add role', msg)
+      addRoleProgressRef.current = null
     },
   })
 

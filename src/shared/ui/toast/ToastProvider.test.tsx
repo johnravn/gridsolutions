@@ -19,7 +19,11 @@ beforeAll(() => {
   })
 })
 
-function FireToast({ kind }: { kind: 'success' | 'error' | 'info' }) {
+function FireToast({
+  kind,
+}: {
+  kind: 'success' | 'error' | 'info' | 'progress'
+}) {
   const toast = useToast()
   return (
     <button
@@ -28,6 +32,8 @@ function FireToast({ kind }: { kind: 'success' | 'error' | 'info' }) {
         if (kind === 'success') toast.success('Saved', 'Time entry added')
         else if (kind === 'error')
           toast.error('Save failed', 'Please try again.')
+        else if (kind === 'progress')
+          toast.progress('Booking items…', 'Reserving equipment')
         else toast.info('Copied to clipboard')
       }}
     >
@@ -36,7 +42,57 @@ function FireToast({ kind }: { kind: 'success' | 'error' | 'info' }) {
   )
 }
 
-function renderToast(kind: 'success' | 'error' | 'info' = 'success') {
+function FireProgressThenSucceed() {
+  const toast = useToast()
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const handle = toast.progress('Booking items…')
+        handle.success('Items reserved')
+      }}
+    >
+      Complete
+    </button>
+  )
+}
+
+function FireProgressThenFail() {
+  const toast = useToast()
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const handle = toast.progress('Booking items…')
+        handle.error('Failed to book', 'Please try again.')
+      }}
+    >
+      Fail
+    </button>
+  )
+}
+
+function FireProgressThenUpdate() {
+  const toast = useToast()
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        const handle = toast.progress('Booking items…', undefined, {
+          current: 1,
+          total: 3,
+        })
+        handle.update({ current: 2, description: '2 of 3 reserved' })
+      }}
+    >
+      Update
+    </button>
+  )
+}
+
+function renderToast(
+  kind: 'success' | 'error' | 'info' | 'progress' = 'success',
+) {
   return render(
     <Theme>
       <AppToastProvider>
@@ -104,5 +160,80 @@ describe('AppToastProvider', () => {
     expect(host?.parentElement).toBe(document.body)
     expect(host?.querySelector('.app-toast-layer')).toBeTruthy()
     expect(host?.querySelector('.app-toast')).toBeTruthy()
+  })
+
+  it('shows a progress toast with a progress bar', async () => {
+    renderToast('progress')
+    fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Booking items…')).toBeInTheDocument()
+    })
+    expect(screen.getByText('Reserving equipment')).toBeInTheDocument()
+    expect(document.querySelector('.app-toast')).toHaveAttribute(
+      'data-kind',
+      'progress',
+    )
+    expect(screen.getByRole('progressbar')).toBeInTheDocument()
+  })
+
+  it('morphs a progress toast into success', async () => {
+    render(
+      <Theme>
+        <AppToastProvider>
+          <FireProgressThenSucceed />
+        </AppToastProvider>
+      </Theme>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Complete' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Items reserved')).toBeInTheDocument()
+    })
+    expect(document.querySelector('.app-toast')).toHaveAttribute(
+      'data-kind',
+      'success',
+    )
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('morphs a progress toast into error', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    render(
+      <Theme>
+        <AppToastProvider>
+          <FireProgressThenFail />
+        </AppToastProvider>
+      </Theme>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Fail' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Failed to book')).toBeInTheDocument()
+    })
+    expect(document.querySelector('.app-toast')).toHaveAttribute(
+      'data-kind',
+      'error',
+    )
+    errorSpy.mockRestore()
+  })
+
+  it('updates a determinate progress toast', async () => {
+    render(
+      <Theme>
+        <AppToastProvider>
+          <FireProgressThenUpdate />
+        </AppToastProvider>
+      </Theme>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Update' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('2 of 3 reserved')).toBeInTheDocument()
+    })
+    expect(screen.getByRole('progressbar')).toHaveAttribute(
+      'aria-valuenow',
+      '67',
+    )
   })
 })

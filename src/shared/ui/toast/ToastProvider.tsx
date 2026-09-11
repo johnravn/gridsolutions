@@ -2,7 +2,7 @@
 import * as React from 'react'
 import { createPortal } from 'react-dom'
 import * as Toast from '@radix-ui/react-toast'
-import { Button, IconButton, Text, Theme } from '@radix-ui/themes'
+import { Button, IconButton, Spinner, Text, Theme } from '@radix-ui/themes'
 import {
   CheckCircleSolid,
   InfoCircle,
@@ -13,7 +13,7 @@ import {
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { wasDemoBlockRecently } from '@features/demo/lib/demoModeState'
 
-type ToastKind = 'success' | 'error' | 'info'
+type ToastKind = 'success' | 'error' | 'info' | 'progress'
 type ToastItem = {
   id: string
   title: string
@@ -22,6 +22,21 @@ type ToastItem = {
   duration?: number
   onUndo?: () => void
   undoLabel?: string
+  progressCurrent?: number
+  progressTotal?: number
+  closing?: boolean
+}
+
+export type ProgressToastHandle = {
+  update: (next: {
+    title?: string
+    description?: string
+    current?: number
+    total?: number
+  }) => void
+  success: (title: string, description?: string, duration?: number) => void
+  error: (title: string, description?: string, duration?: number) => void
+  dismiss: () => void
 }
 
 type ToastContextValue = {
@@ -35,6 +50,11 @@ type ToastContextValue = {
   ) => void
   error: (title: string, description?: string, duration?: number) => void
   info: (title: string, description?: string, duration?: number) => void
+  progress: (
+    title: string,
+    description?: string,
+    opts?: { current?: number; total?: number },
+  ) => ProgressToastHandle
 }
 
 const ToastCtx = React.createContext<ToastContextValue | null>(null)
@@ -43,6 +63,7 @@ const DEFAULT_DURATION: Record<ToastKind, number> = {
   success: 2800,
   info: 3200,
   error: 5000,
+  progress: 0,
 }
 const UNDO_DURATION = 5000
 /** Keep in sync with `--app-toast-exit-ms` in styles.css */
@@ -55,10 +76,18 @@ export function useToast() {
 }
 
 function resolveDuration(t: ToastItem): number {
+  if (t.kind === 'progress') return Infinity
   if (t.duration === 0) return Infinity
   if (t.duration != null) return t.duration
   if (t.onUndo) return UNDO_DURATION
   return DEFAULT_DURATION[t.kind]
+}
+
+function progressPercent(t: ToastItem): number | null {
+  const total = t.progressTotal
+  if (total == null || total <= 0) return null
+  const current = t.progressCurrent ?? 0
+  return Math.max(0, Math.min(100, Math.round((current / total) * 100)))
 }
 
 function ToastItemView({
@@ -71,6 +100,7 @@ function ToastItemView({
   const [open, setOpen] = React.useState(true)
   const removedRef = React.useRef(false)
   const duration = resolveDuration(t)
+  const percent = t.kind === 'progress' ? progressPercent(t) : null
 
   const finish = React.useCallback(() => {
     if (removedRef.current) return
@@ -79,6 +109,10 @@ function ToastItemView({
   }, [onRemove, t.id])
 
   const dismiss = () => setOpen(false)
+
+  React.useEffect(() => {
+    if (t.closing) setOpen(false)
+  }, [t.closing])
 
   const handleUndo = () => {
     t.onUndo?.()
@@ -97,56 +131,76 @@ function ToastItemView({
       }}
       duration={duration}
     >
-      <div className="app-toast-icon" aria-hidden>
-        {t.kind === 'success' ? (
-          <CheckCircleSolid width={18} height={18} />
-        ) : t.kind === 'error' ? (
-          <WarningTriangle width={18} height={18} />
-        ) : (
-          <InfoCircle width={18} height={18} />
-        )}
-      </div>
+      <div className="app-toast-row">
+        <div className="app-toast-icon" aria-hidden>
+          {t.kind === 'success' ? (
+            <CheckCircleSolid width={18} height={18} />
+          ) : t.kind === 'error' ? (
+            <WarningTriangle width={18} height={18} />
+          ) : t.kind === 'progress' ? (
+            <Spinner size="2" />
+          ) : (
+            <InfoCircle width={18} height={18} />
+          )}
+        </div>
 
-      <div className="app-toast-body">
-        <Toast.Title asChild>
-          <Text size="3" weight="medium" className="app-toast-title">
-            {t.title}
-          </Text>
-        </Toast.Title>
-        {t.description && (
-          <Toast.Description asChild>
-            <Text size="2" color="gray" className="app-toast-desc">
-              {t.description}
+        <div className="app-toast-body">
+          <Toast.Title asChild>
+            <Text size="3" weight="medium" className="app-toast-title">
+              {t.title}
             </Text>
-          </Toast.Description>
+          </Toast.Title>
+          {t.description && (
+            <Toast.Description asChild>
+              <Text size="2" color="gray" className="app-toast-desc">
+                {t.description}
+              </Text>
+            </Toast.Description>
+          )}
+        </div>
+
+        {t.onUndo && (
+          <Button
+            size="1"
+            variant="ghost"
+            color="gray"
+            highContrast
+            onClick={handleUndo}
+            className="app-toast-action"
+          >
+            <Undo width={14} height={14} />
+            {t.undoLabel || 'Undo'}
+          </Button>
         )}
+
+        <Toast.Close asChild>
+          <IconButton
+            size="1"
+            variant="ghost"
+            color="gray"
+            aria-label="Dismiss notification"
+            className="app-toast-close"
+          >
+            <Xmark width={14} height={14} strokeWidth={2} />
+          </IconButton>
+        </Toast.Close>
       </div>
-
-      {t.onUndo && (
-        <Button
-          size="1"
-          variant="ghost"
-          color="gray"
-          highContrast
-          onClick={handleUndo}
-          className="app-toast-action"
+      {t.kind === 'progress' && (
+        <div
+          className="app-toast-progress"
+          role="progressbar"
+          aria-label={t.title}
+          aria-valuemin={0}
+          aria-valuemax={percent == null ? undefined : 100}
+          aria-valuenow={percent ?? undefined}
         >
-          <Undo width={14} height={14} />
-          {t.undoLabel || 'Undo'}
-        </Button>
+          <div
+            className="app-toast-progress-bar"
+            data-indeterminate={percent == null ? 'true' : undefined}
+            style={percent == null ? undefined : { width: `${percent}%` }}
+          />
+        </div>
       )}
-
-      <Toast.Close asChild>
-        <IconButton
-          size="1"
-          variant="ghost"
-          color="gray"
-          aria-label="Dismiss notification"
-          className="app-toast-close"
-        >
-          <Xmark width={14} height={14} strokeWidth={2} />
-        </IconButton>
-      </Toast.Close>
     </Toast.Root>
   )
 }
@@ -177,9 +231,19 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
     [],
   )
 
+  const updateById = React.useCallback(
+    (id: string, patch: Partial<ToastItem>) => {
+      setToasts((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+      )
+    },
+    [],
+  )
+
   const push = React.useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = crypto.randomUUID()
     setToasts((prev) => [...prev, { ...t, id }])
+    return id
   }, [])
 
   const api: ToastContextValue = {
@@ -217,6 +281,59 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
     },
     info: (title, description, duration) =>
       push({ kind: 'info', title, description, duration }),
+    progress: (title, description, opts) => {
+      const id = push({
+        kind: 'progress',
+        title,
+        description,
+        progressCurrent: opts?.current,
+        progressTotal: opts?.total,
+      })
+      return {
+        update: (next) =>
+          updateById(id, {
+            ...(next.title != null ? { title: next.title } : null),
+            ...(next.description != null
+              ? { description: next.description }
+              : null),
+            ...(next.current != null
+              ? { progressCurrent: next.current }
+              : null),
+            ...(next.total != null ? { progressTotal: next.total } : null),
+          }),
+        success: (nextTitle, nextDescription, duration) =>
+          updateById(id, {
+            kind: 'success',
+            title: nextTitle,
+            description: nextDescription,
+            duration,
+            progressCurrent: undefined,
+            progressTotal: undefined,
+          }),
+        error: (nextTitle, nextDescription, duration) => {
+          if (wasDemoBlockRecently()) {
+            updateById(id, { closing: true })
+            return
+          }
+          console.error('[Toast Error]', {
+            title: nextTitle,
+            description: nextDescription,
+            duration,
+            timestamp: new Date().toISOString(),
+            stack: new Error().stack,
+          })
+          updateById(id, {
+            kind: 'error',
+            title: nextTitle,
+            description: nextDescription,
+            duration,
+            progressCurrent: undefined,
+            progressTotal: undefined,
+          })
+        },
+        dismiss: () => updateById(id, { closing: true }),
+      }
+    },
   }
 
   const viewport = (
