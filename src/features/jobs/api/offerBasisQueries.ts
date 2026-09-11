@@ -21,6 +21,7 @@ import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
+import { timePeriodIdsSafeToDelete } from '../utils/timePeriodDeleteSafety'
 import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
 import { ensureDefaultEquipmentPeriod } from './queries'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
@@ -1635,6 +1636,52 @@ function throwIfVehicleOverlap(error: { message?: string } | null): void {
   )
 }
 
+async function linkOfferLinesToTimePeriod(
+  table: 'offer_equipment_items' | 'offer_crew_items' | 'offer_transport_items',
+  ids: Array<string>,
+  timePeriodId: string,
+): Promise<void> {
+  if (ids.length === 0) return
+  const { error } = await supabase
+    .from(table)
+    .update({ time_period_id: timePeriodId })
+    .in('id', ids)
+  if (error) throw error
+}
+
+async function referencedOfferLineTimePeriodIds(
+  timePeriodIds: Array<string>,
+): Promise<Set<string>> {
+  const [equipment, crew, transport] = await Promise.all([
+    supabase
+      .from('offer_equipment_items')
+      .select('time_period_id')
+      .in('time_period_id', timePeriodIds),
+    supabase
+      .from('offer_crew_items')
+      .select('time_period_id')
+      .in('time_period_id', timePeriodIds),
+    supabase
+      .from('offer_transport_items')
+      .select('time_period_id')
+      .in('time_period_id', timePeriodIds),
+  ])
+
+  if (equipment.error) throw equipment.error
+  if (crew.error) throw crew.error
+  if (transport.error) throw transport.error
+
+  const referenced = new Set<string>()
+  for (const row of [
+    ...(equipment.data ?? []),
+    ...(crew.data ?? []),
+    ...(transport.data ?? []),
+  ]) {
+    if (row.time_period_id) referenced.add(row.time_period_id)
+  }
+  return referenced
+}
+
 export async function createBookingsFromOfferBasis(
   basisId: string,
   userId: string,
@@ -1757,6 +1804,19 @@ export async function createBookingsFromOfferBasis(
       endAt: defaultEnd,
     })
 
+    const equipmentLineIdsToLink = (basis.groups ?? []).flatMap((group) =>
+      group.items
+        .filter(
+          (item) => !item.time_period_id && (item.item_id || item.group_id),
+        )
+        .map((item) => item.id),
+    )
+    await linkOfferLinesToTimePeriod(
+      'offer_equipment_items',
+      equipmentLineIdsToLink,
+      defaultEquipmentPeriodId,
+    )
+
     const reservedItems: Array<{
       time_period_id: string
       item_id: string
@@ -1774,7 +1834,7 @@ export async function createBookingsFromOfferBasis(
     const excludeItemIds = new Set(options?.excludeItemIds ?? [])
 
     for (const entry of equipmentEntries) {
-      const periodId = defaultEquipmentPeriodId
+      const periodId = entry.time_period_id ?? defaultEquipmentPeriodId
       if (entry.kind === 'item') {
         if (excludeItemIds.has(entry.item_id)) continue
         reservedItems.push({
@@ -1830,6 +1890,8 @@ export async function createBookingsFromOfferBasis(
       end_at: string
       needed_count: number
       role_category?: string | null
+      time_period_id: string | null
+      offerItemIds: Array<string>
     }
 
     const crewAggregates = new Map<string, CrewAggregate>()
@@ -1846,6 +1908,10 @@ export async function createBookingsFromOfferBasis(
         if (!existing.role_category && crewItem.role_category) {
           existing.role_category = crewItem.role_category
         }
+        if (!existing.time_period_id && crewItem.time_period_id) {
+          existing.time_period_id = crewItem.time_period_id
+        }
+        existing.offerItemIds.push(crewItem.id)
       } else {
         crewAggregates.set(key, {
           title: roleTitle,
@@ -1853,27 +1919,50 @@ export async function createBookingsFromOfferBasis(
           end_at: endAt,
           needed_count: crewItem.crew_count,
           role_category: crewItem.role_category ?? null,
+          time_period_id: crewItem.time_period_id ?? null,
+          offerItemIds: [crewItem.id],
         })
       }
     }
 
     for (const aggregate of crewAggregates.values()) {
-      const { data: existingPeriod, error: crewLookupError } = await supabase
-        .from('time_periods')
-        .select('id, deleted')
-        .eq('job_id', basis.job_id)
-        .eq('category', 'crew')
-        .eq('title', aggregate.title)
-        .eq('start_at', aggregate.start_at)
-        .eq('end_at', aggregate.end_at)
-        .maybeSingle()
+      let existingPeriod: { id: string } | null = null
 
-      if (crewLookupError) throw crewLookupError
+      if (aggregate.time_period_id) {
+        const { data: linkedPeriod, error: linkedLookupError } = await supabase
+          .from('time_periods')
+          .select('id')
+          .eq('id', aggregate.time_period_id)
+          .maybeSingle()
+        if (linkedLookupError) throw linkedLookupError
+        existingPeriod = linkedPeriod
+      }
+
+      if (!existingPeriod) {
+        const { data: matchedPeriod, error: crewLookupError } = await supabase
+          .from('time_periods')
+          .select('id')
+          .eq('job_id', basis.job_id)
+          .eq('category', 'crew')
+          .eq('title', aggregate.title)
+          .eq('start_at', aggregate.start_at)
+          .eq('end_at', aggregate.end_at)
+          .maybeSingle()
+
+        if (crewLookupError) throw crewLookupError
+        existingPeriod = matchedPeriod
+      }
+
+      let timePeriodId: string
 
       if (existingPeriod) {
+        timePeriodId = existingPeriod.id
         const { error: updateError } = await supabase
           .from('time_periods')
           .update({
+            title: aggregate.title,
+            start_at: aggregate.start_at,
+            end_at: aggregate.end_at,
             needed_count: aggregate.needed_count,
             deleted: false,
             reserved_by_user_id: userId,
@@ -1884,7 +1973,7 @@ export async function createBookingsFromOfferBasis(
 
         if (updateError) throw updateError
       } else {
-        const { error: insertError } = await supabase
+        const { data: createdPeriod, error: insertError } = await supabase
           .from('time_periods')
           .insert({
             job_id: basis.job_id,
@@ -1898,9 +1987,18 @@ export async function createBookingsFromOfferBasis(
             deleted: false,
             role_category: aggregate.role_category ?? null,
           })
+          .select('id')
+          .single()
 
         if (insertError) throw insertError
+        timePeriodId = createdPeriod.id
       }
+
+      await linkOfferLinesToTimePeriod(
+        'offer_crew_items',
+        aggregate.offerItemIds,
+        timePeriodId,
+      )
     }
   }
 
@@ -1945,30 +2043,49 @@ export async function createBookingsFromOfferBasis(
         'Vehicle'
       const timePeriodTitle = `Transport - ${defaultTitleSegment} (${startAt})`
 
-      const { data: existingPeriod, error: periodLookupError } = await supabase
-        .from('time_periods')
-        .select('id, notes, deleted')
-        .eq('job_id', basis.job_id)
-        .eq('category', 'transport')
-        .eq('title', timePeriodTitle)
-        .eq('start_at', startAt)
-        .eq('end_at', endAt)
-        .maybeSingle()
+      let existingPeriod: { id: string } | null = null
 
-      if (periodLookupError) throw periodLookupError
+      if (transportItem.time_period_id) {
+        const { data: linkedPeriod, error: linkedLookupError } = await supabase
+          .from('time_periods')
+          .select('id')
+          .eq('id', transportItem.time_period_id)
+          .maybeSingle()
+        if (linkedLookupError) throw linkedLookupError
+        existingPeriod = linkedPeriod
+      }
+
+      if (!existingPeriod) {
+        const { data: matchedPeriod, error: periodLookupError } = await supabase
+          .from('time_periods')
+          .select('id')
+          .eq('job_id', basis.job_id)
+          .eq('category', 'transport')
+          .eq('title', timePeriodTitle)
+          .eq('start_at', startAt)
+          .eq('end_at', endAt)
+          .maybeSingle()
+
+        if (periodLookupError) throw periodLookupError
+        existingPeriod = matchedPeriod
+      }
 
       let timePeriodId: string
 
       if (existingPeriod) {
         timePeriodId = existingPeriod.id
-        if (existingPeriod.deleted) {
-          const { error: reviveError } = await supabase
-            .from('time_periods')
-            .update({ deleted: false, reserved_by_user_id: userId })
-            .eq('id', existingPeriod.id)
+        const { error: reviveError } = await supabase
+          .from('time_periods')
+          .update({
+            deleted: false,
+            reserved_by_user_id: userId,
+            title: timePeriodTitle,
+            start_at: startAt,
+            end_at: endAt,
+          })
+          .eq('id', existingPeriod.id)
 
-          if (reviveError) throw reviveError
-        }
+        if (reviveError) throw reviveError
       } else {
         const { data: createdPeriod, error: createPeriodError } = await supabase
           .from('time_periods')
@@ -1987,6 +2104,14 @@ export async function createBookingsFromOfferBasis(
 
         if (createPeriodError) throw createPeriodError
         timePeriodId = createdPeriod.id
+      }
+
+      if (transportItem.time_period_id !== timePeriodId) {
+        await linkOfferLinesToTimePeriod(
+          'offer_transport_items',
+          [transportItem.id],
+          timePeriodId,
+        )
       }
 
       const chosenVehicle = resolvedVehicles[index] ?? null
@@ -2166,11 +2291,20 @@ export async function syncBookingsFromOfferBasis(
       .in('time_period_id', timePeriodIds)
     if (vehiclesError) throw vehiclesError
 
-    const { error: periodsError } = await supabase
-      .from('time_periods')
-      .delete()
-      .in('id', timePeriodIds)
-    if (periodsError) throw periodsError
+    // Offer lines share these windows (RESTRICT FK). Wipe unused periods
+    // only; keep any still referenced so sync can reuse them.
+    const referencedIds = await referencedOfferLineTimePeriodIds(timePeriodIds)
+    const deletablePeriodIds = timePeriodIdsSafeToDelete(
+      timePeriodIds,
+      referencedIds,
+    )
+    if (deletablePeriodIds.length > 0) {
+      const { error: periodsError } = await supabase
+        .from('time_periods')
+        .delete()
+        .in('id', deletablePeriodIds)
+      if (periodsError) throw periodsError
+    }
   }
 
   await createBookingsFromOfferBasis(basisId, userId, {
