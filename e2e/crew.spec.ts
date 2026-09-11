@@ -14,6 +14,9 @@ test.describe('Crew', () => {
       has: page.getByRole('heading', { name: 'Add role' }),
     })
     await expect(roleDialog).toBeVisible({ timeout: 15_000 })
+    await expect(
+      roleDialog.getByRole('checkbox', { name: 'Confirm myself' }),
+    ).toBeVisible()
     await roleDialog
       .getByPlaceholder('e.g. FOH, Monitor, Loader')
       .fill('Technician')

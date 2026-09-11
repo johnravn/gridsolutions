@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Badge, Box, Flex, Text } from '@radix-ui/themes'
+import { Badge, Box, Checkbox, Flex, Text } from '@radix-ui/themes'
 import {
   Community,
   NavArrowDown,
@@ -8,6 +8,15 @@ import {
   Truck,
 } from 'iconoir-react'
 import { JobBookingRecap } from '../JobBookingRecap'
+import {
+  selectionState,
+  setIdsSelected,
+} from '../../utils/equipmentBookingSelection'
+import {
+  syncPreviewGroupKeys,
+  syncPreviewLineKeys,
+  syncPreviewRemovalEquipmentKeys,
+} from '../../utils/offerBookingDiff'
 import type { JobBookingSummary } from '../../utils/bookingSummary'
 import type {
   SyncPreviewCompact,
@@ -16,6 +25,12 @@ import type {
   SyncPreviewLine,
   SyncPreviewOfferGroup,
 } from '../../utils/offerBookingDiff'
+
+type KeepSelection = {
+  keptKeys: Set<string>
+  onKeptKeysChange: (next: Set<string>) => void
+  disabled?: boolean
+}
 
 function asBookingSummary(compact: SyncPreviewCompact): JobBookingSummary {
   return {
@@ -41,21 +56,52 @@ function toggleOnActivate(event: React.KeyboardEvent, toggle: () => void) {
   }
 }
 
+function KeepCheckbox({
+  ids,
+  selection,
+  label,
+}: {
+  ids: Array<string>
+  selection: KeepSelection
+  label: string
+}) {
+  const checked = selectionState(selection.keptKeys, ids)
+  return (
+    <Checkbox
+      size="1"
+      checked={checked}
+      disabled={selection.disabled || ids.length === 0}
+      aria-label={label}
+      onClick={(event) => event.stopPropagation()}
+      onPointerDown={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      onCheckedChange={() => {
+        selection.onKeptKeysChange(
+          setIdsSelected(selection.keptKeys, ids, checked !== true),
+        )
+      }}
+    />
+  )
+}
+
 function ExpandHeader({
   expanded,
   title,
   countLabel,
   icon,
   disabled = false,
+  leading,
 }: {
   expanded: boolean
   title: string
   countLabel?: string
   icon?: React.ReactNode
   disabled?: boolean
+  leading?: React.ReactNode
 }) {
   return (
     <Flex align="center" gap="2" wrap="wrap">
+      {leading}
       {disabled ? null : expanded ? (
         <NavArrowDown width={16} height={16} />
       ) : (
@@ -89,14 +135,18 @@ function CollapsibleBox({
   icon,
   hasContent,
   children,
+  leading,
+  defaultExpanded = false,
 }: {
   title: string
   countLabel?: string
   icon?: React.ReactNode
   hasContent: boolean
   children: React.ReactNode
+  leading?: React.ReactNode
+  defaultExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpanded] = React.useState(defaultExpanded)
   const disabled = !hasContent
 
   return (
@@ -136,6 +186,7 @@ function CollapsibleBox({
           countLabel={countLabel}
           icon={icon}
           disabled={disabled}
+          leading={leading}
         />
       </Box>
       {expanded && !disabled ? (
@@ -150,18 +201,31 @@ function CollapsibleBox({
 function PreviewItemRow({
   item,
   nested = false,
+  keepSelection,
 }: {
   item: SyncPreviewItem
   nested?: boolean
+  keepSelection?: KeepSelection
 }) {
   return (
     <Box pl={nested ? '4' : '0'} py="1">
-      <Text size="2" weight="medium" as="div">
-        {item.name}
-      </Text>
-      <Text size="1" color="gray" as="div">
-        {itemMeta(item)}
-      </Text>
+      <Flex align="start" gap="2">
+        {keepSelection ? (
+          <KeepCheckbox
+            ids={[item.key]}
+            selection={keepSelection}
+            label={`Keep ${item.name} booked`}
+          />
+        ) : null}
+        <Box>
+          <Text size="2" weight="medium" as="div">
+            {item.name}
+          </Text>
+          <Text size="1" color="gray" as="div">
+            {itemMeta(item)}
+          </Text>
+        </Box>
+      </Flex>
     </Box>
   )
 }
@@ -169,11 +233,14 @@ function PreviewItemRow({
 function InventoryGroupLine({
   line,
   sectionKey,
+  keepSelection,
 }: {
   line: Extract<SyncPreviewLine, { kind: 'group' }>
   sectionKey: string
+  keepSelection?: KeepSelection
 }) {
   const [expanded, setExpanded] = React.useState(false)
+  const itemKeys = syncPreviewLineKeys(line)
 
   return (
     <Box>
@@ -188,6 +255,13 @@ function InventoryGroupLine({
         style={{ cursor: 'pointer' }}
       >
         <Flex align="center" gap="2">
+          {keepSelection ? (
+            <KeepCheckbox
+              ids={itemKeys}
+              selection={keepSelection}
+              label={`Keep ${line.groupName} booked`}
+            />
+          ) : null}
           {expanded ? (
             <NavArrowDown width={16} height={16} />
           ) : (
@@ -211,6 +285,7 @@ function InventoryGroupLine({
               key={`${sectionKey}:${item.key}`}
               item={item}
               nested
+              keepSelection={keepSelection}
             />
           ))}
         </Box>
@@ -222,20 +297,40 @@ function InventoryGroupLine({
 function OfferGroupBlock({
   group,
   sectionKey,
+  keepSelection,
 }: {
   group: SyncPreviewOfferGroup
   sectionKey: string
+  keepSelection?: KeepSelection
 }) {
+  const groupKeys = syncPreviewGroupKeys(group)
   return (
-    <CollapsibleBox title={group.name} hasContent={group.lines.length > 0}>
+    <CollapsibleBox
+      title={group.name}
+      hasContent={group.lines.length > 0}
+      leading={
+        keepSelection ? (
+          <KeepCheckbox
+            ids={groupKeys}
+            selection={keepSelection}
+            label={`Keep ${group.name} booked`}
+          />
+        ) : undefined
+      }
+    >
       {group.lines.map((line) =>
         line.kind === 'direct' ? (
-          <PreviewItemRow key={line.item.key} item={line.item} />
+          <PreviewItemRow
+            key={line.item.key}
+            item={line.item}
+            keepSelection={keepSelection}
+          />
         ) : (
           <InventoryGroupLine
             key={`${sectionKey}:${line.group_id}`}
             line={line}
             sectionKey={`${sectionKey}:${group.id}`}
+            keepSelection={keepSelection}
           />
         ),
       )}
@@ -246,20 +341,37 @@ function OfferGroupBlock({
 function UngroupedBlock({
   items,
   title,
+  keepSelection,
 }: {
   items: Array<SyncPreviewItem>
   title: string
+  keepSelection?: KeepSelection
 }) {
   if (items.length === 0) return null
+
+  const itemKeys = items.map((item) => item.key)
 
   return (
     <CollapsibleBox
       title={title}
       countLabel={`${items.length} ${items.length === 1 ? 'item' : 'items'}`}
       hasContent
+      leading={
+        keepSelection ? (
+          <KeepCheckbox
+            ids={itemKeys}
+            selection={keepSelection}
+            label={`Keep ${title} booked`}
+          />
+        ) : undefined
+      }
     >
       {items.map((item) => (
-        <PreviewItemRow key={item.key} item={item} />
+        <PreviewItemRow
+          key={item.key}
+          item={item}
+          keepSelection={keepSelection}
+        />
       ))}
     </CollapsibleBox>
   )
@@ -361,6 +473,8 @@ export function SyncPreviewChangeList({
   ungroupedTitle,
   extraSummary,
   crew,
+  keepSelection,
+  defaultExpanded = false,
 }: {
   title: string
   compact: SyncPreviewCompact
@@ -369,14 +483,22 @@ export function SyncPreviewChangeList({
   ungroupedTitle: string
   extraSummary?: string | null
   crew?: Array<SyncPreviewCrew>
+  keepSelection?: KeepSelection
+  defaultExpanded?: boolean
 }) {
-  const [expanded, setExpanded] = React.useState(false)
+  const [expanded, setExpanded] = React.useState(defaultExpanded)
   const summary = asBookingSummary(compact)
   const crewRows = crew ?? []
   const hasEquipment = groups.length > 0 || ungrouped.length > 0
   const hasCrew = crewRows.length > 0
   const hasTransport = compact.vehicleNames.length > 0 || !!extraSummary
   const hasDetail = hasEquipment || hasCrew || hasTransport
+  const equipmentKeepKeys = keepSelection
+    ? syncPreviewRemovalEquipmentKeys({
+        removalGroups: groups,
+        removalUngrouped: ungrouped,
+      })
+    : []
 
   const equipmentSummary = summary.equipmentByCategory
     .filter((row) => row.quantity > 0)
@@ -429,20 +551,40 @@ export function SyncPreviewChangeList({
 
       {expanded && hasDetail ? (
         <Flex direction="column" gap="2" mt="3">
+          {keepSelection && hasEquipment ? (
+            <Text size="1" color="gray" as="div">
+              Check items or groups to keep them booked.
+            </Text>
+          ) : null}
           <CollapsibleBox
             title="Equipment"
             icon={<Package width={16} height={16} />}
             countLabel={equipmentSummary || 'None'}
             hasContent={hasEquipment}
+            defaultExpanded={!!keepSelection && hasEquipment}
+            leading={
+              keepSelection && hasEquipment ? (
+                <KeepCheckbox
+                  ids={equipmentKeepKeys}
+                  selection={keepSelection}
+                  label="Keep all equipment booked"
+                />
+              ) : undefined
+            }
           >
             {groups.map((group) => (
               <OfferGroupBlock
                 key={group.id}
                 group={group}
                 sectionKey={title}
+                keepSelection={keepSelection}
               />
             ))}
-            <UngroupedBlock items={ungrouped} title={ungroupedTitle} />
+            <UngroupedBlock
+              items={ungrouped}
+              title={ungroupedTitle}
+              keepSelection={keepSelection}
+            />
           </CollapsibleBox>
 
           <CollapsibleBox

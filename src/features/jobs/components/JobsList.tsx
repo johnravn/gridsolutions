@@ -149,6 +149,9 @@ export default function JobsList({
   const isSmallScreen = useMediaQuery('(max-width: 768px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  React.useEffect(() => {
+    if (readyToInvoiceFilter) setSearch('')
+  }, [readyToInvoiceFilter])
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
   const [createOpen, setCreateOpen] = React.useState(false)

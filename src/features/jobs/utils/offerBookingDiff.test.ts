@@ -5,7 +5,10 @@ import {
   computeOfferDiff,
   formatOfferDiffForPreview,
   labelForId,
+  makeEquipmentKey,
   namesFromOfferDetail,
+  reservationMatchesKeepKeys,
+  syncPreviewRemovalEquipmentKeys,
   type BookingsSnapshot,
   type ItemCatalogEntry,
   type SyncLineItems,
@@ -994,5 +997,118 @@ describe('multi-period equipment keys', () => {
     expect(diff.equipmentChanges[0].time_period_id).toBe('period-2d')
     expect(diff.equipmentChanges[0].expected).toBe(1)
     expect(diff.equipmentChanges[0].current).toBe(0)
+  })
+})
+
+describe('reservationMatchesKeepKeys', () => {
+  it('returns false when nothing is marked to keep', () => {
+    expect(
+      reservationMatchesKeepKeys(
+        {
+          item_id: 'item-a',
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'p1',
+        },
+        new Set(),
+      ),
+    ).toBe(false)
+  })
+
+  it('matches a full equipment key including the time period', () => {
+    const key = makeEquipmentKey({
+      item_id: 'item-a',
+      source_kind: 'direct',
+      source_group_id: null,
+      time_period_id: 'p1',
+    })
+    expect(
+      reservationMatchesKeepKeys(
+        {
+          item_id: 'item-a',
+          source_kind: 'direct',
+          source_group_id: null,
+          time_period_id: 'p1',
+        },
+        new Set([key]),
+      ),
+    ).toBe(true)
+  })
+
+  it('matches preview keys that omit the time period', () => {
+    const previewKey = makeEquipmentKey({
+      item_id: 'item-a',
+      source_kind: 'group',
+      source_group_id: 'g1',
+    })
+    expect(
+      reservationMatchesKeepKeys(
+        {
+          item_id: 'item-a',
+          source_kind: 'group',
+          source_group_id: 'g1',
+          time_period_id: 'p1',
+        },
+        new Set([previewKey]),
+      ),
+    ).toBe(true)
+  })
+})
+
+describe('syncPreviewRemovalEquipmentKeys', () => {
+  it('collects keys from offer groups, inventory groups, and ungrouped items', () => {
+    expect(
+      syncPreviewRemovalEquipmentKeys({
+        removalGroups: [
+          {
+            id: 'og1',
+            name: 'PA',
+            lines: [
+              {
+                kind: 'direct',
+                item: {
+                  key: 'direct::mixer:',
+                  item_id: 'mixer',
+                  name: 'Mixer',
+                  brand: null,
+                  model: null,
+                  category: 'Audio',
+                  quantity: 1,
+                },
+              },
+              {
+                kind: 'group',
+                group_id: 'ig1',
+                groupName: 'Mics',
+                category: 'Audio',
+                quantity: 1,
+                items: [
+                  {
+                    key: 'group:ig1:mic:',
+                    item_id: 'mic',
+                    name: 'Mic',
+                    brand: null,
+                    model: null,
+                    category: 'Audio',
+                    quantity: 2,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        removalUngrouped: [
+          {
+            key: 'direct::extra:',
+            item_id: 'extra',
+            name: 'Extra',
+            brand: null,
+            model: null,
+            category: 'Other',
+            quantity: 1,
+          },
+        ],
+      }),
+    ).toEqual(['direct::mixer:', 'group:ig1:mic:', 'direct::extra:'])
   })
 })

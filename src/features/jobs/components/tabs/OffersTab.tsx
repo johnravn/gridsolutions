@@ -101,7 +101,7 @@ import type {
   SyncPreviewViewModel,
 } from '../../utils/offerBookingDiff'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
-import type { JobOfferBasisRow } from '../../api/offerBasisQueries'
+import type { JobOfferBasisRow, SyncBookingsProgress } from '../../api/offerBasisQueries'
 import type { OverlapConflict } from '@features/conflicts/api/overlapChecks'
 import type { JobOffer, OfferType } from '../../types'
 
@@ -250,9 +250,13 @@ export default function OffersTab({
   const [forceConflicts, setForceConflicts] = React.useState<
     Array<OverlapConflict>
   >([])
+  const [syncProgress, setSyncProgress] =
+    React.useState<SyncBookingsProgress | null>(null)
   const pendingForceBookingRef = React.useRef<{
     basisId: string
     action: 'sync' | 'create'
+    skipConflictingEquipment?: boolean
+    keepEquipmentKeys?: Array<string>
   } | null>(null)
   const [deleteOpen, setDeleteOpen] = React.useState<JobOffer | null>(null)
   const [deleteBasisOpen, setDeleteBasisOpen] =
@@ -1034,19 +1038,27 @@ export default function OffersTab({
       basisId,
       force = false,
       skipConflictingEquipment = false,
+      keepEquipmentKeys,
     }: {
       basisId: string
       force?: boolean
       skipConflictingEquipment?: boolean
+      keepEquipmentKeys?: Array<string>
     }) => {
       if (!user?.id) throw new Error('User not authenticated')
       return await syncBookingsFromOfferBasis(basisId, user.id, {
         force,
         skipConflictingEquipment,
+        keepEquipmentKeys,
+        onProgress: setSyncProgress,
       })
     },
     onMutate: ({ basisId }) => {
       setSyncingBasisId(basisId)
+      setSyncProgress({
+        removing: { current: 0, total: 0 },
+        booking: { current: 0, total: 0 },
+      })
     },
     onSuccess: (warnings) => {
       setForceDialogOpen(false)
@@ -1065,6 +1077,7 @@ export default function OffersTab({
     },
     onSettled: () => {
       setSyncingBasisId(null)
+      setSyncProgress(null)
       bookingsSnapshotQuery.refetch()
     },
     onError: (err: unknown) => {
@@ -1332,15 +1345,22 @@ export default function OffersTab({
       options: {
         force?: boolean
         skipConflictingEquipment?: boolean
+        keepEquipmentKeys?: Array<string>
       } = {},
     ): Promise<'overlap' | 'done'> => {
-      pendingForceBookingRef.current = { basisId, action }
+      pendingForceBookingRef.current = {
+        basisId,
+        action,
+        skipConflictingEquipment: options.skipConflictingEquipment,
+        keepEquipmentKeys: options.keepEquipmentKeys,
+      }
       try {
         if (action === 'sync') {
           await syncBookingsMutation.mutateAsync({
             basisId,
             force: options.force,
             skipConflictingEquipment: options.skipConflictingEquipment,
+            keepEquipmentKeys: options.keepEquipmentKeys,
           })
         } else {
           await createBookingsMutation.mutateAsync({
@@ -1491,12 +1511,16 @@ export default function OffersTab({
   )
 
   const handleSyncPreviewConfirm = React.useCallback(
-    async (mode: SyncBasisConfirmMode) => {
+    async (
+      mode: SyncBasisConfirmMode,
+      options: { keepEquipmentKeys: Array<string> },
+    ) => {
       if (!syncPreview) return
       try {
         await startBasisBooking(syncPreview.basisId, 'sync', {
           force: mode === 'force',
           skipConflictingEquipment: mode === 'skip-conflicts',
+          keepEquipmentKeys: options.keepEquipmentKeys,
         })
         setSyncPreview(null)
       } catch {
@@ -2561,8 +2585,9 @@ export default function OffersTab({
           conflicts={syncPreview.conflicts}
           loading={syncPreview.loading}
           syncing={syncBookingsMutation.isPending}
-          onConfirm={(mode) => {
-            void handleSyncPreviewConfirm(mode)
+          progress={syncProgress}
+          onConfirm={(mode, options) => {
+            void handleSyncPreviewConfirm(mode, options)
           }}
         />
       )}
@@ -2798,6 +2823,8 @@ export default function OffersTab({
             syncBookingsMutation.mutate({
               basisId: pending.basisId,
               force: true,
+              skipConflictingEquipment: pending.skipConflictingEquipment,
+              keepEquipmentKeys: pending.keepEquipmentKeys,
             })
             return
           }

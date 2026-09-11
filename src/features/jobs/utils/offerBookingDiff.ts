@@ -133,6 +133,52 @@ export function parseEquipmentKey(key: string): {
   }
 }
 
+export function reservationMatchesKeepKeys(
+  row: {
+    item_id: string
+    source_kind: 'direct' | 'group' | string
+    source_group_id: string | null
+    time_period_id?: string | null
+  },
+  keepKeys: ReadonlySet<string>,
+): boolean {
+  if (keepKeys.size === 0) return false
+  const normalized = {
+    item_id: row.item_id,
+    source_kind:
+      row.source_kind === 'group' ? ('group' as const) : ('direct' as const),
+    source_group_id: row.source_group_id,
+    time_period_id: row.time_period_id ?? null,
+  }
+  if (keepKeys.has(makeEquipmentKey(normalized))) return true
+  return keepKeys.has(
+    makeEquipmentKey({
+      ...normalized,
+      time_period_id: null,
+    }),
+  )
+}
+
+export function syncPreviewLineKeys(line: SyncPreviewLine): Array<string> {
+  if (line.kind === 'direct') return [line.item.key]
+  return line.items.map((item) => item.key)
+}
+
+export function syncPreviewGroupKeys(
+  group: SyncPreviewOfferGroup,
+): Array<string> {
+  return group.lines.flatMap(syncPreviewLineKeys)
+}
+
+export function syncPreviewRemovalEquipmentKeys(
+  preview: Pick<SyncPreviewViewModel, 'removalGroups' | 'removalUngrouped'>,
+): Array<string> {
+  return [
+    ...preview.removalGroups.flatMap(syncPreviewGroupKeys),
+    ...preview.removalUngrouped.map((item) => item.key),
+  ]
+}
+
 export function mapsEqual(a: Map<string, number>, b: Map<string, number>) {
   if (a.size !== b.size) return false
   for (const [k, v] of a.entries()) {

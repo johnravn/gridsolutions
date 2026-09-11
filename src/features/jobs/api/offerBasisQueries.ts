@@ -21,6 +21,7 @@ import {
   basisImportWouldWriteLines,
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
+import { reservationMatchesKeepKeys } from '../utils/offerBookingDiff'
 import { timePeriodIdsSafeToDelete } from '../utils/timePeriodDeleteSafety'
 import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
 import { ensureDefaultEquipmentPeriod } from './queries'
@@ -1649,6 +1650,51 @@ async function linkOfferLinesToTimePeriod(
   if (error) throw error
 }
 
+export type SyncBookingsProgress = {
+  removing: { current: number; total: number }
+  booking: { current: number; total: number }
+}
+
+const SYNC_PROGRESS_CHUNK_SIZE = 1
+
+function countCrewBookingUnits(
+  crewItems: Array<{
+    role_title?: string | null
+    start_date?: string | null
+    end_date?: string | null
+  }>,
+  defaultStart: string,
+  defaultEnd: string,
+): number {
+  const keys = new Set<string>()
+  for (const crewItem of crewItems) {
+    const roleTitle = crewItem.role_title?.trim() || 'Crew role'
+    const startAt = crewItem.start_date || defaultStart
+    const endAt = crewItem.end_date || defaultEnd
+    keys.add(`${roleTitle}__${startAt}__${endAt}`)
+  }
+  return keys.size
+}
+
+async function deleteIdsInChunks(
+  table: 'reserved_items' | 'reserved_crew' | 'reserved_vehicles',
+  ids: Array<string>,
+  onDeleted?: (count: number) => void,
+) {
+  if (ids.length === 0) return
+  if (!onDeleted) {
+    const { error } = await supabase.from(table).delete().in('id', ids)
+    if (error) throw error
+    return
+  }
+  for (let i = 0; i < ids.length; i += SYNC_PROGRESS_CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + SYNC_PROGRESS_CHUNK_SIZE)
+    const { error } = await supabase.from(table).delete().in('id', chunk)
+    if (error) throw error
+    onDeleted(chunk.length)
+  }
+}
+
 async function referencedOfferLineTimePeriodIds(
   timePeriodIds: Array<string>,
 ): Promise<Set<string>> {
@@ -1690,6 +1736,8 @@ export async function createBookingsFromOfferBasis(
     skipConflictCheck?: boolean
     excludeItemIds?: Array<string>
     excludeVehicleIds?: Array<string>
+    keepEquipmentKeys?: Array<string>
+    onBookingProgress?: (progress: { current: number; total: number }) => void
   },
 ): Promise<void> {
   const basis = await (
@@ -1725,6 +1773,17 @@ export async function createBookingsFromOfferBasis(
   }
 
   const forcedFields = options?.force ? forcedBookingFields(userId) : {}
+  const laterBookingCount =
+    countCrewBookingUnits(basis.crew_items || [], defaultStart, defaultEnd) +
+    (basis.transport_items?.length ?? 0)
+  let bookingCurrent = 0
+  let bookingTotal = laterBookingCount
+  const reportBooking = () => {
+    options?.onBookingProgress?.({
+      current: bookingCurrent,
+      total: bookingTotal,
+    })
+  }
 
   if (basis.groups && basis.groups.length > 0) {
     type EquipmentEntry =
@@ -1832,11 +1891,25 @@ export async function createBookingsFromOfferBasis(
     }> = []
 
     const excludeItemIds = new Set(options?.excludeItemIds ?? [])
+    const keepSet = new Set(options?.keepEquipmentKeys ?? [])
 
     for (const entry of equipmentEntries) {
       const periodId = entry.time_period_id ?? defaultEquipmentPeriodId
       if (entry.kind === 'item') {
         if (excludeItemIds.has(entry.item_id)) continue
+        if (
+          reservationMatchesKeepKeys(
+            {
+              item_id: entry.item_id,
+              source_kind: 'direct',
+              source_group_id: null,
+              time_period_id: periodId,
+            },
+            keepSet,
+          )
+        ) {
+          continue
+        }
         reservedItems.push({
           time_period_id: periodId,
           item_id: entry.item_id,
@@ -1857,6 +1930,19 @@ export async function createBookingsFromOfferBasis(
       const groupItems = groupItemsMap.get(entry.group_id) ?? []
       for (const groupItem of groupItems) {
         if (excludeItemIds.has(groupItem.item_id)) continue
+        if (
+          reservationMatchesKeepKeys(
+            {
+              item_id: groupItem.item_id,
+              source_kind: 'group',
+              source_group_id: entry.group_id,
+              time_period_id: periodId,
+            },
+            keepSet,
+          )
+        ) {
+          continue
+        }
         reservedItems.push({
           time_period_id: periodId,
           item_id: groupItem.item_id,
@@ -1874,13 +1960,30 @@ export async function createBookingsFromOfferBasis(
       }
     }
 
-    if (reservedItems.length > 0) {
-      const { error: itemsError } = await supabase
-        .from('reserved_items')
-        .insert(reservedItems)
+    bookingTotal = reservedItems.length + laterBookingCount
+    reportBooking()
 
-      if (itemsError) throw itemsError
+    if (reservedItems.length > 0) {
+      if (options?.onBookingProgress) {
+        for (const row of reservedItems) {
+          const { error: itemsError } = await supabase
+            .from('reserved_items')
+            .insert(row)
+          if (itemsError) throw itemsError
+          bookingCurrent += 1
+          reportBooking()
+        }
+      } else {
+        const { error: itemsError } = await supabase
+          .from('reserved_items')
+          .insert(reservedItems)
+
+        if (itemsError) throw itemsError
+        bookingCurrent += reservedItems.length
+      }
     }
+  } else {
+    reportBooking()
   }
 
   if (basis.crew_items && basis.crew_items.length > 0) {
@@ -1999,6 +2102,8 @@ export async function createBookingsFromOfferBasis(
         aggregate.offerItemIds,
         timePeriodId,
       )
+      bookingCurrent += 1
+      reportBooking()
     }
   }
 
@@ -2169,6 +2274,8 @@ export async function createBookingsFromOfferBasis(
 
         if (noteError) throw noteError
       }
+      bookingCurrent += 1
+      reportBooking()
     }
   }
 
@@ -2218,7 +2325,12 @@ export async function previewBookingConflictsForBasis(
 export async function syncBookingsFromOfferBasis(
   basisId: string,
   userId: string,
-  options?: { force?: boolean; skipConflictingEquipment?: boolean },
+  options?: {
+    force?: boolean
+    skipConflictingEquipment?: boolean
+    keepEquipmentKeys?: Array<string>
+    onProgress?: (progress: SyncBookingsProgress) => void
+  },
 ): Promise<Array<string>> {
   const basis = await (
     offerBasisDetailQuery(basisId)
@@ -2262,6 +2374,12 @@ export async function syncBookingsFromOfferBasis(
     warnings.push(...preview.summaryLines.map((line) => `Skipped: ${line}`))
   }
 
+  const keepSet = new Set(options?.keepEquipmentKeys ?? [])
+  let removing = { current: 0, total: 0 }
+  let booking = { current: 0, total: 0 }
+  const report = () => options?.onProgress?.({ removing, booking })
+  report()
+
   const { data: timePeriods, error: timePeriodsError } = await supabase
     .from('time_periods')
     .select('id')
@@ -2273,31 +2391,70 @@ export async function syncBookingsFromOfferBasis(
   const timePeriodIds = (timePeriods || []).map((period) => period.id)
 
   if (timePeriodIds.length > 0) {
-    const { error: itemsError } = await supabase
-      .from('reserved_items')
-      .delete()
-      .in('time_period_id', timePeriodIds)
-    if (itemsError) throw itemsError
+    const [reservedItemsLookup, reservedCrewLookup, reservedVehiclesLookup] =
+      await Promise.all([
+        supabase
+          .from('reserved_items')
+          .select('id, item_id, source_kind, source_group_id, time_period_id')
+          .in('time_period_id', timePeriodIds),
+        supabase
+          .from('reserved_crew')
+          .select('id')
+          .in('time_period_id', timePeriodIds),
+        supabase
+          .from('reserved_vehicles')
+          .select('id')
+          .in('time_period_id', timePeriodIds),
+      ])
 
-    const { error: crewError } = await supabase
-      .from('reserved_crew')
-      .delete()
-      .in('time_period_id', timePeriodIds)
-    if (crewError) throw crewError
+    if (reservedItemsLookup.error) throw reservedItemsLookup.error
+    if (reservedCrewLookup.error) throw reservedCrewLookup.error
+    if (reservedVehiclesLookup.error) throw reservedVehiclesLookup.error
 
-    const { error: vehiclesError } = await supabase
-      .from('reserved_vehicles')
-      .delete()
-      .in('time_period_id', timePeriodIds)
-    if (vehiclesError) throw vehiclesError
+    const itemIdsToDelete: Array<string> = []
+    const keptPeriodIds = new Set<string>()
+    for (const row of reservedItemsLookup.data ?? []) {
+      if (reservationMatchesKeepKeys(row, keepSet)) {
+        keptPeriodIds.add(row.time_period_id)
+        continue
+      }
+      itemIdsToDelete.push(row.id)
+    }
+    const crewIdsToDelete = (reservedCrewLookup.data ?? []).map((row) => row.id)
+    const vehicleIdsToDelete = (reservedVehiclesLookup.data ?? []).map(
+      (row) => row.id,
+    )
+
+    removing = {
+      current: 0,
+      total:
+        itemIdsToDelete.length +
+        crewIdsToDelete.length +
+        vehicleIdsToDelete.length,
+    }
+    report()
+
+    const bumpRemoving = (count: number) => {
+      removing = {
+        current: removing.current + count,
+        total: removing.total,
+      }
+      report()
+    }
+    const onDeleted = options?.onProgress ? bumpRemoving : undefined
+
+    await deleteIdsInChunks('reserved_items', itemIdsToDelete, onDeleted)
+    await deleteIdsInChunks('reserved_crew', crewIdsToDelete, onDeleted)
+    await deleteIdsInChunks('reserved_vehicles', vehicleIdsToDelete, onDeleted)
 
     // Offer lines share these windows (RESTRICT FK). Wipe unused periods
-    // only; keep any still referenced so sync can reuse them.
+    // only; keep any still referenced so sync can reuse them. Also keep
+    // periods that still have reservations the user chose not to remove.
     const referencedIds = await referencedOfferLineTimePeriodIds(timePeriodIds)
-    const deletablePeriodIds = timePeriodIdsSafeToDelete(
-      timePeriodIds,
-      referencedIds,
-    )
+    const deletablePeriodIds = timePeriodIdsSafeToDelete(timePeriodIds, [
+      ...referencedIds,
+      ...keptPeriodIds,
+    ])
     if (deletablePeriodIds.length > 0) {
       const { error: periodsError } = await supabase
         .from('time_periods')
@@ -2315,6 +2472,13 @@ export async function syncBookingsFromOfferBasis(
       : undefined,
     excludeVehicleIds: options?.skipConflictingEquipment
       ? preview.conflictingVehicleIds
+      : undefined,
+    keepEquipmentKeys: options?.keepEquipmentKeys,
+    onBookingProgress: options?.onProgress
+      ? (next) => {
+          booking = next
+          report()
+        }
       : undefined,
   })
   return options?.force ? preview.summaryLines : warnings

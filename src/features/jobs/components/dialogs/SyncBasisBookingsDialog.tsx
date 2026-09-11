@@ -5,6 +5,7 @@ import {
   Callout,
   Dialog,
   Flex,
+  Progress,
   Separator,
   Spinner,
   Text,
@@ -21,10 +22,36 @@ import {
   formatConflictEntriesSummary,
 } from '@features/conflicts/utils/conflictCopy'
 import { SyncPreviewChangeList } from './SyncPreviewChangeList'
+import type { SyncBookingsProgress } from '@features/jobs/api/offerBasisQueries'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type { SyncPreviewViewModel } from '@features/jobs/utils/offerBookingDiff'
 
 export type SyncBasisConfirmMode = 'sync' | 'skip-conflicts' | 'force'
+
+function SyncProgressTrack({
+  label,
+  current,
+  total,
+}: {
+  label: string
+  current: number
+  total: number
+}) {
+  const percent = total > 0 ? Math.round((current / total) * 100) : 0
+  return (
+    <Box>
+      <Flex justify="between" align="baseline" gap="3" mb="1">
+        <Text size="2" weight="medium">
+          {label}
+        </Text>
+        <Text size="1" color="gray">
+          {total === 0 ? 'None' : `${current} of ${total}`}
+        </Text>
+      </Flex>
+      <Progress value={percent} size="2" />
+    </Box>
+  )
+}
 
 export function SyncBasisBookingsDialog({
   open,
@@ -34,6 +61,7 @@ export function SyncBasisBookingsDialog({
   conflicts,
   loading,
   syncing,
+  progress,
   onConfirm,
 }: {
   open: boolean
@@ -43,13 +71,25 @@ export function SyncBasisBookingsDialog({
   conflicts: BasisBookingConflictPreview | null
   loading: boolean
   syncing: boolean
-  onConfirm: (mode: SyncBasisConfirmMode) => void
+  progress: SyncBookingsProgress | null
+  onConfirm: (
+    mode: SyncBasisConfirmMode,
+    options: { keepEquipmentKeys: Array<string> },
+  ) => void
 }) {
   const [conflictsExpanded, setConflictsExpanded] = React.useState(false)
+  const [keptKeys, setKeptKeys] = React.useState<Set<string>>(() => new Set())
 
   React.useEffect(() => {
-    if (!open) setConflictsExpanded(false)
+    if (!open) {
+      setConflictsExpanded(false)
+      setKeptKeys(new Set())
+    }
   }, [open])
+
+  React.useEffect(() => {
+    setKeptKeys(new Set())
+  }, [preview])
 
   const conflictEntries = groupConflictsForDisplay(conflicts?.conflicts ?? [])
   const { groupCount, itemCount } = conflictDisplayCounts(conflictEntries)
@@ -57,6 +97,20 @@ export function SyncBasisBookingsDialog({
   const alreadyInSync =
     !loading && preview !== null && !preview.hasChanges && !hasConflicts
   const previewReady = !loading && preview !== null
+  const hasRemovals =
+    !!preview &&
+    (preview.removalGroups.length > 0 || preview.removalUngrouped.length > 0)
+  const keepSelection = hasRemovals
+    ? {
+        keptKeys,
+        onKeptKeysChange: setKeptKeys,
+        disabled: syncing,
+      }
+    : undefined
+
+  const confirm = (mode: SyncBasisConfirmMode) => {
+    onConfirm(mode, { keepEquipmentKeys: Array.from(keptKeys) })
+  }
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -127,6 +181,8 @@ export function SyncBasisBookingsDialog({
                     ? preview.transportSummary
                     : null
                 }
+                keepSelection={keepSelection}
+                defaultExpanded={hasRemovals}
               />
 
               <Box
@@ -212,6 +268,21 @@ export function SyncBasisBookingsDialog({
           </Flex>
         )}
 
+        {syncing ? (
+          <Flex direction="column" gap="3" mt="4">
+            <SyncProgressTrack
+              label="Removing bookings"
+              current={progress?.removing.current ?? 0}
+              total={progress?.removing.total ?? 0}
+            />
+            <SyncProgressTrack
+              label="Creating bookings"
+              current={progress?.booking.current ?? 0}
+              total={progress?.booking.total ?? 0}
+            />
+          </Flex>
+        ) : null}
+
         <Flex gap="2" mt="4" justify="end" wrap="wrap">
           <Dialog.Close>
             <Button variant="soft" disabled={syncing}>
@@ -222,14 +293,14 @@ export function SyncBasisBookingsDialog({
             <>
               <Button
                 variant="outline"
-                onClick={() => onConfirm('skip-conflicts')}
+                onClick={() => confirm('skip-conflicts')}
                 disabled={!previewReady || syncing || alreadyInSync}
               >
                 {syncing ? 'Syncing…' : 'Sync without conflicts'}
               </Button>
               <Button
                 variant="solid"
-                onClick={() => onConfirm('force')}
+                onClick={() => confirm('force')}
                 disabled={!previewReady || syncing || alreadyInSync}
               >
                 {syncing ? 'Syncing…' : 'Sync all (force)'}
@@ -238,7 +309,7 @@ export function SyncBasisBookingsDialog({
           ) : (
             <Button
               variant="solid"
-              onClick={() => onConfirm('sync')}
+              onClick={() => confirm('sync')}
               disabled={!previewReady || syncing || alreadyInSync}
             >
               {syncing ? 'Syncing…' : 'Sync bookings'}

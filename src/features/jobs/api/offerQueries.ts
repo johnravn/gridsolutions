@@ -939,7 +939,11 @@ export async function createBookingsFromOffer(
 export async function syncBookingsFromOffer(
   offerId: string,
   userId: string,
-  options?: { force?: boolean },
+  options?: {
+    force?: boolean
+    skipConflictingEquipment?: boolean
+    keepEquipmentKeys?: Array<string>
+  },
 ): Promise<Array<string>> {
   const { data: offer, error } = await supabase
     .from('job_offers')
