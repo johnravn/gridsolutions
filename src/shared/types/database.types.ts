@@ -64,18 +64,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'activity_comments_activity_id_fkey'
-            columns: ['activity_id']
+            foreignKeyName: "activity_comments_activity_id_fkey"
+            columns: ["activity_id"]
             isOneToOne: false
-            referencedRelation: 'activity_log'
-            referencedColumns: ['id']
+            referencedRelation: "activity_log"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'activity_comments_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "activity_comments_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -100,24 +100,24 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'activity_likes_activity_id_fkey'
-            columns: ['activity_id']
+            foreignKeyName: "activity_likes_activity_id_fkey"
+            columns: ["activity_id"]
             isOneToOne: false
-            referencedRelation: 'activity_log'
-            referencedColumns: ['id']
+            referencedRelation: "activity_log"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'activity_likes_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "activity_likes_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
       activity_log: {
         Row: {
-          activity_type: Database['public']['Enums']['activity_type']
+          activity_type: Database["public"]["Enums"]["activity_type"]
           company_id: string
           created_at: string
           created_by_user_id: string
@@ -128,7 +128,7 @@ export type Database = {
           title: string | null
         }
         Insert: {
-          activity_type: Database['public']['Enums']['activity_type']
+          activity_type: Database["public"]["Enums"]["activity_type"]
           company_id: string
           created_at?: string
           created_by_user_id: string
@@ -139,7 +139,7 @@ export type Database = {
           title?: string | null
         }
         Update: {
-          activity_type?: Database['public']['Enums']['activity_type']
+          activity_type?: Database["public"]["Enums"]["activity_type"]
           company_id?: string
           created_at?: string
           created_by_user_id?: string
@@ -151,18 +151,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'activity_log_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "activity_log_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'activity_log_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "activity_log_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -208,11 +208,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'addresses_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "addresses_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -255,53 +255,53 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'calendar_subscriptions_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "calendar_subscriptions_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_crew_user_id_fkey'
-            columns: ['crew_user_id']
+            foreignKeyName: "calendar_subscriptions_crew_user_id_fkey"
+            columns: ["crew_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "calendar_subscriptions_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index_mat'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index_mat"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'calendar_subscriptions_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "calendar_subscriptions_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicles'
-            referencedColumns: ['id']
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -386,11 +386,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'companies_contact_person_id_fkey'
-            columns: ['contact_person_id']
+            foreignKeyName: "companies_contact_person_id_fkey"
+            columns: ["contact_person_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -478,11 +478,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'company_expansions_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "company_expansions_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: true
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -516,11 +516,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'company_pretty_offer_default_images_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "company_pretty_offer_default_images_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -554,18 +554,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'company_user_internal_notes_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "company_user_internal_notes_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'company_user_internal_notes_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "company_user_internal_notes_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -575,7 +575,7 @@ export type Database = {
           rate: number | null
           rate_type: string | null
           rate_updated_at: string | null
-          role: Database['public']['Enums']['company_role']
+          role: Database["public"]["Enums"]["company_role"]
           user_id: string
         }
         Insert: {
@@ -583,7 +583,7 @@ export type Database = {
           rate?: number | null
           rate_type?: string | null
           rate_updated_at?: string | null
-          role: Database['public']['Enums']['company_role']
+          role: Database["public"]["Enums"]["company_role"]
           user_id: string
         }
         Update: {
@@ -591,16 +591,16 @@ export type Database = {
           rate?: number | null
           rate_type?: string | null
           rate_updated_at?: string | null
-          role?: Database['public']['Enums']['company_role']
+          role?: Database["public"]["Enums"]["company_role"]
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'company_users_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "company_users_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -643,18 +643,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'contacts_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'customer_contacts_customer_id_fkey'
-            columns: ['customer_id']
+            foreignKeyName: "customer_contacts_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -691,11 +691,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'crew_pricing_levels_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "crew_pricing_levels_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -780,18 +780,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'customers_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "customers_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'customers_crew_pricing_level_id_fkey'
-            columns: ['crew_pricing_level_id']
+            foreignKeyName: "customers_crew_pricing_level_id_fkey"
+            columns: ["crew_pricing_level_id"]
             isOneToOne: false
-            referencedRelation: 'crew_pricing_levels'
-            referencedColumns: ['id']
+            referencedRelation: "crew_pricing_levels"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -855,53 +855,53 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'group_items_child_group_id_fkey'
-            columns: ['child_group_id']
+            foreignKeyName: "group_items_child_group_id_fkey"
+            columns: ["child_group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_child_group_id_fkey'
-            columns: ['child_group_id']
+            foreignKeyName: "group_items_child_group_id_fkey"
+            columns: ["child_group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -938,25 +938,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'group_price_history_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "group_price_history_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -981,11 +981,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_brands_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_brands_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1007,11 +1007,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_categories_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_categories_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1022,9 +1022,9 @@ export type Database = {
           company_id: string
           deleted: boolean
           description: string | null
-          group_type: Database['public']['Enums']['group_type']
+          group_type: Database["public"]["Enums"]["group_type"]
           id: string
-          item_kind: Database['public']['Enums']['inventory_item_kind']
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"]
           name: string
           unique: boolean
         }
@@ -1034,9 +1034,9 @@ export type Database = {
           company_id: string
           deleted?: boolean
           description?: string | null
-          group_type?: Database['public']['Enums']['group_type']
+          group_type?: Database["public"]["Enums"]["group_type"]
           id?: string
-          item_kind?: Database['public']['Enums']['inventory_item_kind']
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           name: string
           unique?: boolean
         }
@@ -1046,26 +1046,26 @@ export type Database = {
           company_id?: string
           deleted?: boolean
           description?: string | null
-          group_type?: Database['public']['Enums']['group_type']
+          group_type?: Database["public"]["Enums"]["group_type"]
           id?: string
-          item_kind?: Database['public']['Enums']['inventory_item_kind']
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           name?: string
           unique?: boolean
         }
         Relationships: [
           {
-            foreignKeyName: 'item_groups_category_id_fkey'
-            columns: ['category_id']
+            foreignKeyName: "item_groups_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: 'item_categories'
-            referencedColumns: ['id']
+            referencedRelation: "item_categories"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_groups_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_groups_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1102,32 +1102,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_price_history_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_price_history_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1149,46 +1149,46 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_related_item_a_id_fkey'
-            columns: ['item_a_id']
+            foreignKeyName: "item_related_item_a_id_fkey"
+            columns: ["item_a_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_related_item_a_id_fkey'
-            columns: ['item_a_id']
+            foreignKeyName: "item_related_item_a_id_fkey"
+            columns: ["item_a_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_related_item_a_id_fkey'
-            columns: ['item_a_id']
+            foreignKeyName: "item_related_item_a_id_fkey"
+            columns: ["item_a_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_related_item_b_id_fkey'
-            columns: ['item_b_id']
+            foreignKeyName: "item_related_item_b_id_fkey"
+            columns: ["item_b_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_related_item_b_id_fkey'
-            columns: ['item_b_id']
+            foreignKeyName: "item_related_item_b_id_fkey"
+            columns: ["item_b_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_related_item_b_id_fkey'
-            columns: ['item_b_id']
+            foreignKeyName: "item_related_item_b_id_fkey"
+            columns: ["item_b_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1201,7 +1201,7 @@ export type Database = {
           company_id: string
           deleted: boolean
           id: string
-          item_kind: Database['public']['Enums']['inventory_item_kind']
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"]
           model: string | null
           name: string
           nicknames: string | null
@@ -1216,7 +1216,7 @@ export type Database = {
           company_id: string
           deleted?: boolean
           id?: string
-          item_kind?: Database['public']['Enums']['inventory_item_kind']
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           model?: string | null
           name: string
           nicknames?: string | null
@@ -1231,7 +1231,7 @@ export type Database = {
           company_id?: string
           deleted?: boolean
           id?: string
-          item_kind?: Database['public']['Enums']['inventory_item_kind']
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"]
           model?: string | null
           name?: string
           nicknames?: string | null
@@ -1240,25 +1240,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'items_brand_id_fkey'
-            columns: ['brand_id']
+            foreignKeyName: "items_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
-            referencedRelation: 'item_brands'
-            referencedColumns: ['id']
+            referencedRelation: "item_brands"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'items_category_id_fkey'
-            columns: ['category_id']
+            foreignKeyName: "items_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: 'item_categories'
-            referencedColumns: ['id']
+            referencedRelation: "item_categories"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'items_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "items_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1286,18 +1286,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_contacts_contact_id_fkey'
-            columns: ['contact_id']
+            foreignKeyName: "job_contacts_contact_id_fkey"
+            columns: ["contact_id"]
             isOneToOne: false
-            referencedRelation: 'contacts'
-            referencedColumns: ['id']
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_contacts_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_contacts_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1340,18 +1340,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_files_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_files_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_files_uploaded_by_user_id_fkey'
-            columns: ['uploaded_by_user_id']
+            foreignKeyName: "job_files_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -1370,18 +1370,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_invoice_jobs_invoice_id_fkey'
-            columns: ['invoice_id']
+            foreignKeyName: "job_invoice_jobs_invoice_id_fkey"
+            columns: ["invoice_id"]
             isOneToOne: false
-            referencedRelation: 'job_invoices'
-            referencedColumns: ['id']
+            referencedRelation: "job_invoices"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_invoice_jobs_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_invoice_jobs_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1436,25 +1436,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_invoices_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "job_invoices_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'job_invoices_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_invoices_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_invoices_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: "job_invoices_offer_id_fkey"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1503,18 +1503,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_money_items_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "job_money_items_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_money_items_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_money_items_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1545,18 +1545,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_notes_author_user_id_fkey'
-            columns: ['author_user_id']
+            foreignKeyName: "job_notes_author_user_id_fkey"
+            columns: ["author_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'job_notes_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_notes_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1585,7 +1585,7 @@ export type Database = {
           job_id: string
           locked: boolean
           offer_basis_id: string
-          offer_type: Database['public']['Enums']['offer_type']
+          offer_type: Database["public"]["Enums"]["offer_type"]
           offernr: number | null
           pretty_intro_text: string | null
           pretty_subcontractor_markup_percent: number | null
@@ -1604,7 +1604,7 @@ export type Database = {
           sent_via_email_to: string | null
           show_price_per_line: boolean
           source_technical_offer_id: string | null
-          status: Database['public']['Enums']['offer_status']
+          status: Database["public"]["Enums"]["offer_status"]
           title: string
           total_after_discount: number
           total_before_discount: number
@@ -1639,7 +1639,7 @@ export type Database = {
           job_id: string
           locked?: boolean
           offer_basis_id: string
-          offer_type: Database['public']['Enums']['offer_type']
+          offer_type: Database["public"]["Enums"]["offer_type"]
           offernr?: number | null
           pretty_intro_text?: string | null
           pretty_subcontractor_markup_percent?: number | null
@@ -1658,7 +1658,7 @@ export type Database = {
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
           source_technical_offer_id?: string | null
-          status?: Database['public']['Enums']['offer_status']
+          status?: Database["public"]["Enums"]["offer_status"]
           title: string
           total_after_discount?: number
           total_before_discount?: number
@@ -1693,7 +1693,7 @@ export type Database = {
           job_id?: string
           locked?: boolean
           offer_basis_id?: string
-          offer_type?: Database['public']['Enums']['offer_type']
+          offer_type?: Database["public"]["Enums"]["offer_type"]
           offernr?: number | null
           pretty_intro_text?: string | null
           pretty_subcontractor_markup_percent?: number | null
@@ -1712,7 +1712,7 @@ export type Database = {
           sent_via_email_to?: string | null
           show_price_per_line?: boolean
           source_technical_offer_id?: string | null
-          status?: Database['public']['Enums']['offer_status']
+          status?: Database["public"]["Enums"]["offer_status"]
           title?: string
           total_after_discount?: number
           total_before_discount?: number
@@ -1725,74 +1725,74 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_job_offers_based_on'
-            columns: ['based_on_offer_id']
+            foreignKeyName: "fk_job_offers_based_on"
+            columns: ["based_on_offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_job_offers_company'
-            columns: ['company_id']
+            foreignKeyName: "fk_job_offers_company"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_job_offers_job'
-            columns: ['job_id']
+            foreignKeyName: "fk_job_offers_job"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_based_on_offer_id_fkey'
-            columns: ['based_on_offer_id']
+            foreignKeyName: "job_offers_based_on_offer_id_fkey"
+            columns: ["based_on_offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "job_offers_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_copied_from_job_id_fkey'
-            columns: ['copied_from_job_id']
+            foreignKeyName: "job_offers_copied_from_job_id_fkey"
+            columns: ["copied_from_job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_copied_from_offer_id_fkey'
-            columns: ['copied_from_offer_id']
+            foreignKeyName: "job_offers_copied_from_offer_id_fkey"
+            columns: ["copied_from_offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_offers_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_offer_basis_id_fkey'
-            columns: ['offer_basis_id']
+            foreignKeyName: "job_offers_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_offers_source_technical_offer_id_fkey'
-            columns: ['source_technical_offer_id']
+            foreignKeyName: "job_offers_source_technical_offer_id_fkey"
+            columns: ["source_technical_offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1835,32 +1835,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_packing_sessions_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "job_packing_sessions_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_packing_sessions_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "job_packing_sessions_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'job_packing_sessions_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_packing_sessions_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_packing_sessions_vehicle_booking_id_fkey'
-            columns: ['vehicle_booking_id']
+            foreignKeyName: "job_packing_sessions_vehicle_booking_id_fkey"
+            columns: ["vehicle_booking_id"]
             isOneToOne: false
-            referencedRelation: 'reserved_vehicles'
-            referencedColumns: ['id']
+            referencedRelation: "reserved_vehicles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1870,29 +1870,29 @@ export type Database = {
           id: string
           job_id: string
           set_by: string | null
-          status: Database['public']['Enums']['job_status']
+          status: Database["public"]["Enums"]["job_status"]
         }
         Insert: {
           changed_at?: string
           id?: string
           job_id: string
           set_by?: string | null
-          status: Database['public']['Enums']['job_status']
+          status: Database["public"]["Enums"]["job_status"]
         }
         Update: {
           changed_at?: string
           id?: string
           job_id?: string
           set_by?: string | null
-          status?: Database['public']['Enums']['job_status']
+          status?: Database["public"]["Enums"]["job_status"]
         }
         Relationships: [
           {
-            foreignKeyName: 'job_status_history_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_status_history_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1938,18 +1938,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_subcontractor_quotes_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_subcontractor_quotes_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_subcontractor_quotes_job_subcontractor_id_fkey'
-            columns: ['job_subcontractor_id']
+            foreignKeyName: "job_subcontractor_quotes_job_subcontractor_id_fkey"
+            columns: ["job_subcontractor_id"]
             isOneToOne: false
-            referencedRelation: 'job_subcontractors'
-            referencedColumns: ['id']
+            referencedRelation: "job_subcontractors"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1980,25 +1980,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'job_subcontractors_contact_id_fkey'
-            columns: ['contact_id']
+            foreignKeyName: "job_subcontractors_contact_id_fkey"
+            columns: ["contact_id"]
             isOneToOne: false
-            referencedRelation: 'contacts'
-            referencedColumns: ['id']
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_subcontractors_customer_id_fkey'
-            columns: ['customer_id']
+            foreignKeyName: "job_subcontractors_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'job_subcontractors_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "job_subcontractors_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2019,7 +2019,7 @@ export type Database = {
           project_lead_user_id: string | null
           recurring_job_id: string | null
           start_at: string | null
-          status: Database['public']['Enums']['job_status']
+          status: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at: string
         }
@@ -2039,7 +2039,7 @@ export type Database = {
           project_lead_user_id?: string | null
           recurring_job_id?: string | null
           start_at?: string | null
-          status: Database['public']['Enums']['job_status']
+          status: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at?: string
         }
@@ -2059,59 +2059,59 @@ export type Database = {
           project_lead_user_id?: string | null
           recurring_job_id?: string | null
           start_at?: string | null
-          status?: Database['public']['Enums']['job_status']
+          status?: Database["public"]["Enums"]["job_status"]
           title?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'jobs_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "jobs_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'jobs_customer_contact_id_fkey'
-            columns: ['customer_contact_id']
+            foreignKeyName: "jobs_customer_contact_id_fkey"
+            columns: ["customer_contact_id"]
             isOneToOne: false
-            referencedRelation: 'contacts'
-            referencedColumns: ['id']
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'jobs_customer_id_fkey'
-            columns: ['customer_id']
+            foreignKeyName: "jobs_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'jobs_customer_user_id_fkey'
-            columns: ['customer_user_id']
+            foreignKeyName: "jobs_customer_user_id_fkey"
+            columns: ["customer_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'jobs_job_address_id_fkey'
-            columns: ['job_address_id']
+            foreignKeyName: "jobs_job_address_id_fkey"
+            columns: ["job_address_id"]
             isOneToOne: false
-            referencedRelation: 'addresses'
-            referencedColumns: ['id']
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'jobs_project_lead_user_id_fkey'
-            columns: ['project_lead_user_id']
+            foreignKeyName: "jobs_project_lead_user_id_fkey"
+            columns: ["project_lead_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'jobs_recurring_job_id_fkey'
-            columns: ['recurring_job_id']
+            foreignKeyName: "jobs_recurring_job_id_fkey"
+            columns: ["recurring_job_id"]
             isOneToOne: false
-            referencedRelation: 'recurring_jobs'
-            referencedColumns: ['id']
+            referencedRelation: "recurring_jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2148,18 +2148,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'logging_periods_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "logging_periods_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'logging_periods_locked_by_user_id_fkey'
-            columns: ['locked_by_user_id']
+            foreignKeyName: "logging_periods_locked_by_user_id_fkey"
+            columns: ["locked_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2202,18 +2202,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'matter_files_matter_id_fkey'
-            columns: ['matter_id']
+            foreignKeyName: "matter_files_matter_id_fkey"
+            columns: ["matter_id"]
             isOneToOne: false
-            referencedRelation: 'matters'
-            referencedColumns: ['id']
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matter_files_uploaded_by_user_id_fkey'
-            columns: ['uploaded_by_user_id']
+            foreignKeyName: "matter_files_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2244,18 +2244,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'matter_messages_matter_id_fkey'
-            columns: ['matter_id']
+            foreignKeyName: "matter_messages_matter_id_fkey"
+            columns: ["matter_id"]
             isOneToOne: false
-            referencedRelation: 'matters'
-            referencedColumns: ['id']
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matter_messages_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "matter_messages_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2266,7 +2266,7 @@ export type Database = {
           inbox_read_at: string | null
           matter_id: string
           responded_at: string | null
-          status: Database['public']['Enums']['matter_recipient_status']
+          status: Database["public"]["Enums"]["matter_recipient_status"]
           user_id: string
           viewed_at: string | null
         }
@@ -2276,7 +2276,7 @@ export type Database = {
           inbox_read_at?: string | null
           matter_id: string
           responded_at?: string | null
-          status?: Database['public']['Enums']['matter_recipient_status']
+          status?: Database["public"]["Enums"]["matter_recipient_status"]
           user_id: string
           viewed_at?: string | null
         }
@@ -2286,24 +2286,24 @@ export type Database = {
           inbox_read_at?: string | null
           matter_id?: string
           responded_at?: string | null
-          status?: Database['public']['Enums']['matter_recipient_status']
+          status?: Database["public"]["Enums"]["matter_recipient_status"]
           user_id?: string
           viewed_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: 'matter_recipients_matter_id_fkey'
-            columns: ['matter_id']
+            foreignKeyName: "matter_recipients_matter_id_fkey"
+            columns: ["matter_id"]
             isOneToOne: false
-            referencedRelation: 'matters'
-            referencedColumns: ['id']
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matter_recipients_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "matter_recipients_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2334,18 +2334,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'matter_responses_matter_id_fkey'
-            columns: ['matter_id']
+            foreignKeyName: "matter_responses_matter_id_fkey"
+            columns: ["matter_id"]
             isOneToOne: false
-            referencedRelation: 'matters'
-            referencedColumns: ['id']
+            referencedRelation: "matters"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matter_responses_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "matter_responses_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2360,7 +2360,7 @@ export type Database = {
           id: string
           is_anonymous: boolean
           job_id: string | null
-          matter_type: Database['public']['Enums']['matter_type']
+          matter_type: Database["public"]["Enums"]["matter_type"]
           metadata: Json | null
           time_period_id: string | null
           title: string
@@ -2376,7 +2376,7 @@ export type Database = {
           id?: string
           is_anonymous?: boolean
           job_id?: string | null
-          matter_type?: Database['public']['Enums']['matter_type']
+          matter_type?: Database["public"]["Enums"]["matter_type"]
           metadata?: Json | null
           time_period_id?: string | null
           title: string
@@ -2392,7 +2392,7 @@ export type Database = {
           id?: string
           is_anonymous?: boolean
           job_id?: string | null
-          matter_type?: Database['public']['Enums']['matter_type']
+          matter_type?: Database["public"]["Enums"]["matter_type"]
           metadata?: Json | null
           time_period_id?: string | null
           title?: string
@@ -2400,39 +2400,39 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'matters_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "matters_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matters_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "matters_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'matters_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "matters_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matters_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "matters_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'matters_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "matters_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
         ]
       }
@@ -2481,18 +2481,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'notification_preferences_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "notification_preferences_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'notification_preferences_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "notification_preferences_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2510,7 +2510,7 @@ export type Database = {
           id: string
           read_at: string | null
           title: string
-          type: Database['public']['Enums']['notification_type']
+          type: Database["public"]["Enums"]["notification_type"]
           user_id: string
         }
         Insert: {
@@ -2526,7 +2526,7 @@ export type Database = {
           id?: string
           read_at?: string | null
           title: string
-          type?: Database['public']['Enums']['notification_type']
+          type?: Database["public"]["Enums"]["notification_type"]
           user_id: string
         }
         Update: {
@@ -2542,30 +2542,30 @@ export type Database = {
           id?: string
           read_at?: string | null
           title?: string
-          type?: Database['public']['Enums']['notification_type']
+          type?: Database["public"]["Enums"]["notification_type"]
           user_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'notifications_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "notifications_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'notifications_created_by_user_id_fkey'
-            columns: ['created_by_user_id']
+            foreignKeyName: "notifications_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'notifications_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "notifications_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -2611,32 +2611,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_bases_company'
-            columns: ['company_id']
+            foreignKeyName: "fk_offer_bases_company"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_bases_job'
-            columns: ['job_id']
+            foreignKeyName: "fk_offer_bases_job"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_bases_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "offer_bases_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_bases_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "offer_bases_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2691,25 +2691,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'offer_crew_items_offer_basis_id_fkey'
-            columns: ['offer_basis_id']
+            foreignKeyName: "offer_crew_items_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_crew_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_crew_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_crew_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_crew_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
         ]
       }
@@ -2737,11 +2737,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'offer_equipment_groups_offer_basis_id_fkey'
-            columns: ['offer_basis_id']
+            foreignKeyName: "offer_equipment_groups_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2793,88 +2793,88 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_equipment_items_group'
-            columns: ['offer_group_id']
+            foreignKeyName: "fk_offer_equipment_items_group"
+            columns: ["offer_group_id"]
             isOneToOne: false
-            referencedRelation: 'offer_equipment_groups'
-            referencedColumns: ['id']
+            referencedRelation: "offer_equipment_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_equipment_items_item'
-            columns: ['item_id']
+            foreignKeyName: "fk_offer_equipment_items_item"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_equipment_items_item'
-            columns: ['item_id']
+            foreignKeyName: "fk_offer_equipment_items_item"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_equipment_items_item'
-            columns: ['item_id']
+            foreignKeyName: "fk_offer_equipment_items_item"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "offer_equipment_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "offer_equipment_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "offer_equipment_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "offer_equipment_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "offer_equipment_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_offer_group_id_fkey'
-            columns: ['offer_group_id']
+            foreignKeyName: "offer_equipment_items_offer_group_id_fkey"
+            columns: ["offer_group_id"]
             isOneToOne: false
-            referencedRelation: 'offer_equipment_groups'
-            referencedColumns: ['id']
+            referencedRelation: "offer_equipment_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_equipment_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_equipment_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_equipment_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
         ]
       }
@@ -2884,7 +2884,7 @@ export type Database = {
           id: string
           image_url: string | null
           offer_id: string
-          section_type: Database['public']['Enums']['pretty_section_type']
+          section_type: Database["public"]["Enums"]["pretty_section_type"]
           sort_order: number
           title: string | null
         }
@@ -2893,7 +2893,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           offer_id: string
-          section_type: Database['public']['Enums']['pretty_section_type']
+          section_type: Database["public"]["Enums"]["pretty_section_type"]
           sort_order?: number
           title?: string | null
         }
@@ -2902,24 +2902,24 @@ export type Database = {
           id?: string
           image_url?: string | null
           offer_id?: string
-          section_type?: Database['public']['Enums']['pretty_section_type']
+          section_type?: Database["public"]["Enums"]["pretty_section_type"]
           sort_order?: number
           title?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_pretty_sections_offer'
-            columns: ['offer_id']
+            foreignKeyName: "fk_offer_pretty_sections_offer"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_pretty_sections_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: "offer_pretty_sections_offer_id_fkey"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2947,11 +2947,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'offer_transport_groups_offer_basis_id_fkey'
-            columns: ['offer_basis_id']
+            foreignKeyName: "offer_transport_groups_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -2972,7 +2972,7 @@ export type Database = {
           total_price: number
           transport_group_id: string
           vehicle_category:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
           vehicle_id: string | null
           vehicle_name: string
@@ -2993,7 +2993,7 @@ export type Database = {
           total_price?: number
           transport_group_id: string
           vehicle_category?:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
           vehicle_id?: string | null
           vehicle_name: string
@@ -3014,95 +3014,95 @@ export type Database = {
           total_price?: number
           transport_group_id?: string
           vehicle_category?:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
           vehicle_id?: string | null
           vehicle_name?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'fk_offer_transport_items_transport_group'
-            columns: ['transport_group_id']
+            foreignKeyName: "fk_offer_transport_items_transport_group"
+            columns: ["transport_group_id"]
             isOneToOne: false
-            referencedRelation: 'offer_transport_groups'
-            referencedColumns: ['id']
+            referencedRelation: "offer_transport_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_transport_items_vehicle'
-            columns: ['vehicle_id']
+            foreignKeyName: "fk_offer_transport_items_vehicle"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_transport_items_vehicle'
-            columns: ['vehicle_id']
+            foreignKeyName: "fk_offer_transport_items_vehicle"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_transport_items_vehicle'
-            columns: ['vehicle_id']
+            foreignKeyName: "fk_offer_transport_items_vehicle"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index_mat'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index_mat"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'fk_offer_transport_items_vehicle'
-            columns: ['vehicle_id']
+            foreignKeyName: "fk_offer_transport_items_vehicle"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicles'
-            referencedColumns: ['id']
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_offer_basis_id_fkey'
-            columns: ['offer_basis_id']
+            foreignKeyName: "offer_transport_items_offer_basis_id_fkey"
+            columns: ["offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_transport_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "offer_transport_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "offer_transport_items_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "offer_transport_items_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "offer_transport_items_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index_mat'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index_mat"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'offer_transport_items_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "offer_transport_items_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicles'
-            referencedColumns: ['id']
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3114,7 +3114,7 @@ export type Database = {
           expires_at: string
           id: string
           inviter_user_id: string
-          role: Database['public']['Enums']['company_role']
+          role: Database["public"]["Enums"]["company_role"]
         }
         Insert: {
           company_id: string
@@ -3123,7 +3123,7 @@ export type Database = {
           expires_at?: string
           id?: string
           inviter_user_id: string
-          role: Database['public']['Enums']['company_role']
+          role: Database["public"]["Enums"]["company_role"]
         }
         Update: {
           company_id?: string
@@ -3132,15 +3132,15 @@ export type Database = {
           expires_at?: string
           id?: string
           inviter_user_id?: string
-          role?: Database['public']['Enums']['company_role']
+          role?: Database["public"]["Enums"]["company_role"]
         }
         Relationships: [
           {
-            foreignKeyName: 'pending_invites_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "pending_invites_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3177,18 +3177,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'personal_calendar_events_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "personal_calendar_events_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'personal_calendar_events_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "personal_calendar_events_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3228,17 +3228,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_module_block_items_block_id_fkey'
-            columns: ['block_id']
+            foreignKeyName: "pretty_offer_module_block_items_block_id_fkey"
+            columns: ["block_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_module_blocks'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_module_blocks"
+            referencedColumns: ["id"]
           },
         ]
       }
       pretty_offer_module_blocks: {
         Row: {
-          block_type: Database['public']['Enums']['pretty_module_block_type']
+          block_type: Database["public"]["Enums"]["pretty_module_block_type"]
           caption: string | null
           id: string
           link_title: string | null
@@ -3248,7 +3248,7 @@ export type Database = {
           url: string | null
         }
         Insert: {
-          block_type: Database['public']['Enums']['pretty_module_block_type']
+          block_type: Database["public"]["Enums"]["pretty_module_block_type"]
           caption?: string | null
           id?: string
           link_title?: string | null
@@ -3258,7 +3258,7 @@ export type Database = {
           url?: string | null
         }
         Update: {
-          block_type?: Database['public']['Enums']['pretty_module_block_type']
+          block_type?: Database["public"]["Enums"]["pretty_module_block_type"]
           caption?: string | null
           id?: string
           link_title?: string | null
@@ -3269,11 +3269,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_module_blocks_module_id_fkey'
-            columns: ['module_id']
+            foreignKeyName: "pretty_offer_module_blocks_module_id_fkey"
+            columns: ["module_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3281,7 +3281,7 @@ export type Database = {
         Row: {
           caption: string | null
           id: string
-          media_type: Database['public']['Enums']['pretty_module_media_type']
+          media_type: Database["public"]["Enums"]["pretty_module_media_type"]
           module_id: string
           sort_order: number
           title: string | null
@@ -3290,7 +3290,7 @@ export type Database = {
         Insert: {
           caption?: string | null
           id?: string
-          media_type?: Database['public']['Enums']['pretty_module_media_type']
+          media_type?: Database["public"]["Enums"]["pretty_module_media_type"]
           module_id: string
           sort_order?: number
           title?: string | null
@@ -3299,7 +3299,7 @@ export type Database = {
         Update: {
           caption?: string | null
           id?: string
-          media_type?: Database['public']['Enums']['pretty_module_media_type']
+          media_type?: Database["public"]["Enums"]["pretty_module_media_type"]
           module_id?: string
           sort_order?: number
           title?: string | null
@@ -3307,11 +3307,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_module_media_module_id_fkey'
-            columns: ['module_id']
+            foreignKeyName: "pretty_offer_module_media_module_id_fkey"
+            columns: ["module_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3348,11 +3348,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_module_timeline_items_module_id_fkey'
-            columns: ['module_id']
+            foreignKeyName: "pretty_offer_module_timeline_items_module_id_fkey"
+            columns: ["module_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3363,11 +3363,11 @@ export type Database = {
           display_price: number | null
           hero_media_caption: string | null
           hero_media_type:
-            | Database['public']['Enums']['pretty_module_media_type']
+            | Database["public"]["Enums"]["pretty_module_media_type"]
             | null
           hero_media_url: string | null
           id: string
-          module_type: Database['public']['Enums']['pretty_module_type']
+          module_type: Database["public"]["Enums"]["pretty_module_type"]
           offer_id: string
           show_price: boolean
           sort_order: number
@@ -3386,11 +3386,11 @@ export type Database = {
           display_price?: number | null
           hero_media_caption?: string | null
           hero_media_type?:
-            | Database['public']['Enums']['pretty_module_media_type']
+            | Database["public"]["Enums"]["pretty_module_media_type"]
             | null
           hero_media_url?: string | null
           id?: string
-          module_type?: Database['public']['Enums']['pretty_module_type']
+          module_type?: Database["public"]["Enums"]["pretty_module_type"]
           offer_id: string
           show_price?: boolean
           sort_order?: number
@@ -3409,11 +3409,11 @@ export type Database = {
           display_price?: number | null
           hero_media_caption?: string | null
           hero_media_type?:
-            | Database['public']['Enums']['pretty_module_media_type']
+            | Database["public"]["Enums"]["pretty_module_media_type"]
             | null
           hero_media_url?: string | null
           id?: string
-          module_type?: Database['public']['Enums']['pretty_module_type']
+          module_type?: Database["public"]["Enums"]["pretty_module_type"]
           offer_id?: string
           show_price?: boolean
           sort_order?: number
@@ -3428,18 +3428,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_modules_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: "pretty_offer_modules_offer_id_fkey"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
         ]
       }
       pretty_offer_pricing_bases: {
         Row: {
           apply_subcontractor_markup: boolean
-          basis_type: Database['public']['Enums']['pretty_pricing_basis_type']
+          basis_type: Database["public"]["Enums"]["pretty_pricing_basis_type"]
           created_at: string
           id: string
           job_subcontractor_quote_id: string | null
@@ -3451,7 +3451,7 @@ export type Database = {
         }
         Insert: {
           apply_subcontractor_markup?: boolean
-          basis_type: Database['public']['Enums']['pretty_pricing_basis_type']
+          basis_type: Database["public"]["Enums"]["pretty_pricing_basis_type"]
           created_at?: string
           id?: string
           job_subcontractor_quote_id?: string | null
@@ -3463,7 +3463,7 @@ export type Database = {
         }
         Update: {
           apply_subcontractor_markup?: boolean
-          basis_type?: Database['public']['Enums']['pretty_pricing_basis_type']
+          basis_type?: Database["public"]["Enums"]["pretty_pricing_basis_type"]
           created_at?: string
           id?: string
           job_subcontractor_quote_id?: string | null
@@ -3475,32 +3475,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_pricing_bases_job_subcontractor_quote_id_fkey'
-            columns: ['job_subcontractor_quote_id']
+            foreignKeyName: "pretty_offer_pricing_bases_job_subcontractor_quote_id_fkey"
+            columns: ["job_subcontractor_quote_id"]
             isOneToOne: false
-            referencedRelation: 'job_subcontractor_quotes'
-            referencedColumns: ['id']
+            referencedRelation: "job_subcontractor_quotes"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'pretty_offer_pricing_bases_offer_id_fkey'
-            columns: ['offer_id']
+            foreignKeyName: "pretty_offer_pricing_bases_offer_id_fkey"
+            columns: ["offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'pretty_offer_pricing_bases_source_offer_basis_id_fkey'
-            columns: ['source_offer_basis_id']
+            foreignKeyName: "pretty_offer_pricing_bases_source_offer_basis_id_fkey"
+            columns: ["source_offer_basis_id"]
             isOneToOne: false
-            referencedRelation: 'offer_bases'
-            referencedColumns: ['id']
+            referencedRelation: "offer_bases"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'pretty_offer_pricing_bases_source_technical_offer_id_fkey'
-            columns: ['source_technical_offer_id']
+            foreignKeyName: "pretty_offer_pricing_bases_source_technical_offer_id_fkey"
+            columns: ["source_technical_offer_id"]
             isOneToOne: false
-            referencedRelation: 'job_offers'
-            referencedColumns: ['id']
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3510,7 +3510,7 @@ export type Database = {
           basis_id: string
           category_key: string | null
           category_type:
-            | Database['public']['Enums']['pretty_category_type']
+            | Database["public"]["Enums"]["pretty_category_type"]
             | null
           id: string
           module_id: string
@@ -3522,7 +3522,7 @@ export type Database = {
           basis_id: string
           category_key?: string | null
           category_type?:
-            | Database['public']['Enums']['pretty_category_type']
+            | Database["public"]["Enums"]["pretty_category_type"]
             | null
           id?: string
           module_id: string
@@ -3534,7 +3534,7 @@ export type Database = {
           basis_id?: string
           category_key?: string | null
           category_type?:
-            | Database['public']['Enums']['pretty_category_type']
+            | Database["public"]["Enums"]["pretty_category_type"]
             | null
           id?: string
           module_id?: string
@@ -3543,18 +3543,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'pretty_offer_pricing_basis_splits_basis_id_fkey'
-            columns: ['basis_id']
+            foreignKeyName: "pretty_offer_pricing_basis_splits_basis_id_fkey"
+            columns: ["basis_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_pricing_bases'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_pricing_bases"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'pretty_offer_pricing_basis_splits_module_id_fkey'
-            columns: ['module_id']
+            foreignKeyName: "pretty_offer_pricing_basis_splits_module_id_fkey"
+            columns: ["module_id"]
             isOneToOne: false
-            referencedRelation: 'pretty_offer_modules'
-            referencedColumns: ['id']
+            referencedRelation: "pretty_offer_modules"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3615,18 +3615,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'profiles_primary_address_id_fkey'
-            columns: ['primary_address_id']
+            foreignKeyName: "profiles_primary_address_id_fkey"
+            columns: ["primary_address_id"]
             isOneToOne: false
-            referencedRelation: 'addresses'
-            referencedColumns: ['id']
+            referencedRelation: "addresses"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'profiles_selected_company_id_fkey'
-            columns: ['selected_company_id']
+            foreignKeyName: "profiles_selected_company_id_fkey"
+            columns: ["selected_company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3642,7 +3642,7 @@ export type Database = {
           recurring_job_id: string
           sort_order: number
           start_time: string | null
-          status: Database['public']['Enums']['job_status']
+          status: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at: string
         }
@@ -3657,7 +3657,7 @@ export type Database = {
           recurring_job_id: string
           sort_order?: number
           start_time?: string | null
-          status?: Database['public']['Enums']['job_status']
+          status?: Database["public"]["Enums"]["job_status"]
           title: string
           updated_at?: string
         }
@@ -3672,24 +3672,24 @@ export type Database = {
           recurring_job_id?: string
           sort_order?: number
           start_time?: string | null
-          status?: Database['public']['Enums']['job_status']
+          status?: Database["public"]["Enums"]["job_status"]
           title?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'recurring_job_templates_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "recurring_job_templates_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'recurring_job_templates_recurring_job_id_fkey'
-            columns: ['recurring_job_id']
+            foreignKeyName: "recurring_job_templates_recurring_job_id_fkey"
+            columns: ["recurring_job_id"]
             isOneToOne: false
-            referencedRelation: 'recurring_jobs'
-            referencedColumns: ['id']
+            referencedRelation: "recurring_jobs"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -3741,39 +3741,39 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'recurring_jobs_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "recurring_jobs_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'recurring_jobs_customer_contact_id_fkey'
-            columns: ['customer_contact_id']
+            foreignKeyName: "recurring_jobs_customer_contact_id_fkey"
+            columns: ["customer_contact_id"]
             isOneToOne: false
-            referencedRelation: 'contacts'
-            referencedColumns: ['id']
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'recurring_jobs_customer_id_fkey'
-            columns: ['customer_id']
+            foreignKeyName: "recurring_jobs_customer_id_fkey"
+            columns: ["customer_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'recurring_jobs_customer_user_id_fkey'
-            columns: ['customer_user_id']
+            foreignKeyName: "recurring_jobs_customer_user_id_fkey"
+            columns: ["customer_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'recurring_jobs_project_lead_user_id_fkey'
-            columns: ['project_lead_user_id']
+            foreignKeyName: "recurring_jobs_project_lead_user_id_fkey"
+            columns: ["project_lead_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3789,7 +3789,7 @@ export type Database = {
           placeholder_email: string | null
           placeholder_name: string | null
           requested_at: string | null
-          status: Database['public']['Enums']['booking_status']
+          status: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           user_id: string | null
         }
@@ -3804,7 +3804,7 @@ export type Database = {
           placeholder_email?: string | null
           placeholder_name?: string | null
           requested_at?: string | null
-          status?: Database['public']['Enums']['booking_status']
+          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id: string
           user_id?: string | null
         }
@@ -3819,38 +3819,38 @@ export type Database = {
           placeholder_email?: string | null
           placeholder_name?: string | null
           requested_at?: string | null
-          status?: Database['public']['Enums']['booking_status']
+          status?: Database["public"]["Enums"]["booking_status"]
           time_period_id?: string
           user_id?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: 'reserved_crew_forced_by_user_id_fkey'
-            columns: ['forced_by_user_id']
+            foreignKeyName: "reserved_crew_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'reserved_crew_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_crew_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_crew_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_crew_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
           {
-            foreignKeyName: 'reserved_crew_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "reserved_crew_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -3859,7 +3859,7 @@ export type Database = {
           end_at: string | null
           external_note: string | null
           external_status:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced: boolean
           forced_at: string | null
@@ -3868,7 +3868,7 @@ export type Database = {
           item_id: string
           quantity: number
           source_group_id: string | null
-          source_kind: Database['public']['Enums']['reservation_source_kind']
+          source_kind: Database["public"]["Enums"]["reservation_source_kind"]
           start_at: string | null
           subcontractor_id: string | null
           time_period_id: string
@@ -3877,7 +3877,7 @@ export type Database = {
           end_at?: string | null
           external_note?: string | null
           external_status?:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
           forced_at?: string | null
@@ -3886,7 +3886,7 @@ export type Database = {
           item_id: string
           quantity: number
           source_group_id?: string | null
-          source_kind?: Database['public']['Enums']['reservation_source_kind']
+          source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
           subcontractor_id?: string | null
           time_period_id: string
@@ -3895,7 +3895,7 @@ export type Database = {
           end_at?: string | null
           external_note?: string | null
           external_status?:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
           forced_at?: string | null
@@ -3904,74 +3904,74 @@ export type Database = {
           item_id?: string
           quantity?: number
           source_group_id?: string | null
-          source_kind?: Database['public']['Enums']['reservation_source_kind']
+          source_kind?: Database["public"]["Enums"]["reservation_source_kind"]
           start_at?: string | null
           subcontractor_id?: string | null
           time_period_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: 'reserved_items_forced_by_user_id_fkey'
-            columns: ['forced_by_user_id']
+            foreignKeyName: "reserved_items_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'reserved_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "reserved_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "reserved_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "reserved_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_source_group_id_fkey'
-            columns: ['source_group_id']
+            foreignKeyName: "reserved_items_source_group_id_fkey"
+            columns: ["source_group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_source_group_id_fkey'
-            columns: ['source_group_id']
+            foreignKeyName: "reserved_items_source_group_id_fkey"
+            columns: ["source_group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_subcontractor_id_fkey'
-            columns: ['subcontractor_id']
+            foreignKeyName: "reserved_items_subcontractor_id_fkey"
+            columns: ["subcontractor_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_items_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_items_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
         ]
       }
@@ -3982,7 +3982,7 @@ export type Database = {
           end_at: string | null
           external_note: string | null
           external_status:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced: boolean
           forced_at: string | null
@@ -3998,7 +3998,7 @@ export type Database = {
           end_at?: string | null
           external_note?: string | null
           external_status?:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
           forced_at?: string | null
@@ -4014,7 +4014,7 @@ export type Database = {
           end_at?: string | null
           external_note?: string | null
           external_status?:
-            | Database['public']['Enums']['external_request_status']
+            | Database["public"]["Enums"]["external_request_status"]
             | null
           forced?: boolean
           forced_at?: string | null
@@ -4026,53 +4026,53 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'reserved_vehicles_forced_by_user_id_fkey'
-            columns: ['forced_by_user_id']
+            foreignKeyName: "reserved_vehicles_forced_by_user_id_fkey"
+            columns: ["forced_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_vehicles_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'time_periods'
-            referencedColumns: ['id']
+            referencedRelation: "time_periods"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_time_period_id_fkey'
-            columns: ['time_period_id']
+            foreignKeyName: "reserved_vehicles_time_period_id_fkey"
+            columns: ["time_period_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['next_reservation_id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["next_reservation_id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "reserved_vehicles_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_detail'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_detail"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "reserved_vehicles_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "reserved_vehicles_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicle_index_mat'
-            referencedColumns: ['id']
+            referencedRelation: "vehicle_index_mat"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'reserved_vehicles_vehicle_id_fkey'
-            columns: ['vehicle_id']
+            foreignKeyName: "reserved_vehicles_vehicle_id_fkey"
+            columns: ["vehicle_id"]
             isOneToOne: false
-            referencedRelation: 'vehicles'
-            referencedColumns: ['id']
+            referencedRelation: "vehicles"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4154,31 +4154,31 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'time_entries_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "time_entries_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'time_entries_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "time_entries_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'time_entries_user_id_fkey'
-            columns: ['user_id']
+            foreignKeyName: "time_entries_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
       time_periods: {
         Row: {
-          category: Database['public']['Enums']['time_period_category']
+          category: Database["public"]["Enums"]["time_period_category"]
           company_id: string
           created_at: string
           deleted: boolean
@@ -4197,7 +4197,7 @@ export type Database = {
           updated_by_user_id: string | null
         }
         Insert: {
-          category?: Database['public']['Enums']['time_period_category']
+          category?: Database["public"]["Enums"]["time_period_category"]
           company_id: string
           created_at?: string
           deleted?: boolean
@@ -4216,7 +4216,7 @@ export type Database = {
           updated_by_user_id?: string | null
         }
         Update: {
-          category?: Database['public']['Enums']['time_period_category']
+          category?: Database["public"]["Enums"]["time_period_category"]
           company_id?: string
           created_at?: string
           deleted?: boolean
@@ -4236,32 +4236,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'time_periods_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "time_periods_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'time_periods_job_id_fkey'
-            columns: ['job_id']
+            foreignKeyName: "time_periods_job_id_fkey"
+            columns: ["job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'time_periods_reserved_by_user_id_fkey'
-            columns: ['reserved_by_user_id']
+            foreignKeyName: "time_periods_reserved_by_user_id_fkey"
+            columns: ["reserved_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
-            foreignKeyName: 'time_periods_updated_by_user_id_fkey'
-            columns: ['updated_by_user_id']
+            foreignKeyName: "time_periods_updated_by_user_id_fkey"
+            columns: ["updated_by_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4272,7 +4272,7 @@ export type Database = {
           created_at: string
           deleted: boolean
           external_owner_id: string | null
-          fuel: Database['public']['Enums']['fuel'] | null
+          fuel: Database["public"]["Enums"]["fuel"] | null
           id: string
           image_path: string | null
           internally_owned: boolean
@@ -4281,7 +4281,7 @@ export type Database = {
           owner_user_id: string | null
           registration_no: string | null
           vehicle_category:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
         }
         Insert: {
@@ -4290,7 +4290,7 @@ export type Database = {
           created_at?: string
           deleted?: boolean
           external_owner_id?: string | null
-          fuel?: Database['public']['Enums']['fuel'] | null
+          fuel?: Database["public"]["Enums"]["fuel"] | null
           id?: string
           image_path?: string | null
           internally_owned?: boolean
@@ -4299,7 +4299,7 @@ export type Database = {
           owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
         }
         Update: {
@@ -4308,7 +4308,7 @@ export type Database = {
           created_at?: string
           deleted?: boolean
           external_owner_id?: string | null
-          fuel?: Database['public']['Enums']['fuel'] | null
+          fuel?: Database["public"]["Enums"]["fuel"] | null
           id?: string
           image_path?: string | null
           internally_owned?: boolean
@@ -4317,30 +4317,30 @@ export type Database = {
           owner_user_id?: string | null
           registration_no?: string | null
           vehicle_category?:
-            | Database['public']['Enums']['vehicle_category']
+            | Database["public"]["Enums"]["vehicle_category"]
             | null
         }
         Relationships: [
           {
-            foreignKeyName: 'vehicles_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "vehicles_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_external_owner_id_fkey'
-            columns: ['external_owner_id']
+            foreignKeyName: "vehicles_external_owner_id_fkey"
+            columns: ["external_owner_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_owner_user_id_fkey'
-            columns: ['owner_user_id']
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4359,16 +4359,16 @@ export type Database = {
           rate: number | null
           rate_type: string | null
           rate_updated_at: string | null
-          role: Database['public']['Enums']['company_role'] | null
+          role: Database["public"]["Enums"]["company_role"] | null
           user_id: string | null
         }
         Relationships: [
           {
-            foreignKeyName: 'company_users_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "company_users_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4380,18 +4380,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4414,53 +4414,53 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'group_items_child_group_id_fkey'
-            columns: ['child_group_id']
+            foreignKeyName: "group_items_child_group_id_fkey"
+            columns: ["child_group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_child_group_id_fkey'
-            columns: ['child_group_id']
+            foreignKeyName: "group_items_child_group_id_fkey"
+            columns: ["child_group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_items_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_items_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "group_items_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4477,25 +4477,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'group_price_history_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "group_price_history_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'groups_with_rollups'
-            referencedColumns: ['id']
+            referencedRelation: "groups_with_rollups"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'group_price_history_group_id_fkey'
-            columns: ['group_id']
+            foreignKeyName: "group_price_history_group_id_fkey"
+            columns: ["group_id"]
             isOneToOne: false
-            referencedRelation: 'item_groups'
-            referencedColumns: ['id']
+            referencedRelation: "item_groups"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4510,11 +4510,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_groups_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_groups_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4530,7 +4530,7 @@ export type Database = {
           deleted: boolean | null
           id: string | null
           is_group: boolean | null
-          item_kind: Database['public']['Enums']['inventory_item_kind'] | null
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"] | null
           model: string | null
           name: string | null
           nicknames: string | null
@@ -4547,25 +4547,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4579,7 +4579,7 @@ export type Database = {
           deleted: boolean | null
           id: string | null
           is_subrental: boolean | null
-          item_kind: Database['public']['Enums']['inventory_item_kind'] | null
+          item_kind: Database["public"]["Enums"]["inventory_item_kind"] | null
           model: string | null
           name: string | null
           notes: string | null
@@ -4594,7 +4594,7 @@ export type Database = {
           deleted?: boolean | null
           id?: string | null
           is_subrental?: never
-          item_kind?: Database['public']['Enums']['inventory_item_kind'] | null
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"] | null
           model?: string | null
           name?: string | null
           notes?: string | null
@@ -4609,7 +4609,7 @@ export type Database = {
           deleted?: boolean | null
           id?: string | null
           is_subrental?: never
-          item_kind?: Database['public']['Enums']['inventory_item_kind'] | null
+          item_kind?: Database["public"]["Enums"]["inventory_item_kind"] | null
           model?: string | null
           name?: string | null
           notes?: string | null
@@ -4617,25 +4617,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'items_brand_id_fkey'
-            columns: ['brand_id']
+            foreignKeyName: "items_brand_id_fkey"
+            columns: ["brand_id"]
             isOneToOne: false
-            referencedRelation: 'item_brands'
-            referencedColumns: ['id']
+            referencedRelation: "item_brands"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'items_category_id_fkey'
-            columns: ['category_id']
+            foreignKeyName: "items_category_id_fkey"
+            columns: ["category_id"]
             isOneToOne: false
-            referencedRelation: 'item_categories'
-            referencedColumns: ['id']
+            referencedRelation: "item_categories"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'items_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "items_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4652,32 +4652,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'item_price_history_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "item_price_history_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'item_index_ext'
-            referencedColumns: ['id']
+            referencedRelation: "item_index_ext"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items'
-            referencedColumns: ['id']
+            referencedRelation: "items"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'item_price_history_item_id_fkey'
-            columns: ['item_id']
+            foreignKeyName: "item_price_history_item_id_fkey"
+            columns: ["item_id"]
             isOneToOne: false
-            referencedRelation: 'items_with_price'
-            referencedColumns: ['id']
+            referencedRelation: "items_with_price"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4692,11 +4692,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'items_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "items_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4710,7 +4710,7 @@ export type Database = {
           external_owner_id: string | null
           external_owner_is_partner: boolean | null
           external_owner_phone: string | null
-          fuel: Database['public']['Enums']['fuel'] | null
+          fuel: Database["public"]["Enums"]["fuel"] | null
           id: string | null
           image_path: string | null
           internally_owned: boolean | null
@@ -4728,32 +4728,32 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'time_periods_job_id_fkey'
-            columns: ['next_reservation_job_id']
+            foreignKeyName: "time_periods_job_id_fkey"
+            columns: ["next_reservation_job_id"]
             isOneToOne: false
-            referencedRelation: 'jobs'
-            referencedColumns: ['id']
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "vehicles_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_external_owner_id_fkey'
-            columns: ['external_owner_id']
+            foreignKeyName: "vehicles_external_owner_id_fkey"
+            columns: ["external_owner_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_owner_user_id_fkey'
-            columns: ['owner_user_id']
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4765,7 +4765,7 @@ export type Database = {
           deleted: boolean | null
           external_owner_id: string | null
           external_owner_name: string | null
-          fuel: Database['public']['Enums']['fuel'] | null
+          fuel: Database["public"]["Enums"]["fuel"] | null
           id: string | null
           image_path: string | null
           internally_owned: boolean | null
@@ -4776,25 +4776,25 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'vehicles_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "vehicles_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_external_owner_id_fkey'
-            columns: ['external_owner_id']
+            foreignKeyName: "vehicles_external_owner_id_fkey"
+            columns: ["external_owner_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_owner_user_id_fkey'
-            columns: ['owner_user_id']
+            foreignKeyName: "vehicles_owner_user_id_fkey"
+            columns: ["owner_user_id"]
             isOneToOne: false
-            referencedRelation: 'profiles'
-            referencedColumns: ['user_id']
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
         ]
       }
@@ -4806,7 +4806,7 @@ export type Database = {
           deleted: boolean | null
           external_owner_id: string | null
           external_owner_name: string | null
-          fuel: Database['public']['Enums']['fuel'] | null
+          fuel: Database["public"]["Enums"]["fuel"] | null
           id: string | null
           image_path: string | null
           internally_owned: boolean | null
@@ -4815,18 +4815,18 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: 'vehicles_company_id_fkey'
-            columns: ['company_id']
+            foreignKeyName: "vehicles_company_id_fkey"
+            columns: ["company_id"]
             isOneToOne: false
-            referencedRelation: 'companies'
-            referencedColumns: ['id']
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
           },
           {
-            foreignKeyName: 'vehicles_external_owner_id_fkey'
-            columns: ['external_owner_id']
+            foreignKeyName: "vehicles_external_owner_id_fkey"
+            columns: ["external_owner_id"]
             isOneToOne: false
-            referencedRelation: 'customers'
-            referencedColumns: ['id']
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -4858,7 +4858,7 @@ export type Database = {
           p_company_id: string
           p_email: string
           p_inviter_id: string
-          p_role: Database['public']['Enums']['company_role']
+          p_role: Database["public"]["Enums"]["company_role"]
         }
         Returns: Json
       }
@@ -4890,8 +4890,8 @@ export type Database = {
           user_id: string
         }
         SetofOptions: {
-          from: '*'
-          to: 'profiles'
+          from: "*"
+          to: "profiles"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -4903,6 +4903,14 @@ export type Database = {
       auto_update_jobs_to_in_progress: {
         Args: { p_trigger_source?: string }
         Returns: undefined
+      }
+      can_assign_company_role: {
+        Args: {
+          p_actor: string
+          p_company_id: string
+          p_role: Database["public"]["Enums"]["company_role"]
+        }
+        Returns: boolean
       }
       can_freelancer_view_job: {
         Args: { p_company_id: string; p_job_id: string }
@@ -5236,10 +5244,14 @@ export type Database = {
         Args: {
           p_actor_user_id: string
           p_company_id: string
-          p_new_role: Database['public']['Enums']['company_role']
+          p_new_role: Database["public"]["Enums"]["company_role"]
           p_target_user_id: string
         }
         Returns: Json
+      }
+      storage_object_company_id: {
+        Args: { p_bucket_id: string; p_name: string }
+        Returns: string
       }
       trigger_job_status_auto_update: { Args: never; Returns: Json }
       update_my_avatar: { Args: { p_path: string }; Returns: undefined }
@@ -5272,8 +5284,8 @@ export type Database = {
           user_id: string
         }
         SetofOptions: {
-          from: '*'
-          to: 'profiles'
+          from: "*"
+          to: "profiles"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -5281,7 +5293,7 @@ export type Database = {
       user_has_company_role: {
         Args: {
           p_company_id: string
-          p_roles: Database['public']['Enums']['company_role'][]
+          p_roles: Database["public"]["Enums"]["company_role"][]
           p_user_id: string
         }
         Returns: boolean
@@ -5297,117 +5309,117 @@ export type Database = {
     }
     Enums: {
       activity_type:
-        | 'inventory_item_created'
-        | 'inventory_item_deleted'
-        | 'inventory_group_created'
-        | 'inventory_group_deleted'
-        | 'vehicle_added'
-        | 'vehicle_removed'
-        | 'customer_added'
-        | 'customer_removed'
-        | 'crew_added'
-        | 'crew_removed'
-        | 'job_created'
-        | 'job_deleted'
-        | 'announcement'
-        | 'job_status_changed'
-      booking_status: 'planned' | 'confirmed' | 'canceled'
-      company_role: 'super_user' | 'owner' | 'employee' | 'freelancer'
-      crew_request_status: 'planned' | 'requested' | 'declined' | 'accepted'
+        | "inventory_item_created"
+        | "inventory_item_deleted"
+        | "inventory_group_created"
+        | "inventory_group_deleted"
+        | "vehicle_added"
+        | "vehicle_removed"
+        | "customer_added"
+        | "customer_removed"
+        | "crew_added"
+        | "crew_removed"
+        | "job_created"
+        | "job_deleted"
+        | "announcement"
+        | "job_status_changed"
+      booking_status: "planned" | "confirmed" | "canceled"
+      company_role: "super_user" | "owner" | "employee" | "freelancer"
+      crew_request_status: "planned" | "requested" | "declined" | "accepted"
       external_request_status:
-        | 'planned'
-        | 'requested'
-        | 'confirmed'
-        | 'canceled'
-      fuel: 'electric' | 'diesel' | 'petrol'
-      group_type: 'group' | 'bundle'
-      inventory_item_kind: 'stock' | 'subrental'
-      item_kind: 'bulk' | 'unique'
+        | "planned"
+        | "requested"
+        | "confirmed"
+        | "canceled"
+      fuel: "electric" | "diesel" | "petrol"
+      group_type: "group" | "bundle"
+      inventory_item_kind: "stock" | "subrental"
+      item_kind: "bulk" | "unique"
       job_status:
-        | 'draft'
-        | 'planned'
-        | 'requested'
-        | 'confirmed'
-        | 'in_progress'
-        | 'completed'
-        | 'canceled'
-        | 'invoiced'
-        | 'paid'
+        | "draft"
+        | "planned"
+        | "requested"
+        | "confirmed"
+        | "in_progress"
+        | "completed"
+        | "canceled"
+        | "invoiced"
+        | "paid"
       matter_recipient_status:
-        | 'pending'
-        | 'sent'
-        | 'viewed'
-        | 'responded'
-        | 'declined'
-        | 'accepted'
-      matter_type: 'crew_invite' | 'vote' | 'announcement' | 'chat' | 'update'
+        | "pending"
+        | "sent"
+        | "viewed"
+        | "responded"
+        | "declined"
+        | "accepted"
+      matter_type: "crew_invite" | "vote" | "announcement" | "chat" | "update"
       notification_type:
-        | 'offer_sent'
-        | 'offer_accepted'
-        | 'offer_rejected'
-        | 'offer_revision_requested'
-        | 'crew_invite'
-        | 'matter_reply'
-        | 'matter_mention'
-        | 'reminder'
-        | 'announcement'
-        | 'other'
-        | 'matter_update'
+        | "offer_sent"
+        | "offer_accepted"
+        | "offer_rejected"
+        | "offer_revision_requested"
+        | "crew_invite"
+        | "matter_reply"
+        | "matter_mention"
+        | "reminder"
+        | "announcement"
+        | "other"
+        | "matter_update"
       offer_status:
-        | 'draft'
-        | 'sent'
-        | 'viewed'
-        | 'accepted'
-        | 'rejected'
-        | 'superseded'
-      offer_type: 'technical' | 'pretty'
+        | "draft"
+        | "sent"
+        | "viewed"
+        | "accepted"
+        | "rejected"
+        | "superseded"
+      offer_type: "technical" | "pretty"
       pretty_category_type:
-        | 'equipment_group'
-        | 'crew_category'
-        | 'transport_group'
+        | "equipment_group"
+        | "crew_category"
+        | "transport_group"
       pretty_module_block_type:
-        | 'subtitle'
-        | 'description'
-        | 'simple_list'
-        | 'interactive_list'
-        | 'image'
-        | 'video'
-        | 'link'
-        | 'timeline'
-        | 'gallery'
-        | 'column_layout'
-        | 'file_upload'
-        | 'options'
-      pretty_module_media_type: 'image' | 'video' | 'link'
-      pretty_module_type: 'standard' | 'timeline'
-      pretty_pricing_basis_type: 'technical' | 'subcontractor' | 'custom'
+        | "subtitle"
+        | "description"
+        | "simple_list"
+        | "interactive_list"
+        | "image"
+        | "video"
+        | "link"
+        | "timeline"
+        | "gallery"
+        | "column_layout"
+        | "file_upload"
+        | "options"
+      pretty_module_media_type: "image" | "video" | "link"
+      pretty_module_type: "standard" | "timeline"
+      pretty_pricing_basis_type: "technical" | "subcontractor" | "custom"
       pretty_section_type:
-        | 'hero'
-        | 'problem'
-        | 'solution'
-        | 'benefits'
-        | 'testimonial'
-      reservation_source_kind: 'direct' | 'group'
+        | "hero"
+        | "problem"
+        | "solution"
+        | "benefits"
+        | "testimonial"
+      reservation_source_kind: "direct" | "group"
       reservation_status:
-        | 'tentative'
-        | 'requested'
-        | 'confirmed'
-        | 'in_progress'
-        | 'completed'
-        | 'canceled'
-      time_period_category: 'program' | 'equipment' | 'crew' | 'transport'
-      unit_status: 'in_service' | 'needs_service' | 'lost' | 'retired'
+        | "tentative"
+        | "requested"
+        | "confirmed"
+        | "in_progress"
+        | "completed"
+        | "canceled"
+      time_period_category: "program" | "equipment" | "crew" | "transport"
+      unit_status: "in_service" | "needs_service" | "lost" | "retired"
       vehicle_category:
-        | 'passenger_car_small'
-        | 'passenger_car_medium'
-        | 'passenger_car_big'
-        | 'van_small'
-        | 'van_medium'
-        | 'van_big'
-        | 'C1'
-        | 'C1E'
-        | 'C'
-        | 'CE'
+        | "passenger_car_small"
+        | "passenger_car_medium"
+        | "passenger_car_big"
+        | "van_small"
+        | "van_medium"
+        | "van_big"
+        | "C1"
+        | "C1E"
+        | "C"
+        | "CE"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5415,33 +5427,33 @@ export type Database = {
   }
 }
 
-type DatabaseWithoutInternals = Omit<Database, '__InternalSupabase'>
+type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
 
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, 'public'>]
+type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
 
 export type Tables<
   DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema['Tables'] & DefaultSchema['Views'])
+    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])
+    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Views'])[TableName] extends {
+  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
+      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
       Row: infer R
     }
     ? R
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema['Tables'] &
-        DefaultSchema['Views'])
-    ? (DefaultSchema['Tables'] &
-        DefaultSchema['Views'])[DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])
+    ? (DefaultSchema["Tables"] &
+        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
         Row: infer R
       }
       ? R
@@ -5450,23 +5462,23 @@ export type Tables<
 
 export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Insert: infer I
     }
     ? I
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
-    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Insert: infer I
       }
       ? I
@@ -5475,23 +5487,23 @@ export type TablesInsert<
 
 export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema['Tables']
+    | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
   TableName extends DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables']
+    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
     : never = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions['schema']]['Tables'][TableName] extends {
+  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
       Update: infer U
     }
     ? U
     : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema['Tables']
-    ? DefaultSchema['Tables'][DefaultSchemaTableNameOrOptions] extends {
+  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
+    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
         Update: infer U
       }
       ? U
@@ -5500,36 +5512,36 @@ export type TablesUpdate<
 
 export type Enums<
   DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema['Enums']
+    | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
   EnumName extends DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums']
+    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions['schema']]['Enums'][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema['Enums']
-    ? DefaultSchema['Enums'][DefaultSchemaEnumNameOrOptions]
+  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
+  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
+    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
     : never
 
 export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema['CompositeTypes']
+    | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
   CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes']
+    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
     : never = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions['schema']]['CompositeTypes'][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema['CompositeTypes']
-    ? DefaultSchema['CompositeTypes'][PublicCompositeTypeNameOrOptions]
+  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
+  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
+    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
     : never
 
 export const Constants = {
@@ -5539,128 +5551,129 @@ export const Constants = {
   public: {
     Enums: {
       activity_type: [
-        'inventory_item_created',
-        'inventory_item_deleted',
-        'inventory_group_created',
-        'inventory_group_deleted',
-        'vehicle_added',
-        'vehicle_removed',
-        'customer_added',
-        'customer_removed',
-        'crew_added',
-        'crew_removed',
-        'job_created',
-        'job_deleted',
-        'announcement',
-        'job_status_changed',
+        "inventory_item_created",
+        "inventory_item_deleted",
+        "inventory_group_created",
+        "inventory_group_deleted",
+        "vehicle_added",
+        "vehicle_removed",
+        "customer_added",
+        "customer_removed",
+        "crew_added",
+        "crew_removed",
+        "job_created",
+        "job_deleted",
+        "announcement",
+        "job_status_changed",
       ],
-      booking_status: ['planned', 'confirmed', 'canceled'],
-      company_role: ['super_user', 'owner', 'employee', 'freelancer'],
-      crew_request_status: ['planned', 'requested', 'declined', 'accepted'],
+      booking_status: ["planned", "confirmed", "canceled"],
+      company_role: ["super_user", "owner", "employee", "freelancer"],
+      crew_request_status: ["planned", "requested", "declined", "accepted"],
       external_request_status: [
-        'planned',
-        'requested',
-        'confirmed',
-        'canceled',
+        "planned",
+        "requested",
+        "confirmed",
+        "canceled",
       ],
-      fuel: ['electric', 'diesel', 'petrol'],
-      group_type: ['group', 'bundle'],
-      inventory_item_kind: ['stock', 'subrental'],
-      item_kind: ['bulk', 'unique'],
+      fuel: ["electric", "diesel", "petrol"],
+      group_type: ["group", "bundle"],
+      inventory_item_kind: ["stock", "subrental"],
+      item_kind: ["bulk", "unique"],
       job_status: [
-        'draft',
-        'planned',
-        'requested',
-        'confirmed',
-        'in_progress',
-        'completed',
-        'canceled',
-        'invoiced',
-        'paid',
+        "draft",
+        "planned",
+        "requested",
+        "confirmed",
+        "in_progress",
+        "completed",
+        "canceled",
+        "invoiced",
+        "paid",
       ],
       matter_recipient_status: [
-        'pending',
-        'sent',
-        'viewed',
-        'responded',
-        'declined',
-        'accepted',
+        "pending",
+        "sent",
+        "viewed",
+        "responded",
+        "declined",
+        "accepted",
       ],
-      matter_type: ['crew_invite', 'vote', 'announcement', 'chat', 'update'],
+      matter_type: ["crew_invite", "vote", "announcement", "chat", "update"],
       notification_type: [
-        'offer_sent',
-        'offer_accepted',
-        'offer_rejected',
-        'offer_revision_requested',
-        'crew_invite',
-        'matter_reply',
-        'matter_mention',
-        'reminder',
-        'announcement',
-        'other',
-        'matter_update',
+        "offer_sent",
+        "offer_accepted",
+        "offer_rejected",
+        "offer_revision_requested",
+        "crew_invite",
+        "matter_reply",
+        "matter_mention",
+        "reminder",
+        "announcement",
+        "other",
+        "matter_update",
       ],
       offer_status: [
-        'draft',
-        'sent',
-        'viewed',
-        'accepted',
-        'rejected',
-        'superseded',
+        "draft",
+        "sent",
+        "viewed",
+        "accepted",
+        "rejected",
+        "superseded",
       ],
-      offer_type: ['technical', 'pretty'],
+      offer_type: ["technical", "pretty"],
       pretty_category_type: [
-        'equipment_group',
-        'crew_category',
-        'transport_group',
+        "equipment_group",
+        "crew_category",
+        "transport_group",
       ],
       pretty_module_block_type: [
-        'subtitle',
-        'description',
-        'simple_list',
-        'interactive_list',
-        'image',
-        'video',
-        'link',
-        'timeline',
-        'gallery',
-        'column_layout',
-        'file_upload',
-        'options',
+        "subtitle",
+        "description",
+        "simple_list",
+        "interactive_list",
+        "image",
+        "video",
+        "link",
+        "timeline",
+        "gallery",
+        "column_layout",
+        "file_upload",
+        "options",
       ],
-      pretty_module_media_type: ['image', 'video', 'link'],
-      pretty_module_type: ['standard', 'timeline'],
-      pretty_pricing_basis_type: ['technical', 'subcontractor', 'custom'],
+      pretty_module_media_type: ["image", "video", "link"],
+      pretty_module_type: ["standard", "timeline"],
+      pretty_pricing_basis_type: ["technical", "subcontractor", "custom"],
       pretty_section_type: [
-        'hero',
-        'problem',
-        'solution',
-        'benefits',
-        'testimonial',
+        "hero",
+        "problem",
+        "solution",
+        "benefits",
+        "testimonial",
       ],
-      reservation_source_kind: ['direct', 'group'],
+      reservation_source_kind: ["direct", "group"],
       reservation_status: [
-        'tentative',
-        'requested',
-        'confirmed',
-        'in_progress',
-        'completed',
-        'canceled',
+        "tentative",
+        "requested",
+        "confirmed",
+        "in_progress",
+        "completed",
+        "canceled",
       ],
-      time_period_category: ['program', 'equipment', 'crew', 'transport'],
-      unit_status: ['in_service', 'needs_service', 'lost', 'retired'],
+      time_period_category: ["program", "equipment", "crew", "transport"],
+      unit_status: ["in_service", "needs_service", "lost", "retired"],
       vehicle_category: [
-        'passenger_car_small',
-        'passenger_car_medium',
-        'passenger_car_big',
-        'van_small',
-        'van_medium',
-        'van_big',
-        'C1',
-        'C1E',
-        'C',
-        'CE',
+        "passenger_car_small",
+        "passenger_car_medium",
+        "passenger_car_big",
+        "van_small",
+        "van_medium",
+        "van_big",
+        "C1",
+        "C1E",
+        "C",
+        "CE",
       ],
     },
   },
 } as const
+

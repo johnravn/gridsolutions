@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { parseCopyJobRpcResult } from '@features/jobs/utils/copyJobConflicts'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
@@ -82,6 +83,87 @@ describeIntegration('public offer RPCs', () => {
 
     expect(offer?.status).toBe('accepted')
     expect(offer?.accepted_by_name).toBe('E2E Customer')
+  })
+
+  it('preserves technical offer equipment-only discount totals on accept', async () => {
+    const admin = createServiceClient()
+    const accessToken = `e2e-accept-discount-${Date.now()}`
+    const offerId = randomUUID()
+    const basisId = randomUUID()
+
+    // Equipment 1000 + crew 500, 10% equipment-only discount → after 1400, VAT 25% → 1750.
+    // Wrong (full) discount would be 1350 after / 1687.50 with VAT.
+    const equipmentSubtotal = 1000
+    const crewSubtotal = 500
+    const discountPercent = 10
+    const vatPercent = 25
+    const totalBefore = equipmentSubtotal + crewSubtotal
+    const totalAfter = totalBefore - (equipmentSubtotal * discountPercent) / 100
+    const totalWithVat = totalAfter * (1 + vatPercent / 100)
+
+    const { error: basisError } = await admin.from('offer_bases').insert({
+      id: basisId,
+      job_id: ACCEPT_JOB_ID,
+      company_id: TEST_COMPANY_ID,
+      title: 'Accept discount basis',
+      days_of_use: 3,
+      discount_percent: discountPercent,
+      vat_percent: vatPercent,
+    })
+    expect(basisError).toBeNull()
+
+    const { error: offerError } = await admin.from('job_offers').insert({
+      id: offerId,
+      job_id: ACCEPT_JOB_ID,
+      company_id: TEST_COMPANY_ID,
+      offer_basis_id: basisId,
+      offer_type: 'technical',
+      version_number: 90,
+      status: 'sent',
+      access_token: accessToken,
+      title: 'Accept discount preserve',
+      days_of_use: 3,
+      discount_percent: discountPercent,
+      vat_percent: vatPercent,
+      equipment_subtotal: equipmentSubtotal,
+      crew_subtotal: crewSubtotal,
+      transport_subtotal: 0,
+      total_before_discount: totalBefore,
+      total_after_discount: totalAfter,
+      total_with_vat: totalWithVat,
+      locked: true,
+      sent_at: new Date().toISOString(),
+      show_price_per_line: true,
+    })
+    expect(offerError).toBeNull()
+
+    try {
+      const client = createAnonClient()
+      const { error } = await client.rpc('public_offer_accept', {
+        p_access_token: accessToken,
+        p_first_name: 'Discount',
+        p_last_name: 'Customer',
+        p_phone: '+4791234567',
+        p_selected_option_ids: [],
+      })
+      expect(error).toBeNull()
+
+      const { data: offer } = await admin
+        .from('job_offers')
+        .select(
+          'status, total_before_discount, total_after_discount, total_with_vat',
+        )
+        .eq('id', offerId)
+        .single()
+
+      expect(offer?.status).toBe('accepted')
+      expect(Number(offer?.total_before_discount)).toBe(totalBefore)
+      expect(Number(offer?.total_after_discount)).toBe(totalAfter)
+      expect(Number(offer?.total_with_vat)).toBe(totalWithVat)
+    } finally {
+      await admin.from('job_offers').delete().eq('id', offerId)
+      await admin.from('offer_bases').delete().eq('id', basisId)
+    }
   })
 
   it('rejects a sent offer via public_offer_reject', async () => {

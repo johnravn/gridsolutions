@@ -699,17 +699,21 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
  * Lock an offer (prevents further editing)
  */
 export async function lockOffer(offerId: string): Promise<void> {
-  // Persist totals from stored lines before locking so accepted offers match
-  // the public line sums and later invoices.
-  await recalculateOfferTotals(offerId)
-
   const { data: offer, error: offerError } = await supabase
     .from('job_offers')
-    .select('id, job_id, version_number')
+    .select('id, job_id, version_number, offer_type')
     .eq('id', offerId)
     .single()
 
   if (offerError) throw offerError
+
+  // Persist totals before locking so accepted offers match the public line
+  // sums and later invoices. Pretty offers must not use technical line sums.
+  if (offer.offer_type === 'pretty') {
+    await recalculatePrettyOfferTotals(offerId)
+  } else {
+    await recalculateOfferTotals(offerId)
+  }
 
   const { error } = await supabase
     .from('job_offers')
