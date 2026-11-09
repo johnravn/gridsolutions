@@ -56,6 +56,7 @@ import {
   recurringJobsIndexQuery,
 } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
+import { filterScopedRecurringMemberJobs } from '../utils/filterScopedRecurringMemberJobs'
 import { getJobStatusColor } from '../utils/statusColors'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
@@ -481,15 +482,28 @@ export default function JobsList({
 
   const scopedMemberRows = React.useMemo(() => {
     if (!listScope) return []
-    const scopedMemberJobs = scopedRecurringDetail?.jobs ?? []
-    const q = debouncedSearch.trim().toLowerCase()
-    if (!q) return scopedMemberJobs
-    return scopedMemberJobs.filter(
-      (j) =>
-        j.title.toLowerCase().includes(q) ||
-        (j.jobnr != null && String(j.jobnr).includes(q)),
-    )
-  }, [listScope, scopedRecurringDetail, debouncedSearch])
+    return filterScopedRecurringMemberJobs(scopedRecurringDetail?.jobs ?? [], {
+      search: debouncedSearch,
+      statusFilter,
+      showOnlyArchived,
+      dateFrom,
+      dateTo,
+      readyToInvoiceFilter,
+      projectLeadUserId: readyToInvoiceFilter ? userId : null,
+      onlyJobIds,
+    })
+  }, [
+    listScope,
+    scopedRecurringDetail,
+    debouncedSearch,
+    statusFilter,
+    showOnlyArchived,
+    dateFrom,
+    dateTo,
+    readyToInvoiceFilter,
+    userId,
+    onlyJobIds,
+  ])
 
   const scopedHeader = listScope ? (
     <Flex
@@ -537,7 +551,9 @@ export default function JobsList({
             <IndexTableBodySkeleton rowCount={6} rowHeight={88} />
           ) : scopedMemberRows.length === 0 ? (
             <Text size="2" color="gray">
-              No jobs in this series
+              {(scopedRecurringDetail?.jobs?.length ?? 0) === 0
+                ? 'No jobs in this series'
+                : 'No jobs match your filters'}
             </Text>
           ) : (
             <Flex
@@ -650,7 +666,9 @@ export default function JobsList({
               ) : scopedMemberRows.length === 0 ? (
                 <Flex align="center" justify="center" py="6">
                   <Text size="2" color="gray">
-                    No jobs in this series
+                    {(scopedRecurringDetail?.jobs?.length ?? 0) === 0
+                      ? 'No jobs in this series'
+                      : 'No jobs match your filters'}
                   </Text>
                 </Flex>
               ) : (
