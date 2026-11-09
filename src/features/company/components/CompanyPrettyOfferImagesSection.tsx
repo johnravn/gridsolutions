@@ -23,6 +23,16 @@ import {
 } from '../api/prettyOfferDefaultImagesQueries'
 import type { CompanyPrettyOfferDefaultImage } from '../api/prettyOfferDefaultImagesQueries'
 
+type PendingImage = {
+  id: string
+  file: File
+  title: string
+}
+
+function fileBaseName(file: File): string {
+  return file.name.replace(/\.[^.]+$/, '').trim() || 'Untitled image'
+}
+
 function ImageCard({
   image,
   companyId,
@@ -137,8 +147,9 @@ export default function CompanyPrettyOfferImagesSection() {
   const { success, error: toastError } = useToast()
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [addDialogOpen, setAddDialogOpen] = React.useState(false)
-  const [pendingFile, setPendingFile] = React.useState<File | null>(null)
-  const [pendingTitle, setPendingTitle] = React.useState('')
+  const [pendingImages, setPendingImages] = React.useState<Array<PendingImage>>(
+    [],
+  )
 
   const queryOptions = companyId
     ? companyPrettyOfferDefaultImagesQuery({ companyId })
@@ -160,16 +171,31 @@ export default function CompanyPrettyOfferImagesSection() {
   }
 
   const createMutation = useMutation({
-    mutationFn: async ({ title, file }: { title: string; file: File }) => {
+    mutationFn: async (items: Array<PendingImage>) => {
       if (!companyId) throw new Error('No company selected')
-      return createCompanyPrettyOfferDefaultImage({ companyId, title, file })
+      const results = []
+      for (const item of items) {
+        results.push(
+          await createCompanyPrettyOfferDefaultImage({
+            companyId,
+            title: item.title,
+            file: item.file,
+          }),
+        )
+      }
+      return results
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, items) => {
       await invalidate()
-      success('Image added', 'Default offer image saved to your library.')
+      const count = items.length
+      success(
+        count === 1 ? 'Image added' : 'Images added',
+        count === 1
+          ? 'Default offer image saved to your library.'
+          : `${count} default offer images saved to your library.`,
+      )
       setAddDialogOpen(false)
-      setPendingFile(null)
-      setPendingTitle('')
+      setPendingImages([])
     },
     onError: (err: Error) => {
       toastError('Upload failed', err.message)
@@ -177,16 +203,40 @@ export default function CompanyPrettyOfferImagesSection() {
   })
 
   const handleFileSelected = (files: FileList | null) => {
-    const file = files?.[0]
-    if (!file) return
-    setPendingFile(file)
-    const baseName = file.name.replace(/\.[^.]+$/, '').trim()
-    setPendingTitle(baseName)
+    if (!files || files.length === 0) return
+    setPendingImages(
+      Array.from(files).map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        title: fileBaseName(file),
+      })),
+    )
     setAddDialogOpen(true)
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
+  const updatePendingTitle = (id: string, title: string) => {
+    setPendingImages((prev) =>
+      prev.map((item) => (item.id === id ? { ...item, title } : item)),
+    )
+  }
+
+  const removePendingImage = (id: string) => {
+    setPendingImages((prev) => {
+      const next = prev.filter((item) => item.id !== id)
+      if (next.length === 0) setAddDialogOpen(false)
+      return next
+    })
+  }
+
+  const canSubmit =
+    pendingImages.length > 0 &&
+    pendingImages.every((item) => item.title.trim()) &&
+    !createMutation.isPending
+
   if (!companyId) return null
+
+  const isMultiple = pendingImages.length > 1
 
   return (
     <>
@@ -201,6 +251,7 @@ export default function CompanyPrettyOfferImagesSection() {
             ref={fileInputRef}
             type="file"
             accept="image/jpeg,image/png,image/webp"
+            multiple
             hidden
             onChange={(e) => handleFileSelected(e.target.files)}
           />
@@ -210,7 +261,7 @@ export default function CompanyPrettyOfferImagesSection() {
             onClick={() => fileInputRef.current?.click()}
           >
             <Upload width={16} height={16} />
-            Add image
+            Add images
           </Button>
         </Flex>
 
@@ -238,30 +289,59 @@ export default function CompanyPrettyOfferImagesSection() {
         )}
       </Flex>
 
-      <Dialog.Root open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <Dialog.Content maxWidth="420px">
-          <Dialog.Title>Add default offer image</Dialog.Title>
+      <Dialog.Root
+        open={addDialogOpen}
+        onOpenChange={(open) => {
+          setAddDialogOpen(open)
+          if (!open) setPendingImages([])
+        }}
+      >
+        <Dialog.Content maxWidth={isMultiple ? '520px' : '420px'}>
+          <Dialog.Title>
+            {isMultiple
+              ? `Add ${pendingImages.length} default offer images`
+              : 'Add default offer image'}
+          </Dialog.Title>
           <Dialog.Description size="2" mb="3">
-            Give this image a short title so your team can find it when building
-            offers.
+            {isMultiple
+              ? 'Give each image a short title so your team can find them when building offers.'
+              : 'Give this image a short title so your team can find it when building offers.'}
           </Dialog.Description>
           <Flex direction="column" gap="3">
-            <Box>
-              <Text size="2" weight="medium" mb="1" as="div">
-                Title
-              </Text>
-              <TextField.Root
-                value={pendingTitle}
-                placeholder="e.g. Main stage setup"
-                autoFocus
-                onChange={(e) => setPendingTitle(e.target.value)}
-              />
-            </Box>
-            {pendingFile && (
-              <Text size="1" color="gray">
-                {pendingFile.name}
-              </Text>
-            )}
+            {pendingImages.map((item, index) => (
+              <Box key={item.id}>
+                <Flex gap="2" align="end">
+                  <Box style={{ flex: 1 }}>
+                    <Text size="2" weight="medium" mb="1" as="div">
+                      {isMultiple ? `Title ${index + 1}` : 'Title'}
+                    </Text>
+                    <TextField.Root
+                      value={item.title}
+                      placeholder="e.g. Main stage setup"
+                      autoFocus={index === 0}
+                      onChange={(e) =>
+                        updatePendingTitle(item.id, e.target.value)
+                      }
+                    />
+                    <Text size="1" color="gray" mt="1" as="div">
+                      {item.file.name}
+                    </Text>
+                  </Box>
+                  {isMultiple && (
+                    <IconButton
+                      size="2"
+                      variant="ghost"
+                      color="red"
+                      disabled={createMutation.isPending}
+                      onClick={() => removePendingImage(item.id)}
+                      aria-label={`Remove ${item.file.name}`}
+                    >
+                      <Trash width={14} height={14} />
+                    </IconButton>
+                  )}
+                </Flex>
+              </Box>
+            ))}
             <Flex gap="2" justify="end">
               <Dialog.Close>
                 <Button variant="soft" color="gray">
@@ -269,21 +349,18 @@ export default function CompanyPrettyOfferImagesSection() {
                 </Button>
               </Dialog.Close>
               <Button
-                disabled={
-                  !pendingFile ||
-                  !pendingTitle.trim() ||
-                  createMutation.isPending
-                }
+                disabled={!canSubmit}
                 onClick={() => {
-                  if (!pendingFile) return
-                  createMutation.mutate({
-                    title: pendingTitle,
-                    file: pendingFile,
-                  })
+                  if (!canSubmit) return
+                  createMutation.mutate(pendingImages)
                 }}
               >
                 <Plus width={16} height={16} />
-                {createMutation.isPending ? 'Uploading…' : 'Add to library'}
+                {createMutation.isPending
+                  ? 'Uploading…'
+                  : isMultiple
+                    ? `Add ${pendingImages.length} to library`
+                    : 'Add to library'}
               </Button>
             </Flex>
           </Flex>
