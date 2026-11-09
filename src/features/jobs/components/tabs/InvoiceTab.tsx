@@ -438,7 +438,7 @@ export default function InvoiceTab({
     offerTitle?: string
     bookingsCount?: number
   }) => {
-    const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
+    const jobLabel = job.title?.trim() || 'Job'
     if (details.type === 'offer') {
       return `Job: ${jobLabel}\n`
     }
@@ -727,7 +727,7 @@ export default function InvoiceTab({
     setPreviewSourceOffer(offer)
     setPreviewOffer(null)
     setPreviewBookings(oneLineBookings)
-    const jobLabel = `${job.title}${job.jobnr ? ` (#${String(job.jobnr).padStart(6, '0')})` : ''}`
+    const jobLabel = job.title?.trim() || 'Job'
     setInvoicePreviewMessage(`Job: ${jobLabel}`)
     setInvoicePreviewOurRef(
       job.project_lead?.display_name || job.project_lead?.email || '',
@@ -776,8 +776,8 @@ export default function InvoiceTab({
     })
     setPreviewSourceOffer(null)
     setPreviewBookings(bookings)
-    // Default message: job name, start/end date, job number
-    const jobLabel = `${job.title}${job.jobnr ? ` (#${job.jobnr})` : ''}`
+    // Default message: job name and start/end date (no internal job numbers)
+    const jobLabel = job.title?.trim() || 'Job'
     const startFmt = job.start_at
       ? new Date(job.start_at).toLocaleDateString('nb-NO', {
           day: '2-digit',

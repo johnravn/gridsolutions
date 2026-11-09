@@ -145,14 +145,17 @@ function formatTimeRange(startAt: string, endAt: string): string {
   return start || end
 }
 
+/**
+ * Customer-facing job label for invoice line description patterns.
+ * Prefer the job name; use dates (not internal job numbers) to tell
+ * similarly named jobs apart on multi-job invoices.
+ */
 function formatJobLabel(line: BookingInvoiceLine): string {
   const title = line.jobTitle?.trim()
-  const jobnr = line.jobnr
-  if (title && jobnr != null) {
-    return `${title} (#${String(jobnr).padStart(6, '0')})`
-  }
+  const dates = formatDateRange(line.startAt, line.endAt)
+  if (title && dates) return `${title} (${dates})`
   if (title) return title
-  if (jobnr != null) return `#${String(jobnr).padStart(6, '0')}`
+  if (dates) return dates
   return ''
 }
 

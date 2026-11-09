@@ -231,7 +231,17 @@ export default function MultiJobInvoiceDialog({
 
     setEditedLines(bookings.all)
     const labels = selectedMembers
-      .map((j) => `${j.title}${j.jobnr != null ? ` (#${j.jobnr})` : ''}`)
+      .map((j) => {
+        const title = j.title?.trim() || 'Untitled job'
+        const date = j.start_at
+          ? new Date(j.start_at).toLocaleDateString('nb-NO', {
+              day: '2-digit',
+              month: '2-digit',
+              year: 'numeric',
+            })
+          : null
+        return date ? `${title} (${date})` : title
+      })
       .join(', ')
     setMessage(`Jobs: ${labels}`)
     setOurRef('')

@@ -147,12 +147,6 @@ export default function RecurringInvoiceJobPickerDialog({
                     </Table.Cell>
                     <Table.Cell>
                       <Text weight="medium">{job.title}</Text>
-                      {job.jobnr != null && (
-                        <Text size="1" color="gray">
-                          {' '}
-                          #{job.jobnr}
-                        </Text>
-                      )}
                     </Table.Cell>
                     <Table.Cell>
                       {job.start_at

@@ -156,15 +156,49 @@ describe('buildInvoiceLineDescription', () => {
       ],
       separator: ' ',
     })
-    expect(desc).toBe('Corporate event (#000042) :: Wireless vocal mic')
+    expect(desc).toBe('Corporate event (15.01.2026) :: Wireless vocal mic')
   })
 
-  it('includes job token with jobnr only', () => {
+  it('uses job name without internal job numbers', () => {
+    const line = makeLine({
+      jobTitle: 'Corporate event',
+      jobnr: 42,
+      startAt: '',
+      endAt: '',
+    })
+    const desc = buildInvoiceLineDescription(line, {
+      tokens: [{ kind: 'job' }],
+    })
+    expect(desc).toBe('Corporate event')
+  })
+
+  it('falls back to dates when the job has no title', () => {
     const line = makeLine({ jobTitle: null, jobnr: 7 })
     const desc = buildInvoiceLineDescription(line, {
       tokens: [{ kind: 'job' }],
     })
-    expect(desc).toBe('#000007')
+    expect(desc).toBe('15.01.2026')
+  })
+
+  it('distinguishes same-named jobs by date instead of job number', () => {
+    const first = makeLine({
+      jobTitle: 'Weekly show',
+      jobnr: 1,
+      startAt: '2026-01-15T08:00:00.000Z',
+      endAt: '2026-01-15T18:00:00.000Z',
+    })
+    const second = makeLine({
+      jobTitle: 'Weekly show',
+      jobnr: 2,
+      startAt: '2026-01-22T08:00:00.000Z',
+      endAt: '2026-01-22T18:00:00.000Z',
+    })
+    expect(
+      buildInvoiceLineDescription(first, { tokens: [{ kind: 'job' }] }),
+    ).toBe('Weekly show (15.01.2026)')
+    expect(
+      buildInvoiceLineDescription(second, { tokens: [{ kind: 'job' }] }),
+    ).toBe('Weekly show (22.01.2026)')
   })
 
   it('skips empty token values', () => {
