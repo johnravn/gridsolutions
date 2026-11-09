@@ -1,10 +1,11 @@
 -- One shareable public offer link per offer basis.
+-- Use md5()+random() for tokens: remote may not expose gen_random_bytes().
 
 ALTER TABLE public.offer_bases
   ADD COLUMN IF NOT EXISTS access_token text;
 
 -- Prefer token from latest locked pretty offer on the basis; else latest locked
--- offer; else generate a new hex token (matches app generateSecureToken length).
+-- offer; else generate a new hex token.
 UPDATE public.offer_bases ob
 SET access_token = COALESCE(
   (
@@ -28,13 +29,16 @@ SET access_token = COALESCE(
     ORDER BY jo.version_number DESC, jo.created_at DESC
     LIMIT 1
   ),
-  encode(gen_random_bytes(32), 'hex')
+  md5(random()::text || clock_timestamp()::text || ob.id::text)
+    || md5(gen_random_uuid()::text || random()::text)
 )
 WHERE ob.access_token IS NULL OR btrim(ob.access_token) = '';
 
 -- Any remaining null/blank (edge cases) get a fresh token.
 UPDATE public.offer_bases
-SET access_token = encode(gen_random_bytes(32), 'hex')
+SET access_token =
+  md5(random()::text || clock_timestamp()::text || id::text)
+  || md5(gen_random_uuid()::text || random()::text)
 WHERE access_token IS NULL OR btrim(access_token) = '';
 
 -- Ensure uniqueness before adding the constraint (regenerate collisions).
@@ -49,13 +53,18 @@ BEGIN
     HAVING count(*) > 1
   LOOP
     UPDATE public.offer_bases
-    SET access_token = encode(gen_random_bytes(32), 'hex')
+    SET access_token =
+      md5(random()::text || clock_timestamp()::text || id::text)
+      || md5(gen_random_uuid()::text || random()::text)
     WHERE id = ANY (r.ids[2:]);
   END LOOP;
 END $$;
 
 ALTER TABLE public.offer_bases
-  ALTER COLUMN access_token SET DEFAULT encode(gen_random_bytes(32), 'hex');
+  ALTER COLUMN access_token SET DEFAULT (
+    md5(random()::text || clock_timestamp()::text)
+    || md5(gen_random_uuid()::text || random()::text)
+  );
 
 ALTER TABLE public.offer_bases
   ALTER COLUMN access_token SET NOT NULL;
