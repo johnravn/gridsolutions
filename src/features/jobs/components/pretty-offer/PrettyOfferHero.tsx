@@ -2,6 +2,9 @@ import { Badge, Box, Flex, Heading, Text } from '@radix-ui/themes'
 import LazyImage from '@shared/ui/components/LazyImage'
 import { supabase } from '@shared/api/supabase'
 import { useTheme } from '@app/hooks/useTheme'
+import { formatPublicOfferCurrency } from '../../hooks/usePublicOfferResponse'
+import { applyOptionsToOfferTotals } from '../../utils/prettyOfferOptions'
+import { usePrettyOfferOptions } from './PrettyOfferOptionsContext'
 import './prettyOfferDeckStyles.css'
 import type { OfferDetail } from '../../types'
 
@@ -26,6 +29,7 @@ type Props = {
 
 export function PrettyOfferHero({ offer }: Props) {
   const { isDark } = useTheme()
+  const optionsContext = usePrettyOfferOptions()
 
   const companyLogoPath = isDark
     ? offer.company?.logo_dark_path || offer.company?.logo_light_path
@@ -40,6 +44,30 @@ export function PrettyOfferHero({ offer }: Props) {
     ? supabase.storage.from('logos').getPublicUrl(offer.customer.logo_path).data
         .publicUrl + `?v=${offer.customer.logo_path}`
     : null
+
+  const isAccepted = offer.status === 'accepted'
+  const acceptedOptionsSubtotal = offer.accepted_options_subtotal ?? 0
+  const baseSubtotal =
+    isAccepted && acceptedOptionsSubtotal > 0
+      ? offer.total_before_discount - acceptedOptionsSubtotal
+      : offer.total_before_discount
+
+  const displayTotalWithVat = isAccepted
+    ? offer.total_with_vat
+    : optionsContext
+      ? optionsContext.getAdjustedTotals(
+          baseSubtotal,
+          offer.vat_percent,
+          offer.discount_percent,
+        ).totalWithVat
+      : applyOptionsToOfferTotals(
+          baseSubtotal,
+          0,
+          offer.vat_percent,
+          offer.discount_percent,
+        ).totalWithVat
+
+  const showHeroTotal = Number.isFinite(displayTotalWithVat)
 
   return (
     <Box className="pretty-deck-hero">
@@ -128,6 +156,7 @@ export function PrettyOfferHero({ offer }: Props) {
             justify="center"
             gap="6"
             wrap="wrap"
+            mb={showHeroTotal ? '5' : '0'}
             style={{ textAlign: 'center' }}
           >
             {offer.job_start_at && (
@@ -166,6 +195,26 @@ export function PrettyOfferHero({ offer }: Props) {
               </Flex>
             )}
           </Flex>
+        )}
+
+        {showHeroTotal && (
+          <Box className="pretty-deck-hero__total">
+            <Text
+              size="2"
+              weight="medium"
+              color="gray"
+              style={{ letterSpacing: '0.04em', textTransform: 'uppercase' }}
+            >
+              Total incl. VAT
+            </Text>
+            <Text
+              size="8"
+              weight="bold"
+              style={{ lineHeight: 1.15, letterSpacing: '-0.02em' }}
+            >
+              {formatPublicOfferCurrency(displayTotalWithVat)}
+            </Text>
+          </Box>
         )}
       </Box>
     </Box>

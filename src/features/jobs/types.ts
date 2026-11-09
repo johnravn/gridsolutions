@@ -488,6 +488,7 @@ export type OfferBasis = {
   days_of_use: number
   discount_percent: number
   vat_percent: number
+  access_token: string
   bookings_synced_at: string | null
   booking_sync_ignores: Array<{
     kind: 'equipment' | 'crew' | 'transport'
@@ -852,6 +853,39 @@ export type OfferDetail = JobOffer & {
     logo_dark_path: string | null
     accent_color?: string | null
   }
+}
+
+/** One pretty alternative on a shared basis public link. */
+export type PublicOfferAlternative = {
+  sub_version: number
+  status: OfferStatus
+  offer: OfferDetail
+}
+
+/** Multi-alternative payload from public_offer_get. */
+export type PublicOfferAlternativesPayload = {
+  mode: 'alternatives'
+  basis: {
+    id: UUID
+    title: string
+    access_token: string
+    job_id: UUID
+    company_id: UUID
+  }
+  alternatives: Array<PublicOfferAlternative>
+  default_offer_id: UUID
+}
+
+export type PublicOfferResponse =
+  | (OfferDetail & { mode?: 'single' })
+  | PublicOfferAlternativesPayload
+
+export function isPublicOfferAlternativesPayload(
+  value: PublicOfferResponse | null | undefined,
+): value is PublicOfferAlternativesPayload {
+  return (
+    !!value && (value as PublicOfferAlternativesPayload).mode === 'alternatives'
+  )
 }
 
 // Acceptance data

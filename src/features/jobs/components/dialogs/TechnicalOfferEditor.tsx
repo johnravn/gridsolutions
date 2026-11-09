@@ -621,12 +621,14 @@ export default function TechnicalOfferEditor({
     onSuccess: async (_, lockedOfferId) => {
       const stayOpen = lockOutcomeRef.current === 'stay_open'
       lockOutcomeRef.current = 'close'
-      // access_token is set at create time and does not change on lock
+      // Prefer the basis share link (one link per basis); fall back to offer token.
       const cachedOffer = qc.getQueryData(
         offerDetailQuery(lockedOfferId).queryKey,
       )
-      if (cachedOffer?.access_token) {
-        const url = `${window.location.origin}/offer/${cachedOffer.access_token}`
+      const basisToken = linkedBasisDetail?.access_token
+      const shareToken = basisToken || cachedOffer?.access_token
+      if (shareToken) {
+        const url = `${window.location.origin}/offer/${shareToken}`
         const copied = await copyTextToClipboard(url)
         if (copied) {
           success(
@@ -1051,14 +1053,21 @@ export default function TechnicalOfferEditor({
                           size="2"
                           variant="soft"
                           onClick={() => {
-                            const token = existingOffer?.access_token
+                            const token =
+                              linkedBasisDetail?.access_token ||
+                              existingOffer?.access_token
                             if (!token) return
                             window.open(
                               `${window.location.origin}/offer/${token}`,
                               '_blank',
                             )
                           }}
-                          disabled={!existingOffer?.access_token}
+                          disabled={
+                            !(
+                              linkedBasisDetail?.access_token ||
+                              existingOffer?.access_token
+                            )
+                          }
                         >
                           <Eye width={14} height={14} />
                           Show preview

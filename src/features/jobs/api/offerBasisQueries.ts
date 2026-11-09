@@ -15,6 +15,7 @@ import { resolveHourlyHoursPerDay } from '../components/dialogs/technical-offer-
 import {
   calculateRentalFactor,
   calculateTransportLineTotal,
+  generateSecureToken,
 } from '../utils/offerCalculations'
 import { bookedGroupQuantitiesByGroupId } from '../utils/groupBookingQuantity'
 import {
@@ -22,7 +23,6 @@ import {
   withOfferBasisWriteLock,
 } from '../utils/offerBasisWriteSafety'
 import {
-  
   crewKeysToPreserve,
   emptyBookingSyncIgnoreSets,
   equipmentKeysToPreserve,
@@ -31,12 +31,12 @@ import {
   serializeBookingSyncIgnores,
   transportKeysToPreserve,
   unassignedTransportKey,
-  unassignedTransportLabel
+  unassignedTransportLabel,
 } from '../utils/offerBookingDiff'
 import { timePeriodIdsSafeToDelete } from '../utils/timePeriodDeleteSafety'
 import { resolveDefaultDiscountPercent } from '../utils/resolveDefaultDiscountPercent'
 import { ensureDefaultEquipmentPeriod } from './queries'
-import type {BookingSyncIgnoreSets} from '../utils/offerBookingDiff';
+import type { BookingSyncIgnoreSets } from '../utils/offerBookingDiff'
 import type { BasisBookingConflictPreview } from '@features/conflicts/api/equipmentConflictCheck'
 import type {
   LocalCrewItem,
@@ -211,6 +211,7 @@ export function jobOfferBasesQuery(jobId: string) {
           days_of_use: offer.days_of_use,
           discount_percent: offer.discount_percent,
           vat_percent: offer.vat_percent,
+          access_token: offer.access_token,
           bookings_synced_at: offer.bookings_synced_at,
           booking_sync_ignores: [],
           created_at: offer.created_at,
@@ -501,6 +502,7 @@ export async function createEmptyOfferBasis({
       days_of_use: pricing.daysOfUse,
       discount_percent: pricing.discountPercent,
       vat_percent: pricing.vatPercent,
+      access_token: generateSecureToken(),
     })
     .select('id')
     .single()
@@ -1451,6 +1453,7 @@ export async function duplicateOfferBasis(
       days_of_use: basis.days_of_use,
       discount_percent: basis.discount_percent,
       vat_percent: basis.vat_percent,
+      access_token: generateSecureToken(),
     })
     .select('id')
     .single()

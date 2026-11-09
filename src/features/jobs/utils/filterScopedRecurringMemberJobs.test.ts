@@ -3,7 +3,9 @@ import { ACTIVE_STATUS_FILTER } from '../components/JobsFilter'
 import { filterScopedRecurringMemberJobs } from './filterScopedRecurringMemberJobs'
 import type { JobListRow } from '../types'
 
-function job(overrides: Partial<JobListRow> & Pick<JobListRow, 'id'>): JobListRow {
+function job(
+  overrides: Partial<JobListRow> & Pick<JobListRow, 'id'>,
+): JobListRow {
   return {
     company_id: 'c1',
     title: 'Job',

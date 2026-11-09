@@ -284,13 +284,13 @@ export default function OffersTab({
   const [prettyOfferBasisId, setPrettyOfferBasisId] = React.useState<
     string | undefined
   >(undefined)
-  const [linkDialogOpen, setLinkDialogOpen] = React.useState<JobOffer | null>(
-    null,
-  )
+  const [linkDialogOpen, setLinkDialogOpen] = React.useState<{
+    url: string
+  } | null>(null)
   const [responseDialogOpen, setResponseDialogOpen] =
     React.useState<JobOffer | null>(null)
   const [responseType, setResponseType] = React.useState<
-    'accepted' | 'rejected' | 'revision'
+    'accepted' | 'rejected' | 'revision' | 'superseded' | 'sent'
   >('accepted')
   const [responseComment, setResponseComment] = React.useState('')
   const [revisionMessageOffer, setRevisionMessageOffer] =
@@ -1182,7 +1182,11 @@ export default function OffersTab({
     },
     onSuccess: (offer) => {
       invalidateOfferQueries()
-      setLinkDialogOpen(offer)
+      const basis = bases.find((b) => b.id === offer.offer_basis_id)
+      const url = basis?.access_token
+        ? `${window.location.origin}/offer/${basis.access_token}`
+        : `${window.location.origin}/offer/${offer.access_token}`
+      setLinkDialogOpen({ url })
       success('Offer locked', 'The offer has been locked and sent.')
     },
     onError: (err: any) => {
@@ -1194,7 +1198,9 @@ export default function OffersTab({
     mutationFn: async (payload: {
       offerId: string
       offerTitle: string
-      responseType: 'accepted' | 'rejected' | 'revision'
+      offerType: JobOffer['offer_type']
+      offerBasisId: string
+      responseType: 'accepted' | 'rejected' | 'revision' | 'superseded' | 'sent'
       comment: string
     }) => {
       const now = new Date().toISOString()
@@ -1249,6 +1255,18 @@ export default function OffersTab({
           rejected_by_phone: null,
           rejection_comment: null,
         }
+      } else if (payload.responseType === 'superseded') {
+        update = {
+          ...baseUpdate,
+          status: 'superseded',
+          locked: true,
+        }
+      } else if (payload.responseType === 'sent') {
+        update = {
+          ...baseUpdate,
+          status: 'sent',
+          locked: true,
+        }
       } else {
         update = {
           ...baseUpdate,
@@ -1266,6 +1284,21 @@ export default function OffersTab({
         .eq('id', payload.offerId)
 
       if (error) throw error
+
+      // Accepting one pretty alternative supersedes other active alts on the basis.
+      if (
+        payload.responseType === 'accepted' &&
+        payload.offerType === 'pretty'
+      ) {
+        const { error: supersedeError } = await supabase
+          .from('job_offers')
+          .update({ status: 'superseded', locked: true })
+          .eq('offer_basis_id', payload.offerBasisId)
+          .eq('offer_type', 'pretty')
+          .neq('id', payload.offerId)
+          .in('status', ['sent', 'viewed'])
+        if (supersedeError) throw supersedeError
+      }
     },
     onSuccess: () => {
       invalidateOfferQueries()
@@ -1660,14 +1693,32 @@ export default function OffersTab({
     }
   }
 
-  const getOfferLink = (offer: JobOffer) => {
-    return `${window.location.origin}/offer/${offer.access_token}`
+  const getBasisShareLink = (basis: {
+    access_token?: string | null
+  }): string | null => {
+    if (!basis.access_token) return null
+    return `${window.location.origin}/offer/${basis.access_token}`
   }
 
-  const handleCopyLink = (offer: JobOffer) => {
-    const link = getOfferLink(offer)
+  const getOfferShareLink = (offer: JobOffer): string => {
+    const basis = bases.find((b) => b.id === offer.offer_basis_id)
+    return (
+      getBasisShareLink(basis ?? {}) ??
+      `${window.location.origin}/offer/${offer.access_token}`
+    )
+  }
+
+  const basisHasShareablePrettyOffer = (basis: JobOfferBasisRow) =>
+    basis.offers.some(
+      (offer) =>
+        offer.offer_type === 'pretty' &&
+        offer.locked &&
+        offer.status !== 'draft',
+    )
+
+  const handleCopyLink = (url: string) => {
     navigator.clipboard
-      .writeText(link)
+      .writeText(url)
       .then(() => {
         success(
           'Link copied',
@@ -1681,8 +1732,20 @@ export default function OffersTab({
 
   const openResponseDialog = (offer: JobOffer) => {
     setResponseDialogOpen(offer)
-    setResponseType('accepted')
-    setResponseComment('')
+    if (offer.revision_requested_at) {
+      setResponseType('revision')
+    } else if (offer.status === 'accepted') {
+      setResponseType('accepted')
+    } else if (offer.status === 'rejected') {
+      setResponseType('rejected')
+    } else if (offer.status === 'superseded') {
+      setResponseType('superseded')
+    } else if (offer.status === 'sent' || offer.status === 'viewed') {
+      setResponseType('sent')
+    } else {
+      setResponseType('accepted')
+    }
+    setResponseComment(offer.revision_comment ?? '')
   }
 
   const formatCurrency = (amount: number) => {
@@ -1735,7 +1798,8 @@ export default function OffersTab({
       hideDuplicate?: boolean
     } = {},
   ) => {
-    const canCopyLink = offer.locked && offer.status !== 'draft'
+    const shareUrl = getOfferShareLink(offer)
+    const canCopyLink = offer.locked && offer.status !== 'draft' && !!shareUrl
     const hasLeadingItems =
       (offer.locked && !hideView) ||
       (!offer.locked && !hideEdit && !isReadOnly) ||
@@ -1763,10 +1827,10 @@ export default function OffersTab({
           )}
 
           {canCopyLink && !hideCopyLink && (
-            <DropdownMenu.Item onSelect={() => handleCopyLink(offer)}>
+            <DropdownMenu.Item onSelect={() => handleCopyLink(shareUrl)}>
               <Flex align="center" gap="2">
                 <Link width={14} height={14} />
-                <Text>Copy link</Text>
+                <Text>Copy basis link</Text>
               </Flex>
             </DropdownMenu.Item>
           )}
@@ -1854,13 +1918,13 @@ export default function OffersTab({
         )}
         {isLockedSent && (
           <>
-            <Tooltip content="Copy link">
+            <Tooltip content="Copy basis link">
               <IconButton
                 size="1"
                 variant="soft"
-                aria-label="Copy offer link"
-                data-offer-url={getOfferLink(offer)}
-                onClick={() => handleCopyLink(offer)}
+                aria-label="Copy basis offer link"
+                data-offer-url={getOfferShareLink(offer)}
+                onClick={() => handleCopyLink(getOfferShareLink(offer))}
               >
                 <Link width={14} height={14} />
               </IconButton>
@@ -2176,6 +2240,25 @@ export default function OffersTab({
                         <Refresh width={16} height={16} />
                       </IconButton>
                     </Tooltip>
+                    {basisHasShareablePrettyOffer(basis) &&
+                      getBasisShareLink(basis) && (
+                        <Tooltip content="Copy offer link">
+                          <IconButton
+                            size="2"
+                            variant="soft"
+                            aria-label="Copy basis offer link"
+                            data-offer-url={
+                              getBasisShareLink(basis) ?? undefined
+                            }
+                            onClick={() => {
+                              const url = getBasisShareLink(basis)
+                              if (url) handleCopyLink(url)
+                            }}
+                          >
+                            <Link width={16} height={16} />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     <Tooltip content="Copy basis">
                       <IconButton
                         size="2"
@@ -2420,14 +2503,41 @@ export default function OffersTab({
                               style={{ width: 96, verticalAlign: 'middle' }}
                             >
                               <Flex direction="column" gap="1" align="start">
-                                <Badge
-                                  size="1"
-                                  variant="soft"
-                                  radius="full"
-                                  color={getOfferStatusBadgeColor(offer)}
-                                >
-                                  {getOfferStatusLabel(offer)}
-                                </Badge>
+                                {isReadOnly ? (
+                                  <Badge
+                                    size="1"
+                                    variant="soft"
+                                    radius="full"
+                                    color={getOfferStatusBadgeColor(offer)}
+                                  >
+                                    {getOfferStatusLabel(offer)}
+                                  </Badge>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => openResponseDialog(offer)}
+                                    title="Change status"
+                                    aria-label={`Change status (currently ${getOfferStatusLabel(offer)})`}
+                                    style={{
+                                      appearance: 'none',
+                                      background: 'transparent',
+                                      border: 0,
+                                      padding: 0,
+                                      cursor: 'pointer',
+                                      borderRadius: 999,
+                                    }}
+                                  >
+                                    <Badge
+                                      size="1"
+                                      variant="soft"
+                                      radius="full"
+                                      color={getOfferStatusBadgeColor(offer)}
+                                      style={{ cursor: 'pointer' }}
+                                    >
+                                      {getOfferStatusLabel(offer)}
+                                    </Badge>
+                                  </button>
+                                )}
                                 {offer.revision_requested_at && (
                                   <Button
                                     size="1"
@@ -2664,16 +2774,17 @@ export default function OffersTab({
             <Dialog.Title>Offer Link Ready</Dialog.Title>
             <Separator my="3" />
             <Text size="2" mb="3">
-              The offer has been locked and is ready to share. Copy the link
-              below to send it to your customer:
+              The offer has been locked and is ready to share. This is the
+              shared link for the whole basis — all active alternatives appear
+              on the same page:
             </Text>
             <Flex gap="2" align="center">
               <TextField.Root
                 readOnly
-                value={getOfferLink(linkDialogOpen)}
+                value={linkDialogOpen.url}
                 style={{ flex: 1 }}
               />
-              <CopyIconButton text={getOfferLink(linkDialogOpen)} />
+              <CopyIconButton text={linkDialogOpen.url} />
             </Flex>
             <Text size="1" color="gray" mt="2">
               This link allows anyone to view and accept the offer without
@@ -2685,7 +2796,7 @@ export default function OffersTab({
               </Dialog.Close>
               <Button
                 onClick={() => {
-                  window.open(getOfferLink(linkDialogOpen), '_blank')
+                  window.open(linkDialogOpen.url, '_blank')
                 }}
               >
                 Open in New Tab
@@ -2773,7 +2884,12 @@ export default function OffersTab({
                   value={responseType}
                   onValueChange={(value) =>
                     setResponseType(
-                      value as 'accepted' | 'rejected' | 'revision',
+                      value as
+                        | 'accepted'
+                        | 'rejected'
+                        | 'revision'
+                        | 'superseded'
+                        | 'sent',
                     )
                   }
                 >
@@ -2787,10 +2903,18 @@ export default function OffersTab({
                     <RadioCards.Item value="revision">
                       <Text weight="medium">Wants revision</Text>
                     </RadioCards.Item>
+                    <RadioCards.Item value="sent">
+                      <Text weight="medium">Active (sent)</Text>
+                    </RadioCards.Item>
+                    <RadioCards.Item value="superseded">
+                      <Text weight="medium">Superseded</Text>
+                    </RadioCards.Item>
                   </Flex>
                 </RadioCards.Root>
                 <Text size="1" color="gray" mt="2">
-                  Recorded by the project lead.
+                  Recorded by the project lead. Multiple pretty offers can stay
+                  active on the same basis link; mark older ones superseded when
+                  needed.
                 </Text>
               </Box>
               {responseType === 'revision' && (
@@ -2816,6 +2940,8 @@ export default function OffersTab({
                   setOfferResponseMutation.mutate({
                     offerId: responseDialogOpen.id,
                     offerTitle: responseDialogOpen.title,
+                    offerType: responseDialogOpen.offer_type,
+                    offerBasisId: responseDialogOpen.offer_basis_id,
                     responseType,
                     comment: responseComment,
                   })

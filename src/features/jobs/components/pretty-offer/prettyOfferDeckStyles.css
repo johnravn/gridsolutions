@@ -12,6 +12,19 @@
   padding: 1rem clamp(1.5rem, 5vw, 4rem);
 }
 
+.pretty-offer-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+/* With alternatives tabs sticky above, status banners scroll normally. */
+.pretty-deck-status-banner-static .pretty-deck-status-banner {
+  position: relative;
+  top: auto;
+  z-index: 1;
+}
+
 .pretty-deck-status-banner--superseded {
   background: var(--orange-a3);
   border-bottom: 1px solid var(--orange-a6);
@@ -126,6 +139,21 @@
   z-index: 1;
   max-width: 1100px;
   margin: 0 auto;
+}
+
+.pretty-deck-hero__total {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0.85rem 1.4rem;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--color-panel-solid) 72%, transparent);
+  border: 1px solid var(--accent-a5);
+  box-shadow: 0 10px 30px color-mix(in oklab, var(--accent-a4) 35%, transparent);
 }
 
 .pretty-deck-logo-lockup {

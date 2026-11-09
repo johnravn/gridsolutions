@@ -68,10 +68,14 @@ export function usePublicOfferResponse(
 
   const acceptMutation = useMutation({
     mutationFn: () =>
-      acceptOffer(accessToken, {
-        ...acceptanceForm,
-        selected_option_ids: options?.getSelectedOptionIds?.() ?? [],
-      }),
+      acceptOffer(
+        accessToken,
+        {
+          ...acceptanceForm,
+          selected_option_ids: options?.getSelectedOptionIds?.() ?? [],
+        },
+        offer?.id,
+      ),
     onSuccess: () => {
       success('Offer Accepted', 'Thank you for accepting the offer!')
       qc.invalidateQueries({ queryKey: ['public-offer', accessToken] })
@@ -83,7 +87,7 @@ export function usePublicOfferResponse(
   })
 
   const rejectMutation = useMutation({
-    mutationFn: () => rejectOffer(accessToken, rejectionForm),
+    mutationFn: () => rejectOffer(accessToken, rejectionForm, offer?.id),
     onSuccess: () => {
       success('Offer Rejected', 'Your rejection has been recorded.')
       qc.invalidateQueries({ queryKey: ['public-offer', accessToken] })
@@ -95,7 +99,8 @@ export function usePublicOfferResponse(
   })
 
   const revisionMutation = useMutation({
-    mutationFn: () => requestOfferRevision(accessToken, revisionForm),
+    mutationFn: () =>
+      requestOfferRevision(accessToken, revisionForm, offer?.id),
     onSuccess: () => {
       success(
         'Revision Requested',

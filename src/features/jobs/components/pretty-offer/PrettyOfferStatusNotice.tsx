@@ -16,7 +16,7 @@ const HEADING_COLOR: Record<
 
 type Props = {
   offer: OfferDetail
-  variant: 'banner' | 'card'
+  variant: 'banner' | 'card' | 'inline'
 }
 
 export function PrettyOfferStatusNotice({ offer, variant }: Props) {
@@ -24,6 +24,26 @@ export function PrettyOfferStatusNotice({ offer, variant }: Props) {
   if (!notice) return null
 
   const headingColor = HEADING_COLOR[notice.kind]
+  const summary = notice.lines[0]
+
+  if (variant === 'inline') {
+    return (
+      <Box
+        className={`pretty-deck-status-inline pretty-deck-status-inline--${notice.kind}`}
+        role="status"
+        title={[notice.title, ...notice.lines].join(' · ')}
+      >
+        <Text size="2" weight="bold" color={headingColor}>
+          {notice.title}
+        </Text>
+        {summary ? (
+          <Text size="1" color="gray" truncate style={{ maxWidth: 280 }}>
+            {summary}
+          </Text>
+        ) : null}
+      </Box>
+    )
+  }
 
   if (variant === 'banner') {
     return (
@@ -68,4 +88,8 @@ export function PrettyOfferStatusNotice({ offer, variant }: Props) {
 
 export function PrettyOfferStatusBanner({ offer }: { offer: OfferDetail }) {
   return <PrettyOfferStatusNotice offer={offer} variant="banner" />
+}
+
+export function PrettyOfferStatusInline({ offer }: { offer: OfferDetail }) {
+  return <PrettyOfferStatusNotice offer={offer} variant="inline" />
 }

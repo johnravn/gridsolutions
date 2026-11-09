@@ -46,10 +46,12 @@ import {
   PublicOfferEquipmentLines,
   PublicOfferTransportLines,
 } from '../components/public-offer/PublicOfferLineList'
+import { isPublicOfferAlternativesPayload } from '../types'
 import PublicPrettyOfferPage from './PublicPrettyOfferPage'
 import type {
   GroupContentEntry,
   OfferAcceptance,
+  OfferDetail,
   OfferEquipmentItem,
   OfferRejection,
   OfferRevisionRequest,
@@ -428,7 +430,7 @@ export default function PublicOfferPage() {
   }, [])
 
   const {
-    data: offer,
+    data: publicOffer,
     isLoading,
     error,
   } = useQuery({
@@ -436,10 +438,21 @@ export default function PublicOfferPage() {
     enabled: !!accessToken,
   })
 
+  const alternativesPayload = isPublicOfferAlternativesPayload(publicOffer)
+    ? publicOffer
+    : null
+  const offer: OfferDetail | null | undefined = alternativesPayload
+    ? (alternativesPayload.alternatives.find(
+        (alt) => alt.offer.id === alternativesPayload.default_offer_id,
+      )?.offer ??
+      alternativesPayload.alternatives[0]?.offer ??
+      null)
+    : ((publicOffer as OfferDetail | null | undefined) ?? null)
+
   // Mark offer as viewed when loaded
   React.useEffect(() => {
     if (offer && !offer.viewed_at && accessToken) {
-      markOfferViewed(accessToken).catch((err) =>
+      markOfferViewed(accessToken, offer.id).catch((err) =>
         console.error('Failed to mark offer as viewed:', err),
       )
     }
@@ -448,7 +461,7 @@ export default function PublicOfferPage() {
   const acceptMutation = useMutation({
     mutationFn: () => {
       if (!accessToken) throw new Error('Access token is required')
-      return acceptOffer(accessToken, acceptanceForm)
+      return acceptOffer(accessToken, acceptanceForm, offer?.id)
     },
     onSuccess: () => {
       success('Offer Accepted', 'Thank you for accepting the offer!')
@@ -464,7 +477,7 @@ export default function PublicOfferPage() {
   const rejectMutation = useMutation({
     mutationFn: () => {
       if (!accessToken) throw new Error('Access token is required')
-      return rejectOffer(accessToken, rejectionForm)
+      return rejectOffer(accessToken, rejectionForm, offer?.id)
     },
     onSuccess: () => {
       success('Offer Rejected', 'Your rejection has been recorded.')
@@ -479,7 +492,7 @@ export default function PublicOfferPage() {
   const revisionMutation = useMutation({
     mutationFn: () => {
       if (!accessToken) throw new Error('Access token is required')
-      return requestOfferRevision(accessToken, revisionForm)
+      return requestOfferRevision(accessToken, revisionForm, offer?.id)
     },
     onSuccess: () => {
       success(
@@ -700,9 +713,17 @@ export default function PublicOfferPage() {
     )
   }
 
-  if (offer.offer_type === 'pretty' && (offer.modules?.length ?? 0) > 0) {
+  if (
+    alternativesPayload ||
+    (offer.offer_type === 'pretty' && (offer.modules?.length ?? 0) > 0)
+  ) {
     return (
-      <PublicPrettyOfferPage offer={offer} accessToken={accessToken ?? ''} />
+      <PublicPrettyOfferPage
+        offer={offer}
+        accessToken={accessToken ?? ''}
+        alternatives={alternativesPayload?.alternatives}
+        defaultOfferId={alternativesPayload?.default_offer_id}
+      />
     )
   }
 

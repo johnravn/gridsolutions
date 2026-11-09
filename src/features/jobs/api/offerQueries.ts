@@ -34,6 +34,7 @@ import type {
   OfferTransportGroup,
   OfferTransportItem,
   OfferType,
+  PublicOfferResponse,
 } from '../types'
 
 // Query functions for offer management
@@ -447,14 +448,14 @@ export function offerDetailQuery(offerId: string) {
  * Public access to offer via access token
  */
 export function publicOfferQuery(accessToken: string) {
-  return queryOptions<OfferDetail | null>({
+  return queryOptions<PublicOfferResponse | null>({
     queryKey: ['public-offer', accessToken] as const,
-    queryFn: async (): Promise<OfferDetail | null> => {
+    queryFn: async (): Promise<PublicOfferResponse | null> => {
       const { data, error } = await (supabase as any).rpc('public_offer_get', {
         p_access_token: accessToken,
       })
       if (error) throw error
-      return (data ?? null) as OfferDetail | null
+      return (data ?? null) as PublicOfferResponse | null
     },
   })
 }
@@ -701,7 +702,7 @@ export async function recalculateOfferTotals(offerId: string): Promise<void> {
 export async function lockOffer(offerId: string): Promise<void> {
   const { data: offer, error: offerError } = await supabase
     .from('job_offers')
-    .select('id, job_id, version_number, offer_type')
+    .select('id, offer_type')
     .eq('id', offerId)
     .single()
 
@@ -725,18 +726,8 @@ export async function lockOffer(offerId: string): Promise<void> {
     .eq('id', offerId)
 
   if (error) throw error
-
-  const { error: supersedeError } = await supabase
-    .from('job_offers')
-    .update({
-      status: 'superseded',
-      locked: true,
-    })
-    .eq('job_id', offer.job_id)
-    .lt('version_number', offer.version_number)
-    .in('status', ['draft', 'sent', 'viewed'])
-
-  if (supersedeError) throw supersedeError
+  // Sibling offers on the same basis stay active until the user marks them
+  // superseded (or a customer accepts one alternative).
 }
 
 /**
@@ -745,6 +736,7 @@ export async function lockOffer(offerId: string): Promise<void> {
 export async function acceptOffer(
   accessToken: string,
   acceptance: OfferAcceptance,
+  offerId?: string,
 ): Promise<void> {
   const { error } = await (supabase as any).rpc('public_offer_accept', {
     p_access_token: accessToken,
@@ -752,6 +744,7 @@ export async function acceptOffer(
     p_last_name: acceptance.last_name,
     p_phone: acceptance.phone,
     p_selected_option_ids: acceptance.selected_option_ids ?? [],
+    p_offer_id: offerId ?? null,
   })
   if (error) throw error
 }
@@ -762,6 +755,7 @@ export async function acceptOffer(
 export async function rejectOffer(
   accessToken: string,
   rejection: OfferRejection,
+  offerId?: string,
 ): Promise<void> {
   const { error } = await (supabase as any).rpc('public_offer_reject', {
     p_access_token: accessToken,
@@ -769,6 +763,7 @@ export async function rejectOffer(
     p_last_name: rejection.last_name,
     p_phone: rejection.phone,
     p_comment: rejection.comment || '',
+    p_offer_id: offerId ?? null,
   })
   if (error) throw error
 }
@@ -779,6 +774,7 @@ export async function rejectOffer(
 export async function requestOfferRevision(
   accessToken: string,
   revisionRequest: OfferRevisionRequest,
+  offerId?: string,
 ): Promise<void> {
   const { error } = await (supabase as any).rpc(
     'public_offer_request_revision',
@@ -788,6 +784,7 @@ export async function requestOfferRevision(
       p_last_name: revisionRequest.last_name,
       p_phone: revisionRequest.phone,
       p_comment: revisionRequest.comment || '',
+      p_offer_id: offerId ?? null,
     },
   )
   if (error) throw error
@@ -796,9 +793,13 @@ export async function requestOfferRevision(
 /**
  * Mark offer as viewed
  */
-export async function markOfferViewed(accessToken: string): Promise<void> {
+export async function markOfferViewed(
+  accessToken: string,
+  offerId?: string,
+): Promise<void> {
   const { error } = await (supabase as any).rpc('public_offer_mark_viewed', {
     p_access_token: accessToken,
+    p_offer_id: offerId ?? null,
   })
   if (error) console.error('Failed to mark offer as viewed:', error)
 }

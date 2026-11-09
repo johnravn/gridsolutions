@@ -166,6 +166,120 @@ describeIntegration('public offer RPCs', () => {
     }
   })
 
+  it('returns pretty alternatives on a basis link and supersedes siblings on accept', async () => {
+    const admin = createServiceClient()
+    const basisToken = `e2e-basis-alt-${Date.now()}`
+    const basisId = randomUUID()
+    const offerAId = randomUUID()
+    const offerBId = randomUUID()
+    const offerCId = randomUUID()
+
+    const { error: basisError } = await admin.from('offer_bases').insert({
+      id: basisId,
+      job_id: ACCEPT_JOB_ID,
+      company_id: TEST_COMPANY_ID,
+      title: 'Multi-alt pretty basis',
+      access_token: basisToken,
+      days_of_use: 2,
+      discount_percent: 0,
+      vat_percent: 25,
+    })
+    expect(basisError).toBeNull()
+
+    const mkPretty = (
+      id: string,
+      version: number,
+      status: 'sent' | 'superseded',
+      token: string,
+    ) => ({
+      id,
+      job_id: ACCEPT_JOB_ID,
+      company_id: TEST_COMPANY_ID,
+      offer_basis_id: basisId,
+      offer_type: 'pretty' as const,
+      version_number: version,
+      status,
+      access_token: token,
+      title: `Pretty alt v${version}`,
+      days_of_use: 2,
+      discount_percent: 0,
+      vat_percent: 25,
+      equipment_subtotal: 100,
+      crew_subtotal: 0,
+      transport_subtotal: 0,
+      total_before_discount: 100,
+      total_after_discount: 100,
+      total_with_vat: 125,
+      locked: true,
+      sent_at: new Date().toISOString(),
+      show_price_per_line: true,
+    })
+
+    const { error: offersError } = await admin
+      .from('job_offers')
+      .insert([
+        mkPretty(offerAId, 1, 'sent', `${basisToken}-a`),
+        mkPretty(offerBId, 2, 'superseded', `${basisToken}-b`),
+        mkPretty(offerCId, 3, 'sent', `${basisToken}-c`),
+      ])
+    expect(offersError).toBeNull()
+
+    try {
+      const client = createAnonClient()
+      const { data, error } = await client.rpc('public_offer_get', {
+        p_access_token: basisToken,
+      })
+      expect(error).toBeNull()
+      const payload = data as {
+        mode: string
+        default_offer_id: string
+        alternatives: Array<{
+          sub_version: number
+          status: string
+          offer: { id: string }
+        }>
+      }
+      expect(payload.mode).toBe('alternatives')
+      expect(payload.alternatives).toHaveLength(3)
+      expect(payload.alternatives.map((a) => a.sub_version)).toEqual([1, 2, 3])
+      expect(payload.default_offer_id).toBe(offerCId)
+
+      // Legacy offer token also resolves to the basis alternatives view.
+      const { data: legacyData, error: legacyError } = await client.rpc(
+        'public_offer_get',
+        { p_access_token: `${basisToken}-a` },
+      )
+      expect(legacyError).toBeNull()
+      expect((legacyData as { mode: string }).mode).toBe('alternatives')
+
+      const { error: acceptError } = await client.rpc('public_offer_accept', {
+        p_access_token: basisToken,
+        p_first_name: 'Alt',
+        p_last_name: 'Customer',
+        p_phone: '+4791234567',
+        p_selected_option_ids: [],
+        p_offer_id: offerAId,
+      })
+      expect(acceptError).toBeNull()
+
+      const { data: after } = await admin
+        .from('job_offers')
+        .select('id, status')
+        .in('id', [offerAId, offerBId, offerCId])
+
+      const byId = new Map((after ?? []).map((row) => [row.id, row.status]))
+      expect(byId.get(offerAId)).toBe('accepted')
+      expect(byId.get(offerBId)).toBe('superseded')
+      expect(byId.get(offerCId)).toBe('superseded')
+    } finally {
+      await admin
+        .from('job_offers')
+        .delete()
+        .in('id', [offerAId, offerBId, offerCId])
+      await admin.from('offer_bases').delete().eq('id', basisId)
+    }
+  })
+
   it('rejects a sent offer via public_offer_reject', async () => {
     const client = createAnonClient()
     const { error } = await client.rpc('public_offer_reject', {
