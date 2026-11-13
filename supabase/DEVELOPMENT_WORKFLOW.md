@@ -4,24 +4,34 @@
 
 ### Initial Setup (One-time)
 
-1. **Environment Variables**: Ensure `.env.local` exists with:
+1. **Environment Variables**: Prefer hosted **Dev** in `.env.dev.db`, then:
 
-   ```env
-   VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
-   VITE_SUPABASE_ANON_KEY=your-key
-   SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
+   ```bash
+   npm run db:switch:dev
    ```
 
-2. **Link Supabase CLI**:
+   Example Dev values (from Dashboard → Settings → API — never invent keys):
+
+   ```env
+   VITE_SUPABASE_URL=https://YOUR_DEV_REF.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-dev-anon-key
+   SUPABASE_PROJECT_REF=YOUR_DEV_REF
+   ```
+
+   Prod (`tlpgejkglrgoljgvpubn`) stays in `.env.remote.db` for promote / rare checks. See `.env.example`.
+
+2. **Link Supabase CLI** (to the project you intend to push):
 
    ```bash
    npx supabase login
-   npm run supabase:link
+   npm run supabase:link:dev    # day-to-day
+   # npm run supabase:link:prod  # only before a John-approved Prod promote
    ```
 
 3. **Generate Types**:
    ```bash
-   npm run db:types:remote
+   npm run db:types:dev     # while iterating
+   # npm run db:types:prod  # after Prod promote
    ```
 
 ### Daily Development Workflow
@@ -56,21 +66,26 @@
    ));
    ```
 
-3. **Test locally** (if using Docker):
+3. **Push / verify on Dev** (primary path):
 
    ```bash
-   npm run db:reset  # Applies all migrations
+   npm run supabase:link:dev
+   npm run db:push:dev   # when John has authorized a Dev push
    ```
 
-4. **Push to remote**:
+   Optional Docker: `npm run db:reset` (not the cloud-agent default once Dev secrets exist).
+
+4. **Promote to Prod** only when John explicitly asks:
 
    ```bash
-   npm run db:push
+   npm run supabase:link:prod
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
    ```
 
 5. **Update TypeScript types**:
    ```bash
-   npm run db:types:remote
+   npm run db:types:dev    # iterating
+   npm run db:types:prod   # after Prod promote
    ```
 
 #### If You Made Changes in Dashboard
@@ -83,15 +98,15 @@
 
 2. **Review the generated migration** in `supabase/migrations/`
 
-3. **Push to remote** (if needed):
+3. **Push to Dev first**, then Prod only when John asks:
 
    ```bash
-   npm run db:push
+   npm run db:push:dev
    ```
 
 4. **Update types**:
    ```bash
-   npm run db:types:remote
+   npm run db:types:dev
    ```
 
 ### Migration Best Practices
@@ -126,39 +141,29 @@
 After any schema change:
 
 ```bash
-# Always regenerate types
-npm run db:types:remote
+npm run db:types:dev     # while schema lives on Dev first
+# npm run db:types:prod  # after promote so committed types match Prod
 
-# Commit the updated types file
+# Commit the updated types file only when John asks
 git add src/shared/types/database.types.ts
 ```
 
-### Local Development (Optional but Recommended)
+### Hosted Dev (primary) vs Local Docker (optional)
 
-**Benefits:**
+**Hosted Dev** is the default for agents and day-to-day migration dry-runs once the Dev project exists.
 
-- Faster iteration (no network latency)
-- Free (no API rate limits)
-- Test migrations safely
-- Works offline
-
-**Setup:**
+**Local Docker** remains an optional escape hatch (offline / zero-cost experiments):
 
 1. Install Docker Desktop
-2. Start local Supabase:
-   ```bash
-   npm run supabase:start
-   ```
-3. Update `.env.local` with local URLs (get from `npm run db:status`)
-4. Generate types from local:
-   ```bash
-   npm run db:types
-   ```
+2. `npm run supabase:start`
+3. `npm run db:switch:local` (keys from `npm run db:status`)
+4. `npm run db:types` for local types
 
-**When to use local vs remote:**
+**When to use which:**
 
-- **Local**: Development, testing migrations, experimenting
-- **Remote**: Production, staging, generating types for deployment
+- **Dev (hosted)**: Primary development, agent work, migration verify before Prod
+- **Local Docker**: Offline / optional
+- **Prod**: Live `gridsolutions.app` only — promote with `CONFIRM_PROD_PUSH=1 npm run db:push:prod` when John asks
 
 ### Troubleshooting
 
@@ -176,10 +181,10 @@ npm run db:push
 #### Types Out of Sync
 
 ```bash
-# Regenerate from remote
-npm run db:types:remote
-
-# Or from local (if using Docker)
+npm run db:types:dev
+# or after Prod promote:
+npm run db:types:prod
+# or from local Docker:
 npm run db:types
 ```
 
@@ -208,18 +213,23 @@ Before deploying migrations:
 
 ```bash
 # Database
-npm run db:migrate <name>     # Create migration
-npm run db:push                # Push migrations to remote
-npm run db:reset               # Reset local DB
-npm run db:diff <name>         # Capture remote changes
-npm run db:types               # Generate types (local)
-npm run db:types:remote        # Generate types (remote)
+npm run db:migrate <name>            # Create migration
+npm run db:push:dev                  # Push to hosted Dev (when authorized)
+CONFIRM_PROD_PUSH=1 npm run db:push:prod  # Prod — John only
+npm run db:reset                     # Reset local Docker DB (+ optional Prod copy)
+npm run db:diff <name>               # Capture dashboard drift
+npm run db:types:dev                 # Types from Dev
+npm run db:types:prod                # Types from Prod (alias: db:types:remote)
+npm run db:types                     # Types from local Docker
+
+# Switch app .env.local
+npm run db:switch:dev|local|prod|status
 
 # Supabase CLI
-npm run supabase:start         # Start local Supabase
-npm run supabase:stop          # Stop local Supabase
-npm run db:status              # Show status
-npm run supabase:link          # Link to remote project
+npm run supabase:link:dev            # Link CLI to Dev
+npm run supabase:link:prod           # Link CLI to Prod
+npm run supabase:start|stop           # Local Docker stack
+npm run db:status                    # Local Docker status
 ```
 
 ### Dashboard settings (not migrations)

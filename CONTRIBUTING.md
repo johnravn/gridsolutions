@@ -22,21 +22,25 @@ This project is primarily developed using AI agents. This guide ensures all cont
    - Always add RLS policies for new tables
    - Use `DROP POLICY IF EXISTS` before creating policies
 
-3. **Test locally:**
+3. **Verify on hosted Dev** (preferred) or optional local Docker:
 
    ```bash
-   npm run db:reset  # Resets local DB, applies migrations, and repopulates from remote
+   npm run supabase:link:dev
+   npm run db:push:dev          # only after John created Dev and asked / authorized
+   # Optional offline: npm run db:reset  (Docker; copies from Prod — not the agent default)
    ```
 
-4. **Push to production:**
+4. **Promote to Prod** (John only, when explicitly asked):
 
    ```bash
-   npm run db:push  # Pushes migrations to remote Supabase
+   npm run supabase:link:prod
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
    ```
 
 5. **Update TypeScript types:**
    ```bash
-   npm run db:types:remote  # Regenerates types from remote DB
+   npm run db:types:dev     # while iterating against Dev
+   npm run db:types:prod    # after Prod promote (db:types:remote is an alias)
    ```
 
 ### RLS (Row Level Security) Requirements
@@ -89,37 +93,42 @@ Work on `main`. Track work with GitHub issues (`gh issue list` / `gh issue creat
 
 ### Local Development Setup
 
-1. Start local Supabase:
+**Preferred: hosted Dev** (after John creates the Dev project and fills `.env.dev.db`):
 
-   ```bash
-   npm run supabase:start
-   ```
+```bash
+npm run db:switch:dev
+npm run dev
+```
 
-2. Switch to local database:
+**Optional: Docker**
 
-   ```bash
-   npm run db:switch:local
-   ```
-
-3. Start dev server:
-   ```bash
-   npm run dev
-   ```
+```bash
+npm run supabase:start
+npm run db:switch:local
+npm run dev
+```
 
 ### Database Switching
 
-- **Local**: `npm run db:switch:local` - Use for development
-- **Remote**: `npm run db:switch:remote` - Use for production testing
-- **Status**: `npm run db:switch:status` - Check current connection
+- **Dev**: `npm run db:switch:dev` — hosted Dev (primary for agents / day-to-day)
+- **Local**: `npm run db:switch:local` — Docker (optional)
+- **Prod**: `npm run db:switch:prod` — hosted Prod (rare; `db:switch:remote` is a legacy alias)
+- **Status**: `npm run db:switch:status`
+
+CLI link / push (environment-scoped; never push Prod unless John asks):
+
+- `npm run supabase:link:dev` / `npm run supabase:link:prod`
+- `npm run db:push:dev` / `CONFIRM_PROD_PUSH=1 npm run db:push:prod`
 
 ### Type Generation
 
 After any schema change:
 
-- **Local**: `npm run db:types` (from local DB)
-- **Remote**: `npm run db:types:remote` (from production DB)
+- **Dev**: `npm run db:types:dev`
+- **Prod**: `npm run db:types:prod` (alias: `db:types:remote`)
+- **Local Docker**: `npm run db:types`
 
-Always commit updated `src/shared/types/database.types.ts` after schema changes.
+Always commit updated `src/shared/types/database.types.ts` after schema changes (when John asks to commit).
 
 ## Code Style
 

@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.local.db
+.env.dev.db
 .env.remote.db
 .env*.local
 

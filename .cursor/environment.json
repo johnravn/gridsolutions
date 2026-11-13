@@ -6,7 +6,7 @@
     {
       "name": "dev",
       "command": "npm run dev",
-      "description": "Vite dev server for the Grid app on http://localhost:3000 (reads .env.local written by the start script)."
+      "description": "Vite on :3000. Start script prefers hosted Dev secrets; falls back to Docker Supabase."
     }
   ],
   "ports": [
