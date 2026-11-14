@@ -41,7 +41,9 @@ try {
 
 const linked = readLinkedProjectRef()
 if (!linked) {
-  console.error(`CLI is not linked. Run: npm run supabase:link:${target}`)
+  console.error(
+    `CLI is not linked. Run: npm run supabase:link:${target}`,
+  )
   process.exit(1)
 }
 

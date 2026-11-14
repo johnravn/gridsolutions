@@ -14,10 +14,10 @@ npm run db:switch:status
 
 Profile files (all gitignored):
 
-| File             | Target                                        |
-| ---------------- | --------------------------------------------- |
-| `.env.dev.db`    | Hosted Dev                                    |
-| `.env.local.db`  | Local Docker                                  |
+| File | Target |
+| --- | --- |
+| `.env.dev.db` | Hosted Dev |
+| `.env.local.db` | Local Docker |
 | `.env.remote.db` | Hosted Prod (filename kept for compatibility) |
 
 Switching updates **only** Supabase keys in `.env.local` (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `SUPABASE_PROJECT_REF`, `SUPABASE_SERVICE_ROLE_KEY`) and preserves other vars.

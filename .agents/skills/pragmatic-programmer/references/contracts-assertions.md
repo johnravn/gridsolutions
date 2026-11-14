@@ -3,7 +3,6 @@
 Deep reference for making assumptions explicit through contracts and assertions. Load when guidance is needed on defensive programming, crash-early strategies, or formal precondition/postcondition patterns.
 
 ## Table of Contents
-
 1. [Design by Contract (DBC)](#design-by-contract-dbc)
 2. [Preconditions](#preconditions)
 3. [Postconditions](#postconditions)
@@ -33,13 +32,13 @@ If the caller violates the precondition, the contract is void -- the routine owe
 
 ### Why Contracts Matter
 
-| Without Contracts                         | With Contracts                                       |
-| ----------------------------------------- | ---------------------------------------------------- |
-| Functions silently accept bad input       | Bad input is caught immediately at the boundary      |
-| Bugs propagate far from their source      | Bugs are detected at the point of violation          |
+| Without Contracts | With Contracts |
+|------------------|---------------|
+| Functions silently accept bad input | Bad input is caught immediately at the boundary |
+| Bugs propagate far from their source | Bugs are detected at the point of violation |
 | Debugging requires tracing through layers | Stack trace points directly to the violated contract |
-| Assumptions are implicit and undocumented | Assumptions are explicit and enforced                |
-| Tests must guess at valid input ranges    | Contracts document valid input ranges                |
+| Assumptions are implicit and undocumented | Assumptions are explicit and enforced |
+| Tests must guess at valid input ranges | Contracts document valid input ranges |
 
 ---
 
@@ -50,7 +49,6 @@ A precondition defines what must be true when a function is called. It is the **
 ### Examples Across Languages
 
 **Python:**
-
 ```python
 def transfer_funds(from_account, to_account, amount):
     # Preconditions
@@ -66,34 +64,31 @@ def transfer_funds(from_account, to_account, amount):
 ```
 
 **TypeScript:**
-
 ```typescript
 function transferFunds(from: Account, to: Account, amount: number): void {
   // Preconditions
-  if (amount <= 0)
-    throw new PreconditionError(`Amount must be positive: ${amount}`)
-  if (from.balance < amount) throw new PreconditionError(`Insufficient funds`)
-  if (from.id === to.id) throw new PreconditionError(`Cannot self-transfer`)
+  if (amount <= 0) throw new PreconditionError(`Amount must be positive: ${amount}`);
+  if (from.balance < amount) throw new PreconditionError(`Insufficient funds`);
+  if (from.id === to.id) throw new PreconditionError(`Cannot self-transfer`);
 
-  from.balance -= amount
-  to.balance += amount
+  from.balance -= amount;
+  to.balance += amount;
 }
 ```
 
 ### Precondition Guidelines
 
-| Guideline                                          | Rationale                                       |
-| -------------------------------------------------- | ----------------------------------------------- |
-| Check preconditions at the start of the function   | Fail fast before any side effects               |
-| Use descriptive error messages                     | Include actual values so debugging is immediate |
-| Don't correct bad input silently                   | If amount is negative, don't negate it -- crash |
-| Document preconditions in the function's docstring | Callers need to know what's expected            |
-| Preconditions should be cheap to check             | If validation is expensive, it's a design smell |
+| Guideline | Rationale |
+|-----------|-----------|
+| Check preconditions at the start of the function | Fail fast before any side effects |
+| Use descriptive error messages | Include actual values so debugging is immediate |
+| Don't correct bad input silently | If amount is negative, don't negate it -- crash |
+| Document preconditions in the function's docstring | Callers need to know what's expected |
+| Preconditions should be cheap to check | If validation is expensive, it's a design smell |
 
 ### What Makes a Good Precondition?
 
 A precondition should be:
-
 - **Verifiable:** Can be checked programmatically
 - **Documented:** Callers can read and understand it
 - **Minimal:** Only what's truly necessary, not overly restrictive
@@ -108,7 +103,6 @@ A postcondition defines what the function guarantees upon successful completion.
 ### Examples
 
 **Python:**
-
 ```python
 def sort_list(items: list) -> list:
     result = sorted(items)
@@ -124,7 +118,6 @@ def sort_list(items: list) -> list:
 ```
 
 **Go:**
-
 ```go
 func Divide(a, b float64) float64 {
     // Precondition
@@ -145,13 +138,13 @@ func Divide(a, b float64) float64 {
 
 ### Postcondition Patterns
 
-| Pattern             | What It Checks                               | Example                                            |
-| ------------------- | -------------------------------------------- | -------------------------------------------------- |
-| **Preservation**    | Output preserves a property of input         | Sorted list has same length as input               |
-| **Computation**     | Result satisfies a mathematical relationship | `sqrt(x) * sqrt(x) ≈ x`                            |
-| **State change**    | Object state changed correctly               | Account balance decreased by exact transfer amount |
-| **No side effects** | Nothing unexpected changed                   | Other accounts' balances unchanged after transfer  |
-| **Return type**     | Result has expected structure                | API response contains required fields              |
+| Pattern | What It Checks | Example |
+|---------|---------------|---------|
+| **Preservation** | Output preserves a property of input | Sorted list has same length as input |
+| **Computation** | Result satisfies a mathematical relationship | `sqrt(x) * sqrt(x) ≈ x` |
+| **State change** | Object state changed correctly | Account balance decreased by exact transfer amount |
+| **No side effects** | Nothing unexpected changed | Other accounts' balances unchanged after transfer |
+| **Return type** | Result has expected structure | API response contains required fields |
 
 ---
 
@@ -194,14 +187,14 @@ class BankAccount:
 
 ### Common Invariant Patterns
 
-| Domain               | Invariant                                        |
-| -------------------- | ------------------------------------------------ |
-| **Financial**        | Balance >= 0 (or >= overdraft limit)             |
-| **Collection**       | Size >= 0 and matches actual element count       |
-| **Connection pool**  | Active + idle = total allocated                  |
-| **State machine**    | Current state is one of the defined states       |
-| **Tree structure**   | Every child has exactly one parent (except root) |
-| **Sorted container** | Elements are in order after every mutation       |
+| Domain | Invariant |
+|--------|-----------|
+| **Financial** | Balance >= 0 (or >= overdraft limit) |
+| **Collection** | Size >= 0 and matches actual element count |
+| **Connection pool** | Active + idle = total allocated |
+| **State machine** | Current state is one of the defined states |
+| **Tree structure** | Every child has exactly one parent (except root) |
+| **Sorted container** | Elements are in order after every mutation |
 
 ---
 
@@ -260,17 +253,17 @@ def sqrt(x):
 ### TypeScript Runtime Validation
 
 ```typescript
-import { z } from 'zod'
+import { z } from 'zod';
 
 const TransferInput = z.object({
   fromAccountId: z.string().uuid(),
   toAccountId: z.string().uuid(),
   amount: z.number().positive(),
-})
+});
 
 function transferFunds(input: unknown) {
   // Precondition via schema validation
-  const { fromAccountId, toAccountId, amount } = TransferInput.parse(input)
+  const { fromAccountId, toAccountId, amount } = TransferInput.parse(input);
 
   // ...implementation
 }
@@ -302,14 +295,14 @@ def get_day_name(day_number):
 
 ### Assertion Placement Guide
 
-| Location                      | What to Assert                       |
-| ----------------------------- | ------------------------------------ |
-| **Function entry**            | Preconditions on parameters          |
-| **Function exit**             | Postconditions on return value       |
-| **After external call**       | Response is in expected format       |
-| **Switch/match default**      | "Impossible" cases                   |
+| Location | What to Assert |
+|----------|---------------|
+| **Function entry** | Preconditions on parameters |
+| **Function exit** | Postconditions on return value |
+| **After external call** | Response is in expected format |
+| **Switch/match default** | "Impossible" cases |
 | **After complex computation** | Sanity check on intermediate results |
-| **After state mutation**      | Class invariant still holds          |
+| **After state mutation** | Class invariant still holds |
 
 ### Should Assertions Stay in Production?
 
@@ -328,12 +321,12 @@ One of the most important pragmatic principles: **a program that crashes at the 
 
 ### Why Crashing Is Better Than Continuing
 
-| Behavior                   | Consequence                                                           |
-| -------------------------- | --------------------------------------------------------------------- |
-| Crash on invalid state     | Bug found at the source, stack trace points to the problem            |
-| Log a warning and continue | Invalid state propagates, corrupts data, discovered hours later       |
-| Silently ignore the error  | Data loss, security vulnerabilities, mysterious downstream failures   |
-| Return a default value     | Caller doesn't know something went wrong, makes decisions on bad data |
+| Behavior | Consequence |
+|----------|------------|
+| Crash on invalid state | Bug found at the source, stack trace points to the problem |
+| Log a warning and continue | Invalid state propagates, corrupts data, discovered hours later |
+| Silently ignore the error | Data loss, security vulnerabilities, mysterious downstream failures |
+| Return a default value | Caller doesn't know something went wrong, makes decisions on bad data |
 
 ### Example: The Silent Corruption Problem
 
@@ -361,13 +354,13 @@ The first version will happily process users with age 0, making them ineligible 
 
 This is a crucial distinction that many developers conflate:
 
-| Aspect               | Assertions                                               | Error Handling                                      |
-| -------------------- | -------------------------------------------------------- | --------------------------------------------------- |
-| **For**              | Things that should NEVER happen                          | Things that MIGHT happen                            |
-| **Examples**         | Null pointer in non-nullable field, negative array index | Network timeout, file not found, invalid user input |
-| **Response**         | Crash immediately                                        | Recover gracefully                                  |
-| **In production**    | Keep (they indicate bugs)                                | Required (they handle expected failures)            |
-| **Message audience** | Developers (debugging)                                   | Users or calling code (error recovery)              |
+| Aspect | Assertions | Error Handling |
+|--------|-----------|---------------|
+| **For** | Things that should NEVER happen | Things that MIGHT happen |
+| **Examples** | Null pointer in non-nullable field, negative array index | Network timeout, file not found, invalid user input |
+| **Response** | Crash immediately | Recover gracefully |
+| **In production** | Keep (they indicate bugs) | Required (they handle expected failures) |
+| **Message audience** | Developers (debugging) | Users or calling code (error recovery) |
 
 ### Decision Guide
 

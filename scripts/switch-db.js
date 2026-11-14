@@ -180,7 +180,8 @@ SUPABASE_PROJECT_REF=${PROD_PROJECT_REF}
 }
 
 const raw = process.argv[2]
-const command = raw === 'remote' ? 'prod' : raw === 'current' ? 'status' : raw
+const command =
+  raw === 'remote' ? 'prod' : raw === 'current' ? 'status' : raw
 
 switch (command) {
   case 'local':
@@ -200,12 +201,8 @@ switch (command) {
     console.log('')
     console.log('Commands:')
     console.log('  db:switch:local   - Docker Supabase (optional)')
-    console.log(
-      '  db:switch:dev     - Hosted Dev (primary for agents / day-to-day)',
-    )
-    console.log(
-      '  db:switch:prod    - Hosted Prod (promote / rare local checks)',
-    )
+    console.log('  db:switch:dev     - Hosted Dev (primary for agents / day-to-day)')
+    console.log('  db:switch:prod    - Hosted Prod (promote / rare local checks)')
     console.log('  db:switch:remote  - Alias for prod (legacy)')
     console.log('  db:switch:status  - Show current .env.local target')
     console.log('')
