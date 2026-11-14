@@ -876,7 +876,7 @@ async function main() {
   )
   await upsertCompanyUser(TEST_IDS.companyId, ownerId, 'owner', {
     rate: 950,
-    rateType: 'day',
+    rateType: 'daily',
   })
   await upsertProfile(
     freelancerId,
@@ -886,7 +886,7 @@ async function main() {
   )
   await upsertCompanyUser(TEST_IDS.companyId, freelancerId, 'freelancer', {
     rate: 750,
-    rateType: 'day',
+    rateType: 'daily',
   })
   await upsertProfile(
     employeeId,
@@ -896,7 +896,7 @@ async function main() {
   )
   await upsertCompanyUser(TEST_IDS.companyId, employeeId, 'employee', {
     rate: 650,
-    rateType: 'day',
+    rateType: 'daily',
   })
 
   await seedTestItem()
