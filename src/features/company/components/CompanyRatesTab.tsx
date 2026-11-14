@@ -35,6 +35,7 @@ type CompanyRates = {
   vehicle_daily_rate: number | null
   vehicle_distance_rate: number | null
   vehicle_distance_increment: number | null
+  transport_cost_per_km: number | null
   customer_discount_percent: number | null
   partner_discount_percent: number | null
   subcontractor_markup_percent: number | null
@@ -55,7 +56,7 @@ export default function CompanyRatesTab() {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
+          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, transport_cost_per_km, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -82,6 +83,10 @@ export default function CompanyRatesTab() {
         vehicle_daily_rate: rawData.vehicle_daily_rate ?? null,
         vehicle_distance_rate: rawData.vehicle_distance_rate ?? null,
         vehicle_distance_increment: rawData.vehicle_distance_increment ?? 150,
+        transport_cost_per_km:
+          rawData.transport_cost_per_km != null
+            ? Number(rawData.transport_cost_per_km)
+            : 5,
         customer_discount_percent: rawData.customer_discount_percent ?? null,
         partner_discount_percent: rawData.partner_discount_percent ?? null,
         subcontractor_markup_percent:
@@ -134,6 +139,11 @@ export default function CompanyRatesTab() {
             vehicle_distance_increment:
               expansion?.vehicle_distance_increment ?? 150,
           }}
+        />
+
+        <TransportCostCard
+          companyId={companyId}
+          initialCostPerKm={expansion?.transport_cost_per_km ?? 5}
         />
 
         <DiscountsCard
@@ -1033,6 +1043,139 @@ function VehicleRatesCard({
             disabled={saveMutation.isPending}
           >
             {saveMutation.isPending ? 'Saving...' : 'Save Vehicle Rates'}
+          </Button>
+        </Flex>
+      </Flex>
+    </CollapsibleCard>
+  )
+}
+
+/** Operational cost for Money tab (km × rate). Separate from sell-side vehicle distance rates. */
+function TransportCostCard({
+  companyId,
+  initialCostPerKm,
+}: {
+  companyId: string
+  initialCostPerKm: number
+}) {
+  const qc = useQueryClient()
+  const { success, error: toastError } = useToast()
+  const [costPerKm, setCostPerKm] = React.useState(initialCostPerKm)
+  const [isExpanded, setIsExpanded] = React.useState(false)
+
+  React.useEffect(() => {
+    setCostPerKm(initialCostPerKm)
+  }, [initialCostPerKm])
+
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('nb-NO', {
+      style: 'currency',
+      currency: 'NOK',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 2,
+    }).format(amount)
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const { data: current } = await supabase
+        .from('company_expansions')
+        .select('*')
+        .eq('company_id', companyId)
+        .maybeSingle()
+
+      const { error } = await supabase.from('company_expansions').upsert(
+        {
+          company_id: companyId,
+          transport_cost_per_km: costPerKm,
+          accounting_software: current?.accounting_software ?? 'none',
+          accounting_api_key_encrypted:
+            current?.accounting_api_key_encrypted ?? null,
+          accounting_organization_id:
+            current?.accounting_organization_id ?? null,
+          accounting_api_read_only: current?.accounting_api_read_only ?? true,
+          latest_feed_open_to_freelancers:
+            current?.latest_feed_open_to_freelancers ?? false,
+        },
+        { onConflict: 'company_id' },
+      )
+
+      if (error) throw error
+    },
+    onSuccess: async () => {
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'expansion'],
+      })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'transport-cost-per-km'],
+      })
+      success(
+        'Transport cost updated',
+        'Money tab will use this rate for km × cost.',
+      )
+      setIsExpanded(false)
+    },
+    onError: (error: unknown) => {
+      toastError(
+        'Failed to update transport cost',
+        error instanceof Error ? error.message : 'Please try again.',
+      )
+    },
+  })
+
+  return (
+    <CollapsibleCard
+      title="Transport cost (Money)"
+      summary={
+        <Flex align="center" gap="2">
+          <Text size="1" color="gray">
+            Cost per km:
+          </Text>
+          <Text size="3" weight="bold">
+            {formatCurrency(costPerKm)}
+          </Text>
+        </Flex>
+      }
+      expanded={isExpanded}
+      onExpandedChange={setIsExpanded}
+    >
+      <Flex direction="column" gap="4">
+        <Box style={{ maxWidth: 240 }}>
+          <Text
+            as="label"
+            size="2"
+            color="gray"
+            style={{ display: 'block', marginBottom: 6 }}
+          >
+            Cost per km (NOK)
+          </Text>
+          <TextField.Root
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="5"
+            value={String(costPerKm)}
+            onChange={(e) => {
+              const parsed = Number(e.target.value)
+              if (e.target.value === '' || Number.isNaN(parsed)) {
+                setCostPerKm(0)
+                return
+              }
+              setCostPerKm(Math.max(0, parsed))
+            }}
+          />
+        </Box>
+        <Text size="1" color="gray">
+          Used by the Money tab for transport cost (km driven × this rate).
+          Default is 5 kr/km. This is not the customer-facing vehicle distance
+          rate on offers.
+        </Text>
+        <Flex justify="end">
+          <Button
+            variant="solid"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+          >
+            {saveMutation.isPending ? 'Saving…' : 'Save transport cost'}
           </Button>
         </Flex>
       </Flex>

@@ -19,6 +19,7 @@ import { JobProfitabilityTable } from '../components/JobProfitabilityTable'
 import { MonthlyTrendSection } from '../components/MonthlyTrendSection'
 import { ProfitabilityChart } from '../components/ProfitabilityChart'
 import { ReportError } from '../components/ReportError'
+import { ReportingBasisNotice } from '../components/ReportingBasisNotice'
 import { SegmentTabs } from '../components/SegmentTabs'
 import { SummaryKpis } from '../components/SummaryKpis'
 import { UtilizationTable } from '../components/UtilizationTable'
@@ -26,6 +27,7 @@ import { dateRangeFromIndex } from '../utils/dates'
 import { formatHours, formatPercent } from '../utils/format'
 import { financialKpis } from '../utils/kpis'
 import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
+import { filterIncompleteMoneyJobs } from '../utils/incompleteness'
 import type { MarginThreshold, ReportSegment } from '../types'
 
 export default function ReportingPage() {
@@ -100,6 +102,12 @@ export default function ReportingPage() {
     [jobRows, marginThreshold],
   )
 
+  const incompleteMoneyJobs = React.useMemo(
+    () => filterIncompleteMoneyJobs(jobRows),
+    [jobRows],
+  )
+  const incompleteMoneyCount = incompleteMoneyJobs.length
+
   const chartData = React.useMemo(() => {
     if (segment === 'customers') {
       return customerRows.slice(0, 10).map((r) => ({
@@ -137,7 +145,14 @@ export default function ReportingPage() {
   return (
     <Box p="4" style={{ minWidth: 0 }}>
       <Flex direction="column" gap="4" style={{ minWidth: 0 }}>
-        <Flex justify="end" style={{ minWidth: 0 }}>
+        <Flex
+          justify="between"
+          align="center"
+          wrap="wrap"
+          gap="3"
+          style={{ minWidth: 0 }}
+        >
+          <ReportingBasisNotice />
           <DateRangeControl rangeIndex={rangeIndex} onChange={setRangeIndex} />
         </Flex>
 
@@ -158,7 +173,11 @@ export default function ReportingPage() {
               <>
                 <Flex justify="between" align="center" wrap="wrap" gap="2">
                   {!jobsLoading && jobRows.length > 0 ? (
-                    <SummaryKpis items={financialKpis(jobRows)} />
+                    <SummaryKpis
+                      items={financialKpis(jobRows, {
+                        incompleteCount: incompleteMoneyCount,
+                      })}
+                    />
                   ) : (
                     <Box />
                   )}
@@ -174,6 +193,7 @@ export default function ReportingPage() {
                       'Expenses',
                       'Profit',
                       'Margin %',
+                      'Money incomplete',
                     ]}
                     rows={jobRows.map((r) => [
                       r.job_number,
@@ -185,6 +205,7 @@ export default function ReportingPage() {
                       r.expenses,
                       r.profit,
                       r.margin_pct,
+                      r.money_incomplete ? 'yes' : '',
                     ])}
                     disabled={jobsLoading}
                   />
@@ -405,7 +426,12 @@ export default function ReportingPage() {
                   />
                 </Flex>
                 {!jobsLoading && lowMarginRows.length > 0 ? (
-                  <SummaryKpis items={financialKpis(lowMarginRows)} />
+                  <SummaryKpis
+                    items={financialKpis(lowMarginRows, {
+                      incompleteCount:
+                        filterIncompleteMoneyJobs(lowMarginRows).length,
+                    })}
+                  />
                 ) : null}
                 {jobsLoading ? (
                   <Card size="3">

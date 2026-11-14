@@ -2,6 +2,7 @@ import * as React from 'react'
 import {
   Box,
   Button,
+  Card,
   Code,
   Flex,
   Heading,
@@ -137,198 +138,211 @@ export default function CompanyLogsTab({
   }
 
   return (
-    <section
+    <Card
+      size="4"
       style={{
+        height: '100%',
         minHeight: 0,
-        flex: 1,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
       }}
     >
-      <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
-        <Flex align="baseline" justify="between" gap="3" wrap="wrap">
-          <Heading size="5">Logs</Heading>
+      <Box
+        p="4"
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        <Flex direction="column" gap="3" style={{ flex: 1, minHeight: 0 }}>
+          <Flex align="baseline" justify="between" gap="3" wrap="wrap">
+            <Heading size="5">Logs</Heading>
+            <Text size="2" color="gray">
+              {data?.total != null
+                ? `${items.length} shown · ${data.total} matching`
+                : `${items.length} events`}
+            </Text>
+          </Flex>
+
           <Text size="2" color="gray">
-            {data?.total != null
-              ? `${items.length} shown · ${data.total} matching`
-              : `${items.length} events`}
+            Company activity log — filterable by type, actor, date, and text.
           </Text>
-        </Flex>
 
-        <Text size="2" color="gray">
-          Company activity log — filterable by type, actor, date, and text.
-        </Text>
+          <CompanyLogsFilters
+            filters={filters}
+            onChange={setFilters}
+            actors={actorsSorted}
+            actorsLoading={actorsLoading}
+          />
 
-        <CompanyLogsFilters
-          filters={filters}
-          onChange={setFilters}
-          actors={actorsSorted}
-          actorsLoading={actorsLoading}
-        />
+          <Separator size="4" />
 
-        <Separator size="4" />
-
-        <Box
-          style={{
-            flex: 1,
-            minHeight: 280,
-            display: 'flex',
-            flexDirection: 'column',
-            border: '1px solid var(--gray-a5)',
-            borderRadius: 'var(--radius-2)',
-            overflow: 'hidden',
-            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          }}
-        >
-          {isLoading ? (
-            <Box p="3">
-              <IndexTableBodySkeleton rowCount={10} rowHeight={36} />
-            </Box>
-          ) : isError ? (
-            <Box p="4">
-              <Text color="red" size="2">
-                Failed to load activity log
-              </Text>
-            </Box>
-          ) : items.length === 0 ? (
-            <Box p="4">
-              <Text color="gray" size="2">
-                No log entries match these filters
-              </Text>
-            </Box>
-          ) : (
-            <VirtualIndexTable
-              rows={items}
-              columns={COLUMNS}
-              gridTemplateColumns={GRID_COLUMNS}
-              getRowId={(row) => row.id}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-              scrollRef={scrollRef}
-              rowVirtualizer={rowVirtualizer}
-              getRowClassName={() => INDEX_TABLE_ROW_CLASS}
-              renderCell={(row, columnId) => {
-                if (columnId === 'timestamp') {
-                  return (
-                    <Text size="1" style={{ whiteSpace: 'nowrap' }}>
-                      {formatLogTimestamp(row.created_at)}
-                    </Text>
-                  )
-                }
-                if (columnId === 'entity') {
-                  return (
-                    <Code size="1" variant="ghost" color="gray">
-                      {activityEntityLabel(row.activity_type)}
-                    </Code>
-                  )
-                }
-                if (columnId === 'event') {
-                  return (
-                    <Text
-                      size="1"
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={formatActivityTitle(row)}
-                    >
-                      {formatActivityTitle(row)}
-                    </Text>
-                  )
-                }
-                if (columnId === 'actor') {
-                  const name =
-                    row.created_by.display_name || row.created_by.email
-                  return (
-                    <Text
-                      size="1"
-                      color="gray"
-                      style={{
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={name}
-                    >
-                      {name}
-                    </Text>
-                  )
-                }
-                return null
-              }}
-            />
-          )}
-        </Box>
-
-        {selected && (
           <Box
-            p="3"
             style={{
+              flex: 1,
+              minHeight: 280,
+              display: 'flex',
+              flexDirection: 'column',
               border: '1px solid var(--gray-a5)',
               borderRadius: 'var(--radius-2)',
-              background: 'var(--gray-a2)',
-              flexShrink: 0,
+              overflow: 'hidden',
+              fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
             }}
           >
-            <Flex direction="column" gap="2">
-              <Flex align="center" justify="between" gap="3" wrap="wrap">
-                <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-                  <Text size="2" weight="medium">
-                    {formatActivityTitle(selected)}
-                  </Text>
-                  <Text size="1" color="gray">
-                    <Code size="1" variant="ghost">
-                      {selected.activity_type}
-                    </Code>
-                    {' · '}
-                    {formatLogTimestamp(selected.created_at)}
-                    {' · '}
-                    {selected.created_by.display_name ||
-                      selected.created_by.email}
-                  </Text>
-                </Flex>
-                <Flex gap="2">
-                  {getActivityNavigation(selected)?.id && (
+            {isLoading ? (
+              <Box p="3">
+                <IndexTableBodySkeleton rowCount={10} rowHeight={36} />
+              </Box>
+            ) : isError ? (
+              <Box p="4">
+                <Text color="red" size="2">
+                  Failed to load activity log
+                </Text>
+              </Box>
+            ) : items.length === 0 ? (
+              <Box p="4">
+                <Text color="gray" size="2">
+                  No log entries match these filters
+                </Text>
+              </Box>
+            ) : (
+              <VirtualIndexTable
+                rows={items}
+                columns={COLUMNS}
+                gridTemplateColumns={GRID_COLUMNS}
+                getRowId={(row) => row.id}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                scrollRef={scrollRef}
+                rowVirtualizer={rowVirtualizer}
+                getRowClassName={() => INDEX_TABLE_ROW_CLASS}
+                renderCell={(row, columnId) => {
+                  if (columnId === 'timestamp') {
+                    return (
+                      <Text size="1" style={{ whiteSpace: 'nowrap' }}>
+                        {formatLogTimestamp(row.created_at)}
+                      </Text>
+                    )
+                  }
+                  if (columnId === 'entity') {
+                    return (
+                      <Code size="1" variant="ghost" color="gray">
+                        {activityEntityLabel(row.activity_type)}
+                      </Code>
+                    )
+                  }
+                  if (columnId === 'event') {
+                    return (
+                      <Text
+                        size="1"
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={formatActivityTitle(row)}
+                      >
+                        {formatActivityTitle(row)}
+                      </Text>
+                    )
+                  }
+                  if (columnId === 'actor') {
+                    const name =
+                      row.created_by.display_name || row.created_by.email
+                    return (
+                      <Text
+                        size="1"
+                        color="gray"
+                        style={{
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={name}
+                      >
+                        {name}
+                      </Text>
+                    )
+                  }
+                  return null
+                }}
+              />
+            )}
+          </Box>
+
+          {selected && (
+            <Box
+              p="3"
+              style={{
+                border: '1px solid var(--gray-a5)',
+                borderRadius: 'var(--radius-2)',
+                background: 'var(--gray-a2)',
+                flexShrink: 0,
+              }}
+            >
+              <Flex direction="column" gap="2">
+                <Flex align="center" justify="between" gap="3" wrap="wrap">
+                  <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                    <Text size="2" weight="medium">
+                      {formatActivityTitle(selected)}
+                    </Text>
+                    <Text size="1" color="gray">
+                      <Code size="1" variant="ghost">
+                        {selected.activity_type}
+                      </Code>
+                      {' · '}
+                      {formatLogTimestamp(selected.created_at)}
+                      {' · '}
+                      {selected.created_by.display_name ||
+                        selected.created_by.email}
+                    </Text>
+                  </Flex>
+                  <Flex gap="2">
+                    {getActivityNavigation(selected)?.id && (
+                      <Button
+                        size="1"
+                        variant="soft"
+                        onClick={() => openEntity(selected)}
+                      >
+                        Open entity
+                      </Button>
+                    )}
                     <Button
                       size="1"
-                      variant="soft"
-                      onClick={() => openEntity(selected)}
+                      variant="ghost"
+                      onClick={() => setSelectedId(null)}
                     >
-                      Open entity
+                      Clear
                     </Button>
-                  )}
-                  <Button
-                    size="1"
-                    variant="ghost"
-                    onClick={() => setSelectedId(null)}
-                  >
-                    Clear
-                  </Button>
+                  </Flex>
                 </Flex>
+                {selected.description && (
+                  <Text size="2" color="gray">
+                    {selected.description}
+                  </Text>
+                )}
+                {Object.keys(selected.metadata ?? {}).length > 0 && (
+                  <pre
+                    style={{
+                      margin: 0,
+                      maxHeight: 160,
+                      overflow: 'auto',
+                      fontSize: 'var(--font-size-1)',
+                      whiteSpace: 'pre-wrap',
+                    }}
+                  >
+                    {JSON.stringify(selected.metadata, null, 2)}
+                  </pre>
+                )}
               </Flex>
-              {selected.description && (
-                <Text size="2" color="gray">
-                  {selected.description}
-                </Text>
-              )}
-              {Object.keys(selected.metadata ?? {}).length > 0 && (
-                <pre
-                  style={{
-                    margin: 0,
-                    maxHeight: 160,
-                    overflow: 'auto',
-                    fontSize: 'var(--font-size-1)',
-                    whiteSpace: 'pre-wrap',
-                  }}
-                >
-                  {JSON.stringify(selected.metadata, null, 2)}
-                </pre>
-              )}
-            </Flex>
-          </Box>
-        )}
-      </Flex>
-    </section>
+            </Box>
+          )}
+        </Flex>
+      </Box>
+    </Card>
   )
 }

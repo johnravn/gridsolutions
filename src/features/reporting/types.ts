@@ -6,10 +6,19 @@ export type JobProfitabilityRow = {
   customer_name: string | null
   start_at: string | null
   end_at: string | null
+  /** Job workflow status (for incompleteness: completed/invoiced/paid). */
+  status: string | null
   income: number
   expenses: number
   profit: number
   margin_pct: number | null
+  /** Count of confirmed Money lines (Reporting scope = ledger rows). */
+  money_item_count: number
+  /**
+   * True when status is completed/invoiced/paid and there is no confirmed
+   * income (empty Money or expenses-only).
+   */
+  money_incomplete: boolean
 }
 
 export type CustomerProfitabilityRow = {

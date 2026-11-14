@@ -8,6 +8,7 @@ import {
   rangeBounds,
 } from '../utils/dates'
 import { formatJobNumber, marginPct } from '../utils/format'
+import { isMoneyIncompleteJob } from '../utils/incompleteness'
 import type {
   CustomerProfitabilityRow,
   InvoicePipelineBucket,
@@ -88,12 +89,18 @@ async function fetchOverlappingJobs({
   )
 }
 
+type MoneyTotals = {
+  income: number
+  expenses: number
+  itemCount: number
+}
+
 async function fetchMoneyTotalsByJob(
   jobIds: Array<string>,
-): Promise<Map<string, { income: number; expenses: number }>> {
-  const byJob = new Map<string, { income: number; expenses: number }>()
+): Promise<Map<string, MoneyTotals>> {
+  const byJob = new Map<string, MoneyTotals>()
   for (const id of jobIds) {
-    byJob.set(id, { income: 0, expenses: 0 })
+    byJob.set(id, { income: 0, expenses: 0, itemCount: 0 })
   }
   if (jobIds.length === 0) return byJob
 
@@ -111,6 +118,7 @@ async function fetchMoneyTotalsByJob(
     for (const row of items ?? []) {
       const cur = byJob.get(row.job_id)
       if (!cur) continue
+      cur.itemCount += 1
       if (row.type === 'income') cur.income += Number(row.amount)
       else if (row.type === 'expense') cur.expenses += Number(row.amount)
     }
@@ -121,11 +129,12 @@ async function fetchMoneyTotalsByJob(
 
 function toJobProfitabilityRow(
   job: JobRow,
-  money: { income: number; expenses: number },
+  money: MoneyTotals,
 ): JobProfitabilityRow {
   const income = money.income
   const expenses = money.expenses
   const profit = income - expenses
+  const status = job.status ?? null
   return {
     job_id: job.id,
     job_number: formatJobNumber(job.jobnr),
@@ -134,10 +143,17 @@ function toJobProfitabilityRow(
     customer_name: customerNameFromJoin(job.customer),
     start_at: job.start_at ?? null,
     end_at: job.end_at ?? null,
+    status,
     income,
     expenses,
     profit,
     margin_pct: marginPct(income, profit),
+    money_item_count: money.itemCount,
+    money_incomplete: isMoneyIncompleteJob({
+      status,
+      income,
+      itemCount: money.itemCount,
+    }),
   }
 }
 
@@ -157,6 +173,7 @@ export async function fetchJobProfitabilityRows({
     companyId,
     fromDate,
     toDate,
+    includeStatus: true,
   })
   if (overlapping.length === 0) return []
 
@@ -164,7 +181,10 @@ export async function fetchJobProfitabilityRows({
   const byJob = await fetchMoneyTotalsByJob(jobIds)
 
   return overlapping.map((job) =>
-    toJobProfitabilityRow(job, byJob.get(job.id) ?? { income: 0, expenses: 0 }),
+    toJobProfitabilityRow(
+      job,
+      byJob.get(job.id) ?? { income: 0, expenses: 0, itemCount: 0 },
+    ),
   )
 }
 

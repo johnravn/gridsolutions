@@ -422,6 +422,7 @@ export type Database = {
           partner_discount_percent: number | null
           rental_factor_config: Json | null
           subcontractor_markup_percent: number | null
+          transport_cost_per_km: number
           updated_at: string
           vehicle_daily_rate: number | null
           vehicle_distance_increment: number | null
@@ -449,6 +450,7 @@ export type Database = {
           partner_discount_percent?: number | null
           rental_factor_config?: Json | null
           subcontractor_markup_percent?: number | null
+          transport_cost_per_km?: number
           updated_at?: string
           vehicle_daily_rate?: number | null
           vehicle_distance_increment?: number | null
@@ -476,6 +478,7 @@ export type Database = {
           partner_discount_percent?: number | null
           rental_factor_config?: Json | null
           subcontractor_markup_percent?: number | null
+          transport_cost_per_km?: number
           updated_at?: string
           vehicle_daily_rate?: number | null
           vehicle_distance_increment?: number | null
@@ -1466,6 +1469,7 @@ export type Database = {
       job_money_items: {
         Row: {
           amount: number
+          category: string | null
           company_id: string
           created_at: string
           date: string | null
@@ -1480,6 +1484,7 @@ export type Database = {
         }
         Insert: {
           amount: number
+          category?: string | null
           company_id: string
           created_at?: string
           date?: string | null
@@ -1494,6 +1499,7 @@ export type Database = {
         }
         Update: {
           amount?: number
+          category?: string | null
           company_id?: string
           created_at?: string
           date?: string | null
@@ -2026,6 +2032,7 @@ export type Database = {
           start_at: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
+          transport_km_driven: number | null
           updated_at: string
         }
         Insert: {
@@ -2046,6 +2053,7 @@ export type Database = {
           start_at?: string | null
           status: Database["public"]["Enums"]["job_status"]
           title: string
+          transport_km_driven?: number | null
           updated_at?: string
         }
         Update: {
@@ -2066,6 +2074,7 @@ export type Database = {
           start_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           title?: string
+          transport_km_driven?: number | null
           updated_at?: string
         }
         Relationships: [

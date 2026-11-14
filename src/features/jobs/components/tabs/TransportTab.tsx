@@ -224,6 +224,21 @@ export default function TransportTab({ jobId }: { jobId: string }) {
     }
   }
 
+  const { data: moneyKm } = useQuery({
+    queryKey: ['jobs', jobId, 'money', 'job-info'],
+    queryFn: async () => {
+      const { data: jobRow, error } = await supabase
+        .from('jobs')
+        .select('transport_km_driven')
+        .eq('id', jobId)
+        .single()
+      if (error) throw error
+      return jobRow.transport_km_driven != null
+        ? Number(jobRow.transport_km_driven)
+        : null
+    },
+  })
+
   return (
     <Box>
       <Box
@@ -258,6 +273,26 @@ export default function TransportTab({ jobId }: { jobId: string }) {
           </Flex>
         )}
       </Box>
+
+      <Card mb="3" variant="surface">
+        <Flex justify="between" align="center" gap="3" wrap="wrap">
+          <Box>
+            <Text size="2" weight="medium">
+              Km for Money tab
+            </Text>
+            <Text size="1" color="gray" as="div">
+              {moneyKm != null && moneyKm > 0
+                ? `${moneyKm} km saved — edit on the Money tab (cost = km × company rate).`
+                : 'Enter km driven on the Money tab to suggest transport cost.'}
+            </Text>
+          </Box>
+          {moneyKm != null && moneyKm > 0 && (
+            <Badge variant="soft" color="amber">
+              {moneyKm} km
+            </Badge>
+          )}
+        </Flex>
+      </Card>
 
       {isLoading ? (
         <FetchingBookingsStatus />

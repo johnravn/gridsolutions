@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.28'
+export const APP_VERSION = '1.13.29'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -28,6 +28,21 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Job Money ledger',
+      description:
+        'Confirm income and costs on the job Money tab — ex MVA, transport km × company rate, Conta suggestions, and clearer categories. Company Reporting rolls up confirmed lines only.',
+    },
+    {
+      title: 'Honest Reporting',
+      description:
+        'Reporting shows when completed or paid jobs still lack Money fill-in, labels amounts as ex MVA, and Open jumps straight to the job Money tab. Conflicts and Reporting are out of beta.',
+    },
+    {
+      title: 'Company Logs card',
+      description:
+        'Company → Logs uses the same card shell as Overview and the other company tabs.',
+    },
     {
       title: 'Google sign-in',
       description:

@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Button, Text } from '@radix-ui/themes'
+import { Badge, Button, Flex, Text } from '@radix-ui/themes'
 import {
   VirtualIndexTable,
   useClientSort,
@@ -33,7 +33,7 @@ const COLUMNS: Array<IndexColumn<SortKey>> = [
 ]
 
 const GRID =
-  'minmax(72px, 0.7fr) minmax(120px, 1.4fr) minmax(100px, 1.2fr) minmax(120px, 1.2fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(72px, 0.8fr)'
+  'minmax(72px, 0.7fr) minmax(140px, 1.6fr) minmax(100px, 1.2fr) minmax(120px, 1.2fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(72px, 0.8fr)'
 
 export function JobProfitabilityTable({
   rows,
@@ -74,9 +74,16 @@ export function JobProfitabilityTable({
               return <Text size="2">#{row.job_number}</Text>
             case 'title':
               return (
-                <Text size="2" truncate>
-                  {row.title}
-                </Text>
+                <Flex align="center" gap="2" style={{ minWidth: 0 }}>
+                  <Text size="2" truncate style={{ minWidth: 0 }}>
+                    {row.title}
+                  </Text>
+                  {row.money_incomplete ? (
+                    <Badge size="1" color="orange" variant="soft">
+                      Incomplete
+                    </Badge>
+                  ) : null}
+                </Flex>
               )
             case 'customer_name':
               return (
@@ -113,7 +120,7 @@ export function JobProfitabilityTable({
                 search: {
                   jobId: row.job_id,
                   recurringJobId: undefined,
-                  tab: undefined,
+                  tab: 'money',
                 },
               })
             }}

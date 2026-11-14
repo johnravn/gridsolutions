@@ -44,60 +44,60 @@ describe('dates / utilization math', () => {
   })
 })
 
+function jobRow(
+  partial: Partial<JobProfitabilityRow> &
+    Pick<JobProfitabilityRow, 'job_id' | 'job_number' | 'title'>,
+): JobProfitabilityRow {
+  return {
+    customer_id: null,
+    customer_name: null,
+    start_at: null,
+    end_at: null,
+    status: null,
+    income: 0,
+    expenses: 0,
+    profit: 0,
+    margin_pct: null,
+    money_item_count: 0,
+    money_incomplete: false,
+    ...partial,
+  }
+}
+
 describe('filterLowMarginJobs', () => {
   const rows: Array<JobProfitabilityRow> = [
-    {
+    jobRow({
       job_id: '1',
       job_number: '000001',
       title: 'A',
-      customer_id: null,
-      customer_name: null,
-      start_at: null,
-      end_at: null,
       income: 100,
       expenses: 120,
       profit: -20,
       margin_pct: -20,
-    },
-    {
+    }),
+    jobRow({
       job_id: '2',
       job_number: '000002',
       title: 'B',
-      customer_id: null,
-      customer_name: null,
-      start_at: null,
-      end_at: null,
       income: 100,
       expenses: 90,
       profit: 10,
       margin_pct: 10,
-    },
-    {
+    }),
+    jobRow({
       job_id: '3',
       job_number: '000003',
       title: 'C',
-      customer_id: null,
-      customer_name: null,
-      start_at: null,
-      end_at: null,
       income: 100,
       expenses: 50,
       profit: 50,
       margin_pct: 50,
-    },
-    {
+    }),
+    jobRow({
       job_id: '4',
       job_number: '000004',
       title: 'D',
-      customer_id: null,
-      customer_name: null,
-      start_at: null,
-      end_at: null,
-      income: 0,
-      expenses: 0,
-      profit: 0,
-      margin_pct: null,
-    },
+    }),
   ]
 
   it('filters unprofitable when threshold is 0', () => {

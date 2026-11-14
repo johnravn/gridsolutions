@@ -4,6 +4,12 @@ import { supabase } from '@shared/api/supabase'
 
 export type JobMoneyItemSource = 'offer' | 'crew' | 'conta' | 'manual'
 export type JobMoneyItemType = 'income' | 'expense'
+export type JobMoneyItemCategory =
+  | 'crew'
+  | 'equipment'
+  | 'conta'
+  | 'transport'
+  | 'other'
 
 export type JobMoneyItem = {
   id: string
@@ -16,6 +22,7 @@ export type JobMoneyItem = {
   reference: string | null
   source: JobMoneyItemSource
   source_id: string | null
+  category: JobMoneyItemCategory | null
   created_at: string
   updated_at: string
 }
@@ -30,6 +37,7 @@ export type JobMoneyItemInsert = {
   reference?: string | null
   source: JobMoneyItemSource
   source_id?: string | null
+  category?: JobMoneyItemCategory | null
 }
 
 export type JobMoneyItemUpdate = {
@@ -37,6 +45,7 @@ export type JobMoneyItemUpdate = {
   amount?: number
   date?: string | null
   reference?: string | null
+  category?: JobMoneyItemCategory | null
 }
 
 export function jobMoneyItemsQuery(jobId: string) {
@@ -51,7 +60,13 @@ export function jobMoneyItemsQuery(jobId: string) {
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      return (data ?? []) as Array<JobMoneyItem>
+      return (data ?? []).map((row) => ({
+        ...row,
+        type: row.type as JobMoneyItemType,
+        source: row.source as JobMoneyItemSource,
+        category: (row.category as JobMoneyItemCategory | null) ?? null,
+        amount: Number(row.amount),
+      }))
     },
   })
 }
@@ -71,6 +86,7 @@ export async function insertJobMoneyItem(
       reference: payload.reference ?? null,
       source: payload.source,
       source_id: payload.source_id ?? null,
+      category: payload.category ?? null,
     })
     .select('id')
     .single()
@@ -93,5 +109,17 @@ export async function updateJobMoneyItem(
 
 export async function deleteJobMoneyItem(id: string): Promise<void> {
   const { error } = await supabase.from('job_money_items').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** Phase 2 UX will edit this; Phase 1 exposes the writer for Money transport suggestions. */
+export async function updateJobTransportKmDriven(
+  jobId: string,
+  kmDriven: number | null,
+): Promise<void> {
+  const { error } = await supabase
+    .from('jobs')
+    .update({ transport_km_driven: kmDriven })
+    .eq('id', jobId)
   if (error) throw error
 }

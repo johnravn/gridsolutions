@@ -14,6 +14,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { insertJobMoneyItem, updateJobMoneyItem } from '../../api/moneyQueries'
 import type {
   JobMoneyItem,
+  JobMoneyItemCategory,
   JobMoneyItemInsert,
   JobMoneyItemSource,
   JobMoneyItemType,
@@ -52,6 +53,7 @@ type Props = {
     reference?: string | null
     source: JobMoneyItemSource
     sourceId?: string | null
+    category?: JobMoneyItemCategory | null
   }
   existingItem?: JobMoneyItem | null
   onSaved?: () => void
@@ -141,6 +143,7 @@ export default function MoneyItemEditDialog({
         reference: value.reference.trim() || null,
         source: initialData?.source ?? 'manual',
         source_id: initialData?.sourceId ?? null,
+        category: initialData?.category ?? 'other',
       }
       return insertJobMoneyItem(payload)
     },

@@ -160,7 +160,7 @@ export function InvoicePipelineSection({
                   search: {
                     jobId: row.job_id,
                     recurringJobId: undefined,
-                    tab: undefined,
+                    tab: 'money',
                   },
                 })
               }}

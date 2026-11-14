@@ -16,9 +16,9 @@ import {
 import {
   CheckCircle,
   Edit,
-  InfoCircle,
   Plus,
   Trash,
+  WarningTriangle,
   XmarkCircle,
 } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
@@ -31,10 +31,49 @@ import {
 import { contaClient } from '@shared/api/conta/client'
 import { findContaProjectId } from '../../utils/contaProjects'
 import { formatOfferNumberDisplay } from '../../utils/offerNumber'
-import { deleteJobMoneyItem, jobMoneyItemsQuery } from '../../api/moneyQueries'
+import {
+  deleteJobMoneyItem,
+  insertJobMoneyItem,
+  jobMoneyItemsQuery,
+} from '../../api/moneyQueries'
+import {
+  jobSubcontractorQuotesQuery,
+  jobSubcontractorsQuery,
+} from '../../api/subcontractorQueries'
 import MoneyItemEditDialog from '../dialogs/MoneyItemEditDialog'
+import {
+  DEFAULT_TRANSPORT_COST_PER_KM,
+  buildContaExpenseSuggestions,
+  buildPrimaryIncomeSuggestions,
+  buildTransportCostSuggestion,
+  categoryForSource,
+  hasPrimaryIncomeSource,
+} from '../../utils/moneySuggestions'
+import {
+  MONEY_ARCHETYPE_BLURBS,
+  MONEY_ARCHETYPE_LABELS,
+  buildMoneyCompletenessHints,
+  buildSubcontractorQuoteSuggestions,
+  detectMoneyArchetype,
+  filterHighConfidenceSuggestions,
+  sumOfferTransportKm,
+} from '../../utils/moneyArchetypes'
+import {
+  CONTA_CONFIDENCE_COLOR,
+  CONTA_CONFIDENCE_LABEL,
+  contaLedgerDateRange,
+  resolveContaLinkStatus,
+} from '../../utils/moneyConta'
+import MoneyTransportKmCard from './MoneyTransportKmCard'
+import MoneyContaPanel from './MoneyContaPanel'
 import MoneyItemsFilter from './MoneyItemsFilter'
-import type { JobMoneyItem, JobMoneyItemSource } from '../../api/moneyQueries'
+import type { ContaDatePadOption } from '../../utils/moneyConta'
+import type { MoneySuggestion } from '../../utils/moneySuggestions'
+import type {
+  JobMoneyItem,
+  JobMoneyItemCategory,
+  JobMoneyItemSource,
+} from '../../api/moneyQueries'
 import type { JobOffer } from '../../types'
 
 type ContaLedgerLine = {
@@ -49,16 +88,7 @@ type ContaLedgerLine = {
   supplierName?: string
 }
 
-type Suggestion = {
-  id: string
-  sourceId: string
-  type: 'income' | 'expense'
-  description: string
-  amount: number
-  date: string | null
-  reference?: string
-  source: JobMoneyItemSource
-}
+type Suggestion = MoneySuggestion
 
 export default function MoneyTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
@@ -81,6 +111,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const [addSuggestion, setAddSuggestion] = React.useState<Suggestion | null>(
     null,
   )
+  const [contaDatePad, setContaDatePad] =
+    React.useState<ContaDatePadOption>('job')
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '—'
@@ -115,16 +147,146 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('jobs')
-        .select('id, title, jobnr, start_at, end_at')
+        .select('id, title, jobnr, start_at, end_at, transport_km_driven')
         .eq('id', jobId)
         .single()
       if (error) throw error
-      return data as {
-        id: string
-        title: string
-        jobnr: number | null
-        start_at: string | null
-        end_at: string | null
+      return {
+        id: data.id,
+        title: data.title,
+        jobnr: data.jobnr,
+        start_at: data.start_at,
+        end_at: data.end_at,
+        transport_km_driven:
+          data.transport_km_driven != null
+            ? Number(data.transport_km_driven)
+            : null,
+      }
+    },
+  })
+
+  const { data: jobSalesInvoices = [] } = useQuery({
+    queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('job_invoices')
+        .select(
+          'id, status, created_at, invoice_data, conta_response, conta_invoice_id',
+        )
+        .eq('job_id', jobId)
+        .in('status', ['created', 'paid'])
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return data ?? []
+    },
+  })
+
+  const { data: transportCostPerKm } = useQuery({
+    queryKey: ['company', companyId, 'transport-cost-per-km'],
+    enabled: !!companyId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('company_expansions')
+        .select('transport_cost_per_km')
+        .eq('company_id', companyId!)
+        .maybeSingle()
+      if (error) throw error
+      const raw = data?.transport_cost_per_km
+      if (raw == null || !Number.isFinite(Number(raw))) {
+        return DEFAULT_TRANSPORT_COST_PER_KM
+      }
+      return Number(raw)
+    },
+  })
+
+  const { data: plannedOfferKm } = useQuery({
+    queryKey: [
+      'jobs',
+      jobId,
+      'money',
+      'planned-offer-km',
+      acceptedOffers[0]?.offer_basis_id,
+    ],
+    enabled: !!acceptedOffers[0]?.offer_basis_id,
+    queryFn: async () => {
+      const basisId = acceptedOffers[0]?.offer_basis_id
+      if (!basisId) return null
+      const { data, error } = await supabase
+        .from('offer_transport_items')
+        .select('distance_km')
+        .eq('offer_basis_id', basisId)
+      if (error) throw error
+      return sumOfferTransportKm(data ?? [])
+    },
+  })
+
+  const { data: subcontractors = [] } = useQuery({
+    ...jobSubcontractorsQuery({ jobId }),
+    enabled: !!jobId,
+  })
+
+  const { data: subcontractorQuotes = [] } = useQuery({
+    ...jobSubcontractorQuotesQuery({ jobId }),
+    enabled: !!jobId,
+  })
+
+  const { data: archetypeSignals } = useQuery({
+    queryKey: ['jobs', jobId, 'money', 'archetype-signals'],
+    queryFn: async () => {
+      const { data: periods, error: tpErr } = await supabase
+        .from('time_periods')
+        .select('id, category')
+        .eq('job_id', jobId)
+        .eq('deleted', false)
+      if (tpErr) throw tpErr
+
+      const byCat = (cat: string) =>
+        (periods ?? []).filter((p) => p.category === cat).map((p) => p.id)
+
+      const crewPeriodIds = byCat('crew')
+      const equipmentPeriodIds = byCat('equipment')
+      const transportPeriodIds = byCat('transport')
+
+      let crewBookingCount = 0
+      if (crewPeriodIds.length > 0) {
+        const { count, error } = await supabase
+          .from('reserved_crew')
+          .select('id', { count: 'exact', head: true })
+          .in('time_period_id', crewPeriodIds)
+        if (error) throw error
+        crewBookingCount = count ?? 0
+      }
+
+      let stockEquipmentCount = 0
+      let subrentalEquipmentCount = 0
+      if (equipmentPeriodIds.length > 0) {
+        const { data: items, error } = await supabase
+          .from('reserved_items')
+          .select('id, item:item_id ( item_kind )')
+          .in('time_period_id', equipmentPeriodIds)
+        if (error) throw error
+        for (const row of items ?? []) {
+          const item = Array.isArray(row.item) ? row.item[0] : row.item
+          if (item?.item_kind === 'subrental') subrentalEquipmentCount += 1
+          else stockEquipmentCount += 1
+        }
+      }
+
+      let transportBookingCount = 0
+      if (transportPeriodIds.length > 0) {
+        const { count, error } = await supabase
+          .from('reserved_vehicles')
+          .select('id', { count: 'exact', head: true })
+          .in('time_period_id', transportPeriodIds)
+        if (error) throw error
+        transportBookingCount = count ?? 0
+      }
+
+      return {
+        crewBookingCount,
+        stockEquipmentCount,
+        subrentalEquipmentCount,
+        transportBookingCount,
       }
     },
   })
@@ -196,8 +358,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   )
 
   const {
-    data: contaLedgerLines = [],
+    data: contaExpensePull,
     isLoading: isContaExpensesLoading,
+    isFetching: isContaExpensesFetching,
+    error: contaExpensesError,
     refetch: refetchContaExpenses,
   } = useQuery({
     queryKey: [
@@ -208,13 +372,20 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       jobInfo?.jobnr,
       jobInfo?.start_at,
       jobInfo?.end_at,
+      contaDatePad,
     ],
     queryFn: async () => {
       if (!accountingConfig?.accounting_organization_id) {
-        return [] as Array<ContaLedgerLine>
+        return {
+          lines: [] as Array<ContaLedgerLine>,
+          matchMode: 'jobnr' as const,
+        }
       }
       if (!contaProjectId && jobNumberTokens.length === 0) {
-        return [] as Array<ContaLedgerLine>
+        return {
+          lines: [] as Array<ContaLedgerLine>,
+          matchMode: 'jobnr' as const,
+        }
       }
 
       const params = new URLSearchParams({
@@ -224,15 +395,21 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         maxTransactionsPerPage: '200',
       })
 
+      const matchMode = contaProjectId
+        ? ('project' as const)
+        : ('jobnr' as const)
+
       if (contaProjectId) {
         params.set('projectId', String(contaProjectId))
       }
-      if (jobInfo?.start_at) {
-        params.set('startDate', jobInfo.start_at.split('T')[0])
-      }
-      if (jobInfo?.end_at) {
-        params.set('endDate', jobInfo.end_at.split('T')[0])
-      }
+
+      const range = contaLedgerDateRange(
+        jobInfo?.start_at,
+        jobInfo?.end_at,
+        contaDatePad,
+      )
+      if (range.startDate) params.set('startDate', range.startDate)
+      if (range.endDate) params.set('endDate', range.endDate)
 
       const report = (await contaClient.get(
         `/accounting/organizations/${accountingConfig.accounting_organization_id}/reports/supplier-ledger?${params.toString()}`,
@@ -249,13 +426,21 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           supplierName: ledger.name,
         })),
       )
-      if (contaProjectId) return lines
-      return lines.filter(matchesJobNumber)
+      return {
+        lines: matchMode === 'project' ? lines : lines.filter(matchesJobNumber),
+        matchMode,
+      }
     },
     enabled:
       !!accountingConfig?.accounting_organization_id &&
       (!!contaProjectId || jobNumberTokens.length > 0),
   })
+
+  const contaLedgerLines = React.useMemo(
+    () => contaExpensePull?.lines ?? [],
+    [contaExpensePull?.lines],
+  )
+  const contaExpenseMatchMode = contaExpensePull?.matchMode ?? 'jobnr'
 
   const { data: jobCrewPricing } = useQuery({
     queryKey: ['jobs', jobId, 'money', 'crew-pricing'],
@@ -474,34 +659,34 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           date: booking.start_at,
           reference: undefined as string | undefined,
           source: 'crew' as JobMoneyItemSource,
+          category: 'crew' as JobMoneyItemCategory,
         }
       })
       .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
   }, [crewBookings, companyRates, crewExpenseBillingUnit])
 
-  const contaExpenseSuggestionsRaw = React.useMemo(() => {
-    return contaLedgerLines
-      .map((line) => {
-        const amount = Number(line.amount ?? 0)
-        if (!amount) return null
-        const sourceId = `conta-${line.id ?? `${line.description}-${line.date}`}`
-        return {
-          id: sourceId,
-          sourceId,
-          type: 'expense' as const,
-          description:
-            line.description ||
-            line.bookkeepingAccountName ||
-            line.supplierName ||
-            'Accounting expense',
-          amount: Math.abs(amount),
-          date: line.date || line.dueDate || null,
-          reference: line.invoiceNo || undefined,
-          source: 'conta' as JobMoneyItemSource,
-        }
-      })
-      .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
-  }, [contaLedgerLines])
+  const contaExpenseSuggestionsRaw = React.useMemo(
+    () =>
+      buildContaExpenseSuggestions({
+        lines: contaLedgerLines,
+        matchMode: contaExpenseMatchMode,
+      }),
+    [contaLedgerLines, contaExpenseMatchMode],
+  )
+
+  const contaLinkStatus = React.useMemo(
+    () =>
+      resolveContaLinkStatus({
+        hasOrganizationId: !!accountingConfig?.accounting_organization_id,
+        contaProjectId: contaProjectId ?? null,
+        hasJobnr: !!jobInfo?.jobnr,
+      }),
+    [
+      accountingConfig?.accounting_organization_id,
+      contaProjectId,
+      jobInfo?.jobnr,
+    ],
+  )
 
   const confirmedSourceIds = React.useMemo(
     () =>
@@ -513,7 +698,21 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     [confirmedItems],
   )
 
+  const suppressCrewIncome = React.useMemo(
+    () =>
+      hasPrimaryIncomeSource({
+        invoices: jobSalesInvoices,
+        acceptedOffers: acceptedOffers.map((o) => ({
+          total_after_discount: Number(o.total_after_discount) || 0,
+        })),
+      }),
+    [jobSalesInvoices, acceptedOffers],
+  )
+
   const crewIncomeSuggestionsRaw = React.useMemo<Array<Suggestion>>(() => {
+    // When offer or Conta sales invoice income exists, do not suggest per-crew income
+    // (avoids double-counting crew revenue already in the primary income total).
+    if (suppressCrewIncome) return []
     if (!crewBookings || !jobCrewPricing) return []
     const { crewRatePerDay, crewRatePerHour } = jobCrewPricing
     if (crewRatePerDay <= 0 && crewRatePerHour <= 0) return []
@@ -545,52 +744,161 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           date: booking.start_at,
           reference: undefined as string | undefined,
           source: 'crew' as JobMoneyItemSource,
+          category: 'crew' as JobMoneyItemCategory,
         }
       })
       .filter((s): s is NonNullable<typeof s> => s !== null)
-  }, [crewBookings, jobCrewPricing, crewExpenseBillingUnit])
+  }, [suppressCrewIncome, crewBookings, jobCrewPricing, crewExpenseBillingUnit])
+
+  const primaryIncomeSuggestionsRaw = React.useMemo(
+    () =>
+      buildPrimaryIncomeSuggestions({
+        invoices: jobSalesInvoices,
+        acceptedOffers: acceptedOffers.map((o) => ({
+          id: o.id,
+          offernr: o.offernr,
+          title: o.title,
+          version_number: o.version_number,
+          total_after_discount: Number(o.total_after_discount) || 0,
+          accepted_at: o.accepted_at,
+        })),
+        formatOfferLabel: (offer) =>
+          [
+            formatOfferNumberDisplay(offer.offernr),
+            offer.title || `Offer v${offer.version_number}`,
+            'ex MVA',
+          ]
+            .filter(Boolean)
+            .join(' — '),
+      }),
+    [jobSalesInvoices, acceptedOffers],
+  )
+
+  const transportSuggestionRaw = React.useMemo(
+    () =>
+      buildTransportCostSuggestion({
+        kmDriven: jobInfo?.transport_km_driven,
+        costPerKm: transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM,
+        date: jobInfo?.start_at ?? null,
+      }),
+    [jobInfo?.transport_km_driven, jobInfo?.start_at, transportCostPerKm],
+  )
+
+  const quoteSuggestionsRaw = React.useMemo(() => {
+    const names: Record<string, string> = {}
+    for (const s of subcontractors) {
+      names[s.id] = s.customer?.name ?? 'Subcontractor'
+    }
+    return buildSubcontractorQuoteSuggestions({
+      quotes: subcontractorQuotes,
+      subcontractorNames: names,
+    })
+  }, [subcontractors, subcontractorQuotes])
 
   const incomeSuggestions = React.useMemo<Array<Suggestion>>(() => {
-    const offers = acceptedOffers
-      .filter((o) => !confirmedSourceIds.has(`offer-${o.id}`))
-      .map((offer) => ({
-        id: `offer-${offer.id}`,
-        sourceId: `offer-${offer.id}`,
-        type: 'income' as const,
-        description: [
-          formatOfferNumberDisplay(offer.offernr),
-          offer.title || `Offer v${offer.version_number}`,
-        ]
-          .filter(Boolean)
-          .join(' — '),
-        amount: offer.total_with_vat,
-        date: offer.accepted_at || null,
-        reference: undefined as string | undefined,
-        source: 'offer' as JobMoneyItemSource,
-      }))
+    const primary = primaryIncomeSuggestionsRaw.filter(
+      (s) => !confirmedSourceIds.has(s.sourceId),
+    )
     const crew = crewIncomeSuggestionsRaw.filter(
       (s) => !confirmedSourceIds.has(s.sourceId),
     )
-    return [...offers, ...crew]
-  }, [acceptedOffers, crewIncomeSuggestionsRaw, confirmedSourceIds])
+    return [...primary, ...crew]
+  }, [
+    primaryIncomeSuggestionsRaw,
+    crewIncomeSuggestionsRaw,
+    confirmedSourceIds,
+  ])
 
   const expenseSuggestions = React.useMemo<Array<Suggestion>>(() => {
-    const crew = crewExpenseSuggestionsRaw.filter(
+    const crew = crewExpenseSuggestionsRaw
+      .filter((e) => !confirmedSourceIds.has(e.sourceId))
+      .map((e) => ({
+        ...e,
+        category: categoryForSource(e.source, e.type, 'crew'),
+      }))
+    const quotes = quoteSuggestionsRaw.filter(
       (e) => !confirmedSourceIds.has(e.sourceId),
     )
-    const conta = contaExpenseSuggestionsRaw.filter(
-      (e) => !confirmedSourceIds.has(e.sourceId),
-    )
-    return [...crew, ...conta]
+    const conta = contaExpenseSuggestionsRaw
+      .filter((e) => !confirmedSourceIds.has(e.sourceId))
+      .map((e) => ({
+        ...e,
+        category: categoryForSource(e.source, e.type, 'conta'),
+      }))
+    const transport =
+      transportSuggestionRaw &&
+      !confirmedSourceIds.has(transportSuggestionRaw.sourceId)
+        ? [transportSuggestionRaw]
+        : []
+    return [...crew, ...quotes, ...conta, ...transport]
   }, [
     crewExpenseSuggestionsRaw,
+    quoteSuggestionsRaw,
     contaExpenseSuggestionsRaw,
+    transportSuggestionRaw,
     confirmedSourceIds,
   ])
 
   const suggestions: Array<Suggestion> = React.useMemo(
     () => [...incomeSuggestions, ...expenseSuggestions],
     [incomeSuggestions, expenseSuggestions],
+  )
+
+  const highConfidenceSuggestions = React.useMemo(
+    () => filterHighConfidenceSuggestions(suggestions),
+    [suggestions],
+  )
+
+  const moneyArchetype = React.useMemo(
+    () =>
+      detectMoneyArchetype({
+        crewBookingCount: archetypeSignals?.crewBookingCount ?? 0,
+        stockEquipmentCount: archetypeSignals?.stockEquipmentCount ?? 0,
+        subrentalEquipmentCount: archetypeSignals?.subrentalEquipmentCount ?? 0,
+        hasSubcontractors: subcontractors.length > 0,
+        hasSubcontractorQuotes: quoteSuggestionsRaw.length > 0,
+        transportBookingCount: archetypeSignals?.transportBookingCount ?? 0,
+        plannedOfferKm: plannedOfferKm ?? null,
+        transportKmDriven: jobInfo?.transport_km_driven ?? null,
+      }),
+    [
+      archetypeSignals,
+      subcontractors.length,
+      quoteSuggestionsRaw.length,
+      plannedOfferKm,
+      jobInfo?.transport_km_driven,
+    ],
+  )
+
+  const hasTransportSignal =
+    (archetypeSignals?.transportBookingCount ?? 0) > 0 ||
+    (plannedOfferKm != null && plannedOfferKm > 0) ||
+    (jobInfo?.transport_km_driven != null && jobInfo.transport_km_driven > 0) ||
+    moneyArchetype === 'transport_heavy'
+
+  const completenessHints = React.useMemo(
+    () =>
+      buildMoneyCompletenessHints({
+        confirmed: confirmedItems,
+        hasPrimaryIncomeSuggestion: primaryIncomeSuggestionsRaw.length > 0,
+        transportKmDriven: jobInfo?.transport_km_driven ?? null,
+        plannedOfferKm: plannedOfferKm ?? null,
+        hasTransportSignal,
+        unconfirmedHighConfidenceCount: highConfidenceSuggestions.length,
+        hasQuoteSuggestions: quoteSuggestionsRaw.some(
+          (q) => !confirmedSourceIds.has(q.sourceId),
+        ),
+      }),
+    [
+      confirmedItems,
+      primaryIncomeSuggestionsRaw.length,
+      jobInfo?.transport_km_driven,
+      plannedOfferKm,
+      hasTransportSignal,
+      highConfidenceSuggestions.length,
+      quoteSuggestionsRaw,
+      confirmedSourceIds,
+    ],
   )
 
   const confirmedIncomeItems = confirmedItems.filter((i) => i.type === 'income')
@@ -685,6 +993,40 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const addAllHighConfidenceMutation = useMutation({
+    mutationFn: async (items: Array<Suggestion>) => {
+      if (!companyId) throw new Error('No company')
+      for (const s of items) {
+        await insertJobMoneyItem({
+          job_id: jobId,
+          company_id: companyId,
+          type: s.type,
+          description: s.description,
+          amount: s.amount,
+          date: s.date,
+          reference: s.reference ?? null,
+          source: s.source,
+          source_id: s.sourceId,
+          category: s.category,
+        })
+      }
+      return items.length
+    },
+    onSuccess: (count) => {
+      success(
+        'Suggestions added',
+        `${count} high-confidence item${count === 1 ? '' : 's'} confirmed.`,
+      )
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to add suggestions',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
   const handleAddFromSuggestion = (s: Suggestion) => {
     setAddSuggestion(s)
     setEditMode('add')
@@ -706,34 +1048,127 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     setEditDialogOpen(true)
   }
 
-  const getSourceBadgeColor = (source: string) =>
-    source === 'offer'
-      ? 'green'
-      : source === 'crew'
-        ? 'red'
-        : source === 'conta'
-          ? 'blue'
-          : 'gray'
-  const getSourceLabel = (source: string) =>
-    source === 'offer'
-      ? 'Offer'
-      : source === 'crew'
-        ? 'Crew'
-        : source === 'conta'
-          ? 'Conta'
-          : 'Manual'
+  const getSourceBadgeColor = (s: Suggestion | JobMoneyItem) => {
+    const source = s.source
+    if ('source_id' in s && s.source_id?.startsWith('quote-')) return 'orange'
+    if ('sourceId' in s && s.sourceId?.startsWith('quote-')) return 'orange'
+    if (s.category === 'transport') return 'amber'
+    if (source === 'offer') return 'green'
+    if (source === 'crew') return 'red'
+    if (source === 'conta') return 'blue'
+    return 'gray'
+  }
+  const getSourceLabel = (s: Suggestion | JobMoneyItem) => {
+    if ('source_id' in s && s.source_id?.startsWith('quote-')) return 'Quote'
+    if ('sourceId' in s && s.sourceId?.startsWith('quote-')) return 'Quote'
+    if (s.category === 'transport') return 'Transport'
+    if (s.source === 'offer') return 'Offer'
+    if (s.source === 'crew') return 'Crew'
+    if (s.source === 'conta') return 'Conta'
+    return 'Manual'
+  }
 
   return (
     <Box style={{ maxWidth: '100%', minWidth: 0 }}>
-      <Flex justify="between" align="center" mb="3">
+      <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
         <Heading size="3">Money</Heading>
-        {chartData.length > 0 && (
-          <ChartTypeSelector
-            chartType={chartType}
-            onChartTypeChange={setChartType}
-          />
-        )}
+        <Flex align="center" gap="2" wrap="wrap">
+          {highConfidenceSuggestions.length > 0 && (
+            <Button
+              size="2"
+              variant="soft"
+              disabled={addAllHighConfidenceMutation.isPending}
+              onClick={() =>
+                addAllHighConfidenceMutation.mutate(highConfidenceSuggestions)
+              }
+            >
+              {addAllHighConfidenceMutation.isPending
+                ? 'Adding…'
+                : `Add all high-confidence (${highConfidenceSuggestions.length})`}
+            </Button>
+          )}
+          {chartData.length > 0 && (
+            <ChartTypeSelector
+              chartType={chartType}
+              onChartTypeChange={setChartType}
+            />
+          )}
+        </Flex>
       </Flex>
+
+      <Card mb="3" style={{ background: 'var(--gray-a2)' }}>
+        <Flex direction="column" gap="1">
+          <Flex align="center" gap="2" wrap="wrap">
+            <Text size="2" weight="bold">
+              Job type
+            </Text>
+            <Badge variant="soft" size="1">
+              {MONEY_ARCHETYPE_LABELS[moneyArchetype]}
+            </Badge>
+          </Flex>
+          <Text size="2" color="gray">
+            {MONEY_ARCHETYPE_BLURBS[moneyArchetype]}
+          </Text>
+        </Flex>
+      </Card>
+
+      {completenessHints.length > 0 && (
+        <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
+          <Flex direction="column" gap="2">
+            <Flex align="center" gap="2">
+              <WarningTriangle width={16} height={16} />
+              <Text size="2" weight="bold">
+                Completeness
+              </Text>
+            </Flex>
+            {completenessHints.map((hint) => (
+              <Text
+                key={hint.id}
+                size="2"
+                color={hint.severity === 'warn' ? 'orange' : 'gray'}
+              >
+                {hint.message}
+              </Text>
+            ))}
+          </Flex>
+        </Card>
+      )}
+
+      <MoneyTransportKmCard
+        jobId={jobId}
+        kmDriven={jobInfo?.transport_km_driven ?? null}
+        costPerKm={transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM}
+        plannedOfferKm={plannedOfferKm ?? null}
+        prominent={moneyArchetype === 'transport_heavy' || hasTransportSignal}
+      />
+
+      <MoneyContaPanel
+        status={contaLinkStatus}
+        datePad={contaDatePad}
+        onDatePadChange={setContaDatePad}
+        onSync={() => {
+          void refetchContaExpenses()
+        }}
+        isSyncing={isContaExpensesLoading || isContaExpensesFetching}
+        projectId={contaProjectId ?? null}
+        expenseCount={
+          contaExpenseSuggestionsRaw.filter(
+            (s) => !confirmedSourceIds.has(s.sourceId),
+          ).length
+        }
+        incomeCount={
+          primaryIncomeSuggestionsRaw.filter(
+            (s) => s.source === 'conta' && !confirmedSourceIds.has(s.sourceId),
+          ).length
+        }
+        lastError={
+          contaExpensesError instanceof Error
+            ? contaExpensesError.message
+            : contaExpensesError
+              ? String(contaExpensesError)
+              : null
+        }
+      />
 
       {/* Financial Summary Cards - from confirmed items only */}
       <Flex
@@ -829,19 +1264,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 </SegmentedControl.Root>
               </Flex>
             )}
-            {accountingConfig?.accounting_organization_id && (
-              <Button
-                size="2"
-                variant="soft"
-                onClick={() => refetchContaExpenses()}
-                disabled={isContaExpensesLoading}
-              >
-                Sync Conta
-              </Button>
-            )}
           </Flex>
           <Text size="2" color="gray" mb="3">
-            Add items from real events. You can edit before adding.
+            Add items from real events. You can edit before adding. Conta lines
+            show match confidence — review amounts (may be inkl. MVA).
           </Text>
           <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
             <Table.Root variant="surface" size="1">
@@ -851,6 +1277,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                   <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                  <Table.ColumnHeaderCell>Confidence</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell align="right">
                     Amount
                   </Table.ColumnHeaderCell>
@@ -869,16 +1296,41 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                         {s.type === 'income' ? 'Income' : 'Expense'}
                       </Badge>
                     </Table.Cell>
-                    <Table.Cell>{s.description}</Table.Cell>
+                    <Table.Cell>
+                      <Flex direction="column" gap="1">
+                        <Text size="2">{s.description}</Text>
+                        {s.confidenceReason && (
+                          <Text size="1" color="gray">
+                            {s.confidenceReason}
+                          </Text>
+                        )}
+                      </Flex>
+                    </Table.Cell>
                     <Table.Cell>{formatDate(s.date)}</Table.Cell>
                     <Table.Cell>
                       <Badge
-                        color={getSourceBadgeColor(s.source)}
+                        color={getSourceBadgeColor(s)}
                         variant="soft"
                         size="1"
                       >
-                        {getSourceLabel(s.source)}
+                        {getSourceLabel(s)}
                       </Badge>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {s.confidence ? (
+                        <Badge
+                          size="1"
+                          variant="soft"
+                          color={CONTA_CONFIDENCE_COLOR[s.confidence]}
+                          title={s.confidenceReason ?? undefined}
+                        >
+                          {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                        </Badge>
+                      ) : (
+                        <Text size="1" color="gray">
+                          —
+                        </Text>
+                      )}
                     </Table.Cell>
                     <Table.Cell align="right">
                       <Text
@@ -924,18 +1376,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           </Flex>
         </Flex>
 
-        {accountingConfig?.accounting_organization_id &&
-          accountingConfig?.accounting_organization_id &&
-          !contaProjectId && (
-            <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
-              <Text size="2" color="gray">
-                {jobNumberTokens.length > 0
-                  ? 'No Conta project linked yet. Suggestions may show expenses that match the job number.'
-                  : 'No Conta project linked yet. Create a Conta invoice to link the job number.'}
-              </Text>
-            </Card>
-          )}
-
         {visibleConfirmedItems.length === 0 ? (
           <Text size="2" color="gray">
             No items yet. Add from suggestions or add item.
@@ -972,11 +1412,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                     <Table.Cell>{formatDate(item.date)}</Table.Cell>
                     <Table.Cell>{item.reference || '—'}</Table.Cell>
                     <Table.Cell>
-                      <Badge
-                        color={getSourceBadgeColor(item.source)}
-                        variant="soft"
-                      >
-                        {getSourceLabel(item.source)}
+                      <Badge color={getSourceBadgeColor(item)} variant="soft">
+                        {getSourceLabel(item)}
                       </Badge>
                     </Table.Cell>
                     <Table.Cell align="right">
@@ -1058,26 +1495,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         </Card>
       )}
 
-      {/* Accounting Software Integration Info */}
-      {!accountingConfig?.accounting_organization_id && (
-        <Card style={{ background: 'var(--blue-a2)' }}>
-          <Flex gap="3" align="start">
-            <Box style={{ paddingTop: '2px' }}>
-              <InfoCircle width={20} height={20} color="var(--blue-9)" />
-            </Box>
-            <Box style={{ flex: 1 }}>
-              <Heading size="3" mb="1">
-                Connect Accounting Software
-              </Heading>
-              <Text size="2" color="gray" mb="2">
-                Connect your accounting software in Company settings to get
-                expense suggestions from Conta.
-              </Text>
-            </Box>
-          </Flex>
-        </Card>
-      )}
-
       <MoneyItemEditDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
@@ -1094,6 +1511,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 reference: addSuggestion.reference,
                 source: addSuggestion.source,
                 sourceId: addSuggestion.sourceId,
+                category: addSuggestion.category,
               }
             : undefined
         }
