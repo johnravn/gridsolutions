@@ -9,6 +9,8 @@ This repo ships on `main`. Do not use pull requests or feature branches.
 
 **Do not commit or push unless the user explicitly asks in this conversation.** See `.cursor/rules/no-unsolicited-ship.mdc`. The rest of this file is how to commit when they do ask.
 
+**Before any commit/push to `main`:** run `npm run check`, `npm run test`, and `npm run build:check`. Only ship when all three pass — do not push hoping CI will catch failures.
+
 ## Cloud agents vs shipping on main
 
 Grid’s **ship path** is `main` only (issues → commit on main → push main → Vercel Production).
@@ -63,6 +65,6 @@ Subject line: what changed and why. Not a file list.
 
 When the user explicitly asks to push: `git push origin main`. That deploys production (Vercel → gridsolutions.app).
 
-Before asking John to push (and before you push when asked), run quality gates: `npm run check`, `npm run test`, `npm run build:check`.
+Before asking John to push (and before you push when asked), run and pass quality gates: `npm run check`, `npm run test`, `npm run build:check`. This is mandatory for every `main` ship, not optional.
 
 Never force-push `main` unless the user explicitly asks.

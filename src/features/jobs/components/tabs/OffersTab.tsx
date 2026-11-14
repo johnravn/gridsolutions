@@ -1918,11 +1918,11 @@ export default function OffersTab({
         )}
         {isLockedSent && (
           <>
-            <Tooltip content="Copy basis link">
+            <Tooltip content="Copy offer link">
               <IconButton
                 size="1"
                 variant="soft"
-                aria-label="Copy basis offer link"
+                aria-label="Copy offer link"
                 data-offer-url={getOfferShareLink(offer)}
                 onClick={() => handleCopyLink(getOfferShareLink(offer))}
               >
@@ -2246,7 +2246,7 @@ export default function OffersTab({
                           <IconButton
                             size="2"
                             variant="soft"
-                            aria-label="Copy basis offer link"
+                            aria-label="Copy offer link"
                             data-offer-url={
                               getBasisShareLink(basis) ?? undefined
                             }

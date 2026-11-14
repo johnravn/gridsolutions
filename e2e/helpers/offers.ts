@@ -20,9 +20,14 @@ const OFFER_URL_RE = /https?:\/\/\S+\/offer\/[A-Za-z0-9._-]+/
 /**
  * Mobile Chromium often times out on clipboard write, then readText() returns
  * another worker's URL. Prefer the offers-tab copy button, then toast text.
+ *
+ * Accessible name is "Copy offer link" (aria-label); older builds used
+ * "Copy basis offer link". Prefer data-offer-url when present.
  */
 export async function readLockedOfferUrl(page: Page): Promise<string> {
-  const copyLink = page.getByRole('button', { name: 'Copy offer link' })
+  const copyLink = page
+    .getByRole('button', { name: /Copy (?:basis )?offer link/i })
+    .or(page.locator('button[data-offer-url]'))
   await expect(copyLink.first()).toBeAttached({ timeout: 15_000 })
   const fromButton = await copyLink.first().getAttribute('data-offer-url')
   if (fromButton && OFFER_URL_RE.test(fromButton)) return fromButton

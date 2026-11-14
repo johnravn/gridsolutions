@@ -38,11 +38,18 @@ test.describe('Role-based access', () => {
     await openInventoryPage(page)
   })
 
-  test('employee is redirected from company settings', async ({
+  test('employee can open Company Logs but not manage settings', async ({
     employeePage: page,
   }) => {
+    // visit:latest lets employees into /company for Logs only (not Overview/Users/…).
     await page.goto('/company')
-    await expect(page).toHaveURL(/\/dashboard/, { timeout: 15_000 })
+    await expect(page).toHaveURL(/\/company/, { timeout: 15_000 })
+    await expect(page.getByRole('tab', { name: 'Logs' })).toBeVisible({
+      timeout: 15_000,
+    })
+    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveCount(0)
+    await expect(page.getByRole('tab', { name: 'Users' })).toHaveCount(0)
+    await expect(page.getByRole('tab', { name: 'Rates' })).toHaveCount(0)
   })
 
   test('owner can access company settings', async ({ authedPage: page }) => {

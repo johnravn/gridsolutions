@@ -5,6 +5,7 @@ This project is primarily developed using AI agents. Follow these rules strictly
 ## Hard gates
 
 - **Never** `git commit` or `git push` unless John explicitly asks in this conversation. Finishing a task is not permission. See `.cursor/rules/no-unsolicited-ship.mdc`.
+- **Before any `git commit` / `git push` to `main`**: run `npm run check`, `npm run test`, and `npm run build:check`; only ship when all three pass. Do not push hoping CI will catch failures.
 - **Never** Prod schema push (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`, or bare `npm run db:push` while linked to Prod) unless John explicitly asks.
 - **Never** use bare `npm run db:push` in instructions or as the default push — always `db:push:dev` or `db:push:prod`.
 - Agents **may** run `npm run db:push:dev` (and Dev link/types) when the change is clearly what John wants and quality looks good enough. Prefer asking if ambiguous.
@@ -129,7 +130,7 @@ When adding a new feature, mirror an existing one (e.g. `src/features/matters/`)
 
 ## Quality Gates
 
-Run quality gates before asking John to commit or push `main` (and always before you push `main` when asked):
+**Required before any commit/push to `main`** (hard gate above). Also run before asking John to commit or push:
 
 ```bash
 npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
@@ -137,6 +138,7 @@ npm run test         # vitest unit tests
 npm run build:check  # vite build + tsc (catches type errors CI will reject)
 ```
 
+- All three must pass before shipping to `main`. Do not skip or “push and hope.”
 - `npm run build:check` is the single most important gate — Vercel runs the equivalent and will fail the production build if `tsc` errors exist. Run it whenever you've touched non-trivial TypeScript.
 - `npm run check` is safe to run on every change; it auto-fixes formatting and lint.
 - If `npm run check` reports lint errors it couldn't auto-fix, **fix them before committing** — don't silence them.

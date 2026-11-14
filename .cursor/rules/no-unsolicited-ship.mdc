@@ -40,4 +40,4 @@ These are **not** permission for commit / GitHub / Prod:
 
 If they ask to commit but not push, commit only. If they ask to push Dev but not GitHub, push Dev only. If they ask to push Prod, use `CONFIRM_PROD_PUSH=1 npm run db:push:prod` — never bare `db:push`.
 
-When they do ask to commit/push GitHub: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates).
+When they do ask to commit/push GitHub: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates). **Before any commit/push to `main`**, run `npm run check`, `npm run test`, and `npm run build:check`; only ship when they pass.
