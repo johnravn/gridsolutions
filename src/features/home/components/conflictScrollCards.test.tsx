@@ -102,7 +102,7 @@ describe('ConflictScrollCard', () => {
     ).toBeInTheDocument()
   })
 
-  it('labels group conflicts as equipment', () => {
+  it('labels group conflicts as equipment group', () => {
     const group: GroupConflictRow = {
       group_id_1: 'g1',
       group_id_2: 'g2',
@@ -125,8 +125,9 @@ describe('ConflictScrollCard', () => {
     if (!item) throw new Error('expected conflict card')
     renderWithProviders(<ConflictScrollCard item={item} />)
 
-    expect(screen.getByText('Unresolved · Equipment')).toBeInTheDocument()
-    expect(screen.queryByText(/Group/)).not.toBeInTheDocument()
+    expect(
+      screen.getByText('Unresolved · Equipment group'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Vocal package')).toBeInTheDocument()
   })
 })

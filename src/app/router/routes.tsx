@@ -239,7 +239,9 @@ const mattersRoute = createRoute({
 const companyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'company',
-  validateSearch: (search: Record<string, unknown>): {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): {
     tab?: string
     activityId?: string
   } => ({

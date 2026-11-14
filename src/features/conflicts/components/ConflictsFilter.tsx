@@ -20,7 +20,10 @@ export default function ConflictsFilter({
           })
         }
       >
-        <Select.Trigger style={{ minWidth: 140 }} />
+        <Select.Trigger
+          aria-label="Conflict status"
+          style={{ minWidth: 140 }}
+        />
         <Select.Content>
           <Select.Item value="all">All statuses</Select.Item>
           <Select.Item value="unresolved">Unresolved</Select.Item>
@@ -36,7 +39,7 @@ export default function ConflictsFilter({
           })
         }
       >
-        <Select.Trigger style={{ minWidth: 140 }} />
+        <Select.Trigger aria-label="Conflict type" style={{ minWidth: 140 }} />
         <Select.Content>
           <Select.Item value="all">All types</Select.Item>
           {(
@@ -48,6 +51,21 @@ export default function ConflictsFilter({
               {CONFLICT_KIND_LABEL[kind]}
             </Select.Item>
           ))}
+        </Select.Content>
+      </Select.Root>
+      <Select.Root
+        value={filters.scope}
+        onValueChange={(value) =>
+          onChange({
+            ...filters,
+            scope: value as ConflictListFilters['scope'],
+          })
+        }
+      >
+        <Select.Trigger aria-label="Conflict scope" style={{ minWidth: 160 }} />
+        <Select.Content>
+          <Select.Item value="company">Company</Select.Item>
+          <Select.Item value="my_leads">My lead jobs</Select.Item>
         </Select.Content>
       </Select.Root>
     </Flex>

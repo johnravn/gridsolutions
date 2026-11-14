@@ -26,6 +26,7 @@ vi.mock('@tanstack/react-router', () => ({
       {children}
     </a>
   ),
+  useNavigate: () => vi.fn(),
 }))
 
 const crew: CrewConflictRow = {
@@ -65,15 +66,24 @@ const group: GroupConflictRow = {
 }
 
 describe('ConflictInspector', () => {
-  it('shows both jobs, overlap hours, and clickable booking links', () => {
+  it('shows both jobs, why copy, fix CTAs, and clickable booking links', () => {
     const item = buildConflictCards([crew], [], [], [])[0]
     renderWithProviders(<ConflictInspector item={item ?? null} />)
 
     expect(screen.getByText('Unresolved · Crew')).toBeInTheDocument()
     expect(screen.getByText('Anna')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Anna is double-booked for 8 hours/),
+    ).toBeInTheDocument()
     expect(screen.getByText('Job A')).toBeInTheDocument()
     expect(screen.getByText('Job B')).toBeInTheDocument()
     expect(screen.getByText('8 hours')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Fix: open Job A' }),
+    ).toHaveAttribute('href', '/jobs?jobId=j1&tab=bookings')
+    expect(
+      screen.getByRole('link', { name: 'Fix: open Job B' }),
+    ).toHaveAttribute('href', '/jobs?jobId=j2&tab=bookings')
     expect(screen.getByRole('link', { name: 'Open Job A' })).toHaveAttribute(
       'href',
       '/jobs?jobId=j1&tab=bookings',
@@ -83,9 +93,8 @@ describe('ConflictInspector', () => {
       '/jobs?jobId=j2&tab=bookings',
     )
     expect(
-      screen.queryByRole('link', { name: 'Open job Job A' }),
-    ).not.toBeInTheDocument()
-    expect(screen.queryByText(/^Open Job A$/)).not.toBeInTheDocument()
+      screen.getByRole('button', { name: 'Open both' }),
+    ).toBeInTheDocument()
   })
 
   it('names a personal booking and only links jobs that exist', () => {
@@ -98,6 +107,9 @@ describe('ConflictInspector', () => {
     renderWithProviders(<ConflictInspector item={item ?? null} />)
 
     expect(screen.getByText('a personal booking')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Fix: open Job A' }),
+    ).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Open Job A' })).toBeInTheDocument()
     expect(
       screen.queryByRole('link', { name: 'Open a personal booking' }),
@@ -119,23 +131,32 @@ describe('ConflictInspector', () => {
     const item = buildConflictCards([], [], [equipment], [])[0]
     renderWithProviders(<ConflictInspector item={item ?? null} />)
 
-    expect(screen.getByText('12 reserved / 8 available')).toBeInTheDocument()
+    expect(
+      screen.getByText('12 reserved / 8 available (short by 4)'),
+    ).toBeInTheDocument()
     expect(screen.getByText('Job A')).toBeInTheDocument()
     expect(screen.getByText('Job B')).toBeInTheDocument()
     expect(screen.getByText('Job C')).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Fix: open Job C' }),
+    ).toHaveAttribute('href', '/jobs?jobId=j3&tab=bookings')
     expect(screen.getByRole('link', { name: 'Open Job C' })).toHaveAttribute(
       'href',
       '/jobs?jobId=j3&tab=bookings',
     )
-    expect(screen.queryByText(/^Open Job C$/)).not.toBeInTheDocument()
   })
 
-  it('labels group conflicts as equipment and links their jobs', () => {
+  it('labels group conflicts as equipment group and links their jobs', () => {
     const item = buildConflictCards([], [], [], [group])[0]
     renderWithProviders(<ConflictInspector item={item ?? null} />)
 
-    expect(screen.getByText('Unresolved · Equipment')).toBeInTheDocument()
-    expect(screen.queryByText(/Group/)).not.toBeInTheDocument()
+    expect(screen.getByText('Unresolved · Equipment group')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Unique equipment group Vocal package is double-booked/),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: 'Fix: open Job A' }),
+    ).toHaveAttribute('href', '/jobs?jobId=j1&tab=bookings')
     expect(screen.getByRole('link', { name: 'Open Job A' })).toHaveAttribute(
       'href',
       '/jobs?jobId=j1&tab=bookings',

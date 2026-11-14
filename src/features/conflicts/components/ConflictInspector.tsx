@@ -1,14 +1,16 @@
-import { Badge, Box, Flex, Separator, Text } from '@radix-ui/themes'
-import { Link as RouterLink } from '@tanstack/react-router'
+import { Badge, Box, Button, Flex, Separator, Text } from '@radix-ui/themes'
+import { Link as RouterLink, useNavigate } from '@tanstack/react-router'
 import {
   formatConflictPeriod,
   overlapSidesFromPair,
 } from '../utils/conflictCopy'
 import {
   conflictKindLabel,
+  conflictOpenJobs,
   conflictOverlap,
   conflictResourceName,
   conflictStatusLabel,
+  conflictWhyCopy,
 } from '../utils/conflictItems'
 import { formatOverlapDuration } from '../utils/overlapWindow'
 import type { CSSProperties } from 'react'
@@ -77,6 +79,74 @@ function BookingSide({
   return <Box style={style}>{content}</Box>
 }
 
+function FixActions({ item }: { item: ConflictCardItem }) {
+  const navigate = useNavigate()
+  const jobs = conflictOpenJobs(item)
+  if (jobs.length === 0) {
+    return (
+      <Text size="2" color="gray">
+        This conflict only involves personal bookings — edit them on Calendar or
+        the related job Bookings tab.
+      </Text>
+    )
+  }
+
+  return (
+    <Flex direction="column" gap="2">
+      <Text size="1" color="gray" as="div">
+        Fix
+      </Text>
+      <Flex gap="2" wrap="wrap">
+        {jobs.map((job) => (
+          <Button key={job.jobId} asChild size="2" variant="solid">
+            <RouterLink
+              to="/jobs"
+              search={{
+                jobId: job.jobId,
+                recurringJobId: undefined,
+                tab: 'bookings',
+              }}
+              aria-label={`Fix: open ${job.title}`}
+            >
+              Open {job.title}
+            </RouterLink>
+          </Button>
+        ))}
+        {jobs.length >= 2 ? (
+          <Button
+            size="2"
+            variant="soft"
+            onClick={() => {
+              const [first, ...rest] = jobs
+              if (!first) return
+              for (const job of rest) {
+                window.open(
+                  `/jobs?jobId=${encodeURIComponent(job.jobId)}&tab=bookings`,
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
+              void navigate({
+                to: '/jobs',
+                search: {
+                  jobId: first.jobId,
+                  recurringJobId: undefined,
+                  tab: 'bookings',
+                },
+              })
+            }}
+          >
+            Open both
+          </Button>
+        ) : null}
+      </Flex>
+      <Text size="1" color="gray">
+        Resolve by changing assignments on the job Bookings tab.
+      </Text>
+    </Flex>
+  )
+}
+
 export default function ConflictInspector({
   item,
   missing = false,
@@ -106,7 +176,12 @@ export default function ConflictInspector({
         <Text size="5" weight="bold" as="div" mt="1">
           {conflictResourceName(item)}
         </Text>
+        <Text size="2" color="gray" as="div" mt="2">
+          {conflictWhyCopy(item)}
+        </Text>
       </Box>
+
+      <FixActions item={item} />
 
       {item.kind === 'equipment' ? (
         <Box>
@@ -115,6 +190,9 @@ export default function ConflictInspector({
           </Text>
           <Text size="2" as="div">
             {item.row.total_reserved} reserved / {item.row.capacity} available
+            {item.row.total_reserved > item.row.capacity
+              ? ` (short by ${item.row.total_reserved - item.row.capacity})`
+              : ''}
           </Text>
         </Box>
       ) : null}

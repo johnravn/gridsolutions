@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   CONFLICT_KIND_LABEL,
+  DEFAULT_CONFLICT_LIST_FILTERS,
   buildConflictCards,
   conflictInvolvesProjectLead,
   conflictItemId,
@@ -11,8 +12,10 @@ import {
   conflictOverlap,
   conflictOpenJobs,
   conflictResourceName,
+  conflictWhyCopy,
   countProjectLeadConflicts,
   filterConflictItems,
+  sortConflictItems,
 } from './conflictItems'
 import type {
   CrewConflictRow,
@@ -112,34 +115,109 @@ describe('filterConflictItems', () => {
     const forcedCrew = { ...crew, forced_1: true }
     const items = buildConflictCards([crew, forcedCrew], [], [equipment], [])
     expect(
-      filterConflictItems(items, { status: 'unresolved', kind: 'all' }).map(
-        (item) => item.kind,
-      ),
+      filterConflictItems(items, {
+        ...DEFAULT_CONFLICT_LIST_FILTERS,
+        status: 'unresolved',
+        kind: 'all',
+      }).map((item) => item.kind),
     ).toEqual(['crew', 'equipment'])
     expect(
-      filterConflictItems(items, { status: 'all', kind: 'crew' }),
+      filterConflictItems(items, {
+        ...DEFAULT_CONFLICT_LIST_FILTERS,
+        status: 'all',
+        kind: 'crew',
+      }),
     ).toHaveLength(2)
     expect(
-      filterConflictItems(items, { status: 'forced', kind: 'crew' }),
+      filterConflictItems(items, {
+        ...DEFAULT_CONFLICT_LIST_FILTERS,
+        status: 'forced',
+        kind: 'crew',
+      }),
     ).toHaveLength(1)
   })
 
-  it('treats group conflicts as equipment for display and filtering', () => {
+  it('keeps group conflicts as a separate type and filter', () => {
     const items = buildConflictCards([crew], [], [equipment], [group])
     const groupItem = items.find((item) => item.kind === 'group')
     expect(groupItem).toBeDefined()
     if (!groupItem) return
-    expect(conflictKindLabel(groupItem.kind)).toBe('Equipment')
+    expect(conflictKindLabel(groupItem.kind)).toBe('Equipment group')
     expect(Object.keys(CONFLICT_KIND_LABEL)).toEqual([
       'crew',
       'vehicle',
       'equipment',
+      'group',
     ])
     expect(
-      filterConflictItems(items, { status: 'all', kind: 'equipment' }).map(
-        (item) => item.kind,
-      ),
-    ).toEqual(['equipment', 'group'])
+      filterConflictItems(items, {
+        ...DEFAULT_CONFLICT_LIST_FILTERS,
+        status: 'all',
+        kind: 'equipment',
+      }).map((item) => item.kind),
+    ).toEqual(['equipment'])
+    expect(
+      filterConflictItems(items, {
+        ...DEFAULT_CONFLICT_LIST_FILTERS,
+        status: 'all',
+        kind: 'group',
+      }).map((item) => item.kind),
+    ).toEqual(['group'])
+  })
+
+  it('scopes to my lead jobs when requested', () => {
+    const items = buildConflictCards([crew], [], [equipment], [group])
+    expect(
+      filterConflictItems(
+        items,
+        { ...DEFAULT_CONFLICT_LIST_FILTERS, status: 'all', scope: 'my_leads' },
+        ['j3'],
+      ).map((item) => item.kind),
+    ).toEqual(['equipment'])
+  })
+})
+
+describe('sortConflictItems', () => {
+  it('orders by soonest unresolved, then severity', () => {
+    const laterEquipment = {
+      ...equipment,
+      start_at: '2026-01-02T08:00:00.000Z',
+      end_at: '2026-01-02T12:00:00.000Z',
+      total_reserved: 20,
+      capacity: 1,
+    }
+    const soonerEquipment = {
+      ...equipment,
+      item_id: 'item-2',
+      start_at: '2026-01-01T07:00:00.000Z',
+      end_at: '2026-01-01T09:00:00.000Z',
+      total_reserved: 9,
+      capacity: 8,
+    }
+    const items = buildConflictCards(
+      [],
+      [],
+      [laterEquipment, soonerEquipment],
+      [],
+    )
+    expect(sortConflictItems(items).map((item) => item.row)).toMatchObject([
+      { item_id: 'item-2' },
+      { item_id: 'item-1' },
+    ])
+  })
+})
+
+describe('conflictWhyCopy', () => {
+  it('explains crew and equipment conflicts', () => {
+    const crewItem = buildConflictCards([crew], [], [], [])[0]
+    const equipmentItem = buildConflictCards([], [], [equipment], [])[0]
+    expect(crewItem).toBeDefined()
+    expect(equipmentItem).toBeDefined()
+    if (!crewItem || !equipmentItem) return
+    expect(conflictWhyCopy(crewItem)).toMatch(
+      /Anna is double-booked for 8 hours/,
+    )
+    expect(conflictWhyCopy(equipmentItem)).toMatch(/short by 4/)
   })
 })
 

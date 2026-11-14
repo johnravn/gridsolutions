@@ -48,6 +48,16 @@ const forcedItem = {
 }
 
 describe('JobBookingConflictsBanner', () => {
+  it('shows a loading placeholder while conflicts load', async () => {
+    rpcMock.mockReturnValue(new Promise(() => undefined))
+
+    renderWithProviders(<JobBookingConflictsBanner jobId="job-1" />)
+
+    expect(
+      screen.getByText('Checking open booking conflicts…'),
+    ).toBeInTheDocument()
+  })
+
   it('lists forced group overlaps under Equipment, not a Groups heading', async () => {
     rpcMock.mockResolvedValue({
       data: {

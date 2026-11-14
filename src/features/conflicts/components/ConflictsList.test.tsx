@@ -67,16 +67,20 @@ const vehicle: VehicleConflictRow = {
 }
 
 describe('ConflictsList', () => {
-  it('shows an empty state', () => {
+  it('shows an honest empty state with attention horizon', () => {
     renderWithProviders(
       <ConflictsList
         items={[]}
         selectedId={null}
         onSelect={() => undefined}
         loading={false}
+        attentionFrom={new Date('2026-11-14T10:00:00.000Z')}
       />,
     )
-    expect(screen.getByText('No booking conflicts.')).toBeInTheDocument()
+    expect(screen.getByText('No open booking conflicts.')).toBeInTheDocument()
+    expect(
+      screen.getByText(/Checked crew, vehicles, equipment/),
+    ).toBeInTheDocument()
     expect(screen.queryByText('1 conflict')).not.toBeInTheDocument()
   })
 

@@ -89,7 +89,25 @@ export function JobBookingConflictsBanner({
     forced.equipment.length +
     forced.groups.length
 
-  if (isLoading || (unresolvedCount === 0 && forcedCount === 0)) {
+  if (isLoading) {
+    return (
+      <Box
+        p="3"
+        mb="3"
+        style={{
+          borderRadius: 8,
+          backgroundColor: 'var(--gray-a2)',
+          border: '1px solid var(--gray-a5)',
+        }}
+      >
+        <Text size="2" color="gray">
+          Checking open booking conflicts…
+        </Text>
+      </Box>
+    )
+  }
+
+  if (unresolvedCount === 0 && forcedCount === 0) {
     return null
   }
 

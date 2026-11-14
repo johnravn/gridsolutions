@@ -3,16 +3,16 @@ name: pragmatic-programmer
 description: 'Apply meta-principles of software craftsmanship: DRY, orthogonality, tracer bullets, and design by contract. Use when the user mentions "best practices", "pragmatic approach", "broken windows", "tracer bullet", or "software craftsmanship". Covers estimation, domain languages, and reversibility. For code-level quality, see clean-code. For refactoring techniques, see refactoring-patterns.'
 license: MIT
 metadata:
-  category: "general"
-  invocation: "model"
-  origin: "external"
-  source: "https://github.com/wondelai/skills/tree/main/pragmatic-programmer"
-  source_repo: "wondelai/skills"
-  source_path: "pragmatic-programmer"
-  source_sha: "d8d5d75f83da9f16d8aad5bab5f5b341a4770a30"
-  license: "MIT"
+  category: 'general'
+  invocation: 'model'
+  origin: 'external'
+  source: 'https://github.com/wondelai/skills/tree/main/pragmatic-programmer'
+  source_repo: 'wondelai/skills'
+  source_path: 'pragmatic-programmer'
+  source_sha: 'd8d5d75f83da9f16d8aad5bab5f5b341a4770a30'
+  license: 'MIT'
   author: wondelai
-  version: "1.0.0"
+  version: '1.0.0'
 ---
 
 # The Pragmatic Programmer Framework
@@ -40,21 +40,22 @@ Seven meta-principles for building software that lasts:
 **Why it works:** When knowledge is duplicated, changes must be made in multiple places. Eventually one gets missed, introducing inconsistency. DRY reduces the surface area for bugs and makes systems easier to change.
 
 **Key insights:**
+
 - DRY applies to knowledge and intent, not textual similarity -- two identical code blocks serving different business rules are NOT duplication
 - Four types of duplication: imposed (environment forces it), inadvertent (developers don't realize), impatient (too lazy to abstract), inter-developer (multiple people duplicate)
-- Code comments that restate the code violate DRY -- comments should explain *why*, not *what*
+- Code comments that restate the code violate DRY -- comments should explain _why_, not _what_
 - Database schemas, API specs, and documentation are all sources of duplication if not generated from a single source
 - The opposite of DRY is WET: "Write Everything Twice" or "We Enjoy Typing"
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Config values** | Single source of truth | Define DB connection in one env file, reference everywhere |
-| **Validation rules** | Shared schema | Use JSON Schema or Zod schema for both client and server validation |
-| **API contracts** | Generate from spec | OpenAPI spec generates types, docs, and client code |
-| **Business logic** | Domain module | Tax calculation in one module, not scattered across controllers |
-| **Database schema** | Migration-driven | Schema defined in migrations, ORM models generated from DB |
+| Context              | Pattern                | Example                                                             |
+| -------------------- | ---------------------- | ------------------------------------------------------------------- |
+| **Config values**    | Single source of truth | Define DB connection in one env file, reference everywhere          |
+| **Validation rules** | Shared schema          | Use JSON Schema or Zod schema for both client and server validation |
+| **API contracts**    | Generate from spec     | OpenAPI spec generates types, docs, and client code                 |
+| **Business logic**   | Domain module          | Tax calculation in one module, not scattered across controllers     |
+| **Database schema**  | Migration-driven       | Schema defined in migrations, ORM models generated from DB          |
 
 See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 
@@ -65,6 +66,7 @@ See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 **Why it works:** Orthogonal systems are easier to test, easier to change, and produce fewer side effects. When you change the database layer, the UI should not break. When you change the auth provider, the business logic should not care.
 
 **Key insights:**
+
 - Ask: "If I dramatically change the requirements behind a particular function, how many modules are affected?" The answer should be one
 - Eliminate effects between unrelated things -- a logging change should never break billing
 - Layered architectures promote orthogonality: presentation, domain logic, data access
@@ -73,13 +75,13 @@ See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Architecture** | Layered separation | Controller -> Service -> Repository, each replaceable |
-| **Dependencies** | Dependency injection | Pass a `Notifier` interface, not a `SlackClient` concrete class |
-| **Testing** | Isolated unit tests | Test business logic without database, network, or filesystem |
-| **Configuration** | Environment-driven | Feature flags in config, not `if` branches in business logic |
-| **Deployment** | Independent services | Deploy auth service without redeploying payment service |
+| Context           | Pattern              | Example                                                         |
+| ----------------- | -------------------- | --------------------------------------------------------------- |
+| **Architecture**  | Layered separation   | Controller -> Service -> Repository, each replaceable           |
+| **Dependencies**  | Dependency injection | Pass a `Notifier` interface, not a `SlackClient` concrete class |
+| **Testing**       | Isolated unit tests  | Test business logic without database, network, or filesystem    |
+| **Configuration** | Environment-driven   | Feature flags in config, not `if` branches in business logic    |
+| **Deployment**    | Independent services | Deploy auth service without redeploying payment service         |
 
 See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 
@@ -90,6 +92,7 @@ See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 **Why it works:** Tracer bullets give immediate feedback. You see what the system looks like end-to-end before investing in filling out every feature. Users can see something real, developers have a framework to build on, and integration issues surface early.
 
 **Key insights:**
+
 - Tracer bullet: thin but complete path through the system (UI -> API -> DB) -- you keep it
 - Prototype: focused exploration of a single risky aspect -- you throw it away
 - Tracer bullets work when you're "shooting in the dark" -- requirements are vague, architecture is unproven
@@ -98,13 +101,13 @@ See: [references/dry-orthogonality.md](references/dry-orthogonality.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **New project** | Vertical slice | Build one feature end-to-end: button -> API -> DB -> response |
-| **Uncertain tech** | Spike prototype | Test if WebSocket performance is sufficient before committing |
+| Context            | Pattern              | Example                                                        |
+| ------------------ | -------------------- | -------------------------------------------------------------- |
+| **New project**    | Vertical slice       | Build one feature end-to-end: button -> API -> DB -> response  |
+| **Uncertain tech** | Spike prototype      | Test if WebSocket performance is sufficient before committing  |
 | **Framework eval** | Tracer through stack | Build login flow through the full framework before choosing it |
-| **Microservice** | Walking skeleton | Deploy a hello-world service through the full CI/CD pipeline |
-| **Data pipeline** | End-to-end flow | One record from ingestion through transformation to output |
+| **Microservice**   | Walking skeleton     | Deploy a hello-world service through the full CI/CD pipeline   |
+| **Data pipeline**  | End-to-end flow      | One record from ingestion through transformation to output     |
 
 See: [references/tracer-bullets.md](references/tracer-bullets.md)
 
@@ -115,6 +118,7 @@ See: [references/tracer-bullets.md](references/tracer-bullets.md)
 **Why it works:** Contracts make assumptions explicit. Instead of silently corrupting data or limping along in an invalid state, the system crashes at the point of the problem -- making bugs visible and traceable. Dead programs tell no lies.
 
 **Key insights:**
+
 - Preconditions: caller's responsibility -- "I accept only positive integers"
 - Postconditions: routine's guarantee -- "I will return a sorted list"
 - Invariants: always true -- "Account balance never goes negative"
@@ -124,13 +128,13 @@ See: [references/tracer-bullets.md](references/tracer-bullets.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Function entry** | Precondition guard | `assert age >= 0, "Age cannot be negative"` at function start |
-| **Function exit** | Postcondition check | Verify returned list is sorted before returning |
-| **Class state** | Invariant validation | `validate!` method called after every state mutation |
-| **API boundary** | Schema validation | Validate request body against schema before processing |
-| **Data pipeline** | Stage assertions | Assert row count after ETL transform matches expectation |
+| Context            | Pattern              | Example                                                       |
+| ------------------ | -------------------- | ------------------------------------------------------------- |
+| **Function entry** | Precondition guard   | `assert age >= 0, "Age cannot be negative"` at function start |
+| **Function exit**  | Postcondition check  | Verify returned list is sorted before returning               |
+| **Class state**    | Invariant validation | `validate!` method called after every state mutation          |
+| **API boundary**   | Schema validation    | Validate request body against schema before processing        |
+| **Data pipeline**  | Stage assertions     | Assert row count after ETL transform matches expectation      |
 
 See: [references/contracts-assertions.md](references/contracts-assertions.md)
 
@@ -141,6 +145,7 @@ See: [references/contracts-assertions.md](references/contracts-assertions.md)
 **Why it works:** Psychology. When code is clean and well-maintained, developers feel social pressure to keep it that way. When code is already messy, the threshold for adding more mess drops to zero. Quality is a team habit, not an individual heroic effort.
 
 **Key insights:**
+
 - Don't leave broken windows (bad designs, wrong decisions, poor code) unrepaired
 - If you can't fix it now, board it up: add a TODO with a ticket, disable the feature, replace with a stub
 - Be a catalyst for change: show people a working glimpse of the future (stone soup)
@@ -149,13 +154,13 @@ See: [references/contracts-assertions.md](references/contracts-assertions.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Legacy code** | Board up windows | Wrap bad code in a clean interface before adding features |
-| **Code review** | Zero-tolerance for new debt | Reject PRs that add `// TODO: fix later` without a ticket |
-| **Tech debt** | Debt budget | Allocate 20% of each sprint to fixing broken windows |
-| **New team member** | Clean onboarding path | First task: fix a broken window to learn the codebase |
-| **Monitoring** | Entropy metrics | Track linting violations, test coverage trends over time |
+| Context             | Pattern                     | Example                                                   |
+| ------------------- | --------------------------- | --------------------------------------------------------- |
+| **Legacy code**     | Board up windows            | Wrap bad code in a clean interface before adding features |
+| **Code review**     | Zero-tolerance for new debt | Reject PRs that add `// TODO: fix later` without a ticket |
+| **Tech debt**       | Debt budget                 | Allocate 20% of each sprint to fixing broken windows      |
+| **New team member** | Clean onboarding path       | First task: fix a broken window to learn the codebase     |
+| **Monitoring**      | Entropy metrics             | Track linting violations, test coverage trends over time  |
 
 See: [references/broken-windows.md](references/broken-windows.md)
 
@@ -166,6 +171,7 @@ See: [references/broken-windows.md](references/broken-windows.md)
 **Why it works:** Requirements change. Vendors get acquired. Technologies fall out of favor. If your architecture has hard-coded assumptions about any of these, every change becomes a rewrite. Flexible architecture treats decisions as configuration, not structure.
 
 **Key insights:**
+
 - Abstract third-party dependencies behind your own interfaces -- never let vendor APIs leak into business logic
 - Use the "forking road" test: could you switch from Postgres to DynamoDB in a week? If not, you're coupled
 - Metadata-driven systems (config files, feature flags) are more flexible than hard-coded logic
@@ -174,13 +180,13 @@ See: [references/broken-windows.md](references/broken-windows.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Database** | Repository pattern | Business logic calls `repo.save(user)`, not `pg.query(...)` |
-| **External API** | Adapter/wrapper | `PaymentGateway` interface wraps Stripe; swap to Braintree later |
-| **Feature flags** | Runtime toggles | New checkout flow behind a flag, rollback in seconds |
-| **Architecture** | Event-driven decoupling | Services communicate via events, not direct HTTP calls |
-| **Deployment** | Container abstraction | Dockerized app runs on AWS, GCP, or bare metal unchanged |
+| Context           | Pattern                 | Example                                                          |
+| ----------------- | ----------------------- | ---------------------------------------------------------------- |
+| **Database**      | Repository pattern      | Business logic calls `repo.save(user)`, not `pg.query(...)`      |
+| **External API**  | Adapter/wrapper         | `PaymentGateway` interface wraps Stripe; swap to Braintree later |
+| **Feature flags** | Runtime toggles         | New checkout flow behind a flag, rollback in seconds             |
+| **Architecture**  | Event-driven decoupling | Services communicate via events, not direct HTTP calls           |
+| **Deployment**    | Container abstraction   | Dockerized app runs on AWS, GCP, or bare metal unchanged         |
 
 See: [references/reversibility.md](references/reversibility.md)
 
@@ -191,6 +197,7 @@ See: [references/reversibility.md](references/reversibility.md)
 **Why it works:** Estimation builds trust with stakeholders when done honestly ("1-3 weeks" is better than "2 weeks exactly"). A knowledge portfolio ensures you stay relevant as technologies shift -- the programmer who stops learning stops being effective.
 
 **Key insights:**
+
 - Ask "what is this estimate for?" -- context determines precision (budget planning vs. sprint planning)
 - Use PERT: Optimistic + 4x Most Likely + Pessimistic, divided by 6
 - Break estimates into components and estimate each; the total is more accurate than a single guess
@@ -199,39 +206,39 @@ See: [references/reversibility.md](references/reversibility.md)
 
 **Code applications:**
 
-| Context | Pattern | Example |
-|---------|---------|---------|
-| **Sprint planning** | Range estimates | "3-5 days" with confidence level, not a single number |
-| **New technology** | Time-boxed spike | "I'll spend 2 days evaluating; then I can estimate properly" |
-| **Large project** | Bottom-up decomposition | Break into tasks < 1 day, sum with buffer for integration |
-| **Learning** | Weekly investment | 1 hour/week on a new language, tool, or domain |
-| **Career growth** | Portfolio diversification | Mix of depth (expertise) and breadth (adjacent skills) |
+| Context             | Pattern                   | Example                                                      |
+| ------------------- | ------------------------- | ------------------------------------------------------------ |
+| **Sprint planning** | Range estimates           | "3-5 days" with confidence level, not a single number        |
+| **New technology**  | Time-boxed spike          | "I'll spend 2 days evaluating; then I can estimate properly" |
+| **Large project**   | Bottom-up decomposition   | Break into tasks < 1 day, sum with buffer for integration    |
+| **Learning**        | Weekly investment         | 1 hour/week on a new language, tool, or domain               |
+| **Career growth**   | Portfolio diversification | Mix of depth (expertise) and breadth (adjacent skills)       |
 
 See: [references/estimation-portfolio.md](references/estimation-portfolio.md)
 
 ## Common Mistakes
 
-| Mistake | Why It Fails | Fix |
-|---------|-------------|-----|
-| DRY-ing similar-looking code that serves different purposes | Creates coupling between unrelated concepts; changes to one break the other | Only DRY knowledge, not coincidental code similarity |
-| Skipping tracer bullets and building layer-by-layer | Integration issues surface late; no end-to-end feedback until the end | Build one thin vertical slice first |
-| Ignoring broken windows "because we'll refactor later" | Entropy accelerates; later never comes; team morale drops | Fix immediately or board up with a tracked ticket |
-| Estimates as single-point commitments | Creates false precision; erodes trust when missed | Always give ranges with confidence levels |
-| Making everything "flexible" upfront | Over-engineering; YAGNI; abstraction without evidence of need | Add flexibility when you have concrete evidence you'll need it |
-| Assertions in production removed "for performance" | Bugs that assertions would catch now silently corrupt data | Keep critical assertions; benchmark before removing any |
-| Global state "for convenience" | Destroys orthogonality; every module coupled to everything | Use dependency injection and explicit parameters |
+| Mistake                                                     | Why It Fails                                                                | Fix                                                            |
+| ----------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| DRY-ing similar-looking code that serves different purposes | Creates coupling between unrelated concepts; changes to one break the other | Only DRY knowledge, not coincidental code similarity           |
+| Skipping tracer bullets and building layer-by-layer         | Integration issues surface late; no end-to-end feedback until the end       | Build one thin vertical slice first                            |
+| Ignoring broken windows "because we'll refactor later"      | Entropy accelerates; later never comes; team morale drops                   | Fix immediately or board up with a tracked ticket              |
+| Estimates as single-point commitments                       | Creates false precision; erodes trust when missed                           | Always give ranges with confidence levels                      |
+| Making everything "flexible" upfront                        | Over-engineering; YAGNI; abstraction without evidence of need               | Add flexibility when you have concrete evidence you'll need it |
+| Assertions in production removed "for performance"          | Bugs that assertions would catch now silently corrupt data                  | Keep critical assertions; benchmark before removing any        |
+| Global state "for convenience"                              | Destroys orthogonality; every module coupled to everything                  | Use dependency injection and explicit parameters               |
 
 ## Quick Diagnostic
 
-| Question | If No | Action |
-|----------|-------|--------|
-| Can I change the database without touching business logic? | Orthogonality violation | Introduce repository/adapter pattern |
-| Do I have an end-to-end slice working? | Missing tracer bullet | Build one vertical slice before expanding |
-| Is every business rule defined in exactly one place? | DRY violation | Identify the authoritative source and remove duplicates |
-| Would a new developer call this codebase "clean"? | Broken windows present | Schedule a dedicated cleanup sprint |
-| Do my estimates include ranges and confidence levels? | Estimation problem | Switch to PERT or range-based estimates |
-| Can I roll back this deployment in under 5 minutes? | Reversibility gap | Add feature flags and blue-green deploys |
-| Am I learning something new every week? | Knowledge portfolio stagnant | Schedule weekly learning time and track it |
+| Question                                                   | If No                        | Action                                                  |
+| ---------------------------------------------------------- | ---------------------------- | ------------------------------------------------------- |
+| Can I change the database without touching business logic? | Orthogonality violation      | Introduce repository/adapter pattern                    |
+| Do I have an end-to-end slice working?                     | Missing tracer bullet        | Build one vertical slice before expanding               |
+| Is every business rule defined in exactly one place?       | DRY violation                | Identify the authoritative source and remove duplicates |
+| Would a new developer call this codebase "clean"?          | Broken windows present       | Schedule a dedicated cleanup sprint                     |
+| Do my estimates include ranges and confidence levels?      | Estimation problem           | Switch to PERT or range-based estimates                 |
+| Can I roll back this deployment in under 5 minutes?        | Reversibility gap            | Add feature flags and blue-green deploys                |
+| Am I learning something new every week?                    | Knowledge portfolio stagnant | Schedule weekly learning time and track it              |
 
 ## Reference Files
 

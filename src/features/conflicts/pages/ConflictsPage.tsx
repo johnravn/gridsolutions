@@ -30,7 +30,12 @@ import {
   keepAttentionEquipmentConflicts,
   keepAttentionPairConflicts,
 } from '../utils/filterConflictsByProjectLead'
-import { buildConflictCards, filterConflictItems } from '../utils/conflictItems'
+import {
+  DEFAULT_CONFLICT_LIST_FILTERS,
+  buildConflictCards,
+  filterConflictItems,
+  sortConflictItems,
+} from '../utils/conflictItems'
 import type { ConflictListFilters } from '../utils/conflictItems'
 
 export default function ConflictsPage() {
@@ -45,10 +50,9 @@ export default function ConflictsPage() {
   )
   const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
     useMobileInspectorDrawer(isLarge)
-  const [filters, setFilters] = React.useState<ConflictListFilters>({
-    status: 'all',
-    kind: 'all',
-  })
+  const [filters, setFilters] = React.useState<ConflictListFilters>(
+    DEFAULT_CONFLICT_LIST_FILTERS,
+  )
 
   React.useEffect(() => {
     if (conflictId) {
@@ -141,9 +145,14 @@ export default function ConflictsPage() {
     attentionNow,
   ])
   const visibleItems = React.useMemo(
-    () => filterConflictItems(items, filters),
-    [items, filters],
+    () =>
+      sortConflictItems(filterConflictItems(items, filters, projectLeadJobIds)),
+    [items, filters, projectLeadJobIds],
   )
+  const filtersActive =
+    filters.status !== 'all' ||
+    filters.kind !== 'all' ||
+    filters.scope !== 'company'
   const selected = items.find((item) => item.key === selectedId) ?? null
   const missingSelected = Boolean(selectedId && !conflictsLoading && !selected)
 
@@ -179,6 +188,8 @@ export default function ConflictsPage() {
       loading={conflictsLoading && !showInitialSkeleton}
       toolbarExtra={isLarge ? undefined : filter}
       projectLeadJobIds={projectLeadJobIds}
+      attentionFrom={attentionNow}
+      filtersActive={filtersActive}
     />
   )
   const inspector = (

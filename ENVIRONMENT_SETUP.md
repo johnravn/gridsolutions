@@ -4,11 +4,11 @@ This guide explains how to configure environment variables for local development
 
 ## Quick answer
 
-| Target | Where | URL |
-| --- | --- | --- |
-| **Hosted Dev** (preferred) | `.env.dev.db` → `npm run db:switch:dev` | `https://<dev-ref>.supabase.co` |
-| **Local Docker** (optional) | `.env.local.db` → `npm run db:switch:local` | `http://127.0.0.1:54321` |
-| **Hosted Prod** | Vercel Production + `.env.remote.db` for rare local checks | `https://tlpgejkglrgoljgvpubn.supabase.co` |
+| Target                      | Where                                                      | URL                                        |
+| --------------------------- | ---------------------------------------------------------- | ------------------------------------------ |
+| **Hosted Dev** (preferred)  | `.env.dev.db` → `npm run db:switch:dev`                    | `https://<dev-ref>.supabase.co`            |
+| **Local Docker** (optional) | `.env.local.db` → `npm run db:switch:local`                | `http://127.0.0.1:54321`                   |
+| **Hosted Prod**             | Vercel Production + `.env.remote.db` for rare local checks | `https://tlpgejkglrgoljgvpubn.supabase.co` |
 
 Vite reads **`.env.local`** (gitignored). Switch scripts rewrite only the Supabase keys in that file.
 
@@ -84,14 +84,14 @@ Preview env is unused (repo ships on `main` only). If a preview env is ever adde
 
 Add **Dev-only** secrets (never Prod `service_role` by default):
 
-| Secret | Notes |
-| --- | --- |
-| `VITE_SUPABASE_URL` | Dev project URL |
-| `VITE_SUPABASE_ANON_KEY` | Dev anon |
-| `SUPABASE_PROJECT_REF` | Dev ref (must not be `tlpgejkglrgoljgvpubn`) |
-| `SUPABASE_SERVICE_ROLE_KEY` | Optional; needed for seed/admin scripts |
-| `SUPABASE_SEED_DEV` | Set `1` to run `db:seed-test-users` on boot |
-| `SUPABASE_USE_DOCKER` | Set `1` to force Docker fallback |
+| Secret                      | Notes                                        |
+| --------------------------- | -------------------------------------------- |
+| `VITE_SUPABASE_URL`         | Dev project URL                              |
+| `VITE_SUPABASE_ANON_KEY`    | Dev anon                                     |
+| `SUPABASE_PROJECT_REF`      | Dev ref (must not be `tlpgejkglrgoljgvpubn`) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Optional; needed for seed/admin scripts      |
+| `SUPABASE_SEED_DEV`         | Set `1` to run `db:seed-test-users` on boot  |
+| `SUPABASE_USE_DOCKER`       | Set `1` to force Docker fallback             |
 
 `scripts/cloud-agent-start.sh` uses hosted Dev when those URL/anon secrets are present; otherwise it falls back to Docker. It **exits with an error** if secrets point at Prod.
 

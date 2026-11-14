@@ -5,6 +5,10 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { IndexTableBodySkeleton } from '@shared/ui/index-table'
 import {
+  conflictEmptyStateCopy,
+  conflictLoadingHint,
+} from '../utils/conflictAttentionCopy'
+import {
   conflictInvolvesProjectLead,
   conflictJobsLine,
   conflictKindLabel,
@@ -21,6 +25,8 @@ export default function ConflictsList({
   loading,
   toolbarExtra,
   projectLeadJobIds,
+  attentionFrom,
+  filtersActive = false,
 }: {
   items: Array<ConflictCardItem>
   selectedId: string | null
@@ -28,6 +34,8 @@ export default function ConflictsList({
   loading: boolean
   toolbarExtra?: React.ReactNode
   projectLeadJobIds?: ReadonlyArray<string>
+  attentionFrom?: Date | string
+  filtersActive?: boolean
 }) {
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [hoveredId, setHoveredId] = React.useState<string | null>(null)
@@ -120,6 +128,11 @@ export default function ConflictsList({
   const loadingBody = (
     <Box p="3">
       <IndexTableBodySkeleton rowCount={6} rowHeight={80} />
+      {attentionFrom ? (
+        <Text size="1" color="gray" as="div" mt="2">
+          {conflictLoadingHint(attentionFrom)}
+        </Text>
+      ) : null}
     </Box>
   )
 
@@ -132,11 +145,20 @@ export default function ConflictsList({
   }
 
   if (items.length === 0) {
+    const emptyCopy = conflictEmptyStateCopy({
+      attentionFrom: attentionFrom ?? new Date(),
+      filtered: filtersActive,
+    })
     const empty = (
-      <Box py="6">
-        <Text color="gray" size="2" align="center">
-          No booking conflicts.
-        </Text>
+      <Box py="6" px="3">
+        <Flex direction="column" gap="2" align="center">
+          <Text color="gray" size="2" align="center" weight="medium">
+            {emptyCopy.title}
+          </Text>
+          <Text color="gray" size="1" align="center">
+            {emptyCopy.detail}
+          </Text>
+        </Flex>
       </Box>
     )
     return isMobile ? (

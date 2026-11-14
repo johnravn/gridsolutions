@@ -10,7 +10,11 @@ import {
   joinWithAnd,
   overlapSidesFromPair,
 } from './conflictCopy'
-import { overlapWindow, periodWindow } from './overlapWindow'
+import {
+  formatOverlapDuration,
+  overlapWindow,
+  periodWindow,
+} from './overlapWindow'
 import type { OverlapWindow } from './overlapWindow'
 import type {
   CrewConflictRow,
@@ -20,8 +24,9 @@ import type {
 } from '../api/queries'
 
 export type ConflictKind = 'crew' | 'vehicle' | 'equipment' | 'group'
-export type ConflictFilterKind = 'crew' | 'vehicle' | 'equipment'
+export type ConflictFilterKind = ConflictKind
 export type ConflictTone = 'red' | 'amber'
+export type ConflictScopeFilter = 'company' | 'my_leads'
 
 export type ConflictCardItem =
   | {
@@ -52,16 +57,20 @@ export type ConflictCardItem =
 export type ConflictListFilters = {
   status: 'all' | 'unresolved' | 'forced'
   kind: 'all' | ConflictFilterKind
+  scope: ConflictScopeFilter
 }
 
 export const CONFLICT_KIND_LABEL: Record<ConflictFilterKind, string> = {
   crew: 'Crew',
   vehicle: 'Vehicle',
   equipment: 'Equipment',
+  group: 'Equipment group',
 }
 
-export function conflictDisplayKind(kind: ConflictKind): ConflictFilterKind {
-  return kind === 'group' ? 'equipment' : kind
+export const DEFAULT_CONFLICT_LIST_FILTERS: ConflictListFilters = {
+  status: 'unresolved',
+  kind: 'all',
+  scope: 'company',
 }
 
 export function conflictStatusLabel(tone: ConflictTone): string {
@@ -69,7 +78,7 @@ export function conflictStatusLabel(tone: ConflictTone): string {
 }
 
 export function conflictKindLabel(kind: ConflictKind): string {
-  return CONFLICT_KIND_LABEL[conflictDisplayKind(kind)]
+  return CONFLICT_KIND_LABEL[kind]
 }
 
 export function conflictListFooterLabel(count: number): string {
@@ -303,19 +312,84 @@ export function buildConflictCards(
   return items
 }
 
+export function equipmentShortfall(row: EquipmentConflictRow): number {
+  return Math.max(0, row.total_reserved - row.capacity)
+}
+
+export function conflictSortStartMs(item: ConflictCardItem): number {
+  const overlap = conflictOverlap(item)
+  if (overlap) return overlap.start.getTime()
+  if (item.kind === 'equipment') {
+    const start = Date.parse(item.row.start_at)
+    return Number.isNaN(start) ? Number.POSITIVE_INFINITY : start
+  }
+  const start = Date.parse(item.row.start_1)
+  return Number.isNaN(start) ? Number.POSITIVE_INFINITY : start
+}
+
+export function conflictSeverityScore(item: ConflictCardItem): number {
+  if (item.kind === 'equipment') return equipmentShortfall(item.row)
+  return conflictOverlap(item)?.durationMs ?? 0
+}
+
+/** Unresolved first, then soonest overlap, then shortfall/duration. */
+export function sortConflictItems(
+  items: Array<ConflictCardItem>,
+): Array<ConflictCardItem> {
+  return [...items].sort((a, b) => {
+    if (a.tone !== b.tone) return a.tone === 'red' ? -1 : 1
+    const startDiff = conflictSortStartMs(a) - conflictSortStartMs(b)
+    if (startDiff !== 0) return startDiff
+    return conflictSeverityScore(b) - conflictSeverityScore(a)
+  })
+}
+
+export function conflictWhyCopy(item: ConflictCardItem): string {
+  const name = conflictResourceName(item)
+  const overlap = conflictOverlap(item)
+  const duration = overlap
+    ? formatOverlapDuration(overlap.durationMs)
+    : 'an overlapping window'
+  const forcedSuffix =
+    item.tone === 'amber'
+      ? ' Marked as a forced overlap — edit the bookings to clear it.'
+      : ''
+
+  if (item.kind === 'crew') {
+    return `${name} is double-booked for ${duration}.${forcedSuffix}`
+  }
+  if (item.kind === 'vehicle') {
+    return `${name} is booked on overlapping jobs for ${duration}.${forcedSuffix}`
+  }
+  if (item.kind === 'group') {
+    return `Unique equipment group ${name} is double-booked for ${duration}.${forcedSuffix}`
+  }
+  const short = equipmentShortfall(item.row)
+  const shortPart =
+    short > 0
+      ? `short by ${short}`
+      : `${item.row.total_reserved} reserved / ${item.row.capacity} available`
+  return `${name} is over capacity (${shortPart}) during this window.${forcedSuffix}`
+}
+
 export function filterConflictItems(
   items: Array<ConflictCardItem>,
   filters: ConflictListFilters,
+  projectLeadJobIds: ReadonlyArray<string> = [],
 ): Array<ConflictCardItem> {
+  const leadIds = new Set(projectLeadJobIds)
   return items.filter((item) => {
-    if (
-      filters.kind !== 'all' &&
-      conflictDisplayKind(item.kind) !== filters.kind
-    ) {
+    if (filters.kind !== 'all' && item.kind !== filters.kind) {
       return false
     }
     if (filters.status === 'unresolved' && item.tone !== 'red') return false
     if (filters.status === 'forced' && item.tone !== 'amber') return false
+    if (
+      filters.scope === 'my_leads' &&
+      !conflictInvolvesProjectLead(item, leadIds)
+    ) {
+      return false
+    }
     return true
   })
 }
