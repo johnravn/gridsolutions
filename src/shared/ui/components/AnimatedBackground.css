@@ -10,12 +10,17 @@
   /* Intensity dims colored art only; fine grid uses its own readable ink. */
   --geo-intensity: 1;
   --geo-grid-size: 72px;
+  --geo-grid-line: 1px;
   /*
    * Always --gray-12 (Radix dark flips the scale — gray-1 is near-black there).
-   * Really subtle + large cells: ~2.2% ink, low opacity, heavy blur. Prior
-   * 48px/3.5%/0.35 still too sharp and dense for John.
+   * Soft dial from Live-visible 22%/2px/0.85 — whisper lattice, still perceptible.
    */
-  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 2.2%, transparent);
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 11%, transparent);
+}
+
+.dark .geo-bg {
+  /* White-on-dark reads hotter than black-on-light at the same %. */
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 9%, transparent);
 }
 
 .geo-bg__art {
@@ -38,8 +43,8 @@
 }
 
 /*
- * Really subtle atmospheric grid for grid-slash (~72px).
- * Above colored art; heavy soften — faintly perceptible only.
+ * Large grid for grid-slash (~72px). Above colored art.
+ * Soft wash: light blur only — heavy blur erased hairlines before.
  */
 .geo-bg__fine-grid {
   display: none;
@@ -52,22 +57,21 @@
     linear-gradient(
       to right,
       var(--geo-grid-ink) 0,
-      var(--geo-grid-ink) 1px,
-      transparent 1px,
+      var(--geo-grid-ink) var(--geo-grid-line),
+      transparent var(--geo-grid-line),
       transparent var(--geo-grid-size)
     ),
     linear-gradient(
       to bottom,
       var(--geo-grid-ink) 0,
-      var(--geo-grid-ink) 1px,
-      transparent 1px,
+      var(--geo-grid-ink) var(--geo-grid-line),
+      transparent var(--geo-grid-line),
       transparent var(--geo-grid-size)
     );
   background-size: var(--geo-grid-size) var(--geo-grid-size);
   background-position: 0 0;
-  /* Faint only — do not multiply again by --geo-intensity. */
-  opacity: 0.28;
-  filter: blur(3px);
+  opacity: 0.48;
+  filter: blur(1.5px);
 }
 
 .geo-bg--grid-slash .geo-bg__fine-grid {
@@ -76,11 +80,14 @@
 
 @media (prefers-contrast: more) {
   .geo-bg {
-    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 5%, transparent);
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 16%, transparent);
+  }
+  .dark .geo-bg {
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 14%, transparent);
   }
   .geo-bg__fine-grid {
-    opacity: 0.4;
-    filter: blur(2px);
+    opacity: 0.65;
+    filter: blur(0.9px);
   }
 }
 

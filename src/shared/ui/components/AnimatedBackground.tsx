@@ -68,7 +68,7 @@ export function normalizeGeometricPreset(
 }
 
 function GridSlashArt() {
-  // Really subtle ~72px CSS lattice (.geo-bg__fine-grid) — faint atmosphere;
+  // Large soft ~72px CSS lattice (.geo-bg__fine-grid) — visible atmosphere;
   // SVG viewBox lines scaled away on full-bleed shells.
   return (
     <svg
