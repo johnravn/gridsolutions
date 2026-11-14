@@ -68,6 +68,8 @@ export function normalizeGeometricPreset(
 }
 
 function GridSlashArt() {
+  // Fine ~18px grid is a CSS layer (.geo-bg__fine-grid) so it stays screen-space
+  // and readable — SVG viewBox lines scaled away on full-bleed shells.
   return (
     <svg
       className="geo-bg__svg"
@@ -76,28 +78,6 @@ function GridSlashArt() {
       aria-hidden
     >
       <rect className="geo-bg__base" width="320" height="160" />
-      {Array.from({ length: 12 }, (_, i) => (
-        <line
-          key={`h${i}`}
-          className="geo-bg__ink"
-          x1="0"
-          y1={i * 14}
-          x2="320"
-          y2={i * 14}
-          strokeWidth="1"
-        />
-      ))}
-      {Array.from({ length: 24 }, (_, i) => (
-        <line
-          key={`v${i}`}
-          className="geo-bg__ink"
-          x1={i * 14}
-          y1="0"
-          x2={i * 14}
-          y2="160"
-          strokeWidth="1"
-        />
-      ))}
       <polygon
         className="geo-bg__fill-a"
         points="0,0 120,0 0,90"
@@ -349,7 +329,10 @@ export function AnimatedBackground({
       }
       aria-hidden
     >
-      <PresetArt preset={resolved} />
+      <div className="geo-bg__fine-grid" />
+      <div className="geo-bg__art">
+        <PresetArt preset={resolved} />
+      </div>
     </Box>
   )
 }

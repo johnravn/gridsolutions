@@ -7,7 +7,19 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  opacity: var(--geo-intensity, 1);
+  /* Intensity dims colored art; fine grid keeps a readable floor (canvas-like). */
+  --geo-intensity: 1;
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 14%, transparent);
+}
+
+.dark .geo-bg {
+  --geo-grid-ink: color-mix(in oklab, var(--gray-1) 16%, transparent);
+}
+
+.geo-bg__art {
+  position: absolute;
+  inset: 0;
+  opacity: var(--geo-intensity);
 }
 
 .geo-bg__svg {
@@ -22,14 +34,33 @@
   fill: transparent;
 }
 
-/* Ink lines: readable on light + dark shells */
-.geo-bg__ink {
-  stroke: color-mix(in oklab, var(--gray-12) 14%, transparent);
-  fill: none;
+/*
+ * Screen-space fine grid (~18px) for grid-slash — canvas-like faded density.
+ * SVG viewBox lines scaled with the slice and vanished under intensity.
+ */
+.geo-bg__fine-grid {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(to right, var(--geo-grid-ink) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--geo-grid-ink) 1px, transparent 1px);
+  /* ~18–20px: a touch larger than 14px SVG units, closer to canvas preview density */
+  background-size: 18px 18px;
+  background-position: 0 0;
+  /* Stay visible at Recommended intensity (~0.35); still softens when intensity is low. */
+  opacity: clamp(0.35, calc(var(--geo-intensity) * 0.85 + 0.2), 0.9);
 }
 
-.dark .geo-bg__ink {
-  stroke: color-mix(in oklab, var(--gray-1) 16%, transparent);
+.geo-bg--grid-slash .geo-bg__fine-grid {
+  display: block;
+}
+
+/* Ink lines (circuit traces / leftover SVG grids): readable on light + dark */
+.geo-bg__ink {
+  stroke: var(--geo-grid-ink);
+  fill: none;
 }
 
 .geo-bg__fill-a {

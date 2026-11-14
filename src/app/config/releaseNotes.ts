@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.37'
+export const APP_VERSION = '1.13.38'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -36,7 +36,7 @@ export const RELEASE_NOTES = {
     {
       title: 'Geometric backgrounds',
       description:
-        'Profile → Personalization offers sharp Grid Slash (default), Prism Bands, Circuit, and Facet styles instead of soft circles. Auth pages use Grid Slash.',
+        'Profile → Personalization offers sharp Grid Slash (default, with a faded fine grid), Prism Bands, Circuit, and Facet styles instead of soft circles. Auth pages use Grid Slash.',
     },
     {
       title: 'Job Money ledger',
