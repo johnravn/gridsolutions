@@ -70,15 +70,14 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
+      # Use the locked npm `supabase` CLI (avoids GitHub rate limits on
+      # supabase/setup-cli `version: latest`).
       - run: npm ci
-      - run: supabase start -x imgproxy,logflare,vector
-      - run: supabase db reset
+      - run: npx supabase start -x imgproxy,logflare,vector
+      - run: npx supabase db reset
       - name: Export Supabase env
         run: |
-          eval "$(supabase status -o env | sed 's/^/export /')"
+          eval "$(npx supabase status -o env | sed 's/^/export /')"
           echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
@@ -96,16 +95,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: supabase/setup-cli@v1
-        with:
-          version: latest
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: supabase start -x imgproxy,logflare,vector
-      - run: supabase db reset
+      - run: npx supabase start -x imgproxy,logflare,vector
+      - run: npx supabase db reset
       - name: Export Supabase env
         run: |
-          eval "$(supabase status -o env | sed 's/^/export /')"
+          eval "$(npx supabase status -o env | sed 's/^/export /')"
           echo "SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_URL=$API_URL" >> "$GITHUB_ENV"
           echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
