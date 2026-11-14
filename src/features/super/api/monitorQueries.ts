@@ -95,7 +95,7 @@ export const MONITOR_JOB_DEFINITIONS: Array<{
     name: 'Job status auto-update',
     schedule: 'Hourly at :00 (pg_cron)',
     description:
-      'Moves confirmed/planned/requested jobs to in_progress when start_at has passed.',
+      'Confirmed→in_progress inside the job window; confirmed/in_progress→completed after end_at. Does not auto-promote planned/requested.',
   },
   {
     jobKey: 'demo_timeline_advance',
@@ -208,6 +208,8 @@ export type AdvanceDemoTimelineResult = {
 
 export type TriggerJobStatusAutoUpdateResult = {
   rowsUpdated: number
+  rowsToInProgress?: number
+  rowsToCompleted?: number
 }
 
 export type TriggerEmailDispatchResult = {
@@ -362,6 +364,11 @@ export function summarizeRunDetails(
     }
   }
   if (jobKey === 'job_status_auto_update') {
+    const toInProgress = details.rowsToInProgress
+    const toCompleted = details.rowsToCompleted
+    if (typeof toInProgress === 'number' && typeof toCompleted === 'number') {
+      return `${toInProgress} → in progress, ${toCompleted} → completed`
+    }
     const rows = details.rowsUpdated
     if (typeof rows === 'number') return `${rows} jobs updated`
   }

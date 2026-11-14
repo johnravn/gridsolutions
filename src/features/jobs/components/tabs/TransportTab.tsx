@@ -23,6 +23,7 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import { FixedTimePeriodEditor } from '@features/calendar/components/reservations/TimePeriodPicker'
 import { vehicleOwnerBadge } from '@features/vehicles/lib/ownership'
 import { jobBookingConflictsQuery } from '@features/conflicts/api/queries'
+import { conflictAttentionBounds } from '@features/conflicts/utils/conflictAttentionBounds'
 import { vehicleConflictToneByPeriodId } from '@features/conflicts/utils/conflictCategories'
 import BookVehicleDialog from '../dialogs/BookVehicleDialog'
 import { FetchingBookingsStatus } from './FetchingBookingsStatus'
@@ -126,8 +127,17 @@ export default function TransportTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const conflictBounds = React.useMemo(() => {
+    void jobId
+    return conflictAttentionBounds()
+  }, [jobId])
+
   const { data: bookingConflicts } = useQuery({
-    ...jobBookingConflictsQuery({ jobId }),
+    ...jobBookingConflictsQuery({
+      jobId,
+      from: conflictBounds.from,
+      to: conflictBounds.to,
+    }),
     enabled: !!jobId && companyRole !== 'freelancer',
   })
   const conflictToneByPeriod = React.useMemo(

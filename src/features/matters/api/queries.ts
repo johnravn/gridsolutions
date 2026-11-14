@@ -12,6 +12,7 @@ import {
 } from '../utils/crewInviteAnswer'
 import { unwrapOne, unwrapProfile } from '../utils/matterEmbeds'
 import { selectCrewInviteRecipients } from '../utils/selectCrewInviteRecipients'
+import type { HomeMatter } from '@features/home/types'
 import type { Json } from '@shared/types/database.types'
 import type {
   CreateMatterInput,
@@ -21,6 +22,19 @@ import type {
   MatterRecipient,
   MatterResponse,
 } from '../types'
+
+/** Lean select for home unread cards (avoids full matters index). */
+const HOME_UNREAD_MATTER_SELECT = `
+  id,
+  title,
+  matter_type,
+  created_at,
+  created_as_company,
+  metadata,
+  created_by_user_id,
+  created_by:profiles!matters_created_by_user_id_fkey ( user_id, display_name, email, avatar_url ),
+  company:company_id ( id, name )
+`
 
 const MATTER_SELECT = `
   id,
@@ -1232,6 +1246,95 @@ export function matterFilesQuery(matterId: string) {
 
       if (error) throw error
       return (data || []) as unknown as Array<MatterFile>
+    },
+  }
+}
+
+/**
+ * Lean unread matters for the home dashboard — only inbox-unread rows with
+ * card fields. Do not use for Matters list (use mattersIndexQueryAll).
+ */
+export function homeUnreadMattersQuery(userId?: string | null) {
+  return {
+    queryKey: ['matters', 'home-unread', userId ?? 'anon'] as const,
+    queryFn: async (): Promise<Array<HomeMatter>> => {
+      if (!userId) return []
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('superuser')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      const isSuperuser = profile?.superuser ?? false
+
+      let companyIds: Array<string> = []
+      if (isSuperuser) {
+        const { data: allCompanies } = await supabase
+          .from('companies')
+          .select('id')
+        companyIds = (allCompanies || []).map((c) => c.id)
+      } else {
+        const { data: memberships } = await supabase
+          .from('company_users')
+          .select('company_id')
+          .eq('user_id', userId)
+        companyIds = (memberships || []).map((m) => m.company_id)
+      }
+
+      if (companyIds.length === 0) return []
+
+      const { data: recipientMatters, error: recError } = await supabase
+        .from('matter_recipients')
+        .select('matter_id')
+        .eq('user_id', userId)
+        .is('inbox_read_at', null)
+
+      if (recError) throw recError
+
+      const unreadMatterIds = (recipientMatters || []).map((r) => r.matter_id)
+      if (unreadMatterIds.length === 0) return []
+
+      const { data: rows, error } = await supabase
+        .from('matters')
+        .select(HOME_UNREAD_MATTER_SELECT)
+        .in('company_id', companyIds)
+        .in('id', unreadMatterIds)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      const mapped: Array<HomeMatter> = (rows || []).map((row) => {
+        const createdByUserId = row.created_by_user_id
+        return {
+          id: row.id,
+          title: row.title,
+          matter_type: row.matter_type as HomeMatter['matter_type'],
+          created_at: row.created_at,
+          created_as_company: Boolean(row.created_as_company),
+          metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+          is_unread: true,
+          created_by: unwrapProfile(row.created_by, createdByUserId),
+          company: unwrapOne<{ id: string; name: string }>(row.company),
+        }
+      })
+
+      const withAnswered = await attachAnsweredByProfiles(
+        mapped as unknown as Array<Matter>,
+      )
+
+      return withAnswered.map((matter) => ({
+        id: matter.id,
+        title: matter.title,
+        matter_type: matter.matter_type,
+        created_at: matter.created_at,
+        created_as_company: matter.created_as_company,
+        metadata: (matter.metadata as Record<string, unknown> | null) ?? null,
+        is_unread: true,
+        created_by: matter.created_by ?? null,
+        answered_by: matter.answered_by ?? null,
+        company: matter.company ?? null,
+      }))
     },
   }
 }

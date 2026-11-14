@@ -7,9 +7,9 @@ import {
 import type { JobDetail } from '../types'
 
 /**
- * Hook to automatically update job status based on timeframes:
- * - If current time is within job duration and status is "confirmed" → change to "in_progress"
- * - If current time is after job duration and status is "in_progress" → change to "completed"
+ * Hook to automatically update job status based on timeframes (mirrors server cron):
+ * - confirmed → in_progress when now is inside the job window
+ * - confirmed | in_progress → completed after end_at
  */
 export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
   const qc = useQueryClient()

@@ -1,5 +1,9 @@
 import * as React from 'react'
 import { supabase } from '@shared/api/supabase'
+import {
+  invalidateScheduleQueries,
+  jobsPayloadChangedScheduleDates,
+} from './invalidateScheduleQueries'
 import { subscribeRealtimeChannelWithRetry } from './subscribeRealtimeChannelWithRetry'
 import type { JobListRow, JobStatus } from '@features/jobs/types'
 import type { QueryClient } from '@tanstack/react-query'
@@ -166,76 +170,6 @@ function patchJobsListCachesFromRealtime(
   )
 }
 
-function invalidateScheduleQueries(
-  qc: QueryClient,
-  companyId: string,
-  jobIds: Iterable<string>,
-) {
-  void qc.invalidateQueries({
-    queryKey: ['company', companyId, 'calendar'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['company', companyId, 'vehicle-calendar'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['company', companyId, 'vehicle-calendar-past'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['company', companyId, 'item-calendar'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['company', companyId, 'crew-calendar'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['conflicts', 'crew', companyId],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['conflicts', 'vehicle', companyId],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['conflicts', 'equipment', companyId],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['conflicts', 'job'],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['jobs', 'crew-role-ids', companyId],
-    exact: false,
-  })
-  void qc.invalidateQueries({
-    queryKey: ['home', companyId, 'company-jobs-week-bookings'],
-    exact: false,
-  })
-
-  for (const jobId of jobIds) {
-    void qc.invalidateQueries({
-      queryKey: ['jobs', jobId, 'time_periods'],
-      exact: false,
-    })
-    void qc.invalidateQueries({ queryKey: ['jobs.crew', jobId], exact: false })
-    void qc.invalidateQueries({
-      queryKey: ['company', companyId, 'job-calendar', jobId],
-    })
-    void qc.invalidateQueries({
-      queryKey: ['jobs.packing', jobId],
-      exact: false,
-    })
-    void qc.invalidateQueries({
-      queryKey: ['jobs', jobId, 'bookings-snapshot-for-offers'],
-      exact: false,
-    })
-  }
-}
-
 /**
  * Single Realtime channel for matters inbox + jobs + schedule (one WebSocket, one subscribe).
  * Avoids connection storms from three parallel hooks (worse under React Strict Mode).
@@ -264,8 +198,8 @@ export function useCompanyAppRealtimeSync(
       .in('id', ids)
 
     if (error) {
+      // Avoid company-wide conflict/home storms when lookup fails — drop the batch.
       console.error('[realtime] schedule flush lookup failed', error.message)
-      invalidateScheduleQueries(queryClient, company, [])
       return
     }
 
@@ -277,6 +211,7 @@ export function useCompanyAppRealtimeSync(
     for (const row of relevant) {
       if (row.job_id) jobIds.add(row.job_id)
     }
+    if (jobIds.size === 0) return
     invalidateScheduleQueries(queryClient, company, jobIds)
   }, [companyId, queryClient])
 
@@ -351,8 +286,14 @@ export function useCompanyAppRealtimeSync(
             (payload) => {
               patchJobsListCachesFromRealtime(queryClient, cid, payload)
 
-              const newRow = payload.new as { id?: string } | null | undefined
-              const oldRow = payload.old as { id?: string } | null | undefined
+              const newRow = payload.new as
+                | (Record<string, unknown> & { id?: string })
+                | null
+                | undefined
+              const oldRow = payload.old as
+                | (Record<string, unknown> & { id?: string })
+                | null
+                | undefined
               const jobId = newRow?.id ? newRow.id : oldRow?.id
 
               void queryClient.invalidateQueries({
@@ -371,21 +312,24 @@ export function useCompanyAppRealtimeSync(
                 queryKey: ['home', cid, 'company-jobs-week'],
                 exact: false,
               })
-              void queryClient.invalidateQueries({
-                queryKey: ['home', cid, 'company-jobs-week-bookings'],
-                exact: false,
-              })
-              void queryClient.invalidateQueries({
-                queryKey: ['company', cid, 'calendar'],
-                exact: false,
-              })
               if (jobId) {
-                void queryClient.invalidateQueries({
-                  queryKey: ['company', cid, 'job-calendar', jobId],
-                })
                 void queryClient.invalidateQueries({
                   queryKey: ['jobs-detail', jobId],
                 })
+                // Only hit schedule/bookings when job window changed (or insert/delete).
+                if (
+                  jobsPayloadChangedScheduleDates({
+                    eventType: payload.eventType,
+                    new: newRow ?? null,
+                    old: oldRow ?? null,
+                  })
+                ) {
+                  invalidateScheduleQueries(queryClient, cid, [jobId])
+                } else {
+                  void queryClient.invalidateQueries({
+                    queryKey: ['company', cid, 'job-calendar', jobId],
+                  })
+                }
               }
             },
           )

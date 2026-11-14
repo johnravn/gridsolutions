@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Box, Flex, Text } from '@radix-ui/themes'
-import { format, startOfMinute } from 'date-fns'
+import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
 import { WarningTriangle } from 'iconoir-react'
 import { jobBookingConflictsQuery } from '../api/queries'
@@ -16,6 +16,7 @@ import {
   formatConflictCountLabel,
   formatPairOverlapLine,
 } from '../utils/conflictCopy'
+import { conflictAttentionBounds } from '../utils/conflictAttentionBounds'
 import {
   keepAttentionEquipmentConflicts,
   keepAttentionPairConflicts,
@@ -38,13 +39,17 @@ export function JobBookingConflictsBanner({
   isProjectLead?: boolean
   onNavigateSubTab?: (tab: 'crew' | 'equipment' | 'transport') => void
 }) {
+  const { from, to, attentionNow } = React.useMemo(() => {
+    void jobId
+    return conflictAttentionBounds()
+  }, [jobId])
+
   const { data, isLoading } = useQuery({
-    ...jobBookingConflictsQuery({ jobId }),
+    ...jobBookingConflictsQuery({ jobId, from, to }),
     enabled: !!jobId,
   })
 
   const { unresolved, forced } = React.useMemo(() => {
-    const attentionNow = startOfMinute(new Date())
     const crew = splitCrewConflicts(
       keepAttentionPairConflicts(data?.crew ?? [], attentionNow),
     )
@@ -71,7 +76,7 @@ export function JobBookingConflictsBanner({
         groups: groups.forced,
       },
     }
-  }, [data])
+  }, [data, attentionNow])
 
   const unresolvedCount =
     unresolved.crew.length +

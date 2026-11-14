@@ -8,11 +8,20 @@ import { VitePWA } from 'vite-plugin-pwa'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // Load .env / .env.local so API middleware (e.g. calendar feed) can read SUPABASE_SERVICE_ROLE_KEY.
+  // `.env.local` is the active DB target from `npm run db:switch:*` — it must win.
   const env = loadEnv(mode, process.cwd(), '')
-  // Also load .env.local.db so local-Supabase vars (and Conta flags) are
-  // available to Node middleware. VITE_* from that file are defined onto
-  // import.meta.env below — Vite does not load `.env.local.db` on its own.
+  // Conta flags may live only in `.env.local.db`. Fill gaps from that profile,
+  // but never overwrite Supabase connection keys — that used to force the app
+  // onto http://127.0.0.1:54321 even after `db:switch:dev`.
   const localDbPath = path.resolve(process.cwd(), '.env.local.db')
+  const supabaseEnvKeys = new Set([
+    'VITE_SUPABASE_URL',
+    'VITE_SUPABASE_ANON_KEY',
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'SUPABASE_PROJECT_REF',
+    'SUPABASE_SERVICE_ROLE_KEY',
+  ])
   if (fs.existsSync(localDbPath)) {
     const content = fs.readFileSync(localDbPath, 'utf-8')
     for (const line of content.split('\n')) {
@@ -20,18 +29,24 @@ export default defineConfig(({ mode }) => {
       if (match) {
         const key = match[1]
         const value = match[2].replace(/^["']|["']$/g, '').trim()
-        env[key] = value
+        if (supabaseEnvKeys.has(key)) continue
+        if (!env[key]) env[key] = value
         if (!process.env[key]) process.env[key] = value
       }
     }
   }
-  if (env.SUPABASE_SERVICE_ROLE_KEY && !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  // Always mirror the active `.env.local` target into process.env. A previous
+  // config evaluation may have left a stale local URL in the same process.
+  if (env.SUPABASE_SERVICE_ROLE_KEY) {
     process.env.SUPABASE_SERVICE_ROLE_KEY = env.SUPABASE_SERVICE_ROLE_KEY
   }
-  if (env.VITE_SUPABASE_URL && !process.env.VITE_SUPABASE_URL) {
+  if (env.VITE_SUPABASE_URL) {
     process.env.VITE_SUPABASE_URL = env.VITE_SUPABASE_URL
   }
-  if (env.SUPABASE_URL && !process.env.SUPABASE_URL) {
+  if (env.VITE_SUPABASE_ANON_KEY) {
+    process.env.VITE_SUPABASE_ANON_KEY = env.VITE_SUPABASE_ANON_KEY
+  }
+  if (env.SUPABASE_URL) {
     process.env.SUPABASE_URL = env.SUPABASE_URL
   }
 

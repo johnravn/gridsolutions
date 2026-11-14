@@ -35,7 +35,10 @@ export type OptimisticMatterReadSnapshot = {
 
 function snapshotMatterCaches(qc: QueryClient): OptimisticMatterReadSnapshot {
   return {
-    listEntries: qc.getQueriesData({ queryKey: ['matters', 'index'] }),
+    listEntries: [
+      ...qc.getQueriesData({ queryKey: ['matters', 'index'] }),
+      ...qc.getQueriesData({ queryKey: ['matters', 'home-unread'] }),
+    ],
     detailEntries: qc.getQueriesData({ queryKey: ['matters', 'detail'] }),
     unreadCountEntries: qc.getQueriesData({
       queryKey: ['matters', 'unread-count'],
@@ -111,6 +114,16 @@ export function applyOptimisticMatterReadState(
     return changed ? next : old
   })
 
+  // Home unread list is unread-only — drop marked-read rows; unread flips refetch.
+  qc.setQueriesData({ queryKey: ['matters', 'home-unread'] }, (old) => {
+    if (!isMatterList(old)) return old
+    if (!isUnread) {
+      const next = old.filter((matter) => !idSet.has(matter.id))
+      return next.length === old.length ? old : next
+    }
+    return old
+  })
+
   for (const id of ids) {
     qc.setQueryData(
       ['matters', 'detail', id],
@@ -144,6 +157,11 @@ export function applyOptimisticMarkAllMattersRead(
       return { ...matter, is_unread: false }
     })
     return changed ? next : old
+  })
+
+  qc.setQueriesData({ queryKey: ['matters', 'home-unread'] }, (old) => {
+    if (!isMatterList(old)) return old
+    return old.length === 0 ? old : []
   })
 
   qc.setQueriesData({ queryKey: ['matters', 'detail'] }, (old) => {
