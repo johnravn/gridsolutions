@@ -9,12 +9,14 @@ export default function RequireCap({
   need,
   children,
 }: {
-  need: Capability
+  /** One capability, or any-of when an array is passed. */
+  need: Capability | Array<Capability>
   children: React.ReactNode
 }) {
   const { loading, caps } = useAuthz()
   const navigate = useNavigate()
-  const allowed = caps.has(need)
+  const needs = Array.isArray(need) ? need : [need]
+  const allowed = needs.some((cap) => caps.has(cap))
 
   React.useEffect(() => {
     if (loading || allowed) return

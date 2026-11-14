@@ -13,15 +13,28 @@ export function latestFeedQuery({
   companyId,
   userId,
   activityTypes,
+  actorUserId,
+  from,
+  to,
+  search,
   limit = 50,
   offset = 0,
 }: {
   companyId: string
   userId?: string | null
   activityTypes?: Array<ActivityType>
+  /** Filter to a single actor (created_by_user_id). */
+  actorUserId?: string | null
+  /** Inclusive lower bound (ISO). */
+  from?: string | null
+  /** Inclusive upper bound (ISO). */
+  to?: string | null
+  /** Case-insensitive match on title or description. */
+  search?: string | null
   limit?: number
   offset?: number
 }) {
+  const normalizedSearch = search?.trim() ? search.trim() : null
   return queryOptions<{ items: Array<ActivityFeedItem>; total: number }>({
     queryKey: [
       'company',
@@ -29,6 +42,10 @@ export function latestFeedQuery({
       'latest-feed',
       userId ?? 'anon',
       activityTypes,
+      actorUserId ?? null,
+      from ?? null,
+      to ?? null,
+      normalizedSearch,
       limit,
       offset,
     ] as const,
@@ -55,6 +72,27 @@ export function latestFeedQuery({
       // Filter by activity types if provided
       if (activityTypes && activityTypes.length > 0) {
         query = query.in('activity_type', activityTypes)
+      }
+
+      if (actorUserId) {
+        query = query.eq('created_by_user_id', actorUserId)
+      }
+
+      if (from) {
+        query = query.gte('created_at', from)
+      }
+
+      if (to) {
+        query = query.lte('created_at', to)
+      }
+
+      if (normalizedSearch) {
+        const escaped = normalizedSearch
+          .replaceAll('%', '\\%')
+          .replaceAll('_', '\\_')
+          .replaceAll(',', ' ')
+        const pattern = `%${escaped}%`
+        query = query.or(`title.ilike.${pattern},description.ilike.${pattern}`)
       }
 
       const { data, error, count } = await query

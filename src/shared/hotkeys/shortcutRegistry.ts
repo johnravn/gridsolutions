@@ -86,11 +86,11 @@ export const SHORTCUT_REGISTRY: ReadonlyArray<ShortcutDefinition> = [
   },
   {
     id: 'nav.goLatest',
-    label: 'Go to Latest',
-    description: 'Navigate to the activity feed',
+    label: 'Go to Logs',
+    description: 'Navigate to company activity logs',
     category: 'navigation',
     defaultHotkey: null,
-    route: '/latest',
+    route: '/company',
   },
   {
     id: 'nav.goInventory',

@@ -25,7 +25,6 @@ import SuperPage from '@features/super/pages/SuperPage'
 import ProfilePage from '@features/profile/pages/ProfilePage'
 import MattersPage from '@features/matters/pages/MattersPage'
 import CustomerPage from '@features/customers/pages/CostumerPage'
-import LatestPage from '@features/latest/pages/LatestPage'
 import ConflictsPage from '@features/conflicts/pages/ConflictsPage'
 import PublicOfferPage from '@features/jobs/pages/PublicOfferPage'
 import LoggingPage from '@features/logging/pages/LoggingPage'
@@ -45,11 +44,12 @@ const rootRoute = createRootRoute({
     </>
   ),
 })
-const guarded = (need: Capability, Page: React.ComponentType) => () => (
-  <RequireCap need={need}>
-    <Page />
-  </RequireCap>
-)
+const guarded =
+  (need: Capability | Array<Capability>, Page: React.ComponentType) => () => (
+    <RequireCap need={need}>
+      <Page />
+    </RequireCap>
+  )
 
 // --- PUBLIC: Landing page route ----------------------------------------------
 const landingRoute = createRoute({
@@ -239,10 +239,19 @@ const mattersRoute = createRoute({
 const companyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'company',
-  validateSearch: (search: Record<string, unknown>) => ({
-    tab: (search.tab as string | undefined) || undefined,
+  validateSearch: (search: Record<string, unknown>): {
+    tab?: string
+    activityId?: string
+  } => ({
+    ...(typeof search.tab === 'string' && search.tab
+      ? { tab: search.tab }
+      : {}),
+    ...(typeof search.activityId === 'string' && search.activityId
+      ? { activityId: search.activityId }
+      : {}),
   }),
-  component: guarded('visit:company', CompanyPage),
+  // Employees/freelancers with visit:latest may open Company for the Logs tab only.
+  component: guarded(['visit:company', 'visit:latest'], CompanyPage),
 })
 
 const customersRoute = createRoute({
@@ -251,13 +260,23 @@ const customersRoute = createRoute({
   component: guarded('visit:customers', CustomerPage),
 })
 
+/** Legacy Latest feed → Company Logs */
 const latestRoute = createRoute({
-  getParentRoute: () => splitLayoutRoute,
+  getParentRoute: () => authedRoute,
   path: 'latest',
   validateSearch: (search: Record<string, unknown>) => ({
     activityId: (search.activityId as string | undefined) || undefined,
   }),
-  component: guarded('visit:latest', LatestPage),
+  beforeLoad: ({ search }) => {
+    throw redirect({
+      to: '/company',
+      search: {
+        tab: 'logs',
+        activityId: search.activityId,
+      },
+    })
+  },
+  component: () => null,
 })
 
 const profileRoute = createRoute({
@@ -318,6 +337,7 @@ const routeTree = rootRoute.addChildren([
     notificationsRoute,
     reportingRoute,
     superRoute,
+    latestRoute,
     splitLayoutRoute.addChildren([
       inventoryRoute,
       loggingRoute,
@@ -327,7 +347,6 @@ const routeTree = rootRoute.addChildren([
       crewRoute,
       mattersRoute,
       customersRoute,
-      latestRoute,
     ]),
   ]),
   notFoundRoute,

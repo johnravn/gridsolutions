@@ -318,8 +318,13 @@ export async function openProfilePage(page: Page) {
 }
 
 export async function openLatestPage(page: Page) {
-  await clickNavLink(page, 'Latest')
-  await expect(page).toHaveURL(/\/latest/, { timeout: 15_000 })
+  await clickNavLink(page, 'Company')
+  await expect(page).toHaveURL(/\/company/, { timeout: 15_000 })
+  await page.getByRole('tab', { name: 'Logs' }).click()
+  await expect(page).toHaveURL(/tab=logs/, { timeout: 15_000 })
+  await expect(page.getByRole('heading', { name: 'Logs' })).toBeVisible({
+    timeout: 15_000,
+  })
 }
 
 export async function openHomePage(page: Page) {

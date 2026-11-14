@@ -9,39 +9,11 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { Filter } from 'iconoir-react'
+import {
+  ACTIVITY_CATEGORY_GROUPS,
+  ACTIVITY_TYPE_LABELS,
+} from '../utils/activityCategories'
 import type { ActivityType } from '../types'
-
-const activityTypeLabels: Record<ActivityType, string> = {
-  inventory_item_created: 'Inventory Items',
-  inventory_item_deleted: 'Inventory Items',
-  inventory_group_created: 'Inventory Groups',
-  inventory_group_deleted: 'Inventory Groups',
-  vehicle_added: 'Vehicles',
-  vehicle_removed: 'Vehicles',
-  customer_added: 'Customers',
-  customer_removed: 'Customers',
-  crew_added: 'Crew',
-  crew_removed: 'Crew',
-  job_created: 'Jobs',
-  job_status_changed: 'Jobs',
-  job_deleted: 'Jobs',
-  announcement: 'Announcements',
-}
-
-const categoryGroups: Record<string, Array<ActivityType>> = {
-  All: [],
-  Inventory: [
-    'inventory_item_created',
-    'inventory_item_deleted',
-    'inventory_group_created',
-    'inventory_group_deleted',
-  ],
-  Vehicles: ['vehicle_added', 'vehicle_removed'],
-  Customers: ['customer_added', 'customer_removed'],
-  Crew: ['crew_added', 'crew_removed'],
-  Jobs: ['job_created', 'job_status_changed', 'job_deleted'],
-  Announcements: ['announcement'],
-}
 
 export default function ActivityFilter({
   selectedTypes,
@@ -56,7 +28,7 @@ export default function ActivityFilter({
     if (category === 'All') {
       onTypesChange([])
     } else {
-      const types = categoryGroups[category] || []
+      const types = ACTIVITY_CATEGORY_GROUPS[category] || []
       // Toggle: if all types in category are selected, deselect them; otherwise select all
       const allSelected = types.every((t) => selectedTypes.includes(t))
       if (allSelected) {
@@ -106,8 +78,8 @@ export default function ActivityFilter({
 
       <DropdownMenu.Content align="end" style={{ minWidth: 200 }}>
         <DropdownMenu.Label>Filter by Category</DropdownMenu.Label>
-        {Object.keys(categoryGroups).map((category) => {
-          const types = categoryGroups[category]
+        {Object.keys(ACTIVITY_CATEGORY_GROUPS).map((category) => {
+          const types = ACTIVITY_CATEGORY_GROUPS[category]
           const isCategorySelected =
             category === 'All'
               ? selectedTypes.length === 0
@@ -131,7 +103,7 @@ export default function ActivityFilter({
 
         <DropdownMenu.Label>Filter by Type</DropdownMenu.Label>
         {Object.entries(
-          Object.entries(activityTypeLabels).reduce(
+          Object.entries(ACTIVITY_TYPE_LABELS).reduce(
             (acc, [type, label]) => {
               if (!acc[label]) {
                 acc[label] = []

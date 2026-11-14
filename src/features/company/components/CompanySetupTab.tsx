@@ -881,13 +881,13 @@ export default function CompanySetupTab() {
       })
       if (pendingToggleValue) {
         success(
-          'Latest feed enabled for freelancers',
-          'Freelancers can now view the Latest feed',
+          'Logs enabled for freelancers',
+          'Freelancers can now view Company → Logs',
         )
       } else {
         success(
-          'Latest feed disabled for freelancers',
-          'Freelancers can no longer view the Latest feed',
+          'Logs disabled for freelancers',
+          'Freelancers can no longer view Company → Logs',
         )
       }
       setPendingToggleValue(null)
@@ -1340,12 +1340,11 @@ export default function CompanySetupTab() {
             <Flex align="center" justify="between" gap="4">
               <Flex direction="column">
                 <Text size="3" weight="medium" mb="1">
-                  Allow freelancers to view Latest feed
+                  Allow freelancers to view Logs
                 </Text>
                 <Text size="2" color="gray">
-                  When enabled, freelancers in your company can view the Latest
-                  feed. They will have read-only access and can like and
-                  comment.
+                  When enabled, freelancers in your company can open Company →
+                  Logs and view the activity log.
                 </Text>
               </Flex>
               {expansionsLoading ? (

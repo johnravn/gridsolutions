@@ -779,12 +779,12 @@ export default function MatterDetail({
             variant="soft"
             onClick={() => {
               navigate({
-                to: '/latest',
-                search: { activityId },
+                to: '/company',
+                search: { tab: 'logs', activityId },
               })
             }}
           >
-            View Update <ArrowRight width={16} height={16} />
+            View in Logs <ArrowRight width={16} height={16} />
           </Button>
         </Box>
       )}

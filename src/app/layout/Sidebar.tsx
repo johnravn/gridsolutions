@@ -26,7 +26,6 @@ import {
   Menu,
   Message,
   Potion,
-  RssFeed,
   StatsUpSquare,
   User,
   UserLove,
@@ -59,7 +58,6 @@ type NavItem = { to: string; label: string; icon: React.ReactNode }
 export const NAV: Array<Array<NavItem>> = [
   [
     { to: '/dashboard', label: 'Home', icon: <HomeAlt /> },
-    { to: '/latest', label: 'Latest', icon: <RssFeed strokeWidth={2} /> },
     { to: '/inventory', label: 'Inventory', icon: <BoxIso /> },
     { to: '/vehicles', label: 'Vehicles', icon: <Car /> },
     { to: '/crew', label: 'Crew', icon: <Group /> },
@@ -90,7 +88,6 @@ const LABEL_TO_CAP: Record<string, string> = {
   Calendar: 'visit:calendar',
   Logging: 'visit:logging',
   Customers: 'visit:customers',
-  Latest: 'visit:latest',
   Matters: 'visit:matters',
   Company: 'visit:company',
   Reporting: 'visit:company',
@@ -121,6 +118,12 @@ function useAllowedSidebarRoutes() {
           return true
         }
         return hasUser
+      }
+
+      // Company hosts Logs; allow visit:latest users (employees / opted-in freelancers).
+      if (label === 'Company') {
+        if (authzLoading) return false
+        return caps.has('visit:company') || caps.has('visit:latest')
       }
 
       if (authzLoading) {

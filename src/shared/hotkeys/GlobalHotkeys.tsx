@@ -21,7 +21,6 @@ const CREATE_IDS: Array<ShortcutId> = SHORTCUT_REGISTRY.filter((s) =>
 
 const ROUTE_CAP: Record<string, Capability> = {
   '/dashboard': 'visit:home',
-  '/latest': 'visit:latest',
   '/inventory': 'visit:inventory',
   '/vehicles': 'visit:vehicles',
   '/crew': 'visit:crew',
@@ -53,13 +52,21 @@ export function GlobalHotkeys() {
         if (!isShortcutBound(hotkey)) return []
         const def = SHORTCUT_REGISTRY.find((s) => s.id === id)!
         const route = def.route!
-        const cap = ROUTE_CAP[route]
+        const isLogsShortcut = id === 'nav.goLatest'
+        const cap = isLogsShortcut ? 'visit:latest' : ROUTE_CAP[route]
         if (!cap) return []
         return [
           {
             hotkey: asRegisterableHotkey(hotkey),
             callback: () => {
               if (hasOpenDialog()) return
+              if (isLogsShortcut) {
+                void navigate({
+                  to: '/company',
+                  search: { tab: 'logs', activityId: undefined },
+                })
+                return
+              }
               // Registry routes are app paths; cast for typed router.
               void navigate({ to: route as never })
             },

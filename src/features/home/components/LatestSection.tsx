@@ -5,6 +5,7 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useNavigate } from '@tanstack/react-router'
 import { groupInventoryActivities } from '@features/latest/utils/groupInventoryActivities'
 import { formatActivityDate } from '@features/latest/utils/formatActivityDate'
+import { formatActivityTitle } from '@features/latest/utils/formatActivityTitle'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { DashboardCard } from './DashboardCard'
 import {
@@ -55,61 +56,6 @@ function getActivityIcon(
       return { icon: '📢', bgColor: 'var(--red-3)' }
     default:
       return { icon: '📌', bgColor: 'var(--gray-3)' }
-  }
-}
-
-function formatActivityTitle(
-  activity: ActivityFeedItem | GroupedInventoryActivity,
-): string {
-  if ('isGrouped' in activity) {
-    const parts: Array<string> = []
-    if (activity.item_count > 0) {
-      parts.push(
-        `${activity.item_count} ${activity.item_count === 1 ? 'item' : 'items'}`,
-      )
-    }
-    if (activity.group_count > 0) {
-      parts.push(
-        `${activity.group_count} ${activity.group_count === 1 ? 'group' : 'groups'}`,
-      )
-    }
-    return `Added ${parts.join(' and ')} to inventory`
-  }
-
-  const regularActivity: ActivityFeedItem = activity
-  const metadata = regularActivity.metadata
-
-  switch (regularActivity.activity_type) {
-    case 'inventory_item_created':
-      return `Added "${metadata.item_name || 'item'}" to inventory`
-    case 'inventory_item_deleted':
-      return `Removed "${metadata.item_name || 'item'}" from inventory`
-    case 'inventory_group_created':
-      return `Created inventory group "${metadata.group_name || 'group'}"`
-    case 'inventory_group_deleted':
-      return `Removed inventory group "${metadata.group_name || 'group'}"`
-    case 'vehicle_added':
-      return `Added vehicle "${metadata.vehicle_name || metadata.license_plate || 'vehicle'}"`
-    case 'vehicle_removed':
-      return `Removed vehicle "${metadata.vehicle_name || metadata.license_plate || 'vehicle'}"`
-    case 'customer_added':
-      return `Added customer "${metadata.customer_name || 'customer'}"`
-    case 'customer_removed':
-      return `Removed customer "${metadata.customer_name || 'customer'}"`
-    case 'crew_added':
-      return `Added crew member "${metadata.user_name || metadata.email || 'crew'}"`
-    case 'crew_removed':
-      return `Removed crew member "${metadata.user_name || metadata.email || 'crew'}"`
-    case 'job_created':
-      return `Created job "${metadata.job_title || regularActivity.title || 'job'}"`
-    case 'job_status_changed':
-      return `Changed job "${metadata.job_title || regularActivity.title || 'job'}" status`
-    case 'job_deleted':
-      return `Deleted job "${metadata.job_title || regularActivity.title || 'job'}"`
-    case 'announcement':
-      return regularActivity.title || 'Announcement'
-    default:
-      return regularActivity.title || 'Activity'
   }
 }
 
@@ -184,7 +130,7 @@ export function LatestSection({
 
   return (
     <DashboardCard
-      title="Latest"
+      title="Logs"
       icon={<RssFeed width={18} height={18} />}
       scrollContainerStyle={
         isSmallScreen
@@ -196,7 +142,10 @@ export function LatestSection({
           size="2"
           variant="soft"
           onClick={() =>
-            navigate({ to: '/latest', search: { activityId: undefined } })
+            navigate({
+              to: '/company',
+              search: { tab: 'logs', activityId: undefined },
+            })
           }
         >
           View all
