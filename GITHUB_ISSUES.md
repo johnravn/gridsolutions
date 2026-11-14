@@ -1,6 +1,6 @@
 # GitHub Issues & Shipping on `main`
 
-This repo uses **GitHub issues** as the unit of work and ships by **pushing `main`**. There are no pull requests and no feature branches.
+This repo uses **GitHub issues** as the unit of work and ships by **pushing `main`**. There are no pull requests and no feature branches as the review/deploy path.
 
 Agent rule (always on): `.cursor/rules/git-workflow.mdc`
 
@@ -9,12 +9,16 @@ Agent rule (always on): `.cursor/rules/git-workflow.mdc`
 ```
 Issue (existing or created)
   └─> Work on main
-      └─> Test locally + quality gates
-          └─> Commit referencing the issue
-              └─> git push origin main
+      └─> Verify on hosted Dev + quality gates
+          └─> Commit referencing the issue (only when John asks)
+              └─> git push origin main (only when John asks)
                   └─> Vercel deploys gridsolutions.app
                       └─> Closes #N auto-closes the issue
 ```
+
+**Review before ship:** agent desktop / Live, or local `npm run dev` against hosted Dev. Not a PR preview or staging branch.
+
+Cloud-agent scratch branches (if a runtime forces one) are disposable — they are not the review or deploy mechanism. Land on `main` only when John asks.
 
 ## Issues
 
@@ -65,13 +69,14 @@ EOF
 git push origin main
 ```
 
-Pushing `main` deploys production. Test locally first — there is no PR preview.
+Pushing `main` deploys production. Run quality gates before asking John to commit/push — there is no PR preview.
 
 If GitHub blocks the push, turn off branch protection / required PRs on `main` (Settings → Branches). This repo is meant to push `main` directly.
 
 ## Do not
 
-- Create pull requests (`gh pr create`, GitHub UI, etc.)
-- Create feature branches
+- Create pull requests as the default review path (`gh pr create`, GitHub UI, etc.)
+- Create long-lived feature or staging branches
 - Commit without an issue reference
 - Force-push `main` unless explicitly asked
+- Commit or `git push` unless John explicitly asks (see `.cursor/rules/no-unsolicited-ship.mdc`)

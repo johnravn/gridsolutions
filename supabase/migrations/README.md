@@ -2,15 +2,17 @@
 
 This directory contains all database migration files. Migrations are applied in chronological order based on their timestamp prefix.
 
-## ⚠️ CRITICAL RULES FOR AI AGENTS
+## CRITICAL RULES FOR AI AGENTS
 
 **When making ANY database schema changes:**
 
-1. **ALWAYS create a migration file** - Never make changes directly in Supabase Dashboard
-2. **ALWAYS enable RLS** - Every table must have Row Level Security enabled
-3. **ALWAYS add RLS policies** - Create policies for SELECT, INSERT, UPDATE, DELETE
-4. **ALWAYS test locally** - Use `npm run db:reset` before pushing (applies migrations and repopulates from remote)
-5. **ALWAYS update types** - Run `npm run db:types:remote` after schema changes
+1. **ALWAYS create a migration file** — Never make changes directly in Supabase Dashboard
+2. **ALWAYS enable RLS** — Every table must have Row Level Security enabled
+3. **ALWAYS add RLS policies** — Create policies for SELECT, INSERT, UPDATE, DELETE
+4. **ALWAYS verify on hosted Dev** — `npm run db:push:dev` when intent is clear (not bare `db:push`)
+5. **ALWAYS update types** — `npm run db:types:dev` while iterating; `npm run db:types:prod` after Prod promote
+
+Optional Docker `db:reset` is **not** the cloud-agent default. Do not copy Prod data into Dev.
 
 ## Migration Workflow
 
@@ -52,17 +54,18 @@ CREATE POLICY "Users can view company data"
   );
 ```
 
-### Testing Locally
+### Verify on hosted Dev
 
 ```bash
-npm run db:reset  # Resets local DB, applies migrations, and repopulates from remote
+npm run db:push:dev      # when intent is clear — never bare db:push
+npm run db:types:dev
 ```
 
-### Pushing to Production
+### Promote to Production (only when John asks)
 
 ```bash
-npm run db:push  # Pushes migrations to remote Supabase
-npm run db:types:remote  # Regenerates TypeScript types
+CONFIRM_PROD_PUSH=1 npm run db:push:prod
+npm run db:types:prod    # alias: db:types:remote
 ```
 
 ## RLS Policy Patterns
@@ -107,18 +110,20 @@ OR EXISTS (
 
 - ✅ One logical change per migration
 - ✅ Use descriptive migration names
-- ✅ Test locally before pushing
+- ✅ Verify on hosted Dev before Prod promote
 - ✅ Use idempotent SQL
 - ✅ Never edit applied migrations
 - ❌ Never skip RLS policies
 - ❌ Never make changes in Dashboard without capturing as migration
+- ❌ Never use bare `npm run db:push`
 
 ## Resources
 
+- **Agent rules**: See `AGENTS.md` in project root
 - **Complete Guide**: See `CONTRIBUTING.md` in project root
 - **Development Workflow**: See `../DEVELOPMENT_WORKFLOW.md`
 - **Troubleshooting**: See `../../TROUBLESHOOTING_MIGRATIONS.md`
 
 ---
 
-**Remember**: When in doubt, create a migration file and test it locally first!
+**Remember**: When in doubt, create a migration file and verify it on hosted Dev first.

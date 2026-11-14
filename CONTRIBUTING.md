@@ -26,15 +26,16 @@ This project is primarily developed using AI agents. This guide ensures all cont
 
    ```bash
    npm run supabase:link:dev
-   npm run db:push:dev          # only after John created Dev and asked / authorized
-   # Optional offline: npm run db:reset  (Docker; copies from Prod — not the agent default)
+   npm run db:push:dev          # agents may when intent is clear + quality OK; ask if ambiguous
+   # Optional offline: npm run db:reset  (Docker only — not the agent default; do not copy Prod→Dev)
    ```
 
-4. **Promote to Prod** (John only, when explicitly asked):
+4. **Promote to Prod** (only when John explicitly asks):
 
    ```bash
    npm run supabase:link:prod
    CONFIRM_PROD_PUSH=1 npm run db:push:prod
+   # Never use bare npm run db:push
    ```
 
 5. **Update TypeScript types:**
@@ -80,12 +81,13 @@ CREATE POLICY "Users can view company addresses"
 ### Migration Best Practices
 
 - ✅ **One logical change per migration** (e.g., `add_rls_to_addresses.sql`)
-- ✅ **Always test locally before pushing**
+- ✅ **Always verify on hosted Dev before Prod promote**
 - ✅ **Use idempotent SQL** (`IF EXISTS`, `IF NOT EXISTS`)
 - ✅ **Never edit applied migrations** - create a new migration instead
-- ✅ **Always regenerate types after schema changes**
+- ✅ **Always regenerate types after schema changes** (`db:types:dev` / `db:types:prod`)
 - ❌ **Never make schema changes in Dashboard without capturing as migration**
-- ❌ **Never skip the local testing step**
+- ❌ **Never use bare `npm run db:push`** — always `:dev` or `:prod`
+- ❌ **Never skip Dev verification**
 
 ## Development Workflow
 
@@ -115,10 +117,12 @@ npm run dev
 - **Prod**: `npm run db:switch:prod` — hosted Prod (rare; `db:switch:remote` is a legacy alias)
 - **Status**: `npm run db:switch:status`
 
-CLI link / push (environment-scoped; never push Prod unless John asks):
+CLI link / push (environment-scoped):
 
 - `npm run supabase:link:dev` / `npm run supabase:link:prod`
-- `npm run db:push:dev` / `CONFIRM_PROD_PUSH=1 npm run db:push:prod`
+- `npm run db:push:dev` — agents may when intent is clear (see `AGENTS.md` / preferences)
+- `CONFIRM_PROD_PUSH=1 npm run db:push:prod` — only when John asks
+- Never bare `npm run db:push`
 
 ### Type Generation
 
@@ -140,21 +144,24 @@ Always commit updated `src/shared/types/database.types.ts` after schema changes 
 
 ## Testing
 
-- Test migrations locally before pushing
+- Verify migrations on hosted Dev before Prod promote
 - Test RLS policies with different user roles
 - Verify TypeScript types are updated
+- Review via agent desktop or `npm run dev` on Dev — not a staging branch / PR preview
 
 ## Resources
 
+- **Agent rules**: See `AGENTS.md`
 - **Git & issues**: See `GITHUB_ISSUES.md`
 - **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Deploying to Vercel from `main`
+- **Environment / secrets**: See `ENVIRONMENT_SETUP.md`
 - **Migration Workflow**: See `supabase/DEVELOPMENT_WORKFLOW.md`
 - **Quick Start**: See `QUICK_START.md`
 - **Database Setup**: See `SUPABASE_SETUP.md`
 
 ---
 
-**Remember**: When in doubt about database changes, always create a migration file and test it locally first!
+**Remember**: When in doubt about database changes, create a migration file and verify it on hosted Dev first!
 
 ## Automated testing
 

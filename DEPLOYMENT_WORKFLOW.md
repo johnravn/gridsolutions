@@ -2,16 +2,19 @@
 
 This document outlines the complete workflow for developing, testing, and deploying to production on Vercel with gridsolutions.app.
 
-## 🏗️ Branch Strategy
+## Branch Strategy
 
-Work only on **`main`**. No feature branches, no pull requests. Track work with GitHub issues — see `GITHUB_ISSUES.md`.
+Work only on **`main`**. No feature branches or pull requests as the review/deploy path. Track work with GitHub issues — see `GITHUB_ISSUES.md`.
 
-- **`main`** — the only branch
+- **`main`** — the only ship branch
   - Auto-deploys to Vercel → gridsolutions.app
-  - Must stay deployable: test locally before pushing
-  - Apply backward-compatible migrations before pushing code that needs them
+  - Must stay deployable: verify on hosted Dev (or agent desktop) before pushing
+  - Apply backward-compatible migrations to **Dev**, then promote to **Prod** before pushing code that needs them
+- Cloud-agent scratch branches (if a runtime forces one) are disposable — not review or deploy
 
-## 🔄 Development Workflow
+**Review before ship:** agent desktop / Live, or local `npm run dev` on hosted Dev. No staging-branch or PR-preview review.
+
+## Development Workflow
 
 ### Starting a New Feature
 
@@ -24,20 +27,27 @@ Work only on **`main`**. No feature branches, no pull requests. Track work with 
    git pull origin main
    ```
 
-2. **Develop locally:**
+2. **Develop against hosted Dev (preferred):**
 
    ```bash
-   npm run supabase:start      # Start local Supabase (if using Docker)
-   npm run db:switch:local     # Switch to local DB
+   npm run db:switch:dev       # Point app at hosted Dev
    npm run dev                 # Start dev server
+   ```
+
+   Optional Docker:
+
+   ```bash
+   npm run supabase:start
+   npm run db:switch:local
+   npm run dev
    ```
 
 3. **Make changes:**
    - Write code
    - Create migrations if needed (see Migration Workflow below)
-   - Test locally
+   - Verify on Dev / agent desktop
 
-4. **Commit and push `main`:**
+4. **Commit and push `main` (only when John asks):**
 
    ```bash
    git add .
@@ -52,7 +62,9 @@ Work only on **`main`**. No feature branches, no pull requests. Track work with 
 
 ### Migration Workflow on `main`
 
-**⚠️ CRITICAL: Database migrations require special handling**
+**CRITICAL: Database migrations require special handling**
+
+Never use bare `npm run db:push`. Always `db:push:dev` or `CONFIRM_PROD_PUSH=1 npm run db:push:prod`.
 
 #### Option A: Backward-Compatible Migrations (Recommended)
 
@@ -65,17 +77,19 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
    # Edit the migration file
    ```
 
-2. **Test locally:**
+2. **Apply + verify on hosted Dev:**
 
    ```bash
-   npm run db:reset  # Test migration locally
+   npm run db:push:dev       # when intent is clear
+   npm run db:types:dev
+   # Review via npm run dev on Dev or agent desktop
    ```
 
-3. **Push migration to production BEFORE pushing code that uses it:**
+3. **Promote to Prod BEFORE pushing code that uses it (only when John asks):**
 
    ```bash
-   npm run db:push  # Push to production Supabase
-   npm run db:types:remote  # Update types
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
+   npm run db:types:prod     # alias: db:types:remote
    git add supabase/migrations/ src/shared/types/database.types.ts
    git commit -m "$(cat <<'EOF'
    Add inventory tracking tables
@@ -86,7 +100,7 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
    git push origin main
    ```
 
-   If the schema and app change belong in the same commit, still run `npm run db:push` **before** `git push origin main`.
+   If the schema and app change belong in the same commit, still run Prod `db:push:prod` **before** `git push origin main` when John has asked for both.
 
 #### Option B: Breaking Migrations
 
@@ -98,18 +112,19 @@ If your migration breaks existing code (removes columns, changes types, etc.):
    npm run db:migrate remove_old_column
    ```
 
-2. **Test locally:**
+2. **Verify on Dev:**
 
    ```bash
-   npm run db:reset
+   npm run db:push:dev
+   npm run db:types:dev
    ```
 
-3. **Push code that no longer depends on the old schema, then apply the migration immediately:**
+3. **Push code that no longer depends on the old schema, then apply the migration to Prod immediately (only when John asks):**
 
    ```bash
    git push origin main
-   npm run db:push  # Apply migration
-   npm run db:types:remote  # Update types
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
+   npm run db:types:prod
    git add src/shared/types/database.types.ts
    git commit -m "$(cat <<'EOF'
    Update types after migration
@@ -122,7 +137,7 @@ If your migration breaks existing code (removes columns, changes types, etc.):
 
 **Best Practice:** Prefer Option A (backward-compatible) whenever possible.
 
-## 🚀 Deployment Workflow
+## Deployment Workflow
 
 ### Vercel Deployment
 
@@ -133,26 +148,26 @@ Every push to `main` deploys **production** at `https://gridsolutions.app`.
 1. Vercel automatically detects the push to `main`
 2. Builds the application
 3. Deploys to gridsolutions.app
-4. Uses environment variables from Vercel dashboard (Production)
+4. Uses environment variables from Vercel dashboard (Production) — **must point at Prod**, never Dev
 
-Test locally before pushing. This workflow does not use feature-branch preview deployments.
+Verify on Dev / agent desktop before asking John to push. This workflow does not use feature-branch preview deployments.
 
 ### Manual Deployment Steps
 
 1. **Ensure migrations are applied:**
 
    ```bash
-   # Check migration status
    npx supabase migration list
-
-   # If needed, push migrations
-   npm run db:push
+   # Dev first when iterating:
+   npm run db:push:dev
+   # Prod only when John asks:
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
    ```
 
 2. **Update TypeScript types:**
 
    ```bash
-   npm run db:types:remote
+   npm run db:types:prod     # after Prod promote
    git add src/shared/types/database.types.ts
    git commit -m "chore: update types from production"
    git push origin main
@@ -170,36 +185,43 @@ Test locally before pushing. This workflow does not use feature-branch preview d
    - Check Vercel dashboard for build status
    - Verify production at gridsolutions.app
 
-## 🔐 Environment Variables
+## Environment Variables
 
-### Important: Two Different Configurations
+### Important: Different configurations
 
-You need **different** Supabase URLs for local development vs production:
+- **Day-to-day / agents** (`.env.local` via `db:switch:dev`): hosted **Dev**
+- **Optional Docker**: localhost from `supabase:start`
+- **Vercel Production**: hosted **Prod** only — never point Production at Dev
+- **Cloud agent secrets**: Dev only — if `SUPABASE_PROJECT_REF` is Prod (`tlpgejkglrgoljgvpubn`), stop
 
-- **Local Development** (`.env.local`): Use localhost when running Docker Supabase
-- **Vercel/Production**: Use your production Supabase URL
+See `ENVIRONMENT_SETUP.md` for full details.
 
 ### Local Environment Variables (`.env.local`)
 
-**If using local Supabase (Docker):**
+**Preferred — hosted Dev** (`npm run db:switch:dev`):
 
 ```env
-# Local Supabase (when running: npm run supabase:start)
-VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_ANON_KEY=your-local-anon-key
-SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
+VITE_SUPABASE_URL=https://YOUR_DEV_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=your-dev-anon-key
+SUPABASE_PROJECT_REF=YOUR_DEV_REF
 ```
 
-**If NOT using local Supabase (connecting directly to production):**
+**Optional — Docker local:**
 
 ```env
-# Production Supabase (for local development)
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=your-local-anon-key
+```
+
+**Rare — Prod for local checks** (`npm run db:switch:prod`):
+
+```env
 VITE_SUPABASE_URL=https://tlpgejkglrgoljgvpubn.supabase.co
 VITE_SUPABASE_ANON_KEY=your-production-anon-key
 SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 ```
 
-**⚠️ Never commit `.env.local` to git!**
+**Never commit `.env.local` to git!**
 
 ### Vercel Environment Variables (Production)
 
@@ -214,70 +236,78 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 **How to find your production values:**
 
 1. Go to https://app.supabase.com
-2. Select your project
+2. Select your **Prod** project
 3. Go to **Settings → API**
-4. Copy:
-   - **Project URL** → `VITE_SUPABASE_URL`
-   - **anon/public key** → `VITE_SUPABASE_ANON_KEY`
-   - **Project Reference ID** → `SUPABASE_PROJECT_REF` (from URL: `https://app.supabase.com/project/YOUR-PROJECT-REF`)
+4. Copy Project URL, anon key, and project ref
 
-**Preview environment:** unused in this workflow (everything ships on `main`). Keep Production variables set.
+**Preview environment:** unused in this workflow (everything ships on `main`). Keep Production variables set to **Prod**.
 
 ### Quick Check: Which URL Should You Use?
 
-**Use localhost (`http://127.0.0.1:54321`) if:**
+**Use hosted Dev if:**
 
-- ✅ You run `npm run supabase:start` for local development
-- ✅ You want to test migrations locally
-- ✅ You want faster development (no network latency)
+- Day-to-day development, agents, migration dry-runs
+- Reviewing work before John commits/pushes
 
-**Use production URL (`https://...supabase.co`) if:**
+**Use Docker localhost if:**
 
-- ✅ You're deploying to Vercel
-- ✅ You're not using Docker/local Supabase
-- ✅ You want to test against production data (be careful!)
+- Optional offline work / no Dev secrets
 
-## 📋 Pre-Deployment Checklist
+**Use Prod URL if:**
 
-Before pushing to `main`:
+- Vercel Production env
+- Rare local checks against live data (be careful!)
 
-- [ ] All migrations tested locally (`npm run db:reset`)
-- [ ] Migrations pushed to production (if backward-compatible)
-- [ ] TypeScript types updated (`npm run db:types:remote`)
-- [ ] Code tested locally
+## Pre-Deployment Checklist
+
+Before asking John to push to `main`:
+
+- [ ] Migrations verified on hosted Dev (`db:push:dev` / `db:types:dev`)
+- [ ] Migrations promoted to Prod if needed (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`)
+- [ ] TypeScript types updated (`db:types:prod` after Prod promote)
+- [ ] Reviewed on Dev / agent desktop
+- [ ] Quality gates: `npm run check`, `npm run test`, `npm run build:check`
 - [ ] No console errors or warnings
-- [ ] Environment variables set in Vercel
+- [ ] Environment variables set in Vercel (Prod)
 - [ ] Migration files committed to git
 - [ ] Types file committed to git
 
-## 🧪 Testing Workflow
+## Testing Workflow
 
-### Local Testing
+### Dev testing (preferred)
 
-1. **Test with local database:**
+```bash
+npm run db:switch:dev
+npm run dev
+# or review via agent desktop / Live
+```
 
-   ```bash
-   npm run supabase:start
-   npm run db:switch:local
-   npm run db:reset  # Apply all migrations
-   npm run dev
-   ```
+### Optional Docker
 
-2. **Test with production database (read-only):**
-   ```bash
-   npm run db:switch:remote
-   npm run dev
-   # Test against production data (be careful!)
-   ```
+```bash
+npm run supabase:start
+npm run db:switch:local
+npm run db:reset   # Docker only — applies migrations + data copy; not Prod→Dev
+npm run dev
+```
+
+### Rare Prod read check
+
+```bash
+npm run db:switch:prod
+npm run dev
+# Test against production data (be careful!)
+```
 
 ### Pre-Production Testing
 
-Before pushing to `main`:
+Before asking John to push to `main`:
 
-1. **Test migration locally:**
+1. **Verify migration on Dev:**
 
    ```bash
-   npm run db:reset  # Should apply all migrations successfully
+   npm run db:push:dev
+   npm run db:types:dev
    ```
 
 2. **Verify RLS policies:**
@@ -286,11 +316,12 @@ Before pushing to `main`:
    - Verify regular users are restricted correctly
 
 3. **Check TypeScript compilation:**
+
    ```bash
-   npm run build  # Should compile without errors
+   npm run build:check
    ```
 
-## 🔄 Rollback Procedure
+## Rollback Procedure
 
 ### Rollback Code (Vercel)
 
@@ -310,7 +341,7 @@ Before pushing to `main`:
 
 ### Rollback Migration (Supabase)
 
-**⚠️ WARNING: Rolling back migrations is complex and risky!**
+**WARNING: Rolling back migrations is complex and risky!**
 
 1. **Create a new migration to undo changes:**
 
@@ -319,73 +350,74 @@ Before pushing to `main`:
    # Write SQL to reverse the previous migration
    ```
 
-2. **Test locally:**
+2. **Verify on Dev, then Prod when John asks:**
 
    ```bash
-   npm run db:reset
-   ```
-
-3. **Push to production:**
-   ```bash
-   npm run db:push
+   npm run db:push:dev
+   CONFIRM_PROD_PUSH=1 npm run db:push:prod
    ```
 
 **Better approach:** Always make migrations backward-compatible so rollback isn't needed.
 
-## 📝 GitHub Issues
+## GitHub Issues
 
-See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes #N` / `Fixes #N` / `Refs #N`. Do not open pull requests.
+See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes #N` / `Fixes #N` / `Refs #N`. Do not open pull requests as the ship path.
 
-## 🎯 Best Practices
+## Best Practices
 
-### Do's ✅
+### Do's
 
-- Always test migrations locally before pushing
-- Push backward-compatible migrations before pushing code that uses them
+- Always verify migrations on hosted Dev before Prod promote
+- Promote backward-compatible migrations to Prod before pushing code that uses them
 - Update TypeScript types after schema changes
 - Work on `main` and reference GitHub issues in commits
 - Keep `main` always deployable
+- Run quality gates before asking John to commit/push
 - Document breaking changes in the issue and/or commit body
 
-### Don'ts ❌
+### Don'ts
 
 - Never push breaking migrations without deploying compatible code first
-- Never skip local testing
+- Never use bare `npm run db:push`
+- Never commit / `git push` / Prod `db:push:prod` unless John asks
 - Never commit `.env.local` files
 - Never make schema changes in Supabase Dashboard without migrations
 - Never push to `main` with failing tests
 - Never skip updating TypeScript types
-- Never create pull requests or feature branches
+- Never create pull requests or long-lived staging branches as the review path
+- Never point Vercel Production at Dev
+- Never copy Prod data into Dev without written OK
 
-## 🔗 Related Documentation
+## Related Documentation
 
+- **Agent rules**: See `AGENTS.md`
 - **Migration Workflow**: See `CONTRIBUTING.md`
+- **Environment / secrets**: See `ENVIRONMENT_SETUP.md`
 - **Supabase Setup**: See `SUPABASE_SETUP.md`
 - **Quick Start**: See `QUICK_START.md`
 - **Development Workflow**: See `supabase/DEVELOPMENT_WORKFLOW.md`
 
-## 🆘 Troubleshooting
+## Troubleshooting
 
 ### Vercel Build Fails
 
 1. Check build logs in Vercel dashboard
-2. Verify environment variables are set
-3. Test build locally: `npm run build`
+2. Verify environment variables are set (Prod)
+3. Test build locally: `npm run build:check`
 4. Check for TypeScript errors
 
 ### Migration Conflicts
 
 1. Check migration status: `npx supabase migration list`
-2. Pull latest from remote: `npx supabase db pull`
-3. Resolve conflicts manually
-4. Test locally before pushing
+2. Resolve against Dev first (`db:push:dev`)
+3. Promote to Prod only when John asks
 
 ### Type Errors After Deployment
 
-1. Regenerate types: `npm run db:types:remote`
-2. Commit updated types
+1. Regenerate types: `npm run db:types:prod`
+2. Commit updated types (when John asks)
 3. Redeploy (or wait for next deployment)
 
 ---
 
-**Remember**: When in doubt, test locally first, then push to `main` only when quality gates pass.
+**Remember**: Verify on hosted Dev / agent desktop first. Commit and push `main` only when John asks and quality gates pass.

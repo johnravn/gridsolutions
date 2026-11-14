@@ -2,7 +2,7 @@
 
 Pushing **`main`** deploys **production** to [gridsolutions.app](https://gridsolutions.app).
 
-This repo does not use feature branches or pull requests, so preview deployments are not part of the workflow. Test locally, then push `main`.
+This repo does not use feature branches or pull requests as the review/deploy path, so preview deployments are not part of the workflow. Review via **agent desktop / Live** or local `npm run dev` on hosted Dev, then push `main` only when John asks.
 
 ## Production (`main`)
 
@@ -10,7 +10,7 @@ This repo does not use feature branches or pull requests, so preview deployments
 
 **URL**: `https://gridsolutions.app`
 
-**Environment**: Production variables in the Vercel dashboard
+**Environment**: Production variables in the Vercel dashboard — **must point at Prod Supabase**, never Dev
 
 **Process**:
 
@@ -32,6 +32,8 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 
 Preview-environment variables are unused while everything ships on `main`.
 
+Day-to-day app/agent secrets use **hosted Dev** — see `ENVIRONMENT_SETUP.md`. Cloud agents must not use Prod `service_role`.
+
 ## Troubleshooting
 
 ### Production not updating
@@ -44,10 +46,11 @@ Preview-environment variables are unused while everything ships on `main`.
 ### Build fails
 
 1. Check Vercel build logs
-2. Verify Production environment variables
+2. Verify Production environment variables (Prod ref)
 3. Reproduce locally: `npm run build:check`
 
 ## Related
 
+- `AGENTS.md` — agent hard gates + Dev-first workflow
 - `GITHUB_ISSUES.md` — issues + commit/push on `main`
 - `DEPLOYMENT_WORKFLOW.md` — migrations and deploy timing

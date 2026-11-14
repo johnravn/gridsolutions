@@ -1,20 +1,25 @@
 ---
-description: Local database reset always repopulates from remote (db:reset includes data)
+description: Hosted Dev is default DB verify; Docker db:reset is optional only
 alwaysApply: true
 ---
 
-# Local DB Reset
+# Database verify / reset
 
-When you need to reset the local Supabase database (e.g. to apply migrations), ALWAYS run:
+**Default (cloud agents + day-to-day):** hosted Dev.
 
-```bash
-npm run db:reset
-```
+- Prefer `npm run db:switch:dev` → verify with `npm run dev` / agent desktop.
+- Apply schema to Dev with `npm run db:push:dev` when intent is clear (see `no-unsolicited-ship.mdc`).
+- Regenerate types from Dev: `npm run db:types:dev`.
+- Do **not** run `db:reset` / `db:copy-*` unless using optional Docker or John asks.
+- Do **not** copy Prod data into Dev.
+- Prod schema: only when John asks — `CONFIRM_PROD_PUSH=1 npm run db:push:prod`. Never bare `npm run db:push`.
 
-This runs the full reset-with-data workflow: applies migrations, then copies auth users, table data, and storage from remote so the local DB is actually usable for development.
+## Optional Docker only
 
-**Do not** run `npm run db:reset:schema-only` unless you explicitly need an empty database (migrations + seed.sql only, no remote data). That variant is for internal scripts and edge cases — not normal agent or migration testing workflows.
+When you intentionally use local Docker and need a usable local DB:
 
-`npm run db:reset:with-data` is an alias for the same full workflow.
+- Prefer `npm run db:reset` over `db:reset:schema-only` (full reset-with-data vs empty schema+seed).
+- `npm run db:reset:with-data` is an alias for the same full workflow.
+- `db:reset:schema-only` is for internal scripts / empty DB edge cases — not the normal Docker path.
 
-This applies everywhere — including docs, READMEs, suggested commands, and migration workflows. If you see `db:reset:schema-only` referenced as the default local reset step, treat it as a bug and replace it with `npm run db:reset`.
+If docs still present Docker `db:reset` as the **only** migration verify step, treat that as stale and point at hosted Dev (`db:push:dev` / `db:types:dev`) instead.

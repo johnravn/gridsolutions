@@ -1,31 +1,43 @@
 ---
-description: Never commit, push to GitHub, or push the database unless the user asks directly
+description: Never commit, push GitHub, or push Prod DB unless asked; Dev push OK when intent is clear
 alwaysApply: true
 ---
 
 # Do not ship unless asked
 
-Never commit, push to GitHub, or push the database unless the user **explicitly asks** in this conversation.
+Never commit or push to GitHub unless the user **explicitly asks** in this conversation. Never push **Prod** schema unless John explicitly asks.
 
-Forbidden without a direct request:
+## Forbidden without a direct request
 
 - `git commit`
 - `git push` (including `origin main`)
-- `npm run db:push` or any other remote database schema/data push
+- Prod DB push: `CONFIRM_PROD_PUSH=1 npm run db:push:prod`, or bare `npm run db:push` while linked to Prod
+- Bare `npm run db:push` as a substitute for an explicit `:dev` / `:prod` target (ambiguous — do not use)
 
-Allowed without asking: local work — code, tests, local migrations (`db:migrate`), local reset (`db:reset`), local types (`db:types`).
+## Dev schema push (allowed when intent is clear)
 
-## What counts as asking
+Agents **may** run `npm run db:push:dev` (and related Dev link / `db:types:dev`) when the change is clearly what John wants and quality looks good enough. Prefer asking if ambiguous. Never treat finishing a task alone as Prod permission.
 
-Only a clear instruction in the current conversation, for example: "commit this", "push to GitHub", "push the migration", "ship it".
+## Allowed without asking
 
-These are **not** permission:
+- Code, unit tests, quality gates
+- `db:migrate` (create migration files only)
+- `db:switch:dev`, `supabase:link:dev`, `db:types:dev` when CLI can read Dev
+- `npm run dev` against Dev secrets
+- Optional Docker local work (`db:reset`, `db:types`) when intentionally using Docker — not the cloud default
+
+## What counts as asking (commit / GitHub / Prod)
+
+Only a clear instruction in the current conversation, for example: "commit this", "push to GitHub", "push this migration to Prod", "ship it", `CONFIRM_PROD_PUSH`.
+
+These are **not** permission for commit / GitHub / Prod:
 
 - Finishing a task, fixing a bug, or passing quality gates
 - Workflow docs that say to commit/push as the last step
 - Creating or closing a GitHub issue
 - The user saying the work looks good, unless they also say to commit or push
+- Authorization to push **Dev** (does not imply commit, GitHub push, or Prod)
 
-If they ask to commit but not push, commit only. If they ask to push the DB but not GitHub, push the DB only.
+If they ask to commit but not push, commit only. If they ask to push Dev but not GitHub, push Dev only. If they ask to push Prod, use `CONFIRM_PROD_PUSH=1 npm run db:push:prod` — never bare `db:push`.
 
-When they do ask: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates) and the database migration workflow for `db:push`.
+When they do ask to commit/push GitHub: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates).

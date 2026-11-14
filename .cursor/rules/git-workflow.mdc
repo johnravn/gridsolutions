@@ -9,6 +9,20 @@ This repo ships on `main`. Do not use pull requests or feature branches.
 
 **Do not commit or push unless the user explicitly asks in this conversation.** See `.cursor/rules/no-unsolicited-ship.mdc`. The rest of this file is how to commit when they do ask.
 
+## Cloud agents vs shipping on main
+
+Grid’s **ship path** is `main` only (issues → commit on main → push main → Vercel Production).
+Do not open pull requests or ask John to merge feature branches as the default review path.
+
+If a cloud-agent runtime forces a working branch:
+
+- Use it only as disposable scratch for that run.
+- Do **not** treat the branch/PR as the review or deploy mechanism.
+- Do **not** merge to `main` or push `main` unless John explicitly asks.
+- Hand off: summary + desktop/Live and/or “pull branch / apply locally against Dev” — John reviews via agent desktop or `npm run dev` on hosted Dev.
+
+Never create a long-lived staging branch or Supabase Branching preview as the default review env.
+
 ## Issues first
 
 Track work with GitHub issues (`gh`). Before committing (only after the user asked to commit):
@@ -23,8 +37,9 @@ Do not open a second issue for work already covered by an open one.
 ## Branching
 
 - Stay on `main`. `git pull origin main` before starting.
-- Never `git checkout -b`, never `gh pr create`.
-- If asked to open a PR, do not. Stay on `main` and wait until they explicitly ask to commit/push.
+- Never `git checkout -b`, never `gh pr create` as the review/deploy path.
+- If asked to open a PR, do not treat it as Grid’s ship path. Stay on `main` and wait until they explicitly ask to commit/push.
+- Cloud scratch branches (if the runtime forces one) are disposable; they need no issue until John asks to land on `main`.
 
 ## Commits
 
@@ -48,6 +63,6 @@ Subject line: what changed and why. Not a file list.
 
 When the user explicitly asks to push: `git push origin main`. That deploys production (Vercel → gridsolutions.app).
 
-Before push, run quality gates: `npm run check`, `npm run test`, `npm run build:check`.
+Before asking John to push (and before you push when asked), run quality gates: `npm run check`, `npm run test`, `npm run build:check`.
 
 Never force-push `main` unless the user explicitly asks.

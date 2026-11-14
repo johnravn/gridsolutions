@@ -110,7 +110,7 @@ Restart `npm run dev` after switching.
 
 ```bash
 npm run supabase:link:dev
-npm run db:push:dev                 # when John authorizes Dev push
+npm run db:push:dev                 # agents may when intent is clear; never bare db:push
 
 npm run supabase:link:prod
 CONFIRM_PROD_PUSH=1 npm run db:push:prod   # John only

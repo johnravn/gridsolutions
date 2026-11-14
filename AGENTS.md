@@ -2,45 +2,68 @@
 
 This project is primarily developed using AI agents. Follow these rules strictly.
 
-## 🚨 CRITICAL: Do not ship unless asked
+## Hard gates
 
-**Never `git commit`, `git push`, or `npm run db:push` unless the user explicitly asks in this conversation.** Finishing a task is not permission. See `.cursor/rules/no-unsolicited-ship.mdc`.
+- **Never** `git commit` or `git push` unless John explicitly asks in this conversation. Finishing a task is not permission. See `.cursor/rules/no-unsolicited-ship.mdc`.
+- **Never** Prod schema push (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`, or bare `npm run db:push` while linked to Prod) unless John explicitly asks.
+- **Never** use bare `npm run db:push` in instructions or as the default push — always `db:push:dev` or `db:push:prod`.
+- Agents **may** run `npm run db:push:dev` (and Dev link/types) when the change is clearly what John wants and quality looks good enough. Prefer asking if ambiguous.
+- All schema changes via migration files + RLS. Never schema-only in the Supabase Dashboard.
+- Vercel Production → **Prod** DB only. Cloud agent secrets → **Dev** only.
+- No Prod→Dev data copy / `db:copy-*` into Dev without written OK.
 
-Local work is fine (code, tests, `db:migrate`, `db:reset`, `db:types`). Remote GitHub and database pushes wait for a direct request.
+## Cloud agents vs shipping on main
 
-## 🚨 CRITICAL: Database Migration Workflow
+Grid’s **ship path** is `main` only (issues → commit on main → push main → Vercel Production).
+Do not open pull requests or ask John to merge feature branches as the default review path.
+
+If a cloud-agent runtime forces a working branch:
+
+- Use it only as disposable scratch for that run.
+- Do **not** treat the branch/PR as the review or deploy mechanism.
+- Do **not** merge to `main` or push `main` unless John explicitly asks.
+- Hand off: summary + desktop/Live and/or “pull branch / apply locally against Dev” — John reviews via agent desktop or `npm run dev` on hosted Dev.
+
+Never create a long-lived staging branch or Supabase Branching preview as the default review env.
+
+## Cloud agent secrets
+
+Cloud agents must use hosted Dev secrets. See `ENVIRONMENT_SETUP.md` (Cursor secrets). If `SUPABASE_PROJECT_REF` is Prod (`tlpgejkglrgoljgvpubn`), **stop** — fix secrets; do not continue against Prod.
+
+## Database Migration Workflow
 
 **ALL database schema changes MUST go through the migration workflow. Never make changes directly in the Supabase Dashboard.**
 
-### Required Steps for ANY Database Change:
+### Required steps for ANY database change
 
 1. **Create migration**: `npm run db:migrate descriptive_name`
-2. **Write SQL** in the generated migration file
-3. **Test locally**: `npm run db:reset` (applies migrations and repopulates from remote — do not use `db:reset:schema-only` unless you need an empty DB)
-4. **Regenerate types from local** (while iterating): `npm run db:types`
-5. **Push to production** (only if the user explicitly asks): `npm run db:push`
-6. **Regenerate types from remote** (after a requested push succeeds): `npm run db:types:remote`
+2. **Write SQL** in the generated migration file (RLS + idempotent policies)
+3. **Apply to hosted Dev**: `npm run db:push:dev` when intent is clear and quality is good enough (or stop for John if ambiguous)
+4. **Regenerate types from Dev** (while iterating): `npm run db:types:dev`
+5. **Promote to Prod** only when John asks: `CONFIRM_PROD_PUSH=1 npm run db:push:prod`
+6. **After Prod promote**: `npm run db:types:prod` (alias: `db:types:remote`) so committed types match production
 
-> Use `db:types` against the **local** DB while you're iterating on a migration.
-> Do not run `db:push` or `db:types:remote` unless the user asked to push the database.
-> After a requested `db:push` succeeds, regenerate types from remote so they match what's deployed.
+Optional offline: Docker + `npm run db:reset` — **not** the cloud-agent default when Dev secrets exist. Do not copy Prod data into Dev.
 
-### RLS (Row Level Security) Requirements:
+Never use bare `npm run db:push` in instructions — always `:dev` or `:prod`.
+
+### RLS (Row Level Security) Requirements
 
 - **Every table MUST have RLS enabled**: `ALTER TABLE table_name ENABLE ROW LEVEL SECURITY;`
 - **Every table MUST have RLS policies** for SELECT, INSERT, UPDATE, DELETE
 - **Always use idempotent SQL**: `DROP POLICY IF EXISTS` before creating policies
 - **Follow the pattern**: Check `company_users` for company-scoped data, `profiles.user_id` for personal data, allow superusers
 
-### Migration Best Practices:
+### Migration Best Practices
 
 - ✅ One logical change per migration
 - ✅ Use descriptive names (e.g., `add_rls_to_addresses`)
-- ✅ Test locally before pushing
+- ✅ Verify on hosted Dev before Prod promote
 - ✅ Use `IF EXISTS` / `IF NOT EXISTS` for idempotency
 - ❌ Never edit applied migrations (create new one instead)
 - ❌ Never skip RLS policies
 - ❌ Never make schema changes in Dashboard without capturing as migration
+- ❌ Never use bare `npm run db:push`
 
 ## Code Style
 
@@ -104,9 +127,9 @@ src/features/<feature>/
 
 When adding a new feature, mirror an existing one (e.g. `src/features/matters/`). Data fetching always lives in `api/` as TanStack Query option factories — don't call `supabase` from components directly.
 
-## Quality Gates (run before pushing)
+## Quality Gates
 
-Before `git push` to `main`, verify the change passes:
+Run quality gates before asking John to commit or push `main` (and always before you push `main` when asked):
 
 ```bash
 npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
@@ -126,34 +149,35 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 
 1. **Issue first**: reuse an open GitHub issue, or `gh issue create` if none exists
 2. **Stay on `main`**: `git pull origin main` before starting
-3. **Make changes**: Code, test locally
-4. **Create migration** (if needed): `npm run db:migrate descriptive_name`, then `npm run db:reset`
-5. **Stop here** unless the user explicitly asks to commit, push GitHub, or push the database
-6. **If asked to push the DB** (and the migration is backward-compatible): `npm run db:push` before pushing code that depends on it
+3. **Make changes**: Code; verify on hosted Dev (`db:switch:dev` → `npm run dev`) or agent desktop
+4. **Create migration** (if needed): `npm run db:migrate descriptive_name`, then `db:push:dev` when intent is clear
+5. **Stop here** unless John asks to commit, push GitHub, or promote to Prod
+6. **If asked to push Prod** (and the migration is backward-compatible): `CONFIRM_PROD_PUSH=1 npm run db:push:prod` before pushing code that depends on it
 7. **If asked to commit**: include `Closes #N` / `Fixes #N` / `Refs #N` — large commits are fine
 8. **If asked to push GitHub**: `git push origin main` — deploys production (`gridsolutions.app`)
 
 ### Vercel Deployments
 
 - **`main`** → Production (`gridsolutions.app`) on every push
-- Test locally before pushing. There is no PR preview step.
+- Review via agent desktop / local Dev — there is no PR preview or staging-branch review step
 
 ### Git Best Practices
 
 - ✅ One GitHub issue per piece of work (search before creating)
 - ✅ Every commit references the issue it tackles
-- ✅ Test locally and run quality gates before pushing `main`
+- ✅ Run quality gates before asking John to push `main`
 - ✅ Document database changes in the issue and/or commit body
-- ❌ Never commit, `git push`, or `db:push` unless the user explicitly asks
-- ❌ Never create pull requests or feature branches
+- ❌ Never commit or `git push` unless John explicitly asks
+- ❌ Never Prod `db:push` / `db:push:prod` unless John explicitly asks
+- ❌ Never create pull requests or long-lived feature/staging branches
 - ❌ Never commit without an issue reference
-- ❌ Never skip local testing before pushing `main`
 
 ## Documentation
 
 - **Git & issues**: See `GITHUB_ISSUES.md` and `.cursor/rules/git-workflow.mdc`
-- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Vercel deployment, migration timing
+- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` — Vercel deployment, migration timing
 - **Vercel Deployments**: See `VERCEL_DEPLOYMENTS.md`
+- **Environment / secrets**: See `ENVIRONMENT_SETUP.md`
 - **Migration Workflow**: See `CONTRIBUTING.md`
 - **Supabase Development**: See `supabase/DEVELOPMENT_WORKFLOW.md`
 - **Migrations Directory**: See `supabase/migrations/README.md`
@@ -165,7 +189,7 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 1. Check `CONTRIBUTING.md` for the complete workflow
 2. Check `supabase/migrations/README.md` for RLS patterns
 3. Look at existing migrations for examples (e.g., `20250119000000_add_invoice_tracking.sql`)
-4. Always create a migration file - never modify schema directly
+4. Always create a migration file — never modify schema directly
 
 ## When Making Code Changes
 
@@ -174,12 +198,12 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 1. Confirm or create a GitHub issue (`gh issue list` / `gh issue create`)
 2. Work on `main` (`git pull origin main`)
 3. Make your changes
-4. Test locally (`npm run dev`)
-5. Do **not** commit or push unless the user explicitly asks. If they do: commit with `Closes #N` (or `Refs #N` if incomplete), then push only if they also asked to push.
+4. Verify on hosted Dev (`npm run db:switch:dev` → `npm run dev`) or via agent desktop
+5. Do **not** commit or push unless John explicitly asks. If they do: commit with `Closes #N` (or `Refs #N` if incomplete), then push only if they also asked to push.
 
 ---
 
 **Remember**:
 
-- Database changes: Always create a migration file and test it locally first. Do not `db:push` unless asked.
-- Code changes: Work on `main` and tie work to GitHub issues. Do not commit or push unless asked.
+- Database: migration files → Dev (`db:push:dev` / `db:types:dev`) → Prod only with explicit ask (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`).
+- Code: work on `main`, tie work to GitHub issues. Do not commit or push unless asked.
