@@ -12,13 +12,17 @@ import {
 } from '@radix-ui/themes'
 import { BIBLE_VERSION_OPTIONS } from '@shared/lib/bibleVersion'
 import ThemeToggle from '@shared/theme/ThemeToggle'
+import {
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+  GEOMETRIC_BACKGROUND_PRESETS,
+} from '@shared/ui/components/AnimatedBackground'
+import type { GeometricBackgroundPreset } from '@shared/ui/components/AnimatedBackground'
 import type { BibleVersion } from '@shared/lib/bibleVersion'
 
 export type ProfilePersonalizationFormSlice = {
   animatedBackground: boolean
   backgroundIntensity: number
-  backgroundShapeType: 'circles' | 'triangles' | 'rectangles'
-  backgroundSpeed: number
+  backgroundPreset: GeometricBackgroundPreset
   dailyInspirationType: 'quote' | 'bibleverse'
   bibleVersion: BibleVersion
 }
@@ -36,7 +40,7 @@ export default function ProfilePersonalizationTab({
   ) => Promise<unknown>
   isSaving: boolean
 }) {
-  const motionOn = form.animatedBackground
+  const backgroundOn = form.animatedBackground
 
   return (
     <Card
@@ -61,8 +65,8 @@ export default function ProfilePersonalizationTab({
           Personalization
         </Heading>
         <Text size="2" color="gray" mb="4">
-          Theme, optional moving background, and what appears in the inspiration
-          card on your home screen.
+          Theme, optional geometric background, and what appears in the
+          inspiration card on your home screen.
         </Text>
 
         <Flex direction="column" gap="4">
@@ -77,18 +81,18 @@ export default function ProfilePersonalizationTab({
 
           <Box>
             <Text size="2" weight="bold" mb="2" style={{ display: 'block' }}>
-              Moving background
+              Background
             </Text>
             <Text size="2" color="gray" mb="3" style={{ display: 'block' }}>
-              Turn on motion background to show animated shapes behind the app.
-              When it is off (default), the background stays solid and the
-              controls below are disabled.
+              Show a sharp geometric accent layer behind the app. When off
+              (default), the shell stays solid and the controls below are
+              disabled.
             </Text>
 
             <PreferenceRow
-              label="Motion background"
-              description="Enables the animated layer and the intensity, shape, and speed options underneath."
-              checked={motionOn}
+              label="Geometric background"
+              description="Enables the accent layer plus intensity and style options underneath."
+              checked={backgroundOn}
               disabled={isSaving}
               onCheckedChange={async (next) => {
                 if (isSaving) return
@@ -113,11 +117,10 @@ export default function ProfilePersonalizationTab({
                   size="1"
                   variant="soft"
                   onClick={async () => {
-                    if (isSaving || !motionOn) return
+                    if (isSaving || !backgroundOn) return
                     patchForm({
-                      backgroundIntensity: 0.1,
-                      backgroundShapeType: 'circles',
-                      backgroundSpeed: 0.5,
+                      backgroundIntensity: 0.35,
+                      backgroundPreset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
                     })
                     try {
                       await saveProfile()
@@ -125,7 +128,7 @@ export default function ProfilePersonalizationTab({
                       /* mutation onError */
                     }
                   }}
-                  disabled={!motionOn || isSaving}
+                  disabled={!backgroundOn || isSaving}
                 >
                   Recommended settings
                 </Button>
@@ -137,7 +140,7 @@ export default function ProfilePersonalizationTab({
                     patchForm({ backgroundIntensity: value })
                   }}
                   onValueCommit={async () => {
-                    if (!isSaving && motionOn) {
+                    if (!isSaving && backgroundOn) {
                       try {
                         await saveProfile()
                       } catch {
@@ -148,16 +151,16 @@ export default function ProfilePersonalizationTab({
                   min={0}
                   max={1}
                   step={0.1}
-                  disabled={!motionOn || isSaving}
+                  disabled={!backgroundOn || isSaving}
                   style={{ flex: 1 }}
                 />
                 <Text
                   size="2"
-                  color={!motionOn ? 'gray' : undefined}
+                  color={!backgroundOn ? 'gray' : undefined}
                   style={{
                     minWidth: 40,
                     textAlign: 'right',
-                    opacity: !motionOn ? 0.5 : 1,
+                    opacity: !backgroundOn ? 0.5 : 1,
                   }}
                 >
                   {Math.round(form.backgroundIntensity * 100)}%
@@ -169,86 +172,40 @@ export default function ProfilePersonalizationTab({
 
             <Flex direction="column" gap="2">
               <Text size="2" weight="medium">
-                Shape type
+                Style
+              </Text>
+              <Text
+                size="1"
+                color="gray"
+                mb="1"
+                style={{ opacity: !backgroundOn ? 0.5 : 1 }}
+              >
+                Sharp geometric presets — not soft circles.
               </Text>
               <Flex gap="2" wrap="wrap">
-                {(['circles', 'triangles', 'rectangles'] as const).map(
-                  (shape) => (
-                    <Button
-                      key={shape}
-                      size="2"
-                      variant={
-                        form.backgroundShapeType === shape ? 'solid' : 'soft'
-                      }
-                      onClick={async () => {
-                        if (isSaving || !motionOn) return
-                        patchForm({ backgroundShapeType: shape })
-                        try {
-                          await saveProfile()
-                        } catch {
-                          /* mutation onError */
-                        }
-                      }}
-                      disabled={!motionOn || isSaving}
-                      style={{ textTransform: 'capitalize' }}
-                    >
-                      {shape}
-                    </Button>
-                  ),
-                )}
-              </Flex>
-            </Flex>
-
-            <Separator size="4" my="4" />
-
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">
-                Animation speed
-              </Text>
-              <Flex gap="3" align="center">
-                <Slider
-                  value={[form.backgroundSpeed]}
-                  onValueChange={([value]) => {
-                    patchForm({ backgroundSpeed: value })
-                  }}
-                  onValueCommit={async () => {
-                    if (!isSaving && motionOn) {
+                {GEOMETRIC_BACKGROUND_PRESETS.map((preset) => (
+                  <Button
+                    key={preset.id}
+                    size="2"
+                    variant={
+                      form.backgroundPreset === preset.id ? 'solid' : 'soft'
+                    }
+                    onClick={async () => {
+                      if (isSaving || !backgroundOn) return
+                      patchForm({ backgroundPreset: preset.id })
                       try {
                         await saveProfile()
                       } catch {
                         /* mutation onError */
                       }
-                    }
-                  }}
-                  min={0.1}
-                  max={3.0}
-                  step={0.1}
-                  disabled={!motionOn || isSaving}
-                  style={{ flex: 1 }}
-                />
-                <Text
-                  size="2"
-                  color={!motionOn ? 'gray' : undefined}
-                  style={{
-                    minWidth: 50,
-                    textAlign: 'right',
-                    opacity: !motionOn ? 0.5 : 1,
-                  }}
-                >
-                  {form.backgroundSpeed.toFixed(1)}x
-                </Text>
+                    }}
+                    disabled={!backgroundOn || isSaving}
+                    title={preset.description}
+                  >
+                    {preset.label}
+                  </Button>
+                ))}
               </Flex>
-              <Text
-                size="1"
-                color="gray"
-                style={{ opacity: !motionOn ? 0.5 : 1 }}
-              >
-                {form.backgroundSpeed < 1.0
-                  ? 'Slower'
-                  : form.backgroundSpeed > 1.0
-                    ? 'Faster'
-                    : 'Normal'}
-              </Text>
             </Flex>
           </Box>
 

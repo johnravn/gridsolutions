@@ -21,7 +21,10 @@ import { Download, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
 import LazyImage from '@shared/ui/components/LazyImage'
-import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import {
+  AnimatedBackground,
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+} from '@shared/ui/components/AnimatedBackground'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { prettyPhone } from '@shared/phone/phone'
 import { parsePhoneNumberFromString } from 'libphonenumber-js'
@@ -57,9 +60,8 @@ import type {
 } from '../types'
 
 const SUBTLE_ANIMATED_BACKGROUND = {
-  intensity: 0.1,
-  shapeType: 'circles' as const,
-  speed: 0.5,
+  intensity: 0.35,
+  preset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
   boostLightContrast: false,
 }
 

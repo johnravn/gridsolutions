@@ -1,137 +1,355 @@
 import { Box } from '@radix-ui/themes'
+import type { CSSProperties } from 'react'
+import './AnimatedBackground.css'
 
-type ShapeType = 'circles' | 'triangles' | 'rectangles'
+/** Canvas preset ids — Profile → Personalization style picker. */
+export type GeometricBackgroundPreset =
+  | 'grid-slash'
+  | 'prism-bands'
+  | 'circuit'
+  | 'facet'
+
+export const GEOMETRIC_BACKGROUND_PRESETS: ReadonlyArray<{
+  id: GeometricBackgroundPreset
+  label: string
+  description: string
+}> = [
+  {
+    id: 'grid-slash',
+    label: 'Grid Slash',
+    description: 'Fine technical grid with hard diagonal cuts',
+  },
+  {
+    id: 'prism-bands',
+    label: 'Prism Bands',
+    description: 'Bold angled color bands with sharp edges',
+  },
+  {
+    id: 'circuit',
+    label: 'Circuit',
+    description: 'Orthogonal traces and nodes — schematic energy',
+  },
+  {
+    id: 'facet',
+    label: 'Facet',
+    description: 'Low-poly triangles with saturated solid fills',
+  },
+]
+
+/** John locked Grid Slash as default / Recommended (2026-11-14). */
+export const DEFAULT_GEOMETRIC_BACKGROUND_PRESET: GeometricBackgroundPreset =
+  'grid-slash'
+
+const PRESET_IDS = new Set<string>(
+  GEOMETRIC_BACKGROUND_PRESETS.map((p) => p.id),
+)
+
+/** Map legacy soft-shape prefs + unknown values onto canvas presets. */
+export function normalizeGeometricPreset(
+  value: unknown,
+): GeometricBackgroundPreset {
+  if (typeof value === 'string' && PRESET_IDS.has(value)) {
+    return value as GeometricBackgroundPreset
+  }
+  switch (value) {
+    case 'bands':
+    case 'prism':
+      return 'prism-bands'
+    case 'grid':
+    case 'rectangles':
+      return 'grid-slash'
+    case 'facets':
+    case 'triangles':
+      return 'facet'
+    case 'circles':
+    default:
+      return DEFAULT_GEOMETRIC_BACKGROUND_PRESET
+  }
+}
+
+function GridSlashArt() {
+  return (
+    <svg
+      className="geo-bg__svg"
+      viewBox="0 0 320 160"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <rect className="geo-bg__base" width="320" height="160" />
+      {Array.from({ length: 12 }, (_, i) => (
+        <line
+          key={`h${i}`}
+          className="geo-bg__ink"
+          x1="0"
+          y1={i * 14}
+          x2="320"
+          y2={i * 14}
+          strokeWidth="1"
+        />
+      ))}
+      {Array.from({ length: 24 }, (_, i) => (
+        <line
+          key={`v${i}`}
+          className="geo-bg__ink"
+          x1={i * 14}
+          y1="0"
+          x2={i * 14}
+          y2="160"
+          strokeWidth="1"
+        />
+      ))}
+      <polygon
+        className="geo-bg__fill-a"
+        points="0,0 120,0 0,90"
+        opacity="0.7"
+      />
+      <polygon
+        className="geo-bg__fill-c"
+        points="320,0 320,70 200,0"
+        opacity="0.55"
+      />
+      <polygon
+        className="geo-bg__fill-b"
+        points="0,160 90,160 0,100"
+        opacity="0.5"
+      />
+      <line
+        className="geo-bg__stroke-d"
+        x1="40"
+        y1="160"
+        x2="280"
+        y2="0"
+        strokeWidth="3"
+      />
+      <line
+        className="geo-bg__stroke-e"
+        x1="0"
+        y1="40"
+        x2="320"
+        y2="120"
+        strokeWidth="2"
+        opacity="0.75"
+      />
+    </svg>
+  )
+}
+
+function PrismBandsArt() {
+  return (
+    <svg
+      className="geo-bg__svg"
+      viewBox="0 0 320 160"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <rect className="geo-bg__base" width="320" height="160" />
+      <polygon
+        className="geo-bg__fill-a"
+        points="0,0 70,0 20,160 0,160"
+        opacity="0.85"
+      />
+      <polygon
+        className="geo-bg__fill-b"
+        points="55,0 115,0 65,160 5,160"
+        opacity="0.7"
+      />
+      <polygon
+        className="geo-bg__fill-c"
+        points="140,0 195,0 145,160 90,160"
+        opacity="0.65"
+      />
+      <polygon
+        className="geo-bg__fill-d"
+        points="230,0 280,0 250,160 200,160"
+        opacity="0.55"
+      />
+      <polygon
+        className="geo-bg__fill-e"
+        points="300,0 320,0 320,160 270,160"
+        opacity="0.5"
+      />
+    </svg>
+  )
+}
+
+function CircuitArt() {
+  return (
+    <svg
+      className="geo-bg__svg"
+      viewBox="0 0 320 160"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <rect className="geo-bg__base" width="320" height="160" />
+      {[40, 80, 120].map((y) => (
+        <line
+          key={`ch${y}`}
+          className="geo-bg__ink"
+          x1="20"
+          y1={y}
+          x2="300"
+          y2={y}
+          strokeWidth="2"
+        />
+      ))}
+      {[60, 160, 260].map((x) => (
+        <line
+          key={`cv${x}`}
+          className="geo-bg__ink"
+          x1={x}
+          y1="20"
+          x2={x}
+          y2="140"
+          strokeWidth="2"
+        />
+      ))}
+      <rect className="geo-bg__node-a" x="52" y="32" width="16" height="16" />
+      <rect className="geo-bg__node-b" x="152" y="72" width="16" height="16" />
+      <rect className="geo-bg__node-c" x="252" y="112" width="16" height="16" />
+      <rect className="geo-bg__node-d" x="152" y="32" width="16" height="16" />
+      <rect className="geo-bg__node-e" x="52" y="112" width="16" height="16" />
+      <line
+        className="geo-bg__stroke-a"
+        x1="68"
+        y1="40"
+        x2="152"
+        y2="40"
+        strokeWidth="3"
+      />
+      <line
+        className="geo-bg__stroke-b"
+        x1="160"
+        y1="48"
+        x2="160"
+        y2="72"
+        strokeWidth="3"
+      />
+      <line
+        className="geo-bg__stroke-c"
+        x1="168"
+        y1="120"
+        x2="252"
+        y2="120"
+        strokeWidth="3"
+      />
+      <line
+        className="geo-bg__stroke-e"
+        x1="60"
+        y1="48"
+        x2="60"
+        y2="112"
+        strokeWidth="3"
+      />
+    </svg>
+  )
+}
+
+function FacetArt() {
+  return (
+    <svg
+      className="geo-bg__svg"
+      viewBox="0 0 320 160"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <rect className="geo-bg__base" width="320" height="160" />
+      <polygon
+        className="geo-bg__fill-a"
+        points="0,0 160,0 80,80"
+        opacity="0.85"
+      />
+      <polygon
+        className="geo-bg__fill-b"
+        points="160,0 320,0 240,80 80,80"
+        opacity="0.65"
+      />
+      <polygon
+        className="geo-bg__fill-c"
+        points="320,0 320,160 240,80"
+        opacity="0.6"
+      />
+      <polygon
+        className="geo-bg__fill-d"
+        points="0,0 80,80 0,160"
+        opacity="0.55"
+      />
+      <polygon
+        className="geo-bg__fill-e"
+        points="80,80 240,80 160,160"
+        opacity="0.65"
+      />
+      <polygon
+        className="geo-bg__fill-a"
+        points="0,160 160,160 80,80"
+        opacity="0.4"
+      />
+      <polygon
+        className="geo-bg__fill-b"
+        points="160,160 320,160 240,80"
+        opacity="0.45"
+      />
+    </svg>
+  )
+}
+
+function PresetArt({ preset }: { preset: GeometricBackgroundPreset }) {
+  switch (preset) {
+    case 'prism-bands':
+      return <PrismBandsArt />
+    case 'circuit':
+      return <CircuitArt />
+    case 'facet':
+      return <FacetArt />
+    case 'grid-slash':
+    default:
+      return <GridSlashArt />
+  }
+}
 
 /**
- * Soft accent shapes behind auth/offer shells.
- * Continuous slide/rotate loops were removed (decorative, always-on GPU).
- * Shapes stay static; prefer-reduced-motion users get the same calm backdrop.
+ * Geometric accent backdrop for auth / app shells.
+ * Sharp multi-hue SVG geometry (canvas presets) — no soft circle blobs.
+ * Subtle scale/drift only when `subtleMotion` and OS allows motion.
  */
 export function AnimatedBackground({
   intensity = 1.0,
-  shapeType = 'circles',
-  speed: _speed = 1.0,
-  boostLightContrast = true,
+  preset = DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+  shapeType,
+  speed: _speed,
+  boostLightContrast: _boostLightContrast = true,
+  subtleMotion = false,
 }: {
   intensity?: number
-  shapeType?: ShapeType
-  /** @deprecated Ignored — background no longer animates. */
+  preset?: GeometricBackgroundPreset
+  /** @deprecated Use `preset`. Legacy soft-shape values are mapped. */
+  shapeType?: string
+  /** @deprecated Ignored — background no longer uses speed. */
   speed?: number
-  /** When false, shape colors stay subtle after theme class hydration. */
+  /** @deprecated Ignored — light contrast is handled in CSS. */
   boostLightContrast?: boolean
+  /** Opt-in micro-drift (still disabled under prefers-reduced-motion). */
+  subtleMotion?: boolean
 }) {
   const clampedIntensity = Math.max(0, Math.min(1, intensity))
-  const initialRotations = [15, 30, 45, 60, 75]
-
-  const shapeExtra = (index: number) => {
-    if (shapeType === 'circles') {
-      if (index === 3)
-        return 'border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;'
-      if (index === 4)
-        return 'border-radius: 40% 60% 60% 40% / 60% 30% 70% 40%;'
-      return 'border-radius: 50%;'
-    }
-    if (shapeType === 'triangles') {
-      return 'clip-path: polygon(50% 0%, 0% 100%, 100% 100%);'
-    }
-    if (index === 1) return 'border-radius: 20px;'
-    if (index === 3) return 'border-radius: 40px;'
-    if (index === 4) return 'border-radius: 15px;'
-    return 'border-radius: 10px;'
-  }
+  const resolved = normalizeGeometricPreset(preset ?? shapeType)
 
   return (
     <Box
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        zIndex: 0,
-        pointerEvents: 'none',
-        overflow: 'hidden',
-      }}
+      className={[
+        'geo-bg',
+        `geo-bg--${resolved}`,
+        subtleMotion ? 'geo-bg--motion' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+      style={
+        {
+          ['--geo-intensity' as string]: String(clampedIntensity),
+        } as CSSProperties
+      }
+      aria-hidden
     >
-      <style>{`
-        .bg-shape {
-          position: absolute;
-          opacity: ${clampedIntensity};
-          mix-blend-mode: normal;
-        }
-
-        .bg-shape-1 {
-          width: 800px;
-          height: 800px;
-          background: var(--accent-a3);
-          top: -200px;
-          left: 10%;
-          transform: rotate(${initialRotations[0]}deg);
-          ${shapeExtra(0)}
-        }
-
-        .bg-shape-2 {
-          width: 600px;
-          height: 600px;
-          background: var(--accent-a2);
-          top: 20%;
-          right: -10%;
-          left: auto;
-          transform: rotate(${initialRotations[1]}deg);
-          ${shapeExtra(1)}
-        }
-
-        .bg-shape-3 {
-          width: 1000px;
-          height: 1000px;
-          background: var(--accent-a3);
-          bottom: -300px;
-          left: -15%;
-          transform: rotate(${initialRotations[2]}deg);
-          ${shapeExtra(2)}
-        }
-
-        .bg-shape-4 {
-          width: 400px;
-          height: 400px;
-          background: var(--accent-a2);
-          top: 50%;
-          left: 40%;
-          transform: rotate(${initialRotations[3]}deg);
-          ${shapeExtra(3)}
-        }
-
-        .bg-shape-5 {
-          width: 700px;
-          height: 700px;
-          background: var(--accent-a3);
-          top: 10%;
-          left: 55%;
-          transform: rotate(${initialRotations[4]}deg);
-          ${shapeExtra(4)}
-        }
-
-        ${
-          boostLightContrast
-            ? `/* Increase contrast for light mode */
-        .light .bg-shape-1,
-        .light .bg-shape-3,
-        .light .bg-shape-5 {
-          background: var(--accent-a7);
-        }
-
-        .light .bg-shape-2,
-        .light .bg-shape-4 {
-          background: var(--accent-a6);
-        }`
-            : ''
-        }
-      `}</style>
-      <div className="bg-shape bg-shape-1" />
-      <div className="bg-shape bg-shape-2" />
-      <div className="bg-shape bg-shape-3" />
-      <div className="bg-shape bg-shape-4" />
-      <div className="bg-shape bg-shape-5" />
+      <PresetArt preset={resolved} />
     </Box>
   )
 }

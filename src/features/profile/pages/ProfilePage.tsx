@@ -38,6 +38,10 @@ import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatt
 import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
 import ProfileShortcutsTab from '@features/profile/components/ProfileShortcutsTab'
 import { useNavigate, useSearch } from '@tanstack/react-router'
+import {
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+  normalizeGeometricPreset,
+} from '@shared/ui/components/AnimatedBackground'
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
 import type { BibleVersion } from '@shared/lib/bibleVersion'
 
@@ -215,8 +219,7 @@ export default function ProfilePage() {
     notes: '',
     animatedBackground: false,
     backgroundIntensity: 1.0,
-    backgroundShapeType: 'circles' as 'circles' | 'triangles' | 'rectangles',
-    backgroundSpeed: 1.0,
+    backgroundPreset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
     dailyInspirationType: 'quote' as 'quote' | 'bibleverse',
     bibleVersion: DEFAULT_BIBLE_VERSION,
   })
@@ -260,12 +263,10 @@ export default function ProfilePage() {
       backgroundIntensity:
         (data.preferences as Record<string, any> | null)
           ?.animated_background_intensity ?? 1.0,
-      backgroundShapeType:
+      backgroundPreset: normalizeGeometricPreset(
         (data.preferences as Record<string, any> | null)
-          ?.animated_background_shape_type ?? 'circles',
-      backgroundSpeed:
-        (data.preferences as Record<string, any> | null)
-          ?.animated_background_speed ?? 1.0,
+          ?.animated_background_shape_type,
+      ),
       dailyInspirationType:
         (data.preferences as Record<string, any> | null)
           ?.daily_inspiration_type === 'bibleverse'
@@ -378,8 +379,7 @@ export default function ProfilePage() {
         notes: currentForm.notes || null,
         animated_background_enabled: currentForm.animatedBackground,
         animated_background_intensity: currentForm.backgroundIntensity,
-        animated_background_shape_type: currentForm.backgroundShapeType,
-        animated_background_speed: currentForm.backgroundSpeed,
+        animated_background_shape_type: currentForm.backgroundPreset,
         daily_inspiration_type: currentForm.dailyInspirationType,
         bible_version: currentForm.bibleVersion,
       }
@@ -815,8 +815,7 @@ export default function ProfilePage() {
                 {
                   animatedBackground: form.animatedBackground,
                   backgroundIntensity: form.backgroundIntensity,
-                  backgroundShapeType: form.backgroundShapeType,
-                  backgroundSpeed: form.backgroundSpeed,
+                  backgroundPreset: form.backgroundPreset,
                   dailyInspirationType: form.dailyInspirationType,
                   bibleVersion: form.bibleVersion,
                 } satisfies ProfilePersonalizationFormSlice

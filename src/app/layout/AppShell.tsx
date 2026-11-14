@@ -21,7 +21,11 @@ import { supabase } from '@shared/api/supabase'
 import { myProfileQuery } from '@shared/api/myProfileQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { companyExpansionQuery } from '@features/company/api/queries'
-import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import {
+  AnimatedBackground,
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+  normalizeGeometricPreset,
+} from '@shared/ui/components/AnimatedBackground'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
@@ -115,7 +119,7 @@ export default function AppShell() {
 
   const displayName = myProfile?.display_name || myProfile?.email || ''
 
-  // Check user preference for animated background (defaults to false)
+  // Geometric background preference (defaults off). Static art respects RM without hiding.
   const { data: backgroundPrefs } = useQuery({
     queryKey: ['profile', authUser?.id, 'animated-background-preference'],
     enabled: !!authUser?.id,
@@ -124,8 +128,7 @@ export default function AppShell() {
         return {
           enabled: false,
           intensity: 1.0,
-          shapeType: 'circles' as const,
-          speed: 1.0,
+          preset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
         }
       const { data } = await supabase
         .from('profiles')
@@ -133,12 +136,10 @@ export default function AppShell() {
         .eq('user_id', authUser.id)
         .maybeSingle()
       const prefs = data?.preferences as any
-      // Default to false if not set
       return {
         enabled: prefs?.animated_background_enabled ?? false,
         intensity: prefs?.animated_background_intensity ?? 1.0,
-        shapeType: prefs?.animated_background_shape_type ?? 'circles',
-        speed: prefs?.animated_background_speed ?? 1.0,
+        preset: normalizeGeometricPreset(prefs?.animated_background_shape_type),
       }
     },
     staleTime: 10 * 60_000,
@@ -147,10 +148,9 @@ export default function AppShell() {
 
   const backgroundEnabled = backgroundPrefs?.enabled ?? false
   const backgroundIntensity = backgroundPrefs?.intensity ?? 1.0
-  const backgroundShapeType = backgroundPrefs?.shapeType ?? 'circles'
-  const backgroundSpeed = backgroundPrefs?.speed ?? 1.0
-  const showAnimatedBackground =
-    backgroundEnabled && !systemPrefersReducedMotion
+  const backgroundPreset =
+    backgroundPrefs?.preset ?? DEFAULT_GEOMETRIC_BACKGROUND_PRESET
+  const showAnimatedBackground = backgroundEnabled
 
   React.useEffect(() => {
     if (isMobile) setOpen(false)
@@ -202,8 +202,8 @@ export default function AppShell() {
         {!isPublic && showAnimatedBackground && (
           <AnimatedBackground
             intensity={backgroundIntensity}
-            shapeType={backgroundShapeType}
-            speed={backgroundSpeed}
+            preset={backgroundPreset}
+            subtleMotion={!systemPrefersReducedMotion}
           />
         )}
 

@@ -1,0 +1,124 @@
+/* Geometric accent backdrop — sharp lines, multi-hue solids, no soft blobs.
+   Optional micro-drift via .geo-bg--motion; prefers-reduced-motion disables it. */
+
+.geo-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: var(--geo-intensity, 1);
+}
+
+.geo-bg__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.geo-bg__base {
+  fill: transparent;
+}
+
+/* Ink lines: readable on light + dark shells */
+.geo-bg__ink {
+  stroke: color-mix(in oklab, var(--gray-12) 14%, transparent);
+  fill: none;
+}
+
+.dark .geo-bg__ink {
+  stroke: color-mix(in oklab, var(--gray-1) 16%, transparent);
+}
+
+.geo-bg__fill-a {
+  fill: var(--blue-a8);
+}
+.geo-bg__fill-b {
+  fill: var(--cyan-a8);
+}
+.geo-bg__fill-c {
+  fill: var(--purple-a8);
+}
+.geo-bg__fill-d {
+  fill: var(--pink-a8);
+}
+.geo-bg__fill-e {
+  fill: var(--orange-a8);
+}
+
+.geo-bg__stroke-a {
+  stroke: var(--blue-9);
+  fill: none;
+}
+.geo-bg__stroke-b {
+  stroke: var(--cyan-9);
+  fill: none;
+}
+.geo-bg__stroke-c {
+  stroke: var(--purple-9);
+  fill: none;
+}
+.geo-bg__stroke-d {
+  stroke: var(--pink-9);
+  fill: none;
+}
+.geo-bg__stroke-e {
+  stroke: var(--orange-9);
+  fill: none;
+}
+
+.geo-bg__node-a {
+  fill: var(--blue-9);
+}
+.geo-bg__node-b {
+  fill: var(--cyan-9);
+}
+.geo-bg__node-c {
+  fill: var(--purple-9);
+}
+.geo-bg__node-d {
+  fill: var(--pink-9);
+}
+.geo-bg__node-e {
+  fill: var(--orange-9);
+}
+
+/* Light: punch fills so geometry reads on pale auth/app shells */
+.light .geo-bg__fill-a {
+  fill: var(--blue-a9);
+}
+.light .geo-bg__fill-b {
+  fill: var(--cyan-a9);
+}
+.light .geo-bg__fill-c {
+  fill: var(--purple-a9);
+}
+.light .geo-bg__fill-d {
+  fill: var(--pink-a9);
+}
+.light .geo-bg__fill-e {
+  fill: var(--orange-a9);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .geo-bg--motion .geo-bg__svg {
+    animation: geo-bg-drift 56s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes geo-bg-drift {
+  from {
+    transform: translate3d(0, 0, 0) scale(1.02);
+  }
+  to {
+    transform: translate3d(1.2%, -0.8%, 0) scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .geo-bg--motion .geo-bg__svg {
+    animation: none;
+  }
+}

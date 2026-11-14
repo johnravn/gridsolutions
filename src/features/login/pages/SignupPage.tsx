@@ -16,7 +16,10 @@ import {
   Separator,
   Text,
 } from '@radix-ui/themes'
-import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import {
+  AnimatedBackground,
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+} from '@shared/ui/components/AnimatedBackground'
 import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
 
 interface PasswordRequirement {
@@ -183,7 +186,10 @@ export default function SignupPage() {
         overflow: 'auto',
       }}
     >
-      <AnimatedBackground intensity={0.1} shapeType="circles" speed={0.5} />
+      <AnimatedBackground
+        intensity={0.35}
+        preset={DEFAULT_GEOMETRIC_BACKGROUND_PRESET}
+      />
       <Card
         size="4"
         style={{

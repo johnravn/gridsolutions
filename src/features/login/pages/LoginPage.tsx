@@ -13,7 +13,10 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { NavArrowLeft } from 'iconoir-react'
-import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import {
+  AnimatedBackground,
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+} from '@shared/ui/components/AnimatedBackground'
 import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
 import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
 
@@ -103,7 +106,10 @@ export default function LoginPage() {
         overflow: 'auto',
       }}
     >
-      <AnimatedBackground intensity={0.1} shapeType="circles" speed={0.5} />
+      <AnimatedBackground
+        intensity={0.35}
+        preset={DEFAULT_GEOMETRIC_BACKGROUND_PRESET}
+      />
       <Card
         size="4" // a bit roomier than size="3"
         style={{

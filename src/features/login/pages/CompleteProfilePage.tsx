@@ -16,7 +16,10 @@ import {
 import { useAppForm } from '@shared/form'
 import { supabase } from '@shared/api/supabase'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
-import { AnimatedBackground } from '@shared/ui/components/AnimatedBackground'
+import {
+  AnimatedBackground,
+  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+} from '@shared/ui/components/AnimatedBackground'
 import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
 import { myProfileQueryKey } from '@shared/api/myProfileQuery'
 
@@ -171,7 +174,10 @@ export default function CompleteProfilePage() {
         overflow: 'auto',
       }}
     >
-      <AnimatedBackground intensity={0.1} shapeType="circles" speed={0.5} />
+      <AnimatedBackground
+        intensity={0.35}
+        preset={DEFAULT_GEOMETRIC_BACKGROUND_PRESET}
+      />
       <Card
         size="4"
         style={{
