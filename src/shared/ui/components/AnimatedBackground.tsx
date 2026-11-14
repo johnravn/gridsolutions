@@ -329,10 +329,11 @@ export function AnimatedBackground({
       }
       aria-hidden
     >
-      <div className="geo-bg__fine-grid" />
       <div className="geo-bg__art">
         <PresetArt preset={resolved} />
       </div>
+      {/* Fine grid above art so lattice reads on real app/auth chrome */}
+      <div className="geo-bg__fine-grid" />
     </Box>
   )
 }
