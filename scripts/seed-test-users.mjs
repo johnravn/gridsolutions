@@ -1,14 +1,40 @@
 /**
- * Seeds deterministic test users, company, job, and offers for integration/E2E tests.
- * Idempotent — safe to run multiple times after db reset.
+ * Seeds deterministic test users, company, job, offers, and a richer demo catalog
+ * (inventory, vehicles, customers) for integration/E2E tests and hosted Dev.
+ * Idempotent — safe to run multiple times after db reset / against hosted Dev.
  */
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import { loadLocalSupabaseEnv } from './loadLocalSupabaseEnv.mjs'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+/** Load repo-root `.env.local` into process.env when keys are missing (hosted Dev). */
+function loadEnvLocalFile() {
+  const path = join(process.cwd(), '.env.local')
+  if (!existsSync(path)) return
+  for (const raw of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const eq = line.indexOf('=')
+    if (eq <= 0) continue
+    const key = line.slice(0, eq).trim()
+    let value = line.slice(eq + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    if (process.env[key] == null || process.env[key] === '') {
+      process.env[key] = value
+    }
+  }
+}
+
+loadEnvLocalFile()
 
 /** Keep in sync with `APP_VERSION` so "What's new" does not block E2E clicks. */
 function readAppVersion() {
@@ -54,6 +80,43 @@ export const TEST_IDS = {
   conflictSeedJobId: '14141414-1414-4414-8414-141414141414',
   conflictTimePeriodId: '12121212-1212-4212-8212-121212121212',
   conflictReservedItemId: '13131313-1313-4313-8313-131313131313',
+}
+
+/** Extra demo catalog IDs (idempotent upserts; do not reuse E2E conflict item IDs). */
+const DEMO_IDS = {
+  catAudio: 'a1000001-0001-4001-8001-000000000001',
+  catLighting: 'a1000001-0001-4001-8001-000000000002',
+  catVideo: 'a1000001-0001-4001-8001-000000000003',
+  catCables: 'a1000001-0001-4001-8001-000000000004',
+  brandShure: 'a1000002-0002-4002-8002-000000000001',
+  brandDb: 'a1000002-0002-4002-8002-000000000002',
+  brandRobe: 'a1000002-0002-4002-8002-000000000003',
+  brandBlackmagic: 'a1000002-0002-4002-8002-000000000004',
+  itemSm58: 'a1000003-0003-4003-8003-000000000001',
+  itemSm57: 'a1000003-0003-4003-8003-000000000002',
+  itemDiBox: 'a1000003-0003-4003-8003-000000000003',
+  itemXlr5: 'a1000003-0003-4003-8003-000000000004',
+  itemXlr10: 'a1000003-0003-4003-8003-000000000005',
+  itemQscK12: 'a1000003-0003-4003-8003-000000000006',
+  itemSub: 'a1000003-0003-4003-8003-000000000007',
+  itemMovingHead: 'a1000003-0003-4003-8003-000000000008',
+  itemLedPar: 'a1000003-0003-4003-8003-000000000009',
+  itemAtem: 'a1000003-0003-4003-8003-00000000000a',
+  itemCamera: 'a1000003-0003-4003-8003-00000000000b',
+  itemStand: 'a1000003-0003-4003-8003-00000000000c',
+  groupFoh: 'a1000004-0004-4004-8004-000000000001',
+  groupGi1: 'a1000004-0004-4004-8004-000000000011',
+  groupGi2: 'a1000004-0004-4004-8004-000000000012',
+  groupGi3: 'a1000004-0004-4004-8004-000000000013',
+  vehicleVan: 'a1000005-0005-4005-8005-000000000001',
+  vehicleCar: 'a1000005-0005-4005-8005-000000000002',
+  vehicleTruck: 'a1000005-0005-4005-8005-000000000003',
+  vehiclePersonal: 'a1000005-0005-4005-8005-000000000004',
+  customerOslo: 'a1000006-0006-4006-8006-000000000001',
+  customerBergen: 'a1000006-0006-4006-8006-000000000002',
+  contactOslo: 'a1000007-0007-4007-8007-000000000001',
+  contactBergen: 'a1000007-0007-4007-8007-000000000002',
+  addressWarehouse: 'a1000008-0008-4008-8008-000000000001',
 }
 
 /** Conta-ready customer used by money-pipeline e2e / invoice preview. */
@@ -157,14 +220,358 @@ async function upsertProfile(userId, email, displayName, selectedCompanyId) {
   if (error) throw error
 }
 
-async function upsertCompanyUser(companyId, userId, role) {
-  const { error } = await admin
-    .from('company_users')
-    .upsert(
-      { company_id: companyId, user_id: userId, role },
-      { onConflict: 'company_id,user_id' },
-    )
+async function upsertCompanyUser(
+  companyId,
+  userId,
+  role,
+  { rate = null, rateType = null } = {},
+) {
+  const { error } = await admin.from('company_users').upsert(
+    {
+      company_id: companyId,
+      user_id: userId,
+      role,
+      rate,
+      rate_type: rateType,
+      rate_updated_at: rate != null ? new Date().toISOString() : null,
+    },
+    { onConflict: 'company_id,user_id' },
+  )
   if (error) throw error
+}
+
+async function upsertItemWithPrice({
+  id,
+  name,
+  quantity,
+  amount,
+  categoryId = null,
+  brandId = null,
+  model = null,
+  itemKind = 'stock',
+}) {
+  const { error } = await admin.from('items').upsert(
+    {
+      id,
+      company_id: TEST_IDS.companyId,
+      name,
+      model,
+      total_quantity: quantity,
+      category_id: categoryId,
+      brand_id: brandId,
+      item_kind: itemKind,
+      active: true,
+      deleted: false,
+      allow_individual_booking: true,
+    },
+    { onConflict: 'id' },
+  )
+  if (error) throw error
+
+  await admin
+    .from('item_price_history')
+    .update({ effective_to: new Date().toISOString() })
+    .eq('item_id', id)
+    .is('effective_to', null)
+
+  const priceId = id.replace(/^a1000003/, 'a1000009')
+  const { error: priceError } = await admin.from('item_price_history').upsert(
+    {
+      id: priceId,
+      company_id: TEST_IDS.companyId,
+      item_id: id,
+      amount,
+      effective_from: new Date().toISOString(),
+      effective_to: null,
+    },
+    { onConflict: 'id' },
+  )
+  if (priceError) throw priceError
+}
+
+/**
+ * Representative catalog so Dev UI is usable without copying Prod.
+ * Does not change TEST_IDS.testItemId (qty 1) used by conflict/E2E tests.
+ */
+async function seedDemoCatalog(ownerId) {
+  const categories = [
+    { id: DEMO_IDS.catAudio, name: 'Audio' },
+    { id: DEMO_IDS.catLighting, name: 'Lighting' },
+    { id: DEMO_IDS.catVideo, name: 'Video' },
+    { id: DEMO_IDS.catCables, name: 'Cables & stands' },
+  ]
+  for (const cat of categories) {
+    const { error } = await admin.from('item_categories').upsert(
+      { id: cat.id, company_id: TEST_IDS.companyId, name: cat.name },
+      { onConflict: 'id' },
+    )
+    if (error) throw error
+  }
+
+  const brands = [
+    { id: DEMO_IDS.brandShure, name: 'Shure' },
+    { id: DEMO_IDS.brandDb, name: 'd&b audiotechnik' },
+    { id: DEMO_IDS.brandRobe, name: 'Robe' },
+    { id: DEMO_IDS.brandBlackmagic, name: 'Blackmagic' },
+  ]
+  for (const brand of brands) {
+    const { error } = await admin.from('item_brands').upsert(
+      { id: brand.id, company_id: TEST_IDS.companyId, name: brand.name },
+      { onConflict: 'id' },
+    )
+    if (error) throw error
+  }
+
+  const items = [
+    {
+      id: DEMO_IDS.itemSm58,
+      name: 'SM58',
+      model: 'SM58',
+      quantity: 24,
+      amount: 85,
+      categoryId: DEMO_IDS.catAudio,
+      brandId: DEMO_IDS.brandShure,
+    },
+    {
+      id: DEMO_IDS.itemSm57,
+      name: 'SM57',
+      model: 'SM57',
+      quantity: 16,
+      amount: 75,
+      categoryId: DEMO_IDS.catAudio,
+      brandId: DEMO_IDS.brandShure,
+    },
+    {
+      id: DEMO_IDS.itemDiBox,
+      name: 'Active DI box',
+      quantity: 12,
+      amount: 45,
+      categoryId: DEMO_IDS.catAudio,
+    },
+    {
+      id: DEMO_IDS.itemXlr5,
+      name: 'XLR cable 5m',
+      quantity: 80,
+      amount: 12,
+      categoryId: DEMO_IDS.catCables,
+    },
+    {
+      id: DEMO_IDS.itemXlr10,
+      name: 'XLR cable 10m',
+      quantity: 40,
+      amount: 18,
+      categoryId: DEMO_IDS.catCables,
+    },
+    {
+      id: DEMO_IDS.itemStand,
+      name: 'Mic stand boom',
+      quantity: 30,
+      amount: 25,
+      categoryId: DEMO_IDS.catCables,
+    },
+    {
+      id: DEMO_IDS.itemQscK12,
+      name: 'K12.2 powered speaker',
+      model: 'K12.2',
+      quantity: 8,
+      amount: 450,
+      categoryId: DEMO_IDS.catAudio,
+      brandId: DEMO_IDS.brandDb,
+    },
+    {
+      id: DEMO_IDS.itemSub,
+      name: 'KS21 subwoofer',
+      model: 'KS21',
+      quantity: 4,
+      amount: 900,
+      categoryId: DEMO_IDS.catAudio,
+      brandId: DEMO_IDS.brandDb,
+    },
+    {
+      id: DEMO_IDS.itemMovingHead,
+      name: 'MegaPointe',
+      model: 'MegaPointe',
+      quantity: 6,
+      amount: 1200,
+      categoryId: DEMO_IDS.catLighting,
+      brandId: DEMO_IDS.brandRobe,
+    },
+    {
+      id: DEMO_IDS.itemLedPar,
+      name: 'LED PAR 64',
+      quantity: 24,
+      amount: 55,
+      categoryId: DEMO_IDS.catLighting,
+    },
+    {
+      id: DEMO_IDS.itemAtem,
+      name: 'ATEM Mini Pro',
+      model: 'ATEM Mini Pro',
+      quantity: 2,
+      amount: 700,
+      categoryId: DEMO_IDS.catVideo,
+      brandId: DEMO_IDS.brandBlackmagic,
+    },
+    {
+      id: DEMO_IDS.itemCamera,
+      name: 'Pocket Cinema 6K',
+      model: 'Pocket 6K',
+      quantity: 2,
+      amount: 1800,
+      categoryId: DEMO_IDS.catVideo,
+      brandId: DEMO_IDS.brandBlackmagic,
+    },
+  ]
+  for (const item of items) {
+    await upsertItemWithPrice(item)
+  }
+
+  const { error: groupError } = await admin.from('item_groups').upsert(
+    {
+      id: DEMO_IDS.groupFoh,
+      company_id: TEST_IDS.companyId,
+      name: 'FOH PA package',
+      description: '2× tops + 2× subs for small outdoor gigs',
+      category_id: DEMO_IDS.catAudio,
+      group_type: 'bundle',
+      item_kind: 'stock',
+      unique: false,
+      active: true,
+      deleted: false,
+    },
+    { onConflict: 'id' },
+  )
+  if (groupError) throw groupError
+
+  const groupMembers = [
+    { id: DEMO_IDS.groupGi1, itemId: DEMO_IDS.itemQscK12, quantity: 2 },
+    { id: DEMO_IDS.groupGi2, itemId: DEMO_IDS.itemSub, quantity: 2 },
+    { id: DEMO_IDS.groupGi3, itemId: DEMO_IDS.itemXlr10, quantity: 4 },
+  ]
+  for (const member of groupMembers) {
+    const { error } = await admin.from('group_items').upsert(
+      {
+        id: member.id,
+        group_id: DEMO_IDS.groupFoh,
+        item_id: member.itemId,
+        quantity: member.quantity,
+      },
+      { onConflict: 'id' },
+    )
+    if (error) throw error
+  }
+
+  const vehicles = [
+    {
+      id: DEMO_IDS.vehicleVan,
+      name: 'Sprinter van',
+      registration_no: 'EL12345',
+      fuel: 'diesel',
+      vehicle_category: 'van_medium',
+      internally_owned: true,
+    },
+    {
+      id: DEMO_IDS.vehicleCar,
+      name: 'Crew car',
+      registration_no: 'EL54321',
+      fuel: 'petrol',
+      vehicle_category: 'passenger_car_medium',
+      internally_owned: true,
+    },
+    {
+      id: DEMO_IDS.vehicleTruck,
+      name: '18-pallet truck',
+      registration_no: 'EL99999',
+      fuel: 'diesel',
+      vehicle_category: 'C',
+      internally_owned: true,
+    },
+    {
+      id: DEMO_IDS.vehiclePersonal,
+      name: 'Owner EV',
+      registration_no: 'EL77777',
+      fuel: 'electric',
+      vehicle_category: 'passenger_car_small',
+      internally_owned: false,
+      owner_user_id: ownerId,
+    },
+  ]
+  for (const vehicle of vehicles) {
+    const { error } = await admin.from('vehicles').upsert(
+      {
+        ...vehicle,
+        company_id: TEST_IDS.companyId,
+        active: true,
+        deleted: false,
+      },
+      { onConflict: 'id' },
+    )
+    if (error) throw error
+  }
+
+  const { error: addrError } = await admin.from('addresses').upsert(
+    {
+      id: DEMO_IDS.addressWarehouse,
+      company_id: TEST_IDS.companyId,
+      name: 'Warehouse',
+      address_line: 'Testveien 1',
+      zip_code: '0150',
+      city: 'Oslo',
+      country: 'Norway',
+      is_personal: false,
+      deleted: false,
+    },
+    { onConflict: 'id' },
+  )
+  if (addrError) throw addrError
+
+  const customers = [
+    {
+      id: DEMO_IDS.customerOslo,
+      name: 'Oslo Festival AS',
+      email: 'booking@oslofestival.test',
+      contactId: DEMO_IDS.contactOslo,
+      contactName: 'Kari Nordmann',
+      contactEmail: 'kari@oslofestival.test',
+      contactTitle: 'Producer',
+    },
+    {
+      id: DEMO_IDS.customerBergen,
+      name: 'Bergen Live',
+      email: 'tech@bergenlive.test',
+      contactId: DEMO_IDS.contactBergen,
+      contactName: 'Ola Berg',
+      contactEmail: 'ola@bergenlive.test',
+      contactTitle: 'Tech lead',
+    },
+  ]
+  for (const customer of customers) {
+    const { error } = await admin.from('customers').upsert(
+      {
+        id: customer.id,
+        company_id: TEST_IDS.companyId,
+        name: customer.name,
+        email: customer.email,
+        deleted: false,
+      },
+      { onConflict: 'id' },
+    )
+    if (error) throw error
+
+    const { error: contactError } = await admin.from('contacts').upsert(
+      {
+        id: customer.contactId,
+        company_id: TEST_IDS.companyId,
+        customer_id: customer.id,
+        name: customer.contactName,
+        email: customer.contactEmail,
+        title: customer.contactTitle,
+        phone: '+4790000000',
+      },
+      { onConflict: 'id' },
+    )
+    if (contactError) throw contactError
+  }
 }
 
 async function seedCompany(ownerId) {
@@ -467,22 +874,33 @@ async function main() {
     'Test Owner',
     TEST_IDS.companyId,
   )
+  await upsertCompanyUser(TEST_IDS.companyId, ownerId, 'owner', {
+    rate: 950,
+    rateType: 'day',
+  })
   await upsertProfile(
     freelancerId,
     TEST_CREDENTIALS.freelancerEmail,
     'Test Freelancer',
     TEST_IDS.companyId,
   )
-  await upsertCompanyUser(TEST_IDS.companyId, freelancerId, 'freelancer')
+  await upsertCompanyUser(TEST_IDS.companyId, freelancerId, 'freelancer', {
+    rate: 750,
+    rateType: 'day',
+  })
   await upsertProfile(
     employeeId,
     TEST_CREDENTIALS.employeeEmail,
     'Test Employee',
     TEST_IDS.companyId,
   )
-  await upsertCompanyUser(TEST_IDS.companyId, employeeId, 'employee')
+  await upsertCompanyUser(TEST_IDS.companyId, employeeId, 'employee', {
+    rate: 650,
+    rateType: 'day',
+  })
 
   await seedTestItem()
+  await seedDemoCatalog(ownerId)
   await seedContaConfig()
 
   await seedJob({
@@ -638,6 +1056,9 @@ async function main() {
   console.log(`  Employee: ${TEST_CREDENTIALS.employeeEmail}`)
   console.log(`  Freelancer: ${TEST_CREDENTIALS.freelancerEmail}`)
   console.log(`  Company: ${TEST_IDS.companyId}`)
+  console.log(
+    '  Demo catalog: 12 inventory items, 1 FOH bundle, 4 vehicles, 2 customers',
+  )
   console.log(`  Sent offer token: ${TEST_OFFER_TOKENS.sent}`)
   console.log(`  Accept offer token: ${TEST_OFFER_TOKENS.accept}`)
   console.log(`  Reject offer token: ${TEST_OFFER_TOKENS.reject}`)
