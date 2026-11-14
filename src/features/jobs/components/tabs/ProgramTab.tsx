@@ -321,7 +321,8 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
             borderRadius: 8,
             textAlign: 'center',
             cursor: 'pointer',
-            transition: 'all 100ms',
+            transition:
+              'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
           }}
           onClick={() => setCreating(true)}
           onMouseEnter={(e) => {

@@ -356,7 +356,8 @@ export default function LatestInspector({
                           backgroundColor: 'transparent',
                           borderRadius: 'var(--radius-3)',
                           cursor: itemId ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease',
+                          transition:
+                            'background-color 160ms var(--motion-ease-out), border-color 160ms var(--motion-ease-out), opacity 160ms var(--motion-ease-out)',
                           border: '1px solid transparent',
                         }}
                         onClick={
@@ -646,7 +647,8 @@ export default function LatestInspector({
                       borderRadius: 'var(--radius-3)',
                       backgroundColor: 'var(--gray-a2)',
                       border: '1px solid var(--gray-a5)',
-                      transition: 'all 0.2s ease',
+                      transition:
+                        'background-color 160ms var(--motion-ease-out), border-color 160ms var(--motion-ease-out), opacity 160ms var(--motion-ease-out)',
                       boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
                     }}
                     onMouseEnter={(e) => {

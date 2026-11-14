@@ -1014,7 +1014,8 @@ export function CrewItemsPanel({
           borderRadius: 8,
           textAlign: 'center',
           cursor: readOnly ? 'default' : 'pointer',
-          transition: 'all 100ms',
+          transition:
+            'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
         }}
         onClick={readOnly ? undefined : addItem}
         onMouseEnter={(e) => {

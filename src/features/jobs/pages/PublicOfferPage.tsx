@@ -17,7 +17,6 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useParams } from '@tanstack/react-router'
-import { motion } from 'framer-motion'
 import { Download, NavArrowDown, NavArrowRight } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { supabase } from '@shared/api/supabase'
@@ -662,38 +661,24 @@ export default function PublicOfferPage() {
                   background: 'var(--gray-a4)',
                 }}
               >
-                <motion.div
+                <Box
                   style={{
                     position: 'absolute',
                     top: 0,
                     left: 0,
                     right: 0,
                     bottom: 0,
-                    background:
-                      'linear-gradient(90deg, transparent, var(--accent-9), var(--accent-6), var(--accent-9), transparent)',
-                    backgroundSize: '200% 100%',
+                    width: '40%',
+                    background: 'var(--accent-9)',
                     borderRadius: 3,
-                  }}
-                  animate={{
-                    backgroundPosition: ['-200% 0', '200% 0'],
-                  }}
-                  transition={{
-                    duration: 1.5,
-                    repeat: Infinity,
-                    ease: 'easeInOut',
+                    opacity: 0.55,
                   }}
                 />
               </Box>
             </Box>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
-              <Text size="3" color="gray" weight="medium">
-                Loading offer...
-              </Text>
-            </motion.div>
+            <Text size="3" color="gray" weight="medium">
+              Loading offer...
+            </Text>
           </Flex>
         </LoadingShell>
       </Box>
@@ -768,11 +753,7 @@ export default function PublicOfferPage() {
       }}
     >
       <AnimatedBackground {...SUBTLE_ANIMATED_BACKGROUND} />
-      <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: 'easeOut' }}
-      >
+      <Box>
         <DocumentShell wrap={!isMobile}>
           <Flex
             direction={{ initial: 'column', sm: 'row' }}
@@ -2238,7 +2219,7 @@ export default function PublicOfferPage() {
             </Box>
           )}
         </DocumentShell>
-      </motion.div>
+      </Box>
 
       {/* Terms and Conditions Dialog */}
       {hasTerms && (

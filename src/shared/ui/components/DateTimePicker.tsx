@@ -358,7 +358,8 @@ export default function DateTimePicker({
                     cursor: 'pointer',
                     fontSize: 'var(--font-size-2)',
                     fontWeight: activeTab === 'date' ? 500 : 400,
-                    transition: 'all 0.15s',
+                    transition:
+                      'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                   }}
                 >
                   Date
@@ -379,7 +380,8 @@ export default function DateTimePicker({
                     cursor: 'pointer',
                     fontSize: 'var(--font-size-2)',
                     fontWeight: activeTab === 'time' ? 500 : 400,
-                    transition: 'all 0.15s',
+                    transition:
+                      'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                   }}
                 >
                   Time
@@ -531,7 +533,8 @@ export default function DateTimePicker({
                           cursor: 'pointer',
                           fontSize: 'var(--font-size-2)',
                           fontWeight: dateSelected ? 500 : 400,
-                          transition: 'all 0.15s',
+                          transition:
+                            'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                           textAlign: 'center',
                         }}
                       >
@@ -607,7 +610,8 @@ export default function DateTimePicker({
                           cursor: 'pointer',
                           fontSize: 'var(--font-size-2)',
                           fontWeight: yearSelected ? 500 : 400,
-                          transition: 'all 0.15s',
+                          transition:
+                            'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                           textAlign: 'center',
                         }}
                       >
@@ -661,7 +665,8 @@ export default function DateTimePicker({
                           cursor: 'pointer',
                           fontSize: 'var(--font-size-1)',
                           fontWeight: hourSelected ? 500 : 400,
-                          transition: 'all 0.15s',
+                          transition:
+                            'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                           textAlign: 'center',
                         }}
                       >
@@ -709,7 +714,8 @@ export default function DateTimePicker({
                           cursor: 'pointer',
                           fontSize: 'var(--font-size-2)',
                           fontWeight: minuteSelected ? 500 : 400,
-                          transition: 'all 0.15s',
+                          transition:
+                            'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                         }}

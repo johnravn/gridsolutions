@@ -892,7 +892,8 @@ function InternalEquipmentTable({
                 borderRadius: 8,
                 textAlign: 'center',
                 cursor: 'pointer',
-                transition: 'all 100ms',
+                transition:
+                  'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
               }}
               onClick={() => setBookItemsOpen(true)}
               onMouseEnter={(e) => {
@@ -1869,7 +1870,8 @@ function ExternalEquipmentTable({
                   borderRadius: 8,
                   textAlign: 'center',
                   cursor: 'pointer',
-                  transition: 'all 100ms',
+                  transition:
+                    'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
                 }}
                 onClick={() => setBookSubrentalOpen(true)}
                 onMouseEnter={(e) => {

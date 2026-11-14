@@ -1,34 +1,9 @@
-import * as React from 'react'
 import { Button } from '@radix-ui/themes'
 import { ArrowDown } from 'iconoir-react'
-
-const STYLE_ID = 'scroll-button-animation'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 
 export function useScrollButtonStyles() {
-  React.useEffect(() => {
-    if (document.getElementById(STYLE_ID)) return
-
-    const style = document.createElement('style')
-    style.id = STYLE_ID
-    style.textContent = `
-      @keyframes scrollButtonBounce {
-        0%, 100% {
-          transform: translateY(0);
-        }
-        50% {
-          transform: translateY(-4px);
-        }
-      }
-    `
-    document.head.appendChild(style)
-
-    return () => {
-      const existingStyle = document.getElementById(STYLE_ID)
-      if (existingStyle) {
-        existingStyle.remove()
-      }
-    }
-  }, [])
+  // No-op kept for call-site compatibility; bounce keyframes were removed.
 }
 
 export function ScrollToBottomButton({
@@ -44,7 +19,12 @@ export function ScrollToBottomButton({
   onMouseEnter: () => void
   onMouseLeave: () => void
 }) {
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const canHoverMotion = useMediaQuery('(hover: hover) and (pointer: fine)')
+
   if (!visible) return null
+
+  const showHoverScale = !prefersReducedMotion && canHoverMotion && isHovered
 
   return (
     <Button
@@ -68,10 +48,10 @@ export function ScrollToBottomButton({
         color: 'var(--gray-11)',
         cursor: 'pointer',
         zIndex: 10,
-        animation: 'scrollButtonBounce 2s ease-in-out infinite',
-        transition:
-          'background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease',
-        transform: isHovered ? 'scale(1.05)' : 'scale(1)',
+        transition: prefersReducedMotion
+          ? 'background-color 0.15s ease, box-shadow 0.15s ease'
+          : 'background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease-out',
+        transform: showHoverScale ? 'scale(1.05)' : 'scale(1)',
       }}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}

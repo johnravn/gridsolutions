@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { Badge, Box, Flex, Text } from '@radix-ui/themes'
-import { motion } from 'framer-motion'
 import { PrettyOfferHero } from '../components/pretty-offer/PrettyOfferHero'
 import { PrettyOfferModuleSlide } from '../components/pretty-offer/PrettyOfferModuleSlide'
 import { PrettyOfferFooter } from '../components/pretty-offer/PrettyOfferFooter'
@@ -157,11 +156,7 @@ function PublicPrettyOfferPageContent({
   const hasModules = modules.length > 0
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
+    <>
       {showStatusNotice && (
         <Box
           className={
@@ -184,7 +179,7 @@ function PublicPrettyOfferPageContent({
           response={response}
         />
       )}
-    </motion.div>
+    </>
   )
 }
 

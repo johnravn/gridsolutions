@@ -512,7 +512,7 @@ function JobStatusTimeline({
                       : 'var(--gray-a4)',
                   zIndex: 0,
                   borderRadius: '1px',
-                  transition: 'background 0.4s ease',
+                  transition: 'background-color 180ms var(--motion-ease-out)',
                   opacity: isFuture ? 0.4 : 1,
                   transform: 'translateY(-1px)',
                 }}
@@ -534,7 +534,8 @@ function JobStatusTimeline({
                 justifyContent: 'center',
                 zIndex: 1,
                 position: 'relative',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                transition:
+                  'background-color 180ms var(--motion-ease-out), color 180ms var(--motion-ease-out), box-shadow 180ms var(--motion-ease-out)',
               }}
               className="status-dot"
             >
@@ -565,7 +566,7 @@ function JobStatusTimeline({
               style={{
                 color: isActive || isPast ? colors.text : 'var(--gray-a9)',
                 textAlign: 'center',
-                transition: 'color 0.3s ease',
+                transition: 'color 180ms var(--motion-ease-out)',
                 fontSize: 'var(--font-size-1)',
                 opacity: isFuture ? 0.5 : 1,
                 whiteSpace: 'nowrap',
@@ -629,7 +630,8 @@ function JobStatusTimeline({
                     justifyContent: 'center',
                     zIndex: 1,
                     position: 'relative',
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    transition:
+                      'background-color 180ms var(--motion-ease-out), color 180ms var(--motion-ease-out), box-shadow 180ms var(--motion-ease-out)',
                   }}
                   className="status-dot"
                 >
@@ -652,7 +654,7 @@ function JobStatusTimeline({
                       ? STATUS_COLORS.canceled.text
                       : 'var(--gray-a9)',
                     textAlign: 'center',
-                    transition: 'color 0.3s ease',
+                    transition: 'color 180ms var(--motion-ease-out)',
                     fontSize: 'var(--font-size-1)',
                     opacity: !isCanceled ? 0.5 : 1,
                     whiteSpace: 'nowrap',
@@ -713,7 +715,8 @@ function JobStatusTimeline({
                                 : 'var(--gray-a4)',
                             zIndex: 0,
                             borderRadius: '1px',
-                            transition: 'background 0.4s ease',
+                            transition:
+                              'background-color 180ms var(--motion-ease-out)',
                             opacity: isFuture ? 0.4 : 1,
                             transform: 'translateY(-1px)', // Center vertically on the dot center line
                           }}
@@ -737,7 +740,8 @@ function JobStatusTimeline({
                           justifyContent: 'center',
                           zIndex: 1,
                           position: 'relative',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          transition:
+                            'background-color 180ms var(--motion-ease-out), color 180ms var(--motion-ease-out), box-shadow 180ms var(--motion-ease-out)',
                         }}
                         className="status-dot"
                       >
@@ -774,7 +778,7 @@ function JobStatusTimeline({
                           color:
                             isActive || isPast ? colors.text : 'var(--gray-a9)',
                           textAlign: 'center',
-                          transition: 'color 0.3s ease',
+                          transition: 'color 180ms var(--motion-ease-out)',
                           fontSize: 'var(--font-size-1)',
                           opacity: isFuture ? 0.5 : 1,
                           whiteSpace: 'nowrap',
@@ -827,7 +831,8 @@ function JobStatusTimeline({
                   justifyContent: 'center',
                   zIndex: 1,
                   position: 'relative',
-                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  transition:
+                    'background-color 180ms var(--motion-ease-out), color 180ms var(--motion-ease-out), box-shadow 180ms var(--motion-ease-out)',
                 }}
                 className="status-dot"
               >
@@ -850,7 +855,7 @@ function JobStatusTimeline({
                     ? STATUS_COLORS.canceled.text
                     : 'var(--gray-a9)',
                   textAlign: 'center',
-                  transition: 'color 0.3s ease',
+                  transition: 'color 180ms var(--motion-ease-out)',
                   fontSize: 'var(--font-size-1)',
                   opacity: !isCanceled ? 0.5 : 1,
                   whiteSpace: 'nowrap',

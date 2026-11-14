@@ -400,7 +400,8 @@ export default function TransportTab({ jobId }: { jobId: string }) {
                 borderRadius: 8,
                 textAlign: 'center',
                 cursor: canBook ? 'pointer' : 'default',
-                transition: 'all 100ms',
+                transition:
+                  'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
               }}
               onClick={() => canBook && setBookVehOpen(true)}
               onMouseEnter={(e) => {

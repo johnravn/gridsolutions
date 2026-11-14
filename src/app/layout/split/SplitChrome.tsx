@@ -9,7 +9,6 @@ import {
   Separator,
   Tooltip,
 } from '@radix-ui/themes'
-import { AnimatePresence, motion } from 'framer-motion'
 import { TransitionLeft } from 'iconoir-react'
 import {
   formatShortcut,
@@ -57,7 +56,8 @@ function GlowingMinimizeBar({ onExpand }: { onExpand: () => void }) {
             'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
           pointerEvents: 'none',
           zIndex: 5,
-          transition: 'all 0.2s ease-out',
+          transition: 'width 160ms ease-out',
+          boxShadow: '0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4)',
         }}
       />
     </Box>
@@ -110,41 +110,6 @@ function TitleNode({
     )
   }
   return <>{title}</>
-}
-
-function ContentFade({
-  contentKey,
-  reducedMotion,
-  children,
-}: {
-  contentKey: string
-  reducedMotion: boolean
-  children: React.ReactNode
-}) {
-  if (reducedMotion) {
-    return <>{children}</>
-  }
-
-  return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div
-        key={contentKey}
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -4 }}
-        transition={{ duration: 0.18, ease: 'easeOut' }}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          flex: 1,
-          minHeight: 0,
-          minWidth: 0,
-        }}
-      >
-        {children}
-      </motion.div>
-    </AnimatePresence>
-  )
 }
 
 function LeftHeader({
@@ -269,9 +234,14 @@ export function SplitChrome() {
           {isMinimized ? (
             <GlowingMinimizeBar onExpand={expand} />
           ) : (
-            <ContentFade
-              contentKey={slots.contentKey}
-              reducedMotion={prefersReducedMotion}
+            <Box
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0,
+                minWidth: 0,
+              }}
             >
               <LeftHeader
                 slots={slots}
@@ -289,7 +259,7 @@ export function SplitChrome() {
               >
                 {slots.leftBody}
               </Box>
-            </ContentFade>
+            </Box>
           )}
         </Card>
 
@@ -340,9 +310,14 @@ export function SplitChrome() {
             minHeight: 0,
           }}
         >
-          <ContentFade
-            contentKey={slots.contentKey}
-            reducedMotion={prefersReducedMotion}
+          <Box
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              flex: 1,
+              minHeight: 0,
+              minWidth: 0,
+            }}
           >
             <RightHeader slots={slots} />
             <Box
@@ -358,7 +333,7 @@ export function SplitChrome() {
             >
               {slots.rightBody}
             </Box>
-          </ContentFade>
+          </Box>
         </Card>
       </Flex>
     </section>

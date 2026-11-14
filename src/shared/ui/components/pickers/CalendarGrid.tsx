@@ -120,7 +120,8 @@ export function CalendarGrid({
                   cursor: 'pointer',
                   fontSize: 'var(--font-size-2)',
                   fontWeight: yearSelected ? 500 : 400,
-                  transition: 'all 0.15s',
+                  transition:
+                    'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                   textAlign: 'center',
                 }}
               >
@@ -272,7 +273,8 @@ export function CalendarGrid({
                 cursor: disabled ? 'not-allowed' : 'pointer',
                 fontSize: 'var(--font-size-2)',
                 fontWeight,
-                transition: 'all 0.15s',
+                transition:
+                  'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                 textAlign: 'center',
                 opacity: disabled ? 0.6 : 1,
               }}

@@ -114,7 +114,8 @@ function ColorSwatch({
             ? '2px solid var(--gray-12)'
             : '1px solid var(--gray-a6)',
           cursor: 'pointer',
-          transition: 'all 0.2s',
+          transition:
+            'border-color 160ms var(--motion-ease-out), box-shadow 160ms var(--motion-ease-out)',
           boxShadow: isSelected
             ? '0 0 0 1px var(--gray-a3)'
             : '0 1px 2px rgba(0, 0, 0, 0.1)',

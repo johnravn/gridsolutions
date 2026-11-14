@@ -770,20 +770,11 @@ export default function SuperPage() {
                             'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
                           pointerEvents: 'none',
                           zIndex: 5,
-                          transition: 'all 0.2s ease-out',
-                          animation: 'glow-pulse 5s ease-in-out infinite',
+                          transition: 'width 160ms ease-out',
+                          boxShadow:
+                            '0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4)',
                         }}
                       />
-                      <style>{`
-                        @keyframes glow-pulse {
-                          0%, 100% {
-                            box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
-                          }
-                          50% {
-                            box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
-                          }
-                        }
-                      `}</style>
                     </Box>
                   ) : (
                     <>
@@ -1126,20 +1117,11 @@ export default function SuperPage() {
                             'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
                           pointerEvents: 'none',
                           zIndex: 5,
-                          transition: 'all 0.2s ease-out',
-                          animation: 'glow-pulse 5s ease-in-out infinite',
+                          transition: 'width 160ms ease-out',
+                          boxShadow:
+                            '0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4)',
                         }}
                       />
-                      <style>{`
-                        @keyframes glow-pulse {
-                          0%, 100% {
-                            box-shadow: 0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4);
-                          }
-                          50% {
-                            box-shadow: 0 0 12px var(--accent-a6), 0 0 18px var(--accent-a5);
-                          }
-                        }
-                      `}</style>
                     </Box>
                   ) : (
                     <>

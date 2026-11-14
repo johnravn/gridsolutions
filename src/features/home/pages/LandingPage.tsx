@@ -126,17 +126,10 @@ export default function LandingPage() {
           borderBottom: '1px solid var(--gray-a3)',
           opacity: headerOpacity,
         }}
-        initial={{ y: -100 }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.5, ease: 'easeOut' }}
       >
         <Container size="4">
           <Flex align="center" justify="between" gap="4">
-            <motion.div
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-            >
+            <div>
               <Flex
                 align="center"
                 style={{ cursor: 'pointer' }}
@@ -151,12 +144,12 @@ export default function LandingPage() {
                   style={{ height: isMd ? 26 : 22, width: 'auto' }}
                 />
               </Flex>
-            </motion.div>
+            </div>
 
             {isMd ? (
               <Flex align="center" gap="6" justify="end">
                 {navItems.map((item) => (
-                  <motion.button
+                  <button
                     key={item.id}
                     type="button"
                     onClick={() => scrollToSection(item.id)}
@@ -173,8 +166,6 @@ export default function LandingPage() {
                       letterSpacing: '0.02em',
                       position: 'relative',
                     }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                   >
                     <span
                       style={{
@@ -187,7 +178,7 @@ export default function LandingPage() {
                     >
                       {item.label}
                     </span>
-                  </motion.button>
+                  </button>
                 ))}
               </Flex>
             ) : (
@@ -288,11 +279,7 @@ export default function LandingPage() {
                 maxWidth: isMd ? 'none' : 520,
               }}
             >
-              <motion.div
-                initial={{ opacity: 0, y: 24 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, ease: 'easeOut' }}
-              >
+              <div>
                 <Heading
                   size={{ initial: '8', sm: '9', md: '9' }}
                   style={{
@@ -330,11 +317,8 @@ export default function LandingPage() {
                     for Modern Companies
                   </Text>
                 </Heading>
-              </motion.div>
-              <motion.p
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.1, ease: 'easeOut' }}
+              </div>
+              <p
                 style={{
                   margin: 0,
                   fontSize: isMd ? 18 : 16,
@@ -346,12 +330,8 @@ export default function LandingPage() {
                 Streamline your entire operation with a unified platform for
                 inventory, crew management, job scheduling, and customer
                 relations—all in one place.
-              </motion.p>
-              <motion.div
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5, delay: 0.2, ease: 'easeOut' }}
-              >
+              </p>
+              <div>
                 <Flex
                   gap="3"
                   wrap="wrap"
@@ -388,7 +368,7 @@ export default function LandingPage() {
                     Sign In
                   </Button>
                 </Flex>
-              </motion.div>
+              </div>
             </Flex>
 
             {/* Right: representational graphic cards */}
@@ -418,12 +398,7 @@ export default function LandingPage() {
         }}
       >
         <Container size="4">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-          >
+          <div>
             <Box
               style={{
                 padding: isMd ? '3rem' : '2rem 1.5rem',
@@ -467,7 +442,7 @@ export default function LandingPage() {
                 </Button>
               </Flex>
             </Box>
-          </motion.div>
+          </div>
         </Container>
       </Box>
 
@@ -481,12 +456,7 @@ export default function LandingPage() {
         }}
       >
         <Container size="4">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-          >
+          <div>
             <Heading
               size={isMd ? '8' : isSm ? '7' : '6'}
               style={{
@@ -497,7 +467,7 @@ export default function LandingPage() {
             >
               Everything You Need
             </Heading>
-          </motion.div>
+          </div>
 
           <Box
             style={{
@@ -508,12 +478,8 @@ export default function LandingPage() {
               gap: isSm ? '2rem' : '1.5rem',
             }}
           >
-            {features.map((feature, index) => (
-              <FeatureCard
-                key={feature.title}
-                feature={feature}
-                index={index}
-              />
+            {features.map((feature) => (
+              <FeatureCard key={feature.title} feature={feature} />
             ))}
           </Box>
         </Container>
@@ -538,12 +504,7 @@ export default function LandingPage() {
             align="center"
           >
             <Box style={{ flex: 1, width: '100%' }}>
-              <motion.div
-                initial={{ opacity: 0, x: -30 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true }}
-                transition={{ duration: 0.4 }}
-              >
+              <div>
                 <Heading
                   size={isMd ? '8' : isSm ? '7' : '6'}
                   style={{ marginBottom: '1rem', color: 'var(--gray-12)' }}
@@ -572,26 +533,9 @@ export default function LandingPage() {
                     gap: isSm ? '1.5rem' : '1rem',
                   }}
                 >
-                  {benefits.map((benefit, index) => (
-                    <motion.div
-                      key={benefit.title}
-                      initial={{ opacity: 0, y: 20 }}
-                      whileInView={{ opacity: 1, y: 0 }}
-                      viewport={{ once: true, margin: '-50px' }}
-                      transition={{
-                        duration: 0.4,
-                        delay: index * 0.1,
-                        ease: 'easeOut',
-                      }}
-                    >
-                      <motion.div
-                        whileHover={{ y: -4, scale: 1.02 }}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 300,
-                          damping: 20,
-                        }}
-                      >
+                  {benefits.map((benefit) => (
+                    <div key={benefit.title}>
+                      <div>
                         <Box
                           style={{
                             padding: '1.5rem',
@@ -603,7 +547,7 @@ export default function LandingPage() {
                             overflow: 'hidden',
                           }}
                         >
-                          <motion.div
+                          <div
                             style={{
                               position: 'absolute',
                               inset: 0,
@@ -612,27 +556,17 @@ export default function LandingPage() {
                               opacity: 0,
                               borderRadius: '12px',
                             }}
-                            whileHover={{ opacity: 0.1 }}
-                            transition={{ duration: 0.3 }}
                           />
                           <Box style={{ position: 'relative', zIndex: 1 }}>
-                            <motion.div
+                            <div
                               style={{
                                 marginBottom: '0.75rem',
                                 color: 'var(--accent-11)',
                                 display: 'inline-block',
                               }}
-                              whileHover={{
-                                scale: 1.15,
-                                rotate: [0, -10, 10, -10, 0],
-                              }}
-                              transition={{
-                                scale: { duration: 0.2 },
-                                rotate: { duration: 0.6 },
-                              }}
                             >
                               {benefit.icon}
-                            </motion.div>
+                            </div>
                             <Flex direction="column" gap="1">
                               <Text
                                 size="3"
@@ -653,11 +587,11 @@ export default function LandingPage() {
                             </Flex>
                           </Box>
                         </Box>
-                      </motion.div>
-                    </motion.div>
+                      </div>
+                    </div>
                   ))}
                 </Box>
-              </motion.div>
+              </div>
             </Box>
           </Flex>
         </Container>
@@ -673,13 +607,8 @@ export default function LandingPage() {
         }}
       >
         <Container size="4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            whileInView={{ opacity: 1, scale: 1 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-          >
-            <motion.div
+          <div>
+            <div
               style={{
                 padding: isMd ? '4rem' : '2rem 1.5rem',
                 background:
@@ -689,25 +618,15 @@ export default function LandingPage() {
                 position: 'relative',
                 overflow: 'hidden',
               }}
-              whileHover={{ scale: 1.01 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 20 }}
             >
               {/* Animated gradient overlay */}
-              <motion.div
+              <div
                 style={{
                   position: 'absolute',
                   inset: 0,
                   background:
                     'linear-gradient(45deg, transparent 30%, rgba(255,255,255,0.1) 50%, transparent 70%)',
                   backgroundSize: '200% 200%',
-                }}
-                animate={{
-                  backgroundPosition: ['0% 0%', '100% 100%'],
-                }}
-                transition={{
-                  duration: 5,
-                  repeat: Infinity,
-                  ease: 'linear',
                 }}
               />
               <Box style={{ position: 'relative', zIndex: 1 }}>
@@ -731,24 +650,8 @@ export default function LandingPage() {
                     Join companies already using Grid to streamline their
                     operations and boost productivity.
                   </Text>
-                  <motion.div
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.98 }}
-                    transition={{ type: 'spring', stiffness: 400, damping: 17 }}
-                  >
-                    <motion.div
-                      animate={{
-                        boxShadow: [
-                          '0 4px 20px var(--accent-a7)',
-                          '0 8px 30px var(--accent-a8)',
-                          '0 4px 20px var(--accent-a7)',
-                        ],
-                      }}
-                      transition={{
-                        duration: 2,
-                        repeat: Infinity,
-                        ease: 'easeInOut',
-                      }}
+                  <div>
+                    <div
                       style={{
                         borderRadius: 'var(--radius-3)',
                         display: 'inline-block',
@@ -768,52 +671,20 @@ export default function LandingPage() {
                           position: 'relative',
                           overflow: 'hidden',
                         }}
-                        onMouseEnter={(e) => {
-                          const button = e.currentTarget
-                          const shimmer = document.createElement('div')
-                          shimmer.style.cssText = `
-                          position: absolute;
-                          top: 0;
-                          left: -100%;
-                          width: 100%;
-                          height: 100%;
-                          background: linear-gradient(
-                            90deg,
-                            transparent,
-                            rgba(255, 255, 255, 0.3),
-                            transparent
-                          );
-                          transition: left 0.5s ease;
-                        `
-                          button.appendChild(shimmer)
-                          requestAnimationFrame(() => {
-                            shimmer.style.left = '100%'
-                          })
-                          setTimeout(() => shimmer.remove(), 500)
-                        }}
                       >
                         <Flex align="center" gap="2" justify="center">
                           Get Started Free
-                          <motion.div
-                            animate={{
-                              x: [0, 4, 0],
-                            }}
-                            transition={{
-                              duration: 1.5,
-                              repeat: Infinity,
-                              ease: 'easeInOut',
-                            }}
-                          >
+                          <div>
                             <ArrowRight />
-                          </motion.div>
+                          </div>
                         </Flex>
                       </Button>
-                    </motion.div>
-                  </motion.div>
+                    </div>
+                  </div>
                 </Flex>
               </Box>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         </Container>
       </Box>
 
@@ -828,12 +699,7 @@ export default function LandingPage() {
         }}
       >
         <Container size="4">
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.4 }}
-          >
+          <div>
             <Box
               style={{
                 padding: isMd ? '3rem' : '2rem 1.5rem',
@@ -897,7 +763,7 @@ export default function LandingPage() {
                 />
               </Flex>
             </Box>
-          </motion.div>
+          </div>
         </Container>
       </Box>
 
@@ -943,22 +809,7 @@ export default function LandingPage() {
                 variant="ghost"
                 size={isSm ? '3' : '2'}
                 onClick={() => navigate({ to: '/legal' })}
-                style={{
-                  cursor: 'pointer',
-                  transition: 'transform 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)'
-                }}
-                onMouseDown={(e) => {
-                  e.currentTarget.style.transform = 'scale(0.95)'
-                }}
-                onMouseUp={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.05)'
-                }}
+                style={{ cursor: 'pointer' }}
               >
                 Terms & Privacy
               </Button>
@@ -1037,10 +888,7 @@ function HeroGraphicCards() {
       }}
     >
       {/* Card 1: Dashboard / overview */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.25 }}
+      <div
         style={{
           width: 200,
           height: 148,
@@ -1110,13 +958,10 @@ function HeroGraphicCards() {
             />
           ))}
         </div>
-      </motion.div>
+      </div>
 
       {/* Card 2: Calendar / schedule */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.35 }}
+      <div
         style={{
           width: 176,
           height: 176,
@@ -1153,13 +998,10 @@ function HeroGraphicCards() {
             />
           ))}
         </div>
-      </motion.div>
+      </div>
 
       {/* Card 3: List / jobs */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.45 }}
+      <div
         style={{
           width: 228,
           height: 132,
@@ -1200,7 +1042,7 @@ function HeroGraphicCards() {
             />
           </div>
         ))}
-      </motion.div>
+      </div>
     </Flex>
   )
 }
@@ -1404,12 +1246,7 @@ function AppPwaSection({ isMd, isSm }: { isMd: boolean; isSm: boolean }) {
           align="center"
         >
           <Box style={{ flex: 1, width: '100%' }}>
-            <motion.div
-              initial={{ opacity: 0, x: -30 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.4 }}
-            >
+            <div>
               <Flex align="center" gap="2" style={{ marginBottom: '0.75rem' }}>
                 <Box
                   style={{
@@ -1454,7 +1291,7 @@ function AppPwaSection({ isMd, isSm }: { isMd: boolean; isSm: boolean }) {
                 No store download required.
               </Text>
               <AppInstallGuide />
-            </motion.div>
+            </div>
           </Box>
           <Box
             style={{
@@ -1464,12 +1301,7 @@ function AppPwaSection({ isMd, isSm }: { isMd: boolean; isSm: boolean }) {
               justifyContent: 'center',
             }}
           >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.92 }}
-              whileInView={{ opacity: 1, scale: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-            >
+            <div>
               <PwaPhoneMockup
                 canTilt={canTilt}
                 rotateX={rotateX}
@@ -1477,7 +1309,7 @@ function AppPwaSection({ isMd, isSm }: { isMd: boolean; isSm: boolean }) {
                 translateX={translateX}
                 translateY={translateY}
               />
-            </motion.div>
+            </div>
           </Box>
         </Flex>
       </Container>
@@ -1693,94 +1525,60 @@ function PwaPhoneMockup({
   )
 }
 
-function FeatureCard({
-  feature,
-  index,
-}: {
-  feature: (typeof features)[number]
-  index: number
-}) {
+function FeatureCard({ feature }: { feature: (typeof features)[number] }) {
   const isMd = useMediaQuery('(min-width: 768px)')
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: '-100px' }}
-      transition={{
-        duration: 0.5,
-        delay: index * 0.08,
-        ease: 'easeOut',
+    <Box
+      style={{
+        padding: isMd ? '2rem' : '1.5rem',
+        background: 'var(--color-panel-translucent)',
+        backdropFilter: 'blur(8px)',
+        borderRadius: '16px',
+        border: '1px solid var(--gray-4)',
+        height: '100%',
+        cursor: 'default',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
-      <motion.div
-        whileHover={{ y: -8, scale: 1.02 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-        style={{ height: '100%' }}
-      >
-        <Box
+      {/* Subtle gradient overlay on hover */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background:
+            'linear-gradient(135deg, var(--accent-a2) 0%, transparent 50%)',
+          opacity: 0,
+          borderRadius: '16px',
+        }}
+      />
+      <Box style={{ position: 'relative', zIndex: 1 }}>
+        <div
           style={{
-            padding: isMd ? '2rem' : '1.5rem',
-            background: 'var(--color-panel-translucent)',
-            backdropFilter: 'blur(8px)',
-            borderRadius: '16px',
-            border: '1px solid var(--gray-4)',
-            height: '100%',
-            cursor: 'default',
-            willChange: 'transform',
-            position: 'relative',
-            overflow: 'hidden',
+            marginBottom: '1rem',
+            width: '48px',
+            height: '48px',
+            borderRadius: '12px',
+            background: 'var(--accent-3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--accent-11)',
           }}
         >
-          {/* Subtle gradient overlay on hover */}
-          <motion.div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background:
-                'linear-gradient(135deg, var(--accent-a2) 0%, transparent 50%)',
-              opacity: 0,
-              borderRadius: '16px',
-            }}
-            whileHover={{ opacity: 0.1 }}
-            transition={{ duration: 0.3 }}
-          />
-          <Box style={{ position: 'relative', zIndex: 1 }}>
-            <motion.div
-              style={{
-                marginBottom: '1rem',
-                width: '48px',
-                height: '48px',
-                borderRadius: '12px',
-                background: 'var(--accent-3)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-11)',
-              }}
-              whileHover={{
-                scale: 1.1,
-                rotate: [0, -5, 5, -5, 0],
-              }}
-              transition={{
-                scale: { duration: 0.2 },
-                rotate: { duration: 0.5 },
-              }}
-            >
-              {feature.icon}
-            </motion.div>
-            <Heading
-              size="5"
-              style={{ marginBottom: '0.5rem', color: 'var(--gray-12)' }}
-            >
-              {feature.title}
-            </Heading>
-            <Text size="3" style={{ color: 'var(--gray-11)', lineHeight: 1.6 }}>
-              {feature.description}
-            </Text>
-          </Box>
-        </Box>
-      </motion.div>
-    </motion.div>
+          {feature.icon}
+        </div>
+        <Heading
+          size="5"
+          style={{ marginBottom: '0.5rem', color: 'var(--gray-12)' }}
+        >
+          {feature.title}
+        </Heading>
+        <Text size="3" style={{ color: 'var(--gray-11)', lineHeight: 1.6 }}>
+          {feature.description}
+        </Text>
+      </Box>
+    </Box>
   )
 }
 

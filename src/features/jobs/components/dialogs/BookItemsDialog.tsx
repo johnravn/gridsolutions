@@ -1089,7 +1089,7 @@ export default function BookItemsDialog({
               {/* RIGHT: Message Area */}
               <div
                 style={{
-                  transition: '100ms',
+                  transition: 'background-color 100ms var(--motion-ease-out)',
                   borderRadius: 8,
                   display: 'flex',
                   alignItems: 'center',

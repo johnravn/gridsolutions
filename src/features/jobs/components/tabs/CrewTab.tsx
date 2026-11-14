@@ -608,7 +608,8 @@ export default function CrewTab({
                   borderRadius: 8,
                   textAlign: 'center',
                   cursor: 'pointer',
-                  transition: 'all 100ms',
+                  transition:
+                    'background-color 100ms var(--motion-ease-out), opacity 100ms var(--motion-ease-out)',
                 }}
                 onClick={() => setAddRoleOpen(true)}
                 onMouseEnter={(e) => {

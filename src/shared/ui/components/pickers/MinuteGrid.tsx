@@ -83,7 +83,8 @@ export function MinuteGrid({
                 cursor: minuteDisabled ? 'not-allowed' : 'pointer',
                 fontSize: 'var(--font-size-1)',
                 fontWeight,
-                transition: 'all 0.15s',
+                transition:
+                  'background-color 150ms var(--motion-ease-out), border-color 150ms var(--motion-ease-out), color 150ms var(--motion-ease-out)',
                 textAlign: 'center',
                 opacity: minuteDisabled ? 0.6 : 1,
               }}
