@@ -31,6 +31,14 @@ export type VehicleIndexRow = {
   deleted: boolean | null
 }
 
+/** Safety cap for empty/index loads — labeled in UI when hit. */
+export const VEHICLES_INDEX_MAX_ROWS = 500
+
+export type VehiclesIndexResult = {
+  rows: Array<VehicleIndexRow>
+  truncated: boolean
+}
+
 export type VehicleDetail = {
   id: string
   name: string
@@ -65,7 +73,7 @@ export function vehiclesIndexQuery({
       includeExternal,
       search,
     ] as const,
-    queryFn: async (): Promise<Array<VehicleIndexRow>> => {
+    queryFn: async (): Promise<VehiclesIndexResult> => {
       let q = supabase
         .from('vehicles')
         .select(
@@ -101,10 +109,17 @@ export function vehiclesIndexQuery({
         }
       }
 
-      const { data, error } = await q.order('name', { ascending: true })
+      const { data, error } = await q
+        .order('name', { ascending: true })
+        .limit(VEHICLES_INDEX_MAX_ROWS + 1)
       if (error) throw error
 
-      const rows = data.map((r: any) => {
+      const truncated = (data?.length ?? 0) > VEHICLES_INDEX_MAX_ROWS
+      const page = truncated
+        ? (data ?? []).slice(0, VEHICLES_INDEX_MAX_ROWS)
+        : (data ?? [])
+
+      const rows = page.map((r: any) => {
         const ownerUser = Array.isArray(r.owner_user)
           ? r.owner_user[0]
           : r.owner_user
@@ -126,20 +141,23 @@ export function vehiclesIndexQuery({
 
       if (term) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
-        return fuzzySearch(
-          rows,
-          term,
-          [
-            (row) => row.name,
-            (row) => row.registration_no,
-            (row) => row.external_owner_name,
-            (row) => row.owner_user_name,
-          ],
-          0.25,
-        )
+        return {
+          rows: fuzzySearch(
+            rows,
+            term,
+            [
+              (row) => row.name,
+              (row) => row.registration_no,
+              (row) => row.external_owner_name,
+              (row) => row.owner_user_name,
+            ],
+            0.25,
+          ),
+          truncated,
+        }
       }
 
-      return rows
+      return { rows, truncated }
     },
   }
 }

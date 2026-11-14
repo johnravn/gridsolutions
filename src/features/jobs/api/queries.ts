@@ -1,6 +1,6 @@
 import { supabase } from '@shared/api/supabase'
 import {
-  escapeForPostgrestOr,
+  applyFuzzySearch,
   postgrestIlikeClause,
   postgrestIlikePatterns,
 } from '@shared/api/fuzzySearch'
@@ -193,7 +193,7 @@ export function jobsIndexQuery({
       if (showOnlyArchived) {
         q = q.eq('archived', true)
       } else {
-        // When showOnlyArchived not set, respect includeArchived for backward compatibility (e.g. JobsTable, LoggingPage)
+        // When showOnlyArchived not set, respect includeArchived for backward compatibility (e.g. LoggingPage)
         if (!includeArchived) {
           q = q.eq('archived', false)
         }
@@ -221,8 +221,8 @@ export function jobsIndexQuery({
       const fuzzyTerm = search.trim().replace(/^#/, '')
       if (fuzzyTerm) {
         const [customerIds, customerUserIds] = await Promise.all([
-          findCustomerIdsByName(companyId, fuzzyTerm),
-          findCustomerUserIdsBySearch(fuzzyTerm),
+          findCustomerIdsByNameCached(companyId, fuzzyTerm),
+          findCustomerUserIdsBySearchCached(companyId, fuzzyTerm),
         ])
         searchOrFilter = jobsIndexSearchOrFilter({
           search: fuzzyTerm,
@@ -408,6 +408,23 @@ export function jobsIndexSearchOrFilter({
   return parts.length > 0 ? parts.join(',') : null
 }
 
+const JOBS_SEARCH_ID_CACHE_TTL_MS = 30_000
+const jobsSearchIdCache = new Map<string, { at: number; ids: Array<string> }>()
+
+function readJobsSearchIdCache(key: string): Array<string> | null {
+  const hit = jobsSearchIdCache.get(key)
+  if (!hit) return null
+  if (Date.now() - hit.at > JOBS_SEARCH_ID_CACHE_TTL_MS) {
+    jobsSearchIdCache.delete(key)
+    return null
+  }
+  return hit.ids
+}
+
+function writeJobsSearchIdCache(key: string, ids: Array<string>) {
+  jobsSearchIdCache.set(key, { at: Date.now(), ids })
+}
+
 async function findCustomerIdsByName(
   companyId: string,
   search: string,
@@ -429,14 +446,38 @@ async function findCustomerIdsByName(
   return data.map((row) => row.id)
 }
 
+async function findCustomerIdsByNameCached(
+  companyId: string,
+  search: string,
+): Promise<Array<string>> {
+  const key = `cust:${companyId}:${search.trim().toLowerCase()}`
+  const cached = readJobsSearchIdCache(key)
+  if (cached) return cached
+  const ids = await findCustomerIdsByName(companyId, search)
+  writeJobsSearchIdCache(key, ids)
+  return ids
+}
+
 async function findCustomerUserIdsBySearch(
+  companyId: string,
   search: string,
 ): Promise<Array<string>> {
   const patterns = postgrestIlikePatterns(search)
   if (patterns.length === 0) return []
+
+  // Scope to company members — job.customer_user_id is always in-company.
+  const { data: memberships, error: membershipError } = await supabase
+    .from('company_users')
+    .select('user_id')
+    .eq('company_id', companyId)
+  if (membershipError) throw membershipError
+  const memberIds = (memberships ?? []).map((row) => row.user_id)
+  if (memberIds.length === 0) return []
+
   const { data, error } = await supabase
     .from('profiles')
     .select('user_id')
+    .in('user_id', memberIds)
     .or(
       patterns
         .flatMap((pattern) => [
@@ -448,6 +489,18 @@ async function findCustomerUserIdsBySearch(
     .limit(JOBS_INDEX_SEARCH_ID_LIMIT)
   if (error) throw error
   return data.map((row) => row.user_id)
+}
+
+async function findCustomerUserIdsBySearchCached(
+  companyId: string,
+  search: string,
+): Promise<Array<string>> {
+  const key = `user:${companyId}:${search.trim().toLowerCase()}`
+  const cached = readJobsSearchIdCache(key)
+  if (cached) return cached
+  const ids = await findCustomerUserIdsBySearch(companyId, search)
+  writeJobsSearchIdCache(key, ids)
+  return ids
 }
 
 type JobsIndexListParams = {
@@ -535,8 +588,8 @@ async function fetchJobsIndexPage({
   const indexSearch = search.trim().replace(/^#/, '')
   if (indexSearch) {
     const [customerIds, customerUserIds] = await Promise.all([
-      findCustomerIdsByName(companyId, indexSearch),
-      findCustomerUserIdsBySearch(indexSearch),
+      findCustomerIdsByNameCached(companyId, indexSearch),
+      findCustomerUserIdsBySearchCached(companyId, indexSearch),
     ])
     searchOrFilter = jobsIndexSearchOrFilter({
       search: indexSearch,
@@ -649,6 +702,10 @@ export function jobsIndexPageQuery({
   }
 }
 
+/**
+ * Infinite Jobs list stays server-ILIKE only (no client Fuse). Do not reintroduce
+ * Fuse that shrinks `count:exact` without updating the footer (Inventory lesson).
+ */
 export function getJobsIndexNextPageParam(
   lastPage: JobsIndexPageResult,
   _allPages: Array<JobsIndexPageResult>,
@@ -782,21 +839,13 @@ export function addressIndexQuery({
       q = q.or('deleted.is.null,deleted.eq.false')
 
       if (search.trim()) {
-        // 1) Escape LIKE wildcards that users may type
-        const likeSafe = escapePgLike(search.trim())
-        // 2) Escape PostgREST .or() separators and parens in the *filter string*
-        const orSafe = escapeForPostgrestOr(likeSafe)
-
-        // 3) Use % (Postgres wildcard), not *
-        const orFilter = [
-          `name.ilike.%${orSafe}%`,
-          `address_line.ilike.%${orSafe}%`,
-          `zip_code.ilike.%${orSafe}%`,
-          `city.ilike.%${orSafe}%`,
-          `country.ilike.%${orSafe}%`,
-        ].join(',')
-
-        q = q.or(orFilter)
+        q = applyFuzzySearch(q, search, [
+          'name',
+          'address_line',
+          'zip_code',
+          'city',
+          'country',
+        ]) as typeof q
       }
 
       const { data, error } = await q
@@ -805,11 +854,6 @@ export function addressIndexQuery({
     },
     staleTime: 10_000,
   }
-}
-
-/** Escape % and _ which are wildcards in LIKE/ILIKE */
-function escapePgLike(input: string) {
-  return input.replace(/[%_]/g, (m) => '\\' + m)
 }
 
 export function jobDetailQuery({ jobId }: { jobId: string }) {

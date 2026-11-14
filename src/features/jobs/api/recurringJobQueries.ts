@@ -1,4 +1,8 @@
 import { supabase } from '@shared/api/supabase'
+import {
+  postgrestIlikeClause,
+  postgrestIlikePatterns,
+} from '@shared/api/fuzzySearch'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { aggregateRecurringJobCrew } from '../utils/aggregateRecurringJobCrew'
 import { copyJob, deleteJobById } from './queries'
@@ -96,16 +100,29 @@ export function recurringJobsIndexQuery({
         q = q.eq('project_lead_user_id', projectLeadUserId)
       }
 
+      const term = search.trim()
+      if (term) {
+        const patterns = postgrestIlikePatterns(term)
+        if (patterns.length > 0) {
+          q = q.or(
+            patterns
+              .map((pattern) => postgrestIlikeClause('title', pattern))
+              .join(','),
+          )
+        }
+      }
+
       const { data, error } = await q
       if (error) throw error
 
+      // Only attach member counts for the (pre)filtered set.
       let results = await attachJobCounts(
         (data ?? []) as unknown as Array<
           Omit<RecurringJobListRow, 'job_count'>
         >,
       )
 
-      if (search.trim()) {
+      if (term) {
         results = fuzzySearch(
           results,
           search,

@@ -71,8 +71,13 @@ export function EquipmentSection({
   const [unitPriceDrafts, setUnitPriceDrafts] = React.useState<
     Record<string, string>
   >({})
-  const { searchResults, searchLoading, searchItems, clearSearch } =
-    useInventoryItemSearch(companyId)
+  const {
+    searchResults,
+    searchLoading,
+    searchError,
+    searchItems,
+    clearSearch,
+  } = useInventoryItemSearch(companyId)
   const groupItemsCacheRef = React.useRef<
     Map<
       string,
@@ -549,6 +554,11 @@ export function EquipmentSection({
                                       loading={
                                         activeSearchGroupId === group.id &&
                                         searchLoading
+                                      }
+                                      error={
+                                        activeSearchGroupId === group.id
+                                          ? searchError
+                                          : null
                                       }
                                       onSelectItem={(itemId) =>
                                         addItemToGroup(group.id, itemId)

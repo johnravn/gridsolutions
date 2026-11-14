@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Badge,
   Box,
@@ -83,10 +84,13 @@ export default function AddressDialog({
   const { success, error: toastError, info } = useToast()
 
   const [search, setSearch] = React.useState('')
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
   const { data: rows = [], isFetching } = useQuery({
-    ...addressIndexQuery({ companyId, search }),
+    ...addressIndexQuery({ companyId, search: debouncedSearch }),
     enabled: !!companyId && open,
   })
+  const addressesLoading = isFetching || searchPending
 
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [panelMode, setPanelMode] = React.useState<PanelMode>('view')
@@ -292,7 +296,7 @@ export default function AddressDialog({
                 <Search />
               </TextField.Slot>
               <TextField.Slot side="right">
-                {isFetching && <Spinner />}
+                {addressesLoading && <Spinner />}
               </TextField.Slot>
             </TextField.Root>
 

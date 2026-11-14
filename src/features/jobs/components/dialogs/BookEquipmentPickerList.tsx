@@ -15,6 +15,7 @@ import { VirtualIndexTable, useVirtualIndexTable } from '@shared/ui/index-table'
 import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import type { IndexColumn } from '@shared/ui/index-table'
 import type {
+  InventoryIndexPageResult,
   InventoryIndexRow,
   SortBy,
   SortDir,
@@ -89,9 +90,7 @@ export default function BookEquipmentPickerList({
     ] as const,
     enabled: open && !!companyId,
     initialPageParam: 1,
-    queryFn: async ({
-      pageParam,
-    }): Promise<{ rows: Array<InventoryIndexRow>; count: number }> => {
+    queryFn: async ({ pageParam }): Promise<InventoryIndexPageResult> => {
       const page = Number(pageParam) || 1
       const { queryFn } = inventoryIndexQuery({
         companyId,
@@ -109,17 +108,11 @@ export default function BookEquipmentPickerList({
         sortBy,
         sortDir,
       })
-      return await (
-        queryFn as () => Promise<{
-          rows: Array<InventoryIndexRow>
-          count: number
-        }>
-      )()
+      return await (queryFn as () => Promise<InventoryIndexPageResult>)()
     },
     getNextPageParam: (lastPage, allPages) => {
-      const loaded = allPages.reduce((acc, p) => acc + p.rows.length, 0)
-      const total = lastPage.count
-      if (loaded >= total) return undefined
+      if (lastPage.fetched === 0) return undefined
+      if (lastPage.fetched < PAGE_SIZE) return undefined
       return allPages.length + 1
     },
     staleTime: 10_000,
@@ -132,9 +125,9 @@ export default function BookEquipmentPickerList({
         : [],
     [inventoryQuery.data],
   )
-  const totalCount = inventoryQuery.data
-    ? (inventoryQuery.data.pages[0]?.count ?? 0)
-    : 0
+  const totalCount = debouncedSearch.trim()
+    ? rows.length
+    : (inventoryQuery.data?.pages[0]?.serverCount ?? 0)
 
   const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
     rows,

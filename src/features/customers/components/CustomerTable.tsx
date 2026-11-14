@@ -1,5 +1,9 @@
 import * as React from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import {
   Badge,
   Button,
@@ -85,6 +89,7 @@ export default function CustomerTable({
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
   const [addOpen, setAddOpen] = React.useState(false)
   React.useEffect(() => {
     if (!createShortcutRef) return
@@ -95,9 +100,11 @@ export default function CustomerTable({
   }, [createShortcutRef])
 
   const {
-    data: rows = [],
+    data: customersResult,
     isFetching,
     isLoading,
+    isError,
+    error,
   } = useQuery({
     ...customersIndexQuery({
       companyId: companyId ?? '__none__',
@@ -107,13 +114,30 @@ export default function CustomerTable({
     }),
     enabled: !!companyId,
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
+
+  const rows = customersResult?.rows ?? []
+  const truncated = customersResult?.truncated ?? false
 
   const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
     rows,
     getRowId: (r) => r.id,
     estimateRowSize: 52,
   })
+
+  const emptyMessage = isError
+    ? `Search failed${error instanceof Error && error.message ? `: ${error.message}` : ''}`
+    : searchPending || isFetching
+      ? 'Searching…'
+      : debouncedSearch.trim()
+        ? `No matches for “${debouncedSearch.trim()}”`
+        : 'No customers'
+
+  const footerLabel = (n: number) =>
+    truncated
+      ? `Showing first ${n} customer${n !== 1 ? 's' : ''}`
+      : `${n} customer${n !== 1 ? 's' : ''}`
 
   const toolbar = (
     <Flex gap={isMobile ? '4' : '2'} align="center" wrap="wrap">
@@ -137,12 +161,7 @@ export default function CustomerTable({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {(isFetching || isLoading) && (
-              <Flex align="center" gap="1">
-                <Text>Thinking</Text>
-                <Spinner size="2" />
-              </Flex>
-            )}
+            {(searchPending || isLoading || isFetching) && <Spinner />}
           </TextField.Slot>
         </TextField.Root>
         {isMobile ? toolbarExtra : null}
@@ -180,11 +199,11 @@ export default function CustomerTable({
     return (
       <>
         <MobilePageList toolbar={toolbar}>
-          {isLoading ? (
+          {isLoading && !searchPending ? (
             <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
           ) : rows.length === 0 ? (
             <Text size="2" color="gray">
-              No results
+              {emptyMessage}
             </Text>
           ) : (
             <Flex
@@ -239,7 +258,7 @@ export default function CustomerTable({
           )}
           {rows.length > 0 && (
             <Text size="2" color="gray">
-              {rows.length} customer{rows.length !== 1 ? 's' : ''}
+              {footerLabel(rows.length)}
             </Text>
           )}
         </MobilePageList>
@@ -283,11 +302,11 @@ export default function CustomerTable({
       onSelect={onSelect}
       scrollRef={scrollRef}
       rowVirtualizer={rowVirtualizer}
-      isLoading={isLoading}
-      emptyMessage="No results"
+      isLoading={isLoading && !searchPending}
+      emptyMessage={emptyMessage}
       footerCount={{
         shown: rows.length,
-        label: (n) => `${n} customer${n !== 1 ? 's' : ''}`,
+        label: footerLabel,
       }}
       toolbar={toolbar}
     />

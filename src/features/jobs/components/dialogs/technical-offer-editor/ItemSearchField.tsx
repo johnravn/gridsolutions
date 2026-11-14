@@ -24,6 +24,7 @@ export function ItemSearchField({
   formatCurrency,
   compact,
   loading,
+  error,
 }: {
   onSearchChange: (term: string) => void
   searchResults: Array<ItemSearchResult>
@@ -31,6 +32,7 @@ export function ItemSearchField({
   formatCurrency: (amount: number) => string
   compact?: boolean
   loading?: boolean
+  error?: string | boolean | null
 }) {
   const resultsById = React.useMemo(
     () => new Map(searchResults.map((item) => [item.id, item])),
@@ -64,6 +66,7 @@ export function ItemSearchField({
       clearOnSelect
       filterLocally
       loading={loading}
+      error={error ?? false}
       placeholder="Search items or groups to add..."
       emptyMessage="No matching items"
       dropdownMatchTriggerWidth

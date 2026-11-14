@@ -48,6 +48,14 @@ export type ContactRow = {
   created_at: string
 }
 
+/** Safety cap for empty/index loads — labeled in UI when hit. */
+export const CUSTOMERS_INDEX_MAX_ROWS = 500
+
+export type CustomersIndexResult = {
+  rows: Array<CustomerRow>
+  truncated: boolean
+}
+
 /* ---------- index ---------- */
 export function customersIndexQuery({
   companyId,
@@ -69,7 +77,7 @@ export function customersIndexQuery({
       showRegular,
       showPartner,
     ] as const,
-    queryFn: async (): Promise<Array<CustomerRow>> => {
+    queryFn: async (): Promise<CustomersIndexResult> => {
       let q = supabase
         .from('customers')
         .select(
@@ -96,13 +104,19 @@ export function customersIndexQuery({
       if (showRegular && !showPartner) q = q.eq('is_partner', false)
       if (!showRegular && showPartner) q = q.eq('is_partner', true)
       // if both on -> no filter; if both off -> show none
-      if (!showRegular && !showPartner) return []
-      const { data, error } = await q
+      if (!showRegular && !showPartner) return { rows: [], truncated: false }
+      const { data, error } = await q.limit(CUSTOMERS_INDEX_MAX_ROWS + 1)
       if (error) throw error
 
+      const truncated = (data?.length ?? 0) > CUSTOMERS_INDEX_MAX_ROWS
+      const page = truncated
+        ? (data ?? []).slice(0, CUSTOMERS_INDEX_MAX_ROWS)
+        : Array.isArray(data)
+          ? data
+          : []
+
       // Normalize crew_pricing_level (PostgREST may return as array)
-      const rows = Array.isArray(data) ? data : []
-      const normalized = rows.map((row: any) => {
+      const normalized = page.map((row: any) => {
         const level = Array.isArray(row.crew_pricing_level)
           ? (row.crew_pricing_level[0] ?? null)
           : (row.crew_pricing_level ?? null)
@@ -113,19 +127,22 @@ export function customersIndexQuery({
       // This handles cases where database ilike isn't fuzzy enough
       if (search && search.trim()) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
-        return fuzzySearch(
-          normalized as Array<CustomerRow>,
-          search,
-          [
-            (item) => item.name,
-            (item) => item.vat_number,
-            (item) => item.address,
-          ],
-          0.25, // Lower threshold since we already filtered with ilike
-        )
+        return {
+          rows: fuzzySearch(
+            normalized as Array<CustomerRow>,
+            search,
+            [
+              (item) => item.name,
+              (item) => item.vat_number,
+              (item) => item.address,
+            ],
+            0.25, // Lower threshold since we already filtered with ilike
+          ),
+          truncated,
+        }
       }
 
-      return normalized as any
+      return { rows: normalized as Array<CustomerRow>, truncated }
     },
   }
 }

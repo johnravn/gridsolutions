@@ -1,6 +1,7 @@
 // src/features/jobs/components/dialogs/AddContactDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Button,
   Dialog,
@@ -15,6 +16,7 @@ import {
 import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { supabase } from '@shared/api/supabase'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -107,13 +109,19 @@ export default function AddContactDialog({
     form.store,
     (s: { values: typeof defaultValues }) => s.values.searchQuery,
   )
+  const [debouncedSearchQuery] = useDebouncedValue(searchQuery, { wait: 300 })
+  const searchPending = searchQuery !== debouncedSearchQuery
   const mode = useStore(
     form.store,
     (s: { values: typeof defaultValues }) => s.values.mode,
   )
 
-  const { data: contacts = [] } = useQuery({
-    queryKey: ['company', companyId, 'contacts', searchQuery],
+  const {
+    data: contacts = [],
+    isFetching,
+    isPending,
+  } = useQuery({
+    queryKey: ['company', companyId, 'contacts', debouncedSearchQuery],
     enabled: open,
     queryFn: async () => {
       let q = supabase
@@ -122,22 +130,12 @@ export default function AddContactDialog({
         .eq('company_id', companyId)
         .order('name', { ascending: true })
 
-      if (searchQuery.trim()) {
-        const term = searchQuery.trim()
-        const patterns = [
-          `%${term}%`,
-          term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as Array<string>
-
-        const conditions = patterns
-          .flatMap((pattern) => [
-            `name.ilike.${pattern}`,
-            `email.ilike.${pattern}`,
-            `phone.ilike.${pattern}`,
-          ])
-          .join(',')
-
-        q = q.or(conditions)
+      if (debouncedSearchQuery.trim()) {
+        q = applyFuzzySearch(q, debouncedSearchQuery, [
+          'name',
+          'email',
+          'phone',
+        ]) as typeof q
       }
 
       const { data, error } = await q.limit(20)
@@ -256,6 +254,7 @@ export default function AddContactDialog({
                               form.setFieldValue('searchQuery', q)
                               field.handleChange('')
                             }}
+                            loading={isFetching || isPending || searchPending}
                             placeholder="Search by name, email, or phone..."
                             emptyMessage="No contacts found"
                             dropdownMatchTriggerWidth

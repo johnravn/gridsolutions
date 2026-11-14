@@ -1,11 +1,13 @@
 // src/features/super/components/AssignUserToCompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Button, Dialog, Flex, Select, Text } from '@radix-ui/themes'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
 } from '@shared/ui/components/SearchableSelect'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import { assignUserToCompany, companyUsersQuery } from '../api/queries'
@@ -26,6 +28,8 @@ export default function AssignUserToCompanyDialog({
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
   const [searchTerm, setSearchTerm] = React.useState('')
+  const [debouncedSearchTerm] = useDebouncedValue(searchTerm, { wait: 300 })
+  const searchPending = searchTerm !== debouncedSearchTerm
   const [selectedUserId, setSelectedUserId] = React.useState<string | null>(
     null,
   )
@@ -43,18 +47,28 @@ export default function AssignUserToCompanyDialog({
   )
 
   // Search users
-  const { data: searchResults = [], isFetching: searching } = useQuery({
-    queryKey: ['users', 'search', searchTerm, companyId],
-    enabled: open && searchTerm.trim().length > 0,
+  const {
+    data: searchResults = [],
+    isFetching: searching,
+    isPending: searchQueryPending,
+  } = useQuery({
+    queryKey: ['users', 'search', debouncedSearchTerm, companyId],
+    enabled: open && debouncedSearchTerm.trim().length > 0,
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from('profiles')
         .select('user_id, email, display_name, first_name, last_name')
-        .or(
-          `display_name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%,first_name.ilike.%${searchTerm.trim()}%,last_name.ilike.%${searchTerm.trim()}%`,
-        )
         .limit(20)
         .order('email', { ascending: true })
+
+      q = applyFuzzySearch(q, debouncedSearchTerm, [
+        'display_name',
+        'email',
+        'first_name',
+        'last_name',
+      ]) as typeof q
+
+      const { data, error } = await q
 
       if (error) throw error
 
@@ -135,7 +149,7 @@ export default function AssignUserToCompanyDialog({
               onValueChange={(v) => setSelectedUserId(v || null)}
               onInputChange={setSearchTerm}
               filterLocally={false}
-              loading={searching}
+              loading={searching || searchQueryPending || searchPending}
               placeholder="Search by name or email…"
               emptyMessage="No users found (excluding users already in company)"
               disabled={assignMutation.isPending}

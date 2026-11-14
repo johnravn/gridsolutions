@@ -1,6 +1,10 @@
 // src/features/inventory/components/InventoryTable.tsx
 import * as React from 'react'
-import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useQuery,
+} from '@tanstack/react-query'
 import {
   Badge,
   Button,
@@ -36,7 +40,12 @@ import { categoryNamesQuery, inventoryIndexQuery } from '../api/queries'
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
 import type { IndexColumn } from '@shared/ui/index-table'
-import type { InventoryIndexRow, SortBy, SortDir } from '../api/queries'
+import type {
+  InventoryIndexPageResult,
+  InventoryIndexRow,
+  SortBy,
+  SortDir,
+} from '../api/queries'
 
 const GRID_COLUMNS =
   'minmax(180px, 2fr) minmax(100px, 1fr) minmax(80px, 1fr) 80px 100px 100px'
@@ -99,6 +108,7 @@ export default function InventoryTable({
   const { canWrite } = useCompanyWriteAccess()
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
   const [categoryFilter, setCategoryFilter] = React.useState<string | null>(
     null,
   )
@@ -142,9 +152,7 @@ export default function InventoryTable({
     ] as const,
     enabled: !!companyId,
     initialPageParam: 1,
-    queryFn: async ({
-      pageParam,
-    }): Promise<{ rows: Array<InventoryIndexRow>; count: number }> => {
+    queryFn: async ({ pageParam }): Promise<InventoryIndexPageResult> => {
       const page = Number(pageParam) || 1
       const { queryFn } = inventoryIndexQuery({
         companyId: companyId ?? '__none__',
@@ -162,20 +170,17 @@ export default function InventoryTable({
         sortBy,
         sortDir,
       })
-      return await (
-        queryFn as () => Promise<{
-          rows: Array<InventoryIndexRow>
-          count: number
-        }>
-      )()
+      return await (queryFn as () => Promise<InventoryIndexPageResult>)()
     },
     getNextPageParam: (lastPage, allPages) => {
-      const loaded = allPages.reduce((acc, p) => acc + p.rows.length, 0)
-      const total = lastPage.count
-      if (loaded >= total) return undefined
+      // Stop when the server page was short (pre-Fuse). Do not compare
+      // Fuse-shrunk row lengths to the pre-Fuse server total.
+      if (lastPage.fetched === 0) return undefined
+      if (lastPage.fetched < PAGE_SIZE) return undefined
       return allPages.length + 1
     },
     staleTime: 10_000,
+    placeholderData: keepPreviousData,
   })
 
   const rows = React.useMemo(
@@ -185,9 +190,10 @@ export default function InventoryTable({
         : [],
     [inventoryQuery.data],
   )
-  const totalCount = inventoryQuery.data
-    ? (inventoryQuery.data.pages[0]?.count ?? 0)
-    : 0
+  // Searching: footer = visible post-Fuse rows. Idle: PostgREST exact total.
+  const totalCount = debouncedSearch.trim()
+    ? rows.length
+    : (inventoryQuery.data?.pages[0]?.serverCount ?? 0)
 
   const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
     rows,
@@ -310,7 +316,8 @@ export default function InventoryTable({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {(inventoryQuery.isFetching ||
+            {(searchPending ||
+              inventoryQuery.isFetching ||
               inventoryQuery.isFetchingNextPage) && <Spinner />}
           </TextField.Slot>
         </TextField.Root>
@@ -388,7 +395,13 @@ export default function InventoryTable({
             <IndexTableBodySkeleton rowCount={8} rowHeight={64} />
           ) : rows.length === 0 ? (
             <Text size="2" color="gray">
-              No results
+              {inventoryQuery.isError
+                ? 'Search failed'
+                : searchPending || inventoryQuery.isFetching
+                  ? 'Searching…'
+                  : debouncedSearch.trim()
+                    ? `No matches for “${debouncedSearch.trim()}”`
+                    : 'No results'}
             </Text>
           ) : (
             <Flex
@@ -497,7 +510,15 @@ export default function InventoryTable({
         scrollRef={scrollRef}
         rowVirtualizer={rowVirtualizer}
         isLoading={inventoryQuery.isLoading}
-        emptyMessage="No results"
+        emptyMessage={
+          inventoryQuery.isError
+            ? 'Search failed'
+            : searchPending || inventoryQuery.isFetching
+              ? 'Searching…'
+              : debouncedSearch.trim()
+                ? `No matches for “${debouncedSearch.trim()}”`
+                : 'No results'
+        }
         footerCount={{
           shown: totalCount,
           label: (n) => `${n} item${n !== 1 ? 's' : ''}`,

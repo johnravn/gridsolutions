@@ -141,7 +141,7 @@ export default function SubscribeToCalendarDialog({
     enabled: open && !!companyId && !!userId,
   })
 
-  const { data: vehicles = [] } = useQuery({
+  const { data: vehiclesResult } = useQuery({
     ...vehiclesIndexQuery({
       companyId: companyId ?? '',
       includeExternal: true,
@@ -149,6 +149,7 @@ export default function SubscribeToCalendarDialog({
     }),
     enabled: open && !!companyId && addKind === 'transport_vehicle',
   })
+  const vehicles = vehiclesResult?.rows ?? []
 
   const { data: crewPeople = [] } = useQuery({
     ...crewIndexQuery({

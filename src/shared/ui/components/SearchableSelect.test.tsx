@@ -93,6 +93,38 @@ describe('SearchableSelect', () => {
     expect(await screen.findByText('Nothing found')).toBeInTheDocument()
   })
 
+  it('shows error instead of empty results', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={[]}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Pick one"
+        error
+        data-testid="search-select"
+      />,
+    )
+
+    fireEvent.focus(screen.getByTestId('search-select'))
+    expect(await screen.findByText('Search failed')).toBeInTheDocument()
+  })
+
+  it('shows result count when requested', async () => {
+    renderWithProviders(
+      <SearchableSelect
+        options={options}
+        value=""
+        onValueChange={vi.fn()}
+        placeholder="Pick one"
+        resultCount
+        data-testid="search-select"
+      />,
+    )
+
+    fireEvent.focus(screen.getByTestId('search-select'))
+    expect(await screen.findByText('3 matches')).toBeInTheDocument()
+  })
+
   it('allows typing to filter when a placeholder option is selected', async () => {
     renderWithProviders(
       <SearchableSelect

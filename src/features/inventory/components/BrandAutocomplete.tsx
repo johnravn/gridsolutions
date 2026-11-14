@@ -1,7 +1,9 @@
 // src/features/inventory/components/BrandAutocomplete.tsx
 import * as React from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Box, Flex, Text, TextField } from '@radix-ui/themes'
+import { useDebouncedValue } from '@tanstack/react-pacer'
+import { Box, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 
@@ -42,34 +44,38 @@ export default function BrandAutocomplete({
     setInputValue(value || '')
   }, [value])
 
-  // Fetch brands with fuzzy search using PostgreSQL similarity
-  const { data: suggestions = [] } = useQuery({
+  const [debouncedInput] = useDebouncedValue(inputValue, { wait: 300 })
+  const searchPending = inputValue !== debouncedInput
+
+  // Fetch brands with typo-tolerant ILIKE prefilter
+  const { data: suggestions = [], isFetching } = useQuery({
     queryKey: [
       'company',
       companyId,
       'item_brands',
       'search',
-      inputValue.trim(),
+      debouncedInput.trim(),
     ],
-    enabled: !!companyId && inputValue.trim().length > 0,
+    enabled: !!companyId && debouncedInput.trim().length > 0,
     queryFn: async (): Promise<Array<Brand>> => {
-      const searchTerm = inputValue.trim()
+      const searchTerm = debouncedInput.trim()
 
-      // Use ILIKE for fuzzy matching (PostgreSQL will use indexes)
-      // For better fuzzy search, we can add a PostgreSQL function later
-      const { data, error } = await supabase
+      let q = supabase
         .from('item_brands')
         .select('id, name')
         .eq('company_id', companyId)
-        .ilike('name', `%${searchTerm}%`)
+
+      q = applyFuzzySearch(q, searchTerm, ['name']) as typeof q
+
+      const { data, error } = await q
         .order('name', { ascending: true })
         .limit(20)
-
       if (error) throw error
       return data || []
     },
     staleTime: 1000, // Short cache for search results
   })
+  const brandsLoading = isFetching || searchPending
 
   // Filter suggestions client-side for better fuzzy matching
   const filteredSuggestions = React.useMemo(() => {
@@ -244,7 +250,13 @@ export default function BrandAutocomplete({
         onFocus={() => setShowSuggestions(true)}
         disabled={disabled}
         placeholder={placeholder}
-      />
+      >
+        {brandsLoading && inputValue.trim().length > 0 && (
+          <TextField.Slot side="right">
+            <Spinner size="1" />
+          </TextField.Slot>
+        )}
+      </TextField.Root>
 
       {showSuggestions &&
         (filteredSuggestions.length > 0 || showCreateOption) && (

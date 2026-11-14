@@ -1,10 +1,12 @@
 // src/features/jobs/components/dialogs/AddCrewDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Button, Dialog, Flex, Select } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { supabase } from '@shared/api/supabase'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { ForceBookingDialog } from '@features/conflicts/components/ForceBookingDialog'
@@ -73,9 +75,15 @@ export default function AddCrewDialog({
     form.store,
     (s: { values: typeof defaultValues }) => s.values.search,
   )
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
 
-  const { data: people = [], isFetching } = useQuery({
-    queryKey: ['crew-picker', search],
+  const {
+    data: people = [],
+    isFetching,
+    isPending,
+  } = useQuery({
+    queryKey: ['crew-picker', debouncedSearch],
     enabled: open,
     queryFn: async () => {
       let q = supabase
@@ -83,21 +91,11 @@ export default function AddCrewDialog({
         .select('user_id, display_name, email')
         .limit(20)
 
-      if (search.trim()) {
-        const term = search.trim()
-        const patterns = [
-          `%${term}%`,
-          term.length > 2 ? `%${term.split('').join('%')}%` : null,
-        ].filter(Boolean) as Array<string>
-
-        const conditions = patterns
-          .flatMap((pattern) => [
-            `display_name.ilike.${pattern}`,
-            `email.ilike.${pattern}`,
-          ])
-          .join(',')
-
-        q = q.or(conditions)
+      if (debouncedSearch.trim()) {
+        q = applyFuzzySearch(q, debouncedSearch, [
+          'display_name',
+          'email',
+        ]) as typeof q
       }
 
       const { data, error } = await q
@@ -232,7 +230,7 @@ export default function AddCrewDialog({
                       value={field.state.value}
                       onValueChange={field.handleChange}
                       onInputChange={(q) => form.setFieldValue('search', q)}
-                      loading={isFetching}
+                      loading={isFetching || isPending || searchPending}
                       placeholder="Search name or email…"
                       emptyMessage="No results"
                       dropdownMatchTriggerWidth

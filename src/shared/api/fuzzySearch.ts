@@ -66,8 +66,9 @@ export function applyFuzzySearch(
 }
 
 /**
- * @deprecated Prefer applyFuzzySearch / postgrestIlikePatterns. Kept for callers
- * that expected an RPC-based path.
+ * @deprecated Dead stub — SQL `fuzzy_search_*` RPCs are unused. Prefer
+ * `applyFuzzySearch` / `postgrestIlikePatterns` + client Fuse. Do not wire the
+ * RPC path without a profiling decision.
  */
 export async function fuzzySearchRPC<T>(
   _table: string,
@@ -87,5 +88,7 @@ export async function fuzzySearchRPC<T>(
     return []
   }
 
-  throw new Error('fuzzySearchRPC not yet implemented - use applyFuzzySearch')
+  throw new Error(
+    'fuzzySearchRPC is deprecated — use applyFuzzySearch / postgrestIlikePatterns',
+  )
 }

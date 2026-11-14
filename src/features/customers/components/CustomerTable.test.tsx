@@ -56,7 +56,7 @@ const rows: Array<CustomerRow> = [
 vi.mock('../api/queries', () => ({
   customersIndexQuery: () => ({
     queryKey: ['customers-index'],
-    queryFn: async () => rows,
+    queryFn: async () => ({ rows, truncated: false }),
   }),
 }))
 

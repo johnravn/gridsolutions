@@ -16,7 +16,13 @@ import {
   Tooltip,
 } from '@radix-ui/themes'
 import { InfoCircle, Link as LinkIcon, Plus, Search } from 'iconoir-react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { myProfileQuery } from '@shared/api/myProfileQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -101,6 +107,8 @@ export default function LoggingPage() {
   const [selectedJobId, setSelectedJobId] = React.useState<string | null>(null)
   const [showAllJobs, setShowAllJobs] = React.useState(false)
   const [jobSearch, setJobSearch] = React.useState('')
+  const [debouncedJobSearch] = useDebouncedValue(jobSearch, { wait: 300 })
+  const jobSearchPending = jobSearch !== debouncedJobSearch
   const [jobSearchOpen, setJobSearchOpen] = React.useState(false)
   const jobSearchInputRef = React.useRef<HTMLDivElement>(null)
   const [title, setTitle] = React.useState('')
@@ -160,19 +168,24 @@ export default function LoggingPage() {
     enabled,
   })
 
+  const LOGGING_JOBS_MAX_ROWS = 150
   const { data: jobsData = [], isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: loggingSearchTerm(jobSearch),
+      search: loggingSearchTerm(debouncedJobSearch),
       sortBy: 'start_at',
       sortDir: 'desc',
       userId: userId ?? null,
       companyRole: companyRole ?? null,
       includeArchived: false,
       onlyCrewForUserId: showAllJobs ? null : (userId ?? null),
+      maxRows: LOGGING_JOBS_MAX_ROWS,
     }),
     enabled,
+    placeholderData: keepPreviousData,
   })
+  const jobsSearchLoading = jobsLoading || jobSearchPending
+  const jobsTruncated = jobsData.length >= LOGGING_JOBS_MAX_ROWS
 
   const { data: previouslyLoggedJobs = [] } = useQuery({
     ...previouslyLoggedJobsQuery({
@@ -603,53 +616,62 @@ export default function LoggingPage() {
                   {jobsForPicker.length === 0 ? (
                     <Box p="3">
                       <Text size="2" color="gray">
-                        {jobsLoading
-                          ? 'Loading jobs…'
+                        {jobsSearchLoading
+                          ? 'Searching…'
                           : jobSearch.trim()
-                            ? 'No matching jobs. Keep this text as the title, or turn on "Show all jobs".'
+                            ? `No matches for “${jobSearch.trim()}”`
                             : 'No jobs found. Try a different search or turn on "Show all jobs".'}
                       </Text>
                     </Box>
                   ) : (
-                    jobsForPicker.map((job) => (
-                      <Box
-                        key={job.id}
-                        asChild
-                        p="2"
-                        style={{
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => handleJobSelect(job.id, job)}
-                        onMouseDown={(e) => e.preventDefault()}
-                      >
-                        <div>
-                          <Flex align="center" gap="2" wrap="wrap">
-                            <Text size="2">{formatJobOption(job)}</Text>
-                            {previouslyLoggedJobIds.has(job.id) && (
-                              <Badge size="1" color="green" variant="soft">
-                                Logged
-                              </Badge>
+                    <>
+                      {jobsTruncated && (
+                        <Box px="2" pt="2">
+                          <Text size="1" color="gray">
+                            Top {LOGGING_JOBS_MAX_ROWS} results — refine search
+                          </Text>
+                        </Box>
+                      )}
+                      {jobsForPicker.map((job) => (
+                        <Box
+                          key={job.id}
+                          asChild
+                          p="2"
+                          style={{
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => handleJobSelect(job.id, job)}
+                          onMouseDown={(e) => e.preventDefault()}
+                        >
+                          <div>
+                            <Flex align="center" gap="2" wrap="wrap">
+                              <Text size="2">{formatJobOption(job)}</Text>
+                              {previouslyLoggedJobIds.has(job.id) && (
+                                <Badge size="1" color="green" variant="soft">
+                                  Logged
+                                </Badge>
+                              )}
+                              {isJobOnToday(job) && (
+                                <Badge size="1" color="blue" variant="soft">
+                                  Today
+                                </Badge>
+                              )}
+                            </Flex>
+                            {(job.customer?.name ??
+                              job.project_lead?.display_name) && (
+                              <Text size="1" color="gray" as="div">
+                                {[
+                                  job.customer?.name,
+                                  job.project_lead?.display_name,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' · ')}
+                              </Text>
                             )}
-                            {isJobOnToday(job) && (
-                              <Badge size="1" color="blue" variant="soft">
-                                Today
-                              </Badge>
-                            )}
-                          </Flex>
-                          {(job.customer?.name ??
-                            job.project_lead?.display_name) && (
-                            <Text size="1" color="gray" as="div">
-                              {[
-                                job.customer?.name,
-                                job.project_lead?.display_name,
-                              ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            </Text>
-                          )}
-                        </div>
-                      </Box>
-                    ))
+                          </div>
+                        </Box>
+                      ))}
+                    </>
                   )}
                 </Box>
               )}

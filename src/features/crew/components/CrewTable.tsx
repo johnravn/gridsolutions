@@ -259,12 +259,7 @@ export default function CrewTable({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {isLoading && (
-              <Flex align="center" gap="1">
-                <Text>Thinking</Text>
-                <Spinner size="2" />
-              </Flex>
-            )}
+            {isLoading && <Spinner size="2" />}
           </TextField.Slot>
         </TextField.Root>
         {isMobile ? toolbarExtra : null}

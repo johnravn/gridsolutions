@@ -1,6 +1,12 @@
 // src/features/jobs/components/dialogs/BookVehicleDialog.tsx
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Badge,
   Box,
@@ -11,6 +17,7 @@ import {
   SegmentedControl,
   Select,
   Separator,
+  Spinner,
   Table,
   Text,
   TextField,
@@ -160,16 +167,20 @@ export default function BookVehicleDialog({
     enabled: open,
   })
 
-  const { data: allVehicles = [] } = useQuery({
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
+
+  const { data: vehiclesResult, isFetching: vehiclesFetching } = useQuery({
     ...vehiclesIndexQuery({
       companyId,
       includeExternal: true,
-      search,
+      search: debouncedSearch,
     }),
     enabled: open,
+    placeholderData: keepPreviousData,
   })
-
   const vehicles = React.useMemo(() => {
+    const allVehicles = vehiclesResult?.rows ?? []
     return allVehicles
       .filter((v) => !v.deleted)
       .filter((v) => {
@@ -179,7 +190,7 @@ export default function BookVehicleDialog({
         }
         return !v.internally_owned && !!v.owner_user_id
       })
-  }, [allVehicles, ownerType])
+  }, [vehiclesResult?.rows, ownerType])
 
   const selectedVehicle = vehicles.find((v) => v.id === vehicleId)
 
@@ -504,7 +515,13 @@ export default function BookVehicleDialog({
                         placeholder="Search vehicles…"
                         size="2"
                         mb="3"
-                      />
+                      >
+                        {(searchPending || vehiclesFetching) && (
+                          <TextField.Slot side="right">
+                            <Spinner />
+                          </TextField.Slot>
+                        )}
+                      </TextField.Root>
                     )}
                   </form.AppField>
 

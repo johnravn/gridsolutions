@@ -15,6 +15,7 @@ export function useInventoryItemSearch(
     Array<InventorySearchHit>
   >([])
   const [searchLoading, setSearchLoading] = React.useState(false)
+  const [searchError, setSearchError] = React.useState<string | null>(null)
   const searchSeqRef = React.useRef(0)
 
   const searchItems = React.useCallback(
@@ -23,10 +24,12 @@ export function useInventoryItemSearch(
       if (!companyId || !term.trim()) {
         setSearchResults([])
         setSearchLoading(false)
+        setSearchError(null)
         return
       }
 
       setSearchLoading(true)
+      setSearchError(null)
       try {
         const results = await searchInventoryItems(companyId, term, {
           subrentalOnly,
@@ -38,6 +41,7 @@ export function useInventoryItemSearch(
         if (seq !== searchSeqRef.current) return
         console.error('Search error:', error)
         setSearchResults([])
+        setSearchError(error instanceof Error ? error.message : 'Search failed')
       } finally {
         if (seq === searchSeqRef.current) setSearchLoading(false)
       }
@@ -49,7 +53,14 @@ export function useInventoryItemSearch(
     searchSeqRef.current += 1
     setSearchResults([])
     setSearchLoading(false)
+    setSearchError(null)
   }, [])
 
-  return { searchResults, searchLoading, searchItems, clearSearch }
+  return {
+    searchResults,
+    searchLoading,
+    searchError,
+    searchItems,
+    clearSearch,
+  }
 }

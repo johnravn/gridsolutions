@@ -1,5 +1,6 @@
 import * as React from 'react'
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useQuery,
   useQueryClient,
@@ -197,6 +198,7 @@ export default function JobsList({
       onlyJobIds,
     }),
     enabled: !!companyId && !listScope && !waitingForMyJobIds,
+    placeholderData: keepPreviousData,
   })
 
   const { data: scopedRecurringDetail, isLoading: scopedLoading } = useQuery({
@@ -220,7 +222,11 @@ export default function JobsList({
     () => jobsQuery.data?.pages.flatMap((page) => page.rows) ?? [],
     [jobsQuery.data],
   )
-  const totalCount = jobsQuery.data?.pages[0]?.count ?? 0
+  // Freelancer pages drop rows after PostgREST count:exact — show visible only.
+  const totalCount =
+    companyRole === 'freelancer'
+      ? allData.length
+      : (jobsQuery.data?.pages[0]?.count ?? 0)
 
   // When drilling into a recurring series, the index query is disabled — use
   // all member jobs from the series detail so status sync still runs.

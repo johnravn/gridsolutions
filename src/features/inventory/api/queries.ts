@@ -37,38 +37,6 @@ export const inventoryIndexKey = (
     sortDir,
   ] as const
 
-export const inventoryIndexKeyAll = (
-  companyId: string,
-  search: string,
-  showActive: boolean,
-  showInactive: boolean,
-  showStock: boolean,
-  showSubrental: boolean,
-  showGroupOnlyItems: boolean,
-  showGroups: boolean,
-  showItems: boolean,
-  category: string | null,
-  sortBy: SortBy,
-  sortDir: SortDir,
-) =>
-  [
-    'company',
-    companyId,
-    'inventory-index',
-    'all',
-    search,
-    showActive,
-    showInactive,
-    showStock,
-    showSubrental,
-    showGroupOnlyItems,
-    showGroups,
-    showItems,
-    category,
-    sortBy,
-    sortDir,
-  ] as const
-
 export const inventoryDetailKey = (companyId: string, id: string) =>
   ['company', companyId, 'inventory-detail', id] as const
 
@@ -154,6 +122,20 @@ export type SortBy =
   | 'current_price'
 
 export type SortDir = 'asc' | 'desc'
+
+/** One inventory index page after optional client Fuse. */
+export type InventoryIndexPageResult = {
+  rows: Array<InventoryIndexRow>
+  /**
+   * Footer-facing count: post-Fuse matched length on this page when searching;
+   * otherwise PostgREST exact total (`serverCount`).
+   */
+  count: number
+  /** Rows returned by PostgREST before client Fuse (for infinite stop). */
+  fetched: number
+  /** Pre-Fuse PostgREST exact total for empty-search footers. */
+  serverCount: number
+}
 
 // --- Category query keys ---
 export const categoryNamesKey = (companyId: string) =>
@@ -241,9 +223,9 @@ export const inventoryIndexQuery = ({
   sortDir: SortDir
 }) =>
   queryOptions<
-    { rows: Array<InventoryIndexRow>; count: number },
+    InventoryIndexPageResult,
     Error,
-    { rows: Array<InventoryIndexRow>; count: number },
+    InventoryIndexPageResult,
     ReturnType<typeof inventoryIndexKey>
   >({
     queryKey: inventoryIndexKey(
@@ -355,6 +337,8 @@ export const inventoryIndexQuery = ({
       const { data, count, error } = await q.range(from, to)
       if (error) throw error
 
+      const fetched = (data as Array<InventoryIndexRow>).length
+      const serverCount = count ?? 0
       let filteredRows = data as Array<InventoryIndexRow>
 
       // Client-side filtering for complex type combinations that PostgREST can't handle
@@ -368,7 +352,8 @@ export const inventoryIndexQuery = ({
       // Apply client-side fuzzy matching for better typo tolerance
       // This handles cases where database ilike patterns aren't fuzzy enough
       // (e.g., "unaktive" should match "unactive" despite k vs c substitution)
-      if (search && search.trim()) {
+      const searching = Boolean(search && search.trim())
+      if (searching) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
         filteredRows = fuzzySearch(
           filteredRows,
@@ -386,182 +371,10 @@ export const inventoryIndexQuery = ({
 
       return {
         rows: filteredRows,
-        count: count ?? 0, // Total count from server (before client-side filtering)
-      }
-    },
-    staleTime: 10_000,
-  })
-
-/* ------------ Index All (for virtualized list, no pagination) ------------ */
-
-export const inventoryIndexQueryAll = ({
-  companyId,
-  search,
-  showActive,
-  showInactive,
-  showStock,
-  showSubrental,
-  showGroupOnlyItems,
-  showGroups,
-  showItems,
-  category,
-  sortBy,
-  sortDir,
-}: {
-  companyId: string
-  search: string
-  showActive: boolean
-  showInactive: boolean
-  showStock: boolean
-  showSubrental: boolean
-  showGroupOnlyItems: boolean
-  showGroups: boolean
-  showItems: boolean
-  category: string | null
-  sortBy: SortBy
-  sortDir: SortDir
-}) =>
-  queryOptions<
-    { rows: Array<InventoryIndexRow>; count: number },
-    Error,
-    { rows: Array<InventoryIndexRow>; count: number },
-    ReturnType<typeof inventoryIndexKeyAll>
-  >({
-    queryKey: inventoryIndexKeyAll(
-      companyId,
-      search,
-      showActive,
-      showInactive,
-      showStock,
-      showSubrental,
-      showGroupOnlyItems,
-      showGroups,
-      showItems,
-      category,
-      sortBy,
-      sortDir,
-    ),
-    queryFn: async () => {
-      const BATCH_SIZE = 1000
-      let allRows: Array<InventoryIndexRow> = []
-      let totalCount: number | null = null
-
-      const buildQuery = () => {
-        let q = supabase
-          .from('inventory_index')
-          .select('*', { count: 'exact' })
-          .eq('company_id', companyId)
-
-        q = q.or('deleted.is.null,deleted.eq.false')
-
-        if (showActive && !showInactive) {
-          q = q.eq('active', true)
-        } else if (!showActive && showInactive) {
-          q = q.eq('active', false)
-        }
-
-        if (showStock && !showSubrental) {
-          q = q.eq('item_kind', 'stock')
-        } else if (!showStock && showSubrental) {
-          q = q.eq('item_kind', 'subrental')
-        }
-
-        if (!showGroups && !showItems && !showGroupOnlyItems) {
-          q = q.eq('id', '__never_match__')
-        } else if (showGroups && !showItems && !showGroupOnlyItems) {
-          q = q.eq('is_group', true)
-        } else if (!showGroups && showItems && !showGroupOnlyItems) {
-          q = q.eq('is_group', false).eq('allow_individual_booking', true)
-        } else if (!showGroups && !showItems && showGroupOnlyItems) {
-          q = q.eq('is_group', false).eq('allow_individual_booking', false)
-        } else if (showGroups && showItems && !showGroupOnlyItems) {
-          q = q.or('is_group.eq.true,allow_individual_booking.eq.true')
-        } else if (showGroups && !showItems && showGroupOnlyItems) {
-          q = q.or('is_group.eq.true,is_group.eq.false')
-        } else if (!showGroups && showItems && showGroupOnlyItems) {
-          q = q.eq('is_group', false)
-        }
-
-        if (category && category !== 'all') q = q.eq('category_name', category)
-
-        if (search && search.trim()) {
-          const patterns = postgrestIlikePatterns(search)
-          const conditions = patterns.flatMap((pattern) => [
-            `name.ilike.${pattern}`,
-            `category_name.ilike.${pattern}`,
-            `brand_name.ilike.${pattern}`,
-            `model.ilike.${pattern}`,
-            `nicknames.ilike.${pattern}`,
-          ])
-
-          if (conditions.length > 0) {
-            q = q.or(conditions.join(','))
-          }
-        }
-
-        q = q
-          .order(sortBy, {
-            ascending: sortDir === 'asc',
-            nullsFirst: false,
-          })
-          .order('id', { ascending: true })
-
-        return q
-      }
-
-      let offset = 0
-      let hasMore = true
-
-      while (hasMore) {
-        const from = offset
-        const to = offset + BATCH_SIZE - 1
-        const q = buildQuery()
-        const { data, count, error } = await q.range(from, to)
-        if (error) throw error
-
-        totalCount = count ?? totalCount
-        const batch = (
-          Array.isArray(data) ? data : []
-        ) as Array<InventoryIndexRow>
-        allRows = allRows.concat(batch)
-
-        if (
-          batch.length < BATCH_SIZE ||
-          (totalCount != null && allRows.length >= totalCount)
-        ) {
-          hasMore = false
-        } else {
-          offset = to + 1
-        }
-      }
-
-      let filteredRows = allRows
-
-      if (showGroups && !showItems && showGroupOnlyItems) {
-        filteredRows = filteredRows.filter(
-          (row) => row.is_group || !row.allow_individual_booking,
-        )
-      }
-
-      if (search && search.trim()) {
-        const { fuzzySearch } = await import('@shared/lib/generalFunctions')
-        filteredRows = fuzzySearch(
-          filteredRows,
-          search,
-          [
-            (row) => row.name,
-            (row) => row.category_name || '',
-            (row) => row.brand_name || '',
-            (row) => row.model || '',
-            (row) => row.nicknames || '',
-          ],
-          0.25,
-        )
-      }
-
-      return {
-        rows: filteredRows,
-        count: totalCount ?? filteredRows.length,
+        // When Fuse shrinks the page, do not report the pre-Fuse server total.
+        count: searching ? filteredRows.length : serverCount,
+        fetched,
+        serverCount,
       }
     },
     staleTime: 10_000,

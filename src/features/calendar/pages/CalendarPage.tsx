@@ -9,6 +9,7 @@ import {
   Flex,
   IconButton,
   Select,
+  Text,
 } from '@radix-ui/themes'
 import { Calendar, List, MoreHoriz, Plus, ShareAndroid } from 'iconoir-react'
 import { SearchableSelect } from '@shared/ui/components/SearchableSelect'
@@ -25,7 +26,10 @@ import {
   toEventInputs,
 } from '@features/calendar/components/domain'
 import { companyCalendarQuery } from '@features/calendar/api/queries'
-import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
+import {
+  VEHICLES_INDEX_MAX_ROWS,
+  vehiclesIndexQuery,
+} from '@features/vehicles/api/queries'
 import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
@@ -93,8 +97,10 @@ export default function CalendarPage() {
   const shouldFetchSuggestions =
     !isFreelancer && category !== 'all' && !!companyId && suggestionsOpen
 
+  const CALENDAR_ENTITY_MAX_ROWS = 100
+
   // Vehicles for transport
-  const { data: vehicles = [] } = useQuery({
+  const { data: vehiclesResult } = useQuery({
     ...vehiclesIndexQuery({
       companyId: companyId ?? '',
       includeExternal: true,
@@ -102,13 +108,14 @@ export default function CalendarPage() {
     }),
     enabled: shouldFetchSuggestions && category === 'transport',
   })
+  const vehiclesTruncated = vehiclesResult?.truncated ?? false
 
   // Items for equipment
   const { data: itemsData } = useQuery({
     ...inventoryIndexQuery({
       companyId: companyId ?? '',
       page: 1,
-      pageSize: 100,
+      pageSize: CALENDAR_ENTITY_MAX_ROWS,
       search: debouncedSearchInput,
       showActive: true,
       showInactive: false,
@@ -124,6 +131,8 @@ export default function CalendarPage() {
     enabled: shouldFetchSuggestions && category === 'equipment',
   })
   const items = React.useMemo(() => itemsData?.rows || [], [itemsData?.rows])
+  // Full first page from server ⇒ more matches may exist beyond the cap.
+  const itemsTruncated = (itemsData?.fetched ?? 0) >= CALENDAR_ENTITY_MAX_ROWS
 
   // Crew for crew
   const { data: crew = [] } = useQuery({
@@ -141,15 +150,32 @@ export default function CalendarPage() {
       search: debouncedSearchInput,
       userId,
       companyRole,
-      maxRows: 100,
+      maxRows: CALENDAR_ENTITY_MAX_ROWS,
     }),
     enabled: shouldFetchSuggestions && category === 'jobDuration',
   })
+  // jobsIndexQuery has no truncated flag — full maxRows page is a soft cap signal.
+  const jobsTruncated = jobs.length >= CALENDAR_ENTITY_MAX_ROWS
+
+  const entityListTruncated =
+    category === 'transport'
+      ? vehiclesTruncated
+      : category === 'equipment'
+        ? itemsTruncated
+        : category === 'jobDuration'
+          ? jobsTruncated
+          : false
+
+  const entityListCap =
+    category === 'transport'
+      ? VEHICLES_INDEX_MAX_ROWS
+      : CALENDAR_ENTITY_MAX_ROWS
 
   // Get suggestions based on category with fuzzy search filtering
   const suggestions = React.useMemo(() => {
     let allSuggestions: Array<{ id: string; name: string; subtitle?: string }> =
       []
+    const vehicles = vehiclesResult?.rows ?? []
 
     if (category === 'transport') {
       allSuggestions = vehicles.map((v) => ({
@@ -191,7 +217,7 @@ export default function CalendarPage() {
     }
 
     return allSuggestions
-  }, [category, vehicles, items, crew, jobs, searchInput])
+  }, [category, vehiclesResult?.rows, items, crew, jobs, searchInput])
 
   // Helper to check if time period is Job duration
   const isJobDuration = (record: { title?: string | null }) =>
@@ -314,20 +340,27 @@ export default function CalendarPage() {
           </Select.Root>
 
           {!isFreelancer && category !== 'all' && (
-            <SearchableSelect
-              options={entityOptions}
-              value={selectedEntityId ?? ''}
-              onValueChange={(v) => setSelectedEntityId(v || null)}
-              onInputChange={(v) => {
-                setSearchInput(v)
-                if (!v) setSelectedEntityId(null)
-              }}
-              onOpenChange={setSuggestionsOpen}
-              filterLocally={false}
-              placeholder={entitySearchPlaceholder}
-              dropdownMaxHeight={300}
-              style={{ flex: 1, minWidth: 0, maxWidth: 'none' }}
-            />
+            <Flex direction="column" gap="1" style={{ flex: 1, minWidth: 0 }}>
+              <SearchableSelect
+                options={entityOptions}
+                value={selectedEntityId ?? ''}
+                onValueChange={(v) => setSelectedEntityId(v || null)}
+                onInputChange={(v) => {
+                  setSearchInput(v)
+                  if (!v) setSelectedEntityId(null)
+                }}
+                onOpenChange={setSuggestionsOpen}
+                filterLocally={false}
+                placeholder={entitySearchPlaceholder}
+                dropdownMaxHeight={300}
+                style={{ flex: 1, minWidth: 0, maxWidth: 'none' }}
+              />
+              {entityListTruncated && (
+                <Text size="1" color="gray">
+                  Top {entityListCap} results — refine search
+                </Text>
+              )}
+            </Flex>
           )}
         </Flex>
 

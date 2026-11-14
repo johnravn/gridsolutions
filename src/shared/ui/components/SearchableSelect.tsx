@@ -45,6 +45,13 @@ type Props = {
   onInputChange?: (value: string) => void
   onOpenChange?: (open: boolean) => void
   loading?: boolean
+  /** When set, show inline failure instead of empty results. */
+  error?: string | boolean
+  /**
+   * Optional match count shown when the dropdown is open.
+   * Pass explicitly, or omit to auto-count filtered options when open.
+   */
+  resultCount?: number | boolean
   size?: '1' | '2' | '3'
   /** After picking an option, clear the input instead of showing the label (search-to-add). */
   clearOnSelect?: boolean
@@ -266,6 +273,8 @@ export function SearchableSelect({
   onInputChange,
   onOpenChange,
   loading,
+  error,
+  resultCount,
   size,
   clearOnSelect = false,
   renderOption,
@@ -427,10 +436,25 @@ export function SearchableSelect({
     }
   }
 
+  const errorMessage =
+    error === true
+      ? 'Search failed'
+      : typeof error === 'string' && error.trim()
+        ? error
+        : null
+
+  const showResultCount =
+    resultCount === true
+      ? filteredOptions.length
+      : typeof resultCount === 'number'
+        ? resultCount
+        : null
+
   const showDropdown =
     open &&
     !!fixedPosition &&
     (loading ||
+      !!errorMessage ||
       filteredOptions.length > 0 ||
       inputValue.trim().length > 0 ||
       !clearOnSelect)
@@ -461,7 +485,13 @@ export function SearchableSelect({
             fontFamily: 'inherit',
           }}
         >
-          {loading ? (
+          {errorMessage ? (
+            <Box px="2" py="1">
+              <Text size="2" color="red">
+                {errorMessage}
+              </Text>
+            </Box>
+          ) : loading ? (
             <Box px="2" py="1">
               <Text size="2" color="gray">
                 Searching…
@@ -474,51 +504,64 @@ export function SearchableSelect({
               </Text>
             </Box>
           ) : (
-            filteredOptions.map((option, index) => (
-              <Box
-                key={option.value || '__empty__'}
-                data-searchable-select-option
-                data-searchable-select-option-index={index}
-                onPointerDown={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  selectingRef.current = true
-                  handleSelect(option)
-                }}
-                px="2"
-                py={renderOption ? '2' : '1'}
-                style={{
-                  cursor: 'pointer',
-                  borderRadius: 'var(--radius-2)',
-                  backgroundColor:
-                    index === highlightedIndex
-                      ? 'var(--gray-a3)'
-                      : 'transparent',
-                }}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                {renderOption ? (
-                  renderOption(option, {
-                    query: inputValue,
-                    highlighted: index === highlightedIndex,
-                  })
-                ) : (
-                  <>
-                    <Text as="div" size="2" truncate>
-                      <HighlightedText text={option.label} query={inputValue} />
-                    </Text>
-                    {option.description && (
-                      <Text as="div" size="1" color="gray" truncate>
+            <>
+              {showResultCount != null && (
+                <Box px="2" pt="1" pb="0">
+                  <Text size="1" color="gray">
+                    {showResultCount} match
+                    {showResultCount !== 1 ? 'es' : ''}
+                  </Text>
+                </Box>
+              )}
+              {filteredOptions.map((option, index) => (
+                <Box
+                  key={option.value || '__empty__'}
+                  data-searchable-select-option
+                  data-searchable-select-option-index={index}
+                  onPointerDown={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    selectingRef.current = true
+                    handleSelect(option)
+                  }}
+                  px="2"
+                  py={renderOption ? '2' : '1'}
+                  style={{
+                    cursor: 'pointer',
+                    borderRadius: 'var(--radius-2)',
+                    backgroundColor:
+                      index === highlightedIndex
+                        ? 'var(--gray-a3)'
+                        : 'transparent',
+                  }}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                >
+                  {renderOption ? (
+                    renderOption(option, {
+                      query: inputValue,
+                      highlighted: index === highlightedIndex,
+                    })
+                  ) : (
+                    <>
+                      <Text as="div" size="2" truncate>
                         <HighlightedText
-                          text={option.description}
+                          text={option.label}
                           query={inputValue}
                         />
                       </Text>
-                    )}
-                  </>
-                )}
-              </Box>
-            ))
+                      {option.description && (
+                        <Text as="div" size="1" color="gray" truncate>
+                          <HighlightedText
+                            text={option.description}
+                            query={inputValue}
+                          />
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </Box>
+              ))}
+            </>
           )}
         </Box>
       </Theme>

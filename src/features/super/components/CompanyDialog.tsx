@@ -1,11 +1,13 @@
 // src/features/super/components/CompanyDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes'
 import {
   SearchableSelect,
   preventDialogCloseOnSearchableSelect,
 } from '@shared/ui/components/SearchableSelect'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
@@ -46,6 +48,8 @@ export default function CompanyDialog({
   const { success, error: toastError } = useToast()
   const qc = useQueryClient()
   const [searchTerm, setSearchTerm] = React.useState('')
+  const [debouncedSearchTerm] = useDebouncedValue(searchTerm, { wait: 300 })
+  const searchPending = searchTerm !== debouncedSearchTerm
 
   // Format VAT number on initial load
   const formatVATForInput = (vat: string | null | undefined): string => {
@@ -99,11 +103,15 @@ export default function CompanyDialog({
   ) => setForm((s) => ({ ...s, [k]: v }))
 
   // Load users for contact person selection with search
-  const { data: profiles = [], isFetching: profilesLoading } = useQuery({
+  const {
+    data: profiles = [],
+    isFetching: profilesFetching,
+    isPending: profilesPending,
+  } = useQuery({
     queryKey: [
       'profiles',
       'contact-person-search',
-      searchTerm,
+      debouncedSearchTerm,
       form.contact_person_id,
     ],
     enabled: open,
@@ -113,11 +121,13 @@ export default function CompanyDialog({
         .select('user_id, display_name, email, first_name, last_name')
         .limit(20)
 
-      if (searchTerm.trim()) {
-        // Search mode: filter by search term
-        q = q.or(
-          `display_name.ilike.%${searchTerm.trim()}%,email.ilike.%${searchTerm.trim()}%,first_name.ilike.%${searchTerm.trim()}%,last_name.ilike.%${searchTerm.trim()}%`,
-        )
+      if (debouncedSearchTerm.trim()) {
+        q = applyFuzzySearch(q, debouncedSearchTerm, [
+          'display_name',
+          'email',
+          'first_name',
+          'last_name',
+        ]) as typeof q
       } else if (form.contact_person_id) {
         // Show selected person when no search
         q = q.eq('user_id', form.contact_person_id)
@@ -139,6 +149,7 @@ export default function CompanyDialog({
     },
     staleTime: 30_000,
   })
+  const profilesLoading = profilesFetching || profilesPending || searchPending
 
   const contactPersonOptions = React.useMemo(
     () => [

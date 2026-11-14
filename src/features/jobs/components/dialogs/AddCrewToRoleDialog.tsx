@@ -1,6 +1,7 @@
 // src/features/jobs/components/dialogs/AddCrewToRoleDialog.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Box,
   Button,
@@ -13,6 +14,7 @@ import {
 import { z } from 'zod'
 import { useStore } from '@tanstack/react-form'
 import { useAppForm } from '@shared/form'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { supabase } from '@shared/api/supabase'
 import { Check, CheckCircle, Mail, UserPlus } from 'iconoir-react'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -119,6 +121,8 @@ export default function AddCrewToRoleDialog({
     form.store,
     (s: { values: typeof defaultValues }) => s.values.search,
   )
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
   const placeholderName = useStore(
     form.store,
     (s: { values: typeof defaultValues }) => s.values.placeholderName,
@@ -202,7 +206,12 @@ export default function AddCrewToRoleDialog({
   })
 
   const { data: people = [], isFetching } = useQuery({
-    queryKey: ['crew-picker', search, timePeriodId, existingUserIds.size],
+    queryKey: [
+      'crew-picker',
+      debouncedSearch,
+      timePeriodId,
+      existingUserIds.size,
+    ],
     enabled: open,
     queryFn: async () => {
       let q = supabase
@@ -210,10 +219,11 @@ export default function AddCrewToRoleDialog({
         .select('user_id, display_name, email')
         .limit(50)
 
-      if (search.trim()) {
-        q = q.or(
-          `display_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`,
-        )
+      if (debouncedSearch.trim()) {
+        q = applyFuzzySearch(q, debouncedSearch, [
+          'display_name',
+          'email',
+        ]) as typeof q
       }
 
       const { data, error } = await q
@@ -227,6 +237,7 @@ export default function AddCrewToRoleDialog({
       }>
     },
   })
+  const peopleLoading = isFetching || searchPending
 
   const suggestedForRole = React.useMemo(
     () => recentCrew.filter((person) => !existingUserIds.has(person.user_id)),
@@ -759,7 +770,7 @@ export default function AddCrewToRoleDialog({
                                 showSeparator={
                                   suggestedWithoutMe.length > 0 ||
                                   restWithoutMe.length > 0 ||
-                                  isFetching
+                                  peopleLoading
                                 }
                                 confirmMyself={{
                                   onClick: () => void runConfirmMyself(),
@@ -789,7 +800,7 @@ export default function AddCrewToRoleDialog({
                               showSeparator={
                                 idx < suggestedWithoutMe.length - 1 ||
                                 restWithoutMe.length > 0 ||
-                                isFetching
+                                peopleLoading
                               }
                             />
                           ))}
@@ -806,12 +817,12 @@ export default function AddCrewToRoleDialog({
                                 All crew
                               </Text>
                             )}
-                          {isFetching && (
+                          {peopleLoading && (
                             <Text size="2" color="gray">
                               Searching…
                             </Text>
                           )}
-                          {!isFetching &&
+                          {!peopleLoading &&
                             !mePerson &&
                             suggestedWithoutMe.length === 0 &&
                             restWithoutMe.length === 0 && (
@@ -819,7 +830,7 @@ export default function AddCrewToRoleDialog({
                                 No crew members found
                               </Text>
                             )}
-                          {!isFetching &&
+                          {!peopleLoading &&
                             restWithoutMe.map((p, idx) => (
                               <CrewPickerPersonRow
                                 key={p.user_id}

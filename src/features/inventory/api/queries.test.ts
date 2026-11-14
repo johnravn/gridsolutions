@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  inventoryDetailKey,
-  inventoryIndexKey,
-  inventoryIndexKeyAll,
-} from './queries'
+import { inventoryDetailKey, inventoryIndexKey } from './queries'
 
 describe('inventory query keys', () => {
   it('builds stable inventory index keys', () => {
@@ -44,47 +40,12 @@ describe('inventory query keys', () => {
     ])
   })
 
-  it('builds inventory index-all keys without pagination', () => {
-    expect(
-      inventoryIndexKeyAll(
-        'company-1',
-        '',
-        true,
-        true,
-        true,
-        true,
-        false,
-        true,
-        true,
-        null,
-        'on_hand',
-        'desc',
-      ),
-    ).toEqual([
-      'company',
-      'company-1',
-      'inventory-index',
-      'all',
-      '',
-      true,
-      true,
-      true,
-      true,
-      false,
-      true,
-      true,
-      null,
-      'on_hand',
-      'desc',
-    ])
-  })
-
   it('builds inventory detail keys', () => {
-    expect(inventoryDetailKey('company-1', 'item-1')).toEqual([
+    expect(inventoryDetailKey('company-1', 'item-9')).toEqual([
       'company',
       'company-1',
       'inventory-detail',
-      'item-1',
+      'item-9',
     ])
   })
 })

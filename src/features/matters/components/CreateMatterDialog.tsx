@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import {
   Badge,
   Box,
@@ -13,6 +14,7 @@ import {
 } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
+import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { supabase } from '@shared/api/supabase'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -52,6 +54,8 @@ export default function CreateMatterDialog({
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [search, setSearch] = React.useState('')
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
   const [selectedFiles, setSelectedFiles] = React.useState<Array<File>>([])
   const fileInputRef = React.useRef<HTMLInputElement>(null)
@@ -97,7 +101,7 @@ export default function CreateMatterDialog({
 
   // Search for users in the company with their roles
   const { data: people = [], isFetching } = useQuery({
-    queryKey: ['company-users-with-roles', companyId, search],
+    queryKey: ['company-users-with-roles', companyId, debouncedSearch],
     enabled: open && !!companyId,
     queryFn: async () => {
       if (!companyId) return []
@@ -109,10 +113,11 @@ export default function CreateMatterDialog({
         .eq('company_id', companyId)
         .limit(50)
 
-      if (search.trim()) {
-        q = q.or(
-          `display_name.ilike.%${search.trim()}%,email.ilike.%${search.trim()}%`,
-        )
+      if (debouncedSearch.trim()) {
+        q = applyFuzzySearch(q, debouncedSearch, [
+          'display_name',
+          'email',
+        ]) as typeof q
       }
 
       const { data, error } = await q
@@ -120,6 +125,7 @@ export default function CreateMatterDialog({
       return data as Array<PersonWithRole>
     },
   })
+  const peopleLoading = isFetching || searchPending
 
   // Group users by role for easy selection
   const usersByRole = React.useMemo(() => {
@@ -507,17 +513,17 @@ export default function CreateMatterDialog({
                       padding: 8,
                     }}
                   >
-                    {isFetching && (
+                    {peopleLoading && (
                       <Text size="2" color="gray">
                         Searching…
                       </Text>
                     )}
-                    {!isFetching && people.length === 0 && (
+                    {!peopleLoading && people.length === 0 && (
                       <Text size="2" color="gray">
                         No users found
                       </Text>
                     )}
-                    {!isFetching &&
+                    {!peopleLoading &&
                       people.map((p) => {
                         const isSelected = selectedIds.has(p.user_id)
                         return (

@@ -1,5 +1,6 @@
 import * as React from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { Plus, Search } from 'iconoir-react'
 import { Badge, Button, Flex, Spinner, Text, TextField } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
@@ -112,23 +113,31 @@ export default function VehiclesView({
   }, [createShortcutRef])
   const { sortBy, sortDir, handleSort } = useClientSort<SortBy>('name', 'asc')
 
+  const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
+  const searchPending = search !== debouncedSearch
+
   const {
-    data: rawRows = [],
+    data: vehiclesResult,
     isLoading,
     isFetching,
+    isError,
+    error,
   } = useQuery({
     ...vehiclesIndexQuery({
       companyId: companyId ?? '__none__',
       includeExternal,
-      search,
+      search: debouncedSearch,
     }),
     enabled: !!companyId,
+    placeholderData: keepPreviousData,
   })
 
-  const rows = React.useMemo(
-    () => [...rawRows].sort((a, b) => compareVehicles(a, b, sortBy, sortDir)),
-    [rawRows, sortBy, sortDir],
-  )
+  const truncated = vehiclesResult?.truncated ?? false
+
+  const rows = React.useMemo(() => {
+    const rawRows = vehiclesResult?.rows ?? []
+    return [...rawRows].sort((a, b) => compareVehicles(a, b, sortBy, sortDir))
+  }, [vehiclesResult?.rows, sortBy, sortDir])
 
   const { scrollRef, rowVirtualizer } = useVirtualIndexTable({
     rows,
@@ -185,7 +194,7 @@ export default function VehiclesView({
             <Search />
           </TextField.Slot>
           <TextField.Slot side="right">
-            {(isLoading || isFetching) && <Spinner />}
+            {(searchPending || isLoading || isFetching) && <Spinner />}
           </TextField.Slot>
         </TextField.Root>
         {isMobile ? toolbarExtra : null}
@@ -206,6 +215,14 @@ export default function VehiclesView({
       />
     </Flex>
   )
+
+  const emptyMessage = isError
+    ? `Search failed${error instanceof Error && error.message ? `: ${error.message}` : ''}`
+    : searchPending || isFetching
+      ? 'Searching…'
+      : debouncedSearch.trim()
+        ? `No matches for “${debouncedSearch.trim()}”`
+        : 'No vehicles'
 
   if (isMobile) {
     return (
@@ -334,11 +351,14 @@ export default function VehiclesView({
       sortableColumns={['name', 'registration_no', 'fuel', 'owner']}
       scrollRef={scrollRef}
       rowVirtualizer={rowVirtualizer}
-      isLoading={isLoading}
-      emptyMessage="No vehicles"
+      isLoading={isLoading && !searchPending}
+      emptyMessage={emptyMessage}
       footerCount={{
         shown: rows.length,
-        label: (n) => `${n} vehicle${n !== 1 ? 's' : ''}`,
+        label: (n) =>
+          truncated
+            ? `Showing first ${n} vehicle${n !== 1 ? 's' : ''}`
+            : `${n} vehicle${n !== 1 ? 's' : ''}`,
       }}
       toolbar={toolbar}
     />

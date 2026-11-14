@@ -64,7 +64,7 @@ export function TransportSection({
     [],
   )
 
-  const { data: companyVehicles = [] } = useQuery({
+  const { data: vehiclesResult } = useQuery({
     ...vehiclesIndexQuery({
       companyId,
       includeExternal: false,
@@ -72,10 +72,9 @@ export function TransportSection({
     }),
     enabled: !!companyId && !readOnly,
   })
-
   const vehicleCountsByCategory = React.useMemo(
-    () => countCompanyVehiclesByCategory(companyVehicles),
-    [companyVehicles],
+    () => countCompanyVehiclesByCategory(vehiclesResult?.rows ?? []),
+    [vehiclesResult?.rows],
   )
 
   const [daysUsedDrafts, setDaysUsedDrafts] = React.useState<
