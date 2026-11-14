@@ -74,14 +74,15 @@ export function MobileRightDrawer({
         inert={!open ? true : undefined}
         style={{
           position: 'fixed',
+          left: 0,
           right: 0,
           top: 0,
           height: '100svh',
           width: 'var(--app-inspector-drawer-width)',
           margin: 0,
           borderRadius: 0,
-          borderLeft: '1px solid var(--gray-a5)',
-          boxShadow: 'var(--shadow-4)',
+          border: 'none',
+          boxShadow: 'none',
           overflow: 'hidden',
           display: 'flex',
           flexDirection: 'column',

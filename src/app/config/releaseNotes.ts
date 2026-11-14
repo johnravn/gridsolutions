@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.31'
+export const APP_VERSION = '1.13.32'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -92,6 +92,11 @@ export const RELEASE_NOTES = {
       title: 'Daily verse fix',
       description:
         'The home daily verse loads again after the 1.13 release — the serverless endpoint no longer fails on cold start.',
+    },
+    {
+      title: 'Full-screen mobile detail',
+      description:
+        'On phones, list details open full-screen with a bottom-left Back control instead of a thin side drawer. Desktop split view is unchanged.',
     },
     {
       title: 'Mobile list + inspector',

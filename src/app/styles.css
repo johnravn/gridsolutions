@@ -33,12 +33,17 @@
   --app-menu-fab-clearance: calc(
     var(--app-menu-fab-size) + var(--app-menu-fab-inset)
   );
-  --app-sidebar-drawer-width: min(320px, 85vw);
-  /* Right inspector drawer — leave room for the left menu FAB */
-  --app-inspector-drawer-width: min(
-    480px,
-    calc(100vw - var(--app-menu-fab-clearance) - var(--app-safe-left))
+  /*
+   * Scroll-body pad under a fixed bottom FAB: size + inset + home indicator
+   * + breathing room so last fields (e.g. End / Location) clear the control.
+   * Use a px fallback — Radix --space-* live on .radix-themes, not :root.
+   */
+  --app-detail-fab-scroll-pad: calc(
+    var(--app-menu-fab-clearance) + var(--app-safe-bottom) + 20px
   );
+  --app-sidebar-drawer-width: min(320px, 85vw);
+  /* Full-screen mobile detail (replaces thin right drawer) */
+  --app-inspector-drawer-width: 100%;
   /* Main scroll bottom padding — keep in sync with AppShell */
   --app-main-padding-bottom: calc(
     var(--app-content-padding) + var(--app-safe-bottom)
@@ -88,6 +93,12 @@
   --switch-border-radius: 9999px;
 }
 
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
 body {
   @apply m-0;
   font-family:
@@ -95,6 +106,7 @@ body {
     'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
 }
 
 button:not(:disabled),
@@ -104,6 +116,15 @@ a,
 .rt-Button,
 .rt-Link {
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']),
+.rt-IconButton,
+.rt-Button {
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 button:not(:disabled),
@@ -317,7 +338,8 @@ button:not(:disabled),
   transition: transform 380ms var(--motion-ease-ios);
   padding-top: calc(20px + var(--app-safe-top)) !important;
   padding-right: 20px !important;
-  padding-bottom: calc(20px + var(--app-safe-bottom)) !important;
+  /* Bottom clearance lives on .app-inspector-drawer-body (FAB + home indicator) */
+  padding-bottom: 0 !important;
   padding-left: 16px !important;
 }
 
@@ -326,8 +348,12 @@ button:not(:disabled),
   min-height: 0;
   min-width: 0;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding: 0 !important;
-  padding-bottom: var(--app-menu-fab-clearance) !important;
+  /* Clears fixed Back FAB + home indicator when scrolled to end */
+  padding-bottom: var(--app-detail-fab-scroll-pad) !important;
 }
 
 .app-inspector-drawer[data-open] {
@@ -393,7 +419,7 @@ button:not(:disabled),
   overscroll-behavior: contain;
   touch-action: pan-y;
   padding: 0 !important;
-  padding-bottom: var(--app-menu-fab-clearance) !important;
+  padding-bottom: var(--app-detail-fab-scroll-pad) !important;
 }
 
 .app-bottom-drawer[data-open] {
@@ -498,8 +524,9 @@ button:not(:disabled),
   }
 }
 
-/* Floating glass FABs — shared look for menu (left), inspector (right), and scroll. */
+/* Floating glass FABs — shared look for menu / Back (left), inspector (right), scroll. */
 .app-menu-fab.rt-IconButton,
+.app-detail-back-fab.rt-IconButton,
 .app-scroll-fab.rt-IconButton,
 .app-inspector-fab.rt-IconButton {
   position: fixed;
@@ -546,6 +573,23 @@ button:not(:disabled),
     transform 220ms var(--motion-ease-ios),
     box-shadow 220ms var(--motion-ease-ios),
     background-color 220ms ease;
+}
+
+/* Full-screen detail Back — same slot as menu FAB, above the detail panel. */
+.app-detail-back-fab.rt-IconButton {
+  left: calc(var(--app-menu-fab-inset) + var(--app-safe-left));
+  z-index: 105;
+  transition:
+    transform 220ms var(--motion-ease-ios),
+    box-shadow 220ms var(--motion-ease-ios),
+    background-color 220ms ease;
+}
+
+/* Tablet: static 200px sidebar — keep Back over the content column. */
+@media (min-width: 769px) and (max-width: 1023px) {
+  .app-detail-back-fab.rt-IconButton {
+    left: calc(200px + var(--app-menu-fab-inset) + var(--app-safe-left));
+  }
 }
 
 /* Closed: bottom-left. Open: slides with the drawer as a close (X). */
@@ -690,11 +734,12 @@ button:not(:disabled),
   }
 }
 
-body:has(.app-inspector-fab[data-open]) .app-mobile-bottom-action-bar {
+body:has(.app-inspector-fab[data-open]) .app-mobile-bottom-action-bar,
+body:has(.app-inspector-drawer[data-open]) .app-mobile-bottom-action-bar {
   display: none;
 }
 
-/* Stays bottom-right, including when the inspector drawer is open (sits on top of it). */
+/* Bottom-right reopen control; hidden while detail is open (Back owns dismiss). */
 .app-inspector-fab.rt-IconButton {
   right: calc(var(--app-menu-fab-inset) + var(--app-safe-right));
   z-index: 105;
@@ -726,12 +771,14 @@ body:has(.app-inspector-fab[data-open]) .app-mobile-bottom-action-bar {
 
 /*
  * Only one chrome drawer at a time. Hide the idle FAB so it cannot compete
- * with the open drawer's close control.
+ * with the open panel's close / Back control.
  */
 body:has(.app-menu-fab[data-open]) .app-inspector-fab.rt-IconButton,
 body:has(.app-menu-fab[data-open]) .app-inspector-fab.rt-IconButton:disabled,
+body:has(.app-menu-fab[data-open]) .app-detail-back-fab.rt-IconButton,
 body:has(.app-inspector-drawer[data-open])
-  .app-menu-fab.rt-IconButton:not([data-open]) {
+  .app-menu-fab.rt-IconButton:not([data-open]),
+body:has(.app-inspector-drawer[data-open]) .app-inspector-fab.rt-IconButton {
   z-index: 99;
   pointer-events: none;
   opacity: 0 !important;

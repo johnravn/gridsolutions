@@ -1,10 +1,14 @@
 import { Box, Flex, Skeleton } from '@radix-ui/themes'
 import { SplitListBodySkeleton, SplitSlotsClear } from '@app/layout/split'
+import { MobileDetailBackFab } from './MobileDetailBackFab'
 import { MobileDrawerFab } from './MobileDrawerFab'
 import { MobileRightDrawer } from './MobileRightDrawer'
 import type { ReactNode } from 'react'
 
-/** Unwrapped list + right inspector drawer + FAB. Use when `isLarge` is false. */
+/**
+ * Unwrapped list + full-screen inspector + FABs. Use when `isLarge` is false.
+ * Open: Back FAB bottom-left (menu slot). Closed: right chevron reopens.
+ */
 export function MobileSplitView({
   open,
   onOpenChange,
@@ -31,6 +35,7 @@ export function MobileSplitView({
       >
         {inspector}
       </MobileRightDrawer>
+      {open ? <MobileDetailBackFab onBack={() => onOpenChange(false)} /> : null}
       <MobileDrawerFab open={open} onToggle={onToggle} />
     </>
   )

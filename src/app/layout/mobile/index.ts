@@ -4,6 +4,7 @@ export {
   MOBILE_BOTTOM_DRAWER_ID,
 } from './MobileBottomDrawer'
 export { MobileDrawerFab } from './MobileDrawerFab'
+export { MobileDetailBackFab } from './MobileDetailBackFab'
 export { MobileBottomActionBar } from './MobileBottomActionBar'
 export { useLockAppMainScroll } from './useLockAppMainScroll'
 export { useBlurFocusedDescendantWhenClosed } from './useBlurFocusedDescendantWhenClosed'

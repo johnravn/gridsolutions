@@ -3,9 +3,10 @@ import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import { useMobileNav } from './MobileNavContext'
 
 /**
- * Drawer open state for split-page inspectors on small screens.
+ * Full-screen inspector open state for split pages on small screens (<1024).
  * Keeps selection when closed; traps Android back while open; closes on desktop.
  * Mutually exclusive with the mobile nav menu — only one may be open.
+ * UI: MobileSplitView shows Back (bottom-left) while open; right FAB reopens.
  */
 export function useMobileInspectorDrawer(isLarge: boolean) {
   const { navOpen, setNavOpen } = useMobileNav()
