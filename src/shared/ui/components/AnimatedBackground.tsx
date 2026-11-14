@@ -68,8 +68,8 @@ export function normalizeGeometricPreset(
 }
 
 function GridSlashArt() {
-  // Fine ~18px grid is a CSS layer (.geo-bg__fine-grid) so it stays screen-space
-  // and readable — SVG viewBox lines scaled away on full-bleed shells.
+  // Really subtle ~72px CSS lattice (.geo-bg__fine-grid) — faint atmosphere;
+  // SVG viewBox lines scaled away on full-bleed shells.
   return (
     <svg
       className="geo-bg__svg"
