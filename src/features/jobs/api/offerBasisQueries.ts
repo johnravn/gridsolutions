@@ -1671,7 +1671,8 @@ export type SyncBookingsProgress = {
   booking: { current: number; total: number }
 }
 
-const SYNC_PROGRESS_CHUNK_SIZE = 1
+/** Multi-row deletes when progress UI is on (was 1 = one HTTP round-trip per row). */
+const SYNC_PROGRESS_CHUNK_SIZE = 75
 
 function countCrewBookingUnits(
   crewItems: Array<{

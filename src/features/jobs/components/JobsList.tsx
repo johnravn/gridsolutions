@@ -222,7 +222,13 @@ export default function JobsList({
   )
   const totalCount = jobsQuery.data?.pages[0]?.count ?? 0
 
-  useAutoUpdateJobsListJobStatuses(allData, !!companyId)
+  // When drilling into a recurring series, the index query is disabled — use
+  // all member jobs from the series detail so status sync still runs.
+  const autoUpdateJobs = React.useMemo(
+    () => (listScope ? (scopedRecurringDetail?.jobs ?? []) : allData),
+    [listScope, scopedRecurringDetail?.jobs, allData],
+  )
+  useAutoUpdateJobsListJobStatuses(autoUpdateJobs, !!companyId)
 
   const selectedJobDetail = useQuery({
     ...jobDetailQuery({ jobId: selectedJobId ?? '__none__' }),

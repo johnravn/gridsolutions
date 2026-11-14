@@ -155,14 +155,14 @@ export async function findCrewOverlaps({
   const result = new Map<string, Array<OverlapConflict>>()
   if (userIds.length === 0) return result
 
-  const { data, error } = await supabase
+  let crewQuery = supabase
     .from('reserved_crew')
     .select(
       `
       user_id,
       time_period_id,
       forced,
-      time_period:time_period_id (
+      time_period:time_period_id!inner (
         start_at,
         end_at,
         job:job_id (
@@ -175,6 +175,14 @@ export async function findCrewOverlaps({
     )
     .in('user_id', userIds)
     .neq('status', 'canceled')
+    .lt('time_period.start_at', endAt)
+    .gt('time_period.end_at', startAt)
+
+  if (excludePeriodId) {
+    crewQuery = crewQuery.neq('time_period_id', excludePeriodId)
+  }
+
+  const { data, error } = await crewQuery
 
   if (error) throw error
 
@@ -184,7 +192,7 @@ export async function findCrewOverlaps({
     if (skipForcedCrew && row.forced) continue
     const tp = row.time_period as TimePeriodJoin
     if (!tp?.start_at || !tp.end_at) continue
-    if (excludePeriodId && row.time_period_id === excludePeriodId) continue
+    // Date overlap already applied in SQL; keep a defensive client check.
     if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
 
     const conflict = conflictFromTimePeriod(tp)
@@ -233,12 +241,12 @@ export async function findVehicleOverlaps({
   /** Ignore bookings on this job (e.g. sync will replace them). */
   excludeJobId?: string
 }): Promise<Array<OverlapConflict>> {
-  const { data, error } = await supabase
+  let vehicleQuery = supabase
     .from('reserved_vehicles')
     .select(
       `
       id,
-      time_period:time_period_id (
+      time_period:time_period_id!inner (
         start_at,
         end_at,
         job_id,
@@ -252,16 +260,24 @@ export async function findVehicleOverlaps({
     `,
     )
     .eq('vehicle_id', vehicleId)
+    .lt('time_period.start_at', endAt)
+    .gt('time_period.end_at', startAt)
+
+  if (excludeReservationId) {
+    vehicleQuery = vehicleQuery.neq('id', excludeReservationId)
+  }
+
+  const { data, error } = await vehicleQuery
 
   if (error) throw error
 
   const conflicts: Array<OverlapConflict> = []
   for (const row of data ?? []) {
-    if (excludeReservationId && row.id === excludeReservationId) continue
     const tp = row.time_period as TimePeriodJoin
     if (!tp?.start_at || !tp.end_at) continue
     const jobId = tp.job_id ?? tp.job?.id ?? null
     if (excludeJobId && jobId === excludeJobId) continue
+    // Date overlap already applied in SQL; keep a defensive client check.
     if (!periodsOverlap(startAt, endAt, tp.start_at, tp.end_at)) continue
     const conflict = conflictFromTimePeriod(tp)
     if (conflict) conflicts.push(conflict)

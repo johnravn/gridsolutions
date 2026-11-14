@@ -75,6 +75,50 @@ describe('getScheduledJobStatusTransition', () => {
     ).toEqual({ jobId: 'job-1', newStatus: 'completed' })
   })
 
+  it('moves confirmed straight to completed after end time', () => {
+    vi.setSystemTime(new Date('2026-06-10T19:00:00.000Z'))
+    expect(
+      getScheduledJobStatusTransition({
+        id: 'job-1',
+        status: 'confirmed',
+        start_at: '2026-06-10T08:00:00.000Z',
+        end_at: '2026-06-10T18:00:00.000Z',
+      }),
+    ).toEqual({ jobId: 'job-1', newStatus: 'completed' })
+  })
+
+  it('does not auto-promote planned or requested', () => {
+    vi.setSystemTime(new Date('2026-06-10T12:00:00.000Z'))
+    expect(
+      getScheduledJobStatusTransition({
+        id: 'job-1',
+        status: 'planned',
+        start_at: '2026-06-10T08:00:00.000Z',
+        end_at: '2026-06-10T18:00:00.000Z',
+      }),
+    ).toBeNull()
+    expect(
+      getScheduledJobStatusTransition({
+        id: 'job-2',
+        status: 'requested',
+        start_at: '2026-06-10T08:00:00.000Z',
+        end_at: '2026-06-10T18:00:00.000Z',
+      }),
+    ).toBeNull()
+  })
+
+  it('leaves overdue planned and requested alone', () => {
+    vi.setSystemTime(new Date('2026-06-10T19:00:00.000Z'))
+    expect(
+      getScheduledJobStatusTransition({
+        id: 'job-1',
+        status: 'planned',
+        start_at: '2026-06-10T08:00:00.000Z',
+        end_at: '2026-06-10T18:00:00.000Z',
+      }),
+    ).toBeNull()
+  })
+
   it('returns null when confirmed but before start', () => {
     vi.setSystemTime(new Date('2026-06-10T06:00:00.000Z'))
     expect(

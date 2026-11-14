@@ -10,7 +10,12 @@ export type JobStatusWindowRow = {
 
 /**
  * If the job should move to the next status based on wall clock and start/end,
- * returns the transition to persist. Mirrors JobInspector auto-update rules.
+ * returns the transition to persist.
+ *
+ * Mirrors server `auto_update_jobs_to_in_progress`:
+ * - confirmed → in_progress when now is inside [start_at, end_at]
+ * - confirmed | in_progress → completed when now > end_at
+ * - planned / requested are never auto-promoted
  */
 export function getScheduledJobStatusTransition(
   job: JobStatusWindowRow,
@@ -24,15 +29,17 @@ export function getScheduledJobStatusTransition(
   const startAt = new Date(job.start_at).getTime()
   const endAt = new Date(job.end_at).getTime()
 
-  if (job.status === 'confirmed') {
-    if (now >= startAt && now <= endAt) {
-      return { jobId: job.id, newStatus: 'in_progress' }
-    }
-  } else if (job.status === 'in_progress') {
-    if (now > endAt) {
+  if (now > endAt) {
+    if (job.status === 'in_progress' || job.status === 'confirmed') {
       return { jobId: job.id, newStatus: 'completed' }
     }
+    return null
   }
+
+  if (job.status === 'confirmed' && now >= startAt && now <= endAt) {
+    return { jobId: job.id, newStatus: 'in_progress' }
+  }
+
   return null
 }
 

@@ -141,6 +141,6 @@ export function companyJobsWeekQuery({
       return results
     },
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   }
 }

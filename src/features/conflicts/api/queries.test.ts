@@ -86,7 +86,11 @@ describe('conflicts query factories', () => {
       error: null,
     })
 
-    const opts = jobBookingConflictsQuery({ jobId: 'job-1' })
+    const opts = jobBookingConflictsQuery({
+      jobId: 'job-1',
+      from: '2026-06-15T12:00:00.000Z',
+      to: null,
+    })
     const result = await opts.queryFn!({} as never)
 
     expect(result).toEqual({
@@ -97,7 +101,7 @@ describe('conflicts query factories', () => {
     })
     expect(rpcMock).toHaveBeenCalledWith('get_job_booking_conflicts', {
       p_job_id: 'job-1',
-      p_from: undefined,
+      p_from: '2026-06-15T12:00:00.000Z',
       p_to: undefined,
     })
   })

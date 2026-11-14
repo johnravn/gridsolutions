@@ -1,6 +1,5 @@
 import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { startOfMinute } from 'date-fns'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { canVisit } from '@shared/auth/permissions'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -11,6 +10,7 @@ import {
   groupConflictsQuery,
   vehicleConflictsQuery,
 } from '../api/queries'
+import { conflictAttentionBounds } from '../utils/conflictAttentionBounds'
 import {
   keepAttentionEquipmentConflicts,
   keepAttentionPairConflicts,
@@ -36,42 +36,47 @@ export function useProjectLeadConflictCount() {
   const shouldFetchConflicts =
     !!companyId && canSeeConflicts && projectLeadJobIds.length > 0
 
+  const { from, to } = React.useMemo(() => {
+    void companyId
+    return conflictAttentionBounds()
+  }, [companyId])
+
   const { data: crewConflicts = [] } = useQuery({
     ...crewConflictsQuery({
       companyId: companyId ?? '',
-      from: null,
-      to: null,
+      from,
+      to,
     }),
     enabled: shouldFetchConflicts,
   })
   const { data: vehicleConflicts = [] } = useQuery({
     ...vehicleConflictsQuery({
       companyId: companyId ?? '',
-      from: null,
-      to: null,
+      from,
+      to,
     }),
     enabled: shouldFetchConflicts,
   })
   const { data: equipmentConflicts = [] } = useQuery({
     ...equipmentConflictsQuery({
       companyId: companyId ?? '',
-      from: null,
-      to: null,
+      from,
+      to,
     }),
     enabled: shouldFetchConflicts,
   })
   const { data: groupConflicts = [] } = useQuery({
     ...groupConflictsQuery({
       companyId: companyId ?? '',
-      from: null,
-      to: null,
+      from,
+      to,
     }),
     enabled: shouldFetchConflicts,
   })
 
   return React.useMemo(() => {
     if (projectLeadJobIds.length === 0) return 0
-    const attentionNow = startOfMinute(new Date())
+    const { attentionNow } = conflictAttentionBounds()
     return countProjectLeadConflicts(
       buildConflictCards(
         keepAttentionPairConflicts(crewConflicts, attentionNow),

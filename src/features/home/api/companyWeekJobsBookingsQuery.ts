@@ -83,6 +83,12 @@ export function companyWeekJobsBookingsQuery({
   jobsMeta,
 }: {
   companyId: string
+  /**
+   * Cache discriminator for the visible week scope (desktop three-week view
+   * uses 0; mobile this-week vs upcoming uses 0|1). Callers must pass
+   * `jobsMeta` already scoped to the jobs shown for that scope — this
+   * queryFn does not expand to other weeks.
+   */
   weekOffset: CompanyJobsWeekOffset
   jobsMeta: Array<{ id: string; leadUserId: string | null }>
 }) {
@@ -98,6 +104,7 @@ export function companyWeekJobsBookingsQuery({
     ] as const,
     queryFn: async (): Promise<Record<string, WeekJobBookingSummary>> => {
       const empty: Record<string, WeekJobBookingSummary> = {}
+      // jobsMeta is pre-scoped to the visible week(s); do not merge other weeks here.
       if (jobsMeta.length === 0) return empty
 
       const leadByJob = new Map<string, string | null>()
@@ -335,6 +342,6 @@ export function companyWeekJobsBookingsQuery({
       return byJob
     },
     staleTime: 30_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   }
 }

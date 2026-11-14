@@ -437,10 +437,12 @@ export default function SuperMonitorTab() {
     mutationFn: triggerJobStatusAutoUpdate,
     onSuccess: (result) => {
       invalidateSnapshot()
-      success(
-        'Job status auto-update finished',
-        `${result.rowsUpdated} jobs updated`,
-      )
+      const detail =
+        typeof result.rowsToInProgress === 'number' &&
+        typeof result.rowsToCompleted === 'number'
+          ? `${result.rowsToInProgress} → in progress, ${result.rowsToCompleted} → completed`
+          : `${result.rowsUpdated} jobs updated`
+      success('Job status auto-update finished', detail)
     },
     onError: (e: unknown) => {
       toastError(

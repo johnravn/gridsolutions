@@ -4,12 +4,11 @@ import { useQuery } from '@tanstack/react-query'
 import HomePageSkeleton from '@shared/ui/components/HomePageSkeleton'
 import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { startOfMinute } from 'date-fns'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { supabase } from '@shared/api/supabase'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
-import { mattersIndexQueryAll } from '@features/matters/api/queries'
+import { homeUnreadMattersQuery } from '@features/matters/api/queries'
 import { useJobCrewRoleIds } from '@features/jobs/hooks/useJobCrewRoleIds'
 import { HomeDesktopLayout, HomeMobileLayout } from '@features/home/components'
 import { companyJobsWeekQuery } from '@features/home/api/companyJobsWeekQuery'
@@ -28,6 +27,7 @@ import {
   groupConflictsQuery,
   vehicleConflictsQuery,
 } from '@features/conflicts/api/queries'
+import { conflictAttentionBounds } from '@features/conflicts/utils/conflictAttentionBounds'
 import {
   filterCrewConflictsByProjectLead,
   filterEquipmentConflictsByProjectLead,
@@ -37,7 +37,7 @@ import {
   keepAttentionPairConflicts,
 } from '@features/conflicts/utils/filterConflictsByProjectLead'
 import type { JobListRow } from '@features/jobs/types'
-import type { HomeMatter, WeekJobWithRole } from '@features/home/types'
+import type { WeekJobWithRole } from '@features/home/types'
 
 const LARGE_BREAKPOINT = '(min-width: 1024px)'
 
@@ -120,13 +120,22 @@ export default function HomePage() {
 
   const companyWeekJobsLoading = week0Loading || week1Loading || week2Loading
 
+  // Scope bookings to weeks actually on screen (desktop: all three; mobile: segment).
   const bookingsSourceJobs = React.useMemo(() => {
     const byId = new Map<string, (typeof week0Jobs)[number]>()
-    for (const job of week0Jobs) byId.set(job.id, job)
+    if (isLarge) {
+      for (const job of week0Jobs) byId.set(job.id, job)
+      for (const job of week1Jobs) byId.set(job.id, job)
+      for (const job of week2Jobs) byId.set(job.id, job)
+      return Array.from(byId.values())
+    }
+    if (mobileWeekSegment === 0) {
+      return week0Jobs
+    }
     for (const job of week1Jobs) byId.set(job.id, job)
     for (const job of week2Jobs) byId.set(job.id, job)
     return Array.from(byId.values())
-  }, [week0Jobs, week1Jobs, week2Jobs])
+  }, [isLarge, mobileWeekSegment, week0Jobs, week1Jobs, week2Jobs])
 
   const jobsWeekBookingsMeta = React.useMemo(
     () =>
@@ -137,13 +146,15 @@ export default function HomePage() {
     [bookingsSourceJobs],
   )
 
+  const bookingsWeekOffset = isLarge ? 0 : mobileWeekSegment
+
   const {
     data: companyWeekBookingSummaries = {},
     isLoading: companyWeekBookingsDetailLoading,
   } = useQuery({
     ...companyWeekJobsBookingsQuery({
       companyId: companyId ?? '',
-      weekOffset: isLarge ? 0 : mobileWeekSegment,
+      weekOffset: bookingsWeekOffset,
       jobsMeta: jobsWeekBookingsMeta,
     }),
     enabled: !!companyId && canVisitJobs && jobsWeekBookingsMeta.length > 0,
@@ -198,23 +209,18 @@ export default function HomePage() {
     [week2Jobs, userId, crewJobIdSet, isFreelancer, showMyJobsOnly],
   )
 
-  const { data: mattersData, isLoading: mattersLoading } = useQuery({
-    ...mattersIndexQueryAll(userId),
+  const { data: unreadMatters = [], isLoading: mattersLoading } = useQuery({
+    ...homeUnreadMattersQuery(userId),
   })
 
-  const unreadMatters = React.useMemo((): Array<HomeMatter> => {
-    if (!mattersData) return []
-    return mattersData.filter((matter) => matter.is_unread)
-  }, [mattersData])
-
-  // Fetch all conflicts, then drop any whose booking windows have entirely ended.
+  // Bound conflict RPCs to the attention window (ongoing / upcoming), not full history.
   const { conflictFrom, conflictTo, attentionNow } = React.useMemo(() => {
     void companyId
-    const now = startOfMinute(new Date())
+    const bounds = conflictAttentionBounds()
     return {
-      conflictFrom: null as string | null,
-      conflictTo: null as string | null,
-      attentionNow: now,
+      conflictFrom: bounds.from,
+      conflictTo: bounds.to,
+      attentionNow: bounds.attentionNow,
     }
   }, [companyId])
 
@@ -344,9 +350,9 @@ export default function HomePage() {
   const conflictsSettled =
     !homeLayout.showConflicts || (projectLeadJobIdsLoaded && !conflictsLoading)
 
+  // Do not gate skeleton on matters — lean unread list loads after first paint.
   const isHomeDataLoading =
-    mattersLoading ||
-    (canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading)
+    canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading
 
   const showInitialSkeleton = useInitialPageLoad(isHomeDataLoading)
 

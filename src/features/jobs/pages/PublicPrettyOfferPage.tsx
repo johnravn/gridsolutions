@@ -10,7 +10,6 @@ import {
   usePrettyOfferOptions,
 } from '../components/pretty-offer/PrettyOfferOptionsContext'
 import { hasPrettyOfferStatusNotice } from '../utils/prettyOfferStatusNotice'
-import type { OfferStatus } from '../types'
 import '../components/pretty-offer/prettyOfferDeckStyles.css'
 import { usePublicOfferResponse } from '../hooks/usePublicOfferResponse'
 import {
@@ -35,7 +34,7 @@ function tabStatusBadge(alt: PublicOfferAlternative): {
   if (alt.offer.revision_requested_at && alt.status !== 'superseded') {
     return { label: 'Revision', color: 'blue' }
   }
-  switch (alt.status as OfferStatus) {
+  switch (alt.status) {
     case 'accepted':
       return { label: 'Accepted', color: 'green' }
     case 'rejected':
@@ -147,8 +146,7 @@ function PublicPrettyOfferPageContent({
   })
 
   const canAccept = offer.status === 'sent'
-  const showStatusNotice =
-    showStatusBanner && hasPrettyOfferStatusNotice(offer)
+  const showStatusNotice = showStatusBanner && hasPrettyOfferStatusNotice(offer)
 
   const showPricePerLine = offer.show_price_per_line !== false
 
@@ -175,11 +173,7 @@ function PublicPrettyOfferPageContent({
       )}
       <PrettyOfferHero offer={offer} />
       {modules.map((module, index) => (
-        <PrettyOfferModuleSlide
-          key={module.id}
-          index={index}
-          module={module}
-        />
+        <PrettyOfferModuleSlide key={module.id} index={index} module={module} />
       ))}
       {hasModules && (
         <PrettyOfferFooter
