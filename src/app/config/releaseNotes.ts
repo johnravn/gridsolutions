@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.36'
+export const APP_VERSION = '1.13.37'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -28,6 +28,11 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Jobs inspector on phone',
+      description:
+        'Job detail tabs stay reachable while you scroll, Bookings uses a simple Crew / Equipment / Transport switcher, and Money / tables fit better on a small screen.',
+    },
     {
       title: 'Geometric backgrounds',
       description:

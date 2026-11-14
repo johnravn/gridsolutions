@@ -132,13 +132,11 @@ export default function CalendarTab({ jobId }: { jobId: string }) {
       <Box
         mb="3"
         p="3"
+        className="mobile-hscroll"
         style={{
           background: 'var(--gray-a2)',
           borderRadius: 8,
           border: '1px solid var(--gray-a4)',
-          maxWidth: '100%',
-          minWidth: 0,
-          overflowX: 'auto',
         }}
       >
         <Flex align="center" gap="4" wrap="wrap" style={{ width: '100%' }}>
@@ -233,12 +231,11 @@ export default function CalendarTab({ jobId }: { jobId: string }) {
 
       {/* Calendar */}
       <Box
-        className="jobCalendar"
+        className="jobCalendar mobile-hscroll"
         style={{
-          height: 'calc(100vh - 270px)',
+          height: 'min(70svh, calc(100svh - 270px))',
           maxWidth: '100%',
           minWidth: 0,
-          overflowX: 'auto',
         }}
       >
         <FullCalendar

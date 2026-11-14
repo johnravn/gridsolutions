@@ -467,9 +467,26 @@ function JobStatusTimeline({
   const currentFlowIndex = flowStatuses.indexOf(displayStatus)
 
   const isMobile = useMediaQuery('(max-width: 768px)')
-  const mobileSplit = 4
-  const row1Statuses = flowStatuses.slice(0, mobileSplit)
-  const row2Statuses = flowStatuses.slice(mobileSplit)
+  /** Phone: 3 per row so labels stay readable at ~390px. */
+  const mobileSplit = 3
+  const mobileRows = [
+    flowStatuses.slice(0, mobileSplit),
+    flowStatuses.slice(mobileSplit, mobileSplit * 2),
+    flowStatuses.slice(mobileSplit * 2),
+  ].filter((row) => row.length > 0)
+
+  const statusLabel = (status: JobStatus) => {
+    if (!isMobile) return makeWordPresentable(status)
+    const short: Partial<Record<JobStatus, string>> = {
+      requested: 'Request',
+      confirmed: 'Confirm',
+      in_progress: 'Active',
+      completed: 'Done',
+      invoiced: 'Invoice',
+      canceled: 'Cancel',
+    }
+    return short[status] ?? makeWordPresentable(status)
+  }
 
   const renderStatusRow = (statusesInRow: Array<JobStatus>) =>
     statusesInRow.map((status, idx) => {
@@ -570,9 +587,13 @@ function JobStatusTimeline({
                 fontSize: 'var(--font-size-1)',
                 opacity: isFuture ? 0.5 : 1,
                 whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                maxWidth: '100%',
+                paddingInline: 2,
               }}
             >
-              {makeWordPresentable(status)}
+              {statusLabel(status)}
             </Text>
           </Flex>
         </React.Fragment>
@@ -585,26 +606,19 @@ function JobStatusTimeline({
       <Flex direction="column" gap="3" mb="4">
         {isMobile ? (
           <>
-            <Flex align="center" gap="1" style={{ position: 'relative' }}>
-              <Flex align="center" style={{ flex: 1 }} gap="0">
-                {renderStatusRow(row1Statuses)}
+            {mobileRows.map((row, rowIdx) => (
+              <Flex
+                key={`status-row-${rowIdx}`}
+                align="center"
+                gap="1"
+                style={{ position: 'relative' }}
+              >
+                <Flex align="center" style={{ flex: 1, minWidth: 0 }} gap="0">
+                  {renderStatusRow(row)}
+                </Flex>
               </Flex>
-            </Flex>
-            <Flex align="center" gap="1" style={{ position: 'relative' }}>
-              <Flex align="center" style={{ flex: 1 }} gap="0">
-                {renderStatusRow(row2Statuses)}
-              </Flex>
-              {!isCanceled && (
-                <Box
-                  style={{
-                    width: '1px',
-                    height: '50px',
-                    background: 'var(--gray-a4)',
-                    margin: '0 5px',
-                    opacity: 0.5,
-                  }}
-                />
-              )}
+            ))}
+            <Flex justify="center" mt="1">
               <Flex
                 direction="column"
                 align="center"
@@ -612,7 +626,7 @@ function JobStatusTimeline({
                   cursor: cannotWrite ? 'default' : 'pointer',
                   opacity: updateStatus.isPending ? 0.5 : 1,
                   pointerEvents: cannotWrite ? 'none' : 'auto',
-                  minWidth: '70px',
+                  minWidth: 64,
                 }}
                 onClick={handleCanceledClick}
               >
@@ -660,7 +674,7 @@ function JobStatusTimeline({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {makeWordPresentable('canceled')}
+                  {statusLabel('canceled')}
                 </Text>
               </Flex>
             </Flex>

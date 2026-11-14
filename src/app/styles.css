@@ -2381,3 +2381,51 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
     transition: transform 110ms var(--motion-ease-reveal-out);
   }
 }
+
+/* Intentional horizontal scroll (tables/charts inside inspector drawers). */
+.mobile-hscroll {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  /* Prefer vertical page/drawer scroll; allow horizontal when finger moves sideways. */
+  touch-action: pan-x pan-y;
+  scrollbar-width: thin;
+}
+
+.mobile-hscroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.mobile-hscroll::-webkit-scrollbar-thumb {
+  background: var(--gray-a6);
+  border-radius: 4px;
+}
+
+/* Sticky tab / filter chrome inside the full-screen inspector drawer. */
+.job-inspector-sticky-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin-left: -4px;
+  margin-right: -4px;
+  padding: 4px 4px 10px;
+  background: color-mix(in srgb, var(--color-panel-solid) 88%, transparent);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+@media (max-width: 768px) {
+  /* Drop secondary equipment columns — Item + Qty are enough on phone. */
+  .equipment-table-mobile-compact .equipment-col-secondary {
+    display: none;
+  }
+
+  .job-inspector-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}

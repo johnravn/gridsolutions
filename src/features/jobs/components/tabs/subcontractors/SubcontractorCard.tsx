@@ -406,7 +406,7 @@ export default function SubcontractorCard({
                     No quote versions yet.
                   </Text>
                 ) : (
-                  <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+                  <Box className="mobile-hscroll">
                     <Table.Root variant="ghost" size="1">
                       <Table.Header>
                         <Table.Row>

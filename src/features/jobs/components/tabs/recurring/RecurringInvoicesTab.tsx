@@ -206,7 +206,7 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
             </Text>
           </Box>
         ) : (
-          <Box style={{ overflowX: 'auto' }}>
+          <Box className="mobile-hscroll">
             <Table.Root size="2" variant="surface" style={{ minWidth: 640 }}>
               <Table.Header>
                 <Table.Row>

@@ -266,7 +266,7 @@ const FilesTab = React.forwardRef<FilesTabHandle, { job: JobDetail }>(
               </Text>
             </Box>
           ) : (
-            <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <Box className="mobile-hscroll">
               <Table.Root variant="surface">
                 <Table.Header>
                   <Table.Row>

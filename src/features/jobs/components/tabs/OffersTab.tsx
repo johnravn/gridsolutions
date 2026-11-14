@@ -2420,7 +2420,7 @@ export default function OffersTab({
               )}
 
               {hasOffers && (
-                <Box style={{ overflowX: 'auto' }}>
+                <Box className="mobile-hscroll">
                   <Table.Root variant="surface" style={{ minWidth: 560 }}>
                     <Table.Header>
                       <Table.Row>

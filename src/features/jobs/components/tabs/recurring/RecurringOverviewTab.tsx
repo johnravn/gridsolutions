@@ -85,7 +85,7 @@ function SeriesStatusTimeline({
         </Text>
       </Flex>
 
-      <Box style={{ overflowX: 'auto', paddingBottom: 4 }}>
+      <Box className="mobile-hscroll" style={{ paddingBottom: 4 }}>
         <Flex align="start" style={{ minWidth: 520, position: 'relative' }}>
           {JOB_STATUS_FLOW.map((status, idx) => {
             const count = statusCounts.get(status) ?? 0

@@ -13,6 +13,8 @@ import {
   Table,
   Text,
 } from '@radix-ui/themes'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
 import {
   CheckCircle,
   Edit,
@@ -94,6 +96,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+  const isMobile = useMediaQuery('(max-width: 768px)')
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('area')
@@ -1269,92 +1272,163 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             Add items from real events. You can edit before adding. Conta lines
             show match confidence — review amounts (may be inkl. MVA).
           </Text>
-          <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <Table.Root variant="surface" size="1">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Confidence</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell align="right">
-                    Amount
-                  </Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell style={{ width: 80 }} />
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {visibleSuggestions.map((s) => (
-                  <Table.Row key={s.id}>
-                    <Table.Cell>
-                      <Badge
-                        size="1"
-                        variant="soft"
-                        color={s.type === 'income' ? 'green' : 'red'}
-                      >
-                        {s.type === 'income' ? 'Income' : 'Expense'}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Flex direction="column" gap="1">
-                        <Text size="2">{s.description}</Text>
-                        {s.confidenceReason && (
-                          <Text size="1" color="gray">
-                            {s.confidenceReason}
-                          </Text>
-                        )}
-                      </Flex>
-                    </Table.Cell>
-                    <Table.Cell>{formatDate(s.date)}</Table.Cell>
-                    <Table.Cell>
-                      <Badge
-                        color={getSourceBadgeColor(s)}
-                        variant="soft"
-                        size="1"
-                      >
-                        {getSourceLabel(s)}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {s.confidence ? (
+          {isMobile ? (
+            <Flex direction="column" gap="2">
+              {visibleSuggestions.map((s) => (
+                <Box
+                  key={s.id}
+                  p="3"
+                  style={{
+                    border: '1px solid var(--gray-a5)',
+                    borderRadius: 8,
+                    background: 'var(--gray-a1)',
+                  }}
+                >
+                  <Flex justify="between" align="start" gap="3" mb="2">
+                    <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                      <Flex align="center" gap="2" wrap="wrap">
                         <Badge
                           size="1"
                           variant="soft"
-                          color={CONTA_CONFIDENCE_COLOR[s.confidence]}
-                          title={s.confidenceReason ?? undefined}
+                          color={s.type === 'income' ? 'green' : 'red'}
                         >
-                          {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                          {s.type === 'income' ? 'Income' : 'Expense'}
                         </Badge>
-                      ) : (
+                        <Badge
+                          color={getSourceBadgeColor(s)}
+                          variant="soft"
+                          size="1"
+                        >
+                          {getSourceLabel(s)}
+                        </Badge>
+                        {s.confidence ? (
+                          <Badge
+                            size="1"
+                            variant="soft"
+                            color={CONTA_CONFIDENCE_COLOR[s.confidence]}
+                          >
+                            {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                          </Badge>
+                        ) : null}
+                      </Flex>
+                      <Text size="2">{s.description}</Text>
+                      {s.confidenceReason && (
                         <Text size="1" color="gray">
-                          —
+                          {s.confidenceReason}
                         </Text>
                       )}
-                    </Table.Cell>
-                    <Table.Cell align="right">
-                      <Text
-                        weight="medium"
-                        size="2"
-                        color={s.type === 'income' ? 'green' : 'red'}
-                      >
-                        {formatCurrency(s.amount)}
+                      <Text size="1" color="gray">
+                        {formatDate(s.date)}
                       </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Button
-                        size="1"
-                        variant="soft"
-                        onClick={() => handleAddFromSuggestion(s)}
-                      >
-                        Add
-                      </Button>
-                    </Table.Cell>
+                    </Flex>
+                    <Text
+                      weight="medium"
+                      size="2"
+                      color={s.type === 'income' ? 'green' : 'red'}
+                      style={{ flexShrink: 0 }}
+                    >
+                      {formatCurrency(s.amount)}
+                    </Text>
+                  </Flex>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    style={{ width: '100%', minHeight: 40 }}
+                    onClick={() => handleAddFromSuggestion(s)}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              ))}
+            </Flex>
+          ) : (
+            <MobileHScroll>
+              <Table.Root variant="surface" size="1">
+                <Table.Header>
+                  <Table.Row>
+                    <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell>Confidence</Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell align="right">
+                      Amount
+                    </Table.ColumnHeaderCell>
+                    <Table.ColumnHeaderCell style={{ width: 80 }} />
                   </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Root>
-          </Box>
+                </Table.Header>
+                <Table.Body>
+                  {visibleSuggestions.map((s) => (
+                    <Table.Row key={s.id}>
+                      <Table.Cell>
+                        <Badge
+                          size="1"
+                          variant="soft"
+                          color={s.type === 'income' ? 'green' : 'red'}
+                        >
+                          {s.type === 'income' ? 'Income' : 'Expense'}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Flex direction="column" gap="1">
+                          <Text size="2">{s.description}</Text>
+                          {s.confidenceReason && (
+                            <Text size="1" color="gray">
+                              {s.confidenceReason}
+                            </Text>
+                          )}
+                        </Flex>
+                      </Table.Cell>
+                      <Table.Cell>{formatDate(s.date)}</Table.Cell>
+                      <Table.Cell>
+                        <Badge
+                          color={getSourceBadgeColor(s)}
+                          variant="soft"
+                          size="1"
+                        >
+                          {getSourceLabel(s)}
+                        </Badge>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {s.confidence ? (
+                          <Badge
+                            size="1"
+                            variant="soft"
+                            color={CONTA_CONFIDENCE_COLOR[s.confidence]}
+                            title={s.confidenceReason ?? undefined}
+                          >
+                            {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                          </Badge>
+                        ) : (
+                          <Text size="1" color="gray">
+                            —
+                          </Text>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell align="right">
+                        <Text
+                          weight="medium"
+                          size="2"
+                          color={s.type === 'income' ? 'green' : 'red'}
+                        >
+                          {formatCurrency(s.amount)}
+                        </Text>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Button
+                          size="1"
+                          variant="soft"
+                          onClick={() => handleAddFromSuggestion(s)}
+                        >
+                          Add
+                        </Button>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table.Body>
+              </Table.Root>
+            </MobileHScroll>
+          )}
         </Card>
       )}
 
@@ -1380,8 +1454,73 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           <Text size="2" color="gray">
             No items yet. Add from suggestions or add item.
           </Text>
+        ) : isMobile ? (
+          <Flex direction="column" gap="2">
+            {visibleConfirmedItems.map((item) => (
+              <Box
+                key={item.id}
+                p="3"
+                style={{
+                  border: '1px solid var(--gray-a5)',
+                  borderRadius: 8,
+                  background: 'var(--gray-a1)',
+                }}
+              >
+                <Flex justify="between" align="start" gap="3">
+                  <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                    <Flex align="center" gap="2" wrap="wrap">
+                      <Badge
+                        size="1"
+                        variant="soft"
+                        color={item.type === 'income' ? 'green' : 'red'}
+                      >
+                        {item.type === 'income' ? 'Income' : 'Expense'}
+                      </Badge>
+                      <Badge color={getSourceBadgeColor(item)} variant="soft">
+                        {getSourceLabel(item)}
+                      </Badge>
+                    </Flex>
+                    <Text size="2">{item.description}</Text>
+                    <Text size="1" color="gray">
+                      {formatDate(item.date)}
+                      {item.reference ? ` · ${item.reference}` : ''}
+                    </Text>
+                  </Flex>
+                  <Flex direction="column" align="end" gap="2">
+                    <Text
+                      weight="medium"
+                      color={item.type === 'income' ? 'green' : 'red'}
+                    >
+                      {formatCurrency(item.amount)}
+                    </Text>
+                    <Flex gap="2">
+                      <IconButton
+                        size="2"
+                        variant="soft"
+                        color="gray"
+                        aria-label="Edit item"
+                        onClick={() => handleEditItem(item)}
+                      >
+                        <Edit width={14} height={14} />
+                      </IconButton>
+                      <IconButton
+                        size="2"
+                        variant="soft"
+                        color="red"
+                        aria-label="Delete item"
+                        onClick={() => deleteMutation.mutate(item.id)}
+                        disabled={deleteMutation.isPending}
+                      >
+                        <Trash width={14} height={14} />
+                      </IconButton>
+                    </Flex>
+                  </Flex>
+                </Flex>
+              </Box>
+            ))}
+          </Flex>
         ) : (
-          <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <MobileHScroll>
             <Table.Root variant="surface">
               <Table.Header>
                 <Table.Row>
@@ -1449,7 +1588,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 ))}
               </Table.Body>
             </Table.Root>
-          </Box>
+          </MobileHScroll>
         )}
       </Card>
 
@@ -1459,21 +1598,19 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           <Heading size="4" mb="3">
             Income vs Expenses
           </Heading>
-          <Box
+          <MobileHScroll
             style={{
-              height: 400,
+              height: isMobile ? 240 : 400,
               width: '100%',
-              minWidth: 0,
-              overflowX: 'auto',
             }}
           >
             <IncomeExpensesChart
               data={chartData}
-              height={400}
+              height={isMobile ? 240 : 400}
               chartType={chartType}
               onChartTypeChange={setChartType}
             />
-          </Box>
+          </MobileHScroll>
         </Card>
       ) : (
         <Card mb="4">
@@ -1482,7 +1619,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             align="center"
             justify="center"
             gap="3"
-            style={{ minHeight: 300, padding: '40px' }}
+            style={{
+              minHeight: isMobile ? 180 : 300,
+              padding: isMobile ? '24px' : '40px',
+            }}
           >
             <Text size="3" color="gray" align="center">
               No financial data yet

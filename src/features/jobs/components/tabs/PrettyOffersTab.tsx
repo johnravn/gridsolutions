@@ -174,7 +174,7 @@ export default function PrettyOffersTab({
           subcontractor quotes and rich media.
         </Text>
       ) : (
-        <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+        <Box className="mobile-hscroll">
           <Table.Root variant="surface">
             <Table.Header>
               <Table.Row>

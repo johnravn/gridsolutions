@@ -845,9 +845,7 @@ export default function CrewTab({
                             </Text>
                           )}
                           {roleCrew.length > 0 && (
-                            <Box
-                              style={{ overflowX: 'auto', maxWidth: '100%' }}
-                            >
+                            <Box className="mobile-hscroll">
                               <Table.Root variant="surface" size="1">
                                 <Table.Header>
                                   <Table.Row>

@@ -32,7 +32,7 @@ export default function RecurringBookingsTab({
   }
 
   return (
-    <Box style={{ overflowX: 'auto' }}>
+    <Box className="mobile-hscroll">
       <Table.Root size="2" variant="surface">
         <Table.Header>
           <Table.Row>

@@ -224,10 +224,7 @@ export default function ProgramTab({ jobId }: { jobId: string }) {
                 <Heading size="3">{groupName}</Heading>
               </Flex>
             )}
-            <Box
-              style={{ overflowX: 'auto', maxWidth: '100%' }}
-              mb={groupName ? '3' : undefined}
-            >
+            <Box className="mobile-hscroll" mb={groupName ? '3' : undefined}>
               <Table.Root variant="surface">
                 <Table.Header>
                   <Table.Row>

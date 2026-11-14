@@ -437,7 +437,7 @@ export default function ContactsTab({
       <Heading size="2" mb="2" mt="4">
         From job
       </Heading>
-      <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+      <Box className="mobile-hscroll">
         <Table.Root variant="surface">
           <Table.Header>
             <Table.Row>
@@ -650,7 +650,7 @@ export default function ContactsTab({
       <Heading size="2" mb="2" mt="4">
         Crew involved
       </Heading>
-      <Box style={{ overflowX: 'auto', maxWidth: '100%' }}>
+      <Box className="mobile-hscroll">
         <Table.Root variant="surface">
           <Table.Header>
             <Table.Row>

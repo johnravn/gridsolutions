@@ -12,7 +12,7 @@ import {
   Text,
   Tooltip,
 } from '@radix-ui/themes'
-import { Archive, Copy, Edit, NavArrowDown, Trash } from 'iconoir-react'
+import { Archive, Copy, Edit, MoreHoriz, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -41,6 +41,7 @@ import {
   copyJobResultTab,
   formatCopyJobConflictMessage,
 } from '../utils/copyJobConflicts'
+import { InspectorMobileTabSelect } from './InspectorMobileTabSelect'
 import OverviewTab from './tabs/OverviewTab'
 import BookingsTab from './tabs/BookingsTab'
 import TimelineTab from './tabs/TimelineTab'
@@ -400,6 +401,7 @@ export default function JobInspector({
           </Flex>
         </Flex>
         <div
+          className="job-inspector-header-actions"
           style={{
             display: 'flex',
             gap: 8,
@@ -421,45 +423,89 @@ export default function JobInspector({
           })()}
           {canWrite && (
             <>
-              <Tooltip content="Edit job">
-                <Button
-                  size="2"
-                  variant="soft"
-                  aria-label="Edit job"
-                  onClick={() => setEditOpen(true)}
-                >
-                  <Edit width={16} height={16} />
-                </Button>
-              </Tooltip>
-              <Tooltip content="Copy job">
-                <Button
-                  size="2"
-                  variant="soft"
-                  aria-label="Copy job"
-                  onClick={() => setCopyOpen(true)}
-                >
-                  <Copy width={16} height={16} />
-                </Button>
-              </Tooltip>
-              <Button
-                size="2"
-                variant="soft"
-                color="red"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash width={16} height={16} />
-              </Button>
-              <Tooltip content={job.archived ? 'Unarchive job' : 'Archive job'}>
-                <Button
-                  size="2"
-                  variant="soft"
-                  color={job.archived ? 'blue' : 'gray'}
-                  onClick={() => setArchiveOpen(true)}
-                  disabled={archiveJob.isPending}
-                >
-                  <Archive width={16} height={16} />
-                </Button>
-              </Tooltip>
+              {isMobile ? (
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger>
+                    <Button
+                      size="2"
+                      variant="soft"
+                      aria-label="Job actions"
+                      style={{ minHeight: 36, minWidth: 36 }}
+                    >
+                      <MoreHoriz width={18} height={18} />
+                    </Button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Content align="end">
+                    <DropdownMenu.Item onSelect={() => setEditOpen(true)}>
+                      <Edit width={16} height={16} />
+                      Edit
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item onSelect={() => setCopyOpen(true)}>
+                      <Copy width={16} height={16} />
+                      Copy
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Item
+                      onSelect={() => setArchiveOpen(true)}
+                      disabled={archiveJob.isPending}
+                    >
+                      <Archive width={16} height={16} />
+                      {job.archived ? 'Unarchive' : 'Archive'}
+                    </DropdownMenu.Item>
+                    <DropdownMenu.Separator />
+                    <DropdownMenu.Item
+                      color="red"
+                      onSelect={() => setDeleteOpen(true)}
+                    >
+                      <Trash width={16} height={16} />
+                      Delete
+                    </DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Root>
+              ) : (
+                <>
+                  <Tooltip content="Edit job">
+                    <Button
+                      size="2"
+                      variant="soft"
+                      aria-label="Edit job"
+                      onClick={() => setEditOpen(true)}
+                    >
+                      <Edit width={16} height={16} />
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Copy job">
+                    <Button
+                      size="2"
+                      variant="soft"
+                      aria-label="Copy job"
+                      onClick={() => setCopyOpen(true)}
+                    >
+                      <Copy width={16} height={16} />
+                    </Button>
+                  </Tooltip>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    color="red"
+                    onClick={() => setDeleteOpen(true)}
+                  >
+                    <Trash width={16} height={16} />
+                  </Button>
+                  <Tooltip
+                    content={job.archived ? 'Unarchive job' : 'Archive job'}
+                  >
+                    <Button
+                      size="2"
+                      variant="soft"
+                      color={job.archived ? 'blue' : 'gray'}
+                      onClick={() => setArchiveOpen(true)}
+                      disabled={archiveJob.isPending}
+                    >
+                      <Archive width={16} height={16} />
+                    </Button>
+                  </Tooltip>
+                </>
+              )}
               <JobDialog
                 open={editOpen}
                 onOpenChange={setEditOpen}
@@ -508,60 +554,26 @@ export default function JobInspector({
         onValueChange={handleTabChange}
       >
         {isMobile ? (
-          <Flex direction="column" gap="2" mb="2">
-            <Text size="2" color="gray" weight="medium">
-              Tab
-            </Text>
-            <DropdownMenu.Root>
-              <DropdownMenu.Trigger>
-                <Button
-                  variant="soft"
-                  color="gray"
-                  size="3"
-                  style={{
-                    width: '100%',
-                    minHeight: 44,
-                    justifyContent: 'space-between',
-                  }}
-                >
-                  {tabOptions.find((o) => o.value === activeTab)?.label ??
-                    'Overview'}
-                  <NavArrowDown width={18} height={18} />
-                </Button>
-              </DropdownMenu.Trigger>
-              <DropdownMenu.Content
-                align="start"
-                style={{
-                  minWidth: 'var(--radix-dropdown-menu-trigger-width)',
-                  maxHeight: 'min(70vh, 400px)',
-                  overflowY: 'auto',
-                }}
-              >
-                {tabOptions.map((opt) => (
-                  <DropdownMenu.Item
-                    key={opt.value}
-                    onSelect={() => {
-                      if (!isTabAllowed(opt.value)) return
-                      if (
-                        activeTab === 'files' &&
-                        opt.value !== 'files' &&
-                        filesTabRef.current
-                      ) {
-                        filesTabRef.current.checkUnsavedChanges(() => {
-                          handleTabChange(opt.value)
-                        })
-                      } else {
-                        handleTabChange(opt.value)
-                      }
-                    }}
-                    style={{ minHeight: 44, paddingTop: 12, paddingBottom: 12 }}
-                  >
-                    {opt.label}
-                  </DropdownMenu.Item>
-                ))}
-              </DropdownMenu.Content>
-            </DropdownMenu.Root>
-          </Flex>
+          <Box className="job-inspector-sticky-chrome" mb="2">
+            <InspectorMobileTabSelect
+              value={activeTab}
+              options={tabOptions}
+              onChange={(next) => {
+                if (!isTabAllowed(next)) return
+                if (
+                  activeTab === 'files' &&
+                  next !== 'files' &&
+                  filesTabRef.current
+                ) {
+                  filesTabRef.current.checkUnsavedChanges(() => {
+                    handleTabChange(next)
+                  })
+                } else {
+                  handleTabChange(next)
+                }
+              }}
+            />
+          </Box>
         ) : (
           <AnimatedTabsList wrap="wrap" mb="2">
             <Tabs.Trigger value="overview">Overview</Tabs.Trigger>

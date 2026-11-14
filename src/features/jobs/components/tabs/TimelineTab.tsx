@@ -265,7 +265,7 @@ function TimePeriodsManager({
   return (
     <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       {/* Time Periods Table */}
-      <Box style={{ overflowX: 'auto', maxWidth: '100%' }} mb="3">
+      <Box className="mobile-hscroll" mb="3">
         <Table.Root variant="surface">
           <Table.Header>
             <Table.Row>

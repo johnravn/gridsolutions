@@ -446,16 +446,18 @@ function InternalEquipmentTable({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
         }}
       >
-        <Flex align="center" gap="2">
+        <Flex align="center" gap="2" wrap="wrap">
           <Heading size="3">Stock equipment</Heading>
           {isFetching && !isLoading && <Spinner size="2" />}
         </Flex>
         {companyRole !== 'freelancer' && (
-          <Flex align="center" gap="3">
+          <Flex align="center" gap="3" wrap="wrap">
             {rows.length > 0 && (
-              <Flex align="center" gap="2">
+              <Flex align="center" gap="2" wrap="wrap">
                 {editMode && (
                   <Button
                     size="2"
@@ -574,8 +576,11 @@ function InternalEquipmentTable({
                   </Box>
 
                   {isCategoryExpanded && (
-                    <Box p="3" style={{ overflowX: 'auto', maxWidth: '100%' }}>
-                      <Table.Root variant="surface">
+                    <Box p="3" className="mobile-hscroll">
+                      <Table.Root
+                        variant="surface"
+                        className="equipment-table-mobile-compact"
+                      >
                         <Table.Header>
                           <Table.Row>
                             {editMode && (
@@ -585,10 +590,10 @@ function InternalEquipmentTable({
                               Item
                             </Table.ColumnHeaderCell>
                             <Table.ColumnHeaderCell>Qty</Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell className="equipment-col-secondary">
                               Brand
                             </Table.ColumnHeaderCell>
-                            <Table.ColumnHeaderCell>
+                            <Table.ColumnHeaderCell className="equipment-col-secondary">
                               Model
                             </Table.ColumnHeaderCell>
                           </Table.Row>
@@ -696,8 +701,12 @@ function InternalEquipmentTable({
                                     <Table.Cell>
                                       <Text weight="bold">{totalQty}</Text>
                                     </Table.Cell>
-                                    <Table.Cell>—</Table.Cell>
-                                    <Table.Cell>—</Table.Cell>
+                                    <Table.Cell className="equipment-col-secondary">
+                                      —
+                                    </Table.Cell>
+                                    <Table.Cell className="equipment-col-secondary">
+                                      —
+                                    </Table.Cell>
                                   </Table.Row>
 
                                   {/* Expanded group items */}
@@ -720,10 +729,10 @@ function InternalEquipmentTable({
                                             </Text>
                                           </Table.Cell>
                                           <Table.Cell>{r.quantity}</Table.Cell>
-                                          <Table.Cell>
+                                          <Table.Cell className="equipment-col-secondary">
                                             {item?.brand?.name ?? '—'}
                                           </Table.Cell>
-                                          <Table.Cell>
+                                          <Table.Cell className="equipment-col-secondary">
                                             {item?.model ?? '—'}
                                           </Table.Cell>
                                         </Table.Row>
@@ -836,10 +845,12 @@ function InternalEquipmentTable({
                                     r.quantity
                                   )}
                                 </Table.Cell>
-                                <Table.Cell>
+                                <Table.Cell className="equipment-col-secondary">
                                   {item?.brand?.name ?? '—'}
                                 </Table.Cell>
-                                <Table.Cell>{item?.model ?? '—'}</Table.Cell>
+                                <Table.Cell className="equipment-col-secondary">
+                                  {item?.model ?? '—'}
+                                </Table.Cell>
                               </Table.Row>
                             )
                           })}
@@ -1284,13 +1295,15 @@ function ExternalEquipmentTable({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 8,
         }}
       >
-        <Flex align="center" gap="2">
+        <Flex align="center" gap="2" wrap="wrap">
           <Heading size="3">Subrental equipment</Heading>
           {isFetching && !isLoading && <Spinner size="2" />}
         </Flex>
-        <Flex align="center" gap="3">
+        <Flex align="center" gap="3" wrap="wrap">
           {editMode && (
             <Button
               size="2"
@@ -1543,11 +1556,11 @@ function ExternalEquipmentTable({
                             </Box>
 
                             {/* Items Table */}
-                            <Box
-                              mt="3"
-                              style={{ overflowX: 'auto', maxWidth: '100%' }}
-                            >
-                              <Table.Root variant="surface">
+                            <Box mt="3" className="mobile-hscroll">
+                              <Table.Root
+                                variant="surface"
+                                className="equipment-table-mobile-compact"
+                              >
                                 <Table.Header>
                                   <Table.Row>
                                     {editMode && (
@@ -1561,10 +1574,10 @@ function ExternalEquipmentTable({
                                     <Table.ColumnHeaderCell>
                                       Qty
                                     </Table.ColumnHeaderCell>
-                                    <Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className="equipment-col-secondary">
                                       Brand
                                     </Table.ColumnHeaderCell>
-                                    <Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className="equipment-col-secondary">
                                       Model
                                     </Table.ColumnHeaderCell>
                                     <Table.ColumnHeaderCell>
@@ -1681,10 +1694,10 @@ function ExternalEquipmentTable({
                                             r.quantity
                                           )}
                                         </Table.Cell>
-                                        <Table.Cell>
+                                        <Table.Cell className="equipment-col-secondary">
                                           {rowItem?.brand?.name ?? '—'}
                                         </Table.Cell>
-                                        <Table.Cell>
+                                        <Table.Cell className="equipment-col-secondary">
                                           {rowItem?.model ?? '—'}
                                         </Table.Cell>
                                         <Table.Cell

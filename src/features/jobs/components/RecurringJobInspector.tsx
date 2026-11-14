@@ -5,13 +5,14 @@ import {
   Box,
   Button,
   Dialog,
+  DropdownMenu,
   Flex,
   Heading,
   Separator,
   Tabs,
   Text,
 } from '@radix-ui/themes'
-import { Archive, Edit, Trash } from 'iconoir-react'
+import { Archive, Edit, MoreHoriz, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
@@ -20,6 +21,7 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import {
   useTabKeyboardScopeProps,
   useTabKeyboardShortcuts,
@@ -29,6 +31,7 @@ import {
   deleteRecurringJob,
   recurringJobDetailQuery,
 } from '../api/recurringJobQueries'
+import { InspectorMobileTabSelect } from './InspectorMobileTabSelect'
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringOverviewTab from './tabs/recurring/RecurringOverviewTab'
 import RecurringJobsTab from './tabs/recurring/RecurringJobsTab'
@@ -66,12 +69,24 @@ export default function RecurringJobInspector({
   const { companyRole } = useAuthz()
   const { canWrite } = useCompanyWriteAccess()
   const isFreelancer = companyRole === 'freelancer'
+  const isMobile = useMediaQuery('(max-width: 768px)')
   const qc = useQueryClient()
   const { success, error: showError } = useToast()
   const [editOpen, setEditOpen] = React.useState(false)
   const [archiveOpen, setArchiveOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
   const [activeTab, setActiveTab] = React.useState('overview')
+
+  const tabOptions = React.useMemo(() => {
+    const list = [
+      { value: 'overview', label: 'Overview' },
+      { value: 'jobs', label: 'Jobs' },
+      { value: 'invoice', label: 'Invoice' },
+      { value: 'crew', label: 'Crew' },
+      { value: 'bookings', label: 'Bookings' },
+    ]
+    return isFreelancer ? list.filter((t) => t.value !== 'invoice') : list
+  }, [isFreelancer])
 
   const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
   useTabKeyboardShortcuts({
@@ -179,29 +194,61 @@ export default function RecurringJobInspector({
             </Badge>
           </Flex>
         </Flex>
-        {canWrite && (
-          <Flex gap="2">
-            <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
-              <Edit width={16} height={16} />
-            </Button>
-            <Button
-              size="2"
-              variant="soft"
-              color="gray"
-              onClick={() => setArchiveOpen(true)}
-            >
-              <Archive width={16} height={16} />
-            </Button>
-            <Button
-              size="2"
-              variant="soft"
-              color="red"
-              onClick={() => setDeleteOpen(true)}
-            >
-              <Trash width={16} height={16} />
-            </Button>
-          </Flex>
-        )}
+        {canWrite &&
+          (isMobile ? (
+            <DropdownMenu.Root>
+              <DropdownMenu.Trigger>
+                <Button
+                  size="2"
+                  variant="soft"
+                  aria-label="Recurring job actions"
+                  style={{ minHeight: 36, minWidth: 36 }}
+                >
+                  <MoreHoriz width={18} height={18} />
+                </Button>
+              </DropdownMenu.Trigger>
+              <DropdownMenu.Content align="end">
+                <DropdownMenu.Item onSelect={() => setEditOpen(true)}>
+                  <Edit width={16} height={16} />
+                  Edit
+                </DropdownMenu.Item>
+                <DropdownMenu.Item onSelect={() => setArchiveOpen(true)}>
+                  <Archive width={16} height={16} />
+                  Archive
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator />
+                <DropdownMenu.Item
+                  color="red"
+                  onSelect={() => setDeleteOpen(true)}
+                >
+                  <Trash width={16} height={16} />
+                  Delete
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Root>
+          ) : (
+            <Flex gap="2">
+              <Button size="2" variant="soft" onClick={() => setEditOpen(true)}>
+                <Edit width={16} height={16} />
+              </Button>
+              <Button
+                size="2"
+                variant="soft"
+                color="gray"
+                onClick={() => setArchiveOpen(true)}
+              >
+                <Archive width={16} height={16} />
+              </Button>
+              <Button
+                size="2"
+                variant="soft"
+                color="red"
+                onClick={() => setDeleteOpen(true)}
+              >
+                <Trash width={16} height={16} />
+              </Button>
+            </Flex>
+          ))}
       </Box>
 
       {(customerName || contactName || leadName) && (
@@ -236,15 +283,25 @@ export default function RecurringJobInspector({
       <Separator size="4" mb="3" />
 
       <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
-        <AnimatedTabsList mb="3" wrap="wrap">
-          <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
-          <Tabs.Trigger value="jobs">Jobs</Tabs.Trigger>
-          {!isFreelancer && (
-            <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
-          )}
-          <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
-          <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
-        </AnimatedTabsList>
+        {isMobile ? (
+          <Box className="job-inspector-sticky-chrome" mb="3">
+            <InspectorMobileTabSelect
+              value={activeTab}
+              options={tabOptions}
+              onChange={setActiveTab}
+            />
+          </Box>
+        ) : (
+          <AnimatedTabsList mb="3" wrap="wrap">
+            <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
+            <Tabs.Trigger value="jobs">Jobs</Tabs.Trigger>
+            {!isFreelancer && (
+              <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
+            )}
+            <Tabs.Trigger value="crew">Crew</Tabs.Trigger>
+            <Tabs.Trigger value="bookings">Bookings</Tabs.Trigger>
+          </AnimatedTabsList>
+        )}
 
         <Tabs.Content value="overview">
           <RecurringOverviewTab detail={data} onSelectJob={onSelectJob} />
