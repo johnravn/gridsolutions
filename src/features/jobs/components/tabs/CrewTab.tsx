@@ -794,6 +794,7 @@ export default function CrewTab({
 
                       {isExpanded && (
                         <Box
+                          className="motion-enter"
                           mt="3"
                           pt="3"
                           style={{ borderTop: '1px solid var(--gray-a6)' }}

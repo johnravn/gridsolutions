@@ -2365,7 +2365,7 @@ export default function OffersTab({
           </Flex>
 
           {isExpanded && (
-            <>
+            <Box className="motion-enter">
               <JobBookingRecap
                 layout="inline"
                 summary={
@@ -2575,7 +2575,7 @@ export default function OffersTab({
                   </Table.Root>
                 </Box>
               )}
-            </>
+            </Box>
           )}
         </Flex>
       </Card>

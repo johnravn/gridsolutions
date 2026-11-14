@@ -1149,7 +1149,12 @@ export default function InvoiceTab({
                 }}
               >
                 {invoiceSendPhase === 'success' ? (
-                  <>
+                  <Flex
+                    className="motion-success-enter"
+                    direction="column"
+                    align="center"
+                    gap="3"
+                  >
                     <CheckCircle
                       width={40}
                       height={40}
@@ -1161,7 +1166,7 @@ export default function InvoiceTab({
                     <Text size="2" color="gray" align="center">
                       Conta confirmed the invoice was created.
                     </Text>
-                  </>
+                  </Flex>
                 ) : (
                   <>
                     <Spinner size="3" />
@@ -1367,7 +1372,12 @@ export default function InvoiceTab({
                 }}
               >
                 {invoiceSendPhase === 'success' ? (
-                  <>
+                  <Flex
+                    className="motion-success-enter"
+                    direction="column"
+                    align="center"
+                    gap="3"
+                  >
                     <CheckCircle
                       width={40}
                       height={40}
@@ -1379,7 +1389,7 @@ export default function InvoiceTab({
                     <Text size="2" color="gray" align="center">
                       Downloading PDF…
                     </Text>
-                  </>
+                  </Flex>
                 ) : (
                   <>
                     <Spinner size="3" />

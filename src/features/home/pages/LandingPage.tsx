@@ -54,12 +54,16 @@ export default function LandingPage() {
   const { isDark } = useTheme()
   const isMd = useMediaQuery('(min-width: 768px)')
   const isSm = useMediaQuery('(min-width: 640px)')
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
   const headerOpacity = useTransform(scrollY, [0, 100], [0.95, 1])
   const headerBackground = useTransform(
     scrollY,
     [0, 100],
     ['var(--color-panel-translucent)', 'var(--color-panel-solid)'],
   )
+  const scrollBehavior: ScrollBehavior = prefersReducedMotion
+    ? 'auto'
+    : 'smooth'
 
   const scrollToSection = (id: string) => {
     if (id.startsWith('/')) {
@@ -67,15 +71,15 @@ export default function LandingPage() {
       return
     }
     const el = document.getElementById(id)
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    el?.scrollIntoView({ behavior: scrollBehavior, block: 'start' })
   }
 
   useEffect(() => {
     if (pathname === '/contact') {
       const el = document.getElementById('contact')
-      el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      el?.scrollIntoView({ behavior: scrollBehavior, block: 'start' })
     }
-  }, [pathname])
+  }, [pathname, scrollBehavior])
 
   const [navHovered, setNavHovered] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -187,6 +191,7 @@ export default function LandingPage() {
                 aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
                 aria-expanded={mobileMenuOpen}
                 onClick={() => setMobileMenuOpen((open) => !open)}
+                className="landing-mobile-menu-btn"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -199,6 +204,9 @@ export default function LandingPage() {
                   color: 'var(--gray-12)',
                   cursor: 'pointer',
                   padding: 0,
+                  transition: prefersReducedMotion
+                    ? undefined
+                    : 'transform 120ms var(--motion-ease-out)',
                 }}
               >
                 {mobileMenuOpen ? (
@@ -210,38 +218,48 @@ export default function LandingPage() {
             )}
           </Flex>
 
-          {!isMd && mobileMenuOpen ? (
-            <Flex
-              direction="column"
-              gap="1"
-              style={{
-                marginTop: '0.75rem',
-                paddingTop: '0.5rem',
-                borderTop: '1px solid var(--gray-a4)',
-              }}
+          {!isMd ? (
+            <div
+              className={
+                mobileMenuOpen
+                  ? 'motion-expand motion-expand--open'
+                  : 'motion-expand'
+              }
+              style={{ marginTop: mobileMenuOpen ? '0.75rem' : 0 }}
             >
-              {navItems.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => handleNavClick(item.id)}
+              <div className="motion-expand__inner">
+                <Flex
+                  direction="column"
+                  gap="1"
                   style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    padding: '0.75rem 0.25rem',
-                    fontFamily: 'inherit',
-                    fontSize: 15,
-                    fontWeight: 500,
-                    color: 'var(--gray-12)',
-                    letterSpacing: '0.01em',
+                    paddingTop: '0.5rem',
+                    borderTop: '1px solid var(--gray-a4)',
                   }}
                 >
-                  {item.label}
-                </button>
-              ))}
-            </Flex>
+                  {navItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleNavClick(item.id)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        padding: '0.75rem 0.25rem',
+                        fontFamily: 'inherit',
+                        fontSize: 15,
+                        fontWeight: 500,
+                        color: 'var(--gray-12)',
+                        letterSpacing: '0.01em',
+                      }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </Flex>
+              </div>
+            </div>
           ) : null}
         </Container>
       </motion.header>

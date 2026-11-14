@@ -160,7 +160,12 @@ function PrettyOfferResponseSection({
       )}
 
       {canAccept && !isAccepted && showAcceptForm && (
-        <Box mt="4" pt="4" style={{ borderTop: '1px solid var(--accent-a4)' }}>
+        <Box
+          className="motion-enter"
+          mt="4"
+          pt="4"
+          style={{ borderTop: '1px solid var(--accent-a4)' }}
+        >
           <Flex direction="column" gap="3">
             <Flex gap="3" wrap="wrap">
               <Box style={{ flex: 1, minWidth: 180 }}>

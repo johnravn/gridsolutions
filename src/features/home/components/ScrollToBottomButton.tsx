@@ -49,10 +49,11 @@ export function ScrollToBottomButton({
         cursor: 'pointer',
         zIndex: 10,
         transition: prefersReducedMotion
-          ? 'background-color 0.15s ease, box-shadow 0.15s ease'
-          : 'background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease-out',
-        transform: showHoverScale ? 'scale(1.05)' : 'scale(1)',
+          ? 'background-color 150ms var(--motion-ease-out), box-shadow 150ms var(--motion-ease-out)'
+          : 'background-color 150ms var(--motion-ease-out), box-shadow 150ms var(--motion-ease-out), transform 160ms var(--motion-ease-out)',
+        transform: showHoverScale ? 'scale(1.03)' : 'scale(1)',
       }}
+      className={prefersReducedMotion ? undefined : 'scroll-to-bottom-btn'}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
       onClick={onClick}

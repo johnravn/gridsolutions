@@ -330,15 +330,34 @@
   opacity: 0;
   transform: translateY(4px);
   transition:
-    opacity 180ms ease,
-    transform 180ms ease;
+    opacity 180ms var(--motion-ease-out, ease-out),
+    transform 180ms var(--motion-ease-out, ease-out);
   pointer-events: none;
 }
 
-.pretty-deck-clickable-image:hover .pretty-deck-clickable-image__hint,
+@media (hover: hover) and (pointer: fine) {
+  .pretty-deck-clickable-image:hover .pretty-deck-clickable-image__hint {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .pretty-deck-clickable-image:focus-visible .pretty-deck-clickable-image__hint {
   opacity: 1;
   transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pretty-deck-clickable-image__hint {
+    transition: opacity 120ms var(--motion-ease-out, ease-out);
+    transform: none;
+  }
+
+  .pretty-deck-clickable-image:hover .pretty-deck-clickable-image__hint,
+  .pretty-deck-clickable-image:focus-visible
+    .pretty-deck-clickable-image__hint {
+    transform: none;
+  }
 }
 
 .pretty-deck-image-viewer {

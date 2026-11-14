@@ -1423,6 +1423,7 @@ function ExternalEquipmentTable({
                   {/* Expanded Details */}
                   {isExpanded && (
                     <Box
+                      className="motion-enter"
                       p="3"
                       style={{
                         background: 'var(--gray-a1)',

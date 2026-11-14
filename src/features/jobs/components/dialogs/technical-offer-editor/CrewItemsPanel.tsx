@@ -397,6 +397,7 @@ export function CrewItemsPanel({
 
                                 {isExpanded && (
                                   <Box
+                                    className="motion-enter"
                                     mt="3"
                                     pt="3"
                                     style={{

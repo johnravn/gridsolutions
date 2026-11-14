@@ -1,8 +1,24 @@
 import * as React from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { Theme } from '@radix-ui/themes'
 import { AnimatedQuickSuggestions } from './AnimatedQuickSuggestions'
+
+beforeAll(() => {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      addListener: () => {},
+      removeListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  })
+})
 
 function renderSuggestions(
   props: React.ComponentProps<typeof AnimatedQuickSuggestions>,

@@ -889,14 +889,22 @@ function JobStatusTimeline({
         </Badge>
       </Flex>
 
-      {/* Subtle hover styles */}
+      {/* Subtle hover / press — gated for fine pointers + reduced-motion */}
       <style>{`
-        .status-dot:hover {
-          transform: scale(1.1);
-          transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        .status-dot {
+          transition: transform 160ms var(--motion-ease-out);
         }
-        .status-dot:active {
-          transform: scale(1.0);
+        @media (hover: hover) and (pointer: fine) {
+          @media (prefers-reduced-motion: no-preference) {
+            .status-dot:hover {
+              transform: scale(1.02);
+            }
+          }
+        }
+        @media (prefers-reduced-motion: no-preference) {
+          .status-dot:active {
+            transform: scale(0.97);
+          }
         }
       `}</style>
 

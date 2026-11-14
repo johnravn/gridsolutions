@@ -1500,6 +1500,7 @@ export default function PublicOfferPage() {
             )}
             {isAccepted && (
               <Box
+                className="motion-success-enter"
                 p="4"
                 style={{
                   background: 'var(--green-a3)',
@@ -1874,6 +1875,7 @@ export default function PublicOfferPage() {
 
                 {!isAccepted && showAcceptForm && (
                   <Box
+                    className="motion-enter"
                     mt="4"
                     pt="4"
                     style={{ borderTop: '1px solid var(--gray-a5)' }}

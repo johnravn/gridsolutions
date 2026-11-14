@@ -526,7 +526,11 @@ export function EquipmentSection({
                           </Box>
 
                           {isExpanded && (
-                            <Box p="3" style={{ background: 'var(--gray-a1)' }}>
+                            <Box
+                              className="motion-enter"
+                              p="3"
+                              style={{ background: 'var(--gray-a1)' }}
+                            >
                               {/* Search for items */}
                               {!readOnly && (
                                 <Flex

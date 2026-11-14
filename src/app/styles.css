@@ -1468,14 +1468,14 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
 [data-invoice-lines] tbody tr > * {
   background-color: transparent;
   background-repeat: no-repeat;
-  transition: background-color 500ms ease;
+  transition: background-color 220ms var(--motion-ease-out);
 }
 [data-invoice-lines] tbody tr > *:first-child {
   background-image: linear-gradient(var(--amber-9), var(--amber-9));
   background-size: 0 100%;
   transition:
-    background-color 500ms ease,
-    background-size 500ms ease;
+    background-color 220ms var(--motion-ease-out),
+    background-size 220ms var(--motion-ease-out);
 }
 [data-invoice-lines] tr[data-invoice-line-highlighted] > * {
   background-color: var(--amber-a3);
@@ -1753,7 +1753,114 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   }
 }
 
-/* Company rates tab: subtle card hover + transform reveal on expand */
+/* Chat scroll FAB + Landing hamburger — press feedback. */
+@media (prefers-reduced-motion: no-preference) {
+  .scroll-to-bottom-btn:active,
+  .landing-mobile-menu-btn:active {
+    transform: scale(0.97) !important;
+  }
+}
+
+/*
+ * Shared light expand (rates, Landing mobile nav, other keep-mounted panels).
+ * Heavy job tables should use .motion-enter on mount instead of staying mounted.
+ */
+.motion-expand {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--motion-duration-reveal)
+    var(--motion-ease-out);
+}
+
+.motion-expand--open {
+  grid-template-rows: 1fr;
+}
+
+.motion-expand__inner {
+  overflow: hidden;
+  min-height: 0;
+  opacity: 0;
+  transform: translateY(var(--motion-offset-reveal-y));
+  transition:
+    opacity var(--motion-duration-reveal) var(--motion-ease-out),
+    transform var(--motion-duration-reveal) var(--motion-ease-out);
+  pointer-events: none;
+}
+
+.motion-expand--open > .motion-expand__inner {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-expand {
+    transition: none;
+  }
+
+  .motion-expand__inner {
+    transition: opacity 80ms var(--motion-ease-out);
+    transform: none;
+  }
+
+  .motion-expand--open > .motion-expand__inner {
+    opacity: 1;
+  }
+}
+
+/* Enter-only bridge for conditional mounts (accordion bodies, response forms). */
+.motion-enter {
+  transition:
+    opacity var(--motion-duration-reveal) var(--motion-ease-out),
+    transform var(--motion-duration-reveal) var(--motion-ease-out);
+}
+
+@starting-style {
+  .motion-enter {
+    opacity: 0;
+    transform: translateY(var(--motion-offset-reveal-y));
+  }
+}
+
+/* Rare success / delight one-shot (offer accepted, invoice sent). */
+.motion-success-enter {
+  transition:
+    opacity 200ms var(--motion-ease-out),
+    transform 200ms var(--motion-ease-out);
+}
+
+@starting-style {
+  .motion-success-enter {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-enter {
+    transition: opacity 80ms var(--motion-ease-out);
+  }
+
+  @starting-style {
+    .motion-enter {
+      opacity: 0;
+      transform: none;
+    }
+  }
+
+  .motion-success-enter {
+    transition: opacity 120ms var(--motion-ease-out);
+  }
+
+  @starting-style {
+    .motion-success-enter {
+      opacity: 0;
+      transform: none;
+    }
+  }
+}
+
+/* Company rates tab: subtle card hover + shared expand recipe */
 .company-rates-card {
   transform-origin: center center;
 }

@@ -7,6 +7,7 @@ import {
   motionOffsetRevealY,
   motionRevealTransition,
 } from '@shared/lib/motion'
+import type { ReactNode } from 'react'
 
 const LARGE_SCREEN_QUERY = '(min-width: 769px)'
 const REVEAL_CONTAINER_DELAY_MS = 30
@@ -66,6 +67,7 @@ function AnimatedQuickSuggestionsView({
     index: number,
     useAnimation: boolean,
     visible: boolean,
+    prefersReducedMotion = false,
   ) => (
     <Button
       key={suggestion}
@@ -80,7 +82,9 @@ function AnimatedQuickSuggestionsView({
               transition: visible
                 ? motionRevealTransition(['opacity'], {
                     ease: motionEaseRevealOut,
-                    delay: `${REVEAL_CHIP_BASE_DELAY_MS + index * REVEAL_CHIP_STAGGER_MS}ms`,
+                    delay: prefersReducedMotion
+                      ? '0ms'
+                      : `${REVEAL_CHIP_BASE_DELAY_MS + index * REVEAL_CHIP_STAGGER_MS}ms`,
                   })
                 : motionFadeTransition(motionEaseRevealIn),
             }
@@ -113,13 +117,50 @@ function AnimatedQuickSuggestionsView({
   }
 
   return (
+    <AnimatedQuickSuggestionsMotion
+      suggestions={suggestions}
+      open={open}
+      showLabel={showLabel}
+      label={label}
+      gap={gap}
+      renderButton={renderButton}
+    />
+  )
+}
+
+function AnimatedQuickSuggestionsMotion({
+  suggestions,
+  open,
+  showLabel,
+  label,
+  gap,
+  renderButton,
+}: {
+  suggestions: ReadonlyArray<string>
+  open: boolean
+  showLabel: boolean
+  label: string
+  gap: '1' | '2'
+  renderButton: (
+    suggestion: string,
+    index: number,
+    useAnimation: boolean,
+    visible: boolean,
+    prefersReducedMotion?: boolean,
+  ) => ReactNode
+}) {
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+
+  return (
     <Box
       style={{
         display: 'grid',
         gridTemplateRows: open ? '1fr' : '0fr',
-        transition: motionRevealTransition(['grid-template-rows'], {
-          ease: motionEaseRevealOut,
-        }),
+        transition: prefersReducedMotion
+          ? 'none'
+          : motionRevealTransition(['grid-template-rows'], {
+              ease: motionEaseRevealOut,
+            }),
       }}
     >
       <Box style={{ overflow: 'hidden', minHeight: 0 }}>
@@ -129,17 +170,20 @@ function AnimatedQuickSuggestionsView({
           pt="1"
           style={{
             opacity: open ? 1 : 0,
-            transform: open
-              ? 'translateY(0)'
-              : `translateY(${motionOffsetRevealY})`,
-            transition: open
-              ? motionRevealTransition(['opacity', 'transform'], {
-                  ease: motionEaseRevealOut,
-                  delay: `${REVEAL_CONTAINER_DELAY_MS}ms`,
-                })
-              : motionRevealTransition(['opacity', 'transform'], {
-                  ease: motionEaseRevealIn,
-                }),
+            transform:
+              prefersReducedMotion || open
+                ? 'none'
+                : `translateY(${motionOffsetRevealY})`,
+            transition: prefersReducedMotion
+              ? motionFadeTransition(motionEaseRevealOut)
+              : open
+                ? motionRevealTransition(['opacity', 'transform'], {
+                    ease: motionEaseRevealOut,
+                    delay: `${REVEAL_CONTAINER_DELAY_MS}ms`,
+                  })
+                : motionRevealTransition(['opacity', 'transform'], {
+                    ease: motionEaseRevealIn,
+                  }),
             pointerEvents: open ? 'auto' : 'none',
           }}
         >
@@ -149,7 +193,7 @@ function AnimatedQuickSuggestionsView({
             </Text>
           )}
           {suggestions.map((suggestion, index) =>
-            renderButton(suggestion, index, true, open),
+            renderButton(suggestion, index, true, open, prefersReducedMotion),
           )}
         </Flex>
       </Box>

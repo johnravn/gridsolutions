@@ -1,8 +1,10 @@
 import * as React from 'react'
 import { Box, Button, Flex, Text } from '@radix-ui/themes'
 import { Link as LinkIcon } from 'iconoir-react'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import {
   motionEaseRevealOut,
+  motionFadeTransition,
   motionOffsetRevealY,
   motionRevealTransition,
 } from '@shared/lib/motion'
@@ -130,24 +132,32 @@ function AnimatedBlock({
   index: number
   children: React.ReactNode
 }) {
-  const [visible, setVisible] = React.useState(false)
+  const prefersReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+  const [visible, setVisible] = React.useState(prefersReducedMotion)
 
   React.useEffect(() => {
+    if (prefersReducedMotion) {
+      setVisible(true)
+      return
+    }
     const timer = window.setTimeout(() => setVisible(true), index * 60)
     return () => window.clearTimeout(timer)
-  }, [index])
+  }, [index, prefersReducedMotion])
 
   return (
     <Box
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible
-          ? 'translateY(0)'
-          : `translateY(${motionOffsetRevealY})`,
+        transform:
+          prefersReducedMotion || visible
+            ? 'none'
+            : `translateY(${motionOffsetRevealY})`,
         transition: visible
-          ? motionRevealTransition(['opacity', 'transform'], {
-              ease: motionEaseRevealOut,
-            })
+          ? prefersReducedMotion
+            ? motionFadeTransition(motionEaseRevealOut)
+            : motionRevealTransition(['opacity', 'transform'], {
+                ease: motionEaseRevealOut,
+              })
           : undefined,
       }}
     >
