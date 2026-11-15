@@ -9,6 +9,7 @@ import {
   Separator,
   Text,
 } from '@radix-ui/themes'
+import { useDebouncedValue } from '@tanstack/react-pacer'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -46,15 +47,6 @@ const COLUMNS: Array<IndexColumn> = [
   { id: 'actor', header: 'Actor' },
 ]
 
-function useDebouncedValue<T>(value: T, delayMs: number): T {
-  const [debounced, setDebounced] = React.useState(value)
-  React.useEffect(() => {
-    const id = window.setTimeout(() => setDebounced(value), delayMs)
-    return () => window.clearTimeout(id)
-  }, [value, delayMs])
-  return debounced
-}
-
 export default function CompanyLogsTab({
   initialActivityId,
 }: {
@@ -68,7 +60,7 @@ export default function CompanyLogsTab({
   const [selectedId, setSelectedId] = React.useState<string | null>(
     initialActivityId ?? null,
   )
-  const debouncedSearch = useDebouncedValue(filters.search, 300)
+  const [debouncedSearch] = useDebouncedValue(filters.search, { wait: 300 })
 
   React.useEffect(() => {
     if (initialActivityId) setSelectedId(initialActivityId)

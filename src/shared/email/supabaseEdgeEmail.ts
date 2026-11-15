@@ -3,6 +3,7 @@
  * All outbound email goes through Supabase Edge + Resend — never call Resend from the browser.
  */
 import { supabase } from '@shared/api/supabase'
+import { isLocalSupabaseUrl } from '@shared/lib/env'
 
 export type SendOfferEmailResponse =
   | { ok: true; message_id?: string | null }
@@ -58,8 +59,7 @@ function httpStatusFromFunctionsInvokeError(error: unknown): number | null {
 }
 
 function hintForFunctionsHttp404(functionName: string): string {
-  const url = import.meta.env.VITE_SUPABASE_URL as string | undefined
-  const local = url && /127\.0\.0\.1|localhost/i.test(url)
+  const local = isLocalSupabaseUrl()
   return local
     ? `Local gateway has no route for "${functionName}" (often after adding it). Run: npm run supabase:restart — Edge Functions register when the stack starts.`
     : `Deploy this function: supabase functions deploy ${functionName}`

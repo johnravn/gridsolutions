@@ -75,6 +75,7 @@ describe('capabilitiesFor', () => {
       companyRole: 'freelancer',
     })
     expect(caps.has('visit:jobs')).toBe(true)
+    expect(caps.has('visit:latest')).toBe(false)
     expect(caps.has('visit:conflicts')).toBe(false)
     expect(caps.has('visit:inventory')).toBe(false)
     expect(caps.has('visit:crew')).toBe(false)
@@ -82,6 +83,16 @@ describe('capabilitiesFor', () => {
     expect(caps.has('visit:logging')).toBe(false)
     expect(caps.has('visit:customers')).toBe(false)
     expect(caps.has('visit:calendar')).toBe(true)
+  })
+
+  it('grants visit:latest to freelancers when company expansion enables it', () => {
+    const caps = capabilitiesFor({
+      isGlobalSuperuser: false,
+      companyRole: 'freelancer',
+      latestFeedOpenToFreelancers: true,
+    })
+    expect(caps.has('visit:latest')).toBe(true)
+    expect(caps.has('visit:jobs')).toBe(true)
   })
 
   it('grants superuser visit:super only to global superuser', () => {

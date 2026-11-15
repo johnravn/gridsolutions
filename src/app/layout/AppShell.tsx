@@ -27,6 +27,7 @@ import {
   normalizeGeometricPreset,
 } from '@shared/ui/components/AnimatedBackground'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
+import { isLocalSupabaseUrl } from '@shared/lib/env'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
@@ -55,10 +56,7 @@ export default function AppShell() {
     import.meta.env.DEV ||
     ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname)
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-  const isLocalDb =
-    typeof supabaseUrl === 'string' &&
-    (supabaseUrl.includes('127.0.0.1') || supabaseUrl.includes('localhost'))
+  const isLocalDb = isLocalSupabaseUrl()
   const dbBadgeLabel = isLocalDb ? 'Local DB' : 'Remote DB'
   const dbBadgeColor = isLocalDb ? 'green' : 'blue'
 

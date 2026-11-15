@@ -1,9 +1,10 @@
 // src/features/inventory/api/partners.ts
+import { companyKey } from '@shared/api/queryKeys'
 import { supabase } from '@shared/api/supabase'
 
 export function partnerCustomersQuery({ companyId }: { companyId: string }) {
   return {
-    queryKey: ['company', companyId, 'partner-customers'] as const,
+    queryKey: companyKey(companyId, 'partner-customers'),
     queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
       const { data, error } = await supabase
         .from('customers')

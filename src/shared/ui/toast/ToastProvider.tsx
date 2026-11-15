@@ -11,7 +11,7 @@ import {
   Xmark,
 } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { wasDemoBlockRecently } from '@features/demo/lib/demoModeState'
+import { wasDemoBlockRecently } from '@shared/demo/demoModeState'
 
 type ToastKind = 'success' | 'error' | 'info' | 'progress'
 type ToastItem = {

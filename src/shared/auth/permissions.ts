@@ -1,4 +1,10 @@
 // src/shared/auth/permissions.ts
+/**
+ * Route-level visit capabilities for `RequireCap`.
+ * In-page mutate/admin checks still use `companyRole` helpers below
+ * (`canChangeCompanyUserRoles`, `canAssignCompanyRole`, …) — visit caps are
+ * intentionally coarse until a dedicated action Capability set exists.
+ */
 export type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 export type Capability =
   | 'visit:home'
@@ -21,9 +27,12 @@ export type CapabilitySet = Set<Capability>
 export function capabilitiesFor({
   isGlobalSuperuser,
   companyRole,
+  latestFeedOpenToFreelancers = false,
 }: {
   isGlobalSuperuser: boolean
   companyRole: CompanyRole | null // null when no company selected
+  /** Company expansion: freelancers may open Latest when true. */
+  latestFeedOpenToFreelancers?: boolean
 }): CapabilitySet {
   const caps = new Set<Capability>([
     'visit:home',
@@ -96,6 +105,7 @@ export function capabilitiesFor({
     // blocked: inventory, vehicles, crew
     // (calendar, matters, profile, home, jobs already allowed)
     caps.add('visit:jobs')
+    if (latestFeedOpenToFreelancers) caps.add('visit:latest')
     return caps
   }
 

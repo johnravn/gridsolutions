@@ -13,6 +13,8 @@ import {
 } from '@radix-ui/themes'
 import { CheckCircle, OpenNewWindow, XmarkCircle } from 'iconoir-react'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { getContaInvoiceAppUrl } from '@shared/api/conta/gatewayUrls'
+import { appEnv } from '@shared/lib/env'
 import { isContaInvoicePaid } from '@shared/conta/contaInvoicePaid'
 import {
   recurringJobInvoiceSummaryQuery,
@@ -76,14 +78,7 @@ function getContaInvoiceUrl(
   organizationId: string,
   invoiceId: string | null,
 ): string | null {
-  if (!invoiceId) return null
-  const baseUrl =
-    import.meta.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
-  const appBase =
-    baseUrl.includes('sandbox') || baseUrl.includes('test')
-      ? 'https://app.conta-sandbox.no'
-      : 'https://app.conta.no'
-  return `${appBase}/faktura/${organizationId}/fakturaer/${invoiceId}`
+  return getContaInvoiceAppUrl(organizationId, invoiceId, appEnv.contaApiUrl())
 }
 
 function formatJobLabel(job: { title: string; jobnr: number | null }): string {

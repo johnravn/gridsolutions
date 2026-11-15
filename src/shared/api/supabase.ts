@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
-import { wrapSupabaseClientForDemo } from '@features/demo/lib/demoModeState'
+import { wrapSupabaseClientForDemo } from '@shared/demo/demoModeState'
+import { requireSupabaseClientEnv } from '@shared/lib/env'
 import type { Database } from '@shared/types/database.types'
 
-// These come from your Supabase project settings
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+const { url: supabaseUrl, anonKey: supabaseAnonKey } =
+  requireSupabaseClientEnv()
 
 const baseClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {

@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Box, Button, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import { resolveStoragePublicUrl } from '@shared/lib/storagePublicUrl'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { motionFadeTransition } from '@shared/lib/motion'
 import { Upload } from 'iconoir-react'
@@ -31,16 +32,11 @@ export default function LogoUpload({
   const { success, error: toastError } = useToast()
 
   // Get public URL for current logo with cache-busting
-  const logoUrl = React.useMemo(() => {
-    if (currentLogoPath) {
-      const { data } = supabase.storage
-        .from('logos')
-        .getPublicUrl(currentLogoPath)
-      // Add cache-busting parameter to ensure fresh images when switching customers
-      return `${data.publicUrl}?t=${Date.now()}`
-    }
-    return null
-  }, [currentLogoPath])
+  const logoUrl = React.useMemo(
+    () =>
+      resolveStoragePublicUrl('logos', currentLogoPath, { cacheBust: true }),
+    [currentLogoPath],
+  )
 
   // Reset preview URL when currentLogoPath or uploadPath changes (i.e., when switching customers/companies)
   React.useEffect(() => {

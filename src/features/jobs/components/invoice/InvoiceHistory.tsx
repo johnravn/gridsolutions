@@ -14,6 +14,8 @@ import {
 import { CheckCircle, OpenNewWindow, XmarkCircle } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
+import { getContaInvoiceAppUrl } from '@shared/api/conta/gatewayUrls'
+import { appEnv } from '@shared/lib/env'
 import { isContaInvoicePaid } from '@shared/conta/contaInvoicePaid'
 import {
   applyContaInvoicePaidSync,
@@ -264,16 +266,7 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
   const getContaInvoiceUrl = (
     organizationId: string,
     invoiceId: string | null,
-  ) => {
-    if (!invoiceId) return null
-    const baseUrl =
-      import.meta.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
-    const appBase =
-      baseUrl.includes('sandbox') || baseUrl.includes('test')
-        ? 'https://app.conta-sandbox.no'
-        : 'https://app.conta.no'
-    return `${appBase}/faktura/${organizationId}/fakturaer/${invoiceId}`
-  }
+  ) => getContaInvoiceAppUrl(organizationId, invoiceId, appEnv.contaApiUrl())
 
   if (isLoading) {
     return (

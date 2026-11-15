@@ -1,5 +1,6 @@
 // Calendar subscription: premade kinds and feed URL for phone/external calendars
 import { supabase } from '@shared/api/supabase'
+import { appEnv } from '@shared/lib/env'
 
 export type CalendarSubscriptionKind =
   | 'all_jobs'
@@ -139,10 +140,7 @@ export async function deleteCalendarSubscription(
 }
 
 /** Public app URL used for calendar feed link */
-const PUBLIC_BASE_URL =
-  (typeof import.meta !== 'undefined' &&
-    ((import.meta as any).env?.VITE_APP_PUBLIC_URL as string)) ||
-  ''
+const PUBLIC_BASE_URL = appEnv.appPublicUrl() ?? ''
 
 /** Build the feed URL for a given token */
 export function getCalendarFeedUrl(token: string, baseUrl?: string): string {

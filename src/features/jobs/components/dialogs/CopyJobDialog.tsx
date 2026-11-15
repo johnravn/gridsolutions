@@ -1,8 +1,8 @@
-import * as React from 'react'
 import { Button, Dialog, Flex, Separator, Text } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import DateTimePicker from '@shared/ui/components/DateTimePicker'
+import { useDialogOpenEffect } from '@shared/ui/hooks/useDialogOpenEffect'
 
 export function getCopyJobInitialFormValues(input: {
   title: string | null
@@ -52,8 +52,7 @@ export default function CopyJobDialog({
     },
   })
 
-  React.useEffect(() => {
-    if (!open) return
+  useDialogOpenEffect(open, () => {
     form.reset(
       getCopyJobInitialFormValues({
         title: initialTitle,
@@ -61,8 +60,7 @@ export default function CopyJobDialog({
       }),
       { keepDefaultValues: true },
     )
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [open, initialTitle, initialStartAt])
+  }, [initialTitle, initialStartAt])
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>

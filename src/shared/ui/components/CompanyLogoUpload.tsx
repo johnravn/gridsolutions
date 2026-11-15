@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Box, Button, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { supabase } from '@shared/api/supabase'
+import { resolveStoragePublicUrl } from '@shared/lib/storagePublicUrl'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { motionFadeTransition } from '@shared/lib/motion'
 import { Upload } from 'iconoir-react'
@@ -37,25 +38,21 @@ export default function CompanyLogoUpload({
   const { success, error: toastError } = useToast()
 
   // Get public URLs for current logos with cache-busting
-  const lightLogoUrl = React.useMemo(() => {
-    if (currentLightLogoPath) {
-      const { data } = supabase.storage
-        .from('logos')
-        .getPublicUrl(currentLightLogoPath)
-      return `${data.publicUrl}?t=${Date.now()}`
-    }
-    return null
-  }, [currentLightLogoPath])
+  const lightLogoUrl = React.useMemo(
+    () =>
+      resolveStoragePublicUrl('logos', currentLightLogoPath, {
+        cacheBust: true,
+      }),
+    [currentLightLogoPath],
+  )
 
-  const darkLogoUrl = React.useMemo(() => {
-    if (currentDarkLogoPath) {
-      const { data } = supabase.storage
-        .from('logos')
-        .getPublicUrl(currentDarkLogoPath)
-      return `${data.publicUrl}?t=${Date.now()}`
-    }
-    return null
-  }, [currentDarkLogoPath])
+  const darkLogoUrl = React.useMemo(
+    () =>
+      resolveStoragePublicUrl('logos', currentDarkLogoPath, {
+        cacheBust: true,
+      }),
+    [currentDarkLogoPath],
+  )
 
   // Reset preview URLs when paths change
   React.useEffect(() => {

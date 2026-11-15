@@ -1,4 +1,5 @@
 import { supabase } from '@shared/api/supabase'
+import { appEnv } from '@shared/lib/env'
 
 export type ScheduledJobRunStatus = 'running' | 'success' | 'partial' | 'failed'
 
@@ -441,11 +442,8 @@ async function invokeListResendEmails(
   const token = sessionData.session?.access_token
   if (!token) return { data: null, error: new Error('Not signed in') }
 
-  const baseUrl = (import.meta.env.VITE_SUPABASE_URL as string).replace(
-    /\/$/,
-    '',
-  )
-  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+  const baseUrl = (appEnv.supabaseUrl() ?? '').replace(/\/$/, '')
+  const anonKey = appEnv.supabaseAnonKey() ?? ''
   const response = await fetch(`${baseUrl}/functions/v1/list-resend-emails`, {
     method: 'POST',
     headers: {

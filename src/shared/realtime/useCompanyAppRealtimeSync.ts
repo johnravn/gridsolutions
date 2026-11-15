@@ -1,5 +1,6 @@
 import * as React from 'react'
 import { supabase } from '@shared/api/supabase'
+import { appEnv, isLocalSupabaseUrl } from '@shared/lib/env'
 import {
   invalidateScheduleQueries,
   jobsPayloadChangedScheduleDates,
@@ -9,18 +10,14 @@ import type { JobListRow, JobStatus } from '@features/jobs/types'
 import type { QueryClient } from '@tanstack/react-query'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined
-
-const disableAppRealtime =
-  import.meta.env.VITE_DISABLE_APP_REALTIME === 'true' ||
-  import.meta.env.VITE_DISABLE_APP_REALTIME === '1'
+const disableAppRealtime = appEnv.disableAppRealtime()
 
 /** Local stack: give Realtime a moment after boot / db reset; settle after removeChannel to avoid socket churn. */
 function localRealtimeSubscribeOptions(): {
   initialDelayMs: number
   reconnectSettleMs: number
 } {
-  if (!supabaseUrl || !/127\.0\.0\.1|localhost/i.test(supabaseUrl)) {
+  if (!isLocalSupabaseUrl()) {
     return { initialDelayMs: 0, reconnectSettleMs: 0 }
   }
   return { initialDelayMs: 1_800, reconnectSettleMs: 450 }

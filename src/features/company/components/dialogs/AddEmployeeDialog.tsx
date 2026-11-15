@@ -1,9 +1,9 @@
-import * as React from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { Button, Dialog, Flex } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { useDialogOpenEffect } from '@shared/ui/hooks/useDialogOpenEffect'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { sendWelcomeEmailForPendingInvite } from '@shared/email/supabaseEdgeEmail'
 import { addMemberOrInvite } from '@features/crew/api/queries'
@@ -51,10 +51,9 @@ export default function AddEmployeeDialog({
     },
   })
 
-  React.useEffect(() => {
-    if (open) form.reset(defaultValues)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset when dialog opens
-  }, [open])
+  useDialogOpenEffect(open, () => {
+    form.reset(defaultValues)
+  })
 
   const mut = useMutation<AddInviteResult, unknown, string>({
     mutationFn: async (email) => {

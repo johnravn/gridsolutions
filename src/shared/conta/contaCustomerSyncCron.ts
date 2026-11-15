@@ -7,14 +7,16 @@ import {
   makeContaFetch,
   syncCustomersWithContaCore,
 } from './customerSyncCore.js'
+import { resolveContaGatewayUrls } from '../api/conta/gatewayUrls.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '../types/database.types.js'
 
-const contaBaseUrl =
-  process.env.VITE_CONTA_API_URL || 'https://api.gateway.conta.no'
-const contaSandboxUrl =
-  process.env.VITE_CONTA_API_URL_SANDBOX ||
-  'https://api.gateway.conta-sandbox.no'
+const { prod: contaBaseUrl, sandbox: contaSandboxUrl } =
+  resolveContaGatewayUrls({
+    prod: process.env.VITE_CONTA_API_URL_PROD,
+    sandbox: process.env.VITE_CONTA_API_URL_SANDBOX,
+    fallback: process.env.VITE_CONTA_API_URL,
+  })
 
 export type ContaSyncCompanyResult = {
   companyId: string

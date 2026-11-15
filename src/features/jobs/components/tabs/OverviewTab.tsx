@@ -24,6 +24,7 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { motionFadeTransition } from '@shared/lib/motion'
+import { buildGoogleMapsEmbedUrl } from '@shared/maps/MapEmbed'
 import { logActivity } from '@features/latest/api/queries'
 import {
   getJobStatusColor,
@@ -309,7 +310,7 @@ function MapWithSkeleton({ query, zoom }: { query: string; zoom?: number }) {
       >
         <iframe
           title="Google Maps location"
-          src={buildMapUrl(query, zoom)}
+          src={buildGoogleMapsEmbedUrl(query, zoom) ?? ''}
           loading="lazy"
           referrerPolicy="no-referrer-when-downgrade"
           allowFullScreen
@@ -324,19 +325,6 @@ function MapWithSkeleton({ query, zoom }: { query: string; zoom?: number }) {
       </div>
     </Box>
   )
-}
-
-function buildMapUrl(query: string, zoom?: number) {
-  const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_API_KEY as
-    | string
-    | undefined
-  if (!mapsKey) return ''
-
-  const url = new URL('https://www.google.com/maps/embed/v1/place')
-  url.searchParams.set('q', query)
-  if (zoom != null) url.searchParams.set('zoom', String(zoom))
-  url.searchParams.set('key', mapsKey)
-  return url.toString()
 }
 
 function JobStatusTimeline({

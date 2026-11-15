@@ -64,31 +64,3 @@ export function applyFuzzySearch(
 
   return query.or(conditions.join(','))
 }
-
-/**
- * @deprecated Dead stub — SQL `fuzzy_search_*` RPCs are unused. Prefer
- * `applyFuzzySearch` / `postgrestIlikePatterns` + client Fuse. Do not wire the
- * RPC path without a profiling decision.
- */
-export async function fuzzySearchRPC<T>(
-  _table: string,
-  searchTerm: string,
-  _searchColumns: Array<string>,
-  baseQuery?: { then?: unknown } & PromiseLike<{
-    data: unknown
-    error: unknown
-  }>,
-): Promise<Array<T>> {
-  if (!searchTerm || !searchTerm.trim()) {
-    if (baseQuery) {
-      const { data, error } = await baseQuery
-      if (error) throw error
-      return (data || []) as Array<T>
-    }
-    return []
-  }
-
-  throw new Error(
-    'fuzzySearchRPC is deprecated — use applyFuzzySearch / postgrestIlikePatterns',
-  )
-}

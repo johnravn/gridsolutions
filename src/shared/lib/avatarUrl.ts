@@ -1,4 +1,4 @@
-import { supabase } from '@shared/api/supabase'
+import { resolveStoragePublicUrl } from './storagePublicUrl'
 
 /**
  * Resolve a profile avatar for `<img src>`.
@@ -11,10 +11,7 @@ import { supabase } from '@shared/api/supabase'
 export function resolveAvatarUrl(
   avatarPath: string | null | undefined,
 ): string | null {
-  if (avatarPath == null) return null
-  const trimmed = avatarPath.trim()
-  if (!trimmed) return null
-  if (/^https?:\/\//i.test(trimmed)) return trimmed
-  const { data } = supabase.storage.from('avatars').getPublicUrl(trimmed)
-  return data.publicUrl
+  return resolveStoragePublicUrl('avatars', avatarPath, {
+    passThroughAbsoluteHttp: true,
+  })
 }

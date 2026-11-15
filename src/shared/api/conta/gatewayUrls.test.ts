@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { isContaSandboxUrl, resolveContaGatewayUrls } from './gatewayUrls'
+import {
+  getContaInvoiceAppUrl,
+  isContaSandboxUrl,
+  resolveContaGatewayUrls,
+} from './gatewayUrls'
 
 describe('resolveContaGatewayUrls', () => {
   it('uses explicit prod and sandbox URLs', () => {
@@ -39,5 +43,24 @@ describe('resolveContaGatewayUrls', () => {
   it('detects sandbox hosts', () => {
     expect(isContaSandboxUrl('https://api.gateway.conta-sandbox.no')).toBe(true)
     expect(isContaSandboxUrl('https://api.gateway.conta.no')).toBe(false)
+  })
+})
+
+describe('getContaInvoiceAppUrl', () => {
+  it('builds production and sandbox deep links', () => {
+    expect(
+      getContaInvoiceAppUrl('org-1', 'inv-9', 'https://api.gateway.conta.no'),
+    ).toBe('https://app.conta.no/faktura/org-1/fakturaer/inv-9')
+    expect(
+      getContaInvoiceAppUrl(
+        'org-1',
+        'inv-9',
+        'https://api.gateway.conta-sandbox.no',
+      ),
+    ).toBe('https://app.conta-sandbox.no/faktura/org-1/fakturaer/inv-9')
+  })
+
+  it('returns null without an invoice id', () => {
+    expect(getContaInvoiceAppUrl('org-1', null)).toBeNull()
   })
 })

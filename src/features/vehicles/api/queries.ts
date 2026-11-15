@@ -347,21 +347,5 @@ export async function isPersonalBooking(
 }
 
 /* -------------------- Partners for owner dropdown -------------------- */
-export function partnerCustomersQuery({ companyId }: { companyId: string }) {
-  return {
-    queryKey: ['company', companyId, 'partner-customers'] as const,
-    queryFn: async (): Promise<Array<{ id: string; name: string }>> => {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('id, name')
-        .eq('company_id', companyId)
-        .eq('is_partner', true)
-        .or('deleted.is.null,deleted.eq.false')
-        .order('name', { ascending: true })
-
-      if (error) throw error
-      return data
-    },
-    staleTime: 60_000,
-  }
-}
+/** Re-export: single source lives in inventory partners API. */
+export { partnerCustomersQuery } from '@features/inventory/api/partners'

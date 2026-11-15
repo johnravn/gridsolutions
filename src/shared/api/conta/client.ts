@@ -5,20 +5,19 @@
  * on a per-company basis. The API key is stored encrypted in the database.
  */
 
+import { appEnv } from '@shared/lib/env'
 import { supabase } from '../supabase'
 import { resolveContaGatewayUrls } from './gatewayUrls'
 
 const { prod: contaApiUrlProd, sandbox: contaApiUrlSandbox } =
   resolveContaGatewayUrls({
-    prod: import.meta.env.VITE_CONTA_API_URL_PROD,
-    sandbox: import.meta.env.VITE_CONTA_API_URL_SANDBOX,
-    fallback: import.meta.env.VITE_CONTA_API_URL,
+    prod: appEnv.contaApiUrlProd(),
+    sandbox: appEnv.contaApiUrlSandbox(),
+    fallback: appEnv.contaApiUrl(),
   })
 
 /** When true in local dev, use production Conta API key and URL regardless of company setting */
-const useProductionInDev =
-  import.meta.env.DEV &&
-  import.meta.env.VITE_CONTA_USE_PRODUCTION_IN_DEV === 'true'
+const useProductionInDev = appEnv.isDev() && appEnv.contaUseProductionInDev()
 
 /**
  * Get the selected Conta API environment for the current user's company

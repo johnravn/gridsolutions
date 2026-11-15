@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { appEnv } from '@shared/lib/env'
 
 type MapEmbedProps = {
   /** What to show in Maps: full address, place name, or "lat,lng" */
@@ -13,6 +14,21 @@ type MapEmbedProps = {
   title?: string
 }
 
+/** Build a Google Maps Embed API place URL, or null when the key is missing. */
+export function buildGoogleMapsEmbedUrl(
+  query: string,
+  zoom?: number,
+): string | null {
+  const mapsKey = appEnv.googleMapsPlatformApiKey()
+  if (!mapsKey) return null
+
+  const url = new URL('https://www.google.com/maps/embed/v1/place')
+  url.searchParams.set('q', query) // URL handles encoding (æ/ø/å etc.)
+  if (zoom != null) url.searchParams.set('zoom', String(zoom))
+  url.searchParams.set('key', mapsKey)
+  return url.toString()
+}
+
 export default function MapEmbed({
   query,
   zoom,
@@ -22,25 +38,17 @@ export default function MapEmbed({
   height = 0, // 0 means we’ll use the aspect-ratio container
   title = 'Google Maps location',
 }: MapEmbedProps) {
-  // In Vite, env vars must be prefixed with VITE_
-  const mapsKey = import.meta.env.VITE_GOOGLE_MAPS_PLATFORM_API_KEY as
-    | string
-    | undefined
+  const url = buildGoogleMapsEmbedUrl(query, zoom)
 
-  if (!mapsKey) {
+  if (!url) {
     // Fail loud in dev, quiet in prod
-    if (import.meta.env.DEV) {
+    if (appEnv.isDev()) {
       console.warn(
-        'VITE_GOOGLE_MAPS_API_KEY is missing. Add it to your .env file.',
+        'VITE_GOOGLE_MAPS_PLATFORM_API_KEY is missing. Add it to your .env file.',
       )
     }
     return null
   }
-
-  const url = new URL('https://www.google.com/maps/embed/v1/place')
-  url.searchParams.set('q', query) // URL handles encoding (æ/ø/å etc.)
-  if (zoom != null) url.searchParams.set('zoom', String(zoom))
-  url.searchParams.set('key', mapsKey)
 
   // If caller didn’t provide a fixed height, render a responsive 16:9 box
   const responsive = height === 0
@@ -64,7 +72,7 @@ export default function MapEmbed({
     >
       <iframe
         title={title}
-        src={url.toString()}
+        src={url}
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
         allowFullScreen

@@ -451,7 +451,7 @@ export function publicOfferQuery(accessToken: string) {
   return queryOptions<PublicOfferResponse | null>({
     queryKey: ['public-offer', accessToken] as const,
     queryFn: async (): Promise<PublicOfferResponse | null> => {
-      const { data, error } = await (supabase as any).rpc('public_offer_get', {
+      const { data, error } = await supabase.rpc('public_offer_get', {
         p_access_token: accessToken,
       })
       if (error) throw error
@@ -738,13 +738,13 @@ export async function acceptOffer(
   acceptance: OfferAcceptance,
   offerId?: string,
 ): Promise<void> {
-  const { error } = await (supabase as any).rpc('public_offer_accept', {
+  const { error } = await supabase.rpc('public_offer_accept', {
     p_access_token: accessToken,
     p_first_name: acceptance.first_name,
     p_last_name: acceptance.last_name,
     p_phone: acceptance.phone,
     p_selected_option_ids: acceptance.selected_option_ids ?? [],
-    p_offer_id: offerId ?? null,
+    p_offer_id: offerId,
   })
   if (error) throw error
 }
@@ -757,13 +757,13 @@ export async function rejectOffer(
   rejection: OfferRejection,
   offerId?: string,
 ): Promise<void> {
-  const { error } = await (supabase as any).rpc('public_offer_reject', {
+  const { error } = await supabase.rpc('public_offer_reject', {
     p_access_token: accessToken,
     p_first_name: rejection.first_name,
     p_last_name: rejection.last_name,
     p_phone: rejection.phone,
     p_comment: rejection.comment || '',
-    p_offer_id: offerId ?? null,
+    p_offer_id: offerId,
   })
   if (error) throw error
 }
@@ -776,17 +776,14 @@ export async function requestOfferRevision(
   revisionRequest: OfferRevisionRequest,
   offerId?: string,
 ): Promise<void> {
-  const { error } = await (supabase as any).rpc(
-    'public_offer_request_revision',
-    {
-      p_access_token: accessToken,
-      p_first_name: revisionRequest.first_name,
-      p_last_name: revisionRequest.last_name,
-      p_phone: revisionRequest.phone,
-      p_comment: revisionRequest.comment || '',
-      p_offer_id: offerId ?? null,
-    },
-  )
+  const { error } = await supabase.rpc('public_offer_request_revision', {
+    p_access_token: accessToken,
+    p_first_name: revisionRequest.first_name,
+    p_last_name: revisionRequest.last_name,
+    p_phone: revisionRequest.phone,
+    p_comment: revisionRequest.comment || '',
+    p_offer_id: offerId,
+  })
   if (error) throw error
 }
 
@@ -797,9 +794,9 @@ export async function markOfferViewed(
   accessToken: string,
   offerId?: string,
 ): Promise<void> {
-  const { error } = await (supabase as any).rpc('public_offer_mark_viewed', {
+  const { error } = await supabase.rpc('public_offer_mark_viewed', {
     p_access_token: accessToken,
-    p_offer_id: offerId ?? null,
+    p_offer_id: offerId,
   })
   if (error) console.error('Failed to mark offer as viewed:', error)
 }
