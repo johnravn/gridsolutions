@@ -15,8 +15,9 @@ import {
 import { ArrowRight, Check, Download, Edit, Trash, Xmark } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
+import { supabase } from '@shared/api/supabase'
 import { useAuth } from '@app/providers/AuthProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -340,13 +341,10 @@ export default function MatterDetail({
 
   // Get project lead info if available (must be before early return to follow Rules of Hooks)
   const projectLead = matter?.job?.project_lead
-  const avatarUrl = React.useMemo(() => {
-    if (!projectLead?.avatar_url) return null
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(projectLead.avatar_url)
-    return data.publicUrl
-  }, [projectLead?.avatar_url])
+  const avatarUrl = React.useMemo(
+    () => resolveAvatarUrl(projectLead?.avatar_url),
+    [projectLead?.avatar_url],
+  )
 
   const author = matter ? resolveMatterCardAuthor(matter) : null
   const outcome = matter ? parseMatterOutcome(matter.metadata) : null
@@ -355,13 +353,10 @@ export default function MatterDetail({
 
   const leadName = projectLead?.display_name || projectLead?.email || null
   const leadInitials = leadName ? getInitials(leadName) : ''
-  const authorAvatarUrl = React.useMemo(() => {
-    if (!author?.avatarPath) return null
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(author.avatarPath)
-    return data.publicUrl
-  }, [author?.avatarPath])
+  const authorAvatarUrl = React.useMemo(
+    () => resolveAvatarUrl(author?.avatarPath),
+    [author?.avatarPath],
+  )
 
   if (!matter) {
     return (

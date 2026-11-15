@@ -16,7 +16,7 @@ import { Heart, HeartSolid } from 'iconoir-react'
 import { useNavigate } from '@tanstack/react-router'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { authUserQueryOptions } from '@shared/auth/authUserQuery'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
@@ -233,11 +233,9 @@ export default function LatestInspector({
     const groupedActivity = data.groupedActivity
 
     // Calculate avatar URL without using hooks
-    const authorAvatarUrl = groupedActivity.created_by.avatar_url
-      ? supabase.storage
-          .from('avatars')
-          .getPublicUrl(groupedActivity.created_by.avatar_url).data.publicUrl
-      : null
+    const authorAvatarUrl = resolveAvatarUrl(
+      groupedActivity.created_by.avatar_url,
+    )
 
     const authorDisplayName =
       groupedActivity.created_by.display_name ||
@@ -507,11 +505,7 @@ export default function LatestInspector({
   const { activity, comments } = data as LatestInspectorData
 
   // Calculate avatar URL without using hooks
-  const authorAvatarUrl = activity.created_by.avatar_url
-    ? supabase.storage
-        .from('avatars')
-        .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
-    : null
+  const authorAvatarUrl = resolveAvatarUrl(activity.created_by.avatar_url)
 
   const authorDisplayName =
     activity.created_by.display_name || activity.created_by.email
@@ -759,12 +753,9 @@ export default function LatestInspector({
               <Box>
                 {comments.map((comment, idx) => {
                   // Calculate avatar URL without using hooks
-                  const commentAuthorAvatarUrl = comment.created_by.avatar_url
-                    ? supabase.storage
-                        .from('avatars')
-                        .getPublicUrl(comment.created_by.avatar_url).data
-                        .publicUrl
-                    : null
+                  const commentAuthorAvatarUrl = resolveAvatarUrl(
+                    comment.created_by.avatar_url,
+                  )
 
                   const commentAuthorDisplayName =
                     comment.created_by.display_name || comment.created_by.email

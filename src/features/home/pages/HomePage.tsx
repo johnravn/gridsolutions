@@ -6,7 +6,7 @@ import { useInitialPageLoad } from '@shared/ui/hooks/useInitialPageLoad'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { homeUnreadMattersQuery } from '@features/matters/api/queries'
 import { useJobCrewRoleIds } from '@features/jobs/hooks/useJobCrewRoleIds'
@@ -335,11 +335,7 @@ export default function HomePage() {
 
   const getInitials = getInitialsFromNameOrEmail
 
-  const getAvatarUrl = (avatarPath: string | null): string | null => {
-    if (!avatarPath) return null
-    const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath)
-    return data.publicUrl
-  }
+  const getAvatarUrl = resolveAvatarUrl
 
   const { data: homeLayoutPrefs } = useQuery({
     ...profileHomeLayoutQuery(userId ?? ''),

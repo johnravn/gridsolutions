@@ -26,8 +26,8 @@ import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useMobileDetailBack } from '@app/hooks/useMobileDetailBack'
 import { MobileBottomDrawer } from '@app/layout/mobile'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
-import { supabase } from '@shared/api/supabase'
 import { eventHasPendingInviteLabel } from '@features/calendar/api/crewCalendarVisibility'
 import { applyCalendarFilter } from './domain'
 import type { CalendarFilter, CalendarKind } from './domain'
@@ -193,10 +193,7 @@ function snapshotOverflowEvent(
     viewerUserId: opts.viewerUserId,
     focusUserId: opts.focusUserId,
   })
-  const avatarUrl = projectLead?.avatar_url
-    ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url).data
-        .publicUrl
-    : null
+  const avatarUrl = resolveAvatarUrl(projectLead?.avatar_url)
 
   return {
     id: event.id,
@@ -636,10 +633,7 @@ export default function CompanyCalendarPro({
         : undefined
     const isConfirmedCrew = isCrew && crewStatus === 'confirmed'
 
-    const avatarUrl = projectLead?.avatar_url
-      ? supabase.storage.from('avatars').getPublicUrl(projectLead.avatar_url)
-          .data.publicUrl
-      : null
+    const avatarUrl = resolveAvatarUrl(projectLead?.avatar_url)
     const leadName = projectLead
       ? projectLead.display_name || projectLead.email
       : null

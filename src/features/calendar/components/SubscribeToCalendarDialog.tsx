@@ -25,7 +25,7 @@ import {
 } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { vehiclesIndexQuery } from '@features/vehicles/api/queries'
@@ -101,8 +101,7 @@ const PICKER_GRID_STYLE: React.CSSProperties = {
 }
 
 function crewAvatarUrl(path: string | null | undefined): string | null {
-  if (!path) return null
-  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+  return resolveAvatarUrl(path)
 }
 
 const KIND_LABELS: Record<CalendarSubscriptionKind, string> = {

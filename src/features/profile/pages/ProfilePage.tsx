@@ -16,6 +16,7 @@ import {
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import {
   DEFAULT_BIBLE_VERSION,
   normalizeBibleVersion,
@@ -415,14 +416,11 @@ export default function ProfilePage() {
     },
   })
 
-  // helper to get public URL for the avatar
-  const avatarUrl = React.useMemo(() => {
-    if (!form.avatarPath) return null
-    const { data: urlData } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(form.avatarPath)
-    return urlData.publicUrl
-  }, [form.avatarPath])
+  // Absolute OAuth URLs pass through; relative keys get the public avatars prefix
+  const avatarUrl = React.useMemo(
+    () => resolveAvatarUrl(form.avatarPath),
+    [form.avatarPath],
+  )
 
   const set = <TKey extends keyof typeof form>(
     key: TKey,

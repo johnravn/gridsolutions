@@ -26,6 +26,7 @@ import {
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
   normalizeGeometricPreset,
 } from '@shared/ui/components/AnimatedBackground'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useStandaloneClassEffect } from '@shared/lib/useIsStandalone'
 import OfflineBanner from '@shared/ui/components/OfflineBanner'
@@ -108,14 +109,11 @@ export default function AppShell() {
     enabled: !!authUser?.id,
   })
 
-  // Build a public avatar URL from storage path (if any)
-  const avatarUrl = React.useMemo(() => {
-    if (!myProfile?.avatar_url) return null
-    const { data } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(myProfile.avatar_url)
-    return data.publicUrl
-  }, [myProfile?.avatar_url])
+  // Absolute OAuth URLs pass through; relative keys get the public avatars prefix
+  const avatarUrl = React.useMemo(
+    () => resolveAvatarUrl(myProfile?.avatar_url),
+    [myProfile?.avatar_url],
+  )
 
   const displayName = myProfile?.display_name || myProfile?.email || ''
 

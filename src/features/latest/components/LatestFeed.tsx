@@ -8,7 +8,7 @@ import { MOBILE_LIST_BOTTOM_PAD, MobilePageList } from '@app/layout/mobile'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { IndexTableBodySkeleton } from '@shared/ui/index-table'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { latestFeedQuery } from '../api/queries'
 import { groupInventoryActivities } from '../utils/groupInventoryActivities'
@@ -98,11 +98,7 @@ export default function LatestFeed({
     activity: (typeof groupedActivities)[number],
     opts?: { fillHeight?: boolean },
   ) => {
-    const avatarUrl = activity.created_by.avatar_url
-      ? supabase.storage
-          .from('avatars')
-          .getPublicUrl(activity.created_by.avatar_url).data.publicUrl
-      : null
+    const avatarUrl = resolveAvatarUrl(activity.created_by.avatar_url)
 
     const displayName =
       activity.created_by.display_name || activity.created_by.email

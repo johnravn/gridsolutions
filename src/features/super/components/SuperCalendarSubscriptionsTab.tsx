@@ -25,7 +25,7 @@ import {
   Search,
   Trash,
 } from 'iconoir-react'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { getCalendarFeedUrl } from '@features/calendar/api/calendarSubscription'
@@ -190,8 +190,7 @@ function TokenRow({
 }
 
 function avatarPublicUrl(path: string | null): string | undefined {
-  if (!path) return undefined
-  return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+  return resolveAvatarUrl(path) ?? undefined
 }
 
 function UserGroupCard({

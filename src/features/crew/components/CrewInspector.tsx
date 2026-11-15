@@ -16,6 +16,7 @@ import {
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import { EditPencil } from 'iconoir-react'
@@ -189,13 +190,10 @@ export default function CrewInspector({
     },
   })
 
-  const avatarUrl = React.useMemo(() => {
-    if (!data?.avatar_url) return null
-    const { data: urlData } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(data.avatar_url)
-    return urlData.publicUrl
-  }, [data?.avatar_url])
+  const avatarUrl = React.useMemo(
+    () => resolveAvatarUrl(data?.avatar_url),
+    [data?.avatar_url],
+  )
 
   if (!userId)
     return <Text color="gray">Select a crew member to view details.</Text>

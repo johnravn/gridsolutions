@@ -1,7 +1,7 @@
 import { Avatar, Badge, Box, Flex, Text, Tooltip } from '@radix-ui/themes'
 import { Repeat } from 'iconoir-react'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
-import { supabase } from '@shared/api/supabase'
 import {
   INDEX_TABLE_ROW_CLASS,
   INDEX_TABLE_ROW_SELECTED_CLASS,
@@ -34,10 +34,7 @@ export default function RecurringJobListRow({
   const initials = getInitials(
     row.project_lead?.display_name ?? row.project_lead?.email ?? '',
   )
-  const avatarUrl = row.project_lead?.avatar_url
-    ? supabase.storage.from('avatars').getPublicUrl(row.project_lead.avatar_url)
-        .data.publicUrl
-    : null
+  const avatarUrl = resolveAvatarUrl(row.project_lead?.avatar_url)
 
   return (
     <div

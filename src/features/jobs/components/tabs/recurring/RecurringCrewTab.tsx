@@ -2,8 +2,8 @@ import { Avatar, Badge, Box, Flex, Table, Text } from '@radix-ui/themes'
 import { useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
-import { supabase } from '@shared/api/supabase'
 import { recurringJobCrewSummaryQuery } from '../../../api/recurringJobQueries'
 
 type Props = {
@@ -46,10 +46,7 @@ export default function RecurringCrewTab({
         </Table.Header>
         <Table.Body>
           {crew.map((entry) => {
-            const avatarUrl = entry.avatar_url
-              ? supabase.storage.from('avatars').getPublicUrl(entry.avatar_url)
-                  .data.publicUrl
-              : null
+            const avatarUrl = resolveAvatarUrl(entry.avatar_url)
             const initials = getInitials(
               entry.display_name ?? entry.email ?? '',
             )

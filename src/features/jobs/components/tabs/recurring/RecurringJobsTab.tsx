@@ -32,8 +32,8 @@ import { useDebouncedValue } from '@tanstack/react-pacer'
 import { useNavigate } from '@tanstack/react-router'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { motionOffsetRevealX, motionRevealTransition } from '@shared/lib/motion'
 import JobDialog from '../../dialogs/JobDialog'
@@ -81,12 +81,6 @@ function jobCustomerName(job: JobListRow): string {
 
 function jobLeadName(job: JobListRow): string {
   return job.project_lead?.display_name || job.project_lead?.email || '—'
-}
-
-function getAvatarUrl(avatarPath: string | null): string | null {
-  if (!avatarPath) return null
-  const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath)
-  return data.publicUrl
 }
 
 type Props = {
@@ -748,7 +742,7 @@ function AssignJobDialog({
               const initials = getInitials(
                 job.project_lead?.display_name ?? job.project_lead?.email ?? '',
               )
-              const avatarUrl = getAvatarUrl(
+              const avatarUrl = resolveAvatarUrl(
                 job.project_lead?.avatar_url ?? null,
               )
               return (

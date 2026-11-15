@@ -11,7 +11,7 @@ import {
 import { DialogTrigger } from '@shared/ui/radixAsChild'
 import { Edit, Link as LinkIcon, Trash } from 'iconoir-react'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import {
   IndexTableBodySkeleton,
@@ -52,9 +52,7 @@ function getDisplayName(
 }
 
 function getAvatarUrl(avatarPath: string | null | undefined): string | null {
-  if (!avatarPath) return null
-  const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath)
-  return data.publicUrl
+  return resolveAvatarUrl(avatarPath)
 }
 
 function formatDate(iso: string) {

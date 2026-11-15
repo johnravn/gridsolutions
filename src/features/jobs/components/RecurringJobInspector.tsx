@@ -16,8 +16,8 @@ import { Archive, Edit, MoreHoriz, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
@@ -150,11 +150,7 @@ export default function RecurringJobInspector({
   const contactName = data.customer_contact?.name ?? null
   const leadName =
     data.project_lead?.display_name || data.project_lead?.email || null
-  const avatarUrl = data.project_lead?.avatar_url
-    ? supabase.storage
-        .from('avatars')
-        .getPublicUrl(data.project_lead.avatar_url).data.publicUrl
-    : null
+  const avatarUrl = resolveAvatarUrl(data.project_lead?.avatar_url)
   const initials = getInitials(
     data.project_lead?.display_name ?? data.project_lead?.email ?? '',
   )

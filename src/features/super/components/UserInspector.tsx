@@ -11,7 +11,7 @@ import {
 } from '@radix-ui/themes'
 import { Combine, Edit, Trash } from 'iconoir-react'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import { userCompanyMembershipsQuery, userDetailQuery } from '../api/queries'
@@ -46,13 +46,10 @@ export default function UserInspector({
     }
   }, [id, isLoading, data, isError, onDeleted])
 
-  const avatarUrl = React.useMemo(() => {
-    if (!data?.avatar_url) return null
-    const { data: storageData } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(data.avatar_url)
-    return storageData.publicUrl
-  }, [data?.avatar_url])
+  const avatarUrl = React.useMemo(
+    () => resolveAvatarUrl(data?.avatar_url),
+    [data?.avatar_url],
+  )
 
   if (!id) return <Text color="gray">Select a user to view details.</Text>
 

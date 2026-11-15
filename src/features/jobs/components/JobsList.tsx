@@ -50,7 +50,7 @@ import {
   INDEX_TABLE_ROW_SELECTED_CLASS,
 } from '@shared/ui/index-table/indexTableStyles'
 import { HighlightedText } from '@shared/ui/components/HighlightedText'
-import { supabase } from '@shared/api/supabase'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
 import {
   recurringJobDetailQuery,
@@ -402,11 +402,7 @@ export default function JobsList({
     }
   }
 
-  const getAvatarUrl = (avatarPath: string | null): string | null => {
-    if (!avatarPath) return null
-    const { data } = supabase.storage.from('avatars').getPublicUrl(avatarPath)
-    return data.publicUrl
-  }
+  const getAvatarUrl = resolveAvatarUrl
 
   const toolbar = (
     <Flex gap={compact ? '4' : '2'} align="center" wrap="wrap">
