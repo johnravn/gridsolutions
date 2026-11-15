@@ -1,9 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  buildLockedMonthSet,
   formatLoggingDate,
   formatMonthInput,
   getMonthOptions,
   getRange,
+  isRangeOverlappingLockedPeriod,
+  shiftRangeToMonth,
+  toMonthKey,
 } from '@features/logging/lib/timeEntryRange'
 import {
   LOGGING_FIXTURE_DATES,
@@ -108,5 +112,82 @@ describe('getRange', () => {
     expect(range.label).toBe('2025')
     expect(range.from).toBe(new Date(2025, 0, 1).toISOString())
     expect(range.to).toBe(new Date(2026, 0, 1).toISOString())
+  })
+})
+
+describe('toMonthKey', () => {
+  it('reads YYYY-MM from ISO strings', () => {
+    expect(toMonthKey('2026-06-15T12:00:00.000Z')).toBe('2026-06')
+  })
+})
+
+describe('buildLockedMonthSet', () => {
+  it('collects only locked period months', () => {
+    expect(
+      [
+        ...buildLockedMonthSet([
+          { period_start: '2026-05-01', is_locked: false },
+          { period_start: '2026-06-01', is_locked: true },
+          { period_start: '2026-07-01', is_locked: true },
+        ]),
+      ].sort(),
+    ).toEqual(['2026-06', '2026-07'])
+  })
+})
+
+describe('isRangeOverlappingLockedPeriod', () => {
+  it('returns false when no locked months', () => {
+    expect(
+      isRangeOverlappingLockedPeriod({
+        startAt: new Date(2026, 5, 10, 9).toISOString(),
+        endAt: new Date(2026, 5, 10, 17).toISOString(),
+        lockedMonthSet: new Set(),
+      }),
+    ).toBe(false)
+  })
+
+  it('detects overlap when the start month is locked', () => {
+    expect(
+      isRangeOverlappingLockedPeriod({
+        startAt: new Date(2026, 5, 10, 9).toISOString(),
+        endAt: new Date(2026, 5, 10, 17).toISOString(),
+        lockedMonthSet: new Set(['2026-06']),
+      }),
+    ).toBe(true)
+  })
+
+  it('detects overlap across a multi-month range', () => {
+    expect(
+      isRangeOverlappingLockedPeriod({
+        startAt: new Date(2026, 4, 28, 9).toISOString(),
+        endAt: new Date(2026, 6, 2, 17).toISOString(),
+        lockedMonthSet: new Set(['2026-06']),
+      }),
+    ).toBe(true)
+  })
+})
+
+describe('shiftRangeToMonth', () => {
+  it('returns null when already in the target month', () => {
+    const startAt = new Date(2026, 5, 10, 9).toISOString()
+    const endAt = new Date(2026, 5, 10, 17).toISOString()
+    expect(
+      shiftRangeToMonth({ startAt, endAt, monthKey: '2026-06' }),
+    ).toBeNull()
+  })
+
+  it('preserves duration when moving to another month', () => {
+    const startAt = new Date(2026, 5, 10, 9).toISOString()
+    const endAt = new Date(2026, 5, 10, 17).toISOString()
+    const shifted = shiftRangeToMonth({
+      startAt,
+      endAt,
+      monthKey: '2026-07',
+    })
+    expect(shifted).not.toBeNull()
+    expect(toMonthKey(shifted!.startAt)).toBe('2026-07')
+    expect(
+      new Date(shifted!.endAt).getTime() - new Date(shifted!.startAt).getTime(),
+    ).toBe(8 * 60 * 60 * 1000)
   })
 })

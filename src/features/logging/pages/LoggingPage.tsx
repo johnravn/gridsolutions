@@ -53,7 +53,12 @@ import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
 import LoggingMonthScroller from '../components/LoggingMonthScroller'
 import TimeEntriesTable from '../components/TimeEntriesTable'
 import TimeEntryWhenFields from '../components/TimeEntryWhenFields'
-import { buildLoggingJobPickerList, loggingSearchTerm } from '../lib/jobPicker'
+import {
+  buildLoggingJobPickerList,
+  formatJobOption,
+  isJobOnToday,
+  loggingSearchTerm,
+} from '../lib/jobPicker'
 import {
   formatHoursBetween,
   formatHoursInput,
@@ -63,13 +68,18 @@ import {
   parseHoursInput,
 } from '../lib/timeEntryHours'
 import {
+  buildLockedMonthSet,
   formatLoggingDate,
   formatMonthInput,
+  getDefaultTimes,
+  getEndFallback,
   getMonthOptions,
   getRange,
+  getYearFromIso,
+  isRangeOverlappingLockedPeriod,
+  shiftRangeToMonth,
 } from '../lib/timeEntryRange'
 import type { TimeInputMode } from '../lib/timeEntryHours'
-import type { LoggingPeriod } from '../api/loggingPeriods'
 import type { TimeEntryInsert, TimeEntryWithProfile } from '../api/timeEntries'
 
 export default function LoggingPage() {
@@ -220,67 +230,45 @@ export default function LoggingPage() {
     [endAt, entryStartYear],
   )
 
-  const { data: loggingPeriodsView = [] } = useQuery<Array<LoggingPeriod>>({
-    queryKey: ['logging_periods', companyId ?? 'none', selectedYear],
+  const { data: loggingPeriodsView = [] } = useQuery({
+    ...loggingPeriodsQuery({
+      companyId: companyId ?? '',
+      year: selectedYear,
+    }),
     enabled: !!companyId,
-    queryFn: async () => {
-      if (!companyId) return []
-      const { queryFn } = loggingPeriodsQuery({ companyId, year: selectedYear })
-      return queryFn()
-    },
   })
-  const { data: loggingPeriodsStart = [] } = useQuery<Array<LoggingPeriod>>({
-    queryKey: ['logging_periods', companyId ?? 'none', entryStartYear],
+  const { data: loggingPeriodsStart = [] } = useQuery({
+    ...loggingPeriodsQuery({
+      companyId: companyId ?? '',
+      year: entryStartYear,
+    }),
     enabled: !!companyId && entryStartYear !== selectedYear,
-    queryFn: async () => {
-      if (!companyId) return []
-      const { queryFn } = loggingPeriodsQuery({
-        companyId,
-        year: entryStartYear,
-      })
-      return queryFn()
-    },
   })
-  const { data: loggingPeriodsEnd = [] } = useQuery<Array<LoggingPeriod>>({
-    queryKey: ['logging_periods', companyId ?? 'none', entryEndYear],
+  const { data: loggingPeriodsEnd = [] } = useQuery({
+    ...loggingPeriodsQuery({
+      companyId: companyId ?? '',
+      year: entryEndYear,
+    }),
     enabled:
       !!companyId &&
       entryEndYear !== selectedYear &&
       entryEndYear !== entryStartYear,
-    queryFn: async () => {
-      if (!companyId) return []
-      const { queryFn } = loggingPeriodsQuery({
-        companyId,
-        year: entryEndYear,
-      })
-      return queryFn()
-    },
   })
 
-  const lockedMonthSetForView = React.useMemo(() => {
-    const set = new Set<string>()
-    loggingPeriodsView.forEach((period) => {
-      if (!period.is_locked) return
-      const monthKey = toMonthKey(period.period_start)
-      set.add(monthKey)
-    })
-    return set
-  }, [loggingPeriodsView])
+  const lockedMonthSetForView = React.useMemo(
+    () => buildLockedMonthSet(loggingPeriodsView),
+    [loggingPeriodsView],
+  )
 
-  const lockedMonthSetForEntry = React.useMemo(() => {
-    const set = new Set<string>()
-    const combined = [
-      ...loggingPeriodsView,
-      ...loggingPeriodsStart,
-      ...loggingPeriodsEnd,
-    ]
-    combined.forEach((period) => {
-      if (!period.is_locked) return
-      const monthKey = toMonthKey(period.period_start)
-      set.add(monthKey)
-    })
-    return set
-  }, [loggingPeriodsEnd, loggingPeriodsStart, loggingPeriodsView])
+  const lockedMonthSetForEntry = React.useMemo(
+    () =>
+      buildLockedMonthSet([
+        ...loggingPeriodsView,
+        ...loggingPeriodsStart,
+        ...loggingPeriodsEnd,
+      ]),
+    [loggingPeriodsEnd, loggingPeriodsStart, loggingPeriodsView],
+  )
 
   const isEntryInLockedPeriod = React.useMemo(() => {
     return isRangeOverlappingLockedPeriod({
@@ -401,8 +389,9 @@ export default function LoggingPage() {
       success('Saved', 'Time entry added')
       invalidateEntries()
     },
-    onError: (e: any) => {
-      error('Failed to save', e?.message || 'Please try again.')
+    onError: (e: unknown) => {
+      const message = e instanceof Error ? e.message : 'Please try again.'
+      error('Failed to save', message)
     },
   })
 
@@ -425,8 +414,9 @@ export default function LoggingPage() {
       success('Deleted', 'Time entry removed')
       invalidateEntries()
     },
-    onError: (e: any) => {
-      error('Failed to delete', e?.message || 'Please try again.')
+    onError: (e: unknown) => {
+      const message = e instanceof Error ? e.message : 'Please try again.'
+      error('Failed to delete', message)
     },
   })
 
@@ -539,7 +529,9 @@ export default function LoggingPage() {
                     const job =
                       jobsData.find((j) => j.id === selectedJobId) ??
                       previouslyLoggedJobs.find((j) => j.id === selectedJobId)
-                    return job ? formatJobOption(job) : title || selectedJobId
+                    return job
+                      ? formatJobOption(job, formatLoggingDate)
+                      : title || selectedJobId
                   })()}
                 </Text>
               </Flex>
@@ -645,7 +637,9 @@ export default function LoggingPage() {
                         >
                           <div>
                             <Flex align="center" gap="2" wrap="wrap">
-                              <Text size="2">{formatJobOption(job)}</Text>
+                              <Text size="2">
+                                {formatJobOption(job, formatLoggingDate)}
+                              </Text>
                               {previouslyLoggedJobIds.has(job.id) && (
                                 <Badge size="1" color="green" variant="soft">
                                   Logged
@@ -1012,143 +1006,4 @@ export default function LoggingPage() {
       }}
     />
   )
-}
-
-function getDefaultTimes() {
-  const start = new Date()
-  const minutes = start.getMinutes()
-  start.setMinutes(0, 0, 0)
-  if (minutes >= 30) {
-    start.setHours(start.getHours() + 1)
-  }
-  const end = new Date(start.getTime() + 60 * 60 * 1000)
-  return { startAt: start.toISOString(), endAt: end.toISOString() }
-}
-
-function getYearFromIso(value: string | null | undefined) {
-  if (!value) return null
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) return null
-  return parsed.getFullYear()
-}
-
-function getMonthKeyFromDate(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
-}
-
-function isRangeOverlappingLockedPeriod({
-  startAt,
-  endAt,
-  lockedMonthSet,
-}: {
-  startAt: string
-  endAt: string
-  lockedMonthSet: Set<string>
-}) {
-  if (!startAt || !endAt || lockedMonthSet.size === 0) return false
-  const start = new Date(startAt)
-  const end = new Date(endAt)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return false
-  }
-  if (end.getTime() < start.getTime()) return false
-
-  const cursor = new Date(start)
-  cursor.setDate(1)
-  cursor.setHours(0, 0, 0, 0)
-  const endMonth = new Date(end)
-  endMonth.setDate(1)
-  endMonth.setHours(0, 0, 0, 0)
-
-  while (cursor.getTime() <= endMonth.getTime()) {
-    if (lockedMonthSet.has(getMonthKeyFromDate(cursor))) return true
-    cursor.setMonth(cursor.getMonth() + 1)
-  }
-  return false
-}
-
-function shiftRangeToMonth({
-  startAt,
-  endAt,
-  monthKey,
-}: {
-  startAt: string
-  endAt: string
-  monthKey: string
-}) {
-  if (!startAt || !endAt || !monthKey) return null
-  if (toMonthKey(startAt) === monthKey) return null
-  const [yearStr, monthStr] = monthKey.split('-')
-  const year = Number(yearStr)
-  const monthIndex = Number(monthStr) - 1
-  if (!Number.isFinite(year) || !Number.isFinite(monthIndex)) return null
-
-  const start = new Date(startAt)
-  const end = new Date(endAt)
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-    return null
-  }
-  const durationMs = Math.max(0, end.getTime() - start.getTime())
-  const lastDay = new Date(year, monthIndex + 1, 0).getDate()
-  const nextDay = Math.min(start.getDate(), lastDay)
-
-  const nextStart = new Date(start)
-  nextStart.setFullYear(year, monthIndex, nextDay)
-  const nextEnd = new Date(nextStart.getTime() + durationMs)
-  return { startAt: nextStart.toISOString(), endAt: nextEnd.toISOString() }
-}
-
-function formatJobOption(job: {
-  title: string
-  jobnr: number | null
-  start_at: string | null
-  end_at: string | null
-}) {
-  const numberPart = job.jobnr != null ? `#${job.jobnr}` : 'Job'
-  const titlePart = job.title ? ` — ${job.title}` : ''
-  const datePart = job.start_at ? ` (${formatLoggingDate(job.start_at)})` : ''
-  return `${numberPart}${titlePart}${datePart}`
-}
-
-function isJobOnToday(job: {
-  start_at: string | null
-  end_at: string | null
-}): boolean {
-  const today = new Date()
-  const todayStart = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime()
-  const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1
-  if (job.start_at) {
-    const t = new Date(job.start_at).getTime()
-    if (t >= todayStart && t < todayEnd) return true
-  }
-  if (job.end_at) {
-    const t = new Date(job.end_at).getTime()
-    if (t >= todayStart && t < todayEnd) return true
-  }
-  return false
-}
-
-function getEndFallback(startAt: string) {
-  const start = new Date(startAt)
-  if (Number.isNaN(start.getTime())) return startAt
-  const end = new Date(start.getTime() + 60 * 60 * 1000)
-  return end.toISOString()
-}
-
-function toMonthKey(value: string) {
-  const match = value.match(/^(\d{4}-\d{2})/)
-  if (match) return match[1]
-  const parsed = new Date(value)
-  if (Number.isNaN(parsed.getTime())) {
-    return value.slice(0, 7)
-  }
-  const year = parsed.getFullYear()
-  const month = String(parsed.getMonth() + 1).padStart(2, '0')
-  return `${year}-${month}`
 }

@@ -1,21 +1,8 @@
 // src/features/super/pages/SuperPage.tsx
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  AlertDialog,
-  Box,
-  Button,
-  Card,
-  Flex,
-  Grid,
-  Heading,
-  IconButton,
-  Separator,
-  Tabs,
-  Text,
-  Tooltip,
-} from '@radix-ui/themes'
-import { Plus, TransitionLeft } from 'iconoir-react'
+import { AlertDialog, Box, Button, Flex, Tabs, Text } from '@radix-ui/themes'
+import { Plus } from 'iconoir-react'
 import {
   getModShortcutLabel,
   useModKeyShortcut,
@@ -24,7 +11,8 @@ import {
 } from '@shared/lib/keyboardShortcuts'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { AnimatedTabsList } from '@shared/ui/components/AnimatedTabsList'
-import { supabase } from '@shared/api/supabase'
+import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { adminDeleteCompany, adminDeleteUser } from '../api/adminDeletes'
 import CompaniesTable from '../components/CompaniesTable'
 import CompanyDialog from '../components/CompanyDialog'
 import CompanyInspector from '../components/CompanyInspector'
@@ -35,6 +23,9 @@ import SuperEmailTab from '../components/SuperEmailTab'
 import SuperMonitorTab from '../components/SuperMonitorTab'
 import SuperCalendarSubscriptionsTab from '../components/SuperCalendarSubscriptionsTab'
 import MergeUsersDialog from '../components/MergeUsersDialog'
+import { SuperMasterDetailSplit } from '../components/SuperMasterDetailSplit'
+import { useLocalSplitPane } from '../hooks/useLocalSplitPane'
+import { errorMessage } from '../lib/errorMessage'
 import type { CompanyIndexRow } from '@features/company/api/queries'
 import type { UserIndexRow } from '../api/queries'
 
@@ -56,7 +47,6 @@ export default function SuperPage() {
   const [deletingCompany, setDeletingCompany] =
     React.useState<CompanyIndexRow | null>(null)
 
-  // User-specific state
   const [userDialogOpen, setUserDialogOpen] = React.useState(false)
   const [editingUser, setEditingUser] = React.useState<UserIndexRow | null>(
     null,
@@ -68,7 +58,6 @@ export default function SuperPage() {
     null,
   )
 
-  // Track active tab to clear selection when switching
   const [activeTab, setActiveTab] = React.useState<string>('monitor')
 
   const handleTabChange = React.useCallback((tab: string) => {
@@ -84,158 +73,22 @@ export default function SuperPage() {
     onTabChange: handleTabChange,
   })
 
-  // match JobsPage behavior for responsive layout
-  const [isLarge, setIsLarge] = React.useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.matchMedia('(min-width: 1024px)').matches
-      : false,
-  )
-  React.useEffect(() => {
-    const mq = window.matchMedia('(min-width: 1024px)')
-    const onChange = (e: MediaQueryListEvent) => setIsLarge(e.matches)
-    try {
-      mq.addEventListener('change', onChange)
-      return () => mq.removeEventListener('change', onChange)
-    } catch {
-      mq.addListener(onChange)
-      return () => mq.removeListener(onChange)
-    }
-  }, [])
-
-  // Resize state for Companies tab: default 40% for 2fr/3fr ratio
-  const [companiesLeftWidth, setCompaniesLeftWidth] = React.useState<number>(40)
-  const [isCompaniesMinimized, setIsCompaniesMinimized] = React.useState(false)
-  const [companiesSavedWidth, setCompaniesSavedWidth] =
-    React.useState<number>(40)
-  const [isResizingCompanies, setIsResizingCompanies] = React.useState(false)
-  const companiesContainerRef = React.useRef<HTMLDivElement>(null)
-
-  // Resize state for Users tab: default 50% for 1fr/1fr ratio
-  const [usersLeftWidth, setUsersLeftWidth] = React.useState<number>(50)
-  const [isUsersMinimized, setIsUsersMinimized] = React.useState(false)
-  const [usersSavedWidth, setUsersSavedWidth] = React.useState<number>(50)
-  const [isResizingUsers, setIsResizingUsers] = React.useState(false)
-  const usersContainerRef = React.useRef<HTMLDivElement>(null)
-
-  const toggleCompaniesMinimize = React.useCallback(() => {
-    if (isCompaniesMinimized) {
-      setCompaniesLeftWidth(companiesSavedWidth || 40)
-      setIsCompaniesMinimized(false)
-    } else {
-      setCompaniesSavedWidth(companiesLeftWidth)
-      setIsCompaniesMinimized(true)
-    }
-  }, [companiesLeftWidth, companiesSavedWidth, isCompaniesMinimized])
-
-  const handleCompaniesGlowingBarClick = React.useCallback(() => {
-    if (isCompaniesMinimized) {
-      setCompaniesLeftWidth(companiesSavedWidth || 40)
-      setIsCompaniesMinimized(false)
-    }
-  }, [companiesSavedWidth, isCompaniesMinimized])
-
-  const toggleUsersMinimize = React.useCallback(() => {
-    if (isUsersMinimized) {
-      setUsersLeftWidth(usersSavedWidth || 50)
-      setIsUsersMinimized(false)
-    } else {
-      setUsersSavedWidth(usersLeftWidth)
-      setIsUsersMinimized(true)
-    }
-  }, [isUsersMinimized, usersLeftWidth, usersSavedWidth])
-
-  const handleUsersGlowingBarClick = React.useCallback(() => {
-    if (isUsersMinimized) {
-      setUsersLeftWidth(usersSavedWidth || 50)
-      setIsUsersMinimized(false)
-    }
-  }, [isUsersMinimized, usersSavedWidth])
+  const isLarge = useMediaQuery('(min-width: 1024px)')
+  const companiesPane = useLocalSplitPane({ defaultWidthPercent: 40 })
+  const usersPane = useLocalSplitPane({ defaultWidthPercent: 50 })
 
   const collapseShortcutLabel = getModShortcutLabel('B')
+  const toggleCompaniesMinimize = companiesPane.toggleMinimize
+  const toggleUsersMinimize = usersPane.toggleMinimize
   const toggleActiveMinimize = React.useCallback(() => {
     if (activeTab === 'companies') toggleCompaniesMinimize()
-    else toggleUsersMinimize()
+    else if (activeTab === 'users') toggleUsersMinimize()
   }, [activeTab, toggleCompaniesMinimize, toggleUsersMinimize])
   useModKeyShortcut({
     key: 'b',
     enabled: isLarge,
     onTrigger: toggleActiveMinimize,
   })
-
-  // Handle mouse move for resizing Companies tab
-  React.useEffect(() => {
-    if (!isResizingCompanies) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!companiesContainerRef.current) return
-      const containerRect =
-        companiesContainerRef.current.getBoundingClientRect()
-      const containerWidth = containerRect.width
-      const mouseX = e.clientX - containerRect.left
-      const minWidth = 25
-      const maxWidth = 75
-      const newWidthPercent = Math.max(
-        minWidth,
-        Math.min(maxWidth, (mouseX / containerWidth) * 100),
-      )
-      setCompaniesLeftWidth(newWidthPercent)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizingCompanies(false)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizingCompanies])
-
-  // Handle mouse move for resizing Users tab
-  React.useEffect(() => {
-    if (!isResizingUsers) return
-
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!usersContainerRef.current) return
-      const containerRect = usersContainerRef.current.getBoundingClientRect()
-      const containerWidth = containerRect.width
-      const mouseX = e.clientX - containerRect.left
-      const minWidth = 25
-      const maxWidth = 75
-      const newWidthPercent = Math.max(
-        minWidth,
-        Math.min(maxWidth, (mouseX / containerWidth) * 100),
-      )
-      setUsersLeftWidth(newWidthPercent)
-    }
-
-    const handleMouseUp = () => {
-      setIsResizingUsers(false)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseup', handleMouseUp)
-
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseup', handleMouseUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-  }, [isResizingUsers])
 
   const handleCreate = () => {
     setEditingCompany(null)
@@ -260,165 +113,31 @@ export default function SuperPage() {
     setDeletingUser(user)
   }
 
-  const deleteMutation = useMutation({
-    mutationFn: async (companyId: string) => {
-      // Delete related records first to avoid foreign key constraint violations
-      // Order matters: delete child records before parent records
-
-      // 1. Delete reserved_items, reserved_crew, reserved_vehicles (depend on time_periods)
-      // First, get all time_periods for this company's jobs
-      const { data: timePeriods } = await supabase
-        .from('time_periods')
-        .select('id')
-        .eq('company_id', companyId)
-
-      const timePeriodIds = timePeriods?.map((tp) => tp.id) ?? []
-
-      if (timePeriodIds.length > 0) {
-        const { error: riError } = await supabase
-          .from('reserved_items')
-          .delete()
-          .in('time_period_id', timePeriodIds)
-        if (riError) throw riError
-
-        const { error: rcError } = await supabase
-          .from('reserved_crew')
-          .delete()
-          .in('time_period_id', timePeriodIds)
-        if (rcError) throw rcError
-
-        const { error: rvError } = await supabase
-          .from('reserved_vehicles')
-          .delete()
-          .in('time_period_id', timePeriodIds)
-        if (rvError) throw rvError
-      }
-
-      // 2. Get all jobs for this company first (needed for time_periods and job-related data)
-      const { data: jobs } = await supabase
-        .from('jobs')
-        .select('id')
-        .eq('company_id', companyId)
-
-      const jobIds = jobs?.map((j) => j.id) ?? []
-
-      // 3. Delete time_periods (depend on jobs and company_id)
-      // Must delete before jobs to avoid broken foreign key references
-      const { error: tpError } = await supabase
-        .from('time_periods')
-        .delete()
-        .eq('company_id', companyId)
-      if (tpError) throw tpError
-
-      // 4. Delete job-related data (depend on jobs)
-      if (jobIds.length > 0) {
-        const { error: jnError } = await supabase
-          .from('job_notes')
-          .delete()
-          .in('job_id', jobIds)
-        if (jnError) throw jnError
-
-        const { error: jfError } = await supabase
-          .from('job_files')
-          .delete()
-          .in('job_id', jobIds)
-        if (jfError) throw jfError
-
-        const { error: jcError } = await supabase
-          .from('job_contacts')
-          .delete()
-          .in('job_id', jobIds)
-        if (jcError) throw jcError
-
-        const { error: jshError } = await supabase
-          .from('job_status_history')
-          .delete()
-          .in('job_id', jobIds)
-        if (jshError) throw jshError
-
-        const { error: jiError } = await supabase
-          .from('job_invoices')
-          .delete()
-          .in('job_id', jobIds)
-        if (jiError) throw jiError
-      }
-
-      // 5. Delete jobs (depend on company_id, customers, contacts, addresses)
-      const { error: jobsError } = await supabase
-        .from('jobs')
-        .delete()
-        .eq('company_id', companyId)
-      if (jobsError) throw jobsError
-
-      // 6. Delete contacts (depend on company_id and customers)
-      const { error: contactsError } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('company_id', companyId)
-      if (contactsError) throw contactsError
-
-      // 7. Delete customers (depend on company_id)
-      const { error: customersError } = await supabase
-        .from('customers')
-        .delete()
-        .eq('company_id', companyId)
-      if (customersError) throw customersError
-
-      // 8. Delete addresses (depend on company_id)
-      const { error: addressesError } = await supabase
-        .from('addresses')
-        .delete()
-        .eq('company_id', companyId)
-      if (addressesError) throw addressesError
-
-      // 9. Delete vehicles (depend on company_id)
-      const { error: vehiclesError } = await supabase
-        .from('vehicles')
-        .delete()
-        .eq('company_id', companyId)
-      if (vehiclesError) throw vehiclesError
-
-      // 10. Delete group_price_history (depends on company_id and item_groups)
-      // Note: item_groups will be cascade deleted, but we need to delete price history first
-      const { error: gphError } = await supabase
-        .from('group_price_history')
-        .delete()
-        .eq('company_id', companyId)
-      if (gphError) throw gphError
-
-      // 11. Set nullable foreign keys to null
-      // profiles.selected_company_id
-      const { error: profilesError } = await supabase
-        .from('profiles')
-        .update({ selected_company_id: null })
-        .eq('selected_company_id', companyId)
-      if (profilesError) throw profilesError
-
-      // 12. Finally, delete the company
-      // This will cascade delete:
-      // - activity_log (ON DELETE CASCADE)
-      // - company_expansions (ON DELETE CASCADE)
-      // - company_users (ON DELETE CASCADE)
-      // - item_brands (ON DELETE CASCADE)
-      // - item_categories (ON DELETE CASCADE)
-      // - item_groups (ON DELETE CASCADE)
-      // - items (ON DELETE CASCADE)
-      // - job_offers (ON DELETE CASCADE)
-      // - matters (ON DELETE CASCADE)
-      // - pending_invites (ON DELETE CASCADE)
-      const { error } = await supabase
-        .from('companies')
-        .delete()
-        .eq('id', companyId)
-
-      if (error) throw error
+  const findCompany = React.useCallback(
+    (id: string) => {
+      const companies = qc.getQueryData<Array<CompanyIndexRow>>([
+        'companies',
+        'index',
+      ])
+      return companies?.find((c) => c.id === id) ?? null
     },
+    [qc],
+  )
+
+  const findUser = React.useCallback(
+    (id: string) => {
+      const users = qc.getQueryData<Array<UserIndexRow>>(['users', 'index'])
+      return users?.find((u) => u.user_id === id) ?? null
+    },
+    [qc],
+  )
+
+  const deleteMutation = useMutation({
+    mutationFn: adminDeleteCompany,
     onMutate: async (companyId: string) => {
-      // Clear the selected ID immediately to prevent the inspector from trying to load the deleted company
       if (selectedId === companyId) {
         setSelectedId(null)
       }
-      // Remove the company from query cache to prevent loading attempts
       await qc.removeQueries({ queryKey: ['company', companyId] })
     },
     onSuccess: () => {
@@ -429,108 +148,13 @@ export default function SuperPage() {
         qc.invalidateQueries({ queryKey: ['company'] }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to delete company', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to delete company', errorMessage(e))
     },
   })
 
   const deleteUserMutation = useMutation({
-    mutationFn: async (userId: string) => {
-      // Delete related records first to avoid foreign key constraint violations
-      // Order matters: delete child records before parent records
-
-      // 1. Delete reserved_crew records (non-nullable foreign key)
-      const { error: rcError } = await supabase
-        .from('reserved_crew')
-        .delete()
-        .eq('user_id', userId)
-      if (rcError) throw rcError
-
-      // 2. Delete company_users records (user's company memberships)
-      const { error: cuError } = await supabase
-        .from('company_users')
-        .delete()
-        .eq('user_id', userId)
-      if (cuError) throw cuError
-
-      // 3. Delete matters created by the user first (created_by_user_id is NOT NULL)
-      // This should cascade delete related records (matter_files, matter_messages, etc.)
-      // if foreign keys are set up with CASCADE
-      const { error: matError } = await supabase
-        .from('matters')
-        .delete()
-        .eq('created_by_user_id', userId)
-      if (matError) throw matError
-
-      // 3b. Delete other matter-related records that reference the user
-      // (These might not be cascade-deleted if the user is not the creator)
-      const { error: mfError } = await supabase
-        .from('matter_files')
-        .delete()
-        .eq('uploaded_by_user_id', userId)
-      if (mfError) throw mfError
-
-      const { error: mmError } = await supabase
-        .from('matter_messages')
-        .delete()
-        .eq('user_id', userId)
-      if (mmError) throw mmError
-
-      const { error: mrError } = await supabase
-        .from('matter_recipients')
-        .delete()
-        .eq('user_id', userId)
-      if (mrError) throw mrError
-
-      const { error: mrespError } = await supabase
-        .from('matter_responses')
-        .delete()
-        .eq('user_id', userId)
-      if (mrespError) throw mrespError
-
-      // 4. Delete job_notes records
-      const { error: jnError } = await supabase
-        .from('job_notes')
-        .delete()
-        .eq('author_user_id', userId)
-      if (jnError) throw jnError
-
-      // 5. Set nullable foreign keys to null
-      // These won't prevent deletion but should be cleaned up
-      await supabase
-        .from('job_files')
-        .update({ uploaded_by_user_id: null })
-        .eq('uploaded_by_user_id', userId)
-
-      await supabase
-        .from('jobs')
-        .update({ project_lead_user_id: null })
-        .eq('project_lead_user_id', userId)
-
-      await supabase
-        .from('companies')
-        .update({ contact_person_id: null })
-        .eq('contact_person_id', userId)
-
-      await supabase
-        .from('time_periods')
-        .update({ reserved_by_user_id: null })
-        .eq('reserved_by_user_id', userId)
-
-      await supabase
-        .from('time_periods')
-        .update({ updated_by_user_id: null })
-        .eq('updated_by_user_id', userId)
-
-      // 6. Finally, delete from profiles table
-      // Note: In production, you may want to also delete from auth.users via Admin API
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('user_id', userId)
-
-      if (error) throw error
-    },
+    mutationFn: adminDeleteUser,
     onSuccess: () => {
       setDeletingUser(null)
       if (selectedId === deletingUser?.user_id) {
@@ -544,10 +168,17 @@ export default function SuperPage() {
         qc.invalidateQueries({ queryKey: ['company'] }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to delete user', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to delete user', errorMessage(e))
     },
   })
+
+  const tabContentStyle = {
+    flex: 1,
+    minHeight: 0,
+    display: 'flex',
+    flexDirection: 'column',
+  } as const
 
   return (
     <section
@@ -585,746 +216,108 @@ export default function SuperPage() {
             flexDirection: 'column',
           }}
         >
-          <Tabs.Content
-            value="companies"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {!isLarge ? (
-              <Grid
-                columns="1fr"
-                gap="4"
-                align="stretch"
-                style={{
-                  height: isLarge ? '100%' : undefined,
-                  minHeight: 0,
-                  flex: isLarge ? 1 : undefined,
-                }}
-              >
-                {/* LEFT: Companies table */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: isLarge ? '100%' : undefined,
-                    minHeight: 0,
+          <Tabs.Content value="companies" style={tabContentStyle}>
+            <SuperMasterDetailSplit
+              isLarge={isLarge}
+              title="Companies"
+              collapseShortcutLabel={collapseShortcutLabel}
+              pane={companiesPane}
+              listHeaderActions={
+                <Button onClick={handleCreate}>
+                  <Plus width={16} height={16} />
+                  Create
+                </Button>
+              }
+              list={
+                <CompaniesTable
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                />
+              }
+              inspector={
+                <CompanyInspector
+                  id={selectedId}
+                  onDeleted={() => setSelectedId(null)}
+                  onEdit={() => {
+                    if (!selectedId) return
+                    const company = findCompany(selectedId)
+                    if (company) {
+                      setEditingCompany(company)
+                      setDialogOpen(true)
+                    }
                   }}
-                >
-                  <Flex align="center" justify="between" mb="3">
-                    <Heading size="5">Companies</Heading>
-                    <Button onClick={handleCreate}>
-                      <Plus width={16} height={16} />
-                      Create
-                    </Button>
-                  </Flex>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: 1,
-                      minHeight: 0,
-                      overflow: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <CompaniesTable
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                    />
-                  </Box>
-                </Card>
-
-                {/* RIGHT: Inspector */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: isLarge ? '100%' : undefined,
-                    maxHeight: isLarge ? '100%' : undefined,
-                    overflow: isLarge ? 'hidden' : 'visible',
-                    minHeight: 0,
+                  onDelete={() => {
+                    if (!selectedId) return
+                    const company = findCompany(selectedId)
+                    if (company) setDeletingCompany(company)
                   }}
-                >
-                  <Heading size="5" mb="3">
-                    Inspector
-                  </Heading>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <CompanyInspector
-                      id={selectedId}
-                      onDeleted={() => setSelectedId(null)}
-                      onEdit={() => {
-                        if (selectedId) {
-                          const companies = qc.getQueryData<
-                            Array<CompanyIndexRow>
-                          >(['companies', 'index'])
-                          const company = companies?.find(
-                            (c) => c.id === selectedId,
-                          )
-                          if (company) {
-                            setEditingCompany(company)
-                            setDialogOpen(true)
-                          }
-                        }
-                      }}
-                      onDelete={() => {
-                        if (selectedId) {
-                          const companies = qc.getQueryData<
-                            Array<CompanyIndexRow>
-                          >(['companies', 'index'])
-                          const company = companies?.find(
-                            (c) => c.id === selectedId,
-                          )
-                          if (company) {
-                            setDeletingCompany(company)
-                          }
-                        }
-                      }}
-                    />
-                  </Box>
-                </Card>
-              </Grid>
-            ) : (
-              <Flex
-                ref={companiesContainerRef}
-                gap="2"
-                align="stretch"
-                style={{
-                  height: isLarge ? '100%' : undefined,
-                  minHeight: 0,
-                  position: 'relative',
-                  flex: isLarge ? 1 : undefined,
-                }}
-              >
-                {/* LEFT: Companies table */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    width: isCompaniesMinimized
-                      ? '60px'
-                      : `${companiesLeftWidth}%`,
-                    height: isLarge ? '100%' : undefined,
-                    minWidth: isCompaniesMinimized ? '60px' : '300px',
-                    maxWidth: isCompaniesMinimized ? '60px' : '75%',
-                    minHeight: 0,
-                    flexShrink: 0,
-                    transition: isResizingCompanies
-                      ? 'none'
-                      : 'width 0.1s ease-out',
-                    position: 'relative',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {isCompaniesMinimized ? (
-                    <Box
-                      onClick={handleCompaniesGlowingBarClick}
-                      onMouseEnter={(e) => {
-                        const bar = e.currentTarget.querySelector(
-                          '[data-glowing-bar]',
-                        ) as HTMLElement
-                        if (bar) bar.style.width = '24px'
-                      }}
-                      onMouseLeave={(e) => {
-                        const bar = e.currentTarget.querySelector(
-                          '[data-glowing-bar]',
-                        ) as HTMLElement
-                        if (bar) bar.style.width = '12px'
-                      }}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        cursor: 'pointer',
-                        zIndex: 1,
-                      }}
-                    >
-                      <Box
-                        data-glowing-bar
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          top: '20px',
-                          bottom: '20px',
-                          transform: 'translateX(-50%)',
-                          width: '12px',
-                          borderRadius: '4px',
-                          background:
-                            'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
-                          pointerEvents: 'none',
-                          zIndex: 5,
-                          transition: 'width 160ms ease-out',
-                          boxShadow:
-                            '0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4)',
-                        }}
-                      />
-                    </Box>
-                  ) : (
-                    <>
-                      <Flex align="center" justify="between" mb="3">
-                        <Heading size="5">Companies</Heading>
-                        <Flex align="center" gap="2">
-                          <Button onClick={handleCreate}>
-                            <Plus width={16} height={16} />
-                            Create
-                          </Button>
-                          <Tooltip
-                            content={`Collapse sidebar (${collapseShortcutLabel})`}
-                          >
-                            <IconButton
-                              className="split-header-icon-button"
-                              size="3"
-                              variant="ghost"
-                              onClick={toggleCompaniesMinimize}
-                            >
-                              <TransitionLeft width={22} height={22} />
-                            </IconButton>
-                          </Tooltip>
-                        </Flex>
-                      </Flex>
-                      <Separator size="4" mb="3" />
-                      <Box
-                        style={{
-                          flex: 1,
-                          minHeight: 0,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column',
-                        }}
-                      >
-                        <CompaniesTable
-                          selectedId={selectedId}
-                          onSelect={setSelectedId}
-                          onEdit={handleEdit}
-                          onDelete={handleDelete}
-                        />
-                      </Box>
-                    </>
-                  )}
-                </Card>
-
-                {/* RESIZER */}
-                {!isCompaniesMinimized && (
-                  <Box
-                    className="section-resizer"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setIsResizingCompanies(true)
-                    }}
-                    style={{
-                      width: '6px',
-                      height: '20%',
-                      cursor: 'col-resize',
-                      backgroundColor: 'var(--gray-a4)',
-                      borderRadius: '4px',
-                      flexShrink: 0,
-                      alignSelf: 'center',
-                      userSelect: 'none',
-                      margin: '0 -4px',
-                      zIndex: 10,
-                      transition: isResizingCompanies
-                        ? 'none'
-                        : 'background-color 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isResizingCompanies) {
-                        e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                        e.currentTarget.style.cursor = 'col-resize'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isResizingCompanies) {
-                        e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-                      }
-                    }}
-                  />
-                )}
-
-                {/* RIGHT: Inspector */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1,
-                    height: isLarge ? '100%' : undefined,
-                    maxHeight: isLarge ? '100%' : undefined,
-                    overflow: isLarge ? 'hidden' : 'visible',
-                    minWidth: '300px',
-                    minHeight: 0,
-                    transition: isResizingCompanies
-                      ? 'none'
-                      : 'flex-basis 0.1s ease-out',
-                  }}
-                >
-                  <Heading size="5" mb="3">
-                    Inspector
-                  </Heading>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <CompanyInspector
-                      id={selectedId}
-                      onDeleted={() => setSelectedId(null)}
-                      onEdit={() => {
-                        if (selectedId) {
-                          const companies = qc.getQueryData<
-                            Array<CompanyIndexRow>
-                          >(['companies', 'index'])
-                          const company = companies?.find(
-                            (c) => c.id === selectedId,
-                          )
-                          if (company) {
-                            setEditingCompany(company)
-                            setDialogOpen(true)
-                          }
-                        }
-                      }}
-                      onDelete={() => {
-                        if (selectedId) {
-                          const companies = qc.getQueryData<
-                            Array<CompanyIndexRow>
-                          >(['companies', 'index'])
-                          const company = companies?.find(
-                            (c) => c.id === selectedId,
-                          )
-                          if (company) {
-                            setDeletingCompany(company)
-                          }
-                        }
-                      }}
-                    />
-                  </Box>
-                </Card>
-              </Flex>
-            )}
+                />
+              }
+            />
           </Tabs.Content>
 
-          <Tabs.Content
-            value="users"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
-            {!isLarge ? (
-              <Grid
-                columns="1fr"
-                gap="4"
-                align="stretch"
-                style={{
-                  height: isLarge ? '100%' : undefined,
-                  minHeight: 0,
-                  flex: isLarge ? 1 : undefined,
-                }}
-              >
-                {/* LEFT: Users table */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: isLarge ? '100%' : undefined,
-                    minHeight: 0,
+          <Tabs.Content value="users" style={tabContentStyle}>
+            <SuperMasterDetailSplit
+              isLarge={isLarge}
+              title="Users"
+              collapseShortcutLabel={collapseShortcutLabel}
+              pane={usersPane}
+              list={
+                <UsersTable
+                  selectedId={selectedId}
+                  onSelect={setSelectedId}
+                  onEdit={handleEditUser}
+                  onDelete={handleDeleteUser}
+                />
+              }
+              inspector={
+                <UserInspector
+                  id={selectedId}
+                  onDeleted={() => setSelectedId(null)}
+                  onEdit={() => {
+                    if (!selectedId) return
+                    const user = findUser(selectedId)
+                    if (user) {
+                      setEditingUser(user)
+                      setUserDialogOpen(true)
+                    }
                   }}
-                >
-                  <Flex align="center" justify="between" mb="3">
-                    <Heading size="5">Users</Heading>
-                  </Flex>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: 1,
-                      minHeight: 0,
-                      overflow: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                    }}
-                  >
-                    <UsersTable
-                      selectedId={selectedId}
-                      onSelect={setSelectedId}
-                      onEdit={handleEditUser}
-                      onDelete={handleDeleteUser}
-                    />
-                  </Box>
-                </Card>
-
-                {/* RIGHT: Inspector */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: isLarge ? '100%' : undefined,
-                    maxHeight: isLarge ? '100%' : undefined,
-                    overflow: isLarge ? 'hidden' : 'visible',
-                    minHeight: 0,
+                  onDelete={() => {
+                    if (!selectedId) return
+                    const user = findUser(selectedId)
+                    if (user) setDeletingUser(user)
                   }}
-                >
-                  <Heading size="5" mb="3">
-                    Inspector
-                  </Heading>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <UserInspector
-                      id={selectedId}
-                      onDeleted={() => setSelectedId(null)}
-                      onEdit={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setEditingUser(user)
-                            setUserDialogOpen(true)
-                          }
-                        }
-                      }}
-                      onDelete={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setDeletingUser(user)
-                          }
-                        }
-                      }}
-                      onMerge={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setMergingUser(user)
-                          }
-                        }
-                      }}
-                    />
-                  </Box>
-                </Card>
-              </Grid>
-            ) : (
-              <Flex
-                ref={usersContainerRef}
-                gap="2"
-                align="stretch"
-                style={{
-                  height: isLarge ? '100%' : undefined,
-                  minHeight: 0,
-                  position: 'relative',
-                  flex: isLarge ? 1 : undefined,
-                }}
-              >
-                {/* LEFT: Users table */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    width: isUsersMinimized ? '60px' : `${usersLeftWidth}%`,
-                    height: isLarge ? '100%' : undefined,
-                    minWidth: isUsersMinimized ? '60px' : '300px',
-                    maxWidth: isUsersMinimized ? '60px' : '75%',
-                    minHeight: 0,
-                    flexShrink: 0,
-                    transition: isResizingUsers
-                      ? 'none'
-                      : 'width 0.1s ease-out',
-                    position: 'relative',
-                    overflow: 'hidden',
+                  onMerge={() => {
+                    if (!selectedId) return
+                    const user = findUser(selectedId)
+                    if (user) setMergingUser(user)
                   }}
-                >
-                  {isUsersMinimized ? (
-                    <Box
-                      onClick={handleUsersGlowingBarClick}
-                      onMouseEnter={(e) => {
-                        const bar = e.currentTarget.querySelector(
-                          '[data-glowing-bar]',
-                        ) as HTMLElement
-                        if (bar) bar.style.width = '24px'
-                      }}
-                      onMouseLeave={(e) => {
-                        const bar = e.currentTarget.querySelector(
-                          '[data-glowing-bar]',
-                        ) as HTMLElement
-                        if (bar) bar.style.width = '12px'
-                      }}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        cursor: 'pointer',
-                        zIndex: 1,
-                      }}
-                    >
-                      <Box
-                        data-glowing-bar
-                        style={{
-                          position: 'absolute',
-                          left: '50%',
-                          top: '20px',
-                          bottom: '20px',
-                          transform: 'translateX(-50%)',
-                          width: '12px',
-                          borderRadius: '4px',
-                          background:
-                            'linear-gradient(180deg, var(--accent-9), var(--accent-6))',
-                          pointerEvents: 'none',
-                          zIndex: 5,
-                          transition: 'width 160ms ease-out',
-                          boxShadow:
-                            '0 0 8px var(--accent-a5), 0 0 12px var(--accent-a4)',
-                        }}
-                      />
-                    </Box>
-                  ) : (
-                    <>
-                      <Flex align="center" justify="between" mb="3">
-                        <Heading size="5">Users</Heading>
-                        <Tooltip
-                          content={`Collapse sidebar (${collapseShortcutLabel})`}
-                        >
-                          <IconButton
-                            className="split-header-icon-button"
-                            size="3"
-                            variant="ghost"
-                            onClick={toggleUsersMinimize}
-                          >
-                            <TransitionLeft width={22} height={22} />
-                          </IconButton>
-                        </Tooltip>
-                      </Flex>
-                      <Separator size="4" mb="3" />
-                      <Box
-                        style={{
-                          flex: 1,
-                          minHeight: 0,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column',
-                        }}
-                      >
-                        <UsersTable
-                          selectedId={selectedId}
-                          onSelect={setSelectedId}
-                          onEdit={handleEditUser}
-                          onDelete={handleDeleteUser}
-                        />
-                      </Box>
-                    </>
-                  )}
-                </Card>
-
-                {/* RESIZER */}
-                {!isUsersMinimized && (
-                  <Box
-                    className="section-resizer"
-                    onMouseDown={(e) => {
-                      e.preventDefault()
-                      setIsResizingUsers(true)
-                    }}
-                    style={{
-                      width: '6px',
-                      height: '20%',
-                      cursor: 'col-resize',
-                      backgroundColor: 'var(--gray-a4)',
-                      borderRadius: '4px',
-                      flexShrink: 0,
-                      alignSelf: 'center',
-                      userSelect: 'none',
-                      margin: '0 -4px',
-                      zIndex: 10,
-                      transition: isResizingUsers
-                        ? 'none'
-                        : 'background-color 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!isResizingUsers) {
-                        e.currentTarget.style.backgroundColor = 'var(--gray-a6)'
-                        e.currentTarget.style.cursor = 'col-resize'
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isResizingUsers) {
-                        e.currentTarget.style.backgroundColor = 'var(--gray-a4)'
-                      }
-                    }}
-                  />
-                )}
-
-                {/* RIGHT: Inspector */}
-                <Card
-                  size="3"
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    flex: 1,
-                    height: isLarge ? '100%' : undefined,
-                    maxHeight: isLarge ? '100%' : undefined,
-                    overflow: isLarge ? 'hidden' : 'visible',
-                    minWidth: '300px',
-                    minHeight: 0,
-                    transition: isResizingUsers
-                      ? 'none'
-                      : 'flex-basis 0.1s ease-out',
-                  }}
-                >
-                  <Heading size="5" mb="3">
-                    Inspector
-                  </Heading>
-                  <Separator size="4" mb="3" />
-                  <Box
-                    style={{
-                      flex: isLarge ? 1 : undefined,
-                      minHeight: isLarge ? 0 : undefined,
-                      overflowY: isLarge ? 'auto' : 'visible',
-                    }}
-                  >
-                    <UserInspector
-                      id={selectedId}
-                      onDeleted={() => setSelectedId(null)}
-                      onEdit={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setEditingUser(user)
-                            setUserDialogOpen(true)
-                          }
-                        }
-                      }}
-                      onDelete={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setDeletingUser(user)
-                          }
-                        }
-                      }}
-                      onMerge={() => {
-                        if (selectedId) {
-                          const users = qc.getQueryData<Array<UserIndexRow>>([
-                            'users',
-                            'index',
-                          ])
-                          const user = users?.find(
-                            (u) => u.user_id === selectedId,
-                          )
-                          if (user) {
-                            setMergingUser(user)
-                          }
-                        }
-                      }}
-                    />
-                  </Box>
-                </Card>
-              </Flex>
-            )}
+                />
+              }
+            />
           </Tabs.Content>
 
-          <Tabs.Content
-            value="calendar"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <Tabs.Content value="calendar" style={tabContentStyle}>
             <SuperCalendarSubscriptionsTab />
           </Tabs.Content>
 
-          <Tabs.Content
-            value="email"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <Tabs.Content value="email" style={tabContentStyle}>
             <SuperEmailTab />
           </Tabs.Content>
 
-          <Tabs.Content
-            value="monitor"
-            style={{
-              flex: 1,
-              minHeight: 0,
-              display: 'flex',
-              flexDirection: 'column',
-            }}
-          >
+          <Tabs.Content value="monitor" style={tabContentStyle}>
             <SuperMonitorTab />
           </Tabs.Content>
         </Box>
       </Tabs.Root>
 
-      {/* Create/Edit Dialog */}
       <CompanyDialog
         open={dialogOpen}
         onOpenChange={(open) => {
           setDialogOpen(open)
-          if (!open) {
-            setEditingCompany(null)
-          }
+          if (!open) setEditingCompany(null)
         }}
         mode={editingCompany ? 'edit' : 'create'}
         initialData={
@@ -1347,7 +340,6 @@ export default function SuperPage() {
         }}
       />
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog.Root
         open={!!deletingCompany}
         onOpenChange={(open) => {
@@ -1382,14 +374,11 @@ export default function SuperPage() {
         </AlertDialog.Content>
       </AlertDialog.Root>
 
-      {/* User Dialog */}
       <UserDialog
         open={userDialogOpen}
         onOpenChange={(open) => {
           setUserDialogOpen(open)
-          if (!open) {
-            setEditingUser(null)
-          }
+          if (!open) setEditingUser(null)
         }}
         initialData={
           editingUser
@@ -1411,7 +400,6 @@ export default function SuperPage() {
         }}
       />
 
-      {/* Delete User Confirmation Dialog */}
       <AlertDialog.Root
         open={!!deletingUser}
         onOpenChange={(open) => {

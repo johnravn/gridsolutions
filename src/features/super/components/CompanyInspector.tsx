@@ -20,6 +20,7 @@ import { prettyPhone } from '@shared/phone/phone'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { companyUsersQuery, removeUserFromCompany } from '../api/queries'
+import { errorMessage, isNotFoundQueryError } from '../lib/errorMessage'
 import AssignUserToCompanyDialog from './AssignUserToCompanyDialog'
 import type { CompanyUserRow } from '../api/queries'
 
@@ -72,23 +73,15 @@ export default function CompanyInspector({
         }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to remove user', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to remove user', errorMessage(e))
     },
   })
 
   // If query returns no data or error (company was deleted), clear selection
   React.useEffect(() => {
     if (id && !isLoading) {
-      // Check if error is a "not found" or "single row" error (company was deleted)
-      const errorMessage = (error as any)?.message || ''
-      const isNotFoundError =
-        errorMessage.includes('Cannot coerce') ||
-        errorMessage.includes('JSON object') ||
-        errorMessage.includes('No rows returned') ||
-        errorMessage.includes('PGRST116')
-
-      if ((!data && !isError) || (isError && isNotFoundError)) {
+      if ((!data && !isError) || (isError && isNotFoundQueryError(error))) {
         onDeleted?.()
       }
     }
@@ -98,25 +91,14 @@ export default function CompanyInspector({
 
   if (isLoading) return <InspectorSkeleton />
 
-  // If error is a "not found" error (company was deleted), clear selection
-  const errorMessage = (error as any)?.message || ''
-  const isNotFoundError =
-    errorMessage.includes('Cannot coerce') ||
-    errorMessage.includes('JSON object') ||
-    errorMessage.includes('No rows returned') ||
-    errorMessage.includes('PGRST116')
-
-  if (isError && isNotFoundError) {
-    // Clear selection and show "select a company" message
-    // The useEffect will handle clearing the id, but we need to render something now
+  if (isError && isNotFoundQueryError(error)) {
     return <Text color="gray">Select a company to view details.</Text>
   }
 
   if (isError)
     return (
       <Text color="red">
-        Failed to load.{' '}
-        <Code>{(error as any)?.message || 'Unknown error'}</Code>
+        Failed to load. <Code>{errorMessage(error, 'Unknown error')}</Code>
       </Text>
     )
 

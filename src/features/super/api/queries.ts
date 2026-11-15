@@ -109,11 +109,14 @@ export function userDetailQuery({ userId }: { userId: string }) {
 
       if (!data) return null
 
-      // Normalize the address relation
-      const address =
-        (Array.isArray((data as any).primary_address)
-          ? (data as any).primary_address[0]
-          : (data as any).primary_address) ?? null
+      type AddressRow = NonNullable<UserDetail['primary_address']>
+      const rawAddress = data.primary_address as
+        | AddressRow
+        | Array<AddressRow>
+        | null
+      const address = Array.isArray(rawAddress)
+        ? (rawAddress[0] ?? null)
+        : rawAddress
 
       return {
         user_id: data.user_id,
@@ -128,13 +131,7 @@ export function userDetailQuery({ userId }: { userId: string }) {
         timezone: data.timezone ?? null,
         avatar_url: data.avatar_url ?? null,
         created_at: data.created_at,
-        preferences: (data.preferences ?? null) as {
-          date_of_birth?: string
-          drivers_license?: string
-          licenses?: Array<string>
-          certificates?: Array<string>
-          notes?: string
-        } | null,
+        preferences: (data.preferences ?? null) as UserDetail['preferences'],
         primary_address_id: data.primary_address_id ?? null,
         primary_address: address,
       }
@@ -168,11 +165,20 @@ export function userCompanyMembershipsQuery({ userId }: { userId: string }) {
 
       if (error) throw error
 
-      return data.map((row) => ({
-        company_id: row.company_id,
-        company_name: (row.companies as any).name,
-        role: row.role,
-      }))
+      return data.map((row) => {
+        const company = row.companies as
+          | { name: string }
+          | Array<{ name: string }>
+          | null
+        const companyName = Array.isArray(company)
+          ? (company[0]?.name ?? '')
+          : (company?.name ?? '')
+        return {
+          company_id: row.company_id,
+          company_name: companyName,
+          role: row.role,
+        }
+      })
     },
   }
 }

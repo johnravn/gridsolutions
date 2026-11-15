@@ -12,6 +12,7 @@ import {
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import { adminUpdateProfile } from '../api/queries'
+import { errorMessage } from '../lib/errorMessage'
 
 type FormState = {
   email: string
@@ -134,8 +135,8 @@ export default function UserDialog({
       onSaved?.()
       void qc.invalidateQueries({ queryKey: ['users'] })
     },
-    onError: (e: any) => {
-      toastError('Failed to delete user', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to delete user', errorMessage(e))
     },
   })
 

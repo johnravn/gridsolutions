@@ -73,3 +73,34 @@ export function buildLoggingJobPickerList<T extends LoggingJobPickerItem>({
     .slice(0, maxOtherJobs)
   return [...logged, ...others]
 }
+
+export function formatJobOption(
+  job: Pick<LoggingJobPickerItem, 'title' | 'jobnr' | 'start_at'>,
+  formatDate: (iso: string) => string,
+) {
+  const numberPart = job.jobnr != null ? `#${job.jobnr}` : 'Job'
+  const titlePart = job.title ? ` — ${job.title}` : ''
+  const datePart = job.start_at ? ` (${formatDate(job.start_at)})` : ''
+  return `${numberPart}${titlePart}${datePart}`
+}
+
+export function isJobOnToday(
+  job: Pick<LoggingJobPickerItem, 'start_at' | 'end_at'>,
+  now = new Date(),
+): boolean {
+  const todayStart = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime()
+  const todayEnd = todayStart + 24 * 60 * 60 * 1000 - 1
+  if (job.start_at) {
+    const t = new Date(job.start_at).getTime()
+    if (t >= todayStart && t < todayEnd) return true
+  }
+  if (job.end_at) {
+    const t = new Date(job.end_at).getTime()
+    if (t >= todayStart && t < todayEnd) return true
+  }
+  return false
+}

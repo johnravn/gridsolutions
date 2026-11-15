@@ -136,8 +136,11 @@ export default function EditTimeEntryDialog({
       onOpenChange(false)
       onSaved?.()
     },
-    onError: (e: any) => {
-      error('Failed to save', e?.message || 'Please try again.')
+    onError: (e: unknown) => {
+      error(
+        'Failed to save',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
     },
   })
 

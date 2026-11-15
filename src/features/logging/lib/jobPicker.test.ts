@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLoggingJobPickerList,
+  formatJobOption,
+  isJobOnToday,
   jobStartsWithinLoggingWindow,
   loggingJobMatchesSearch,
   loggingSearchTerm,
@@ -131,5 +133,54 @@ describe('buildLoggingJobPickerList', () => {
     })
     expect(result).toHaveLength(4)
     expect(result[0]?.id).toBe('logged')
+  })
+})
+
+describe('formatJobOption', () => {
+  it('formats number, title, and date', () => {
+    expect(
+      formatJobOption(
+        {
+          id: '1',
+          title: 'Load-in',
+          jobnr: 42,
+          start_at: '2026-06-15T12:00:00.000Z',
+          end_at: null,
+        },
+        () => '15. jun 2026',
+      ),
+    ).toBe('#42 — Load-in (15. jun 2026)')
+  })
+})
+
+describe('isJobOnToday', () => {
+  it('returns true when start is today', () => {
+    expect(
+      isJobOnToday(
+        {
+          id: '1',
+          title: 'Today',
+          jobnr: null,
+          start_at: new Date(2026, 5, 15, 10).toISOString(),
+          end_at: null,
+        },
+        new Date(2026, 5, 15, 12),
+      ),
+    ).toBe(true)
+  })
+
+  it('returns false when outside today', () => {
+    expect(
+      isJobOnToday(
+        {
+          id: '1',
+          title: 'Yesterday',
+          jobnr: null,
+          start_at: new Date(2026, 5, 14, 10).toISOString(),
+          end_at: null,
+        },
+        new Date(2026, 5, 15, 12),
+      ),
+    ).toBe(false)
   })
 })

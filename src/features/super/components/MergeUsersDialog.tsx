@@ -8,8 +8,8 @@ import {
   Text,
   TextField,
 } from '@radix-ui/themes'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import { mergeUsers } from '../api/adminDeletes'
 import { usersIndexQuery } from '../api/queries'
 
 type Props = {
@@ -50,11 +50,7 @@ export default function MergeUsersDialog({
       if (!absorbUserId || !keepUserId) {
         throw new Error('Select the account to keep')
       }
-      const { error } = await supabase.rpc('merge_users', {
-        p_keep_user_id: keepUserId,
-        p_absorb_user_id: absorbUserId,
-      })
-      if (error) throw error
+      await mergeUsers({ keepUserId, absorbUserId })
     },
     onSuccess: async () => {
       onOpenChange(false)

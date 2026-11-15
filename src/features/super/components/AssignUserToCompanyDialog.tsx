@@ -11,6 +11,7 @@ import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
 import { assignUserToCompany, companyUsersQuery } from '../api/queries'
+import { errorMessage } from '../lib/errorMessage'
 
 type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 
@@ -122,8 +123,8 @@ export default function AssignUserToCompanyDialog({
         }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to assign user', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to assign user', errorMessage(e))
     },
   })
 

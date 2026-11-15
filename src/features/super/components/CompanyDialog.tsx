@@ -11,6 +11,7 @@ import { applyFuzzySearch } from '@shared/api/fuzzySearch'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { fmtVAT } from '@shared/lib/generalFunctions'
 import { supabase } from '@shared/api/supabase'
+import { errorMessage } from '../lib/errorMessage'
 
 type FormState = {
   name: string
@@ -241,8 +242,8 @@ export default function CompanyDialog({
       onSaved?.()
       void qc.invalidateQueries({ queryKey: ['companies'] })
     },
-    onError: (e: any) => {
-      toastError('Failed to create company', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to create company', errorMessage(e))
     },
   })
 
@@ -283,8 +284,8 @@ export default function CompanyDialog({
         }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Failed to update company', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError('Failed to update company', errorMessage(e))
     },
   })
 

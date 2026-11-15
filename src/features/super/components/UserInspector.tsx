@@ -15,6 +15,7 @@ import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import { userCompanyMembershipsQuery, userDetailQuery } from '../api/queries'
+import { errorMessage } from '../lib/errorMessage'
 
 export default function UserInspector({
   id,
@@ -58,8 +59,7 @@ export default function UserInspector({
   if (isError)
     return (
       <Text color="red">
-        Failed to load.{' '}
-        <Code>{(error as any)?.message || 'Unknown error'}</Code>
+        Failed to load. <Code>{errorMessage(error, 'Unknown error')}</Code>
       </Text>
     )
 

@@ -25,10 +25,13 @@ export default function DemoPage() {
 
         await enterDemo()
         if (cancelled) return
-        await qc.invalidateQueries({ queryKey: ['auth', 'user'] })
-        await qc.invalidateQueries({ queryKey: ['my-companies'] })
-        await qc.invalidateQueries({ queryKey: ['profile'] })
-        await qc.invalidateQueries({ queryKey: ['authz'] })
+        // Keep keys in sync with useDemoMode / authz consumers after enter_demo
+        await Promise.all([
+          qc.invalidateQueries({ queryKey: ['auth', 'user'] }),
+          qc.invalidateQueries({ queryKey: ['my-companies'] }),
+          qc.invalidateQueries({ queryKey: ['profile'] }),
+          qc.invalidateQueries({ queryKey: ['authz'] }),
+        ])
         navigate({ to: '/dashboard' })
       } catch (err) {
         if (cancelled) return
