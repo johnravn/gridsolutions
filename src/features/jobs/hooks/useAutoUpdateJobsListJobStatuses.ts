@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
+import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   getScheduledJobStatusTransition,
   persistJobStatusTransition,
 } from '../utils/jobStatusAutoTransition'
+import { reportAutoStatusFailure } from '../utils/reportAutoStatusFailure'
 import type { JobListRow } from '../types'
 
 const TICK_MS = 60_000
@@ -18,6 +20,7 @@ export function useAutoUpdateJobsListJobStatuses(
   enabled: boolean,
 ) {
   const qc = useQueryClient()
+  const { error: toastError } = useToast()
   const tickInFlightRef = useRef(false)
   const jobsRef = useRef(jobs)
   jobsRef.current = jobs
@@ -55,11 +58,7 @@ export function useAutoUpdateJobsListJobStatuses(
           try {
             await persistJobStatusTransition(jobId, newStatus)
           } catch (e) {
-            console.error(
-              '[jobs list] auto status transition failed',
-              jobId,
-              e instanceof Error ? e.message : e,
-            )
+            reportAutoStatusFailure(`jobs list:${jobId}`, e, toastError)
           }
         }
         if (transitions.length > 0) {
@@ -73,5 +72,5 @@ export function useAutoUpdateJobsListJobStatuses(
     void runTick()
     const id = window.setInterval(() => void runTick(), TICK_MS)
     return () => window.clearInterval(id)
-  }, [enabled, qc, relevantKey])
+  }, [enabled, qc, relevantKey, toastError])
 }

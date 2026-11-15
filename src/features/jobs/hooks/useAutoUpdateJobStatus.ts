@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   getScheduledJobStatusTransition,
   persistJobStatusTransition,
 } from '../utils/jobStatusAutoTransition'
+import { reportAutoStatusFailure } from '../utils/reportAutoStatusFailure'
 import type { JobDetail } from '../types'
 
 /**
@@ -13,6 +15,7 @@ import type { JobDetail } from '../types'
  */
 export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
   const qc = useQueryClient()
+  const { error: toastError } = useToast()
   const updateIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const updateStatus = useMutation({
@@ -31,11 +34,7 @@ export function useAutoUpdateJobStatus(job: JobDetail | null | undefined) {
       // Don't show toast for auto-updates to avoid spam
     },
     onError: (err: unknown) => {
-      // Silent error - don't spam user with auto-update failures
-      console.error(
-        'Auto-update job status failed:',
-        err instanceof Error ? err.message : err,
-      )
+      reportAutoStatusFailure('job detail', err, toastError)
     },
   })
 

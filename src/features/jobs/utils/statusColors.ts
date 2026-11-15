@@ -74,6 +74,23 @@ export function getJobStatusColor(status: JobStatus): RadixBadgeColor {
 }
 
 /**
+ * Freelancers must not see billing statuses past completed.
+ * Single owner for list, inspector header, and overview timeline.
+ */
+export function maskJobStatusForRole(
+  status: JobStatus,
+  companyRole: string | null,
+): JobStatus {
+  if (
+    companyRole === 'freelancer' &&
+    (status === 'invoiced' || status === 'paid')
+  ) {
+    return 'completed'
+  }
+  return status
+}
+
+/**
  * Type-safe record of all status colors
  */
 export const JOB_STATUS_COLORS: Record<JobStatus, RadixBadgeColor> = {

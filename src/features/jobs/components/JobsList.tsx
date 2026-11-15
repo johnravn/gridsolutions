@@ -58,7 +58,9 @@ import {
 } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { filterScopedRecurringMemberJobs } from '../utils/filterScopedRecurringMemberJobs'
-import { getJobStatusColor } from '../utils/statusColors'
+import { jobsListEmptyMessage } from '../utils/jobsListEmptyMessage'
+import { getJobStatusColor, maskJobStatusForRole } from '../utils/statusColors'
+import { resolveJobsIndexListArgs } from '../utils/resolveJobsIndexListArgs'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
@@ -71,16 +73,6 @@ import type {
   JobsListScope,
   JobsPageSelection,
 } from '../types'
-
-function getDisplayStatus(
-  status: JobStatus,
-  companyRole: string | null,
-): JobStatus {
-  if (companyRole === 'freelancer') {
-    if (status === 'invoiced' || status === 'paid') return 'completed'
-  }
-  return status
-}
 
 type SortBy = 'title' | 'start_at' | 'status' | 'customer_name'
 type SortDir = 'asc' | 'desc'
@@ -173,6 +165,15 @@ export default function JobsList({
   const selectedRecurringJobId =
     selection?.kind === 'recurring_job' ? selection.id : null
 
+  const indexListArgs = resolveJobsIndexListArgs({
+    companyRole,
+    showJobsInRecurringSeries,
+    readyToInvoiceFilter,
+    showMyJobsOnly,
+    statusFilter,
+    userId,
+  })
+
   const jobsQuery = useInfiniteQuery({
     ...jobsIndexInfiniteQuery({
       companyId: companyId ?? '__none__',
@@ -184,17 +185,9 @@ export default function JobsList({
       userId,
       companyRole,
       showOnlyArchived,
-      projectLeadUserId: readyToInvoiceFilter ? userId : null,
-      statuses: readyToInvoiceFilter
-        ? ['completed']
-        : statusFilter.length > 0
-          ? statusFilter
-          : null,
-      includeRecurringMembers:
-        companyRole === 'freelancer' ||
-        showJobsInRecurringSeries ||
-        readyToInvoiceFilter ||
-        showMyJobsOnly,
+      projectLeadUserId: indexListArgs.projectLeadUserId,
+      statuses: indexListArgs.statuses,
+      includeRecurringMembers: indexListArgs.includeRecurringMembers,
       onlyJobIds,
     }),
     enabled: !!companyId && !listScope && !waitingForMyJobIds,
@@ -640,9 +633,10 @@ export default function JobsList({
             <IndexTableBodySkeleton rowCount={6} rowHeight={88} />
           ) : scopedMemberRows.length === 0 ? (
             <Text size="2" color="gray">
-              {(scopedRecurringDetail?.jobs?.length ?? 0) === 0
-                ? 'No jobs in this series'
-                : 'No jobs match your filters'}
+              {jobsListEmptyMessage({
+                scoped: true,
+                hasFilter: (scopedRecurringDetail?.jobs?.length ?? 0) > 0,
+              })}
             </Text>
           ) : (
             <Flex
@@ -755,9 +749,10 @@ export default function JobsList({
               ) : scopedMemberRows.length === 0 ? (
                 <Flex align="center" justify="center" py="6">
                   <Text size="2" color="gray">
-                    {(scopedRecurringDetail?.jobs?.length ?? 0) === 0
-                      ? 'No jobs in this series'
-                      : 'No jobs match your filters'}
+                    {jobsListEmptyMessage({
+                      scoped: true,
+                      hasFilter: (scopedRecurringDetail?.jobs?.length ?? 0) > 0,
+                    })}
                   </Text>
                 </Flex>
               ) : (
@@ -895,9 +890,10 @@ export default function JobsList({
             !hasNextPage &&
             (hideRecurringPins || searchRecurringHits.length === 0) ? (
             <Text size="2" color="gray">
-              {allData.length === 0 && !hideRecurringPins
-                ? 'No jobs yet'
-                : 'No jobs match your filters'}
+              {jobsListEmptyMessage({
+                scoped: false,
+                hasFilter: !(allData.length === 0 && !hideRecurringPins),
+              })}
             </Text>
           ) : (
             <Flex
@@ -1171,9 +1167,10 @@ export default function JobsList({
               (hideRecurringPins || searchRecurringHits.length === 0) ? (
               <Flex align="center" justify="center" py="6">
                 <Text size="2" color="gray">
-                  {allData.length === 0 && !hideRecurringPins
-                    ? 'No jobs yet'
-                    : 'No jobs match your filters'}
+                  {jobsListEmptyMessage({
+                    scoped: false,
+                    hasFilter: !(allData.length === 0 && !hideRecurringPins),
+                  })}
                 </Text>
               </Flex>
             ) : (
@@ -1213,7 +1210,7 @@ export default function JobsList({
 
                   const job = rows[virtualRow.index]
                   const isSelected = job.id === selectedJobId
-                  const displayStatus = getDisplayStatus(
+                  const displayStatus = maskJobStatusForRole(
                     job.status,
                     companyRole,
                   )
@@ -1564,7 +1561,7 @@ function JobIndexRow({
   compact?: boolean
   searchQuery?: string
 }) {
-  const displayStatus = getDisplayStatus(job.status, companyRole)
+  const displayStatus = maskJobStatusForRole(job.status, companyRole)
   const isCanceled = job.status === 'canceled'
   const showCrewBadge = !isCanceled && (myRole === 'crew' || myRole === 'both')
   const customerName =

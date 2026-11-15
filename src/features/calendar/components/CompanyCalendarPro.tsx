@@ -29,7 +29,12 @@ import { useAuthz } from '@shared/auth/useAuthz'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { eventHasPendingInviteLabel } from '@features/calendar/api/crewCalendarVisibility'
-import { applyCalendarFilter } from './domain'
+import {
+  CALENDAR_TIME_ZONE,
+  applyCalendarFilter,
+  getCalendarExtendedProps,
+  isJobDurationTitle,
+} from './domain'
 import type { CalendarFilter, CalendarKind } from './domain'
 import type {
   EventApi,
@@ -72,7 +77,7 @@ function getRadixColorsForPeriod(
 } {
   const t = (title || '').toLowerCase()
 
-  if (t.includes('job duration'))
+  if (isJobDurationTitle(title))
     return {
       bg: 'var(--blue-a6)',
       border: 'var(--blue-a8)',
@@ -165,26 +170,7 @@ function snapshotOverflowEvent(
   event: EventApi,
   opts: { viewerUserId?: string | null; focusUserId?: string | null },
 ): OverflowEvent {
-  const props = event.extendedProps as {
-    projectLead?: {
-      display_name: string | null
-      email: string
-      avatar_url: string | null
-    } | null
-    jobTitle?: string
-    status?: string
-    category?:
-      | 'program'
-      | 'equipment'
-      | 'crew'
-      | 'transport'
-      | 'personal'
-      | null
-    ref?: { jobId?: string; userId?: string }
-    kind?: string
-    notes?: string
-    pendingInviteUserIds?: Array<string>
-  }
+  const props = getCalendarExtendedProps(event)
   const projectLead = props.projectLead
   const isCanceled = props.status === 'canceled'
   const isPendingInvite = eventHasPendingInviteLabel({
@@ -226,20 +212,16 @@ function snapshotOverflowEvent(
 
 type Props = {
   events: Array<EventInput>
-  onCreate?: (e: {
-    title: string
-    start: string
-    end?: string
-    allDay: boolean
-    context?: any
-  }) => void
-  onUpdate?: (id: string, patch: Partial<EventInput>) => void
-  onDelete?: (id: string) => void
   defaultKinds?: Array<CalendarKind>
   // Optional: controlled filter from outside
   initialScope?: CalendarFilter['scope']
-  // Hide the create booking button
+  // Hide the built-in filter / create controls
   hideCreateButton?: boolean
+  /**
+   * Parent already applied kind/scope filters (orthogonal to hideCreateButton).
+   * When true, skip applyCalendarFilter so UI chrome changes don't alter data.
+   */
+  eventsAlreadyFiltered?: boolean
   onPersonalEventClick?: (event: {
     id: string
     title: string
@@ -259,12 +241,10 @@ type Props = {
 
 export default function CompanyCalendarPro({
   events,
-  onCreate: _onCreate,
-  onUpdate: _onUpdate,
-  onDelete: _onDelete,
   defaultKinds = ['job'],
   initialScope,
   hideCreateButton = false,
+  eventsAlreadyFiltered = false,
   onPersonalEventClick,
   initialListMode = false,
   onListModeChange,
@@ -356,20 +336,18 @@ export default function CompanyCalendarPro({
   }, [initialScope, scopeKind, scopeId])
 
   const filtered = React.useMemo(() => {
-    // When hideCreateButton is true, events are already filtered by parent
-    // Only apply additional filters if controls are visible
-    if (hideCreateButton) {
+    if (eventsAlreadyFiltered) {
       return events
     }
     return applyCalendarFilter(events, { kinds, scope, text: query })
-  }, [events, kinds, scope, query, hideCreateButton])
+  }, [events, kinds, scope, query, eventsAlreadyFiltered])
 
   const coloredEvents = React.useMemo(
     () =>
       filtered.map((event) => {
-        const props = event.extendedProps as any
-        const category = props?.category
-        const status = props?.status
+        const props = getCalendarExtendedProps(event)
+        const category = props.category
+        const status = props.status
         const title = event.title || ''
         const isCanceled = status === 'canceled'
         const colors = isCanceled
@@ -421,15 +399,9 @@ export default function CompanyCalendarPro({
   }
 
   function openJobFromEvent(event: EventApi) {
-    const extendedProps = event.extendedProps as any
-    const jobId = extendedProps?.ref?.jobId as string | undefined
-    const category = extendedProps?.category as
-      | 'program'
-      | 'equipment'
-      | 'crew'
-      | 'transport'
-      | null
-      | undefined
+    const extendedProps = getCalendarExtendedProps(event)
+    const jobId = extendedProps.ref?.jobId
+    const category = extendedProps.category
 
     if (jobId) {
       const tab = getTabForCategory(category)
@@ -441,11 +413,7 @@ export default function CompanyCalendarPro({
   }
 
   function handleEventClick(arg: EventClickArg) {
-    const xp = arg.event.extendedProps as {
-      kind?: string
-      notes?: string
-      ref?: { userId?: string }
-    }
+    const xp = getCalendarExtendedProps(arg.event)
     if (xp.kind === 'personal' && xp.ref?.userId && onPersonalEventClick) {
       onPersonalEventClick({
         id: arg.event.id,
@@ -581,29 +549,17 @@ export default function CompanyCalendarPro({
 
   // Compact event UI (time xx:xx, job title). Hover shows HoverCard with details.
   function renderEvent(arg: EventContentArg) {
-    const props = arg.event.extendedProps as any
-    const projectLead = props?.projectLead as
-      | {
-          user_id: string
-          display_name: string | null
-          email: string
-          avatar_url: string | null
-        }
-      | null
-      | undefined
-    const jobTitle = props?.jobTitle as string | undefined
-    const status = props?.status as string | undefined
-    const category = props?.category as string | undefined
-    const crewUserIds = (props?.crewUserIds as Array<string> | undefined) || []
-    const crewStatusByUserId =
-      (props?.crewStatusByUserId as Record<string, string> | undefined) || {}
-    const jobCrewUserIds =
-      (props?.jobCrewUserIds as Array<string> | undefined) || []
-    const jobCrewStatusByUserId =
-      (props?.jobCrewStatusByUserId as Record<string, string> | undefined) || {}
-    const pendingInviteUserIds =
-      (props?.pendingInviteUserIds as Array<string> | undefined) || []
-    const ref = props?.ref as { userId?: string } | undefined
+    const props = getCalendarExtendedProps(arg.event)
+    const projectLead = props.projectLead
+    const jobTitle = props.jobTitle
+    const status = props.status
+    const category = props.category
+    const crewUserIds = props.crewUserIds || []
+    const crewStatusByUserId = props.crewStatusByUserId || {}
+    const jobCrewUserIds = props.jobCrewUserIds || []
+    const jobCrewStatusByUserId = props.jobCrewStatusByUserId || {}
+    const pendingInviteUserIds = props.pendingInviteUserIds || []
+    const ref = props.ref
 
     const isPendingInvite = eventHasPendingInviteLabel({
       category,
@@ -838,7 +794,7 @@ export default function CompanyCalendarPro({
             </Text>
             <Select.Root
               value={scopeKind}
-              onValueChange={(v) => setScopeKind(v as any)}
+              onValueChange={(v) => setScopeKind(v as 'none' | CalendarKind)}
             >
               <Select.Trigger placeholder="Scope kind" />
               <Select.Content>
@@ -913,7 +869,7 @@ export default function CompanyCalendarPro({
             plugins={CALENDAR_PLUGINS}
             initialView="dayGridMonth"
             headerToolbar={isSmallScreen ? MONTH_ONLY_HEADER : CALENDAR_HEADER}
-            timeZone="Europe/Oslo"
+            timeZone={CALENDAR_TIME_ZONE}
             locale={enLocale}
             selectable={false}
             editable={false}
@@ -941,7 +897,7 @@ export default function CompanyCalendarPro({
               listWeek: 'week',
               listDay: 'day',
             }}
-            timeZone="Europe/Oslo"
+            timeZone={CALENDAR_TIME_ZONE}
             locale={enLocale}
             eventClick={handleEventClick}
             eventContent={renderEvent}

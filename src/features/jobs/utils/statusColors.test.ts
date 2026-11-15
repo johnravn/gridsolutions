@@ -3,6 +3,7 @@ import {
   getJobStatusColor,
   getStatusTimelineColors,
   JOB_STATUS_COLORS,
+  maskJobStatusForRole,
 } from './statusColors'
 import type { JobStatus } from '../types'
 
@@ -43,5 +44,19 @@ describe('getStatusTimelineColors', () => {
       expect(colors.text).toMatch(/^var\(--/)
       expect(colors.dotBg).toMatch(/^var\(--/)
     }
+  })
+})
+
+describe('maskJobStatusForRole', () => {
+  it('masks invoiced and paid as completed for freelancers', () => {
+    expect(maskJobStatusForRole('invoiced', 'freelancer')).toBe('completed')
+    expect(maskJobStatusForRole('paid', 'freelancer')).toBe('completed')
+    expect(maskJobStatusForRole('confirmed', 'freelancer')).toBe('confirmed')
+  })
+
+  it('leaves billing statuses visible for other roles', () => {
+    expect(maskJobStatusForRole('invoiced', 'employee')).toBe('invoiced')
+    expect(maskJobStatusForRole('paid', 'owner')).toBe('paid')
+    expect(maskJobStatusForRole('paid', null)).toBe('paid')
   })
 })

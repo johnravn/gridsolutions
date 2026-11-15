@@ -21,13 +21,7 @@ import {
   profileHomeLayoutQuery,
 } from '@features/home/api/profileHomeLayoutQuery'
 import { resolveMyJobRole } from '@features/home/utils/resolveMyJobRole'
-import {
-  crewConflictsQuery,
-  equipmentConflictsQuery,
-  groupConflictsQuery,
-  vehicleConflictsQuery,
-} from '@features/conflicts/api/queries'
-import { conflictAttentionBounds } from '@features/conflicts/utils/conflictAttentionBounds'
+import { useCompanyConflictBundle } from '@features/conflicts/hooks/useCompanyConflictBundle'
 import {
   filterCrewConflictsByProjectLead,
   filterEquipmentConflictsByProjectLead,
@@ -213,17 +207,6 @@ export default function HomePage() {
     ...homeUnreadMattersQuery(userId),
   })
 
-  // Bound conflict RPCs to the attention window (ongoing / upcoming), not full history.
-  const { conflictFrom, conflictTo, attentionNow } = React.useMemo(() => {
-    void companyId
-    const bounds = conflictAttentionBounds()
-    return {
-      conflictFrom: bounds.from,
-      conflictTo: bounds.to,
-      attentionNow: bounds.attentionNow,
-    }
-  }, [companyId])
-
   const { data: projectLeadJobIds = [], isSuccess: projectLeadJobIdsLoaded } =
     useQuery({
       ...projectLeadJobIdsQuery({
@@ -236,56 +219,14 @@ export default function HomePage() {
   const shouldFetchConflicts =
     !!companyId && projectLeadJobIdsLoaded && projectLeadJobIds.length > 0
 
-  const { data: crewConflicts = [], isLoading: crewConflictsLoading } =
-    useQuery({
-      ...crewConflictsQuery({
-        companyId: companyId ?? '',
-        from: conflictFrom,
-        to: conflictTo,
-      }),
-      enabled: shouldFetchConflicts,
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })
-  const { data: vehicleConflicts = [], isLoading: vehicleConflictsLoading } =
-    useQuery({
-      ...vehicleConflictsQuery({
-        companyId: companyId ?? '',
-        from: conflictFrom,
-        to: conflictTo,
-      }),
-      enabled: shouldFetchConflicts,
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })
   const {
-    data: equipmentConflicts = [],
-    isLoading: equipmentConflictsLoading,
-  } = useQuery({
-    ...equipmentConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: shouldFetchConflicts,
-    staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-  })
-  const { data: groupConflicts = [], isLoading: groupConflictsLoading } =
-    useQuery({
-      ...groupConflictsQuery({
-        companyId: companyId ?? '',
-        from: conflictFrom,
-        to: conflictTo,
-      }),
-      enabled: shouldFetchConflicts,
-      staleTime: 5 * 60 * 1000,
-      refetchOnWindowFocus: false,
-      refetchOnReconnect: false,
-    })
+    attentionNow,
+    crewConflicts,
+    vehicleConflicts,
+    equipmentConflicts,
+    groupConflicts,
+    isLoading: conflictsLoading,
+  } = useCompanyConflictBundle({ enabled: shouldFetchConflicts })
 
   const filteredCrewConflicts = React.useMemo(
     () =>
@@ -325,13 +266,6 @@ export default function HomePage() {
       ),
     [groupConflicts, projectLeadJobIds, attentionNow],
   )
-
-  const conflictsLoading =
-    shouldFetchConflicts &&
-    (crewConflictsLoading ||
-      vehicleConflictsLoading ||
-      equipmentConflictsLoading ||
-      groupConflictsLoading)
 
   const getInitials = getInitialsFromNameOrEmail
 

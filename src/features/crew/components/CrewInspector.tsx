@@ -698,12 +698,7 @@ export default function CrewInspector({
       <Separator my="2" />
 
       {/* Calendar */}
-      <InspectorCalendar
-        events={events}
-        onCreate={() => {}}
-        onUpdate={() => {}}
-        onDelete={() => {}}
-      />
+      <InspectorCalendar events={events} />
     </Box>
   )
 }

@@ -29,6 +29,7 @@ import { logActivity } from '@features/latest/api/queries'
 import {
   getJobStatusColor,
   getStatusTimelineColors,
+  maskJobStatusForRole,
 } from '@features/jobs/utils/statusColors'
 import AddressDialog from '../dialogs/AddressDialog'
 import ContactDialog from '../dialogs/ContactDialog'
@@ -60,20 +61,6 @@ const STATUS_COLORS: Record<
   invoiced: getStatusTimelineColors('invoiced'),
   paid: getStatusTimelineColors('paid'),
   canceled: getStatusTimelineColors('canceled'),
-}
-
-// Helper function to mask status for freelancers
-function getDisplayStatus(
-  status: JobStatus,
-  companyRole: string | null,
-): JobStatus {
-  if (companyRole === 'freelancer') {
-    // Freelancers should not see statuses beyond 'completed'
-    if (status === 'invoiced' || status === 'paid') {
-      return 'completed'
-    }
-  }
-  return status
 }
 
 const OverviewTab = ({ job }: { job: JobDetail }) => {
@@ -342,7 +329,7 @@ function JobStatusTimeline({
   const { success, error } = useToast()
   const { companyRole } = useAuthz()
   const { isReadOnly: cannotWrite } = useCompanyWriteAccess()
-  const displayStatus = getDisplayStatus(currentStatus, companyRole)
+  const displayStatus = maskJobStatusForRole(currentStatus, companyRole)
   const isCanceled = displayStatus === 'canceled'
   const [showArchivePrompt, setShowArchivePrompt] = React.useState(false)
 

@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useLocation } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompany } from '@shared/companies/CompanyProvider'
@@ -16,23 +16,12 @@ import {
   SplitPageSkeleton,
   useSplitLayout,
 } from '@app/layout/split'
-import {
-  crewConflictsQuery,
-  equipmentConflictsQuery,
-  groupConflictsQuery,
-  vehicleConflictsQuery,
-} from '../api/queries'
 import ConflictInspector from '../components/ConflictInspector'
 import ConflictsFilter from '../components/ConflictsFilter'
 import ConflictsList from '../components/ConflictsList'
-import { conflictAttentionBounds } from '../utils/conflictAttentionBounds'
-import {
-  keepAttentionEquipmentConflicts,
-  keepAttentionPairConflicts,
-} from '../utils/filterConflictsByProjectLead'
+import { useCompanyConflictBundle } from '../hooks/useCompanyConflictBundle'
 import {
   DEFAULT_CONFLICT_LIST_FILTERS,
-  buildConflictCards,
   filterConflictItems,
   sortConflictItems,
 } from '../utils/conflictItems'
@@ -41,8 +30,9 @@ import type { ConflictListFilters } from '../utils/conflictItems'
 export default function ConflictsPage() {
   const { companyId } = useCompany()
   const { userId } = useAuthz()
-  const { isLarge, hasSlots } = useSplitLayout()
+  const navigate = useNavigate()
   const location = useLocation()
+  const { isLarge, hasSlots } = useSplitLayout()
   const search = location.search as { conflictId?: string }
   const conflictId = search.conflictId
   const [selectedId, setSelectedId] = React.useState<string | null>(
@@ -55,9 +45,7 @@ export default function ConflictsPage() {
   )
 
   React.useEffect(() => {
-    if (conflictId) {
-      setSelectedId(conflictId)
-    }
+    setSelectedId(conflictId || null)
   }, [conflictId])
 
   const openedFromUrlRef = React.useRef<string | null>(null)
@@ -68,56 +56,32 @@ export default function ConflictsPage() {
     openDrawer()
   }, [conflictId, isLarge, openDrawer])
 
+  const writeSelection = React.useCallback(
+    (id: string | null) => {
+      setSelectedId(id)
+      void navigate({
+        to: '/conflicts',
+        search: { conflictId: id ?? undefined },
+        replace: true,
+      })
+    },
+    [navigate],
+  )
+
   const handleSelect = React.useCallback(
     (id: string) => {
-      setSelectedId(id)
+      writeSelection(id)
       openDrawer()
     },
-    [openDrawer],
+    [openDrawer, writeSelection],
   )
 
   const {
-    from: conflictFrom,
-    to: conflictTo,
     attentionNow,
-  } = React.useMemo(() => {
-    void companyId
-    return conflictAttentionBounds()
-  }, [companyId])
+    attentionCards: items,
+    isLoading: conflictsLoading,
+  } = useCompanyConflictBundle({ enabled: !!companyId })
 
-  const { data: crewConflicts = [], isLoading: crewLoading } = useQuery({
-    ...crewConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: !!companyId,
-  })
-  const { data: vehicleConflicts = [], isLoading: vehicleLoading } = useQuery({
-    ...vehicleConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: !!companyId,
-  })
-  const { data: equipmentConflicts = [], isLoading: equipmentLoading } =
-    useQuery({
-      ...equipmentConflictsQuery({
-        companyId: companyId ?? '',
-        from: conflictFrom,
-        to: conflictTo,
-      }),
-      enabled: !!companyId,
-    })
-  const { data: groupConflicts = [], isLoading: groupLoading } = useQuery({
-    ...groupConflictsQuery({
-      companyId: companyId ?? '',
-      from: conflictFrom,
-      to: conflictTo,
-    }),
-    enabled: !!companyId,
-  })
   const { data: projectLeadJobIds = [] } = useQuery({
     ...projectLeadJobIdsQuery({
       companyId: companyId ?? '',
@@ -126,24 +90,8 @@ export default function ConflictsPage() {
     enabled: !!companyId && !!userId,
   })
 
-  const conflictsLoading =
-    crewLoading || vehicleLoading || equipmentLoading || groupLoading
   const showInitialSkeleton = useInitialPageLoad(conflictsLoading)
 
-  const items = React.useMemo(() => {
-    return buildConflictCards(
-      keepAttentionPairConflicts(crewConflicts, attentionNow),
-      keepAttentionPairConflicts(vehicleConflicts, attentionNow),
-      keepAttentionEquipmentConflicts(equipmentConflicts, attentionNow),
-      keepAttentionPairConflicts(groupConflicts, attentionNow),
-    )
-  }, [
-    crewConflicts,
-    vehicleConflicts,
-    equipmentConflicts,
-    groupConflicts,
-    attentionNow,
-  ])
   const visibleItems = React.useMemo(
     () =>
       sortConflictItems(filterConflictItems(items, filters, projectLeadJobIds)),
@@ -184,7 +132,7 @@ export default function ConflictsPage() {
     <ConflictsList
       items={visibleItems}
       selectedId={selectedId}
-      onSelect={isLarge ? setSelectedId : handleSelect}
+      onSelect={isLarge ? writeSelection : handleSelect}
       loading={conflictsLoading && !showInitialSkeleton}
       toolbarExtra={isLarge ? undefined : filter}
       projectLeadJobIds={projectLeadJobIds}

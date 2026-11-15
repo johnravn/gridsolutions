@@ -7,6 +7,7 @@ import nbLocale from '@fullcalendar/core/locales/nb'
 import timeGridPlugin from '@fullcalendar/timegrid'
 import listPlugin from '@fullcalendar/list'
 import interactionPlugin from '@fullcalendar/interaction'
+import { CALENDAR_TIME_ZONE, getCalendarExtendedProps } from './domain'
 import type {
   DateSelectArg,
   EventClickArg,
@@ -43,10 +44,13 @@ export default function InspectorCalendar({
   const [currentDate, setCurrentDate] = React.useState<Date>(new Date())
   const calendarRef = React.useRef<any>(null)
 
+  const canMutate = Boolean(onCreate || onUpdate || onDelete)
+
   function handleSelect(sel: DateSelectArg) {
+    if (!onCreate) return
     const title = window.prompt('New booking title?')
     if (!title) return
-    onCreate?.({
+    onCreate({
       title,
       start: sel.startStr,
       end: sel.endStr,
@@ -55,6 +59,7 @@ export default function InspectorCalendar({
   }
 
   function handleEventClick(arg: EventClickArg) {
+    if (!onUpdate && !onDelete) return
     const { id, title } = arg.event
     const action = window.prompt('Edit title, or type "delete"', title || '')
     if (!action) return
@@ -64,9 +69,7 @@ export default function InspectorCalendar({
 
   // Render event in list mode to show job name instead of time period name
   function renderListEvent(arg: EventContentArg) {
-    const jobTitle = (arg.event.extendedProps as any)?.jobTitle as
-      | string
-      | undefined
+    const jobTitle = getCalendarExtendedProps(arg.event).jobTitle
     // Use job title if available, otherwise fall back to event title
     const displayTitle = jobTitle || arg.event.title || 'Event'
     return <span>{displayTitle}</span>
@@ -123,12 +126,12 @@ export default function InspectorCalendar({
             },
           }}
           height="420px"
-          timeZone="Europe/Oslo"
+          timeZone={CALENDAR_TIME_ZONE}
           locale={nbLocale}
-          selectable
-          selectMirror
-          select={handleSelect}
-          eventClick={handleEventClick}
+          selectable={canMutate}
+          selectMirror={canMutate}
+          select={canMutate ? handleSelect : undefined}
+          eventClick={canMutate ? handleEventClick : undefined}
           events={events}
           nowIndicator
           slotMinTime="07:00:00"
@@ -152,7 +155,7 @@ export default function InspectorCalendar({
                 setCurrentDate(dateInfo.start)
               }
             }}
-            timeZone="Europe/Oslo"
+            timeZone={CALENDAR_TIME_ZONE}
             locale={nbLocale}
             events={events}
             height="auto"

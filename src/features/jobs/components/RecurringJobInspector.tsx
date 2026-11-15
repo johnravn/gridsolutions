@@ -103,7 +103,7 @@ export default function RecurringJobInspector({
     }
   }, [isFreelancer, activeTab])
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isFetched } = useQuery({
     ...recurringJobDetailQuery({ recurringJobId: id ?? '__none__' }),
     enabled: !!id,
   })
@@ -140,7 +140,20 @@ export default function RecurringJobInspector({
   if (!id) {
     return <Text color="gray">Select a recurring job to see details.</Text>
   }
-  if (isLoading || !data) return <InspectorSkeleton />
+  if (isLoading) return <InspectorSkeleton />
+  if (isError || (isFetched && !data)) {
+    return (
+      <Flex direction="column" gap="2" p="3">
+        <Text color="gray">Recurring job not found.</Text>
+        {onDeleted ? (
+          <Button variant="soft" onClick={() => onDeleted()}>
+            Clear selection
+          </Button>
+        ) : null}
+      </Flex>
+    )
+  }
+  if (!data) return <InspectorSkeleton />
 
   const customerName =
     data.customer?.name ??

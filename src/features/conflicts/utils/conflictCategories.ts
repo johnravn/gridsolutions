@@ -1,8 +1,8 @@
-import { mergeEquipmentConflicts } from './mergeEquipmentConflicts'
 import type {
   CrewConflictRow,
   EquipmentConflictRow,
   GroupConflictRow,
+  PairConflictBase,
   VehicleConflictRow,
 } from '../api/queries'
 
@@ -30,9 +30,12 @@ export function vehicleConflictToneByPeriodId(
   return tones
 }
 
-export function splitCrewConflicts(rows: Array<CrewConflictRow>) {
-  const unresolved: Array<CrewConflictRow> = []
-  const forced: Array<CrewConflictRow> = []
+/** Split pair conflicts; rows should already be merged at the query boundary. */
+export function splitPairConflicts<TRow extends PairConflictBase>(
+  rows: Array<TRow>,
+): { unresolved: Array<TRow>; forced: Array<TRow> } {
+  const unresolved: Array<TRow> = []
+  const forced: Array<TRow> = []
   for (const row of rows) {
     if (isForcedPair(row.forced_1, row.forced_2)) {
       forced.push(row)
@@ -41,26 +44,25 @@ export function splitCrewConflicts(rows: Array<CrewConflictRow>) {
     }
   }
   return { unresolved, forced }
+}
+
+export function splitCrewConflicts(rows: Array<CrewConflictRow>) {
+  return splitPairConflicts(rows)
 }
 
 export function splitVehicleConflicts(rows: Array<VehicleConflictRow>) {
-  const unresolved: Array<VehicleConflictRow> = []
-  const forced: Array<VehicleConflictRow> = []
-  for (const row of rows) {
-    if (isForcedPair(row.forced_1, row.forced_2)) {
-      forced.push(row)
-    } else {
-      unresolved.push(row)
-    }
-  }
-  return { unresolved, forced }
+  return splitPairConflicts(rows)
 }
 
+/**
+ * Split equipment conflicts by has_forced.
+ * Callers should pass rows already merged via equipmentConflictsQuery /
+ * jobBookingConflictsQuery (merge lives once at the query boundary).
+ */
 export function splitEquipmentConflicts(rows: Array<EquipmentConflictRow>) {
-  const merged = mergeEquipmentConflicts(rows)
   const unresolved: Array<EquipmentConflictRow> = []
   const forced: Array<EquipmentConflictRow> = []
-  for (const row of merged) {
+  for (const row of rows) {
     if (row.has_forced) {
       forced.push(row)
     } else {
@@ -71,16 +73,7 @@ export function splitEquipmentConflicts(rows: Array<EquipmentConflictRow>) {
 }
 
 export function splitGroupConflicts(rows: Array<GroupConflictRow>) {
-  const unresolved: Array<GroupConflictRow> = []
-  const forced: Array<GroupConflictRow> = []
-  for (const row of rows) {
-    if (isForcedPair(row.forced_1, row.forced_2)) {
-      forced.push(row)
-    } else {
-      unresolved.push(row)
-    }
-  }
-  return { unresolved, forced }
+  return splitPairConflicts(rows)
 }
 
 export function groupConflictDisplayName(row: {

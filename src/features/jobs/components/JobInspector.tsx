@@ -35,7 +35,7 @@ import {
 } from '../utils/jobInspectorKeyboardTabs'
 import { copyJob, deleteJobById, jobDetailQuery } from '../api/queries'
 import { useAutoUpdateJobStatus } from '../hooks/useAutoUpdateJobStatus'
-import { getJobStatusColor } from '../utils/statusColors'
+import { getJobStatusColor, maskJobStatusForRole } from '../utils/statusColors'
 import {
   copyJobConflictToastTitle,
   copyJobResultTab,
@@ -57,21 +57,16 @@ import PackingTab from './tabs/PackingTab'
 import JobDialog from './dialogs/JobDialog'
 import CopyJobDialog from './dialogs/CopyJobDialog'
 import SubcontractorsTab from './tabs/SubcontractorsTab'
-import type { JobDetail, JobStatus } from '../types'
+import type { JobDetail } from '../types'
 import type { FilesTabHandle } from './tabs/FilesTab'
 
-// Helper function to mask status for freelancers
-function getDisplayStatus(
-  status: JobStatus,
-  companyRole: string | null,
-): JobStatus {
-  if (companyRole === 'freelancer') {
-    // Freelancers should not see statuses beyond 'completed'
-    if (status === 'invoiced' || status === 'paid') {
-      return 'completed'
-    }
+function mutationErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message
+  if (typeof err === 'object' && err && 'message' in err) {
+    const message = (err as { message?: unknown }).message
+    if (typeof message === 'string' && message) return message
   }
-  return status
+  return 'Please try again.'
 }
 
 export default function JobInspector({
@@ -227,7 +222,7 @@ export default function JobInspector({
   const qc = useQueryClient()
   const { success, error: toastError, info } = useToast()
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, isFetched } = useQuery({
     ...jobDetailQuery({ jobId: id ?? '__none__' }),
     enabled: !!id, // won't run until we have an id, but the hook is still called every render
   })
@@ -244,8 +239,8 @@ export default function JobInspector({
       success('Job deleted', 'The job and all related data have been deleted.')
       onDeleted?.()
     },
-    onError: (err: any) => {
-      toastError('Failed to delete job', err?.message || 'Please try again.')
+    onError: (err: unknown) => {
+      toastError('Failed to delete job', mutationErrorMessage(err))
     },
   })
 
@@ -275,8 +270,8 @@ export default function JobInspector({
         archived ? 'Job has been archived.' : 'Job has been unarchived.',
       )
     },
-    onError: (err: any) => {
-      toastError('Failed to update job', err?.message || 'Please try again.')
+    onError: (err: unknown) => {
+      toastError('Failed to update job', mutationErrorMessage(err))
     },
   })
 
@@ -316,14 +311,27 @@ export default function JobInspector({
         success('Job copied', 'A new job was created from this one.')
       }, 50)
     },
-    onError: (err: any) => {
-      toastError('Failed to copy job', err?.message || 'Please try again.')
+    onError: (err: unknown) => {
+      toastError('Failed to copy job', mutationErrorMessage(err))
     },
   })
 
   // now you can early return safely since hooks above already ran
   if (!id) return <Text color="gray">Select a job to see details.</Text>
-  if (isLoading || !data) return <InspectorSkeleton />
+  if (isLoading) return <InspectorSkeleton />
+  if (isError || (isFetched && !data)) {
+    return (
+      <Flex direction="column" gap="2" p="3">
+        <Text color="gray">Job not found.</Text>
+        {onDeleted ? (
+          <Button variant="soft" onClick={() => onDeleted()}>
+            Clear selection
+          </Button>
+        ) : null}
+      </Flex>
+    )
+  }
+  if (!data) return <InspectorSkeleton />
 
   const job = data
 
@@ -415,7 +423,7 @@ export default function JobInspector({
           }}
         >
           {(() => {
-            const displayStatus = getDisplayStatus(job.status, companyRole)
+            const displayStatus = maskJobStatusForRole(job.status, companyRole)
             return (
               <Badge
                 color={getJobStatusColor(displayStatus)}

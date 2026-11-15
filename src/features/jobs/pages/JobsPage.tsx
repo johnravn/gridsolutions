@@ -1,7 +1,7 @@
 import * as React from 'react'
 import { Box, Flex, IconButton, Text, Tooltip } from '@radix-ui/themes'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { useLocation } from '@tanstack/react-router'
+import { useLocation, useNavigate } from '@tanstack/react-router'
 import { CloudSync, LotOfCash, Sparks } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
@@ -32,6 +32,7 @@ import RecurringJobInspector from '../components/RecurringJobInspector'
 import SyncContaPaidInvoicesDialog from '../components/dialogs/SyncContaPaidInvoicesDialog'
 import { jobsIndexInfiniteQuery } from '../api/queries'
 import { myJobIdsQuery } from '../api/myJobIdsQuery'
+import { resolveJobsIndexListArgs } from '../utils/resolveJobsIndexListArgs'
 import type { JobStatus, JobsListScope, JobsPageSelection } from '../types'
 
 function JobInspectorTabShortcutTip() {
@@ -66,12 +67,28 @@ export default function JobsPage() {
     () => createJobShortcutRef.current?.(),
     canWrite,
   )
+  const navigate = useNavigate()
   const location = useLocation()
   const search = location.search as Record<string, unknown>
   const jobId = (search.jobId as string | undefined) || undefined
   const recurringJobId =
     (search.recurringJobId as string | undefined) || undefined
   const tab = (search.tab as string | undefined) || undefined
+
+  const writeSelectionToUrl = React.useCallback(
+    (next: JobsPageSelection, nextTab?: string) => {
+      void navigate({
+        to: '/jobs',
+        search: {
+          jobId: next?.kind === 'job' ? next.id : undefined,
+          recurringJobId: next?.kind === 'recurring_job' ? next.id : undefined,
+          tab: next?.kind === 'job' ? (nextTab ?? tab) : undefined,
+        },
+        replace: true,
+      })
+    },
+    [navigate, tab],
+  )
 
   const { data: expansion } = useQuery({
     ...(companyId
@@ -210,15 +227,19 @@ export default function JobsPage() {
 
   const handleSelectJob = React.useCallback(
     (id: string | null) => {
-      setSelection(id ? { kind: 'job', id } : null)
+      const next: JobsPageSelection = id ? { kind: 'job', id } : null
+      setSelection(next)
+      writeSelectionToUrl(next)
       if (id && !isLarge) openDrawer()
     },
-    [isLarge, openDrawer],
+    [isLarge, openDrawer, writeSelectionToUrl],
   )
 
   const handleSelectRecurringJob = React.useCallback(
     (id: string | null, title?: string) => {
-      setSelection(id ? { kind: 'recurring_job', id } : null)
+      const next: JobsPageSelection = id ? { kind: 'recurring_job', id } : null
+      setSelection(next)
+      writeSelectionToUrl(next)
       if (id) {
         setListScope((prev) => ({
           kind: 'recurring',
@@ -233,29 +254,40 @@ export default function JobsPage() {
       }
       if (id && !isLarge) openDrawer()
     },
-    [isLarge, openDrawer],
+    [isLarge, openDrawer, writeSelectionToUrl],
   )
 
   const handleSelectJobFromRecurring = React.useCallback(
     (id: string) => {
-      setSelection({ kind: 'job', id })
+      const next: JobsPageSelection = { kind: 'job', id }
+      setSelection(next)
+      writeSelectionToUrl(next)
       if (!isLarge) openDrawer()
     },
-    [isLarge, openDrawer],
+    [isLarge, openDrawer, writeSelectionToUrl],
   )
 
   const handleExitListScope = React.useCallback(() => {
     setListScope(null)
     // True leave: drop series overview selection. Keep a member job so place isn’t lost.
-    setSelection((prev) => (prev?.kind === 'recurring_job' ? null : prev))
-  }, [])
+    setSelection((prev) => {
+      const next = prev?.kind === 'recurring_job' ? null : prev
+      writeSelectionToUrl(next)
+      return next
+    })
+  }, [writeSelectionToUrl])
 
   const handleOpenRecurringSeries = React.useCallback(
     (recurringId: string, title: string) => {
       setListScope({ kind: 'recurring', id: recurringId, title })
-      setSelection({ kind: 'recurring_job', id: recurringId })
+      const next: JobsPageSelection = {
+        kind: 'recurring_job',
+        id: recurringId,
+      }
+      setSelection(next)
+      writeSelectionToUrl(next)
     },
-    [],
+    [writeSelectionToUrl],
   )
 
   const { data: myJobIds, isLoading: myJobIdsLoading } = useQuery({
@@ -268,11 +300,14 @@ export default function JobsPage() {
   const waitingForMyJobIds = myJobsFilterActive && myJobIdsLoading
   const onlyJobIds = myJobsFilterActive ? (myJobIds ?? []) : null
 
-  const includeRecurringMembers =
-    companyRole === 'freelancer' ||
-    showJobsInRecurringSeries ||
-    readyToInvoiceFilter ||
-    myJobsFilterActive
+  const indexListArgs = resolveJobsIndexListArgs({
+    companyRole,
+    showJobsInRecurringSeries,
+    readyToInvoiceFilter,
+    showMyJobsOnly: myJobsFilterActive,
+    statusFilter,
+    userId,
+  })
 
   const { isLoading: jobsIndexLoading } = useInfiniteQuery({
     ...jobsIndexInfiniteQuery({
@@ -285,13 +320,9 @@ export default function JobsPage() {
       showOnlyArchived,
       dateFrom: dateFrom || undefined,
       dateTo: dateTo || undefined,
-      projectLeadUserId: readyToInvoiceFilter ? userId : null,
-      statuses: readyToInvoiceFilter
-        ? ['completed']
-        : statusFilter.length > 0
-          ? statusFilter
-          : null,
-      includeRecurringMembers,
+      projectLeadUserId: indexListArgs.projectLeadUserId,
+      statuses: indexListArgs.statuses,
+      includeRecurringMembers: indexListArgs.includeRecurringMembers,
       onlyJobIds,
     }),
     enabled: !!companyId && !waitingForMyJobIds,

@@ -22,8 +22,13 @@ import CompanyCalendarPro from '@features/calendar/components/CompanyCalendarPro
 import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeToCalendarDialog'
 import PersonalCalendarEventDialog from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
 import {
+  CALENDAR_CATEGORY_KINDS,
+  
   applyCalendarFilter,
-  toEventInputs,
+  defaultCalendarWindow,
+  defaultKindsForCategory,
+  isJobDurationTitle,
+  toEventInputs
 } from '@features/calendar/components/domain'
 import { companyCalendarQuery } from '@features/calendar/api/queries'
 import {
@@ -34,17 +39,16 @@ import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
+import type {CalendarPageCategory} from '@features/calendar/components/domain';
 import type { PersonalEventDraft } from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
-import type { CalendarKind } from '@features/calendar/components/domain'
-
-type Category = 'jobDuration' | 'equipment' | 'crew' | 'transport' | 'all'
 
 export default function CalendarPage() {
   const { companyId } = useCompany()
   const { userId, companyRole } = useAuthz()
   const isMobile = useMediaQuery('(max-width: 1023px)')
   const isFreelancer = companyRole === 'freelancer'
-  const [category, setCategory] = React.useState<Category>('jobDuration')
+  const [category, setCategory] =
+    React.useState<CalendarPageCategory>('jobDuration')
   const [searchInput, setSearchInput] = React.useState('')
   const [debouncedSearchInput] = useDebouncedValue(searchInput, { wait: 300 })
   const [selectedEntityId, setSelectedEntityId] = React.useState<string | null>(
@@ -57,13 +61,7 @@ export default function CalendarPage() {
   const [personalEvent, setPersonalEvent] =
     React.useState<PersonalEventDraft | null>(null)
 
-  const calendarWindow = React.useMemo(() => {
-    const from = new Date()
-    from.setDate(from.getDate() - 30)
-    const to = new Date()
-    to.setDate(to.getDate() + 90)
-    return { fromDate: from.toISOString(), toDate: to.toISOString() }
-  }, [])
+  const calendarWindow = React.useMemo(() => defaultCalendarWindow(), [])
 
   // Set default category based on role
   React.useEffect(() => {
@@ -219,10 +217,6 @@ export default function CalendarPage() {
     return allSuggestions
   }, [category, vehiclesResult?.rows, items, crew, jobs, searchInput])
 
-  // Helper to check if time period is Job duration
-  const isJobDuration = (record: { title?: string | null }) =>
-    record.title?.toLowerCase().includes('job duration') ?? false
-
   // Filter events based on category and selected entity
   const events = React.useMemo(() => {
     let baseEvents = toEventInputs(calendarRecords)
@@ -232,25 +226,15 @@ export default function CalendarPage() {
     baseEvents = baseEvents.filter((event) => {
       const record = calendarRecords.find((r) => r.id === event.id)
       if (!record) return false
-      const kind = (event.extendedProps as any)?.kind
       // If it's a job event, only include if it's job duration (not regular program)
-      if (kind === 'job') {
-        return isJobDuration(record)
+      if (record.kind === 'job') {
+        return isJobDurationTitle(record.title)
       }
       // For other kinds (item, vehicle, crew), always include them
       return true
     })
 
-    // Map category to kind for filtering
-    const categoryToKind: Record<Category, Array<CalendarKind> | null> = {
-      all: null, // Show all (already filtered above)
-      jobDuration: ['job'],
-      equipment: ['item'],
-      transport: ['vehicle'],
-      crew: ['crew', 'personal'],
-    }
-
-    const kinds = categoryToKind[category]
+    const kinds = CALENDAR_CATEGORY_KINDS[category]
     const scope = selectedEntityId
       ? category === 'transport'
         ? { vehicleId: selectedEntityId }
@@ -264,22 +248,18 @@ export default function CalendarPage() {
       : undefined
 
     return applyCalendarFilter(baseEvents, {
-      kinds: kinds || undefined,
+      kinds: kinds ?? undefined,
       scope,
     })
   }, [calendarRecords, category, selectedEntityId])
 
-  const defaultKinds = React.useMemo((): Array<CalendarKind> => {
-    if (category === 'all')
-      return ['job', 'item', 'vehicle', 'crew', 'personal']
-    if (category === 'jobDuration') return ['job']
-    if (category === 'equipment') return ['item']
-    if (category === 'transport') return ['vehicle']
-    return ['crew', 'personal']
-  }, [category])
+  const defaultKinds = React.useMemo(
+    () => defaultKindsForCategory(category),
+    [category],
+  )
 
   const handleCategoryChange = (value: string) => {
-    setCategory(value as Category)
+    setCategory(value as CalendarPageCategory)
     setSelectedEntityId(null)
     setSearchInput('')
     setSuggestionsOpen(false)
@@ -437,11 +417,9 @@ export default function CalendarPage() {
 
       <CompanyCalendarPro
         events={events}
-        onCreate={() => {}}
-        onUpdate={() => {}}
-        onDelete={() => {}}
         defaultKinds={defaultKinds}
         hideCreateButton
+        eventsAlreadyFiltered
         initialListMode={listMode}
         onListModeChange={setListMode}
         focusUserId={category === 'crew' ? selectedEntityId : null}

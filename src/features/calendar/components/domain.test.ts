@@ -2,9 +2,52 @@ import { describe, expect, it } from 'vitest'
 import { makeCalendarRecord } from '@test/fixtures/calendar'
 import {
   applyCalendarFilter,
+  CALENDAR_WINDOW_FUTURE_DAYS,
+  CALENDAR_WINDOW_PAST_DAYS,
+  defaultCalendarWindow,
+  defaultKindsForCategory,
+  isJobDurationTitle,
   toEventInputs,
   type CalendarFilter,
 } from './domain'
+
+describe('isJobDurationTitle', () => {
+  it('matches the job duration title heuristic', () => {
+    expect(isJobDurationTitle('Job duration')).toBe(true)
+    expect(isJobDurationTitle('Load-in')).toBe(false)
+    expect(isJobDurationTitle(null)).toBe(false)
+  })
+})
+
+describe('defaultKindsForCategory', () => {
+  it('maps page categories to calendar kinds', () => {
+    expect(defaultKindsForCategory('jobDuration')).toEqual(['job'])
+    expect(defaultKindsForCategory('crew')).toEqual(['crew', 'personal'])
+    expect(defaultKindsForCategory('all')).toEqual([
+      'job',
+      'item',
+      'vehicle',
+      'crew',
+      'personal',
+    ])
+  })
+})
+
+describe('defaultCalendarWindow', () => {
+  it('uses the shared past/future day constants', () => {
+    const now = new Date('2026-06-15T12:00:00.000Z')
+    const window = defaultCalendarWindow(now)
+    const from = new Date(window.fromDate)
+    const to = new Date(window.toDate)
+    const dayMs = 24 * 60 * 60 * 1000
+    expect(Math.round((now.getTime() - from.getTime()) / dayMs)).toBe(
+      CALENDAR_WINDOW_PAST_DAYS,
+    )
+    expect(Math.round((to.getTime() - now.getTime()) / dayMs)).toBe(
+      CALENDAR_WINDOW_FUTURE_DAYS,
+    )
+  })
+})
 
 describe('toEventInputs', () => {
   it('maps calendar records to FullCalendar event inputs', () => {

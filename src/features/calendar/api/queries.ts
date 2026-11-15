@@ -4,6 +4,10 @@ import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
 import { crewDisplayName } from '../utils/canFollowCrewUser'
 import {
+  
+  defaultCalendarWindow
+} from '../components/domain'
+import {
   buildPendingInviteUserIdsByPeriod,
   companyCrewPeriodIsVisible,
   isActiveCrewBooking,
@@ -14,7 +18,26 @@ import {
   isFreelancerVisibleCrewBooking,
 } from './freelancerCalendarVisibility'
 import { listPersonalCalendarEvents } from './personalCalendarEvents'
-import type { CalendarRecord } from '../components/domain'
+import type {CalendarRecord} from '../components/domain';
+
+/** Shared job-title lookup for entity calendars (vehicle/item/crew). */
+export async function fetchJobTitlesByIds(
+  jobIds: Array<string>,
+): Promise<Map<string, string>> {
+  const jobTitles = new Map<string, string>()
+  const unique = Array.from(new Set(jobIds.filter(Boolean)))
+  if (unique.length === 0) return jobTitles
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id, title')
+    .in('id', unique)
+  if (error) throw error
+  for (const job of data ?? []) {
+    if (job.id && job.title) jobTitles.set(job.id, job.title)
+  }
+  return jobTitles
+}
 
 /** Fetch time periods for a specific vehicle (category = 'transport') */
 export function vehicleCalendarQuery({
@@ -87,26 +110,10 @@ export function vehicleCalendarQuery({
 
       if (!data || data.length === 0) return []
 
-      // Get unique job IDs for fetching job titles
       const jobIds = Array.from(
         new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
       )
-
-      // Fetch job titles
-      const jobTitles = new Map<string, string>()
-      if (jobIds.length > 0) {
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs')
-          .select('id, title')
-          .in('id', jobIds)
-
-        if (jobsError) throw jobsError
-        ;(jobsData || []).forEach((job: any) => {
-          if (job.id && job.title) {
-            jobTitles.set(job.id, job.title)
-          }
-        })
-      }
+      const jobTitles = await fetchJobTitlesByIds(jobIds)
 
       return data.map((tp: any): CalendarRecord => {
         const jobTitle = tp.job_id
@@ -184,17 +191,7 @@ export function vehiclePastCalendarQuery({
       const jobIds = Array.from(
         new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
       )
-      const jobTitles = new Map<string, string>()
-      if (jobIds.length > 0) {
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs')
-          .select('id, title')
-          .in('id', jobIds)
-        if (jobsError) throw jobsError
-        ;(jobsData || []).forEach((job: any) => {
-          if (job.id && job.title) jobTitles.set(job.id, job.title)
-        })
-      }
+      const jobTitles = await fetchJobTitlesByIds(jobIds)
 
       return data.map(
         (tp: any): CalendarRecord => ({
@@ -251,24 +248,10 @@ export function itemCalendarQuery({
 
       if (!data || data.length === 0) return []
 
-      // Fetch job titles for display (user wants job title, not time period name)
       const jobIds = Array.from(
         new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
       )
-      const jobTitles = new Map<string, string>()
-      if (jobIds.length > 0) {
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs')
-          .select('id, title')
-          .in('id', jobIds)
-
-        if (jobsError) throw jobsError
-        ;(jobsData || []).forEach((job: any) => {
-          if (job.id && job.title) {
-            jobTitles.set(job.id, job.title)
-          }
-        })
-      }
+      const jobTitles = await fetchJobTitlesByIds(jobIds)
 
       // Fetch all items for each time period to populate itemIds array
       const allItemsRes = await fetchAllInChunks(timePeriodIds, (chunk) =>
@@ -380,24 +363,10 @@ export function crewCalendarQuery({
         )
       }
 
-      // Fetch job titles for display (user wants job title, not time period name)
       const jobIds = Array.from(
         new Set(data.map((tp) => tp.job_id).filter((id): id is string => !!id)),
       )
-      const jobTitles = new Map<string, string>()
-      if (jobIds.length > 0) {
-        const { data: jobsData, error: jobsError } = await supabase
-          .from('jobs')
-          .select('id, title')
-          .in('id', jobIds)
-
-        if (jobsError) throw jobsError
-        ;(jobsData || []).forEach((job: any) => {
-          if (job.id && job.title) {
-            jobTitles.set(job.id, job.title)
-          }
-        })
-      }
+      const jobTitles = await fetchJobTitlesByIds(jobIds)
 
       return data.map((tp: any): CalendarRecord => {
         const jobTitle = tp.job_id
@@ -500,13 +469,9 @@ export function companyCalendarQuery({
       toDate,
     ] as const,
     queryFn: async () => {
-      const now = new Date()
-      const defaultFrom = new Date(now)
-      defaultFrom.setDate(defaultFrom.getDate() - 30)
-      const defaultTo = new Date(now)
-      defaultTo.setDate(defaultTo.getDate() + 90)
-      const fromIso = fromDate ?? defaultFrom.toISOString()
-      const toIso = toDate ?? defaultTo.toISOString()
+      const defaults = defaultCalendarWindow()
+      const fromIso = fromDate ?? defaults.fromDate
+      const toIso = toDate ?? defaults.toDate
 
       let q = supabase
         .from('time_periods')
