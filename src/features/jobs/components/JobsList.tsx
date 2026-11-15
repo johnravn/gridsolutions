@@ -601,27 +601,31 @@ export default function JobsList({
             {scopedSeriesTitle}
           </Text>
         </Flex>
-        {showSeriesOverviewCta ? (
-          <Button
-            size="1"
-            variant="soft"
-            color="violet"
-            style={{ flexShrink: 0 }}
-            onClick={openScopedSeriesOverview}
-          >
-            Overview
-            <NavArrowRight width={14} height={14} />
-          </Button>
-        ) : (
-          <Badge
-            size="1"
-            color="violet"
-            variant="outline"
-            style={{ flexShrink: 0 }}
-          >
-            Overview
-          </Badge>
-        )}
+        <Button
+          size="1"
+          variant={showSeriesOverviewCta ? 'soft' : 'outline'}
+          color="violet"
+          highContrast={!showSeriesOverviewCta}
+          style={{ flexShrink: 0 }}
+          onClick={openScopedSeriesOverview}
+          aria-current={showSeriesOverviewCta ? undefined : 'page'}
+          title={
+            showSeriesOverviewCta
+              ? 'Open series overview'
+              : 'Viewing series overview'
+          }
+        >
+          Overview
+          <NavArrowRight
+            width={14}
+            height={14}
+            style={{
+              opacity: showSeriesOverviewCta ? 1 : 0,
+              flexShrink: 0,
+            }}
+            aria-hidden={!showSeriesOverviewCta}
+          />
+        </Button>
       </Flex>
     </Flex>
   ) : null
