@@ -6,6 +6,7 @@ import { supabase } from '@shared/api/supabase'
 import {
   sendCrewPositionInviteEmail,
   sendMatterEmailTest,
+  sendNotificationEmailNow,
   sendOfferByEmail,
   sendWelcomeEmailForPendingInvite,
 } from '@shared/email/supabaseEdgeEmail'
@@ -209,18 +210,28 @@ export async function sendSuperSampleEmail(
       return
     }
     case 'notification': {
-      const { error } = await supabase.from('notifications').insert({
-        company_id: companyId,
-        user_id: user.id,
-        created_by_user_id: user.id,
-        type: 'matter_update',
-        title: '[Super test] Notification email',
-        body_text:
-          'This sample uses the same template as in-app notifications (matters, offers, etc.). Delivery is queued by the database when vault/pg_net is configured.',
-        action_url: '/matters',
-        email_force_send: true,
-      })
+      const { data: inserted, error } = await supabase
+        .from('notifications')
+        .insert({
+          company_id: companyId,
+          user_id: user.id,
+          created_by_user_id: user.id,
+          type: 'matter_update',
+          title: '[Super test] Notification email',
+          body_text:
+            'This sample uses the same template as in-app notifications (matters, offers, etc.).',
+          action_url: '/matters',
+          email_force_send: true,
+        })
+        .select('id')
+        .single()
       if (error) throw error
+      // Same JWT → Edge path as crew invites (do not rely on vault/pg_net alone).
+      const r = await sendNotificationEmailNow({
+        notificationId: inserted.id,
+        forceEmail: true,
+      })
+      if (!r.ok) throw new Error(r.failure.message)
       return
     }
     case 'welcome': {

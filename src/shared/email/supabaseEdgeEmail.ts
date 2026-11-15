@@ -9,15 +9,23 @@ export type SendOfferEmailResponse =
   | { ok: true; message_id?: string | null }
   | { error: string; details?: string }
 export type SendWelcomeEmailResponse =
-  | { ok: true }
+  | {
+      ok: true
+      email_sent?: boolean
+      dry_run?: boolean
+      skipped?: string
+      message_id?: string | null
+    }
   | { error: string; details?: string }
 export type SendNotificationEmailResponse =
   | {
       ok: true
       email_sent?: boolean
       already_sent?: boolean
+      dry_run?: boolean
       skipped?: string
       warning?: string
+      message_id?: string | null
     }
   | { error: string; details?: string }
 
@@ -26,7 +34,13 @@ export type SendTestEmailResponse =
   | { error: string; details?: string }
 
 export type SendCrewPositionInviteEmailResponse =
-  | { ok: true }
+  | {
+      ok: true
+      email_sent?: boolean
+      dry_run?: boolean
+      skipped?: string
+      message_id?: string | null
+    }
   | { error: string; details?: string }
 
 export type EmailEdgeInvokeFailure = {
@@ -63,6 +77,39 @@ function hintForFunctionsHttp404(functionName: string): string {
   return local
     ? `Local gateway has no route for "${functionName}" (often after adding it). Run: npm run supabase:restart — Edge Functions register when the stack starts.`
     : `Deploy this function: supabase functions deploy ${functionName}`
+}
+
+/**
+ * Edge may return HTTP 200 with dry_run / skipped without POSTing to Resend.
+ * User-facing "sent" toasts must treat those as delivery failures.
+ * `already_sent` stays OK (idempotent — prior real send or queue mark).
+ */
+export function softSuccessDeliveryFailure(
+  data: unknown,
+): EmailEdgeInvokeFailure | null {
+  if (!data || typeof data !== 'object') return null
+  const row = data as {
+    dry_run?: unknown
+    skipped?: unknown
+  }
+  if (row.dry_run === true) {
+    return {
+      message:
+        'Email dry-run is on (RESEND_DRY_RUN) — nothing was sent to Resend',
+    }
+  }
+  if (typeof row.skipped === 'string' && row.skipped.length > 0) {
+    return {
+      message: `Email was not delivered (${row.skipped})`,
+      details:
+        row.skipped === 'test_recipient'
+          ? 'Recipient looks like a test/demo address and is suppressed'
+          : row.skipped === 'preferences'
+            ? 'Recipient notification preferences blocked email'
+            : undefined,
+    }
+  }
+  return null
 }
 
 /**
@@ -145,6 +192,8 @@ export async function sendWelcomeEmailForPendingInvite(
     },
   )
   if (!res.ok) return { ok: false, failure: res.failure }
+  const soft = softSuccessDeliveryFailure(res.data)
+  if (soft) return { ok: false, failure: soft }
   return { ok: true }
 }
 
@@ -160,6 +209,13 @@ export async function sendNotificationEmailNow(params: {
     },
   )
   if (!res.ok) return { ok: false, failure: res.failure }
+  // Preferential / invite sends must not toast "sent" on dry-run or skipped.
+  // Non-force paths can still call this; soft-success is only meaningful when
+  // the UI claims delivery (crew invite uses forceEmail: true).
+  if (params.forceEmail) {
+    const soft = softSuccessDeliveryFailure(res.data)
+    if (soft) return { ok: false, failure: soft }
+  }
   return { ok: true }
 }
 
@@ -198,6 +254,8 @@ export async function sendCrewPositionInviteEmail(params: {
       },
     )
   if (!res.ok) return { ok: false, failure: res.failure }
+  const soft = softSuccessDeliveryFailure(res.data)
+  if (soft) return { ok: false, failure: soft }
   return { ok: true }
 }
 

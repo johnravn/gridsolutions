@@ -300,16 +300,44 @@ ${primaryButton(actionLink, 'Open in Grid')}
       )
     }
 
+    // Soft-success (dry-run / filtered recipients): still mark processed so cron
+    // drains, but do not claim email_sent — clients fail closed on these flags.
+    const softSkip = sent.dryRun
+      ? 'dry_run'
+      : sent.skippedTestRecipient
+        ? 'test_recipient'
+        : null
+
     const { error: updateError } = await supabase
       .from('notifications')
       .update({ email_sent_at: new Date().toISOString() })
       .eq('id', notificationId)
+
+    if (softSkip) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          ...(softSkip === 'dry_run'
+            ? { dry_run: true }
+            : { skipped: softSkip }),
+          ...(updateError ? { warning: 'Could not update email_sent_at' } : {}),
+        }),
+        {
+          status: 200,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+    }
 
     if (updateError) {
       return new Response(
         JSON.stringify({
           ok: true,
           email_sent: true,
+          message_id: sent.messageId,
           warning: 'Could not update email_sent_at',
         }),
         {
@@ -322,13 +350,20 @@ ${primaryButton(actionLink, 'Open in Grid')}
       )
     }
 
-    return new Response(JSON.stringify({ ok: true, email_sent: true }), {
-      status: 200,
-      headers: {
-        ...emailFunctionCorsHeaders,
-        'Content-Type': 'application/json',
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        email_sent: true,
+        message_id: sent.messageId,
+      }),
+      {
+        status: 200,
+        headers: {
+          ...emailFunctionCorsHeaders,
+          'Content-Type': 'application/json',
+        },
       },
-    })
+    )
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,

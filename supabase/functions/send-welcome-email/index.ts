@@ -204,13 +204,43 @@ ${primaryButton(signupLink, 'Accept invitation & get started')}
       )
     }
 
-    return new Response(JSON.stringify({ ok: true }), {
-      status: 200,
-      headers: {
-        ...emailFunctionCorsHeaders,
-        'Content-Type': 'application/json',
+    if (sent.dryRun) {
+      return new Response(JSON.stringify({ ok: true, dry_run: true }), {
+        status: 200,
+        headers: {
+          ...emailFunctionCorsHeaders,
+          'Content-Type': 'application/json',
+        },
+      })
+    }
+
+    if (sent.skippedTestRecipient) {
+      return new Response(
+        JSON.stringify({ ok: true, skipped: 'test_recipient' }),
+        {
+          status: 200,
+          headers: {
+            ...emailFunctionCorsHeaders,
+            'Content-Type': 'application/json',
+          },
+        },
+      )
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        email_sent: true,
+        message_id: sent.messageId,
+      }),
+      {
+        status: 200,
+        headers: {
+          ...emailFunctionCorsHeaders,
+          'Content-Type': 'application/json',
+        },
       },
-    })
+    )
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
