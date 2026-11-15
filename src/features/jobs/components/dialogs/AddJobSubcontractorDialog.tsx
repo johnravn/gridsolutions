@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Dialog, Flex } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
-import { partnerCustomersQuery } from '@features/inventory/api/partners'
+import { partnerCustomersQuery } from '@features/customers/api/partners'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   SearchableSelect,

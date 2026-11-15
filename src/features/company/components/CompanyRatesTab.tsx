@@ -1,4 +1,3 @@
-// src/features/company/components/CompanyRatesTab.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -16,17 +15,22 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { NavArrowDown, NavArrowRight, Plus, Trash } from 'iconoir-react'
 
 import {
+  companyExpansionQuery,
   createCrewPricingLevel,
   crewPricingLevelsQuery,
   deleteCrewPricingLevel,
+  patchCompanyExpansion,
   updateCrewPricingLevel,
 } from '../api/queries'
-import type { CrewPricingLevelRow, RentalFactorConfig } from '../api/queries'
+import type {
+  CompanyExpansion,
+  CrewPricingLevelRow,
+  RentalFactorConfig,
+} from '../api/queries'
 
 type CompanyRates = {
   crew_rate_per_day: number | null
@@ -44,59 +48,45 @@ type CompanyRates = {
   fixed_rate_per_day: number | null
 }
 
+function toCompanyRates(
+  expansion: CompanyExpansion | null | undefined,
+): CompanyRates | null {
+  if (!expansion) return null
+  const rentalFactorConfig =
+    expansion.rental_factor_config &&
+    typeof expansion.rental_factor_config === 'object'
+      ? expansion.rental_factor_config
+      : null
+  return {
+    crew_rate_per_day: expansion.crew_rate_per_day ?? null,
+    crew_rate_per_hour: expansion.crew_rate_per_hour ?? null,
+    default_crew_billing_unit:
+      expansion.default_crew_billing_unit === 'day' ? 'day' : 'hour',
+    vehicle_daily_rate: expansion.vehicle_daily_rate ?? null,
+    vehicle_distance_rate: expansion.vehicle_distance_rate ?? null,
+    vehicle_distance_increment: expansion.vehicle_distance_increment ?? 150,
+    transport_cost_per_km:
+      expansion.transport_cost_per_km != null
+        ? Number(expansion.transport_cost_per_km)
+        : 5,
+    customer_discount_percent: expansion.customer_discount_percent ?? null,
+    partner_discount_percent: expansion.partner_discount_percent ?? null,
+    subcontractor_markup_percent:
+      expansion.subcontractor_markup_percent ?? null,
+    rental_factor_config: rentalFactorConfig,
+    fixed_rate_start_day: expansion.fixed_rate_start_day ?? null,
+    fixed_rate_per_day: expansion.fixed_rate_per_day ?? null,
+  }
+}
+
 export default function CompanyRatesTab() {
   const { companyId } = useCompany()
 
-  // Fetch company expansion with rates
-  const { data: expansion, isLoading } = useQuery({
-    queryKey: ['company', companyId, 'expansion'] as const,
+  const { data: expansionRaw, isLoading } = useQuery({
+    ...companyExpansionQuery({ companyId: companyId ?? '' }),
     enabled: !!companyId,
-    queryFn: async (): Promise<CompanyRates | null> => {
-      if (!companyId) return null
-      const { data, error } = await supabase
-        .from('company_expansions')
-        .select(
-          'crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, transport_cost_per_km, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day',
-        )
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      if (error) throw error
-      if (!data) return null
-
-      // Parse rental_factor_config if it's a string
-      const rawData = data as any
-      let rentalFactorConfig = rawData.rental_factor_config
-      if (typeof rentalFactorConfig === 'string') {
-        try {
-          rentalFactorConfig = JSON.parse(rentalFactorConfig)
-        } catch {
-          rentalFactorConfig = null
-        }
-      }
-
-      return {
-        crew_rate_per_day: rawData.crew_rate_per_day ?? null,
-        crew_rate_per_hour: rawData.crew_rate_per_hour ?? null,
-        default_crew_billing_unit:
-          rawData.default_crew_billing_unit === 'day' ? 'day' : 'hour',
-        vehicle_daily_rate: rawData.vehicle_daily_rate ?? null,
-        vehicle_distance_rate: rawData.vehicle_distance_rate ?? null,
-        vehicle_distance_increment: rawData.vehicle_distance_increment ?? 150,
-        transport_cost_per_km:
-          rawData.transport_cost_per_km != null
-            ? Number(rawData.transport_cost_per_km)
-            : 5,
-        customer_discount_percent: rawData.customer_discount_percent ?? null,
-        partner_discount_percent: rawData.partner_discount_percent ?? null,
-        subcontractor_markup_percent:
-          rawData.subcontractor_markup_percent ?? null,
-        rental_factor_config: rentalFactorConfig,
-        fixed_rate_start_day: rawData.fixed_rate_start_day ?? null,
-        fixed_rate_per_day: rawData.fixed_rate_per_day ?? null,
-      } as CompanyRates
-    },
   })
+  const expansion = toCompanyRates(expansionRaw)
 
   if (!companyId) return <div>No company selected.</div>
 
@@ -315,31 +305,14 @@ function CrewRatesCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
+      await patchCompanyExpansion({
+        companyId,
+        patch: {
           crew_rate_per_day: rates.crew_rate_per_day,
           crew_rate_per_hour: rates.crew_rate_per_hour,
           default_crew_billing_unit: rates.default_crew_billing_unit,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            (current as any)?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
         },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -347,10 +320,10 @@ function CrewRatesCard({
       })
       success('Crew rates updated', 'Crew rates have been saved.')
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toastError(
         'Failed to update crew rates',
-        error?.message ?? 'Please try again.',
+        error instanceof Error ? error.message : 'Please try again.',
       )
     },
   })
@@ -886,31 +859,14 @@ function VehicleRatesCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
+      await patchCompanyExpansion({
+        companyId,
+        patch: {
           vehicle_daily_rate: rates.vehicle_daily_rate,
           vehicle_distance_rate: rates.vehicle_distance_rate,
           vehicle_distance_increment: rates.vehicle_distance_increment,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            (current as any)?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
         },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -919,10 +875,10 @@ function VehicleRatesCard({
       success('Vehicle rates updated', 'Vehicle rates have been saved.')
       setIsExpanded(false) // Collapse after save
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toastError(
         'Failed to update vehicle rates',
-        error?.message ?? 'Please try again.',
+        error instanceof Error ? error.message : 'Please try again.',
       )
     },
   })
@@ -1077,29 +1033,10 @@ function TransportCostCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
-          transport_cost_per_km: costPerKm,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            current?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
-        },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      await patchCompanyExpansion({
+        companyId,
+        patch: { transport_cost_per_km: costPerKm },
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -1234,30 +1171,13 @@ function DiscountsCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
+      await patchCompanyExpansion({
+        companyId,
+        patch: {
           customer_discount_percent: discounts.customer_discount_percent,
           partner_discount_percent: discounts.partner_discount_percent,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            (current as any)?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
         },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -1266,10 +1186,10 @@ function DiscountsCard({
       success('Discounts updated', 'Discounts have been saved.')
       setIsExpanded(false) // Collapse after save
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toastError(
         'Failed to update discounts',
-        error?.message ?? 'Please try again.',
+        error instanceof Error ? error.message : 'Please try again.',
       )
     },
   })
@@ -1397,29 +1317,10 @@ function SubcontractorMarkupCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
-          subcontractor_markup_percent: markupPercent,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            (current as any)?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
-        },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      await patchCompanyExpansion({
+        companyId,
+        patch: { subcontractor_markup_percent: markupPercent },
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -1431,10 +1332,10 @@ function SubcontractorMarkupCard({
       )
       setIsExpanded(false)
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toastError(
         'Failed to update subcontractor markup',
-        error?.message ?? 'Please try again.',
+        error instanceof Error ? error.message : 'Please try again.',
       )
     },
   })
@@ -1543,33 +1444,16 @@ function RentalFactorsCard({
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      const { data: current } = await supabase
-        .from('company_expansions')
-        .select('*')
-        .eq('company_id', companyId)
-        .maybeSingle()
-
-      const { error } = await supabase.from('company_expansions').upsert(
-        {
-          company_id: companyId,
+      await patchCompanyExpansion({
+        companyId,
+        patch: {
           rental_factor_config: config.rental_factor_config
             ? JSON.stringify(config.rental_factor_config)
             : null,
           fixed_rate_start_day: config.fixed_rate_start_day,
           fixed_rate_per_day: config.fixed_rate_per_day,
-          accounting_software: current?.accounting_software ?? 'none',
-          accounting_api_key_encrypted:
-            current?.accounting_api_key_encrypted ?? null,
-          accounting_organization_id:
-            (current as any)?.accounting_organization_id ?? null,
-          accounting_api_read_only: current?.accounting_api_read_only ?? true,
-          latest_feed_open_to_freelancers:
-            current?.latest_feed_open_to_freelancers ?? false,
         },
-        { onConflict: 'company_id' },
-      )
-
-      if (error) throw error
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
@@ -1578,10 +1462,10 @@ function RentalFactorsCard({
       success('Rental factors updated', 'Rental factors have been saved.')
       setIsExpanded(false) // Collapse after save
     },
-    onError: (error: any) => {
+    onError: (error: unknown) => {
       toastError(
         'Failed to update rental factors',
-        error?.message ?? 'Please try again.',
+        error instanceof Error ? error.message : 'Please try again.',
       )
     },
   })

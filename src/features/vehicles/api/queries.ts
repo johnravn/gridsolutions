@@ -55,6 +55,84 @@ export type VehicleDetail = {
   created_at: string
 }
 
+type VehicleRowRaw = {
+  id: string
+  name: string
+  registration_no?: string | null
+  image_path?: string | null
+  notes?: string | null
+  fuel?: FuelType | null
+  vehicle_category?: VehicleCategory | null
+  internally_owned?: boolean | null
+  external_owner_id?: string | null
+  owner_user_id?: string | null
+  deleted?: boolean | null
+  created_at?: string
+  external_owner?:
+    | { name?: string | null }
+    | Array<{ name?: string | null }>
+    | null
+  owner_user?:
+    | {
+        user_id?: string
+        display_name?: string | null
+        email?: string | null
+      }
+    | Array<{
+        user_id?: string
+        display_name?: string | null
+        email?: string | null
+      }>
+    | null
+}
+
+function mapOwnerUser(raw: VehicleRowRaw['owner_user']) {
+  return Array.isArray(raw) ? raw[0] : raw
+}
+
+function mapExternalOwnerName(raw: VehicleRowRaw['external_owner']) {
+  const owner = Array.isArray(raw) ? raw[0] : raw
+  return owner?.name ?? null
+}
+
+/** Project a vehicles row (+ joins) into index/detail field shapes. */
+export function mapVehicleRow(r: VehicleRowRaw): VehicleIndexRow {
+  const ownerUser = mapOwnerUser(r.owner_user)
+  return {
+    id: r.id,
+    name: r.name,
+    registration_no: r.registration_no ?? null,
+    image_path: r.image_path ?? null,
+    fuel: r.fuel ?? null,
+    vehicle_category: r.vehicle_category ?? null,
+    internally_owned: !!r.internally_owned,
+    external_owner_id: r.external_owner_id ?? null,
+    external_owner_name: mapExternalOwnerName(r.external_owner),
+    owner_user_id: r.owner_user_id ?? null,
+    owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
+    deleted: r.deleted ?? null,
+  }
+}
+
+function mapVehicleDetail(r: VehicleRowRaw): VehicleDetail {
+  const base = mapVehicleRow(r)
+  return {
+    id: base.id,
+    name: base.name,
+    registration_no: base.registration_no,
+    image_path: base.image_path,
+    notes: r.notes ?? null,
+    fuel: base.fuel,
+    vehicle_category: base.vehicle_category,
+    internally_owned: base.internally_owned,
+    external_owner_id: base.external_owner_id,
+    external_owner_name: base.external_owner_name,
+    owner_user_id: base.owner_user_id,
+    owner_user_name: base.owner_user_name,
+    created_at: r.created_at ?? '',
+  }
+}
+
 /* -------------------- Index -------------------- */
 export function vehiclesIndexQuery({
   companyId,
@@ -119,25 +197,7 @@ export function vehiclesIndexQuery({
         ? (data ?? []).slice(0, VEHICLES_INDEX_MAX_ROWS)
         : (data ?? [])
 
-      const rows = page.map((r: any) => {
-        const ownerUser = Array.isArray(r.owner_user)
-          ? r.owner_user[0]
-          : r.owner_user
-        return {
-          id: r.id,
-          name: r.name,
-          registration_no: r.registration_no ?? null,
-          image_path: r.image_path ?? null,
-          fuel: r.fuel ?? null,
-          vehicle_category: r.vehicle_category ?? null,
-          internally_owned: !!r.internally_owned,
-          external_owner_id: r.external_owner_id ?? null,
-          external_owner_name: r.external_owner?.name ?? null,
-          owner_user_id: r.owner_user_id ?? null,
-          owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
-          deleted: r.deleted ?? null,
-        }
-      }) as Array<VehicleIndexRow>
+      const rows = page.map((r) => mapVehicleRow(r as VehicleRowRaw))
 
       if (term) {
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
@@ -199,25 +259,7 @@ export function vehicleDetailQuery({
       if (error) throw error
       if (!data) return null
 
-      const d: any = data
-      const ownerUser = Array.isArray(d.owner_user)
-        ? d.owner_user[0]
-        : d.owner_user
-      return {
-        id: d.id,
-        name: d.name,
-        registration_no: d.registration_no ?? null,
-        image_path: d.image_path ?? null,
-        notes: d.notes ?? null,
-        fuel: d.fuel ?? null,
-        vehicle_category: d.vehicle_category ?? null,
-        internally_owned: !!d.internally_owned,
-        external_owner_id: d.external_owner_id ?? null,
-        external_owner_name: d.external_owner?.name ?? null,
-        owner_user_id: d.owner_user_id ?? null,
-        owner_user_name: ownerUser?.display_name ?? ownerUser?.email ?? null,
-        created_at: d.created_at,
-      }
+      return mapVehicleDetail(data as VehicleRowRaw)
     },
   }
 }
@@ -306,33 +348,6 @@ export type UpdatePersonalBookingInput = {
   endAt?: string
 }
 
-/** Update a personal vehicle booking. Caller must ensure job_id is null. */
-export async function updatePersonalVehicleBooking(
-  input: UpdatePersonalBookingInput,
-): Promise<void> {
-  const payload: Record<string, unknown> = {}
-  if (input.title !== undefined) payload.title = input.title
-  if (input.startAt !== undefined) payload.start_at = input.startAt
-  if (input.endAt !== undefined) payload.end_at = input.endAt
-  if (Object.keys(payload).length === 0) return
-  const { error } = await supabase
-    .from('time_periods')
-    .update(payload)
-    .eq('id', input.timePeriodId)
-  if (error) throw error
-}
-
-/** Delete a personal vehicle booking (hard-delete; cascade removes reserved_vehicles). Caller must ensure job_id is null. */
-export async function deletePersonalVehicleBooking(
-  timePeriodId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('time_periods')
-    .delete()
-    .eq('id', timePeriodId)
-  if (error) throw error
-}
-
 /** Check if a time period is a personal booking (job_id is null) */
 export async function isPersonalBooking(
   timePeriodId: string,
@@ -346,6 +361,45 @@ export async function isPersonalBooking(
   return data.job_id == null
 }
 
+async function assertPersonalBooking(timePeriodId: string): Promise<void> {
+  const personal = await isPersonalBooking(timePeriodId)
+  if (!personal) {
+    throw new Error('Not a personal vehicle booking (job_id is set)')
+  }
+}
+
+/** Update a personal vehicle booking. Rejects if the time period belongs to a job. */
+export async function updatePersonalVehicleBooking(
+  input: UpdatePersonalBookingInput,
+): Promise<void> {
+  await assertPersonalBooking(input.timePeriodId)
+  const payload: Record<string, unknown> = {}
+  if (input.title !== undefined) payload.title = input.title
+  if (input.startAt !== undefined) payload.start_at = input.startAt
+  if (input.endAt !== undefined) payload.end_at = input.endAt
+  if (Object.keys(payload).length === 0) return
+  const { error } = await supabase
+    .from('time_periods')
+    .update(payload)
+    .eq('id', input.timePeriodId)
+    .is('job_id', null)
+  if (error) throw error
+}
+
+/** Delete a personal vehicle booking (hard-delete; cascade removes reserved_vehicles). */
+export async function deletePersonalVehicleBooking(
+  timePeriodId: string,
+): Promise<void> {
+  await assertPersonalBooking(timePeriodId)
+  const { error } = await supabase
+    .from('time_periods')
+    .delete()
+    .eq('id', timePeriodId)
+    .is('job_id', null)
+  if (error) throw error
+}
+
 /* -------------------- Partners for owner dropdown -------------------- */
-/** Re-export: single source lives in inventory partners API. */
-export { partnerCustomersQuery } from '@features/inventory/api/partners'
+/** Re-export: single source lives under customers. */
+export { partnerCustomersQuery } from '@features/customers/api/partners'
+

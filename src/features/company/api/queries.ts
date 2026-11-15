@@ -1,7 +1,14 @@
-// src/features/company/api/queries.ts
 import { supabase } from '@shared/api/supabase'
 
 export type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
+
+async function requireAuthenticatedUserId(): Promise<string> {
+  const { data: auth, error: authErr } = await supabase.auth.getUser()
+  if (authErr) throw authErr
+  const actorId = auth.user?.id
+  if (!actorId) throw new Error('Not authenticated')
+  return actorId
+}
 
 export async function setCompanyUserRole({
   companyId,
@@ -12,10 +19,7 @@ export async function setCompanyUserRole({
   userId: string
   role: CompanyRole
 }) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
+  const actorId = await requireAuthenticatedUserId()
 
   const { data, error } = await supabase.rpc('set_company_user_role', {
     p_company_id: companyId,
@@ -39,10 +43,7 @@ export async function removeCompanyUser({
   companyId: string
   userId: string
 }) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
+  await requireAuthenticatedUserId()
 
   const { error } = await supabase
     .from('company_users')
@@ -274,17 +275,14 @@ export async function updateCompany({
   logo_light_path?: string | null
   logo_dark_path?: string | null
 }) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
+  await requireAuthenticatedUserId()
 
   // Validate that id matches companyId for security
   if (id !== companyId) {
     throw new Error('Company ID mismatch')
   }
 
-  const updates: Record<string, any> = {
+  const updates: Record<string, string | null> = {
     name,
     address: address || null,
     vat_number: vat_number || null,
@@ -304,27 +302,6 @@ export async function updateCompany({
   if (error) throw error
 }
 
-// Update company accent color
-export async function updateCompanyAccentColor({
-  companyId,
-  accentColor,
-}: {
-  companyId: string
-  accentColor: RadixAccentColor | null
-}) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
-
-  const { error } = await supabase
-    .from('companies')
-    .update({ accent_color: accentColor })
-    .eq('id', companyId)
-
-  if (error) throw error
-}
-
 // Update company theme properties
 export async function updateCompanyTheme({
   companyId,
@@ -339,12 +316,9 @@ export async function updateCompanyTheme({
   grayColor?: RadixGrayColor | null
   panelBackground?: RadixPanelBackground | null
 }) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
+  await requireAuthenticatedUserId()
 
-  const updates: Record<string, any> = {}
+  const updates: Record<string, string | null> = {}
   if (accentColor !== undefined) updates.accent_color = accentColor
   if (radius !== undefined) updates.theme_radius = radius
   if (grayColor !== undefined) updates.theme_gray_color = grayColor
@@ -390,6 +364,7 @@ export type CompanyExpansion = {
   fixed_rate_start_day: number | null
   fixed_rate_per_day: number | null
   default_invoice_days_until_due: number | null
+  latest_feed_open_to_freelancers: boolean
   created_at: string
   updated_at: string
 }
@@ -404,7 +379,7 @@ export function companyExpansionQuery({ companyId }: { companyId: string }) {
       const { data, error } = await supabase
         .from('company_expansions')
         .select(
-          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, transport_cost_per_km, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, created_at, updated_at',
+          'id, company_id, accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active, crew_rate_per_day, crew_rate_per_hour, default_crew_billing_unit, vehicle_daily_rate, vehicle_distance_rate, vehicle_distance_increment, transport_cost_per_km, customer_discount_percent, partner_discount_percent, subcontractor_markup_percent, rental_factor_config, fixed_rate_start_day, fixed_rate_per_day, default_invoice_days_until_due, latest_feed_open_to_freelancers, created_at, updated_at',
         )
         .eq('company_id', companyId)
         .maybeSingle()
@@ -430,6 +405,65 @@ export function companyExpansionQuery({ companyId }: { companyId: string }) {
   }
 }
 
+/** Rate / settings fields that may be patched without touching accounting keys. */
+export type CompanyExpansionPatch = {
+  crew_rate_per_day?: number | null
+  crew_rate_per_hour?: number | null
+  default_crew_billing_unit?: DefaultCrewBillingUnit
+  vehicle_daily_rate?: number | null
+  vehicle_distance_rate?: number | null
+  vehicle_distance_increment?: number | null
+  transport_cost_per_km?: number | null
+  customer_discount_percent?: number | null
+  partner_discount_percent?: number | null
+  subcontractor_markup_percent?: number | null
+  rental_factor_config?: RentalFactorConfig | string | null
+  fixed_rate_start_day?: number | null
+  fixed_rate_per_day?: number | null
+  default_invoice_days_until_due?: number | null
+  latest_feed_open_to_freelancers?: boolean
+}
+
+/**
+ * Partial update of company_expansions. Updates when a row exists; inserts
+ * otherwise. Never re-stamps accounting credentials (unlike full upserts).
+ */
+export async function patchCompanyExpansion({
+  companyId,
+  patch,
+}: {
+  companyId: string
+  patch: CompanyExpansionPatch
+}): Promise<void> {
+  if (!companyId) throw new Error('No company selected')
+  if (Object.keys(patch).length === 0) return
+
+  const { data: current, error: readErr } = await supabase
+    .from('company_expansions')
+    .select('id')
+    .eq('company_id', companyId)
+    .maybeSingle()
+  if (readErr) throw readErr
+
+  // Generated DB types omit null on some numeric columns; runtime accepts null clears.
+  const payload = patch as Record<string, unknown>
+
+  if (current?.id) {
+    const { error } = await supabase
+      .from('company_expansions')
+      .update(payload)
+      .eq('company_id', companyId)
+    if (error) throw error
+    return
+  }
+
+  const { error } = await supabase.from('company_expansions').insert({
+    company_id: companyId,
+    ...payload,
+  })
+  if (error) throw error
+}
+
 export async function updateCompanyExpansion({
   companyId,
   accountingSoftware,
@@ -449,10 +483,7 @@ export async function updateCompanyExpansion({
   readOnly?: boolean
   apiKeyActive?: boolean
 }) {
-  const { data: auth, error: authErr } = await supabase.auth.getUser()
-  if (authErr) throw authErr
-  const actorId = auth.user.id
-  if (!actorId) throw new Error('Not authenticated')
+  await requireAuthenticatedUserId()
 
   // Encrypt the API key(s) if provided
   let encryptedKey: string | null = null
@@ -478,7 +509,9 @@ export async function updateCompanyExpansion({
   // Get current expansion to preserve existing values if not provided
   const { data: current } = await supabase
     .from('company_expansions')
-    .select('*')
+    .select(
+      'accounting_software, accounting_api_key_encrypted, accounting_api_key_sandbox_encrypted, accounting_api_environment, accounting_organization_id, accounting_api_read_only, accounting_api_key_active',
+    )
     .eq('company_id', companyId)
     .maybeSingle()
 
@@ -500,15 +533,15 @@ export async function updateCompanyExpansion({
         accounting_api_key_sandbox_encrypted:
           sandboxApiKey !== undefined
             ? encryptedSandboxKey
-            : ((current as any)?.accounting_api_key_sandbox_encrypted ?? null),
+            : (current?.accounting_api_key_sandbox_encrypted ?? null),
         accounting_api_environment:
           apiEnvironment !== undefined
             ? apiEnvironment
-            : ((current as any)?.accounting_api_environment ?? 'production'),
+            : (current?.accounting_api_environment ?? 'production'),
         accounting_organization_id:
           organizationId !== undefined
             ? organizationId
-            : ((current as any)?.accounting_organization_id ?? null),
+            : (current?.accounting_organization_id ?? null),
         accounting_api_read_only:
           readOnly !== undefined
             ? readOnly
@@ -516,7 +549,7 @@ export async function updateCompanyExpansion({
         accounting_api_key_active:
           apiKeyActive !== undefined
             ? apiKeyActive
-            : ((current as any)?.accounting_api_key_active ?? true),
+            : (current?.accounting_api_key_active ?? true),
       },
       { onConflict: 'company_id' },
     )
@@ -534,15 +567,10 @@ export async function updateCompanyInvoiceDefaults({
   companyId: string
   defaultInvoiceDaysUntilDue: number | null
 }) {
-  const { data, error } = await supabase
-    .from('company_expansions')
-    .update({ default_invoice_days_until_due: defaultInvoiceDaysUntilDue })
-    .eq('company_id', companyId)
-    .select()
-    .maybeSingle()
-
-  if (error) throw error
-  return data
+  await patchCompanyExpansion({
+    companyId,
+    patch: { default_invoice_days_until_due: defaultInvoiceDaysUntilDue },
+  })
 }
 
 // Crew pricing levels (customer-specific crew rates)

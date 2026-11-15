@@ -20,44 +20,8 @@ import { prettyPhone } from '@shared/phone/phone'
 import MapEmbed from '@shared/maps/MapEmbed'
 import { supabase } from '@shared/api/supabase'
 import { updateCompany } from '../../api/queries'
+import { formatCompanyAddress, parseCompanyAddress } from '../../lib/address'
 import type { CompanyDetail } from '../../api/queries'
-
-function parseAddress(addr: string | null) {
-  if (!addr) {
-    return {
-      address_line: '',
-      zip_code: '',
-      city: '',
-      country: 'Norway',
-    }
-  }
-  const parts = addr
-    .split(',')
-    .map((p) => p.trim())
-    .filter(Boolean)
-  if (parts.length >= 4) {
-    return {
-      address_line: parts[0] || '',
-      zip_code: parts[1] || '',
-      city: parts[2] || '',
-      country: parts[3] || 'Norway',
-    }
-  }
-  if (parts.length === 1) {
-    return {
-      address_line: parts[0] || '',
-      zip_code: '',
-      city: '',
-      country: 'Norway',
-    }
-  }
-  return {
-    address_line: addr,
-    zip_code: '',
-    city: '',
-    country: 'Norway',
-  }
-}
 
 function buildDefaults(initial: CompanyDetail) {
   return {
@@ -66,7 +30,7 @@ function buildDefaults(initial: CompanyDetail) {
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
     general_email: initial.general_email ?? '',
     contact_person_id: initial.contact_person_id ?? '',
-    ...parseAddress(initial.address ?? null),
+    ...parseCompanyAddress(initial.address ?? null),
   }
 }
 
@@ -138,15 +102,12 @@ export default function EditCompanyDialog({
     mutationFn: async (value: ReturnType<typeof buildDefaults>) => {
       if (!companyId) throw new Error('No company selected')
 
-      const mapQuery = [
-        value.address_line,
-        value.zip_code,
-        value.city,
-        value.country,
-      ]
-        .map((v) => v.trim())
-        .filter(Boolean)
-        .join(', ')
+      const mapQuery = formatCompanyAddress({
+        address_line: value.address_line,
+        zip_code: value.zip_code,
+        city: value.city,
+        country: value.country,
+      })
 
       return updateCompany({
         companyId,

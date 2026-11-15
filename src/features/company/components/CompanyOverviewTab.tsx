@@ -22,6 +22,7 @@ import CompanyLogoUpload from '@shared/ui/components/CompanyLogoUpload'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import CreateAnnouncementDialog from '@features/latest/components/CreateAnnouncementDialog'
 import { companyDetailQuery, updateCompany } from '../api/queries'
+import { formatCompanyAddress, parseCompanyAddress } from '../lib/address'
 import EditCompanyDialog from './dialogs/EditCompanyDialog'
 
 const FIELD_MAX = 420
@@ -88,48 +89,8 @@ export default function CompanyOverviewTab() {
     )
   }
 
-  // Parse address string into components
-  const parseAddress = (addr: string | null) => {
-    if (!addr) {
-      return {
-        address_line: '',
-        zip_code: '',
-        city: '',
-        country: 'Norway',
-      }
-    }
-    const parts = addr
-      .split(',')
-      .map((p) => p.trim())
-      .filter(Boolean)
-    if (parts.length >= 4) {
-      return {
-        address_line: parts[0] || '',
-        zip_code: parts[1] || '',
-        city: parts[2] || '',
-        country: parts[3] || 'Norway',
-      }
-    }
-    return {
-      address_line: addr,
-      zip_code: '',
-      city: '',
-      country: 'Norway',
-    }
-  }
-
-  const parsedAddress = parseAddress(data.address)
-
-  // Build a single-line address for the map preview
-  const mapQuery = [
-    parsedAddress.address_line,
-    parsedAddress.zip_code,
-    parsedAddress.city,
-    parsedAddress.country,
-  ]
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .join(', ')
+  const parsedAddress = parseCompanyAddress(data.address)
+  const mapQuery = formatCompanyAddress(parsedAddress)
 
   return (
     <Card

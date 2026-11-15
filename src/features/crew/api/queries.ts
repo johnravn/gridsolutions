@@ -1,5 +1,7 @@
-// src/features/crew/api/queries.ts
 import { supabase } from '@shared/api/supabase'
+import type { CompanyRole } from '@features/company/types'
+
+export type { CompanyRole }
 
 export type CrewKind = 'employee' | 'freelancer' | 'owner'
 export type CrewPerson = {
@@ -207,21 +209,32 @@ export function crewDetailQuery({
 
       if (pErr) throw pErr
 
+      type ProfileAddress = CrewDetail['primary_address']
+      const primaryAddress = (() => {
+        const raw = prof?.primary_address as
+          | ProfileAddress
+          | Array<NonNullable<ProfileAddress>>
+          | null
+          | undefined
+        if (!raw) return null
+        return Array.isArray(raw) ? (raw[0] ?? null) : raw
+      })()
+
+      const rateType =
+        base.rate_type === 'daily' || base.rate_type === 'hourly'
+          ? base.rate_type
+          : null
+
       return {
-        ...(base as Omit<
-          CrewDetail,
-          | 'bio'
-          | 'preferences'
-          | 'locale'
-          | 'timezone'
-          | 'superuser'
-          | 'primary_address_id'
-          | 'selected_company_id'
-          | 'primary_address'
-          | 'rate_type'
-          | 'rate'
-          | 'rate_updated_at'
-        >),
+        user_id: base.user_id ?? userId,
+        role: base.role as CrewDetail['role'],
+        email: base.email ?? '',
+        display_name: base.display_name,
+        first_name: base.first_name,
+        last_name: base.last_name,
+        phone: base.phone,
+        avatar_url: base.avatar_url,
+        created_at: base.created_at,
         bio: prof?.bio ?? null,
         preferences:
           (prof?.preferences as unknown as CrewOptionalFields | null) ?? null,
@@ -230,10 +243,10 @@ export function crewDetailQuery({
         superuser: prof?.superuser ?? false,
         primary_address_id: prof?.primary_address_id ?? null,
         selected_company_id: prof?.selected_company_id ?? null,
-        rate_type: (base as any)?.rate_type ?? null,
-        rate: (base as any)?.rate ? Number((base as any).rate) : null,
-        rate_updated_at: (base as any)?.rate_updated_at ?? null,
-        primary_address: (prof as any)?.primary_address ?? null,
+        rate_type: rateType,
+        rate: base.rate != null ? Number(base.rate) : null,
+        rate_updated_at: base.rate_updated_at ?? null,
+        primary_address: primaryAddress,
       }
     },
   }
@@ -275,8 +288,6 @@ export type AddInviteResult =
       type: 'already_member'
       role: 'owner' | 'employee' | 'freelancer' | 'super_user'
     }
-
-export type CompanyRole = 'owner' | 'employee' | 'freelancer' | 'super_user'
 
 export async function addMemberOrInvite({
   companyId,

@@ -24,6 +24,7 @@ import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import EditBrandsDialog from '@features/inventory/components/EditBrandsDialog'
 import { useAuthz } from '@shared/auth/useAuthz'
+import { companyExpansionQuery, patchCompanyExpansion } from '../api/queries'
 import EditWelcomeMatterDialog from './dialogs/EditWelcomeMatterDialog'
 import CompanyPrettyOfferImagesSection from './CompanyPrettyOfferImagesSection'
 
@@ -82,7 +83,10 @@ function CategoriesDialogContent({
     },
     onSuccess: async () => {
       setForm({ name: '' })
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -102,7 +106,10 @@ function CategoriesDialogContent({
     onSuccess: async () => {
       setEditingId(null)
       setEditingName('')
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -120,7 +127,10 @@ function CategoriesDialogContent({
       if (deleteError) throw deleteError
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -643,20 +653,17 @@ export default function CompanySetupTab() {
   const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [uploadingPDF, setUploadingPDF] = React.useState(false)
 
-  // Fetch company_expansions for latest_feed_open_to_freelancers setting
   const { data: expansions, isLoading: expansionsLoading } = useQuery({
-    queryKey: ['company', companyId, 'expansions'] as const,
+    ...companyExpansionQuery({ companyId: companyId ?? '' }),
     enabled: !!companyId,
-    queryFn: async () => {
-      if (!companyId) return null
-      const { data, error } = await supabase
-        .from('company_expansions')
-        .select('id, latest_feed_open_to_freelancers')
-        .eq('company_id', companyId)
-        .maybeSingle()
-      if (error) throw error
-      return data
-    },
+    select: (row) =>
+      row
+        ? {
+            id: row.id,
+            latest_feed_open_to_freelancers:
+              row.latest_feed_open_to_freelancers ?? false,
+          }
+        : null,
   })
 
   // Terms and conditions state - fetch from company directly
@@ -859,25 +866,14 @@ export default function CompanySetupTab() {
   const updateFeedAccessMutation = useMutation({
     mutationFn: async (openToFreelancers: boolean) => {
       if (!companyId) throw new Error('No company selected')
-
-      // Upsert: create if doesn't exist, update if exists
-      if (expansions?.id) {
-        const { error } = await supabase
-          .from('company_expansions')
-          .update({ latest_feed_open_to_freelancers: openToFreelancers })
-          .eq('id', expansions.id)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('company_expansions').insert({
-          company_id: companyId,
-          latest_feed_open_to_freelancers: openToFreelancers,
-        })
-        if (error) throw error
-      }
+      await patchCompanyExpansion({
+        companyId,
+        patch: { latest_feed_open_to_freelancers: openToFreelancers },
+      })
     },
     onSuccess: async () => {
       await qc.invalidateQueries({
-        queryKey: ['company', companyId, 'expansions'],
+        queryKey: ['company', companyId, 'expansion'],
       })
       if (pendingToggleValue) {
         success(

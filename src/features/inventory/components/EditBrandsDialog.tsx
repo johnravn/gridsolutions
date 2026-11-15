@@ -1,4 +1,4 @@
-// src/features/inventory/components/EditBrandsDialog.tsx
+// Twin of EditCategoriesDialog (same CRUD chrome; differs by table + query key).
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {

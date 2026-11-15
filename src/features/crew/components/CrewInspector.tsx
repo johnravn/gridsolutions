@@ -17,6 +17,7 @@ import { useCompany } from '@shared/companies/CompanyProvider'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
+import { errorMessage } from '@shared/lib/errorMessage'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { prettyPhone } from '@shared/phone/phone'
 import { EditPencil } from 'iconoir-react'
@@ -201,8 +202,7 @@ export default function CrewInspector({
   if (isError)
     return (
       <Text color="red">
-        Failed to load.{' '}
-        <Code>{(error as any)?.message || 'Unknown error'}</Code>
+        Failed to load. <Code>{errorMessage(error)}</Code>
       </Text>
     )
   if (!data) return <Text color="gray">Not found.</Text>

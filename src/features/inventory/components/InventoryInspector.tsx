@@ -21,9 +21,8 @@ import { Edit, Trash } from 'iconoir-react'
 import { toEventInputs } from '@features/calendar/components/domain'
 import InspectorCalendar from '@features/calendar/components/InspectorCalendar'
 import { itemCalendarQuery } from '@features/calendar/api/queries'
+import { errorMessage } from '@shared/lib/errorMessage'
 import { inventoryDetailQuery } from '../api/queries'
-
-// ⬇️ We'll pass edit props to these (next step we'll add mode/initialData in those files)
 import AddItemDialog from './AddItemDialog'
 import AddGroupDialog from './AddGroupDialog'
 
@@ -45,18 +44,30 @@ export default function InventoryInspector({ id }: { id: string | null }) {
     [],
   )
 
+  const enabled = Boolean(companyId && id)
+
+  const { data, isLoading, isError, error } = useQuery({
+    ...inventoryDetailQuery({
+      companyId: companyId ?? '',
+      id: id ?? '',
+    }),
+    enabled,
+  })
+
   const deleteMutation = useMutation({
     mutationFn: async () => {
-      if (!companyId || !id) throw new Error('Missing company or id')
+      if (!companyId || !id || !data) {
+        throw new Error('Missing company, id, or entry')
+      }
+      const entry = data
       const table = entry.type === 'item' ? 'items' : 'item_groups'
-      const { error } = await supabase
+      const { error: deleteError } = await supabase
         .from(table)
         .update({ deleted: true })
         .eq('company_id', companyId)
         .eq('id', id)
-      if (error) throw error
+      if (deleteError) throw deleteError
 
-      // Log activity
       try {
         const { logActivity } = await import('@features/latest/api/queries')
         await logActivity({
@@ -93,19 +104,10 @@ export default function InventoryInspector({ id }: { id: string | null }) {
       info('Deleted', 'The entry has been deleted.')
       setDeleteOpen(false)
     },
-    onError: (e: any) => {
-      toastError('Failed to delete', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      const message = e instanceof Error ? e.message : 'Please try again.'
+      toastError('Failed to delete', message)
     },
-  })
-
-  const enabled = Boolean(companyId && id)
-
-  const { data, isLoading, isError, error } = useQuery({
-    ...inventoryDetailQuery({
-      companyId: companyId ?? '',
-      id: id ?? '',
-    }),
-    enabled,
   })
 
   // Fetch calendar events for this item (only if it's an item, not a group)
@@ -134,8 +136,7 @@ export default function InventoryInspector({ id }: { id: string | null }) {
   if (isError) {
     return (
       <Text color="red">
-        Failed to load.{' '}
-        <Code>{(error as any)?.message || 'Unknown error'}</Code>
+        Failed to load. <Code>{errorMessage(error)}</Code>
       </Text>
     )
   }

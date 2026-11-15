@@ -15,6 +15,7 @@ import { Edit, Plus, Trash } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
+import { errorMessage } from '@shared/lib/errorMessage'
 import LazyImage from '@shared/ui/components/LazyImage'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import { toEventInputs } from '@features/calendar/components/domain'
@@ -364,8 +365,7 @@ export default function VehicleInspector({ id }: { id: string | null }) {
   if (isError)
     return (
       <Text color="red">
-        Failed to load.{' '}
-        <Code>{(error as any)?.message || 'Unknown error'}</Code>
+        Failed to load. <Code>{errorMessage(error)}</Code>
       </Text>
     )
   if (!data) return <Text color="gray">Not found.</Text>

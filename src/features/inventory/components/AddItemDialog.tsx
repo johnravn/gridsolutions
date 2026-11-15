@@ -26,6 +26,7 @@ import {
   SHOW_AUTOFILL_BUTTONS,
   generateItemAutofill,
 } from '@shared/testing/autofill'
+import { categoryOptionsQuery } from '../api/queries'
 import BrandAutocomplete from './BrandAutocomplete'
 import type { InventoryItemKind } from '../api/queries'
 
@@ -166,18 +167,8 @@ export default function AddItemDialog({
     isLoading: catLoading,
     error: catErr,
   } = useQuery({
-    queryKey: ['company', companyId, 'item_categories'],
+    ...categoryOptionsQuery({ companyId: companyId ?? '' }),
     enabled: !!companyId && open,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('item_categories')
-        .select('id, name')
-        .eq('company_id', companyId)
-        .order('name', { ascending: true })
-      if (error) throw error
-      return data as Array<Option>
-    },
-    staleTime: 60_000,
   })
 
   React.useEffect(() => {

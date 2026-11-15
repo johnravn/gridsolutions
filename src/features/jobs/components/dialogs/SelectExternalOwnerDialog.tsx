@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Button, Dialog, Flex } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
-import { partnerCustomersQuery } from '@features/inventory/api/partners'
+import { partnerCustomersQuery } from '@features/customers/api/partners'
 
 const schema = z.object({
   selectedOwnerId: z.string().min(1, 'Select a partner'),

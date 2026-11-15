@@ -27,11 +27,8 @@ import {
 } from '@app/layout/split'
 import CrewTable from '../components/CrewTable'
 import CrewInspector from '../components/CrewInspector'
-import {
-  crewIndexQuery,
-  crewInternalNotesQuery,
-  pendingInvitesQuery,
-} from '../api/queries'
+import { crewInternalNotesQuery } from '../api/queries'
+import { useCrewIndexBundle } from '../hooks/useCrewIndexBundle'
 
 export default function CrewPage() {
   const { companyId } = useCompany()
@@ -85,23 +82,12 @@ export default function CrewPage() {
     [openDrawer],
   )
 
-  const { isLoading: empLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'employee' }),
-    enabled: !!companyId && showEmployees,
+  const { isLoading: crewIndexLoading } = useCrewIndexBundle({
+    companyId,
+    showEmployees,
+    showFreelancers,
+    showMyPending,
   })
-  const { isLoading: frLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'freelancer' }),
-    enabled: !!companyId && showFreelancers,
-  })
-  const { isLoading: owLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'owner' }),
-    enabled: !!companyId,
-  })
-  const { isLoading: invLoading } = useQuery({
-    ...pendingInvitesQuery({ companyId: companyId! }),
-    enabled: !!companyId && showMyPending,
-  })
-  const crewIndexLoading = empLoading || frLoading || owLoading || invLoading
   const showInitialSkeleton = useInitialPageLoad(crewIndexLoading)
 
   const filter = (

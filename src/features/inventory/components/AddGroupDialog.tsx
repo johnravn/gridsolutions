@@ -31,9 +31,9 @@ import {
   generateGroupAutofill,
   generateGroupPartsAutofill,
 } from '@shared/testing/autofill'
+import { categoryOptionsQuery } from '../api/queries'
 import type { InventoryItemKind } from '../api/queries'
 
-type Option = { id: string; name: string }
 type PickerItem = {
   id: string
   name: string
@@ -166,18 +166,8 @@ export default function AddGroupDialog({
 
   /* -------- Categories -------- */
   const { data: categories = [] } = useQuery({
-    queryKey: ['company', companyId, 'item_categories'],
+    ...categoryOptionsQuery({ companyId: companyId ?? '' }),
     enabled: !!companyId && open,
-    queryFn: async (): Promise<Array<Option>> => {
-      const { data, error } = await supabase
-        .from('item_categories')
-        .select('id, name')
-        .eq('company_id', companyId)
-        .order('name', { ascending: true })
-      if (error) throw error
-      return data as Array<Option>
-    },
-    staleTime: 60_000,
   })
 
   /* -------- Item and Group search (picker) -------- */

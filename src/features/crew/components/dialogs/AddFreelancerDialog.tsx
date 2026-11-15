@@ -7,15 +7,7 @@ import { useDialogOpenEffect } from '@shared/ui/hooks/useDialogOpenEffect'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { sendWelcomeEmailForPendingInvite } from '@shared/email/supabaseEdgeEmail'
 import { addMemberOrInvite } from '../../api/queries'
-
-type AddInviteResult =
-  | { type: 'added' }
-  | { type: 'invited'; pending_invite_id: string }
-  | { type: 'already_invited'; by: string; pending_invite_id: string }
-  | {
-      type: 'already_member'
-      role: 'owner' | 'employee' | 'freelancer' | 'super_user'
-    }
+import type { AddInviteResult } from '../../api/queries'
 
 const defaultValues = {
   email: '',

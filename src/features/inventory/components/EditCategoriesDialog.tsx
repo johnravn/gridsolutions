@@ -1,4 +1,4 @@
-// src/features/inventory/components/EditCategoriesDialog.tsx
+// Twin of EditBrandsDialog (same CRUD chrome; differs by table + query key).
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -93,7 +93,10 @@ export default function EditCategoriesDialog({
     },
     onSuccess: async () => {
       form.reset(defaultValues)
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -114,7 +117,10 @@ export default function EditCategoriesDialog({
     onSuccess: async () => {
       setEditingId(null)
       setEditingName('')
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,
@@ -133,7 +139,10 @@ export default function EditCategoriesDialog({
       if (deleteError) throw deleteError
     },
     onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: categoriesQueryKey })
+      await qc.invalidateQueries({
+        queryKey: ['company', companyId, 'item-categories'],
+        exact: false,
+      })
       await qc.invalidateQueries({
         queryKey: ['company', companyId, 'inventory-index'],
         exact: false,

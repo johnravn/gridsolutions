@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeCompanyUser, setCompanyUserRole } from './queries'
+import {
+  patchCompanyExpansion,
+  removeCompanyUser,
+  setCompanyUserRole,
+} from './queries'
 
 const getUserMock = vi.fn()
 const rpcMock = vi.fn()
 const deleteMock = vi.fn()
 const eqMock = vi.fn()
+const maybeSingleMock = vi.fn()
+const updateEqMock = vi.fn()
+const insertMock = vi.fn()
 
 vi.mock('@shared/api/supabase', () => ({
   supabase: {
@@ -12,19 +19,37 @@ vi.mock('@shared/api/supabase', () => ({
       getUser: () => getUserMock(),
     },
     rpc: (...args: unknown[]) => rpcMock(...args),
-    from: () => ({
-      delete: () => ({
-        eq: (...args: unknown[]) => {
-          eqMock(...args)
-          return {
-            eq: (...innerArgs: unknown[]) => {
-              eqMock(...innerArgs)
-              return deleteMock()
+    from: (table: string) => {
+      if (table === 'company_users') {
+        return {
+          delete: () => ({
+            eq: (...args: unknown[]) => {
+              eqMock(...args)
+              return {
+                eq: (...innerArgs: unknown[]) => {
+                  eqMock(...innerArgs)
+                  return deleteMock()
+                },
+              }
             },
-          }
-        },
-      }),
-    }),
+          }),
+        }
+      }
+      if (table === 'company_expansions') {
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: () => maybeSingleMock(),
+            }),
+          }),
+          update: (payload: unknown) => ({
+            eq: (...args: unknown[]) => updateEqMock(payload, ...args),
+          }),
+          insert: (payload: unknown) => insertMock(payload),
+        }
+      }
+      return {}
+    },
   },
 }))
 
@@ -34,6 +59,9 @@ describe('company api mutations', () => {
     rpcMock.mockReset()
     deleteMock.mockReset()
     eqMock.mockReset()
+    maybeSingleMock.mockReset()
+    updateEqMock.mockReset()
+    insertMock.mockReset()
   })
 
   it('setCompanyUserRole calls RPC with actor and target', async () => {
@@ -93,5 +121,38 @@ describe('company api mutations', () => {
 
     expect(eqMock).toHaveBeenCalledWith('company_id', 'company-1')
     expect(eqMock).toHaveBeenCalledWith('user_id', 'user-2')
+  })
+
+  it('patchCompanyExpansion updates when a row exists', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { id: 'exp-1' }, error: null })
+    updateEqMock.mockResolvedValue({ error: null })
+
+    await patchCompanyExpansion({
+      companyId: 'company-1',
+      patch: { crew_rate_per_day: 1000 },
+    })
+
+    expect(updateEqMock).toHaveBeenCalledWith(
+      { crew_rate_per_day: 1000 },
+      'company_id',
+      'company-1',
+    )
+    expect(insertMock).not.toHaveBeenCalled()
+  })
+
+  it('patchCompanyExpansion inserts when no row exists', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null })
+    insertMock.mockResolvedValue({ error: null })
+
+    await patchCompanyExpansion({
+      companyId: 'company-1',
+      patch: { latest_feed_open_to_freelancers: true },
+    })
+
+    expect(insertMock).toHaveBeenCalledWith({
+      company_id: 'company-1',
+      latest_feed_open_to_freelancers: true,
+    })
+    expect(updateEqMock).not.toHaveBeenCalled()
   })
 })

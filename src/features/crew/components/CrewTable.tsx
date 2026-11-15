@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Badge,
   Box,
@@ -30,11 +30,8 @@ import {
   buildCrewIndexRows,
   compareCrewIndexRows,
 } from '../lib/buildCrewIndexRows'
-import {
-  crewIndexQuery,
-  deleteInvite,
-  pendingInvitesQuery,
-} from '../api/queries'
+import { deleteInvite } from '../api/queries'
+import { useCrewIndexBundle } from '../hooks/useCrewIndexBundle'
 import AddFreelancerDialog from './dialogs/AddFreelancerDialog'
 import type {
   CrewIndexTableRow,
@@ -85,24 +82,17 @@ export default function CrewTable({
   )
   const { success } = useToast()
 
-  const { data: employees = [], isLoading: empLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'employee' }),
-    enabled: !!companyId && showEmployees,
-  })
-
-  const { data: freelancers = [], isLoading: frLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'freelancer' }),
-    enabled: !!companyId && showFreelancers,
-  })
-
-  const { data: owners = [], isLoading: owLoading } = useQuery({
-    ...crewIndexQuery({ companyId: companyId!, kind: 'owner' }),
-    enabled: !!companyId,
-  })
-
-  const { data: myInvites = [], isLoading: invLoading } = useQuery({
-    ...pendingInvitesQuery({ companyId: companyId! }),
-    enabled: !!companyId && showMyPending,
+  const {
+    employees,
+    freelancers,
+    owners,
+    invites: myInvites,
+    isLoading: indexLoading,
+  } = useCrewIndexBundle({
+    companyId,
+    showEmployees,
+    showFreelancers,
+    showMyPending,
   })
 
   const baseRows = React.useMemo(
@@ -172,7 +162,7 @@ export default function CrewTable({
     },
   })
 
-  const isLoading = empLoading || frLoading || invLoading || owLoading
+  const isLoading = indexLoading
 
   const columns: Array<IndexColumn<CrewSortColumn>> = [
     { id: 'name', header: 'Name / Email', sortable: true, sortKey: 'name' },

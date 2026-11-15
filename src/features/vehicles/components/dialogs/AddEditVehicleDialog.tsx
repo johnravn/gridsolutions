@@ -13,9 +13,11 @@ import {
 } from '@shared/testing/autofill'
 import { Camera, Sparks } from 'iconoir-react'
 import { crewIndexQuery } from '@features/crew/api/queries'
-import { partnerCustomersQuery, upsertVehicle } from '../../api/queries'
-import type { FuelType, VehicleCategory } from '../../api/queries'
+import { partnerCustomersQuery } from '@features/customers/api/partners'
+import { upsertVehicle } from '../../api/queries'
+import { vehicleOwnerKind } from '../../lib/ownership'
 import type { VehicleOwnerKind } from '../../lib/ownership'
+import type { FuelType, VehicleCategory } from '../../api/queries'
 
 type Mode = 'create' | 'edit'
 type Initial = {
@@ -124,11 +126,7 @@ export default function AddEditVehicleDialog({
   React.useEffect(() => {
     if (!open) return
     if (mode === 'edit' && initial) {
-      const ownerType: VehicleOwnerKind = initial.internally_owned
-        ? 'company'
-        : initial.owner_user_id
-          ? 'person'
-          : 'partner'
+      const ownerType = vehicleOwnerKind(initial)
       form.reset(
         {
           name: initial.name,
