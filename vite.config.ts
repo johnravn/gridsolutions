@@ -81,6 +81,17 @@ export default defineConfig(({ mode }) => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          // SPA shell only for navigations — never for hashed assets / SW helpers.
+          // Missing those must 404 (see vercel.json), not return index.html, or
+          // Safari rejects the response as an invalid JavaScript MIME type.
+          navigateFallback: 'index.html',
+          navigateFallbackDenylist: [
+            /^\/api\//,
+            /^\/assets\//,
+            /^\/sw\.js$/i,
+            /^\/workbox-.*\.js$/i,
+            /\.[a-zA-Z0-9]+$/i,
+          ],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
