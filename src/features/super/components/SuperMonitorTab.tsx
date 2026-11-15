@@ -17,6 +17,8 @@ import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
   MONITOR_JOB_DEFINITIONS,
   ageInMinutes,
+  extractContaResultsFromDetails,
+  formatContaSyncCompanyErrors,
   formatDurationMs,
   formatMonitorDateTime,
   formatTriggerSource,
@@ -33,6 +35,7 @@ import {
 } from '../api/monitorQueries'
 import SuperResendEmailsSection from './SuperResendEmailsSection'
 import { MonitorVirtualList } from './MonitorVirtualList'
+import { ContaErrorLogPanel, RunDetailsLogPanel } from './MonitorRunLogs'
 import type {
   MonitorContaCompany,
   MonitorJobLastRun,
@@ -110,9 +113,20 @@ function JobCard({
           </Grid>
         )}
         {lastRun?.last_error_message ? (
-          <Text size="1" color="red">
+          <Text size="1" color="red" as="div">
             {lastRun.last_error_message}
           </Text>
+        ) : null}
+        {lastRun?.job_key === 'conta_customer_sync' ||
+        lastRun?.job_key === 'conta_invoice_paid_sync' ? (
+          <ContaErrorLogPanel details={lastRun.last_details} />
+        ) : null}
+        {lastRun ? (
+          <RunDetailsLogPanel
+            details={lastRun.last_details}
+            jobKey={lastRun.job_key}
+            includeContaErrors={false}
+          />
         ) : null}
       </Flex>
     </Card>
@@ -121,8 +135,10 @@ function JobCard({
 
 function ContaCompanyHealthSection({
   companies,
+  failingCompanyIds,
 }: {
   companies: Array<MonitorContaCompany>
+  failingCompanyIds: Set<string>
 }) {
   return (
     <Card size="3" style={{ flexShrink: 0 }}>
@@ -150,6 +166,7 @@ function ContaCompanyHealthSection({
               const inactive = !row.api_key_active
               const neverSynced = !row.last_customer_sync_at
               const openInvoices = row.open_conta_invoice_count ?? 0
+              const lastSyncFailed = failingCompanyIds.has(row.company_id)
               return (
                 <Box
                   p="3"
@@ -169,6 +186,11 @@ function ContaCompanyHealthSection({
                       {row.company_name}
                     </Text>
                     <Flex align="center" gap="2" wrap="wrap">
+                      {lastSyncFailed ? (
+                        <Badge color="red" variant="soft" size="1">
+                          Last sync error
+                        </Badge>
+                      ) : null}
                       <Badge variant="soft" size="1" color="gray">
                         {row.accounting_api_environment ?? '—'}
                       </Badge>
@@ -367,6 +389,15 @@ function RecentRunsSection({ runs }: { runs: Array<MonitorRecentRun> }) {
                       {run.error_message}
                     </Text>
                   ) : null}
+                  {run.job_key === 'conta_customer_sync' ||
+                  run.job_key === 'conta_invoice_paid_sync' ? (
+                    <ContaErrorLogPanel details={run.details} />
+                  ) : null}
+                  <RunDetailsLogPanel
+                    details={run.details}
+                    jobKey={run.job_key}
+                    includeContaErrors={false}
+                  />
                 </Box>
               )
             }}
@@ -392,14 +423,30 @@ export default function SuperMonitorTab() {
     mutationFn: triggerContaSyncNow,
     onSuccess: (result) => {
       invalidateSnapshot()
-      const customerMsg = summarizeContaCustomerSyncResults(
-        result.customerSync?.results ?? result.results ?? [],
-      )
-      const invoiceMsg = summarizeContaInvoicePaidSyncResults(
-        result.invoicePaidSync?.results ?? [],
-      )
-      const combined = `Customers: ${customerMsg}. Invoices: ${invoiceMsg}.`
-      if (result.ok) {
+      const customerResults =
+        result.customerSync?.results ?? result.results ?? []
+      const invoiceResults = result.invoicePaidSync?.results ?? []
+      const customerMsg = summarizeContaCustomerSyncResults(customerResults)
+      const invoiceMsg = summarizeContaInvoicePaidSyncResults(invoiceResults)
+      const companyErrors = [
+        ...formatContaSyncCompanyErrors(customerResults, { limit: 2 }),
+        ...formatContaSyncCompanyErrors(invoiceResults, { limit: 2 }),
+      ]
+      const combined = [
+        `Customers: ${customerMsg}. Invoices: ${invoiceMsg}.`,
+        companyErrors.length > 0
+          ? `Open Show error log on the Conta job cards for the full list.`
+          : null,
+        ...companyErrors,
+      ]
+        .filter(Boolean)
+        .join(' ')
+      const hasIssues =
+        !result.ok ||
+        result.customerSync?.status === 'partial' ||
+        result.invoicePaidSync?.status === 'partial' ||
+        companyErrors.length > 0
+      if (!hasIssues) {
         success('Conta syncs completed', combined)
       } else {
         toastError('Conta syncs completed with issues', combined)
@@ -489,6 +536,17 @@ export default function SuperMonitorTab() {
       const status = lastRunByKey.get(def.jobKey)?.last_status
       return status === 'failed' || status === 'partial'
     })
+  }, [lastRunByKey])
+
+  const failingContaCompanyIds = React.useMemo(() => {
+    const ids = new Set<string>()
+    for (const key of ['conta_customer_sync', 'conta_invoice_paid_sync']) {
+      const details = lastRunByKey.get(key)?.last_details
+      for (const row of extractContaResultsFromDetails(details)) {
+        if (row.errors.length > 0) ids.add(row.companyId)
+      }
+    }
+    return ids
   }, [lastRunByKey])
 
   const showAlert = problemJobs.length > 0 || backlogWarning
@@ -693,7 +751,10 @@ export default function SuperMonitorTab() {
           </Flex>
         </Box>
 
-        <ContaCompanyHealthSection companies={contaCompanies} />
+        <ContaCompanyHealthSection
+          companies={contaCompanies}
+          failingCompanyIds={failingContaCompanyIds}
+        />
 
         <EmailPipelineSection
           pendingCount={pendingCount}

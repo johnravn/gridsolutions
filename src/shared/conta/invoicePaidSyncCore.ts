@@ -5,6 +5,11 @@
  */
 
 import { isContaInvoicePaid } from './contaInvoicePaid.js'
+import {
+  assertContaOrganizationAccess,
+  formatContaAuthError,
+  isContaAuthError,
+} from './customerSyncCore.js'
 import type { ContaFetch } from './customerSyncCore.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '../types/database.types.js'
@@ -215,6 +220,19 @@ export async function syncInvoicePaidStatusForOrganization(
     paidInvoices: [],
   }
 
+  try {
+    await assertContaOrganizationAccess(conta, organizationId)
+  } catch (e: unknown) {
+    const message =
+      e instanceof Error ? e.message : 'Conta organization access failed'
+    result.errors.push(
+      isContaAuthError(message)
+        ? formatContaAuthError(organizationId, message)
+        : message,
+    )
+    return result
+  }
+
   const { data: invoices, error: invoicesError } = await supabase
     .from('job_invoices')
     .select(
@@ -308,11 +326,16 @@ export async function syncInvoicePaidStatusForOrganization(
         )
       }
     } catch (e: unknown) {
-      result.errors.push(
+      const message =
         e instanceof Error
           ? e.message
-          : `Invoice ${invoice.id}: Conta sync failed`,
-      )
+          : `Invoice ${invoice.id}: Conta sync failed`
+      if (isContaAuthError(message)) {
+        result.errors.push(formatContaAuthError(organizationId, message))
+        opts?.onProgress?.({ current: total, total })
+        break
+      }
+      result.errors.push(message)
     }
     opts?.onProgress?.({ current: i + 1, total })
   }

@@ -3,11 +3,18 @@
  * No path aliases — safe for Vercel serverless.
  */
 
+import { resolveContaGatewayUrls } from '../api/conta/gatewayUrls.js'
 import {
+  isContaAuthError,
   makeContaFetch,
   syncCustomersWithContaCore,
 } from './customerSyncCore.js'
-import { resolveContaGatewayUrls } from '../api/conta/gatewayUrls.js'
+import { loadContaCompanyNames, withCompanyName } from './contaCompanyNames.js'
+import {
+  buildContaErrorLog,
+  normalizeContaCompanyResultForPersist,
+  totalContaErrorCount,
+} from './contaErrorLog.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '../types/database.types.js'
 
@@ -20,11 +27,13 @@ const { prod: contaBaseUrl, sandbox: contaSandboxUrl } =
 
 export type ContaSyncCompanyResult = {
   companyId: string
+  companyName?: string | null
   updated: number
   created: number
   skipped: number
   skippedReason?: string
   errors: Array<string>
+  errorEntries?: Array<{ message: string; count: number }>
 }
 
 export type ScheduledJobRunStatus = 'running' | 'success' | 'partial' | 'failed'
@@ -65,7 +74,7 @@ export function summarizeContaSyncResults(
   const updated = results.reduce((n, r) => n + r.updated, 0)
   const created = results.reduce((n, r) => n + r.created, 0)
   const skipped = results.reduce((n, r) => n + r.skipped, 0)
-  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  const errors = totalContaErrorCount(results)
   return `${updated} updated, ${created} created, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
 }
 
@@ -161,6 +170,10 @@ export async function runContaCustomerSyncForAllCompanies(
     }
   }
 
+  const companyIds = (companies ?? [])
+    .map((row) => row.company_id)
+    .filter(Boolean)
+  const companyNames = await loadContaCompanyNames(supabase, companyIds)
   const results: Array<ContaSyncCompanyResult> = []
 
   for (const row of companies ?? []) {
@@ -172,24 +185,34 @@ export async function runContaCustomerSyncForAllCompanies(
       { p_company_id: row.company_id },
     )
     if (keyError) {
-      results.push({
-        companyId: row.company_id,
-        updated: 0,
-        created: 0,
-        skipped: 0,
-        errors: [keyError.message],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            updated: 0,
+            created: 0,
+            skipped: 0,
+            errors: [keyError.message],
+          },
+          companyNames,
+        ),
+      )
       continue
     }
     if (!apiKey) {
-      results.push({
-        companyId: row.company_id,
-        updated: 0,
-        created: 0,
-        skipped: 0,
-        skippedReason: 'No active Conta API key for company',
-        errors: [],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            updated: 0,
+            created: 0,
+            skipped: 0,
+            skippedReason: 'No active Conta API key for company',
+            errors: [],
+          },
+          companyNames,
+        ),
+      )
       continue
     }
 
@@ -203,40 +226,59 @@ export async function runContaCustomerSyncForAllCompanies(
         makeContaFetch({ apiKey, baseUrl }),
         supabase,
       )
-      results.push({
-        companyId: row.company_id,
-        updated: r.updated,
-        created: r.created,
-        skipped: r.skipped,
-        errors: r.errors,
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            updated: r.updated,
+            created: r.created,
+            skipped: r.skipped,
+            errors: r.errors,
+          },
+          companyNames,
+        ),
+      )
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : 'Sync failed'
-      results.push({
-        companyId: row.company_id,
-        updated: 0,
-        created: 0,
-        skipped: 0,
-        errors: [message],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            updated: 0,
+            created: 0,
+            skipped: 0,
+            errors: [message],
+          },
+          companyNames,
+        ),
+      )
     }
   }
 
-  const status = deriveContaSyncStatus(results)
+  const persistedResults = results.map(normalizeContaCompanyResultForPersist)
+  const status = deriveContaSyncStatus(persistedResults)
+  const errorLog = buildContaErrorLog(persistedResults)
   const details = {
-    companies: results.length,
+    companies: persistedResults.length,
     syncedAt,
-    results,
-    summary: summarizeContaSyncResults(results),
+    results: persistedResults,
+    errorLog,
+    summary: summarizeContaSyncResults(persistedResults),
   }
-  await finishJobRun(supabase, runId, status, details)
+  const firstFailed = persistedResults.find((r) =>
+    r.errors.some((message) => isContaAuthError(message)),
+  )
+  const firstAuthError = firstFailed
+    ? `${firstFailed.companyName ?? firstFailed.companyId}: ${firstFailed.errors.find((m) => isContaAuthError(m))}`
+    : null
+  await finishJobRun(supabase, runId, status, details, firstAuthError)
 
   return {
     ok: status !== 'failed',
     runId,
-    companies: results.length,
+    companies: persistedResults.length,
     syncedAt,
     status,
-    results,
+    results: persistedResults,
   }
 }

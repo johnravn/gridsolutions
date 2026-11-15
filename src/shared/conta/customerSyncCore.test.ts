@@ -1,9 +1,31 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   buildContaCustomerCreateBody,
+  formatContaAuthError,
+  isContaAuthError,
   makeContaFetch,
   syncCustomersWithContaCore,
 } from './customerSyncCore'
+
+describe('isContaAuthError', () => {
+  it('detects Conta 401 credential failures', () => {
+    expect(
+      isContaAuthError(
+        'Conta 401: {\n  "message":"Invalid authentication credentials"\n}',
+      ),
+    ).toBe(true)
+    expect(isContaAuthError('Conta 404: not found')).toBe(false)
+  })
+
+  it('formats a single company-level auth message', () => {
+    expect(
+      formatContaAuthError(
+        'org-1',
+        'Conta 401: Invalid authentication credentials',
+      ),
+    ).toMatch(/organization org-1/)
+  })
+})
 
 describe('makeContaFetch', () => {
   beforeEach(() => {

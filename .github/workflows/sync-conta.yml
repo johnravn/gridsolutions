@@ -30,7 +30,22 @@ jobs:
             echo "::error::Conta sync failed with HTTP $code"
             exit 1
           fi
-          echo "$body" | grep -q '"ok":true' || {
-            echo "::error::Conta sync response missing ok:true"
-            exit 1
-          }
+          # `ok:true` still allows status=partial (e.g. one company with Conta 401).
+          # Require both legs to be fully successful so ops notices auth/key failures.
+          node -e '
+            const body = JSON.parse(process.argv[1] || "{}")
+            if (body.ok !== true) {
+              console.error("Conta sync response missing ok:true")
+              process.exit(1)
+            }
+            const customer = body.customerSync?.status
+            const invoice = body.invoicePaidSync?.status
+            if (customer !== "success") {
+              console.error(`Conta customer sync status was ${customer ?? "missing"} (expected success)`)
+              process.exit(1)
+            }
+            if (invoice !== "success") {
+              console.error(`Conta invoice paid sync status was ${invoice ?? "missing"} (expected success)`)
+              process.exit(1)
+            }
+          ' "$body"

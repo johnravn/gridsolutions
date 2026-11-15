@@ -271,6 +271,9 @@ describe('syncInvoicePaidStatusForOrganization', () => {
     })
 
     const get = vi.fn().mockImplementation(async (path: string) => {
+      if (path.includes('/customers?')) {
+        return { hits: [], totalHits: 0 }
+      }
       if (path.endsWith('/invoices/1')) {
         return { id: 1, status: 'CLOSED_BY_PAYMENT', extendedStatus: 'PAID' }
       }
@@ -303,7 +306,7 @@ describe('syncInvoicePaidStatusForOrganization', () => {
     expect(onProgress).toHaveBeenCalledWith({ current: 2, total: 2 })
   })
 
-  it('uses stored paid response without Conta GET', async () => {
+  it('uses stored paid response without Conta invoice GET after auth probe', async () => {
     const invoices = [
       makeInvoice({
         conta_response: {
@@ -318,7 +321,12 @@ describe('syncInvoicePaidStatusForOrganization', () => {
       junctionJobIds: ['job-1'],
       updatedJobIds: ['job-1'],
     })
-    const get = vi.fn()
+    const get = vi.fn().mockImplementation(async (path: string) => {
+      if (path.includes('/customers?')) {
+        return { hits: [], totalHits: 0 }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
     const conta: ContaFetch = { get, post: vi.fn() }
 
     const result = await syncInvoicePaidStatusForOrganization(
@@ -327,7 +335,7 @@ describe('syncInvoicePaidStatusForOrganization', () => {
       supabase,
     )
 
-    expect(get).not.toHaveBeenCalled()
+    expect(get).toHaveBeenCalledTimes(1)
     expect(result.invoicesMarkedPaid).toBe(1)
     expect(result.jobsMarkedPaid).toBe(1)
     expect(result.paidInvoices).toEqual([
@@ -337,5 +345,34 @@ describe('syncInvoicePaidStatusForOrganization', () => {
         jobsMarkedPaid: 1,
       }),
     ])
+  })
+
+  it('fails fast on Conta 401 without checking invoices', async () => {
+    const invoices = [
+      makeInvoice({ id: 'inv-a', conta_response: { id: 1 } }),
+      makeInvoice({ id: 'inv-b', conta_response: { id: 2 } }),
+    ]
+    const { supabase } = createSupabaseMock({ invoices })
+    const get = vi
+      .fn()
+      .mockRejectedValue(
+        new Error(
+          'Conta 401: {\n  "message":"Invalid authentication credentials"\n}',
+        ),
+      )
+    const conta: ContaFetch = { get, post: vi.fn() }
+
+    const result = await syncInvoicePaidStatusForOrganization(
+      'org-bad',
+      conta,
+      supabase,
+    )
+
+    expect(result.checked).toBe(0)
+    expect(result.errors).toHaveLength(1)
+    expect(result.errors[0]).toMatch(
+      /Conta authentication failed for organization org-bad/,
+    )
+    expect(get).toHaveBeenCalledTimes(1)
   })
 })

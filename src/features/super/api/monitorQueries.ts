@@ -1,5 +1,10 @@
 import { supabase } from '@shared/api/supabase'
 import { appEnv } from '@shared/lib/env'
+import {
+  extractContaErrorLogFromDetails,
+  totalContaErrorCount,
+} from '@shared/conta/contaErrorLog'
+import type { ContaErrorLogEntry } from '@shared/conta/contaErrorLog'
 
 export type ScheduledJobRunStatus = 'running' | 'success' | 'partial' | 'failed'
 
@@ -161,23 +166,29 @@ export function systemMonitorSnapshotQuery() {
   }
 }
 
+export type ContaSyncCompanyLegResult = {
+  companyId: string
+  companyName?: string | null
+  updated?: number
+  created?: number
+  checked?: number
+  invoicesMarkedPaid?: number
+  jobsMarkedPaid?: number
+  skipped: number
+  skippedReason?: string
+  errors: Array<string>
+  errorEntries?: Array<{ message: string; count: number }>
+}
+
+export type { ContaErrorLogEntry }
+
 export type ContaSyncLegResult = {
   ok: boolean
   runId: string | null
   status: ScheduledJobRunStatus
   companies: number
   syncedAt: string
-  results: Array<{
-    companyId: string
-    updated?: number
-    created?: number
-    checked?: number
-    invoicesMarkedPaid?: number
-    jobsMarkedPaid?: number
-    skipped: number
-    skippedReason?: string
-    errors: Array<string>
-  }>
+  results: Array<ContaSyncCompanyLegResult>
   error?: string
 }
 
@@ -289,7 +300,7 @@ export function summarizeContaCustomerSyncResults(
   const updated = results.reduce((n, r) => n + (r.updated ?? 0), 0)
   const created = results.reduce((n, r) => n + (r.created ?? 0), 0)
   const skipped = results.reduce((n, r) => n + r.skipped, 0)
-  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  const errors = totalContaErrorCount(results)
   return `${updated} updated, ${created} created, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
 }
 
@@ -300,8 +311,48 @@ export function summarizeContaInvoicePaidSyncResults(
   const invoices = results.reduce((n, r) => n + (r.invoicesMarkedPaid ?? 0), 0)
   const jobs = results.reduce((n, r) => n + (r.jobsMarkedPaid ?? 0), 0)
   const skipped = results.reduce((n, r) => n + r.skipped, 0)
-  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  const errors = totalContaErrorCount(results)
   return `${checked} checked, ${invoices} invoices paid, ${jobs} jobs paid, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
+}
+
+/** First company-level Conta error lines for Super Monitor / toasts. */
+export function formatContaSyncCompanyErrors(
+  results: Array<ContaSyncCompanyLegResult> | null | undefined,
+  opts?: { limit?: number },
+): Array<string> {
+  const limit = opts?.limit ?? 3
+  const log = extractContaErrorLogFromDetails({
+    results: results ?? [],
+  })
+  return log.slice(0, limit).map((entry) => {
+    const label = entry.companyName?.trim() || entry.companyId
+    const more = entry.count > 1 ? ` ×${entry.count}` : ''
+    return `${label}: ${entry.message}${more}`
+  })
+}
+
+export function extractContaResultsFromDetails(
+  details: Record<string, unknown> | null | undefined,
+): Array<ContaSyncCompanyLegResult> {
+  if (!details || !Array.isArray(details.results)) return []
+  return details.results as Array<ContaSyncCompanyLegResult>
+}
+
+export function getContaErrorLogForDetails(
+  details: Record<string, unknown> | null | undefined,
+): Array<ContaErrorLogEntry> {
+  return extractContaErrorLogFromDetails(details)
+}
+
+export function formatRunDetailsJson(
+  details: Record<string, unknown> | null | undefined,
+): string {
+  if (!details) return 'No details stored for this run.'
+  try {
+    return JSON.stringify(details, null, 2)
+  } catch {
+    return String(details)
+  }
 }
 
 export function formatMonitorDateTime(iso: string | null | undefined): string {

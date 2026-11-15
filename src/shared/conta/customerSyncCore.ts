@@ -176,6 +176,35 @@ export function makeContaFetch(opt: ContaClientOptions): ContaFetch {
   }
 }
 
+/** True when Conta rejected the API key / organization (do not retry per row). */
+export function isContaAuthError(message: string): boolean {
+  return (
+    /\bConta 401\b/i.test(message) ||
+    /\bConta 403\b/i.test(message) ||
+    /Invalid authentication credentials/i.test(message)
+  )
+}
+
+export function formatContaAuthError(
+  organizationId: string,
+  message: string,
+): string {
+  return `Conta authentication failed for organization ${organizationId}: ${message}. Update the company Conta API key and confirm sandbox vs production environment.`
+}
+
+/**
+ * Cheap Conta access check before per-invoice loops.
+ * Throws on any Conta error (including 401).
+ */
+export async function assertContaOrganizationAccess(
+  conta: ContaFetch,
+  organizationId: string,
+): Promise<void> {
+  await conta.get(
+    `/invoice/organizations/${organizationId}/customers?hits=1&page=0`,
+  )
+}
+
 async function resolveContaHit(
   conta: ContaFetch,
   organizationId: string,
@@ -230,9 +259,21 @@ export async function syncCustomersWithContaCore(
   const hitsPerPage = 100
   let hasMore = true
   while (hasMore) {
-    const res = (await conta.get(
-      `/invoice/organizations/${organizationId}/customers?hits=${hitsPerPage}&page=${page}`,
-    )) as { hits?: Array<ContaCustomerHit>; totalHits?: number }
+    let res: { hits?: Array<ContaCustomerHit>; totalHits?: number }
+    try {
+      res = (await conta.get(
+        `/invoice/organizations/${organizationId}/customers?hits=${hitsPerPage}&page=${page}`,
+      )) as { hits?: Array<ContaCustomerHit>; totalHits?: number }
+    } catch (e: unknown) {
+      const message =
+        e instanceof Error ? e.message : 'Conta customer list failed'
+      result.errors.push(
+        isContaAuthError(message)
+          ? formatContaAuthError(organizationId, message)
+          : message,
+      )
+      return result
+    }
     const hits = Array.isArray(res?.hits) ? res.hits : []
     for (const h of hits) {
       if (!h.id) continue

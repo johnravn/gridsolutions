@@ -3,13 +3,19 @@
  * No path aliases — safe for Vercel serverless.
  */
 
-import { makeContaFetch } from './customerSyncCore.js'
+import { resolveContaGatewayUrls } from '../api/conta/gatewayUrls.js'
+import { isContaAuthError, makeContaFetch } from './customerSyncCore.js'
+import { loadContaCompanyNames, withCompanyName } from './contaCompanyNames.js'
+import {
+  buildContaErrorLog,
+  normalizeContaCompanyResultForPersist,
+  totalContaErrorCount,
+} from './contaErrorLog.js'
 import { syncInvoicePaidStatusForOrganization } from './invoicePaidSyncCore.js'
 import type {
   ContaSyncTriggerSource,
   ScheduledJobRunStatus,
 } from './contaCustomerSyncCron.js'
-import { resolveContaGatewayUrls } from '../api/conta/gatewayUrls.js'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, Json } from '../types/database.types.js'
 
@@ -22,12 +28,14 @@ const { prod: contaBaseUrl, sandbox: contaSandboxUrl } =
 
 export type ContaInvoicePaidSyncCompanyResult = {
   companyId: string
+  companyName?: string | null
   checked: number
   invoicesMarkedPaid: number
   jobsMarkedPaid: number
   skipped: number
   skippedReason?: string
   errors: Array<string>
+  errorEntries?: Array<{ message: string; count: number }>
 }
 
 export function deriveInvoicePaidSyncStatus(
@@ -62,7 +70,7 @@ export function summarizeInvoicePaidSyncResults(
   const invoices = results.reduce((n, r) => n + r.invoicesMarkedPaid, 0)
   const jobs = results.reduce((n, r) => n + r.jobsMarkedPaid, 0)
   const skipped = results.reduce((n, r) => n + r.skipped, 0)
-  const errors = results.reduce((n, r) => n + r.errors.length, 0)
+  const errors = totalContaErrorCount(results)
   return `${checked} checked, ${invoices} invoices paid, ${jobs} jobs paid, ${skipped} skipped${errors > 0 ? `, ${errors} errors` : ''}`
 }
 
@@ -157,6 +165,10 @@ export async function runContaInvoicePaidSyncForAllCompanies(
     }
   }
 
+  const companyIds = (companies ?? [])
+    .map((row) => row.company_id)
+    .filter(Boolean)
+  const companyNames = await loadContaCompanyNames(supabase, companyIds)
   const results: Array<ContaInvoicePaidSyncCompanyResult> = []
 
   for (const row of companies ?? []) {
@@ -168,26 +180,36 @@ export async function runContaInvoicePaidSyncForAllCompanies(
       { p_company_id: row.company_id },
     )
     if (keyError) {
-      results.push({
-        companyId: row.company_id,
-        checked: 0,
-        invoicesMarkedPaid: 0,
-        jobsMarkedPaid: 0,
-        skipped: 0,
-        errors: [keyError.message],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            checked: 0,
+            invoicesMarkedPaid: 0,
+            jobsMarkedPaid: 0,
+            skipped: 0,
+            errors: [keyError.message],
+          },
+          companyNames,
+        ),
+      )
       continue
     }
     if (!apiKey) {
-      results.push({
-        companyId: row.company_id,
-        checked: 0,
-        invoicesMarkedPaid: 0,
-        jobsMarkedPaid: 0,
-        skipped: 0,
-        skippedReason: 'No active Conta API key for company',
-        errors: [],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            checked: 0,
+            invoicesMarkedPaid: 0,
+            jobsMarkedPaid: 0,
+            skipped: 0,
+            skippedReason: 'No active Conta API key for company',
+            errors: [],
+          },
+          companyNames,
+        ),
+      )
       continue
     }
 
@@ -200,43 +222,62 @@ export async function runContaInvoicePaidSyncForAllCompanies(
         makeContaFetch({ apiKey, baseUrl }),
         supabase,
       )
-      results.push({
-        companyId: row.company_id,
-        checked: r.checked,
-        invoicesMarkedPaid: r.invoicesMarkedPaid,
-        jobsMarkedPaid: r.jobsMarkedPaid,
-        skipped: r.skipped,
-        errors: r.errors,
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            checked: r.checked,
+            invoicesMarkedPaid: r.invoicesMarkedPaid,
+            jobsMarkedPaid: r.jobsMarkedPaid,
+            skipped: r.skipped,
+            errors: r.errors,
+          },
+          companyNames,
+        ),
+      )
     } catch (e: unknown) {
       const message =
         e instanceof Error ? e.message : 'Invoice paid sync failed'
-      results.push({
-        companyId: row.company_id,
-        checked: 0,
-        invoicesMarkedPaid: 0,
-        jobsMarkedPaid: 0,
-        skipped: 0,
-        errors: [message],
-      })
+      results.push(
+        withCompanyName(
+          {
+            companyId: row.company_id,
+            checked: 0,
+            invoicesMarkedPaid: 0,
+            jobsMarkedPaid: 0,
+            skipped: 0,
+            errors: [message],
+          },
+          companyNames,
+        ),
+      )
     }
   }
 
-  const status = deriveInvoicePaidSyncStatus(results)
+  const persistedResults = results.map(normalizeContaCompanyResultForPersist)
+  const status = deriveInvoicePaidSyncStatus(persistedResults)
+  const errorLog = buildContaErrorLog(persistedResults)
   const details = {
-    companies: results.length,
+    companies: persistedResults.length,
     syncedAt,
-    results,
-    summary: summarizeInvoicePaidSyncResults(results),
+    results: persistedResults,
+    errorLog,
+    summary: summarizeInvoicePaidSyncResults(persistedResults),
   }
-  await finishJobRun(supabase, runId, status, details)
+  const firstFailed = persistedResults.find((r) =>
+    r.errors.some((message) => isContaAuthError(message)),
+  )
+  const firstAuthError = firstFailed
+    ? `${firstFailed.companyName ?? firstFailed.companyId}: ${firstFailed.errors.find((m) => isContaAuthError(m))}`
+    : null
+  await finishJobRun(supabase, runId, status, details, firstAuthError)
 
   return {
     ok: status !== 'failed',
     runId,
-    companies: results.length,
+    companies: persistedResults.length,
     syncedAt,
     status,
-    results,
+    results: persistedResults,
   }
 }
