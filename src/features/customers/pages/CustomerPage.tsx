@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button } from '@radix-ui/themes'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { Refresh } from 'iconoir-react'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import { useRegisterShortcutAction } from '@shared/hotkeys'
@@ -19,6 +18,7 @@ import {
   SplitPageSkeleton,
   useSplitLayout,
 } from '@app/layout/split'
+import { accountingConfigQuery } from '../api/accountingConfigQuery'
 import { syncCustomersWithConta } from '../api/contaCustomerSync'
 import CustomerTable from '../components/CustomerTable'
 import CustomerInspector from '../components/CustomerInspector'
@@ -49,20 +49,7 @@ export default function CustomerPage() {
   )
 
   const { data: accountingConfig } = useQuery({
-    queryKey: ['company', companyId, 'accounting-config'],
-    queryFn: async () => {
-      if (!companyId) return null
-      const { data, error } = await supabase
-        .from('company_expansions')
-        .select('accounting_organization_id, accounting_software')
-        .eq('company_id', companyId)
-        .maybeSingle()
-      if (error) throw error
-      return data as {
-        accounting_organization_id: string | null
-        accounting_software: string | null
-      } | null
-    },
+    ...accountingConfigQuery(companyId ?? ''),
     enabled: !!companyId,
   })
 

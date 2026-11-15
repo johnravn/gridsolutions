@@ -224,121 +224,7 @@ export function mattersIndexQueryAll(userId?: string | null) {
         .eq('user_id', userId)
         .in('matter_id', matterIds)
 
-      const myResponseMap = new Map<string, any>()
-      if (myResponsesData) {
-        for (const r of myResponsesData) {
-          myResponseMap.set(r.matter_id, {
-            id: r.id,
-            matter_id: r.matter_id,
-            user_id: userId,
-            response: r.response,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-          })
-        }
-      }
-
-      return attachAnsweredByProfiles(
-        filteredMatters.map((m) => ({
-          ...mapMatterRow(m as Record<string, unknown>),
-          recipient_count: recipientCounts.get(m.id) || 0,
-          response_count: responseCounts.get(m.id) || 0,
-          my_response: myResponseMap.get(m.id) || null,
-          is_unread: unreadMatterIds.has(m.id),
-          is_recipient: recipientMatterIds.has(m.id),
-        })),
-      )
-    },
-  }
-}
-
-// Legacy function - kept for backward compatibility, but uses single company
-export function mattersIndexQuery(companyId: string, userId?: string | null) {
-  return {
-    queryKey: ['matters', 'index', companyId, userId ?? 'anon'],
-    queryFn: async (): Promise<Array<Matter>> => {
-      if (!userId) return []
-
-      // Get all matters where user is a recipient (with read status)
-      const { data: recipientMatters, error: recError } = await supabase
-        .from('matter_recipients')
-        .select('matter_id, inbox_read_at')
-        .eq('user_id', userId)
-
-      if (recError) throw recError
-
-      // Get all matter IDs where user is recipient or creator
-      const recipientMatterIds = new Set<string>(
-        (recipientMatters || []).map((r) => r.matter_id),
-      )
-
-      const unreadMatterIds = new Set<string>(
-        (recipientMatters || [])
-          .filter((r) => !r.inbox_read_at)
-          .map((r) => r.matter_id),
-      )
-
-      // Now fetch matters that:
-      // 1. Belong to the company
-      // 2. User is either creator OR recipient
-      const q = supabase
-        .from('matters')
-        .select(MATTER_SELECT)
-        .eq('company_id', companyId)
-        .order('created_at', { ascending: false })
-
-      const { data: allMatters, error } = await q
-      if (error) throw error
-
-      // Inbox is recipient-only for every matter type (offers, invites, announcements).
-      const filteredMatters = (allMatters || []).filter((m) =>
-        recipientMatterIds.has(m.id),
-      )
-
-      if (filteredMatters.length === 0) return []
-
-      const matterIds = filteredMatters.map((m) => m.id)
-
-      // Get recipient and response counts for these matters
-      const [recipientsData, responsesData] = await Promise.all([
-        supabase
-          .from('matter_recipients')
-          .select('matter_id')
-          .in('matter_id', matterIds),
-        supabase
-          .from('matter_responses')
-          .select('matter_id')
-          .in('matter_id', matterIds),
-      ])
-
-      if (recipientsData.error) throw recipientsData.error
-      if (responsesData.error) throw responsesData.error
-
-      const recipientCounts = new Map<string, number>()
-      const responseCounts = new Map<string, number>()
-
-      for (const r of recipientsData.data || []) {
-        recipientCounts.set(
-          r.matter_id,
-          (recipientCounts.get(r.matter_id) || 0) + 1,
-        )
-      }
-
-      for (const r of responsesData.data || []) {
-        responseCounts.set(
-          r.matter_id,
-          (responseCounts.get(r.matter_id) || 0) + 1,
-        )
-      }
-
-      // Get my responses for these matters
-      const { data: myResponsesData } = await supabase
-        .from('matter_responses')
-        .select('matter_id, id, response, created_at, updated_at')
-        .eq('user_id', userId)
-        .in('matter_id', matterIds)
-
-      const myResponseMap = new Map<string, any>()
+      const myResponseMap = new Map<string, MatterResponse>()
       if (myResponsesData) {
         for (const r of myResponsesData) {
           myResponseMap.set(r.matter_id, {
@@ -469,7 +355,15 @@ export function matterRecipientsQuery(matterId: string) {
       if (responsesError) throw responsesError
 
       // Create a map of user_id -> response for quick lookup
-      const responseMap = new Map<string, any>()
+      const responseMap = new Map<
+        string,
+        {
+          id: string
+          response: string
+          created_at: string
+          updated_at: string
+        }
+      >()
       if (responsesData) {
         for (const response of responsesData) {
           responseMap.set(response.user_id, {
@@ -482,12 +376,11 @@ export function matterRecipientsQuery(matterId: string) {
       }
 
       // Merge responses with recipients
-      const recipients = (recipientsData || []).map((r: any) => ({
+      return (recipientsData || []).map((r) => ({
         ...r,
+        user: unwrapProfile(r.user, r.user_id),
         response: responseMap.get(r.user_id) || null,
-      }))
-
-      return recipients as unknown as Array<MatterRecipient>
+      })) as Array<MatterRecipient>
     },
   }
 }

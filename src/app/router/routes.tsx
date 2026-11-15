@@ -24,7 +24,7 @@ import CompanyPage from '@features/company/pages/CompanyPage'
 import SuperPage from '@features/super/pages/SuperPage'
 import ProfilePage from '@features/profile/pages/ProfilePage'
 import MattersPage from '@features/matters/pages/MattersPage'
-import CustomerPage from '@features/customers/pages/CostumerPage'
+import CustomerPage from '@features/customers/pages/CustomerPage'
 import ConflictsPage from '@features/conflicts/pages/ConflictsPage'
 import PublicOfferPage from '@features/jobs/pages/PublicOfferPage'
 import LoggingPage from '@features/logging/pages/LoggingPage'
@@ -239,7 +239,9 @@ const mattersRoute = createRoute({
 const companyRoute = createRoute({
   getParentRoute: () => authedRoute,
   path: 'company',
-  validateSearch: (search: Record<string, unknown>): {
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): {
     tab?: string
     activityId?: string
   } => ({

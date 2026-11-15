@@ -9,6 +9,7 @@ import {
 } from '../utils/dates'
 import { formatJobNumber, marginPct } from '../utils/format'
 import { isMoneyIncompleteJob } from '../utils/incompleteness'
+import { requireCompanyId } from '../utils/requireCompanyId'
 import type {
   CustomerProfitabilityRow,
   InvoicePipelineBucket,
@@ -67,6 +68,7 @@ async function fetchOverlappingJobs({
   toDate: string
   includeStatus?: boolean
 }): Promise<Array<JobRow>> {
+  const scopedCompanyId = requireCompanyId(companyId)
   const { from, to } = rangeBounds(fromDate, toDate)
   const rangeStart = from.getTime()
   const rangeEnd = to.getTime()
@@ -78,7 +80,7 @@ async function fetchOverlappingJobs({
   const { data: jobs, error } = await supabase
     .from('jobs')
     .select(select)
-    .eq('company_id', companyId)
+    .eq('company_id', scopedCompanyId)
     .eq('archived', false)
 
   if (error) throw error
@@ -169,8 +171,9 @@ export async function fetchJobProfitabilityRows({
   fromDate: string
   toDate: string
 }): Promise<Array<JobProfitabilityRow>> {
+  const scopedCompanyId = requireCompanyId(companyId)
   const overlapping = await fetchOverlappingJobs({
-    companyId,
+    companyId: scopedCompanyId,
     fromDate,
     toDate,
     includeStatus: true,
@@ -284,6 +287,7 @@ export function reportUtilizationQuery({
   return queryOptions<Array<UtilizationRow>>({
     queryKey: ['reporting', 'utilization', companyId, fromDate, toDate],
     queryFn: async (): Promise<Array<UtilizationRow>> => {
+      const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO, from, to } = rangeBounds(fromDate, toDate)
       const rangeStartMs = from.getTime()
       const rangeEndMs = to.getTime()
@@ -292,7 +296,7 @@ export function reportUtilizationQuery({
       const { data: periods, error: periodsError } = await supabase
         .from('time_periods')
         .select('id, start_at, end_at')
-        .eq('company_id', companyId)
+        .eq('company_id', scopedCompanyId)
         .eq('deleted', false)
         .lte('start_at', toISO)
         .gte('end_at', fromISO)
@@ -371,20 +375,21 @@ export function reportMonthlyTrendQuery({
   return queryOptions<Array<MonthlyTrendRow>>({
     queryKey: ['reporting', 'monthly-trend', companyId, fromDate, toDate],
     queryFn: async (): Promise<Array<MonthlyTrendRow>> => {
+      const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
 
       const [datedRes, undatedRes] = await Promise.all([
         supabase
           .from('job_money_items')
           .select('type, amount, date, created_at')
-          .eq('company_id', companyId)
+          .eq('company_id', scopedCompanyId)
           .not('date', 'is', null)
           .gte('date', fromISO)
           .lte('date', toISO),
         supabase
           .from('job_money_items')
           .select('type, amount, date, created_at')
-          .eq('company_id', companyId)
+          .eq('company_id', scopedCompanyId)
           .is('date', null)
           .gte('created_at', fromISO)
           .lte('created_at', toISO),

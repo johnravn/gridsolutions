@@ -15,6 +15,11 @@ import {
   sanitizeCustomHexInput,
 } from '../CustomerBrandColorsFields'
 import { upsertCustomer } from '../../api/queries'
+import { CustomerDiscountPercentField } from '../CustomerDiscountPercentField'
+import {
+  composeCustomerAddress,
+  parseCustomerAddress,
+} from '../../utils/customerAddress'
 import {
   formatDiscountPercentInput,
   optionalDiscountPercentSchema,
@@ -37,21 +42,6 @@ type Initial = {
   discount_percent?: number | null
 }
 
-function parseAddress(addr: string | null) {
-  if (!addr)
-    return { address_line: '', zip_code: '', city: '', country: 'Norway' }
-  const parts = addr
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
-  return {
-    address_line: parts[0] || '',
-    zip_code: parts[1] || '',
-    city: parts[2] || '',
-    country: parts[3] || 'Norway',
-  }
-}
-
 function buildDefaults(initial: Initial) {
   return {
     id: initial.id,
@@ -64,7 +54,7 @@ function buildDefaults(initial: Initial) {
     accent_color_custom: normalizeCustomHex(initial.accent_color_custom),
     vat_number: initial.vat_number ? formatVATInput(initial.vat_number) : '',
     is_partner: initial.is_partner,
-    ...parseAddress(initial.address),
+    ...parseCustomerAddress(initial.address),
   }
 }
 
@@ -134,22 +124,12 @@ export default function EditCustomerDialog({
     mutationFn: async (value: ReturnType<typeof buildDefaults>) => {
       if (!companyId) throw new Error('No company selected')
 
-      const addressParts = [
-        value.address_line,
-        value.zip_code,
-        value.city,
-        value.country,
-      ]
-        .filter(Boolean)
-        .join(', ')
-      const addressString = addressParts || null
-
       return upsertCustomer({
         id: value.id,
         company_id: companyId,
         name: value.name,
         vat_number: value.vat_number.trim() || null,
-        address: addressString,
+        address: composeCustomerAddress(value),
         is_partner: !!value.is_partner,
         logo_path: value.logo_path ?? null,
         crew_pricing_level_id:
@@ -266,25 +246,11 @@ export default function EditCustomerDialog({
               </form.AppField>
               <form.AppField name="discount_percent">
                 {(field) => (
-                  <Flex direction="column" gap="1">
-                    <Text as="label" size="2" weight="medium">
-                      Offer discount (%)
-                    </Text>
-                    <TextField.Root
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="Company default"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                    <Text size="1" color="gray">
-                      Leave empty to use the company customer or partner
-                      default.
-                    </Text>
-                  </Flex>
+                  <CustomerDiscountPercentField
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={field.handleChange}
+                  />
                 )}
               </form.AppField>
               <form.AppField name="accent_color">

@@ -1,4 +1,3 @@
-// src/features/costumers/components/CustomerInspector.tsx
 import * as React from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -30,9 +29,9 @@ import { CopyIconButton } from '@shared/lib/CopyIconButton'
 import InspectorSkeleton from '@shared/ui/components/InspectorSkeleton'
 import MapEmbed from '@shared/maps/MapEmbed'
 import LogoUpload from '@shared/ui/components/LogoUpload'
-import { supabase } from '@shared/api/supabase'
 import { companyExpansionQuery } from '@features/company/api/queries'
 import { resolveDefaultDiscountPercent } from '@features/jobs/utils/resolveDefaultDiscountPercent'
+import { accountingConfigQuery } from '../api/accountingConfigQuery'
 import {
   customerDetailQuery,
   customerRecentJobsQuery,
@@ -129,20 +128,7 @@ export default function CustomerInspector({
   })
 
   const { data: accountingConfig } = useQuery({
-    queryKey: ['company', companyId, 'accounting-config'],
-    queryFn: async () => {
-      if (!companyId) return null
-      const { data: expData, error: expErr } = await supabase
-        .from('company_expansions')
-        .select('accounting_organization_id, accounting_software')
-        .eq('company_id', companyId)
-        .maybeSingle()
-      if (expErr) throw expErr
-      return expData as {
-        accounting_organization_id: string | null
-        accounting_software: string | null
-      } | null
-    },
+    ...accountingConfigQuery(companyId ?? ''),
     enabled: !!companyId && !!data,
   })
 

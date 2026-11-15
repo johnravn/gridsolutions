@@ -30,7 +30,7 @@ export type Matter = {
   created_as_company: boolean
   created_at: string
   updated_at: string
-  metadata?: Record<string, any> | null
+  metadata?: Record<string, unknown> | null
   created_by?: {
     user_id: string
     display_name: string | null

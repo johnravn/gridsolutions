@@ -1,3 +1,5 @@
+import { asMetadataRecord } from './matterMetadata'
+
 export type CrewInviteAnswerStatus = 'accepted' | 'declined'
 export type MatterOutcomeStatus = CrewInviteAnswerStatus
 export type MatterOutcomeKind = 'crew_invite' | 'offer'
@@ -19,13 +21,6 @@ function isAnswerStatus(value: unknown): value is CrewInviteAnswerStatus {
   return value === 'accepted' || value === 'declined'
 }
 
-function asRecord(metadata: unknown): Record<string, unknown> | null {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
-    return null
-  }
-  return metadata as Record<string, unknown>
-}
-
 function trimName(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const name = value.trim()
@@ -36,7 +31,7 @@ function trimName(value: unknown): string | null {
 export function parseCrewInviteAnswerMeta(
   metadata: unknown,
 ): CrewInviteAnswerMeta | null {
-  const record = asRecord(metadata)
+  const record = asMetadataRecord(metadata)
   if (!record) return null
   const sourceId = record.source_crew_invite_matter_id
   const answeredBy = record.answered_by_user_id
@@ -62,7 +57,7 @@ export function parseCrewInviteAnswerMeta(
  * Offer rejections are shown as declined.
  */
 export function parseMatterOutcome(metadata: unknown): MatterOutcome | null {
-  const record = asRecord(metadata)
+  const record = asMetadataRecord(metadata)
   if (!record) return null
 
   const crew = parseCrewInviteAnswerMeta(record)

@@ -22,6 +22,7 @@ import { useAuth } from '@app/providers/AuthProvider'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import MapEmbed from '@shared/maps/MapEmbed'
+import { crewInviteDetailsQuery } from '../api/crewInviteDetailsQuery'
 import {
   deleteMatter,
   markMatterAsUnread,
@@ -44,6 +45,15 @@ import {
   crewInviteResponseKind,
 } from '../utils/crewInviteResponse'
 import { parseMatterOutcome } from '../utils/crewInviteAnswer'
+import {
+  formatMatterDate,
+  formatMatterDuration,
+  formatMatterTime,
+} from '../utils/formatMatterDateTime'
+import {
+  parseActivityId,
+  parseInvitationMessage,
+} from '../utils/matterMetadata'
 import { MatterReadIconButton } from './MatterReadIconButton'
 import { MatterOutcomeBanner } from './CrewInviteAnswerStatus'
 
@@ -87,7 +97,7 @@ export default function MatterDetail({
     enabled: canSeeAnnouncementRecipients,
   })
 
-  const hasInvitationMeta = !!(matter?.metadata as any)?.invitation_message
+  const hasInvitationMeta = !!parseInvitationMessage(matter?.metadata)
 
   const { data: messages = [] } = useQuery({
     ...matterMessagesQuery(matterId),
@@ -101,9 +111,8 @@ export default function MatterDetail({
   const matterFiles = files || []
 
   const invitationMessage = React.useMemo(() => {
-    const meta = (matter?.metadata as { invitation_message?: string } | null)
-      ?.invitation_message
-    if (meta?.trim()) return meta.trim()
+    const meta = parseInvitationMessage(matter?.metadata)
+    if (meta) return meta
     if (
       !matter ||
       matter.matter_type !== 'crew_invite' ||
@@ -117,101 +126,18 @@ export default function MatterDetail({
     return creatorMessage?.content ?? null
   }, [messages, matter])
 
-  // Fetch additional job and time period details for crew_invite matters
   const { data: crewInviteDetails } = useQuery({
-    queryKey: ['matters', 'crew-invite-details', matterId],
-    queryFn: async () => {
-      if (!matter || matter.matter_type !== 'crew_invite') return null
-      if (!matter.job_id || !matter.time_period_id) return null
-
-      // Fetch job details with address
-      const { data: job, error: jobError } = await supabase
-        .from('jobs')
-        .select(
-          'id, title, job_address_id, address:job_address_id ( id, name, address_line, zip_code, city, country )',
-        )
-        .eq('id', matter.job_id)
-        .single()
-
-      if (jobError) throw jobError
-
-      // Fetch time period details with category
-      const { data: timePeriod, error: tpError } = await supabase
-        .from('time_periods')
-        .select('id, title, start_at, end_at, role_category')
-        .eq('id', matter.time_period_id)
-        .single()
-
-      if (tpError) throw tpError
-
-      // Fetch reserved_crew notes for this user
-      const {
-        data: { user: authUser },
-      } = await supabase.auth.getUser()
-      let notes: string | null = null
-      if (authUser) {
-        const { data: crewRow } = await supabase
-          .from('reserved_crew')
-          .select('notes')
-          .eq('time_period_id', matter.time_period_id)
-          .eq('user_id', authUser.id)
-          .maybeSingle()
-        notes = crewRow?.notes || null
-      }
-
-      return { job, timePeriod, notes }
-    },
-    enabled: !!matter && matter.matter_type === 'crew_invite',
+    ...crewInviteDetailsQuery({
+      matterId,
+      jobId: matter?.job_id ?? '',
+      timePeriodId: matter?.time_period_id ?? '',
+    }),
+    enabled:
+      !!matter &&
+      matter.matter_type === 'crew_invite' &&
+      !!matter.job_id &&
+      !!matter.time_period_id,
   })
-
-  // Helper function to format date as "3. december 2025"
-  const formatDate = (dateString: string): string => {
-    const d = new Date(dateString)
-    const day = d.getDate()
-    const monthNames = [
-      'january',
-      'february',
-      'march',
-      'april',
-      'may',
-      'june',
-      'july',
-      'august',
-      'september',
-      'october',
-      'november',
-      'december',
-    ]
-    const month = monthNames[d.getMonth()]
-    const year = d.getFullYear()
-    return `${day}. ${month} ${year}`
-  }
-
-  // Helper function to format time as "14:50"
-  const formatTime = (dateString: string): string => {
-    const d = new Date(dateString)
-    const hours = String(d.getHours()).padStart(2, '0')
-    const minutes = String(d.getMinutes()).padStart(2, '0')
-    return `${hours}:${minutes}`
-  }
-
-  // Helper function to format duration as "8hrs 25m"
-  const formatDuration = (startDate: string, endDate: string): string => {
-    const start = new Date(startDate)
-    const end = new Date(endDate)
-    const diffMs = end.getTime() - start.getTime()
-    const totalMinutes = Math.round(diffMs / (1000 * 60))
-    const hours = Math.floor(totalMinutes / 60)
-    const minutes = totalMinutes % 60
-
-    if (hours > 0 && minutes > 0) {
-      return `${hours}hrs ${minutes}m`
-    } else if (hours > 0) {
-      return `${hours}hrs`
-    } else {
-      return `${minutes}m`
-    }
-  }
 
   const [deleteOpen, setDeleteOpen] = React.useState(false)
 
@@ -327,9 +253,8 @@ export default function MatterDetail({
   // Build address string for map query (must be before early return to follow Rules of Hooks)
   const mapQuery = React.useMemo(() => {
     if (!crewInviteDetails) return null
-    const job = crewInviteDetails.job
-    if (!job?.address) return null
-    const addr = job.address as any
+    const addr = crewInviteDetails.job?.address
+    if (!addr) return null
     const parts = [
       addr.address_line,
       addr.zip_code,
@@ -366,7 +291,7 @@ export default function MatterDetail({
     )
   }
 
-  const activityId = (matter.metadata as any)?.activity_id as string | undefined
+  const activityId = parseActivityId(matter.metadata) ?? undefined
 
   const getTypeBadge = () => {
     const variants: Record<string, { color: string; label: string }> = {
@@ -456,8 +381,8 @@ export default function MatterDetail({
                 )}
                 <Text size="2" color="gray">
                   {outcome
-                    ? `${author.name} · ${formatDate(matter.created_at)}`
-                    : `Created by ${author.name} on ${formatDate(
+                    ? `${author.name} · ${formatMatterDate(matter.created_at)}`
+                    : `Created by ${author.name} on ${formatMatterDate(
                         matter.created_at,
                       )}`}
                 </Text>
@@ -645,21 +570,29 @@ export default function MatterDetail({
                       <Flex direction="column" gap="1">
                         <Text weight="medium">Start:</Text>
                         <Text>
-                          {formatTime(crewInviteDetails.timePeriod.start_at)}{' '}
-                          {formatDate(crewInviteDetails.timePeriod.start_at)}
+                          {formatMatterTime(
+                            crewInviteDetails.timePeriod.start_at,
+                          )}{' '}
+                          {formatMatterDate(
+                            crewInviteDetails.timePeriod.start_at,
+                          )}
                         </Text>
                       </Flex>
                       <Flex direction="column" gap="1">
                         <Text weight="medium">Stop:</Text>
                         <Text>
-                          {formatTime(crewInviteDetails.timePeriod.end_at)}{' '}
-                          {formatDate(crewInviteDetails.timePeriod.end_at)}
+                          {formatMatterTime(
+                            crewInviteDetails.timePeriod.end_at,
+                          )}{' '}
+                          {formatMatterDate(
+                            crewInviteDetails.timePeriod.end_at,
+                          )}
                         </Text>
                       </Flex>
                       <Flex direction="column" gap="1">
                         <Text weight="medium">Duration:</Text>
                         <Text>
-                          {formatDuration(
+                          {formatMatterDuration(
                             crewInviteDetails.timePeriod.start_at,
                             crewInviteDetails.timePeriod.end_at,
                           )}
@@ -684,7 +617,8 @@ export default function MatterDetail({
                   {/* Left: Address text (separated) */}
                   <Box style={{ flex: 1, minWidth: 200 }}>
                     {(() => {
-                      const addr = crewInviteDetails.job.address as any
+                      const addr = crewInviteDetails.job.address
+                      if (!addr) return null
                       return (
                         <Flex direction="column" gap="2">
                           {addr.address_line && (

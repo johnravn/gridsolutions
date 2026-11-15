@@ -1,3 +1,5 @@
+import { unwrapRelation } from '@shared/api/unwrapRelation'
+
 export type EmbeddedProfile = {
   user_id: string
   display_name: string | null
@@ -5,13 +7,9 @@ export type EmbeddedProfile = {
   avatar_url: string | null
 }
 
+/** Alias for shared PostgREST relation unwrap (keeps existing matter call sites). */
 export function unwrapOne<T>(value: unknown): T | null {
-  if (value == null) return null
-  if (Array.isArray(value)) {
-    const first = value[0]
-    return first == null ? null : (first as T)
-  }
-  return value as T
+  return unwrapRelation<T>(value)
 }
 
 /**

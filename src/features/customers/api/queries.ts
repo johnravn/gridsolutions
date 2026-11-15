@@ -3,50 +3,10 @@ import {
   postgrestIlikeClause,
   postgrestIlikePatterns,
 } from '@shared/api/fuzzySearch'
+import { unwrapRelation } from '@shared/api/unwrapRelation'
+import type { ContactRow, CrewPricingLevelInfo, CustomerRow } from '../types'
 
-export type CrewPricingLevelInfo = {
-  id: string
-  name: string
-  crew_rate_per_day: number | null
-  crew_rate_per_hour: number | null
-}
-
-export type CustomerRow = {
-  id: string
-  company_id: string
-  name: string
-  email: string | null
-  phone: string | null
-  address: string | null
-  vat_number: string | null
-  is_partner: boolean
-  logo_path: string | null
-  accent_color?: string | null
-  accent_color_custom?: string | null
-  crew_pricing_level_id: string | null
-  discount_percent: number | null
-  crew_pricing_level?: CrewPricingLevelInfo | null
-  created_at: string
-  conta_customer_id?: number | null
-  conta_days_until_payment_reminder?: number | null
-  conta_days_until_estimate_overdue?: number | null
-  conta_invoice_delivery_method?: string | null
-  conta_invoice_count?: number | null
-  conta_total_invoiced?: number | null
-  conta_total_unpaid?: number | null
-  conta_last_synced_at?: string | null
-}
-
-export type ContactRow = {
-  id: string
-  customer_id: string
-  name: string
-  email: string | null
-  phone: string | null
-  title: string | null
-  notes: string | null
-  created_at: string
-}
+export type { ContactRow, CrewPricingLevelInfo, CustomerRow } from '../types'
 
 /** Safety cap for empty/index loads — labeled in UI when hit. */
 export const CUSTOMERS_INDEX_MAX_ROWS = 500
@@ -116,11 +76,15 @@ export function customersIndexQuery({
           : []
 
       // Normalize crew_pricing_level (PostgREST may return as array)
-      const normalized = page.map((row: any) => {
-        const level = Array.isArray(row.crew_pricing_level)
-          ? (row.crew_pricing_level[0] ?? null)
-          : (row.crew_pricing_level ?? null)
-        return { ...row, crew_pricing_level: level }
+      const normalized: Array<CustomerRow> = page.map((row) => {
+        const { crew_pricing_level, ...rest } = row as CustomerRow & {
+          crew_pricing_level?: unknown
+        }
+        return {
+          ...rest,
+          crew_pricing_level:
+            unwrapRelation<CrewPricingLevelInfo>(crew_pricing_level),
+        }
       })
 
       // Apply client-side fuzzy matching for better results
@@ -129,7 +93,7 @@ export function customersIndexQuery({
         const { fuzzySearch } = await import('@shared/lib/generalFunctions')
         return {
           rows: fuzzySearch(
-            normalized as Array<CustomerRow>,
+            normalized,
             search,
             [
               (item) => item.name,
@@ -142,7 +106,7 @@ export function customersIndexQuery({
         }
       }
 
-      return { rows: normalized as Array<CustomerRow>, truncated }
+      return { rows: normalized, truncated }
     },
   }
 }
@@ -183,14 +147,13 @@ export function customerDetailQuery({
         .order('name', { ascending: true })
       if (cErr) throw cErr
 
-      const raw = c as any
-      const crewPricingLevel = Array.isArray(raw.crew_pricing_level)
-        ? (raw.crew_pricing_level[0] ?? null)
-        : (raw.crew_pricing_level ?? null)
+      const raw = c as CustomerRow & { crew_pricing_level?: unknown }
       return {
         ...raw,
-        crew_pricing_level: crewPricingLevel,
-        contacts: contacts as any,
+        crew_pricing_level: unwrapRelation<CrewPricingLevelInfo>(
+          raw.crew_pricing_level,
+        ),
+        contacts: (contacts ?? []) as Array<ContactRow>,
       }
     },
   }
@@ -252,12 +215,16 @@ export async function upsertCustomer(payload: {
       .eq('id', payload.id)
       .eq('company_id', payload.company_id)
     if (error) throw error
-    return
-  } else {
-    const { error } = await supabase.from('customers').insert(body)
-    if (error) throw error
-    return
+    return { id: payload.id }
   }
+
+  const { data, error } = await supabase
+    .from('customers')
+    .insert(body)
+    .select('id')
+    .single()
+  if (error) throw error
+  return { id: data.id }
 }
 
 /* ---------- contacts CRUD ---------- */
@@ -361,7 +328,13 @@ export function customerRecentJobsQuery({
         .order('start_at', { ascending: false, nullsFirst: false })
         .limit(3)
       if (error) throw error
-      return data as any
+      return (data ?? []) as Array<{
+        id: string
+        title: string
+        status: string
+        start_at: string | null
+        end_at: string | null
+      }>
     },
   }
 }

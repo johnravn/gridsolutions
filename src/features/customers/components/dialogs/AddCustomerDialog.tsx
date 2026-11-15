@@ -13,6 +13,9 @@ import {
   SHOW_AUTOFILL_BUTTONS,
   generateCustomerAutofill,
 } from '@shared/testing/autofill'
+import { upsertCustomer } from '../../api/queries'
+import { CustomerDiscountPercentField } from '../CustomerDiscountPercentField'
+import { composeCustomerAddress } from '../../utils/customerAddress'
 import {
   optionalDiscountPercentSchema,
   parseOptionalDiscountPercent,
@@ -72,35 +75,16 @@ export default function AddCustomerDialog({
     mutationFn: async (value: typeof defaultValues) => {
       if (!companyId) throw new Error('No company selected')
 
-      const addressParts = [
-        value.address_line,
-        value.zip_code,
-        value.city,
-        value.country,
-      ]
-        .filter(Boolean)
-        .join(', ')
-      const addressString = addressParts || null
+      const addressString = composeCustomerAddress(value)
 
-      const customerPayload = {
+      const { id: customerId } = await upsertCustomer({
         company_id: companyId,
         name: value.name,
         vat_number: value.vat_number.trim() || null,
         address: addressString,
         is_partner: !!value.is_partner,
         discount_percent: parseOptionalDiscountPercent(value.discount_percent),
-      }
-
-      let customerId: string | undefined
-      if (value.name.trim()) {
-        const { data: customerData, error: customerError } = await supabase
-          .from('customers')
-          .insert(customerPayload)
-          .select('id')
-          .single()
-        if (customerError) throw customerError
-        customerId = customerData.id
-      }
+      })
 
       if (
         customerId &&
@@ -261,25 +245,11 @@ export default function AddCustomerDialog({
               </form.AppField>
               <form.AppField name="discount_percent">
                 {(field) => (
-                  <Flex direction="column" gap="1">
-                    <Text as="label" size="2" weight="medium">
-                      Offer discount (%)
-                    </Text>
-                    <TextField.Root
-                      type="number"
-                      min="0"
-                      max="100"
-                      step="0.01"
-                      placeholder="Company default"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                    />
-                    <Text size="1" color="gray">
-                      Leave empty to use the company customer or partner
-                      default.
-                    </Text>
-                  </Flex>
+                  <CustomerDiscountPercentField
+                    value={field.state.value}
+                    onBlur={field.handleBlur}
+                    onChange={field.handleChange}
+                  />
                 )}
               </form.AppField>
               <form.AppField name="is_partner">

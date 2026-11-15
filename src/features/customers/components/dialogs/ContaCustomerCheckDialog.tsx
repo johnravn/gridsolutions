@@ -12,10 +12,10 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { Download, Plus, Refresh } from 'iconoir-react'
-import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { hasCompleteContaAddress } from '@shared/conta/customerSyncCore'
 import { resolveContaCustomerType } from '@shared/conta/contaCustomerMatch'
+import { accountingConfigQuery } from '../../api/accountingConfigQuery'
 import {
   checkContaCustomerExists,
   contaCustomerTypeLabel,
@@ -73,20 +73,7 @@ export default function ContaCustomerCheckDialog({
   const [selectedId, setSelectedId] = React.useState('')
 
   const { data: accountingConfig } = useQuery({
-    queryKey: ['company', companyId, 'accounting-config'],
-    queryFn: async () => {
-      if (!companyId) return null
-      const { data, error } = await supabase
-        .from('company_expansions')
-        .select('accounting_organization_id, accounting_software')
-        .eq('company_id', companyId)
-        .maybeSingle()
-      if (error) throw error
-      return data as {
-        accounting_organization_id: string | null
-        accounting_software: string | null
-      } | null
-    },
+    ...accountingConfigQuery(companyId ?? ''),
     enabled: open && !!companyId,
   })
 
