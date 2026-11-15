@@ -179,6 +179,9 @@ export default function RecurringJobInspector({
           gap="2"
           style={{ minWidth: 0, flex: '1 1 auto' }}
         >
+          <Text size="1" color="gray" weight="medium">
+            Series
+          </Text>
           <Heading
             size="4"
             style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}
@@ -186,7 +189,7 @@ export default function RecurringJobInspector({
             {data.title}
           </Heading>
           <Flex gap="2" align="center" wrap="wrap">
-            <Badge variant="outline" size="2" color="violet">
+            <Badge variant="soft" size="2" color="violet">
               Recurring job
             </Badge>
             <Badge variant="outline" size="2">

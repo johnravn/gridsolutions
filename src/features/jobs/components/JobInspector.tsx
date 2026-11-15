@@ -368,15 +368,20 @@ export default function JobInspector({
               )}
             </Flex>
             {job.recurring_job && (
-              <Tooltip content="Open recurring job series">
+              <Tooltip content="Open series overview">
                 <Badge
                   size="1"
                   variant="outline"
                   color="violet"
+                  title={job.recurring_job.title}
                   style={{
                     width: 'fit-content',
+                    maxWidth: 220,
                     cursor: 'pointer',
                     flexShrink: 0,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
                   onClick={() => {
                     const series = job.recurring_job!
@@ -394,7 +399,7 @@ export default function JobInspector({
                     })
                   }}
                 >
-                  Recurring job
+                  Series · {job.recurring_job.title}
                 </Badge>
               </Tooltip>
             )}

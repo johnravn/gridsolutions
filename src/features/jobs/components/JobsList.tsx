@@ -517,39 +517,116 @@ export default function JobsList({
     onlyJobIds,
   ])
 
+  const scopedSeriesTitle =
+    scopedRecurringDetail?.title &&
+    scopedRecurringDetail.title.trim().length > 0
+      ? scopedRecurringDetail.title
+      : listScope?.title && listScope.title !== 'Recurring job'
+        ? listScope.title
+        : (scopedRecurringDetail?.title ?? listScope?.title ?? 'Series')
+  const showSeriesOverviewCta = Boolean(listScope && selection?.kind === 'job')
+  const openScopedSeriesOverview = () => {
+    if (!listScope) return
+    onSelectRecurringJob(listScope.id, scopedSeriesTitle)
+  }
+
   const scopedHeader = listScope ? (
     <Flex
       direction="column"
-      gap="1"
+      gap="2"
       mb="2"
       width="100%"
       style={{ minWidth: 0 }}
     >
-      <Flex align="center" justify="between" gap="2" width="100%">
-        <Button
-          size="3"
-          variant="soft"
-          style={{ flexShrink: 0 }}
-          onClick={() => onExitListScope?.()}
+      <Button
+        size="2"
+        variant="ghost"
+        color="gray"
+        highContrast
+        style={{
+          flexShrink: 0,
+          alignSelf: 'flex-start',
+          marginLeft: 'calc(-1 * var(--space-2))',
+        }}
+        onClick={() => onExitListScope?.()}
+      >
+        <ArrowLeft width={16} height={16} />
+        All jobs
+      </Button>
+      <Flex
+        align="center"
+        justify="between"
+        gap="2"
+        width="100%"
+        px="2"
+        py="2"
+        style={{
+          minWidth: 0,
+          borderRadius: 'var(--radius-3)',
+          backgroundColor: 'var(--violet-a3)',
+        }}
+      >
+        <Flex
+          align="center"
+          gap="2"
+          style={{ minWidth: 0, flex: '1 1 auto', cursor: 'pointer' }}
+          onClick={openScopedSeriesOverview}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault()
+              openScopedSeriesOverview()
+            }
+          }}
+          aria-label={`Open series: ${scopedSeriesTitle}`}
         >
-          <ArrowLeft width={16} height={16} />
-          All jobs
-        </Button>
-        <Button
-          size="3"
-          variant="soft"
-          color="violet"
-          style={{ flexShrink: 0 }}
-          onClick={() => onSelectRecurringJob(listScope.id, listScope.title)}
-        >
-          <Repeat width={16} height={16} />
-          Series overview
-          <NavArrowRight width={16} height={16} />
-        </Button>
+          <Repeat
+            width={16}
+            height={16}
+            color="var(--violet-11)"
+            style={{ flexShrink: 0 }}
+          />
+          <Badge
+            size="1"
+            color="violet"
+            variant="soft"
+            style={{ flexShrink: 0 }}
+          >
+            Series
+          </Badge>
+          <Text
+            size="2"
+            weight="bold"
+            truncate
+            title={scopedSeriesTitle}
+            style={{ minWidth: 0, color: 'var(--violet-12)' }}
+          >
+            {scopedSeriesTitle}
+          </Text>
+        </Flex>
+        {showSeriesOverviewCta ? (
+          <Button
+            size="1"
+            variant="soft"
+            color="violet"
+            style={{ flexShrink: 0 }}
+            onClick={openScopedSeriesOverview}
+          >
+            Overview
+            <NavArrowRight width={14} height={14} />
+          </Button>
+        ) : (
+          <Badge
+            size="1"
+            color="violet"
+            variant="outline"
+            style={{ flexShrink: 0 }}
+          >
+            Overview
+          </Badge>
+        )}
       </Flex>
-      <Text size="2" weight="bold" truncate title={listScope.title}>
-        {listScope.title}
-      </Text>
     </Flex>
   ) : null
 

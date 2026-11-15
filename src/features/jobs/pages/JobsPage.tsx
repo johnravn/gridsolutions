@@ -245,11 +245,10 @@ export default function JobsPage() {
   )
 
   const handleExitListScope = React.useCallback(() => {
-    if (listScope) {
-      setSelection({ kind: 'recurring_job', id: listScope.id })
-    }
     setListScope(null)
-  }, [listScope])
+    // True leave: drop series overview selection. Keep a member job so place isn’t lost.
+    setSelection((prev) => (prev?.kind === 'recurring_job' ? null : prev))
+  }, [])
 
   const handleOpenRecurringSeries = React.useCallback(
     (recurringId: string, title: string) => {
