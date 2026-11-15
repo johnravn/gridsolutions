@@ -191,92 +191,93 @@ test.describe('Money pipeline', () => {
   // Conta mock + long job journey; avoid parallel workers racing the same DB seed.
   test.describe.configure({ mode: 'serial' })
 
-  test('basis → pretty → technical → public → invoice → Conta payload', async ({
-    authedPage: page,
-    context,
-  }) => {
-    test.setTimeout(300_000)
+  test(
+    'basis → pretty → technical → public → invoice → Conta payload',
+    { tag: '@ci' },
+    async ({ authedPage: page, context }) => {
+      test.setTimeout(300_000)
 
-    const jobTitle = await createDraftJob(page)
-    await assignJobContaCustomer(page, jobTitle)
+      const jobTitle = await createDraftJob(page)
+      await assignJobContaCustomer(page, jobTitle)
 
-    await createMoneyPipelineBasis(page, jobTitle)
-    await assertPrettyTotalsFromBasis(page, jobTitle)
+      await createMoneyPipelineBasis(page, jobTitle)
+      await assertPrettyTotalsFromBasis(page, jobTitle)
 
-    const tech = await createTechnicalFromBasis(page)
-    const offerUrl = await lockAndSendTechnical(page, tech, jobTitle)
+      const tech = await createTechnicalFromBasis(page)
+      const offerUrl = await lockAndSendTechnical(page, tech, jobTitle)
 
-    await expect(
-      page.getByText(formatOfferMoney(moneyPipelineExpected.totalWithVat), {
-        exact: true,
-      }),
-    ).toBeVisible({ timeout: 15_000 })
+      await expect(
+        page.getByText(formatOfferMoney(moneyPipelineExpected.totalWithVat), {
+          exact: true,
+        }),
+      ).toBeVisible({ timeout: 15_000 })
 
-    const publicPage = await context.newPage()
-    await publicPage.goto(offerUrl)
-    await expect(
-      publicPage.getByText(MONEY_PIPELINE.customLineDescription).first(),
-    ).toBeVisible({ timeout: 15_000 })
-    await expectMoneyTexts(publicPage, [moneyPipelineExpected.totalWithVat])
+      const publicPage = await context.newPage()
+      await publicPage.goto(offerUrl)
+      await expect(
+        publicPage.getByText(MONEY_PIPELINE.customLineDescription).first(),
+      ).toBeVisible({ timeout: 15_000 })
+      await expectMoneyTexts(publicPage, [moneyPipelineExpected.totalWithVat])
 
-    await openPublicOfferAction(publicPage, 'Accept Offer')
-    await publicPage.getByPlaceholder('First name').fill('E2E')
-    await publicPage.getByPlaceholder('Last name').fill('Money')
-    await publicPage.getByPlaceholder('Enter phone number').fill('91234567')
-    await publicPage
-      .getByRole('button', { name: 'Accept', exact: true })
-      .click()
-    await expect(publicPage.getByText('Offer Accepted').first()).toBeVisible({
-      timeout: 15_000,
-    })
-    await publicPage.close()
-
-    await page.bringToFront()
-    await reopenJobOffers(page, jobTitle)
-    await expect(async () => {
-      await clickJobTab(page, 'Overview')
-      await clickJobTab(page, 'Offers')
-      await expect(page.getByText('accepted').first()).toBeVisible({
-        timeout: 3_000,
+      await openPublicOfferAction(publicPage, 'Accept Offer')
+      await publicPage.getByPlaceholder('First name').fill('E2E')
+      await publicPage.getByPlaceholder('Last name').fill('Money')
+      await publicPage.getByPlaceholder('Enter phone number').fill('91234567')
+      await publicPage
+        .getByRole('button', { name: 'Accept', exact: true })
+        .click()
+      await expect(publicPage.getByText('Offer Accepted').first()).toBeVisible({
+        timeout: 15_000,
       })
-    }).toPass({ timeout: 30_000 })
+      await publicPage.close()
 
-    const preview = await openInvoiceFromAcceptedOffer(page)
-    await expectMoneyTexts(preview, [
-      moneyPipelineExpected.totalAfterDiscount,
-      moneyPipelineExpected.vatAmount,
-      moneyPipelineExpected.totalWithVat,
-    ])
+      await page.bringToFront()
+      await reopenJobOffers(page, jobTitle)
+      await expect(async () => {
+        await clickJobTab(page, 'Overview')
+        await clickJobTab(page, 'Offers')
+        await expect(page.getByText('accepted').first()).toBeVisible({
+          timeout: 3_000,
+        })
+      }).toPass({ timeout: 30_000 })
 
-    await setOfferLineItemsExpanded(preview, true)
-    await expect(
-      preview.getByText(MONEY_PIPELINE.customLineDescription).first(),
-    ).toBeVisible({ timeout: 15_000 })
-    await expectMoneyTexts(preview, [
-      moneyPipelineExpected.totalAfterDiscount,
-      moneyPipelineExpected.vatAmount,
-      moneyPipelineExpected.totalWithVat,
-    ])
+      const preview = await openInvoiceFromAcceptedOffer(page)
+      await expectMoneyTexts(preview, [
+        moneyPipelineExpected.totalAfterDiscount,
+        moneyPipelineExpected.vatAmount,
+        moneyPipelineExpected.totalWithVat,
+      ])
 
-    const body = await sendInvoiceAndCaptureContaBody(page, preview)
-    const lines = body.invoiceLines as Array<{
-      description?: string
-      quantity?: number
-      price?: number
-      discount?: number
-    }>
-    expect(Array.isArray(lines)).toBe(true)
-    expect(lines.length).toBeGreaterThanOrEqual(1)
-    const equipmentLine = lines.find(
-      (l) =>
-        l.description?.includes(MONEY_PIPELINE.customLineDescription) ||
-        l.price === moneyPipelineExpected.expandedLine.unitPrice,
-    )
-    expect(equipmentLine).toBeTruthy()
-    expect(equipmentLine?.quantity).toBe(MONEY_PIPELINE.quantity)
-    expect(equipmentLine?.discount).toBe(MONEY_PIPELINE.discountPercent)
-    expect(equipmentLine?.price).toBe(
-      moneyPipelineExpected.expandedLine.unitPrice,
-    )
-  })
+      await setOfferLineItemsExpanded(preview, true)
+      await expect(
+        preview.getByText(MONEY_PIPELINE.customLineDescription).first(),
+      ).toBeVisible({ timeout: 15_000 })
+      await expectMoneyTexts(preview, [
+        moneyPipelineExpected.totalAfterDiscount,
+        moneyPipelineExpected.vatAmount,
+        moneyPipelineExpected.totalWithVat,
+      ])
+
+      const body = await sendInvoiceAndCaptureContaBody(page, preview)
+      const lines = body.invoiceLines as Array<{
+        description?: string
+        quantity?: number
+        price?: number
+        discount?: number
+      }>
+      expect(Array.isArray(lines)).toBe(true)
+      expect(lines.length).toBeGreaterThanOrEqual(1)
+      const equipmentLine = lines.find(
+        (l) =>
+          l.description?.includes(MONEY_PIPELINE.customLineDescription) ||
+          l.price === moneyPipelineExpected.expandedLine.unitPrice,
+      )
+      expect(equipmentLine).toBeTruthy()
+      expect(equipmentLine?.quantity).toBe(MONEY_PIPELINE.quantity)
+      expect(equipmentLine?.discount).toBe(MONEY_PIPELINE.discountPercent)
+      expect(equipmentLine?.price).toBe(
+        moneyPipelineExpected.expandedLine.unitPrice,
+      )
+    },
+  )
 })

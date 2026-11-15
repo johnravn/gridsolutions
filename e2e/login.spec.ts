@@ -1,7 +1,7 @@
 import { test, expect } from './fixtures'
 
 test.describe('Login', () => {
-  test('signs in and lands on dashboard', async ({ page }) => {
+  test('signs in and lands on dashboard', { tag: '@ci' }, async ({ page }) => {
     await page.goto('/login')
     await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
 

@@ -111,12 +111,27 @@ function jobTabLocatorOptions(tabName: string) {
   }
 }
 
+/** Phone inspectors use InspectorMobileTabSelect (`aria-label="Tab: …"`). */
+function mobileJobTabTrigger(page: Page) {
+  return page.getByRole('button', { name: /^Tab:/ })
+}
+
+function accessibleNameMatchesTab(
+  accessibleName: string,
+  tabName: string | RegExp,
+) {
+  const label = accessibleName.replace(/^Tab:\s*/i, '')
+  return typeof tabName === 'string'
+    ? label === tabName || label.includes(tabName)
+    : tabName.test(label)
+}
+
 async function ensureMobileInspectorOpen(page: Page) {
   const openInspector = page.getByRole('button', { name: 'Open inspector' })
   if (!(await openInspector.isVisible().catch(() => false))) return
 
-  const tabLabel = page.getByText('Tab', { exact: true })
-  const box = await tabLabel.boundingBox().catch(() => null)
+  const trigger = mobileJobTabTrigger(page)
+  const box = await trigger.boundingBox().catch(() => null)
   const viewport = page.viewportSize()
   const inViewport =
     !!box &&
@@ -136,21 +151,17 @@ export async function clickJobTab(page: Page, tabName: string) {
 
   await ensureMobileInspectorOpen(page)
 
-  const mobilePicker = page.getByText('Tab', { exact: true })
-  if (await mobilePicker.isVisible().catch(() => false)) {
-    const pickerButton = mobilePicker.locator('..').getByRole('button')
+  const mobileTrigger = mobileJobTabTrigger(page)
+  if (await mobileTrigger.isVisible().catch(() => false)) {
+    const accessibleName =
+      (await mobileTrigger.getAttribute('aria-label')) ?? ''
     // Already on this tab — avoid opening a menu Playwright cannot click through.
-    if (
-      await pickerButton
-        .filter({ hasText: tabOptions.name })
-        .isVisible()
-        .catch(() => false)
-    ) {
+    if (accessibleNameMatchesTab(accessibleName, tabOptions.name)) {
       return
     }
 
-    await pickerButton.scrollIntoViewIfNeeded()
-    await pickerButton.click({ force: true })
+    await mobileTrigger.scrollIntoViewIfNeeded()
+    await mobileTrigger.click({ force: true })
     const menuItem = page.getByRole('menuitem', tabOptions)
     await expect(menuItem).toBeAttached({ timeout: 5_000 })
     // Menu content is portaled; under mobile inspector transforms Playwright
@@ -166,21 +177,21 @@ export async function clickJobTab(page: Page, tabName: string) {
 
 export async function expectJobTabActive(page: Page, tabName: string) {
   const tabOptions = jobTabLocatorOptions(tabName)
-  const mobilePicker = page.getByText('Tab', { exact: true })
-  if (await mobilePicker.isVisible().catch(() => false)) {
-    await expect(tabSectionButton(page)).toContainText(tabOptions.name)
+  const mobileTrigger = mobileJobTabTrigger(page)
+  if (await mobileTrigger.isVisible().catch(() => false)) {
+    await expect(mobileTrigger).toHaveAttribute(
+      'aria-label',
+      typeof tabOptions.name === 'string'
+        ? new RegExp(
+            `^Tab:\\s*${tabOptions.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`,
+          )
+        : /^Tab:\s*.*Pretty Offers/,
+    )
     return
   }
 
   const tab = page.getByRole('tablist').first().getByRole('tab', tabOptions)
   await expect(tab).toHaveAttribute('data-state', 'active')
-}
-
-function tabSectionButton(page: Page) {
-  return page
-    .getByText('Tab', { exact: true })
-    .locator('..')
-    .getByRole('button')
 }
 
 export async function openJobsPage(page: Page) {

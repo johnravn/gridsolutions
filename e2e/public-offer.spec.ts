@@ -6,12 +6,16 @@ test.describe('Public offer', () => {
   test.beforeEach(async () => {
     await resetMutablePublicOffers()
   })
-  test('displays a sent offer to customers', async ({ page }) => {
-    await page.goto(`/offer/${TEST_OFFER_TOKENS.sent}`)
-    await expect(page.getByText(/Test microphone/i)).toBeVisible({
-      timeout: 15_000,
-    })
-  })
+  test(
+    'displays a sent offer to customers',
+    { tag: '@ci' },
+    async ({ page }) => {
+      await page.goto(`/offer/${TEST_OFFER_TOKENS.sent}`)
+      await expect(page.getByText(/Test microphone/i)).toBeVisible({
+        timeout: 15_000,
+      })
+    },
+  )
 
   test('customer can accept a sent offer', async ({ page }) => {
     await page.goto(`/offer/${TEST_OFFER_TOKENS.accept}`)

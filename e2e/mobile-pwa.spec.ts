@@ -7,33 +7,35 @@ test.describe('Mobile PWA layout', () => {
     hasTouch: true,
   })
 
-  test('dashboard has no horizontal overflow on mobile viewport', async ({
-    page,
-  }) => {
-    await page.goto('/login')
-    await page
-      .getByPlaceholder('you@company.com')
-      .fill(process.env.E2E_TEST_EMAIL ?? 'owner@test.grid.local')
-    await page
-      .getByPlaceholder('••••••••')
-      .fill(process.env.E2E_TEST_PASSWORD ?? 'TestPassword123!')
-    await page.getByRole('button', { name: 'Sign in' }).click()
+  test(
+    'dashboard has no horizontal overflow on mobile viewport',
+    { tag: '@ci' },
+    async ({ page }) => {
+      await page.goto('/login')
+      await page
+        .getByPlaceholder('you@company.com')
+        .fill(process.env.E2E_TEST_EMAIL ?? 'owner@test.grid.local')
+      await page
+        .getByPlaceholder('••••••••')
+        .fill(process.env.E2E_TEST_PASSWORD ?? 'TestPassword123!')
+      await page.getByRole('button', { name: 'Sign in' }).click()
 
-    await page.waitForURL('**/dashboard**', { timeout: 30_000 })
+      await page.waitForURL('**/dashboard**', { timeout: 30_000 })
 
-    const hasHorizontalOverflow = await page.evaluate(() => {
-      return document.documentElement.scrollWidth > window.innerWidth + 1
-    })
+      const hasHorizontalOverflow = await page.evaluate(() => {
+        return document.documentElement.scrollWidth > window.innerWidth + 1
+      })
 
-    expect(hasHorizontalOverflow).toBe(false)
+      expect(hasHorizontalOverflow).toBe(false)
 
-    const drawer = page.locator('.app-sidebar-drawer')
-    await expect(drawer).toBeAttached()
-    await expect(drawer).not.toHaveAttribute('data-open')
-    const drawerRight = await drawer.evaluate(
-      (el) => el.getBoundingClientRect().right,
-    )
-    // Overshoot past x=0 so the 1px border / shadow cannot leave a hairline.
-    expect(drawerRight).toBeLessThanOrEqual(-1)
-  })
+      const drawer = page.locator('.app-sidebar-drawer')
+      await expect(drawer).toBeAttached()
+      await expect(drawer).not.toHaveAttribute('data-open')
+      const drawerRight = await drawer.evaluate(
+        (el) => el.getBoundingClientRect().right,
+      )
+      // Overshoot past x=0 so the 1px border / shadow cannot leave a hairline.
+      expect(drawerRight).toBeLessThanOrEqual(-1)
+    },
+  )
 })

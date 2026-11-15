@@ -7,38 +7,46 @@ import {
 } from './helpers/navigation'
 
 test.describe('Jobs', () => {
-  test('owner can create a draft job', async ({ authedPage: page }) => {
-    const title = await createDraftJob(page)
-    // Mobile inspector heading can sit outside the viewport (drawer transform).
-    await expect(page.getByRole('heading', { name: title })).toBeAttached()
-  })
+  test(
+    'owner can create a draft job',
+    { tag: '@ci' },
+    async ({ authedPage: page }) => {
+      const title = await createDraftJob(page)
+      // Mobile inspector heading can sit outside the viewport (drawer transform).
+      await expect(page.getByRole('heading', { name: title })).toBeAttached()
+    },
+  )
 
-  test('owner can navigate job tabs', async ({ authedPage: page }) => {
-    test.setTimeout(60_000)
-    const title = await createDraftJob(page)
+  test(
+    'owner can navigate job tabs',
+    { tag: '@ci' },
+    async ({ authedPage: page }) => {
+      test.setTimeout(60_000)
+      const title = await createDraftJob(page)
 
-    await clickJobTab(page, 'Overview')
-    await expectJobTabActive(page, 'Overview')
+      await clickJobTab(page, 'Overview')
+      await expectJobTabActive(page, 'Overview')
 
-    await clickJobTab(page, 'Bookings')
-    await expectJobTabActive(page, 'Bookings')
+      await clickJobTab(page, 'Bookings')
+      await expectJobTabActive(page, 'Bookings')
 
-    await clickJobTab(page, 'Offers')
-    await expect(page.getByRole('heading', { name: 'Offers' })).toBeVisible({
-      timeout: 15_000,
-    })
+      await clickJobTab(page, 'Offers')
+      await expect(page.getByRole('heading', { name: 'Offers' })).toBeVisible({
+        timeout: 15_000,
+      })
 
-    await clickJobTab(page, 'Subcontractors')
-    await expectJobTabActive(page, 'Subcontractors')
-    await expect(
-      page.getByRole('heading', { name: 'Subcontractors' }),
-    ).toBeVisible({ timeout: 15_000 })
-    await expect(
-      page.getByRole('heading', { name: 'Subrental equipment' }),
-    ).toBeVisible({ timeout: 15_000 })
+      await clickJobTab(page, 'Subcontractors')
+      await expectJobTabActive(page, 'Subcontractors')
+      await expect(
+        page.getByRole('heading', { name: 'Subcontractors' }),
+      ).toBeVisible({ timeout: 15_000 })
+      await expect(
+        page.getByRole('heading', { name: 'Subrental equipment' }),
+      ).toBeVisible({ timeout: 15_000 })
 
-    await expect(page.getByRole('heading', { name: title })).toBeVisible()
-  })
+      await expect(page.getByRole('heading', { name: title })).toBeVisible()
+    },
+  )
 
   test('owner can edit job title', async ({ authedPage: page }) => {
     test.setTimeout(60_000)
@@ -111,26 +119,30 @@ test.describe('Jobs', () => {
     ).toBeVisible({ timeout: 15_000 })
   })
 
-  test('owner can change job status from overview timeline', async ({
-    authedPage: page,
-  }) => {
-    await createDraftJob(page)
+  test(
+    'owner can change job status from overview timeline',
+    { tag: '@ci' },
+    async ({ authedPage: page }) => {
+      await createDraftJob(page)
 
-    await clickJobTab(page, 'Overview')
-    const overview = page.getByRole('tabpanel')
-    const statusSection = overview
-      .getByRole('heading', { name: 'Job Status' })
-      .locator('..')
-    const currentStatusRow = overview.getByText('Current status:').locator('..')
-    const currentStatus = (
-      await currentStatusRow.locator('.rt-Badge').textContent()
-    )?.trim()
-    const targetStatus = currentStatus === 'Planned' ? 'Requested' : 'Planned'
+      await clickJobTab(page, 'Overview')
+      const overview = page.getByRole('tabpanel')
+      const statusSection = overview
+        .getByRole('heading', { name: 'Job Status' })
+        .locator('..')
+      const currentStatusRow = overview
+        .getByText('Current status:')
+        .locator('..')
+      const currentStatus = (
+        await currentStatusRow.locator('.rt-Badge').textContent()
+      )?.trim()
+      const targetStatus = currentStatus === 'Planned' ? 'Requested' : 'Planned'
 
-    await statusSection.getByText(targetStatus, { exact: true }).click()
+      await statusSection.getByText(targetStatus, { exact: true }).click()
 
-    await expect(
-      currentStatusRow.getByText(targetStatus, { exact: true }),
-    ).toBeVisible({ timeout: 15_000 })
-  })
+      await expect(
+        currentStatusRow.getByText(targetStatus, { exact: true }),
+      ).toBeVisible({ timeout: 15_000 })
+    },
+  )
 })

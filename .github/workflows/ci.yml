@@ -88,7 +88,9 @@ jobs:
   e2e:
     name: E2E tests
     runs-on: ubuntu-latest
-    needs: integration
+    # Parallel with integration (separate runner/DB). Wait only for unit so we
+    # do not burn ~20m of E2E when unit already failed.
+    needs: unit
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -107,4 +109,5 @@ jobs:
           echo "VITE_SUPABASE_ANON_KEY=$ANON_KEY" >> "$GITHUB_ENV"
           echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY" >> "$GITHUB_ENV"
       - run: npm run db:seed-test-users
-      - run: npm run test:e2e
+      # Slim suite (@ci tags + mobile-pwa). Full: E2E_FULL=1 npm run test:e2e:full
+      - run: npm run test:e2e:ci

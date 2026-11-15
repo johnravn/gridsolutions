@@ -2,6 +2,11 @@ import { defineConfig, devices } from '@playwright/test'
 import { execSync } from 'node:child_process'
 import os from 'node:os'
 
+/** Slim CI suite: @ci tags + mobile-pwa only. Full suite: local or E2E_FULL=1. */
+const slimCi =
+  process.env.E2E_CI === '1' ||
+  (!!process.env.CI && process.env.E2E_FULL !== '1')
+
 function resolveWorkerCount(): number {
   const fromEnv = process.env.PLAYWRIGHT_WORKERS
   if (fromEnv) {
@@ -49,7 +54,8 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.mjs',
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
+  // One retry in CI: enough for transient flakes without 3× long journeys.
+  retries: process.env.CI ? 1 : 0,
   workers: resolveWorkerCount(),
   // Login fixture + createDraftJob routinely exceed the 30s default under 4 workers.
   timeout: 90_000,
@@ -60,16 +66,32 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:3000',
     trace: 'on-first-retry',
   },
-  projects: [
-    {
-      name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
-    },
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-    },
-  ],
+  projects: slimCi
+    ? [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+          grep: /@ci\b/,
+          testIgnore: /mobile-pwa\.spec\.ts/,
+        },
+        {
+          // Mobile coverage in CI is the dedicated PWA layout smoke only —
+          // not a second full pass of desktop journeys on Pixel 5.
+          name: 'mobile-chrome',
+          use: { ...devices['Pixel 5'] },
+          testMatch: /mobile-pwa\.spec\.ts/,
+        },
+      ]
+    : [
+        {
+          name: 'chromium',
+          use: { ...devices['Desktop Chrome'] },
+        },
+        {
+          name: 'mobile-chrome',
+          use: { ...devices['Pixel 5'] },
+        },
+      ],
   webServer: {
     command: 'npm run dev',
     url: 'http://127.0.0.1:3000',

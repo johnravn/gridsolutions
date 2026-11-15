@@ -223,28 +223,45 @@ RUN_INTEGRATION_TESTS=1 npm run test:integration
 1. `e2e/global-setup.mjs` seeds test data
 2. Playwright starts `npm run dev` on port 3000 (reuses an existing server if one is running)
 3. Supabase URL/anon key are injected from `supabase status -o env`
-4. Tests run headless in Chromium
+4. Tests run headless (Chromium + mobile-chrome projects)
+
+**CI vs full suite**
+
+| Command                 | What runs                                                            |
+| ----------------------- | -------------------------------------------------------------------- |
+| `npm run test:e2e`      | Full suite locally; also slims automatically when GitHub sets `CI=1` |
+| `npm run test:e2e:ci`   | Slim suite (`E2E_CI=1` → `@ci` + mobile-pwa) — what Actions runs     |
+| `npm run test:e2e:full` | Force full suite even under `CI=1` (`E2E_FULL=1`)                    |
+
+Slim CI keeps critical paths tagged `@ci` on Chromium, plus `mobile-pwa.spec.ts` on Pixel 5 only. See Project doc `docs/e2e-ci-slim.md` for stayed vs cut.
 
 **Current tests** (`e2e/`):
 
-| File                     | Coverage                                                       |
-| ------------------------ | -------------------------------------------------------------- |
-| `login.spec.ts`          | Sign in → dashboard                                            |
-| `jobs.spec.ts`           | Create job, tab navigation, edit title                         |
-| `offers.spec.ts`         | Create offer, lock & send, customer accepts, owner sees status |
-| `public-offer.spec.ts`   | View public offer, accept, reject, request revision            |
-| `inventory.spec.ts`      | Open inventory, search                                         |
-| `customers.spec.ts`      | Open customers page                                            |
-| `calendar.spec.ts`       | Open calendar page                                             |
-| `logging.spec.ts`        | Open logging page                                              |
-| `bookings.spec.ts`       | Open bookings tab on a job                                     |
-| `vehicles.spec.ts`       | Open vehicles page                                             |
-| `crew.spec.ts`           | Open crew page                                                 |
-| `company.spec.ts`        | Open company settings                                          |
-| `roles.spec.ts`          | Freelancer denied inventory nav                                |
-| `recurring-jobs.spec.ts` | Recurring jobs tab (when present)                              |
+| File                     | Coverage                                              | CI (`@ci`)         |
+| ------------------------ | ----------------------------------------------------- | ------------------ |
+| `login.spec.ts`          | Sign in → dashboard                                   | yes                |
+| `jobs.spec.ts`           | Create job, tabs, edit/copy/status                    | create/tabs/status |
+| `money-pipeline.spec.ts` | Basis → pretty → technical → public → invoice → Conta | yes                |
+| `bookings.spec.ts`       | Book / conflict / delete equipment                    | book only          |
+| `public-offer.spec.ts`   | View / accept / reject / revision                     | view only          |
+| `inventory.spec.ts`      | Add item                                              | yes                |
+| `customers.spec.ts`      | Open / create customer                                | create             |
+| `calendar.spec.ts`       | Filter, reminders, subscriptions, views               | filter only        |
+| `roles.spec.ts`          | Freelancer/employee/owner authz                       | core authz         |
+| `recurring-jobs.spec.ts` | Create recurring + inspector tabs                     | yes                |
+| `mobile-pwa.spec.ts`     | Mobile overflow / drawer                              | mobile project     |
+| `offers.spec.ts`         | Create offer, lock & send, customer accepts           | full only          |
+| `pretty-offers.spec.ts`  | Pretty offer editor                                   | full only          |
+| `phone-input.spec.ts`    | Country-code paste                                    | full only          |
+| `logging.spec.ts`        | Logging month switch                                  | full only          |
+| `vehicles.spec.ts`       | Vehicles page / book on job                           | full only          |
+| `crew.spec.ts`           | Add crew booking dialog                               | full only          |
+| `company.spec.ts`        | Open company settings                                 | full only          |
+| `latest.spec.ts`         | Open Company → Logs                                   | full only          |
+| `profile.spec.ts`        | Open profile                                          | full only          |
+| `matters.spec.ts`        | Open matters                                          | full only          |
 
-**Shared helpers:** `e2e/helpers/navigation.ts` — `openJobsPage`, `createDraftJob`, and page openers for inventory, customers, calendar, etc.
+**Shared helpers:** `e2e/helpers/navigation.ts` — `openJobsPage`, `createDraftJob`, `clickJobTab` (desktop tabs + mobile `Tab:` picker), page openers.
 
 **Auth fixture:** `e2e/fixtures.ts` provides `authedPage` — logs in as the test owner before each test that needs it.
 
@@ -252,7 +269,9 @@ RUN_INTEGRATION_TESTS=1 npm run test:integration
 
 ```bash
 supabase start
-npm run test:e2e
+npm run test:e2e          # full locally
+npm run test:e2e:ci       # slim (also what CI runs when CI=1)
+E2E_FULL=1 npm run test:e2e:full   # force full under CI=1
 ```
 
 **Debug visually:**
@@ -320,12 +339,14 @@ The seed script uses the **system** `supabase` binary (not `node_modules/.bin/su
 
 Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 
-| Job         | Command                                                              | Depends on  |
-| ----------- | -------------------------------------------------------------------- | ----------- |
-| Unit tests  | `npm run test`                                                       | —           |
-| Build       | `npm run build:check`                                                | —           |
-| Integration | `supabase start` → `db reset` → seed → `test:integration`            | unit        |
-| E2E         | `playwright install chromium` → `supabase start` → seed → `test:e2e` | integration |
+| Job         | Command                                                                 | Depends on |
+| ----------- | ----------------------------------------------------------------------- | ---------- |
+| Unit tests  | `npm run test`                                                          | —          |
+| Build       | `npm run build:check`                                                   | —          |
+| Integration | `supabase start` → `db reset` → seed → `test:integration`               | unit       |
+| E2E         | `playwright install chromium` → `supabase start` → seed → `test:e2e:ci` | unit       |
+
+E2E runs **in parallel with integration** (separate runner). Slim suite: `@ci` tags on Chromium + `mobile-pwa` on mobile-chrome. Force full: `E2E_FULL=1`.
 
 Runs on every push to `main`.
 

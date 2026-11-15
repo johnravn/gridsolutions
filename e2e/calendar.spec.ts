@@ -7,19 +7,21 @@ import {
 
 test.describe('Calendar', () => {
   test.describe.configure({ timeout: 60_000 })
-  test('owner can filter calendar by equipment category', async ({
-    authedPage: page,
-  }) => {
-    test.setTimeout(60_000)
-    await openCalendarPage(page)
+  test(
+    'owner can filter calendar by equipment category',
+    { tag: '@ci' },
+    async ({ authedPage: page }) => {
+      test.setTimeout(60_000)
+      await openCalendarPage(page)
 
-    const categorySelect = page.getByRole('combobox', { name: 'Category' })
-    await expect(categorySelect).toContainText('Jobs')
-    await categorySelect.click()
-    await page.getByRole('option', { name: 'Equipment' }).click()
-    await expect(categorySelect).toContainText('Equipment')
-    await expect(page.getByPlaceholder('Search items...')).toBeVisible()
-  })
+      const categorySelect = page.getByRole('combobox', { name: 'Category' })
+      await expect(categorySelect).toContainText('Jobs')
+      await categorySelect.click()
+      await page.getByRole('option', { name: 'Equipment' }).click()
+      await expect(categorySelect).toContainText('Equipment')
+      await expect(page.getByPlaceholder('Search items...')).toBeVisible()
+    },
+  )
 
   test('owner can opt in to a 1-hour reminder on project lead jobs', async ({
     authedPage: page,

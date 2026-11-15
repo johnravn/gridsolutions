@@ -16,6 +16,8 @@
     "test:integration": "node scripts/run-vitest.mjs run --config vitest.integration.config.ts",
     "test:kill-orphans": "node scripts/kill-vitest-orphans.mjs",
     "test:e2e": "playwright test",
+    "test:e2e:ci": "E2E_CI=1 playwright test",
+    "test:e2e:full": "E2E_FULL=1 playwright test",
     "test:e2e:install": "playwright install chromium",
     "test:all": "npm run test && npm run db:seed-test-users && RUN_INTEGRATION_TESTS=1 npm run test:integration && npm run test:e2e",
     "lint": "eslint",

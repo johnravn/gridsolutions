@@ -114,7 +114,7 @@ export async function assignJobContaCustomer(page: Page, jobTitle: string) {
   }
   await expect(
     page
-      .getByText('Tab', { exact: true })
+      .getByRole('button', { name: /^Tab:/ })
       .or(page.getByRole('tab', { name: 'Offers', exact: true })),
   ).toBeVisible({ timeout: 15_000 })
 }
