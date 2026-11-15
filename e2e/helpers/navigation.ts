@@ -592,9 +592,18 @@ async function pickDateRangeInDialog(
 
   const [year, , day] = localDate.split('-').map(Number)
   const dayNum = String(day)
-  // Trigger shows e.g. "1. jul 2026" / "1. July 2026" — require day + year.
+  // Split Start/End triggers (period picker UX): each is e.g.
+  // "Start All day 15. nov 2026" / "End All day 15. nov 2026".
+  // A bare day+year regex matches both and fails Playwright strict mode.
   await expect(
-    dialog.getByRole('button', { name: new RegExp(`${dayNum}\\..*${year}`) }),
+    dialog.getByRole('button', {
+      name: new RegExp(`^Start .*${dayNum}\\..*${year}`),
+    }),
+  ).toBeVisible({ timeout: 5_000 })
+  await expect(
+    dialog.getByRole('button', {
+      name: new RegExp(`^End .*${dayNum}\\..*${year}`),
+    }),
   ).toBeVisible({ timeout: 5_000 })
 }
 
