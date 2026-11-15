@@ -2,30 +2,46 @@ import { supabase } from '@shared/api/supabase'
 
 export type HomeDashboardLayoutPreferences = {
   showDailyInspiration: boolean
-  showLatest: boolean
+  /** Gates CompanyJobsWeekSection on Home (legacy key: home_show_latest). */
+  showCompanyJobsWeek: boolean
   showMatters: boolean
   showConflicts: boolean
-  showUpcomingJobs: boolean
 }
 
 export function defaultHomeDashboardLayoutPreferences(): HomeDashboardLayoutPreferences {
   return {
     showDailyInspiration: true,
-    showLatest: true,
+    showCompanyJobsWeek: true,
     showMatters: true,
     showConflicts: true,
-    showUpcomingJobs: true,
   }
 }
 
-function parseHomeLayout(prefs: Record<string, unknown> | null | undefined) {
+function prefEnabled(
+  prefs: Record<string, unknown>,
+  ...keys: Array<string>
+): boolean {
+  for (const key of keys) {
+    if (key in prefs) return prefs[key] !== false
+  }
+  return true
+}
+
+/** Exported for unit tests — preference key rename + legacy fallback. */
+export function parseHomeLayout(
+  prefs: Record<string, unknown> | null | undefined,
+) {
   const p = prefs ?? {}
   return {
-    showDailyInspiration: p.home_show_daily_inspiration !== false,
-    showLatest: p.home_show_latest !== false,
-    showMatters: p.home_show_matters !== false,
-    showConflicts: p.home_show_conflicts !== false,
-    showUpcomingJobs: p.home_show_upcoming_jobs !== false,
+    showDailyInspiration: prefEnabled(p, 'home_show_daily_inspiration'),
+    // Prefer new key; fall back to legacy home_show_latest (same meaning).
+    showCompanyJobsWeek: prefEnabled(
+      p,
+      'home_show_company_jobs_week',
+      'home_show_latest',
+    ),
+    showMatters: prefEnabled(p, 'home_show_matters'),
+    showConflicts: prefEnabled(p, 'home_show_conflicts'),
   } satisfies HomeDashboardLayoutPreferences
 }
 

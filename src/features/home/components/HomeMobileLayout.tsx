@@ -109,7 +109,7 @@ export function HomeMobileLayout({
           getAvatarUrl={getAvatarUrl}
         />
 
-        {canVisitJobs && homeLayout.showLatest && (
+        {canVisitJobs && homeLayout.showCompanyJobsWeek && (
           <CompanyJobsWeekSection
             presentation="mobile"
             jobsThisWeek={jobsThisWeek}

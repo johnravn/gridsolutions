@@ -14,14 +14,19 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useAppForm } from '@shared/form'
-import { supabase } from '@shared/api/supabase'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
+import {
+  completeRequiredProfile,
+  signOut,
+} from '@features/login/api/authActions'
 import {
   AnimatedBackground,
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
 } from '@shared/ui/components/AnimatedBackground'
+import { authUserQueryOptions } from '@shared/auth/authUserQuery'
 import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
 import { myProfileQueryKey } from '@shared/api/myProfileQuery'
+import { useLockDocumentScroll } from '@shared/ui/hooks/useLockDocumentScroll'
 
 const schema = z.object({
   firstName: z.string().trim().min(1, 'First name is required'),
@@ -37,14 +42,8 @@ export default function CompleteProfilePage() {
   const qc = useQueryClient()
   const [error, setError] = React.useState<string | null>(null)
 
-  const { data: authUser, isLoading: authLoading } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data, error: authError } = await supabase.auth.getUser()
-      if (authError) throw authError
-      return data.user
-    },
-  })
+  const { data: authUser, isLoading: authLoading } =
+    useQuery(authUserQueryOptions)
 
   const { data: profile, isLoading: profileLoading } = useQuery({
     queryKey: ['profile-completeness', authUser?.id ?? '__none__'],
@@ -95,26 +94,12 @@ export default function CompleteProfilePage() {
       phone: string
     }) => {
       if (!authUser?.id) throw new Error('Not signed in')
-      const { data: existing, error: loadError } = await supabase
-        .from('profiles')
-        .select('display_name, bio, avatar_url, preferences')
-        .eq('user_id', authUser.id)
-        .maybeSingle()
-      if (loadError) throw loadError
-
-      const displayName =
-        existing?.display_name?.trim() ||
-        `${value.firstName} ${value.lastName}`.trim()
-      const { error: rpcError } = await supabase.rpc('update_my_profile', {
-        p_display_name: displayName,
-        p_first_name: value.firstName.trim(),
-        p_last_name: value.lastName.trim(),
-        p_phone: value.phone.trim(),
-        p_bio: existing?.bio ?? '',
-        p_avatar_path: existing?.avatar_url ?? '',
-        p_preferences: existing?.preferences ?? {},
+      await completeRequiredProfile({
+        userId: authUser.id,
+        firstName: value.firstName,
+        lastName: value.lastName,
+        phone: value.phone,
       })
-      if (rpcError) throw rpcError
     },
     onSuccess: async () => {
       if (authUser?.id) {
@@ -133,21 +118,7 @@ export default function CompleteProfilePage() {
     },
   })
 
-  React.useEffect(() => {
-    const originalStyle = {
-      overflow: document.body.style.overflow,
-      padding: document.body.style.padding,
-      margin: document.body.style.margin,
-    }
-    document.body.style.overflow = 'hidden'
-    document.body.style.padding = '0'
-    document.body.style.margin = '0'
-    return () => {
-      document.body.style.overflow = originalStyle.overflow
-      document.body.style.padding = originalStyle.padding
-      document.body.style.margin = originalStyle.margin
-    }
-  }, [])
+  useLockDocumentScroll({ includeHtml: false })
 
   if (authLoading || profileLoading) {
     return (
@@ -288,7 +259,7 @@ export default function CompleteProfilePage() {
             variant="ghost"
             color="gray"
             onClick={async () => {
-              await supabase.auth.signOut()
+              await signOut()
               void navigate({ to: '/login' })
             }}
           >

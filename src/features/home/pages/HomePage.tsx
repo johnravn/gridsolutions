@@ -282,7 +282,7 @@ export default function HomePage() {
 
   // Do not gate skeleton on matters — lean unread list loads after first paint.
   const isHomeDataLoading =
-    canVisitJobs && homeLayout.showLatest && companyWeekJobsLoading
+    canVisitJobs && homeLayout.showCompanyJobsWeek && companyWeekJobsLoading
 
   const showInitialSkeleton = useInitialPageLoad(isHomeDataLoading)
 

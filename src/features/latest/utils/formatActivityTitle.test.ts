@@ -15,6 +15,26 @@ describe('formatActivityTitle', () => {
     expect(formatActivityTitle(item)).toBe('Added "Cable" to inventory')
   })
 
+  it('falls back for unknown activity types', () => {
+    const withTitle = {
+      ...makeActivityFeedItem({
+        activity_type: 'announcement',
+        title: 'Team update',
+      }),
+      activity_type: 'future_type' as 'announcement',
+    }
+    expect(formatActivityTitle(withTitle)).toBe('Team update')
+
+    const withoutTitle = {
+      ...makeActivityFeedItem({
+        activity_type: 'announcement',
+        title: '   ',
+      }),
+      activity_type: 'future_type' as 'announcement',
+    }
+    expect(formatActivityTitle(withoutTitle)).toBe('Activity update')
+  })
+
   it('maps entity labels', () => {
     expect(activityEntityLabel('job_created')).toBe('job')
     expect(activityEntityLabel('announcement')).toBe('announcement')

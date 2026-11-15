@@ -22,36 +22,47 @@ export function formatActivityTitle(
   }
 
   const metadata = activity.metadata
+  const fallbackTitle = activity.title?.trim() || 'Activity update'
+  const label = (...keys: Array<string>) => {
+    for (const key of keys) {
+      const value = metadata[key]
+      if (typeof value === 'string' && value.trim()) return value
+    }
+    return null
+  }
 
   switch (activity.activity_type) {
     case 'inventory_item_created':
-      return `Added "${metadata.item_name || 'item'}" to inventory`
+      return `Added "${label('item_name') || 'item'}" to inventory`
     case 'inventory_item_deleted':
-      return `Removed "${metadata.item_name || 'item'}" from inventory`
+      return `Removed "${label('item_name') || 'item'}" from inventory`
     case 'inventory_group_created':
-      return `Created inventory group "${metadata.group_name || 'group'}"`
+      return `Created inventory group "${label('group_name') || 'group'}"`
     case 'inventory_group_deleted':
-      return `Removed inventory group "${metadata.group_name || 'group'}"`
+      return `Removed inventory group "${label('group_name') || 'group'}"`
     case 'vehicle_added':
-      return `Added vehicle "${metadata.vehicle_name || metadata.license_plate || 'vehicle'}"`
+      return `Added vehicle "${label('vehicle_name', 'license_plate') || 'vehicle'}"`
     case 'vehicle_removed':
-      return `Removed vehicle "${metadata.vehicle_name || metadata.license_plate || 'vehicle'}"`
+      return `Removed vehicle "${label('vehicle_name', 'license_plate') || 'vehicle'}"`
     case 'customer_added':
-      return `Added customer "${metadata.customer_name || 'customer'}"`
+      return `Added customer "${label('customer_name') || 'customer'}"`
     case 'customer_removed':
-      return `Removed customer "${metadata.customer_name || 'customer'}"`
+      return `Removed customer "${label('customer_name') || 'customer'}"`
     case 'crew_added':
-      return `Added crew member "${metadata.user_name || metadata.email || 'crew'}"`
+      return `Added crew member "${label('user_name', 'email') || 'crew'}"`
     case 'crew_removed':
-      return `Removed crew member "${metadata.user_name || metadata.email || 'crew'}"`
+      return `Removed crew member "${label('user_name', 'email') || 'crew'}"`
     case 'job_created':
-      return `Created job "${metadata.job_title || activity.title || 'job'}"`
+      return `Created job "${label('job_title') || activity.title || 'job'}"`
     case 'job_status_changed':
-      return `Changed job "${metadata.job_title || activity.title || 'job'}" status`
+      return `Changed job "${label('job_title') || activity.title || 'job'}" status`
     case 'job_deleted':
-      return `Deleted job "${metadata.job_title || activity.title || 'job'}"`
+      return `Deleted job "${label('job_title') || activity.title || 'job'}"`
     case 'announcement':
       return activity.title || 'Announcement'
+    default:
+      // Runtime corrupt / future activity_type payloads.
+      return fallbackTitle
   }
 }
 

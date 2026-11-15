@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
-import { supabase } from '@shared/api/supabase'
+import { normalizeBibleVersion } from '@shared/lib/bibleVersion'
 import {
-  DEFAULT_BIBLE_VERSION,
-  normalizeBibleVersion,
-} from '@shared/lib/bibleVersion'
+  dailyInspirationPrefsQuery,
+  defaultDailyInspirationPrefs,
+} from '../api/dailyInspirationPrefsQuery'
 import { normalizeDailyInspirationType } from '../utils/dailyInspiration'
 import { BibleVerseSection } from './BibleVerseSection'
 import { QuoteSection } from './QuoteSection'
@@ -16,34 +16,13 @@ export function DailyInspirationSection({
   presentation?: 'desktop' | 'mobile'
 }) {
   const { data: inspiration } = useQuery({
-    queryKey: ['profile', userId ?? '__none__', 'daily-inspiration-type'],
+    ...dailyInspirationPrefsQuery(userId ?? ''),
     enabled: !!userId,
-    queryFn: async () => {
-      if (!userId) {
-        return {
-          type: 'quote' as const,
-          bibleVersion: DEFAULT_BIBLE_VERSION,
-        }
-      }
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('preferences')
-        .eq('user_id', userId)
-        .maybeSingle()
-      if (error) throw error
-      const prefs = (data as { preferences?: unknown } | null)?.preferences as
-        | Record<string, unknown>
-        | undefined
-      return {
-        type: normalizeDailyInspirationType(prefs?.daily_inspiration_type),
-        bibleVersion: normalizeBibleVersion(prefs?.bible_version),
-      }
-    },
-    staleTime: 1000 * 60 * 60 * 12,
-    gcTime: 1000 * 60 * 60 * 48,
   })
 
-  const resolved = normalizeDailyInspirationType(inspiration?.type)
+  const resolved = normalizeDailyInspirationType(
+    inspiration?.type ?? defaultDailyInspirationPrefs().type,
+  )
 
   if (resolved === 'bibleverse')
     return (

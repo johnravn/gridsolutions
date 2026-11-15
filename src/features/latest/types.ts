@@ -16,34 +16,16 @@ export type ActivityType =
   | 'job_deleted'
   | 'announcement'
 
-// Temporary types until database types are regenerated
 export type ActivityLogRow = {
   id: string
   company_id: string
   activity_type: ActivityType
   created_by_user_id: string
   created_at: string
-  metadata: Record<string, any>
+  metadata: Record<string, unknown>
   title: string | null
   description: string | null
   deleted: boolean
-}
-
-export type ActivityCommentRow = {
-  id: string
-  activity_id: string
-  created_by_user_id: string
-  content: string
-  created_at: string
-  updated_at: string
-  deleted: boolean
-}
-
-export type ActivityLikeRow = {
-  id: string
-  activity_id: string
-  user_id: string
-  created_at: string
 }
 
 export type ActivityFeedItem = ActivityLogRow & {
@@ -58,21 +40,7 @@ export type ActivityFeedItem = ActivityLogRow & {
   user_liked: boolean
 }
 
-export type ActivityCommentWithAuthor = ActivityCommentRow & {
-  created_by: {
-    user_id: string
-    display_name: string | null
-    avatar_url: string | null
-    email: string
-  }
-}
-
-export type LatestInspectorData = {
-  activity: ActivityFeedItem
-  comments: Array<ActivityCommentWithAuthor>
-}
-
-// Grouped inventory activities
+/** Client-side grouped inventory rows for Company Logs / formatters. */
 export type GroupedInventoryActivity = {
   id: string // Composite ID based on grouped items
   isGrouped: true

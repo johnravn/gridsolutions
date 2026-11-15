@@ -1,4 +1,3 @@
-// src/pages/ProfilePage.tsx
 import * as React from 'react'
 import {
   Box,
@@ -15,7 +14,7 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@shared/api/supabase'
+import { authUserQueryOptions } from '@shared/auth/authUserQuery'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import {
   DEFAULT_BIBLE_VERSION,
@@ -34,6 +33,15 @@ import { Camera } from 'iconoir-react'
 import { PhoneInputField } from '@shared/phone/PhoneInputField'
 import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your project
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
+import { profilePageQuery } from '@features/profile/api/profileQuery'
+import {
+  
+  
+  
+  prefsAsRecord,
+  saveProfilePage
+} from '@features/profile/api/updateProfile'
+import { uploadAvatar } from '@features/profile/api/uploadAvatar'
 import ProfileAuthTab from '@features/profile/components/ProfileAuthTab'
 import ProfileMatterEmailSettings from '@features/profile/components/ProfileMatterEmailSettings'
 import ProfilePersonalizationTab from '@features/profile/components/ProfilePersonalizationTab'
@@ -43,50 +51,8 @@ import {
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
   normalizeGeometricPreset,
 } from '@shared/ui/components/AnimatedBackground'
+import type {ProfileAddressForm, ProfilePageForm, ProfilePreferencesFields} from '@features/profile/api/updateProfile';
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
-import type { BibleVersion } from '@shared/lib/bibleVersion'
-
-type ProfileRow = {
-  user_id: string
-  email: string
-  first_name: string | null
-  last_name: string | null
-  display_name: string | null
-  phone: string | null
-  avatar_url: string | null
-  bio: string | null
-  preferences: any | null
-  primary_address_id: string | null
-  // Nested via FK select (see query below)
-  addresses?: {
-    id: string
-    name: string | null
-    address_line: string
-    zip_code: string
-    city: string
-    country: string
-  } | null
-}
-
-type OptionalFields = {
-  date_of_birth?: string | null
-  drivers_license?: string | null
-  licenses?: Array<string> | null
-  certificates?: Array<string> | null
-  notes?: string | null
-  animated_background_intensity?: number | null
-  daily_inspiration_type?: 'quote' | 'bibleverse' | null
-  bible_version?: BibleVersion | null
-}
-
-type AddressForm = {
-  id: string | null
-  name: string
-  address_line: string
-  zip_code: string
-  city: string
-  country: string
-}
 
 const PROFILE_TABS = [
   'general',
@@ -157,61 +123,23 @@ export default function ProfilePage() {
   }, [])
 
   // 1) get current user
-  const { data: authUser } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => {
-      const { data: authData, error: authErr } = await supabase.auth.getUser()
-      if (authErr) throw authErr
-      return authData.user
-    },
-  })
+  const { data: authUser } = useQuery(authUserQueryOptions)
 
   // 2) load profile (+ joined primary address)
-  const { data, isLoading, isError, error } = useQuery<ProfileRow | null>({
-    queryKey: ['profile', authUser?.id ?? '__none__'],
+  const { data, isLoading, isError, error } = useQuery({
+    ...profilePageQuery(authUser?.id ?? '__none__'),
     enabled: !!authUser?.id,
-    queryFn: async () => {
-      if (!authUser?.id) return null
-      const { data: profileData, error: profileErr } = await supabase
-        .from('profiles')
-        .select(
-          `
-          user_id,
-          email,
-          first_name,
-          last_name,
-          display_name,
-          phone,
-          avatar_url,
-          bio,
-          preferences,
-          primary_address_id,
-          addresses:primary_address_id (
-            id,
-            name,
-            address_line,
-            zip_code,
-            city,
-            country
-          )
-        `,
-        )
-        .eq('user_id', authUser.id)
-        .maybeSingle()
-      if (profileErr) throw profileErr
-      return profileData as unknown as ProfileRow
-    },
   })
 
   // 3) local form state
-  const [form, setForm] = React.useState({
+  const [form, setForm] = React.useState<ProfilePageForm>({
     // personal
     display_name: '',
     first_name: '',
     last_name: '',
     phone: '',
     bio: '',
-    avatarPath: '' as string | null,
+    avatarPath: null,
     // optional (preferences)
     date_of_birth: '',
     drivers_license: '',
@@ -221,13 +149,13 @@ export default function ProfilePage() {
     animatedBackground: false,
     backgroundIntensity: 1.0,
     backgroundPreset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
-    dailyInspirationType: 'quote' as 'quote' | 'bibleverse',
+    dailyInspirationType: 'quote',
     bibleVersion: DEFAULT_BIBLE_VERSION,
   })
   const formRef = React.useRef(form)
   formRef.current = form
 
-  const [addr, setAddr] = React.useState<AddressForm>({
+  const [addr, setAddr] = React.useState<ProfileAddressForm>({
     id: null,
     name: '',
     address_line: '',
@@ -241,7 +169,7 @@ export default function ProfilePage() {
     if (!data) return
 
     // optional fields moved out of address (address now normalized)
-    const prefs: OptionalFields = data.preferences ?? {}
+    const prefs = prefsAsRecord(data.preferences) as ProfilePreferencesFields
     const licensesCsv = (prefs.licenses ?? []).join(', ')
     const certificatesCsv = (prefs.certificates ?? []).join(', ')
 
@@ -258,24 +186,14 @@ export default function ProfilePage() {
       licensesCsv,
       certificatesCsv,
       notes: prefs.notes ?? '',
-      animatedBackground:
-        (data.preferences as Record<string, any> | null)
-          ?.animated_background_enabled ?? false,
-      backgroundIntensity:
-        (data.preferences as Record<string, any> | null)
-          ?.animated_background_intensity ?? 1.0,
+      animatedBackground: prefs.animated_background_enabled ?? false,
+      backgroundIntensity: prefs.animated_background_intensity ?? 1.0,
       backgroundPreset: normalizeGeometricPreset(
-        (data.preferences as Record<string, any> | null)
-          ?.animated_background_shape_type,
+        prefs.animated_background_shape_type,
       ),
       dailyInspirationType:
-        (data.preferences as Record<string, any> | null)
-          ?.daily_inspiration_type === 'bibleverse'
-          ? 'bibleverse'
-          : 'quote',
-      bibleVersion: normalizeBibleVersion(
-        (data.preferences as Record<string, any> | null)?.bible_version,
-      ),
+        prefs.daily_inspiration_type === 'bibleverse' ? 'bibleverse' : 'quote',
+      bibleVersion: normalizeBibleVersion(prefs.bible_version),
     }))
 
     const a = data.addresses
@@ -289,115 +207,20 @@ export default function ProfilePage() {
     })
   }, [data])
 
-  // 4) avatar upload
-  const uploadAvatar = async (file: File) => {
-    if (!authUser?.id) throw new Error('Not authenticated')
-    const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
-    const fileName = `${Date.now()}.${ext}`
-    const path = `${authUser.id}/${fileName}`
-
-    const { error: upErr } = await supabase.storage
-      .from('avatars')
-      .upload(path, file, { cacheControl: '3600', upsert: false })
-    if (upErr) throw upErr
-    return path // storage path
-  }
-
-  // 5) save
+  // 4) save
   const mut = useMutation({
     mutationFn: async () => {
       if (!authUser?.id) throw new Error('Not authenticated')
-      const currentForm = formRef.current
-
-      // CSV -> arrays
-      const licenses = currentForm.licensesCsv
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-      const certificates = currentForm.certificatesCsv
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-
-      const addressName: string = data?.display_name + '´s home'
-
-      // 5a) Upsert address (normalized)
-      // If we have an id, update; else insert a new row
-      let addressId = addr.id
-      const cleanAddress = {
-        name: addressName,
-        address_line: addr.address_line,
-        zip_code: addr.zip_code,
-        city: addr.city,
-        country: addr.country,
-        is_personal: true,
-        company_id: null,
+      const result = await saveProfilePage({
+        userId: authUser.id,
+        form: formRef.current,
+        addr,
+        previousPreferences: data?.preferences,
+        previousDisplayName: data?.display_name,
+      })
+      if (result.addressId && result.addressId !== addr.id) {
+        setAddr((s) => ({ ...s, id: result.addressId }))
       }
-
-      if (addressId) {
-        const { error: updErr } = await supabase
-          .from('addresses')
-          .update(cleanAddress)
-          .eq('id', addressId)
-        if (updErr) throw updErr
-      } else if (
-        addr.address_line &&
-        addr.city &&
-        addr.zip_code &&
-        addr.country
-      ) {
-        const newAddressId = crypto.randomUUID()
-        const { error: insErr } = await supabase
-          .from('addresses')
-          .insert([{ id: newAddressId, ...cleanAddress }])
-        if (insErr) throw insErr
-        addressId = newAddressId
-        setAddr((s) => ({ ...s, id: newAddressId }))
-      }
-
-      // 5b) Set primary_address_id on profile (separate simple update)
-      if (addressId) {
-        const { error: linkErr } = await supabase
-          .from('profiles')
-          .update({ primary_address_id: addressId })
-          .eq('user_id', authUser.id)
-        if (linkErr) throw linkErr
-      }
-
-      // 5c) Update profile core + preferences (RPC replaces entire JSON — merge first)
-      const prevPrefs =
-        data?.preferences != null &&
-        typeof data.preferences === 'object' &&
-        !Array.isArray(data.preferences)
-          ? { ...(data.preferences as Record<string, unknown>) }
-          : {}
-      const preferences: Record<string, unknown> = {
-        ...prevPrefs,
-        date_of_birth: currentForm.date_of_birth || null,
-        drivers_license: currentForm.drivers_license || null,
-        licenses: licenses.length ? licenses : null,
-        certificates: certificates.length ? certificates : null,
-        notes: currentForm.notes || null,
-        animated_background_enabled: currentForm.animatedBackground,
-        animated_background_intensity: currentForm.backgroundIntensity,
-        animated_background_shape_type: currentForm.backgroundPreset,
-        daily_inspiration_type: currentForm.dailyInspirationType,
-        bible_version: currentForm.bibleVersion,
-      }
-      delete preferences.prefer_reduced_motion
-      delete preferences.daily_inspiration_show_attribution
-      delete preferences.daily_inspiration_large_text
-
-      const { error: rpcErr } = await supabase.rpc('update_my_profile', {
-        p_display_name: currentForm.display_name || null,
-        p_first_name: currentForm.first_name || null,
-        p_last_name: currentForm.last_name || null,
-        p_phone: currentForm.phone || null,
-        p_bio: currentForm.bio || null,
-        p_avatar_path: currentForm.avatarPath || null,
-        p_preferences: preferences,
-      } as any)
-      if (rpcErr) throw rpcErr
     },
     onSuccess: () => {
       success('Saved', 'Your profile has been updated.')
@@ -411,8 +234,11 @@ export default function ProfilePage() {
         }),
       ])
     },
-    onError: (e: any) => {
-      toastError('Save failed', e?.message ?? 'Please try again.')
+    onError: (e: unknown) => {
+      toastError(
+        'Save failed',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
     },
   })
 
@@ -422,14 +248,14 @@ export default function ProfilePage() {
     [form.avatarPath],
   )
 
-  const set = <TKey extends keyof typeof form>(
+  const set = <TKey extends keyof ProfilePageForm>(
     key: TKey,
-    value: (typeof form)[TKey],
+    value: ProfilePageForm[TKey],
   ) => setForm((s) => ({ ...s, [key]: value }))
 
-  const setAddrVal = <TKey extends keyof AddressForm>(
+  const setAddrVal = <TKey extends keyof ProfileAddressForm>(
     key: TKey,
-    value: AddressForm[TKey],
+    value: ProfileAddressForm[TKey],
   ) => setAddr((s) => ({ ...s, [key]: value }))
 
   // Build a single-line address for the map preview
@@ -445,7 +271,7 @@ export default function ProfilePage() {
     return (
       <Box p="4">
         <Text color="red">
-          Failed to load profile. {error ? String((error as any).message) : ''}
+          Failed to load profile. {error instanceof Error ? error.message : ''}
         </Text>
       </Box>
     )
@@ -534,18 +360,24 @@ export default function ProfilePage() {
                         onChange={async (e) => {
                           const file = e.target.files?.[0]
                           if (!file) return
+                          if (!authUser?.id) {
+                            toastError('Upload failed', 'Not authenticated')
+                            return
+                          }
                           setUploading(true)
                           try {
-                            const path = await uploadAvatar(file)
+                            const path = await uploadAvatar(authUser.id, file)
                             set('avatarPath', path)
                             info(
                               'Photo uploaded',
                               'Remember to hit Save to apply.',
                             )
-                          } catch (err: any) {
+                          } catch (err: unknown) {
                             toastError(
                               'Upload failed',
-                              err?.message ?? 'Try another image.',
+                              err instanceof Error
+                                ? err.message
+                                : 'Try another image.',
                             )
                           } finally {
                             setUploading(false)

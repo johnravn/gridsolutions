@@ -1,11 +1,14 @@
-// src/features/login/pages/SignupPage.tsx
 import * as React from 'react'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
-import { isValidPhoneNumber } from 'react-phone-number-input' // ✅ add this
+import { isValidPhoneNumber } from 'react-phone-number-input'
+import {
+  PASSWORD_REQUIREMENTS,
+  strongPasswordSchema,
+} from '@shared/auth/passwordPolicy'
 import { useAppForm } from '@shared/form'
-import { supabase } from '@shared/api/supabase'
-import { PhoneInputField } from '@shared/phone/PhoneInputField' // ✅ add this
+import { PhoneInputField } from '@shared/phone/PhoneInputField'
+import { signUpWithPassword } from '@features/login/api/authActions'
 import {
   Box,
   Button,
@@ -20,41 +23,8 @@ import {
   AnimatedBackground,
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
 } from '@shared/ui/components/AnimatedBackground'
+import { useLockDocumentScroll } from '@shared/ui/hooks/useLockDocumentScroll'
 import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
-
-interface PasswordRequirement {
-  id: string
-  label: string
-  check: (password: string) => boolean
-}
-
-const PASSWORD_REQUIREMENTS: Array<PasswordRequirement> = [
-  {
-    id: 'length',
-    label: 'At least 12 characters',
-    check: (pwd) => pwd.length >= 12,
-  },
-  {
-    id: 'lowercase',
-    label: 'Contains lowercase letter',
-    check: (pwd) => /[a-z]/.test(pwd),
-  },
-  {
-    id: 'uppercase',
-    label: 'Contains uppercase letter',
-    check: (pwd) => /[A-Z]/.test(pwd),
-  },
-  {
-    id: 'number',
-    label: 'Contains number',
-    check: (pwd) => /[0-9]/.test(pwd),
-  },
-  {
-    id: 'special',
-    label: 'Contains special character (!@#$%^&*...)',
-    check: (pwd) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd),
-  },
-]
 
 const defaultValues = {
   firstName: '',
@@ -77,7 +47,7 @@ const schema = z
         'Please enter a valid phone number',
       ),
     email: z.string().trim().min(1, 'Email is required'),
-    password: z.string().min(1, 'Password is required'),
+    password: strongPasswordSchema,
     confirmPassword: z.string(),
   })
   .refine((v) => v.password === v.confirmPassword, {
@@ -100,74 +70,27 @@ export default function SignupPage() {
       setInfo(null)
 
       try {
-        const { error: signUpErr } = await supabase.auth.signUp({
+        const result = await signUpWithPassword({
           email: value.email,
           password: value.password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-            data: {
-              full_name: `${value.firstName} ${value.lastName}`.trim(),
-              first_name: value.firstName,
-              last_name: value.lastName,
-              phone: value.phone,
-            },
-          },
+          firstName: value.firstName,
+          lastName: value.lastName,
+          phone: value.phone,
         })
-        if (signUpErr) throw signUpErr
-      } catch (err: any) {
-        console.error('signUp failed:', {
-          message: err?.message,
-          status: err?.status,
-          name: err?.name,
-        })
-        setError(err?.message ?? 'Sign up failed')
-        return
+        if (result.kind === 'session') {
+          navigate({ to: '/dashboard' })
+          return
+        }
+        setInfo(
+          'Check your email to confirm your account. Your profile will be created after confirmation.',
+        )
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Sign up failed')
       }
-
-      // If a session exists immediately (email confirmation OFF),
-      // we can upsert into public.profiles right now.
-      const { data: sessionData } = await supabase.auth.getSession()
-      if (sessionData.session?.user) {
-        navigate({ to: '/dashboard' })
-        return
-      }
-
-      // If no session yet (email confirmation ON), show next steps.
-      setInfo(
-        'Check your email to confirm your account. Your profile will be created after confirmation.',
-      )
     },
   })
 
-  // Prevent body scroll and padding issues
-  React.useEffect(() => {
-    const originalStyle = {
-      overflow: document.body.style.overflow,
-      padding: document.body.style.padding,
-      margin: document.body.style.margin,
-    }
-    const originalHtmlStyle = {
-      overflow: document.documentElement.style.overflow,
-      padding: document.documentElement.style.padding,
-      margin: document.documentElement.style.margin,
-    }
-
-    document.body.style.overflow = 'hidden'
-    document.body.style.padding = '0'
-    document.body.style.margin = '0'
-    document.documentElement.style.overflow = 'hidden'
-    document.documentElement.style.padding = '0'
-    document.documentElement.style.margin = '0'
-
-    return () => {
-      document.body.style.overflow = originalStyle.overflow
-      document.body.style.padding = originalStyle.padding
-      document.body.style.margin = originalStyle.margin
-      document.documentElement.style.overflow = originalHtmlStyle.overflow
-      document.documentElement.style.padding = originalHtmlStyle.padding
-      document.documentElement.style.margin = originalHtmlStyle.margin
-    }
-  }, [])
+  useLockDocumentScroll()
 
   return (
     <Box

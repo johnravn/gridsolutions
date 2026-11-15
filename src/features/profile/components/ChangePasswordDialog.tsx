@@ -11,43 +11,13 @@ import {
 } from '@radix-ui/themes'
 import { CheckCircle } from 'iconoir-react'
 import { z } from 'zod'
+import {
+  PASSWORD_REQUIREMENTS,
+  passwordMeetsRequirements,
+} from '@shared/auth/passwordPolicy'
 import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { supabase } from '@shared/api/supabase'
-
-interface PasswordRequirement {
-  id: string
-  label: string
-  check: (password: string) => boolean
-}
-
-const PASSWORD_REQUIREMENTS: Array<PasswordRequirement> = [
-  {
-    id: 'length',
-    label: 'At least 12 characters',
-    check: (pwd) => pwd.length >= 12,
-  },
-  {
-    id: 'lowercase',
-    label: 'Contains lowercase letter',
-    check: (pwd) => /[a-z]/.test(pwd),
-  },
-  {
-    id: 'uppercase',
-    label: 'Contains uppercase letter',
-    check: (pwd) => /[A-Z]/.test(pwd),
-  },
-  {
-    id: 'number',
-    label: 'Contains number',
-    check: (pwd) => /[0-9]/.test(pwd),
-  },
-  {
-    id: 'special',
-    label: 'Contains special character (!@#$%^&*...)',
-    check: (pwd) => /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(pwd),
-  },
-]
 
 const verifyDefaults = {
   currentPassword: '',
@@ -77,9 +47,7 @@ const changeSchema = z
         message: 'Please enter a new password.',
         path: ['newPassword'],
       })
-    } else if (
-      !PASSWORD_REQUIREMENTS.every((req) => req.check(data.newPassword))
-    ) {
+    } else if (!passwordMeetsRequirements(data.newPassword)) {
       ctx.addIssue({
         code: 'custom',
         message: 'New password does not meet all requirements.',
@@ -462,9 +430,7 @@ export default function ChangePasswordDialog({
                   >
                     {([newPassword, confirmPassword]) => {
                       const allRequirementsSatisfied =
-                        PASSWORD_REQUIREMENTS.every((req) =>
-                          req.check(newPassword),
-                        )
+                        passwordMeetsRequirements(newPassword)
                       return (
                         <changeForm.SubmitButton
                           label={

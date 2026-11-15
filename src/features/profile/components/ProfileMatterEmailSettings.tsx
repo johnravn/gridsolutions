@@ -10,7 +10,7 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@shared/api/supabase'
+import { authUserQueryOptions } from '@shared/auth/authUserQuery'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
@@ -24,10 +24,7 @@ export default function ProfileMatterEmailSettings() {
   const { companyId, company } = useCompany()
   const { success, error: toastError } = useToast()
 
-  const { data: authUser } = useQuery({
-    queryKey: ['auth', 'user'],
-    queryFn: async () => (await supabase.auth.getUser()).data.user ?? null,
-  })
+  const { data: authUser } = useQuery(authUserQueryOptions)
   const userId = authUser?.id ?? ''
 
   const { data: prefs } = useQuery({

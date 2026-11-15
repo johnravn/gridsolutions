@@ -20,7 +20,7 @@ import { InfoCircle, Trash } from 'iconoir-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { getAvailableOrganizations } from '@features/home/api/queries'
+import { getAvailableOrganizations } from '@features/company/api/contaQueries'
 import { contaClient } from '@shared/api/conta/client'
 import {
   companyExpansionQuery,

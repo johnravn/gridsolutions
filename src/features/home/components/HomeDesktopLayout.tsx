@@ -75,7 +75,7 @@ export function HomeDesktopLayout({
   const showAttentionBand =
     homeLayout.showMatters || canVisitJobs || homeLayout.showConflicts
   const showTopRow = showInspiration || showAttentionBand
-  const showJobs = canVisitJobs && homeLayout.showLatest
+  const showJobs = canVisitJobs && homeLayout.showCompanyJobsWeek
 
   const gridTemplateColumns = showInspiration
     ? showAttentionBand

@@ -44,66 +44,6 @@ export type NotificationPreferences = {
   updated_at: string
 }
 
-export function notificationsQuery({
-  userId,
-  companyId,
-  unreadOnly = false,
-  limit = 50,
-}: {
-  userId: string
-  companyId: string | null
-  unreadOnly?: boolean
-  limit?: number
-}) {
-  return queryOptions<Array<Notification>>({
-    queryKey: ['notifications', userId, companyId ?? 'all', unreadOnly, limit],
-    queryFn: async () => {
-      let q = supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
-      if (companyId) {
-        q = q.eq('company_id', companyId)
-      }
-      if (unreadOnly) {
-        q = q.is('read_at', null)
-      }
-      const { data, error } = await q
-      if (error) throw error
-      return (data ?? []) as Array<Notification>
-    },
-    enabled: !!userId,
-  })
-}
-
-export function unreadNotificationsCountQuery({
-  userId,
-  companyId,
-}: {
-  userId: string
-  companyId: string | null
-}) {
-  return queryOptions<number>({
-    queryKey: ['notifications', 'unread-count', userId, companyId ?? 'all'],
-    queryFn: async () => {
-      let q = supabase
-        .from('notifications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-        .is('read_at', null)
-      if (companyId) {
-        q = q.eq('company_id', companyId)
-      }
-      const { count, error } = await q
-      if (error) throw error
-      return count ?? 0
-    },
-    enabled: !!userId,
-  })
-}
-
 export function notificationPreferencesQuery({
   userId,
   companyId,
@@ -125,16 +65,6 @@ export function notificationPreferencesQuery({
     },
     enabled: !!userId && !!companyId,
   })
-}
-
-export async function markNotificationRead(
-  notificationId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('id', notificationId)
-  if (error) throw error
 }
 
 /** Mark notification as read by entity (e.g. when user views a matter). */
@@ -195,43 +125,6 @@ export async function markNotificationsUnreadByMatterIds(
     .eq('entity_type', 'matter')
     .in('entity_id', matterIds)
   if (error) throw error
-}
-
-export async function markAllNotificationsRead(
-  userId: string,
-  companyId: string | null,
-): Promise<void> {
-  let q = supabase
-    .from('notifications')
-    .update({ read_at: new Date().toISOString() })
-    .eq('user_id', userId)
-    .is('read_at', null)
-  if (companyId) {
-    q = q.eq('company_id', companyId)
-  }
-  const { error } = await q
-  if (error) throw error
-}
-
-/** Get entity_ids of unread notifications with entity_type='matter' (for syncing inbox read state). */
-export async function getUnreadMatterEntityIds(
-  userId: string,
-  companyId: string | null,
-): Promise<Array<string>> {
-  let q = supabase
-    .from('notifications')
-    .select('entity_id')
-    .eq('user_id', userId)
-    .eq('entity_type', 'matter')
-    .not('entity_id', 'is', null)
-    .is('read_at', null)
-  if (companyId) {
-    q = q.eq('company_id', companyId)
-  }
-  const { data, error } = await q
-  if (error) throw error
-  const ids = [...new Set((data ?? []).map((r) => r.entity_id).filter(Boolean))]
-  return ids as Array<string>
 }
 
 export async function upsertNotificationPreferences(payload: {

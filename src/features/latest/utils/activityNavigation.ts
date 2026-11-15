@@ -17,6 +17,14 @@ export type ActivityButtonInfo = {
  * Gets navigation information for an activity type
  * Returns null if the activity doesn't support navigation
  */
+function metaString(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = metadata[key]
+  return typeof value === 'string' && value.length > 0 ? value : null
+}
+
 export function getActivityNavigation(
   activity: ActivityFeedItem,
 ): NavigationInfo | null {
@@ -27,38 +35,38 @@ export function getActivityNavigation(
       return {
         route: '/inventory',
         searchParam: 'inventoryId',
-        id: metadata.item_id || null,
+        id: metaString(metadata, 'item_id'),
       }
     case 'inventory_group_created':
       return {
         route: '/inventory',
         searchParam: 'inventoryId',
-        id: metadata.group_id || null,
+        id: metaString(metadata, 'group_id'),
       }
     case 'vehicle_added':
       return {
         route: '/vehicles',
         searchParam: 'vehicleId',
-        id: metadata.vehicle_id || null,
+        id: metaString(metadata, 'vehicle_id'),
       }
     case 'customer_added':
       return {
         route: '/customers',
         searchParam: 'customerId',
-        id: metadata.customer_id || null,
+        id: metaString(metadata, 'customer_id'),
       }
     case 'crew_added':
       return {
         route: '/crew',
         searchParam: 'userId',
-        id: metadata.user_id || null,
+        id: metaString(metadata, 'user_id'),
       }
     case 'job_created':
     case 'job_status_changed':
       return {
         route: '/jobs',
         searchParam: 'jobId',
-        id: metadata.job_id || null,
+        id: metaString(metadata, 'job_id'),
       }
     default:
       return null

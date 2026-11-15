@@ -2,7 +2,6 @@ import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
-import { supabase } from '@shared/api/supabase'
 import {
   Box,
   Button,
@@ -17,8 +16,9 @@ import {
   AnimatedBackground,
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
 } from '@shared/ui/components/AnimatedBackground'
+import { signInWithPassword } from '@features/login/api/authActions'
 import { OAuthProviderButtons } from '@features/login/components/OAuthProviderButtons'
-import { fetchProfileCompleteness, isProfileComplete } from '@shared/auth/oauth'
+import { useLockDocumentScroll } from '@shared/ui/hooks/useLockDocumentScroll'
 
 const defaultValues = {
   email: '',
@@ -41,53 +41,20 @@ export default function LoginPage() {
     },
     onSubmit: async ({ value }) => {
       setError(null)
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: value.email,
-        password: value.password,
-      })
-      if (signInError) return setError(signInError.message)
-      const { data: sessionData } = await supabase.auth.getSession()
-      const userId = sessionData.session?.user?.id
-      if (userId) {
-        const profile = await fetchProfileCompleteness(userId)
-        if (!isProfileComplete(profile)) {
+      try {
+        const result = await signInWithPassword(value)
+        if (result.kind === 'incomplete_profile') {
           navigate({ to: '/complete-profile' })
           return
         }
+        navigate({ to: '/dashboard' })
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Sign in failed')
       }
-      navigate({ to: '/dashboard' })
     },
   })
 
-  // Prevent body scroll and padding issues
-  React.useEffect(() => {
-    const originalStyle = {
-      overflow: document.body.style.overflow,
-      padding: document.body.style.padding,
-      margin: document.body.style.margin,
-    }
-    const originalHtmlStyle = {
-      overflow: document.documentElement.style.overflow,
-      padding: document.documentElement.style.padding,
-      margin: document.documentElement.style.margin,
-    }
-
-    document.body.style.overflow = 'hidden'
-    document.body.style.padding = '0'
-    document.body.style.margin = '0'
-    document.documentElement.style.overflow = 'hidden'
-    document.documentElement.style.padding = '0'
-    document.documentElement.style.margin = '0'
-
-    return () => {
-      document.body.style.overflow = originalStyle.overflow
-      document.body.style.padding = originalStyle.padding
-      document.body.style.margin = originalStyle.margin
-      document.documentElement.style.overflow = originalHtmlStyle.overflow
-      document.documentElement.style.padding = originalHtmlStyle.padding
-      document.documentElement.style.margin = originalHtmlStyle.margin
-    }
-  }, [])
+  useLockDocumentScroll()
 
   return (
     <Box
