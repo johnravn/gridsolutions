@@ -859,6 +859,37 @@ describe('DateTimeRangePicker', () => {
     expect(dialog.queryByRole('button', { name: '2026-06-10' })).toBeNull()
   })
 
+  it('GRI-46: End Hours → Start keeps Hours after dismiss+reopen race', () => {
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={vi.fn()}
+      />,
+    )
+    clickEndField()
+    switchPhase('Hours')
+    expect(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: 'End hour 17:00',
+      }),
+    ).toBeInTheDocument()
+
+    const startBtn = screen.getByRole('button', { name: /^Start / })
+    // John's path: pointerdown on Start can dismiss the popover, then click
+    // reopens — must resume Hours for Start, not snap to Dates.
+    fireEvent.pointerDown(startBtn)
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.click(startBtn)
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(
+      dialog.getByRole('button', { name: 'Start hour 09:00' }),
+    ).toBeInTheDocument()
+    expect(dialog.queryByText('Select start date')).toBeNull()
+    expect(dialog.queryByRole('button', { name: '2026-06-10' })).toBeNull()
+  })
+
   it('stays on Minutes when clicking End in the trigger while on Start minutes', () => {
     renderWithProviders(
       <DateTimeRangePicker

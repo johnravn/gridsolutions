@@ -26,6 +26,8 @@ type PickerTriggerProps = {
    */
   fieldInteraction?: boolean
   onFieldClick?: (field: 'start' | 'end') => void
+  /** Fires on pointerdown of Start/End (before popover outside-dismiss). */
+  onFieldPointerDown?: (field: 'start' | 'end') => void
   onOpen?: () => void
 } & Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'>
 
@@ -241,12 +243,14 @@ function FieldSlot({
   field,
   interactive,
   onClick,
+  onPointerDown,
   disabled,
   inline = false,
 }: {
   field: FieldDisplay
   interactive?: boolean
   onClick?: () => void
+  onPointerDown?: () => void
   disabled?: boolean
   inline?: boolean
 }) {
@@ -291,6 +295,8 @@ function FieldSlot({
         }}
         onPointerDown={(e) => {
           // Keep the popover trigger shell from toggling; fields own open/focus.
+          // Notify parent before Radix outside-dismiss so Hours/Minutes can resume.
+          onPointerDown?.()
           e.stopPropagation()
         }}
         onMouseEnter={() => setHovered(true)}
@@ -320,12 +326,14 @@ function FieldsRow({
   fields,
   fieldInteraction,
   onFieldClick,
+  onFieldPointerDown,
   disabled,
   inline = false,
 }: {
   fields: Array<FieldDisplay>
   fieldInteraction?: boolean
   onFieldClick?: (field: 'start' | 'end') => void
+  onFieldPointerDown?: (field: 'start' | 'end') => void
   disabled?: boolean
   inline?: boolean
 }) {
@@ -358,6 +366,11 @@ function FieldsRow({
               interactive={interactive}
               disabled={disabled}
               onClick={interactive ? () => onFieldClick(id) : undefined}
+              onPointerDown={
+                interactive && onFieldPointerDown && id != null
+                  ? () => onFieldPointerDown(id)
+                  : undefined
+              }
             />
           </React.Fragment>
         )
@@ -379,6 +392,7 @@ export const PickerTrigger = React.forwardRef<
     inline = false,
     fieldInteraction = false,
     onFieldClick,
+    onFieldPointerDown,
     onOpen,
     ...buttonProps
   },
@@ -428,6 +442,7 @@ export const PickerTrigger = React.forwardRef<
         ref={ref as React.Ref<HTMLDivElement>}
         {...divProps}
         {...interactionHandlers}
+        data-picker-trigger=""
         role={divProps.role ?? 'group'}
         aria-label={
           typeof divProps['aria-label'] === 'string'
@@ -463,6 +478,7 @@ export const PickerTrigger = React.forwardRef<
           inline={inline}
           fieldInteraction
           onFieldClick={onFieldClick}
+          onFieldPointerDown={onFieldPointerDown}
           disabled={disabled}
         />
       </div>

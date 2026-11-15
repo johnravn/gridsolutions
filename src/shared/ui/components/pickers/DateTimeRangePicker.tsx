@@ -176,9 +176,22 @@ export default function DateTimeRangePicker({
   const wasOpenRef = React.useRef(false)
   const pendingOpenTargetRef = React.useRef<'start' | 'end' | null>(null)
   const triggerRef = React.useRef<HTMLElement | null>(null)
+  /** True while pointer is on the trigger — used so a dismiss+reopen retarget keeps Hours/Minutes. */
+  const interactingWithTriggerRef = React.useRef(false)
+  const phaseRef = React.useRef<Phase>(phase)
+  phaseRef.current = phase
   const advanceToEndTabTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null)
+
+  const resolveOpenPhase = React.useCallback((preferred: Phase): Phase => {
+    // If we were editing times and the trigger field click dismissed+reopened,
+    // stay on Hours/Minutes instead of snapping back to Dates (GRI-46).
+    if (preferred === 'hours' || preferred === 'minutes') return preferred
+    const current = phaseRef.current
+    if (current === 'hours' || current === 'minutes') return current
+    return 'dates'
+  }, [])
 
   React.useEffect(() => {
     return () => {
@@ -217,7 +230,8 @@ export default function DateTimeRangePicker({
       setRangePickNext(pending)
       setBoundPinned(true)
       setActiveTimeTab(pending)
-      setPhase('dates')
+      setPhase(resolveOpenPhase('dates'))
+      interactingWithTriggerRef.current = false
       const anchorIso = pending === 'end' ? endAt || startAt : startAt || endAt
       if (anchorIso) {
         const parsed = parseIso(anchorIso)
@@ -233,7 +247,8 @@ export default function DateTimeRangePicker({
     setBoundTarget('range')
     setRangePickNext('start')
     setBoundPinned(false)
-  }, [open, syncFromProps, startAt, endAt])
+    interactingWithTriggerRef.current = false
+  }, [open, syncFromProps, startAt, endAt, resolveOpenPhase])
 
   // Keep the closed trigger in sync when the parent form resets/prefills
   // (e.g. Edit Job / Add Role). Internal selection state otherwise wins and
@@ -604,20 +619,22 @@ export default function DateTimeRangePicker({
       advanceToEndTabTimeoutRef.current = null
     }
 
-    // Closed trigger: open pinned on that bound for one refine, then alternate.
+    interactingWithTriggerRef.current = true
+
+    // Closed trigger: open pinned on that bound. If a trigger click just
+    // dismissed us while on Hours/Minutes, resume that phase (GRI-46).
     if (!open) {
       pendingOpenTargetRef.current = field
       setBoundTarget(field)
       setRangePickNext(field)
       setBoundPinned(true)
       setActiveTimeTab(field)
-      setPhase('dates')
+      setPhase(resolveOpenPhase('dates'))
       setOpen(true)
       return
     }
 
-    // Already open: retarget Start/End only. Stay on Hours/Minutes when editing
-    // times — jumping back to Dates felt like a glitch.
+    // Already open: retarget Start/End only. Stay on Hours/Minutes.
     setBoundTarget(field)
     setRangePickNext(field)
     setBoundPinned(true)
@@ -631,10 +648,13 @@ export default function DateTimeRangePicker({
     event: Event | { target: EventTarget | null; preventDefault: () => void },
   ) => {
     const target = event.target
-    if (!(target instanceof Node)) return
-    if (triggerRef.current?.contains(target)) {
-      event.preventDefault()
-    }
+    if (!(target instanceof Element)) return
+    const onTrigger =
+      triggerRef.current?.contains(target) ||
+      target.closest('[data-picker-trigger]') != null
+    if (!onTrigger) return
+    interactingWithTriggerRef.current = true
+    event.preventDefault()
   }
 
   const hasHourSelection =
@@ -654,6 +674,19 @@ export default function DateTimeRangePicker({
         onOpenChange={(newOpen) => {
           if (disabled) return
           setOpen(newOpen)
+          if (!newOpen) {
+            // Defer reset so a trigger Start/End click that dismissed us can
+            // reopen on Hours/Minutes in the same gesture (GRI-46).
+            queueMicrotask(() => {
+              if (interactingWithTriggerRef.current) return
+              if (
+                phaseRef.current === 'hours' ||
+                phaseRef.current === 'minutes'
+              ) {
+                setPhase('dates')
+              }
+            })
+          }
         }}
       >
         <PopoverTrigger asChild>
@@ -666,6 +699,9 @@ export default function DateTimeRangePicker({
             inline={useInlineTrigger}
             fieldInteraction={fieldsClickable}
             onFieldClick={handleFieldClick}
+            onFieldPointerDown={() => {
+              interactingWithTriggerRef.current = true
+            }}
             onOpen={() => {
               pendingOpenTargetRef.current = null
               setOpen(true)
@@ -678,6 +714,7 @@ export default function DateTimeRangePicker({
           sideOffset={4}
           onPointerDownOutside={keepOpenWhenInteractingWithTrigger}
           onFocusOutside={keepOpenWhenInteractingWithTrigger}
+          onInteractOutside={keepOpenWhenInteractingWithTrigger}
           style={{
             width: 360,
             maxHeight: 'min(80vh, 600px)',
