@@ -90,38 +90,50 @@ export default function AddEmployeeDialog({
         return
       }
 
-      if (res.type === 'invited') {
-        success(
-          'Invitation sent',
-          'They’ll receive an email with a link to join. They’ll be added when they sign up.',
-        )
-        finish()
+      // New invite INSERT may also fire pg_net → send-welcome-email, but that path
+      // depends on vault cron_secret. Always invoke from the client (same as Super).
+      if (res.type === 'invited' || res.type === 'already_invited') {
+        const pendingInviteId = res.pending_invite_id
+        const alreadyInvitedBy = res.type === 'already_invited' ? res.by : null
+        void sendWelcomeEmailForPendingInvite(pendingInviteId)
+          .then((emailRes) => {
+            if (emailRes.ok) {
+              success(
+                alreadyInvitedBy ? 'Invitation email sent' : 'Invitation sent',
+                alreadyInvitedBy
+                  ? `We sent another invite link. A pending invite already exists (from ${alreadyInvitedBy}).`
+                  : 'They’ll receive an email with a link to join. They’ll be added when they sign up.',
+              )
+            } else if (alreadyInvitedBy) {
+              info(
+                'Already invited',
+                `An invite already exists (from ${alreadyInvitedBy}). We could not resend the email just now.`,
+              )
+            } else {
+              info(
+                'Invite created',
+                `They’ll be added when they sign up, but the email did not send: ${emailRes.failure.message}`,
+              )
+            }
+          })
+          .catch(() => {
+            if (alreadyInvitedBy) {
+              info(
+                'Already invited',
+                'An invite already exists. We could not resend the email just now.',
+              )
+            } else {
+              info(
+                'Invite created',
+                'They’ll be added when they sign up, but we could not send the email just now.',
+              )
+            }
+          })
+          .finally(() => {
+            finish()
+          })
         return
       }
-
-      void sendWelcomeEmailForPendingInvite(res.pending_invite_id)
-        .then((emailRes) => {
-          if (emailRes.ok) {
-            success(
-              'Invitation email sent',
-              `We sent another invite link. A pending invite already exists (from ${res.by}).`,
-            )
-          } else {
-            info(
-              'Already invited',
-              `An invite already exists (from ${res.by}). We could not resend the email just now.`,
-            )
-          }
-        })
-        .catch(() => {
-          info(
-            'Already invited',
-            'An invite already exists. We could not resend the email just now.',
-          )
-        })
-        .finally(() => {
-          finish()
-        })
     },
     onError: (e: unknown) => {
       error('Failed', e instanceof Error ? e.message : 'Please try again.')
