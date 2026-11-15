@@ -161,16 +161,12 @@ export function SuperMasterDetailSplit({
           <Box
             onClick={expandFromBar}
             onMouseEnter={(e) => {
-              const bar = e.currentTarget.querySelector(
-                '[data-glowing-bar]',
-              ) as HTMLElement | null
-              if (bar) bar.style.width = '24px'
+              const bar = e.currentTarget.querySelector('[data-glowing-bar]')
+              if (bar instanceof HTMLElement) bar.style.width = '24px'
             }}
             onMouseLeave={(e) => {
-              const bar = e.currentTarget.querySelector(
-                '[data-glowing-bar]',
-              ) as HTMLElement | null
-              if (bar) bar.style.width = '12px'
+              const bar = e.currentTarget.querySelector('[data-glowing-bar]')
+              if (bar instanceof HTMLElement) bar.style.width = '12px'
             }}
             style={{
               position: 'absolute',
