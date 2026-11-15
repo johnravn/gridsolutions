@@ -16,13 +16,13 @@ import {
   formatDateLabel,
   formatTimeLabel,
   getInitialMonth,
-  handleRangeDateClick,
   handleRangeHourClick,
   isEndMinuteDisabled,
   isFullDayEnd,
   isFullDayStart,
   isInvalidTimeRange,
   isStartMinuteDisabled,
+  normalizeDateRange,
   parseIso,
   startOfDay,
   toLocalDate,
@@ -130,6 +130,16 @@ export default function DateTimeRangePicker({
     'start',
   )
   const [boundTarget, setBoundTarget] = React.useState<BoundTarget>('range')
+  /**
+   * Next bound to set while unbound (SAS-style alternate): start → end → start…
+   * Trigger Start/End pins a refine of that bound for one calendar click, then
+   * advances to the other so both can be set without re-clicking the trigger.
+   */
+  const [rangePickNext, setRangePickNext] = React.useState<'start' | 'end'>(
+    'start',
+  )
+  /** True after clicking Start/End until the next date pick (refine keep-other). */
+  const [boundPinned, setBoundPinned] = React.useState(false)
 
   const parsedStart = React.useMemo(() => parseIso(startAt), [startAt])
   const parsedEnd = React.useMemo(() => parseIso(endAt), [endAt])
@@ -164,6 +174,7 @@ export default function DateTimeRangePicker({
   }, [parsedStart, parsedEnd, startAt, endAt, optionalEnd, dateOnly])
 
   const wasOpenRef = React.useRef(false)
+  const pendingOpenTargetRef = React.useRef<'start' | 'end' | null>(null)
   const advanceToEndTabTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null)
@@ -176,6 +187,20 @@ export default function DateTimeRangePicker({
     }
   }, [])
 
+  const focusMonthForBound = React.useCallback(
+    (field: 'start' | 'end') => {
+      const iso =
+        field === 'end'
+          ? (dateSelection.end ?? dateSelection.start)
+          : dateSelection.start
+      if (!iso) return
+      const parsed = parseIso(startOfDay(iso))
+      if (!parsed) return
+      setCurrentMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+    },
+    [dateSelection.start, dateSelection.end],
+  )
+
   React.useEffect(() => {
     const justOpened = open && !wasOpenRef.current
     wasOpenRef.current = open
@@ -183,10 +208,31 @@ export default function DateTimeRangePicker({
     if (!justOpened) return
 
     syncFromProps()
+    const pending = pendingOpenTargetRef.current
+    pendingOpenTargetRef.current = null
+
+    if (pending === 'start' || pending === 'end') {
+      setBoundTarget(pending)
+      setRangePickNext(pending)
+      setBoundPinned(true)
+      setActiveTimeTab(pending)
+      setPhase('dates')
+      const anchorIso = pending === 'end' ? endAt || startAt : startAt || endAt
+      if (anchorIso) {
+        const parsed = parseIso(anchorIso)
+        if (parsed) {
+          setCurrentMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1))
+        }
+      }
+      return
+    }
+
     setPhase('dates')
     setActiveTimeTab('start')
     setBoundTarget('range')
-  }, [open, syncFromProps])
+    setRangePickNext('start')
+    setBoundPinned(false)
+  }, [open, syncFromProps, startAt, endAt])
 
   // Keep the closed trigger in sync when the parent form resets/prefills
   // (e.g. Edit Job / Add Role). Internal selection state otherwise wins and
@@ -260,24 +306,40 @@ export default function DateTimeRangePicker({
     commitRange(dates, times)
   }
 
+  const advanceDatePickTo = (next: 'start' | 'end') => {
+    setRangePickNext(next)
+    setActiveTimeTab(next)
+    setBoundPinned(false)
+    // Stay in alternating mode after a pin refine so the following click
+    // sets the other bound without another trigger click (SAS-style).
+    setBoundTarget('range')
+  }
+
   const handleDateClick = (date: Date) => {
     if (disabled) return
     const localDate = dateToLocalDate(date)
+    const timesForDateChange = dateOnly ? EMPTY_TIME_SELECTION : timeSelection
 
-    if (boundTarget === 'start' && dateSelection.start) {
-      const currentEnd = dateSelection.end
-      let start = localDate
-      if (currentEnd != null && compareLocalDates(start, currentEnd) > 0) {
-        start = currentEnd
+    // Trigger pin: refine one bound (keep the other), then advance to the opposite.
+    if (
+      boundPinned &&
+      (boundTarget === 'start' || boundTarget === 'end') &&
+      dateSelection.start
+    ) {
+      if (boundTarget === 'start') {
+        const currentEnd = dateSelection.end
+        let start = localDate
+        if (currentEnd != null && compareLocalDates(start, currentEnd) > 0) {
+          start = currentEnd
+        }
+        applyDateSelection(
+          { start, end: currentEnd },
+          dateOnly ? EMPTY_TIME_SELECTION : timesForDateChange,
+        )
+        advanceDatePickTo('end')
+        return
       }
-      applyDateSelection(
-        { start, end: currentEnd },
-        dateOnly ? EMPTY_TIME_SELECTION : timeSelection,
-      )
-      return
-    }
 
-    if (boundTarget === 'end' && dateSelection.start) {
       const start = dateSelection.start
       let end = localDate
       if (compareLocalDates(end, start) < 0) {
@@ -285,8 +347,9 @@ export default function DateTimeRangePicker({
       }
       applyDateSelection(
         { start, end },
-        dateOnly ? EMPTY_TIME_SELECTION : timeSelection,
+        dateOnly ? EMPTY_TIME_SELECTION : timesForDateChange,
       )
+      advanceDatePickTo('start')
       return
     }
 
@@ -294,23 +357,44 @@ export default function DateTimeRangePicker({
       optionalEnd &&
       dateSelection.start &&
       dateSelection.end == null &&
-      localDate === dateSelection.start
+      localDate === dateSelection.start &&
+      rangePickNext === 'end'
     ) {
       return
     }
 
-    const next = handleRangeDateClick(dateSelection, localDate)
+    // Unpinned alternate: first → start (reset end), next → end, then cycle.
+    if (rangePickNext === 'start') {
+      const dates = {
+        start: localDate,
+        end: optionalEnd ? null : localDate,
+      }
+      const datesChanged =
+        dates.start !== dateSelection.start || dates.end !== dateSelection.end
+      const times = datesChanged ? EMPTY_TIME_SELECTION : timesForDateChange
+      applyDateSelection(dates, times)
+      advanceDatePickTo('end')
+      return
+    }
 
-    if (!next.start) return
+    if (!dateSelection.start) {
+      const dates = {
+        start: localDate,
+        end: optionalEnd ? null : localDate,
+      }
+      applyDateSelection(dates, EMPTY_TIME_SELECTION)
+      advanceDatePickTo('end')
+      return
+    }
 
-    const end =
-      optionalEnd && next.end == null ? null : (next.end ?? next.start)
-    const dates = { start: next.start, end }
-    const datesChanged =
-      dates.start !== dateSelection.start || dates.end !== dateSelection.end
-    const times = datesChanged ? EMPTY_TIME_SELECTION : timeSelection
-
-    applyDateSelection(dates, times)
+    const normalized = normalizeDateRange(dateSelection.start, localDate)
+    const dates = { start: normalized.start, end: normalized.end }
+    // Keep existing times when only adjusting the end day (or swapping bounds).
+    applyDateSelection(
+      dates,
+      dateOnly ? EMPTY_TIME_SELECTION : timesForDateChange,
+    )
+    advanceDatePickTo('start')
   }
 
   const handleSameDayHourClick = (hour: number) => {
@@ -475,34 +559,67 @@ export default function DateTimeRangePicker({
   const rangeInvalid =
     invalid || (!dateOnly && isInvalidTimeRange(startAt, endAt))
 
-  const fieldInteraction = open && dateSelection.start != null
+  const baseTriggerFields = React.useMemo(
+    () => buildTriggerFields(),
+    [buildTriggerFields],
+  )
+
+  // Split Start/End slots are always clickable once a range is shown — not only
+  // while the popover is open — so either date can be targeted from the trigger.
+  const hasTriggerRange = baseTriggerFields.length > 0
+  const fieldsClickable = hasTriggerRange && !disabled
+
+  const dateFocusBound: 'start' | 'end' =
+    boundPinned && (boundTarget === 'start' || boundTarget === 'end')
+      ? boundTarget
+      : rangePickNext
 
   const triggerFields = React.useMemo(() => {
-    const fields = buildTriggerFields()
-    if (!fieldInteraction) return fields
-    return fields.map((field) => {
+    if (!open || !hasTriggerRange) return baseTriggerFields
+    return baseTriggerFields.map((field) => {
       const isStart = field.label === 'Start'
       const isEnd = field.label === 'End'
       const active =
         phase === 'dates'
-          ? (isStart && boundTarget === 'start') ||
-            (isEnd && boundTarget === 'end')
+          ? (isStart && dateFocusBound === 'start') ||
+            (isEnd && dateFocusBound === 'end')
           : (isStart && activeTimeTab === 'start') ||
             (isEnd && activeTimeTab === 'end')
       return { ...field, active }
     })
-  }, [buildTriggerFields, fieldInteraction, phase, boundTarget, activeTimeTab])
+  }, [
+    baseTriggerFields,
+    open,
+    hasTriggerRange,
+    phase,
+    dateFocusBound,
+    activeTimeTab,
+  ])
 
   const handleFieldClick = (field: 'start' | 'end') => {
+    if (disabled) return
     if (advanceToEndTabTimeoutRef.current) {
       clearTimeout(advanceToEndTabTimeoutRef.current)
       advanceToEndTabTimeoutRef.current = null
     }
-    setBoundTarget(field)
-    setActiveTimeTab(field)
-    if (!dateOnly && phase === 'dates') {
-      setPhase('hours')
+
+    // Closed trigger: open pinned on that bound for one refine, then alternate.
+    if (!open) {
+      pendingOpenTargetRef.current = field
+      setBoundTarget(field)
+      setRangePickNext(field)
+      setBoundPinned(true)
+      setActiveTimeTab(field)
+      setPhase('dates')
+      setOpen(true)
+      return
     }
+
+    setBoundTarget(field)
+    setRangePickNext(field)
+    setBoundPinned(true)
+    setActiveTimeTab(field)
+    focusMonthForBound(field)
   }
 
   const hasHourSelection =
@@ -531,9 +648,12 @@ export default function DateTimeRangePicker({
             invalid={rangeInvalid}
             disabled={disabled}
             inline={useInlineTrigger}
-            fieldInteraction={fieldInteraction}
+            fieldInteraction={fieldsClickable}
             onFieldClick={handleFieldClick}
-            onOpen={() => setOpen(true)}
+            onOpen={() => {
+              pendingOpenTargetRef.current = null
+              setOpen(true)
+            }}
           />
         </PopoverTrigger>
         <Popover.Content
@@ -560,12 +680,16 @@ export default function DateTimeRangePicker({
                 onChange={(id) => {
                   const nextPhase = id as Phase
                   setPhase(nextPhase)
-                  if (nextPhase === 'dates') {
-                    setBoundTarget('range')
-                  } else if (nextPhase === 'hours' && phase !== 'hours') {
-                    setBoundTarget('range')
-                  }
+                  // Preserve start/end targeting when moving between phases so
+                  // trigger field focus and time tabs stay aligned.
                   if (nextPhase === 'minutes' && boundTarget === 'range') {
+                    setActiveTimeTab('start')
+                  }
+                  if (
+                    nextPhase === 'hours' &&
+                    boundTarget === 'range' &&
+                    !isSameDay
+                  ) {
                     setActiveTimeTab('start')
                   }
                 }}
@@ -574,13 +698,20 @@ export default function DateTimeRangePicker({
           )}
 
           {phase === 'dates' && (
-            <CalendarGrid
-              currentMonth={currentMonth}
-              onMonthChange={setCurrentMonth}
-              onDateClick={handleDateClick}
-              rangeSelection={dateSelection}
-              disabled={disabled}
-            />
+            <Flex direction="column" gap="2">
+              <Text size="1" color="gray">
+                {dateFocusBound === 'start'
+                  ? 'Select start date'
+                  : 'Select end date'}
+              </Text>
+              <CalendarGrid
+                currentMonth={currentMonth}
+                onMonthChange={setCurrentMonth}
+                onDateClick={handleDateClick}
+                rangeSelection={dateSelection}
+                disabled={disabled}
+              />
+            </Flex>
           )}
 
           {!dateOnly && phase === 'hours' && dateSelection.start && (

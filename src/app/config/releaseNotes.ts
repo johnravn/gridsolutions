@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.41'
+export const APP_VERSION = '1.13.42'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -28,6 +28,11 @@ export const RELEASE_NOTES = {
   version: APP_VERSION,
   title: "What's new in Grid",
   highlights: [
+    {
+      title: 'Smoother period picker',
+      description:
+        'Start and End on the period trigger are separate click targets. Calendar picks alternate start → end (SAS-style), or pin one bound from the trigger then continue on the other.',
+    },
     {
       title: 'Jobs inspector on phone',
       description:

@@ -20,7 +20,10 @@ type PickerTriggerProps = {
   compact?: boolean
   /** One-line trigger matching Radix TextField height. */
   inline?: boolean
-  /** When true, Start/End fields are clickable (popover open on times tab). */
+  /**
+   * When true, Start/End fields are individually clickable (including while the
+   * popover is closed) so either bound can be targeted from the trigger.
+   */
   fieldInteraction?: boolean
   onFieldClick?: (field: 'start' | 'end') => void
   onOpen?: () => void
@@ -215,6 +218,25 @@ function FieldHighlight({ active }: { active: boolean }) {
   )
 }
 
+function FieldHoverHighlight({ visible }: { visible: boolean }) {
+  return (
+    <div
+      aria-hidden
+      style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: 'var(--radius-2)',
+        background: 'var(--gray-a3)',
+        opacity: visible ? 1 : 0,
+        transition: motionRevealTransition(['opacity'], {
+          ease: motionEaseRevealOut,
+        }),
+        pointerEvents: 'none',
+      }}
+    />
+  )
+}
+
 function FieldSlot({
   field,
   interactive,
@@ -228,6 +250,7 @@ function FieldSlot({
   disabled?: boolean
   inline?: boolean
 }) {
+  const [hovered, setHovered] = React.useState(false)
   const content = (
     <Flex
       direction={inline ? 'row' : 'column'}
@@ -267,14 +290,18 @@ function FieldSlot({
           onClick()
         }}
         onPointerDown={(e) => {
+          // Keep the popover trigger shell from toggling; fields own open/focus.
           e.stopPropagation()
         }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
         style={{
           ...slotStyle,
           cursor: disabled ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.6 : 1,
         }}
       >
+        <FieldHoverHighlight visible={hovered && !field.active && !disabled} />
         <FieldHighlight active={field.active ?? false} />
         {content}
       </button>
@@ -401,6 +428,22 @@ export const PickerTrigger = React.forwardRef<
         ref={ref as React.Ref<HTMLDivElement>}
         {...divProps}
         {...interactionHandlers}
+        role={divProps.role ?? 'group'}
+        aria-label={
+          typeof divProps['aria-label'] === 'string'
+            ? divProps['aria-label']
+            : placeholder
+        }
+        onClick={(e) => {
+          // Shell clicks must not toggle the popover — Start/End own open/focus.
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onPointerDown={(e) => {
+          interactionHandlers.onPointerDown(e)
+          e.preventDefault()
+          e.stopPropagation()
+        }}
         className={mergeTriggerClassName(className)}
         style={{
           ...(inline

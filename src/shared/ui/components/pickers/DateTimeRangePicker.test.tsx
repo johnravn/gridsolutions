@@ -87,7 +87,8 @@ describe('DateTimeRangePicker', () => {
     clickDay('2026-06-10')
 
     expect(screen.getAllByText('10. jun 2026')).toHaveLength(2)
-    expect(screen.queryByText('Select end date')).toBeNull()
+    // Next pick is end (SAS alternate) — hint advances after the start click.
+    expect(screen.getByText('Select end date')).toBeInTheDocument()
   })
 
   it('selects date range with full-day defaults', () => {
@@ -416,8 +417,12 @@ describe('DateTimeRangePicker', () => {
     ).toBeInTheDocument()
   })
 
-  function openFilledPicker() {
-    fireEvent.click(screen.getByRole('button', { name: /Start / }))
+  function clickStartField() {
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: /^Start (?:\d|All day)/,
+      }),
+    )
   }
 
   function clickEndField() {
@@ -428,7 +433,129 @@ describe('DateTimeRangePicker', () => {
     )
   }
 
-  it('lets the user change only the end hour after opening and clicking End', () => {
+  it('opens from a closed trigger when Start is clicked and targets start date', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={onChange}
+      />,
+    )
+
+    clickStartField()
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('Select start date')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: 'Start 10. jun 2026 09:00',
+        pressed: true,
+      }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-08' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-08', 9),
+      endAt: atHour('2026-06-15', 17),
+    })
+  })
+
+  it('opens from a closed trigger when End is clicked and targets end date', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={onChange}
+      />,
+    )
+
+    clickEndField()
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: 'End 15. jun 2026 17:00',
+        pressed: true,
+      }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-20' }))
+
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 9),
+      endAt: atHour('2026-06-20', 17),
+    })
+  })
+
+  it('alternates start then end without re-clicking the trigger (SAS-style)', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker startAt="" endAt="" onChange={onChange} />,
+    )
+    openPicker()
+
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('Select start date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-10' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-10'),
+    })
+
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-15' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-15'),
+    })
+
+    // Third click starts a new cycle on start
+    expect(dialog.getByText('Select start date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-20' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-20'),
+      endAt: endOfDay('2026-06-20'),
+    })
+  })
+
+  it('after pinning Start and picking, next calendar click sets End', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={onChange}
+      />,
+    )
+
+    clickStartField()
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-08' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-08', 9),
+      endAt: atHour('2026-06-15', 17),
+    })
+
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: /End 15\. jun 2026/,
+        pressed: true,
+      }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-18' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-08', 9),
+      endAt: atHour('2026-06-18', 17),
+    })
+  })
+
+  it('lets the user change only the end hour after targeting End then Hours', () => {
     const onChange = vi.fn()
     renderWithProviders(
       <DateTimeRangePicker
@@ -437,8 +564,8 @@ describe('DateTimeRangePicker', () => {
         onChange={onChange}
       />,
     )
-    openFilledPicker()
     clickEndField()
+    switchPhase('Hours')
 
     const dialog = within(screen.getByRole('dialog'))
     expect(
@@ -462,8 +589,8 @@ describe('DateTimeRangePicker', () => {
         onChange={onChange}
       />,
     )
-    openFilledPicker()
     clickEndField()
+    switchPhase('Hours')
 
     const dialog = within(screen.getByRole('dialog'))
     fireEvent.click(dialog.getByRole('button', { name: 'End hour 17:00' }))
@@ -484,7 +611,6 @@ describe('DateTimeRangePicker', () => {
         onChange={onChange}
       />,
     )
-    openFilledPicker()
     clickEndField()
 
     const dialog = within(screen.getByRole('dialog'))
@@ -509,7 +635,6 @@ describe('DateTimeRangePicker', () => {
     )
     expect(screen.getByText('Open-ended')).toBeInTheDocument()
 
-    openFilledPicker()
     clickEndField()
     fireEvent.click(
       within(screen.getByRole('dialog')).getByRole('button', {
@@ -533,12 +658,14 @@ describe('DateTimeRangePicker', () => {
       />,
     )
 
-    const trigger = screen.getByRole('button')
+    const trigger = screen.getByRole('group', { name: 'Select period' })
     expect(trigger).toHaveTextContent('Start')
     expect(trigger).toHaveTextContent('End')
     expect(trigger).toHaveTextContent('10. jun 2026')
     expect(trigger).toHaveTextContent('12. jun 2026')
     expect(trigger).toHaveStyle({ height: 'var(--space-6)' })
+    expect(screen.getByRole('button', { name: /^Start / })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^End / })).toBeInTheDocument()
   })
 
   it('keeps the stacked trigger on small screens when inline is set', () => {
@@ -552,8 +679,177 @@ describe('DateTimeRangePicker', () => {
       />,
     )
 
-    const trigger = screen.getByRole('button')
+    const trigger = screen.getByRole('group', { name: 'Select period' })
     expect(trigger).toHaveStyle({ minHeight: '78px' })
     expect(trigger).not.toHaveStyle({ height: 'var(--space-6)' })
+  })
+
+  it('dateOnly unpinned alternate sets start then end', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker dateOnly startAt="" endAt="" onChange={onChange} />,
+    )
+    openPicker()
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-10' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-10'),
+    })
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-14' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-14'),
+    })
+  })
+
+  it('dateOnly pin Start then next click sets End', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        dateOnly
+        startAt={startOfDay('2026-06-10')}
+        endAt={endOfDay('2026-06-15')}
+        onChange={onChange}
+      />,
+    )
+    clickStartField()
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-08' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-08'),
+      endAt: endOfDay('2026-06-15'),
+    })
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-20' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-08'),
+      endAt: endOfDay('2026-06-20'),
+    })
+  })
+
+  it('optionalEnd alternate leaves end open until second click', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        dateOnly
+        optionalEnd
+        startAt=""
+        endAt=""
+        onChange={onChange}
+      />,
+    )
+    openPicker()
+    const dialog = within(screen.getByRole('dialog'))
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-10' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: '',
+    })
+    expect(screen.getByText('Open-ended')).toBeInTheDocument()
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-18' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-10'),
+      endAt: endOfDay('2026-06-18'),
+    })
+  })
+
+  it('inline trigger pin End then alternate sets Start on next click', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        inline
+        startAt={atHour('2026-06-10', 8)}
+        endAt={atHour('2026-06-12', 18)}
+        onChange={onChange}
+      />,
+    )
+    clickEndField()
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-14' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 8),
+      endAt: atHour('2026-06-14', 18),
+    })
+    expect(dialog.getByText('Select start date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-09' }))
+    // Unpinned cycle start resets the period to the new start day.
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: startOfDay('2026-06-09'),
+      endAt: endOfDay('2026-06-09'),
+    })
+  })
+
+  it('re-pinning Start while open keeps refining start until pick advances', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={onChange}
+      />,
+    )
+    clickStartField()
+    const dialog = within(screen.getByRole('dialog'))
+    // Still pinned: click Start again (noop retarget), then pick
+    clickStartField()
+    expect(dialog.getByText('Select start date')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '2026-06-11' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-11', 9),
+      endAt: atHour('2026-06-15', 17),
+    })
+    expect(dialog.getByText('Select end date')).toBeInTheDocument()
+  })
+
+  it('hours phase after pinning Start edits start hour then can switch via End', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={onChange}
+      />,
+    )
+    clickStartField()
+    switchPhase('Hours')
+    const dialog = within(screen.getByRole('dialog'))
+    expect(
+      dialog.getByRole('button', { name: 'Start hour 09:00' }),
+    ).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: 'Start hour 10:00' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 10),
+      endAt: atHour('2026-06-15', 17),
+    })
+    clickEndField()
+    expect(
+      dialog.getByRole('button', { name: 'End hour 17:00' }),
+    ).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: 'End hour 19:00' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 10),
+      endAt: atHour('2026-06-15', 19),
+    })
+  })
+
+  it('same-day hours still use range hour grid when opened empty', () => {
+    const onChange = vi.fn()
+    renderWithProviders(
+      <DateTimeRangePicker startAt="" endAt="" onChange={onChange} />,
+    )
+    openPicker()
+    clickDay('2026-06-10')
+    switchPhase('Hours')
+    const dialog = within(screen.getByRole('dialog'))
+    expect(dialog.getByText('Select start and end hour')).toBeInTheDocument()
+    fireEvent.click(dialog.getByRole('button', { name: '09' }))
+    fireEvent.click(dialog.getByRole('button', { name: '17' }))
+    expect(onChange).toHaveBeenLastCalledWith({
+      startAt: atHour('2026-06-10', 9),
+      endAt: atHour('2026-06-10', 17),
+    })
   })
 })

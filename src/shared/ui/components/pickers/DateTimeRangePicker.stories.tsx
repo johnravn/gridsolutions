@@ -127,3 +127,61 @@ export const Inline: Story = {
     />
   ),
 }
+
+/** Click Start or End on the closed trigger — each opens focused on that bound. */
+export const ClickEitherBound: Story = {
+  name: 'Click either Start or End',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'With a filled range, Start and End are separate hit targets even while closed. Click End to refine end (keeps start); the next calendar click then sets start (SAS-style alternate). Unpinned picking also alternates: start → end → start…',
+      },
+    },
+  },
+  render: () => (
+    <ControlledRangePicker
+      label="Job period"
+      initialStart="2026-07-01T08:00:00.000Z"
+      initialEnd="2026-07-05T17:00:00.000Z"
+    />
+  ),
+}
+
+/** Empty period — first calendar click sets start, second sets end, then cycles. */
+export const AlternateClicks: Story = {
+  name: 'Alternate start / end clicks',
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'SAS-inspired flow: open empty → click a day (start) → click another (end) → click again to start a new period. No need to tap Start/End between picks unless you want to pin a bound.',
+      },
+    },
+  },
+  render: () => <ControlledRangePicker label="Job period" />,
+}
+
+export const ClickEitherBoundDateOnly: Story = {
+  name: 'Click either bound (date only)',
+  render: () => (
+    <ControlledRangePicker
+      label="Period"
+      dateOnly
+      initialStart="2026-07-01T00:00:00.000Z"
+      initialEnd="2026-07-15T23:59:59.999Z"
+    />
+  ),
+}
+
+export const ClickEitherBoundInline: Story = {
+  name: 'Click either bound (inline)',
+  render: () => (
+    <ControlledRangePicker
+      label="Crew period"
+      inline
+      initialStart="2026-07-01T08:00:00.000Z"
+      initialEnd="2026-07-05T17:00:00.000Z"
+    />
+  ),
+}
