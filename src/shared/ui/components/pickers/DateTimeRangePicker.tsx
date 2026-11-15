@@ -175,6 +175,7 @@ export default function DateTimeRangePicker({
 
   const wasOpenRef = React.useRef(false)
   const pendingOpenTargetRef = React.useRef<'start' | 'end' | null>(null)
+  const triggerRef = React.useRef<HTMLElement | null>(null)
   const advanceToEndTabTimeoutRef = React.useRef<ReturnType<
     typeof setTimeout
   > | null>(null)
@@ -615,11 +616,25 @@ export default function DateTimeRangePicker({
       return
     }
 
+    // Already open: retarget Start/End only. Stay on Hours/Minutes when editing
+    // times — jumping back to Dates felt like a glitch.
     setBoundTarget(field)
     setRangePickNext(field)
     setBoundPinned(true)
     setActiveTimeTab(field)
-    focusMonthForBound(field)
+    if (phase === 'dates') {
+      focusMonthForBound(field)
+    }
+  }
+
+  const keepOpenWhenInteractingWithTrigger = (
+    event: Event | { target: EventTarget | null; preventDefault: () => void },
+  ) => {
+    const target = event.target
+    if (!(target instanceof Node)) return
+    if (triggerRef.current?.contains(target)) {
+      event.preventDefault()
+    }
   }
 
   const hasHourSelection =
@@ -643,6 +658,7 @@ export default function DateTimeRangePicker({
       >
         <PopoverTrigger asChild>
           <PickerTrigger
+            ref={triggerRef as React.Ref<HTMLButtonElement | HTMLDivElement>}
             fields={triggerFields}
             placeholder="Select period"
             invalid={rangeInvalid}
@@ -660,6 +676,8 @@ export default function DateTimeRangePicker({
           side="bottom"
           align="start"
           sideOffset={4}
+          onPointerDownOutside={keepOpenWhenInteractingWithTrigger}
+          onFocusOutside={keepOpenWhenInteractingWithTrigger}
           style={{
             width: 360,
             maxHeight: 'min(80vh, 600px)',

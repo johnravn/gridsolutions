@@ -835,6 +835,55 @@ describe('DateTimeRangePicker', () => {
     })
   })
 
+  it('stays on Hours when clicking Start in the trigger while on End hours', () => {
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atHour('2026-06-10', 9)}
+        endAt={atHour('2026-06-15', 17)}
+        onChange={vi.fn()}
+      />,
+    )
+    clickEndField()
+    switchPhase('Hours')
+    const dialog = within(screen.getByRole('dialog'))
+    expect(
+      dialog.getByRole('button', { name: 'End hour 17:00' }),
+    ).toBeInTheDocument()
+
+    clickStartField()
+
+    expect(
+      dialog.getByRole('button', { name: 'Start hour 09:00' }),
+    ).toBeInTheDocument()
+    expect(dialog.queryByText('Select start date')).toBeNull()
+    expect(dialog.queryByRole('button', { name: '2026-06-10' })).toBeNull()
+  })
+
+  it('stays on Minutes when clicking End in the trigger while on Start minutes', () => {
+    renderWithProviders(
+      <DateTimeRangePicker
+        startAt={atTime('2026-06-10', 9, 15)}
+        endAt={atTime('2026-06-15', 17, 0)}
+        onChange={vi.fn()}
+      />,
+    )
+    clickStartField()
+    switchPhase('Hours')
+    switchPhase('Minutes')
+    const dialog = within(screen.getByRole('dialog'))
+    expect(
+      dialog.getByRole('button', { name: 'Start minute :15' }),
+    ).toBeInTheDocument()
+
+    clickEndField()
+
+    expect(
+      dialog.getByRole('button', { name: 'End minute :00' }),
+    ).toBeInTheDocument()
+    expect(dialog.queryByText('Select end date')).toBeNull()
+    expect(dialog.queryByRole('button', { name: '2026-06-15' })).toBeNull()
+  })
+
   it('same-day hours still use range hour grid when opened empty', () => {
     const onChange = vi.fn()
     renderWithProviders(
