@@ -1,5 +1,5 @@
 import { supabase } from '@shared/api/supabase'
-import { fireAndForgetCrewPositionInviteEmail } from '@shared/email/supabaseEdgeEmail'
+import { sendCrewPositionInviteEmail } from '@shared/email/supabaseEdgeEmail'
 import {
   createNotificationAndSendEmail,
   markNotificationReadByEntity,
@@ -525,6 +525,7 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
           : 'matter_update'
     const actionUrl = `/matters?matterId=${matter.id}`
 
+    const emailErrors: Array<string> = []
     for (const recipientUserId of recipientUserIds) {
       try {
         await createNotificationAndSendEmail(
@@ -541,7 +542,10 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
           { forceEmail },
         )
       } catch (e) {
-        if (import.meta.env.DEV) {
+        const message = e instanceof Error ? e.message : String(e)
+        if (forceEmail) {
+          emailErrors.push(message)
+        } else if (import.meta.env.DEV) {
           console.warn(
             '[notifications] createNotificationAndSendEmail failed',
             notifType,
@@ -549,6 +553,13 @@ export async function createMatter(input: CreateMatterInput): Promise<string> {
           )
         }
       }
+    }
+    if (emailErrors.length > 0) {
+      throw new Error(
+        emailErrors.length === 1
+          ? `Invite created in Grid, but email failed: ${emailErrors[0]}`
+          : `Invite created in Grid, but ${emailErrors.length} emails failed (first: ${emailErrors[0]})`,
+      )
     }
   }
 
@@ -697,8 +708,19 @@ export async function sendCrewInvites(
     })
   }
 
+  const placeholderEmailErrors: Array<string> = []
   for (const row of placeholderRows) {
-    fireAndForgetCrewPositionInviteEmail(row.id, invitationMessage)
+    const sent = await sendCrewPositionInviteEmail({
+      reservedCrewId: row.id,
+      invitationMessage,
+    })
+    if (!sent.ok) {
+      placeholderEmailErrors.push(
+        sent.failure.details
+          ? `${sent.failure.message}: ${sent.failure.details}`
+          : sent.failure.message,
+      )
+    }
   }
 
   if (userIds.length > 0) {
@@ -710,6 +732,14 @@ export async function sendCrewInvites(
       .in('user_id', userIds)
 
     if (updateError) throw updateError
+  }
+
+  if (placeholderEmailErrors.length > 0) {
+    throw new Error(
+      placeholderEmailErrors.length === 1
+        ? `Crew invite email failed: ${placeholderEmailErrors[0]}`
+        : `${placeholderEmailErrors.length} crew invite emails failed (first: ${placeholderEmailErrors[0]})`,
+    )
   }
 
   return matterId ?? ''

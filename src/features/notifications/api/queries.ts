@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { sendNotificationEmailNow } from '@shared/email/supabaseEdgeEmail'
 
 export type NotificationType =
   | 'offer_sent'
@@ -166,7 +167,11 @@ export type CreateNotificationPayload = {
   action_url?: string | null
   entity_type?: string | null
   entity_id?: string | null
-  /** When true, edge send bypasses prefs (crew_invite, force-email announcements). Dispatched only via DB trigger / cron. */
+  /**
+   * When true, edge send bypasses prefs (crew_invite, force-email announcements).
+   * Client also awaits `sendNotificationEmailNow` so delivery does not depend solely
+   * on vault/pg_net (DB trigger remains a backup; rare duplicates possible).
+   */
   email_force_send?: boolean
 }
 
@@ -199,16 +204,33 @@ export async function createNotification(
 }
 
 /**
- * Create a notification; email is sent once by `trg_notifications_dispatch_email_after_insert`
- * (pg_net → send-notification-email). Do not invoke the edge function from the client — that
- * duplicated sends when the trigger also ran.
+ * Create a notification. Preferential email path for `forceEmail`:
+ * client JWT → `send-notification-email` (same as Super). DB trigger / cron remain
+ * backup when vault `cron_secret` works; `email_sent_at` usually dedupes the second call.
  */
 export async function createNotificationAndSendEmail(
   payload: CreateNotificationPayload,
   options?: { forceEmail?: boolean },
 ): Promise<string> {
-  return createNotification({
+  const forceEmail = payload.email_force_send ?? options?.forceEmail ?? false
+  const notificationId = await createNotification({
     ...payload,
-    email_force_send: payload.email_force_send ?? options?.forceEmail ?? false,
+    email_force_send: forceEmail,
   })
+
+  if (forceEmail) {
+    const sent = await sendNotificationEmailNow({
+      notificationId,
+      forceEmail: true,
+    })
+    if (!sent.ok) {
+      throw new Error(
+        sent.failure.details
+          ? `${sent.failure.message}: ${sent.failure.details}`
+          : sent.failure.message,
+      )
+    }
+  }
+
+  return notificationId
 }

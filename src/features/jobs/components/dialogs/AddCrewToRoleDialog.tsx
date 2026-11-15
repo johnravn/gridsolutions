@@ -30,6 +30,10 @@ import {
 } from '@features/conflicts/api/forceBooking'
 import { sendCrewInvite } from '@features/matters/api/queries'
 import {
+  sendCrewPositionInviteEmail,
+  sendWelcomeEmailForPendingInvite,
+} from '@shared/email/supabaseEdgeEmail'
+import {
   addMemberOrInvite,
   crewInternalNotesQuery,
 } from '../../../crew/api/queries'
@@ -519,11 +523,27 @@ export default function AddCrewToRoleDialog({
       email: string
       displayName: string
     }) => {
-      await addMemberOrInvite({
+      const inviteRes = await addMemberOrInvite({
         companyId,
         email,
         role: 'freelancer',
       })
+
+      if (
+        inviteRes.type === 'invited' ||
+        inviteRes.type === 'already_invited'
+      ) {
+        const sent = await sendWelcomeEmailForPendingInvite(
+          inviteRes.pending_invite_id,
+        )
+        if (!sent.ok) {
+          throw new Error(
+            sent.failure.details
+              ? `${sent.failure.message}: ${sent.failure.details}`
+              : sent.failure.message,
+          )
+        }
+      }
 
       const { data: prof, error: profErr } = await supabase
         .from('profiles')
@@ -533,16 +553,36 @@ export default function AddCrewToRoleDialog({
 
       if (profErr) throw profErr
 
-      const { error } = await supabase.from('reserved_crew').insert({
-        time_period_id: timePeriodId,
-        user_id: prof?.user_id ?? null,
-        placeholder_name: prof?.user_id ? null : displayName,
-        placeholder_email: prof?.user_id ? null : email,
-        status: 'planned' as const,
-        notes: null,
-      })
+      const { data: reserved, error } = await supabase
+        .from('reserved_crew')
+        .insert({
+          time_period_id: timePeriodId,
+          user_id: prof?.user_id ?? null,
+          placeholder_name: prof?.user_id ? null : displayName,
+          placeholder_email: prof?.user_id ? null : email,
+          status: 'planned' as const,
+          notes: null,
+        })
+        .select('id')
+        .single()
 
       if (error) throw error
+
+      // Existing Grid user: matter + notification email. Email-only: Resend position invite.
+      if (prof?.user_id) {
+        await sendCrewInvite(jobId, timePeriodId, prof.user_id, companyId)
+      } else if (reserved?.id) {
+        const sent = await sendCrewPositionInviteEmail({
+          reservedCrewId: reserved.id,
+        })
+        if (!sent.ok) {
+          throw new Error(
+            sent.failure.details
+              ? `${sent.failure.message}: ${sent.failure.details}`
+              : sent.failure.message,
+          )
+        }
+      }
     },
     onMutate: () => ({ progressToast: progress('Inviting crew…') }),
     onSuccess: (_data, _vars, ctx) => {
@@ -550,9 +590,10 @@ export default function AddCrewToRoleDialog({
       qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'time_periods', 'crew'],
       })
+      qc.invalidateQueries({ queryKey: ['matters'] })
       ctx?.progressToast.success(
-        'Invite created',
-        'They’ll get an email to join the company. The booking has been added to this role.',
+        'Invite sent',
+        'They’ll get an email. The booking has been added to this role.',
       )
       form.setFieldValue('placeholderEmail', '')
       form.setFieldValue('placeholderName', '')
