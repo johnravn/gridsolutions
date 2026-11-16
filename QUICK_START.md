@@ -52,7 +52,7 @@ npm run db:types:dev
 
 ## Review before ship
 
-John reviews via **agent desktop / Live** or local `npm run dev` on Dev. There is no PR preview or staging-branch review path. Ship is commit + `git push origin main` only when John asks.
+Prefer a **feature branch** Preview URL (push the branch / open a PR when John asks). Agent desktop / Live and local `npm run dev` on Dev remain valid. Do not use a shared staging branch. Ship is merge to `main` + `git push origin main` only when John asks.
 
 ## Stop
 

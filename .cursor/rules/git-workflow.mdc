@@ -1,29 +1,35 @@
 ---
-description: Trunk-based git — work on main, GitHub issues, no pull requests
+description: Feature branches + Vercel previews; main is production; issues first
 alwaysApply: true
 ---
 
 # Git workflow
 
-This repo ships on `main`. Do not use pull requests or feature branches.
+Prefer **one branch per feature** so each change can get its own **Vercel Preview URL**. Keep **`main` as production**. Do **not** use a shared staging branch as the default review env.
 
-**Do not commit or push unless the user explicitly asks in this conversation.** See `.cursor/rules/no-unsolicited-ship.mdc`. The rest of this file is how to commit when they do ask.
+**Do not commit or push unless the user explicitly asks in this conversation.** See `.cursor/rules/no-unsolicited-ship.mdc`. The rest of this file is how to work when they do ask.
 
-**Before any commit/push to `main`:** run `npm run check`, `npm run test`, and `npm run build:check`. Only ship when all three pass — do not push hoping CI will catch failures.
+**Before any merge / push to `main`:** run `npm run check`, `npm run test`, and `npm run build:check`. Only ship when all three pass — do not push hoping CI will catch failures.
 
-## Cloud agents vs shipping on main
+## Ship path vs review path
 
-Grid’s **ship path** is `main` only (issues → commit on main → push main → Vercel Production).
-Do not open pull requests or ask John to merge feature branches as the default review path.
+| Path | What | Deploys |
+| ---- | ---- | ------- |
+| **Review** | Feature branch (`cursor/…` or similar), optionally a PR | Vercel **Preview** |
+| **Ship** | Merge into `main` (only when John asks) | Vercel **Production** → gridsolutions.app |
 
-If a cloud-agent runtime forces a working branch:
+Flow:
 
-- Use it only as disposable scratch for that run.
-- Do **not** treat the branch/PR as the review or deploy mechanism.
-- Do **not** merge to `main` or push `main` unless John explicitly asks.
-- Hand off: summary + desktop/Live and/or “pull branch / apply locally against Dev” — John reviews via agent desktop or `npm run dev` on hosted Dev.
+```
+Issue → feature branch → work → (when asked) push branch / open PR
+  → Vercel Preview URL for review
+  → (when John asks to ship) quality gates → merge to main → Production
+```
 
-Never create a long-lived staging branch or Supabase Branching preview as the default review env.
+- Open a PR when it helps review or surfaces the preview link. PRs are a review/preview tool, not a long-lived merge bureaucracy.
+- Cloud agents must **not** push or merge to `main` unless John explicitly asks to ship/merge.
+- Never create a long-lived shared staging branch or Supabase Branching preview as the default review env.
+- Agent desktop / Live and `npm run dev` on hosted Dev remain valid review paths alongside Preview.
 
 ## Issues first
 
@@ -38,10 +44,11 @@ Do not open a second issue for work already covered by an open one.
 
 ## Branching
 
-- Stay on `main`. `git pull origin main` before starting.
-- Never `git checkout -b`, never `gh pr create` as the review/deploy path.
-- If asked to open a PR, do not treat it as Grid’s ship path. Stay on `main` and wait until they explicitly ask to commit/push.
-- Cloud scratch branches (if the runtime forces one) are disposable; they need no issue until John asks to land on `main`.
+1. `git fetch origin main` / `git pull origin main` (or rebase onto latest `main`) before starting.
+2. Create a **feature branch** from `main`, e.g. `cursor/<short-description>` (cloud agents often use a runtime suffix — that is fine).
+3. Do all work on that branch. Do not commit directly on `main` unless John explicitly asks for a main-only hotfix.
+4. When asked to push for preview/review: `git push -u origin HEAD` (feature branch only). Share the Vercel Preview URL / PR link.
+5. When asked to **ship**: merge the feature branch into `main` (via PR merge or local merge), run quality gates, bump version if needed, then push `main`. Never force-push `main` unless explicitly asked.
 
 ## Commits
 
@@ -55,7 +62,7 @@ Add customer CSV export
 Closes #142
 ```
 
-- Completes the issue → `Closes #N` or `Fixes #N` (auto-closes on push to `main`)
+- Completes the issue → `Closes #N` or `Fixes #N` (auto-closes when the commit lands on `main`)
 - Partial work → `Refs #N` (leave the issue open)
 - Multiple issues → `Closes #12, #34`
 
@@ -63,8 +70,9 @@ Subject line: what changed and why. Not a file list.
 
 ## Push (only when the user asks)
 
-When the user explicitly asks to push: `git push origin main`. That deploys production (Vercel → gridsolutions.app).
-
-Before asking John to push (and before you push when asked), run and pass quality gates: `npm run check`, `npm run test`, `npm run build:check`. This is mandatory for every `main` ship, not optional.
+| Ask | Action |
+| --- | ------ |
+| Push / commit for preview or review | Push the **feature branch** only (`git push -u origin HEAD`). Optionally open/update a PR. Does **not** deploy production. |
+| Ship / merge / push to production | Quality gates → merge to **`main`** → `git push origin main` → Production. Bump app version in the same ship when the repo’s version pattern applies. |
 
 Never force-push `main` unless the user explicitly asks.

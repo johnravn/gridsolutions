@@ -91,7 +91,7 @@ CREATE POLICY "Users can view company addresses"
 
 ## Development Workflow
 
-Work on `main`. Track work with GitHub issues (`gh issue list` / `gh issue create`). Commits must include `Closes #N`, `Fixes #N`, or `Refs #N`. Do not open pull requests or feature branches — see `GITHUB_ISSUES.md`.
+Work on a **feature branch** from `main` (one branch per change for Vercel Preview). Track work with GitHub issues (`gh issue list` / `gh issue create`). Commits must include `Closes #N`, `Fixes #N`, or `Refs #N`. Open a PR when useful for review/preview. Merge to `main` only when John asks to ship — see `GITHUB_ISSUES.md`.
 
 ### Local Development Setup
 
@@ -147,13 +147,13 @@ Always commit updated `src/shared/types/database.types.ts` after schema changes 
 - Verify migrations on hosted Dev before Prod promote
 - Test RLS policies with different user roles
 - Verify TypeScript types are updated
-- Review via agent desktop or `npm run dev` on Dev — not a staging branch / PR preview
+- Review via Vercel Preview URL, agent desktop, or `npm run dev` on Dev — not a shared staging branch
 
 ## Resources
 
 - **Agent rules**: See `AGENTS.md`
 - **Git & issues**: See `GITHUB_ISSUES.md`
-- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` - Deploying to Vercel from `main`
+- **Deployment Workflow**: See `DEPLOYMENT_WORKFLOW.md` — feature-branch Preview, then merge to `main` for Production
 - **Environment / secrets**: See `ENVIRONMENT_SETUP.md`
 - **Migration Workflow**: See `supabase/DEVELOPMENT_WORKFLOW.md`
 - **Quick Start**: See `QUICK_START.md`

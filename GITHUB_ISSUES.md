@@ -1,6 +1,6 @@
-# GitHub Issues & Shipping on `main`
+# GitHub Issues & Feature-Branch Shipping
 
-This repo uses **GitHub issues** as the unit of work and ships by **pushing `main`**. There are no pull requests and no feature branches as the review/deploy path.
+This repo uses **GitHub issues** as the unit of work. Day-to-day work happens on **one feature branch per change** so Vercel can publish a **Preview URL**. Production ships only when that branch is **merged into `main`**.
 
 Agent rule (always on): `.cursor/rules/git-workflow.mdc`
 
@@ -8,17 +8,16 @@ Agent rule (always on): `.cursor/rules/git-workflow.mdc`
 
 ```
 Issue (existing or created)
-  └─> Work on main
+  └─> Feature branch from main (cursor/…)
       └─> Verify on hosted Dev + quality gates
           └─> Commit referencing the issue (only when John asks)
-              └─> git push origin main (only when John asks)
-                  └─> Vercel deploys gridsolutions.app
-                      └─> Closes #N auto-closes the issue
+              └─> git push origin <feature-branch> (only when John asks)
+                  └─> Vercel Preview (+ optional PR for review)
+                      └─> When John asks to ship: merge → main → Production
+                          └─> Closes #N auto-closes when the commit lands on main
 ```
 
-**Review before ship:** agent desktop / Live, or local `npm run dev` against hosted Dev. Not a PR preview or staging branch.
-
-Cloud-agent scratch branches (if a runtime forces one) are disposable — they are not the review or deploy mechanism. Land on `main` only when John asks.
+**Review before ship:** Vercel Preview URL, agent desktop / Live, and/or local `npm run dev` against hosted Dev. Prefer Preview links for cloud-agent handoff. Do **not** use a shared staging branch.
 
 ## Issues
 
@@ -46,19 +45,20 @@ Add customer CSV export
 Closes #142
 ```
 
-| Intent              | Keyword                  | Effect on push to `main` |
-| ------------------- | ------------------------ | ------------------------ |
-| Work is done        | `Closes #N` / `Fixes #N` | Issue auto-closes        |
-| Partial / follow-up | `Refs #N`                | Issue stays open         |
-| Several issues      | `Closes #12, #34`        | All listed issues close  |
+| Intent              | Keyword                  | Effect when landed on `main` |
+| ------------------- | ------------------------ | ---------------------------- |
+| Work is done        | `Closes #N` / `Fixes #N` | Issue auto-closes            |
+| Partial / follow-up | `Refs #N`                | Issue stays open             |
+| Several issues      | `Closes #12, #34`        | All listed issues close      |
 
-## Push
+## Branches & push
 
 ```bash
 git checkout main
 git pull origin main
+git checkout -b cursor/add-customer-csv-export
 # ... work ...
-npm run check && npm run test && npm run build:check
+npm run check && npm run test && npm run build:check   # required before shipping to main
 git add -A
 git commit -m "$(cat <<'EOF'
 Add customer CSV export
@@ -66,17 +66,20 @@ Add customer CSV export
 Closes #142
 EOF
 )"
-git push origin main
+git push -u origin HEAD
+# Optional: open a PR for review + Preview link
 ```
 
-Pushing `main` deploys production. Run quality gates before asking John to commit/push — there is no PR preview.
+- Pushing a **feature branch** (or opening a PR) triggers a **Vercel Preview** — not production.
+- Shipping: when John asks, merge into `main` (PR merge or local merge), bump version if needed, push `main` → Production (`gridsolutions.app`).
+- GitHub Actions CI already runs on `pull_request` and on pushes to `main`.
 
-If GitHub blocks the push, turn off branch protection / required PRs on `main` (Settings → Branches). This repo is meant to push `main` directly.
+Do not force-push `main` unless explicitly asked. Do not commit or `git push` unless John explicitly asks (see `.cursor/rules/no-unsolicited-ship.mdc`). Asking to push a feature branch / open a PR is **not** permission to merge to `main`.
 
 ## Do not
 
-- Create pull requests as the default review path (`gh pr create`, GitHub UI, etc.)
-- Create long-lived feature or staging branches
+- Push or merge to `main` unless John asks to ship
+- Use a shared long-lived staging branch as the default review path
 - Commit without an issue reference
 - Force-push `main` unless explicitly asked
-- Commit or `git push` unless John explicitly asks (see `.cursor/rules/no-unsolicited-ship.mdc`)
+- Commit or `git push` unless John explicitly asks

@@ -76,7 +76,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 CRON_SECRET=...
 ```
 
-Preview env is unused (repo ships on `main` only). If a preview env is ever added, it must use **Dev**, not Prod.
+**Preview** env is used for feature-branch / PR deployments. It must use **Dev** (or a dedicated non-Prod project), not Prod.
 
 `SUPABASE_SERVICE_ROLE_KEY` is required for serverless routes (`/api/calendar/feed`, Conta cron). `CRON_SECRET` must match Edge secrets + Vault `cron_secret` within that environment. See `docs/EMAIL.md`.
 

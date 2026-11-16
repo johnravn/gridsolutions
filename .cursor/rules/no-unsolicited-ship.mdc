@@ -7,10 +7,13 @@ alwaysApply: true
 
 Never commit or push to GitHub unless the user **explicitly asks** in this conversation. Never push **Prod** schema unless John explicitly asks.
 
+Feature branches and Preview deploys do **not** weaken this rule: creating a branch and editing files is fine; **commit / push / merge to `main` / Prod DB** still need an explicit ask.
+
 ## Forbidden without a direct request
 
 - `git commit`
-- `git push` (including `origin main`)
+- `git push` (feature branch **or** `origin main`)
+- Merge / push to **`main`** (production)
 - Prod DB push: `CONFIRM_PROD_PUSH=1 npm run db:push:prod`, or bare `npm run db:push` while linked to Prod
 - Bare `npm run db:push` as a substitute for an explicit `:dev` / `:prod` target (ambiguous — do not use)
 
@@ -21,6 +24,7 @@ Agents **may** run `npm run db:push:dev` (and related Dev link / `db:types:dev`)
 ## Allowed without asking
 
 - Code, unit tests, quality gates
+- Creating / checking out a **feature branch** (no commit)
 - `db:migrate` (create migration files only)
 - `db:switch:dev`, `supabase:link:dev`, `db:types:dev` when CLI can read Dev
 - `npm run dev` against Dev secrets
@@ -28,16 +32,20 @@ Agents **may** run `npm run db:push:dev` (and related Dev link / `db:types:dev`)
 
 ## What counts as asking (commit / GitHub / Prod)
 
-Only a clear instruction in the current conversation, for example: "commit this", "push to GitHub", "push this migration to Prod", "ship it", `CONFIRM_PROD_PUSH`.
+Only a clear instruction in the current conversation, for example:
+
+- Commit / push for review: "commit this", "push the branch", "push for preview", "open a PR"
+- Ship production: "ship it", "merge to main", "push to GitHub" (when context means production), "push this migration to Prod", `CONFIRM_PROD_PUSH`
 
 These are **not** permission for commit / GitHub / Prod:
 
 - Finishing a task, fixing a bug, or passing quality gates
 - Workflow docs that say to commit/push as the last step
 - Creating or closing a GitHub issue
-- The user saying the work looks good, unless they also say to commit or push
+- The user saying the work looks good, unless they also say to commit, push, or ship
 - Authorization to push **Dev** (does not imply commit, GitHub push, or Prod)
+- Authorization to push a **feature branch** / open a PR (does **not** imply merge to `main` or Prod)
 
-If they ask to commit but not push, commit only. If they ask to push Dev but not GitHub, push Dev only. If they ask to push Prod, use `CONFIRM_PROD_PUSH=1 npm run db:push:prod` — never bare `db:push`.
+If they ask to commit but not push, commit only. If they ask to push the feature branch / open a PR but not ship, do **not** merge or push `main`. If they ask to push Dev but not GitHub, push Dev only. If they ask to push Prod, use `CONFIRM_PROD_PUSH=1 npm run db:push:prod` — never bare `db:push`.
 
-When they do ask to commit/push GitHub: follow `.cursor/rules/git-workflow.mdc` (issue reference, quality gates). **Before any commit/push to `main`**, run `npm run check`, `npm run test`, and `npm run build:check`; only ship when they pass.
+When they ask to commit/push GitHub: follow `.cursor/rules/git-workflow.mdc` (issue reference; feature branch for review; merge to `main` only when shipping). **Before any merge/push to `main`**, run `npm run check`, `npm run test`, and `npm run build:check`; only ship when they pass.
