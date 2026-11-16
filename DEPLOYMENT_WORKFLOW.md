@@ -4,27 +4,32 @@ This document outlines the complete workflow for developing, testing, and deploy
 
 ## Branch Strategy
 
-Work only on **`main`**. No feature branches or pull requests as the review/deploy path. Track work with GitHub issues — see `GITHUB_ISSUES.md`.
+Prefer **one feature branch per change** for Vercel Preview. Keep **`main` as production**. Do not use a shared staging branch. Track work with GitHub issues — see `GITHUB_ISSUES.md`.
 
-- **`main`** — the only ship branch
-  - Auto-deploys to Vercel → gridsolutions.app
-  - Must stay deployable: verify on hosted Dev (or agent desktop) before pushing
-  - Apply backward-compatible migrations to **Dev**, then promote to **Prod** before pushing code that needs them
-- Cloud-agent scratch branches (if a runtime forces one) are disposable — not review or deploy
+- **Feature branches** (`cursor/…` or similar) — review path
+  - Push (when John asks) → Vercel **Preview** URL
+  - Optional PR for review / Preview link
+  - Verify on hosted Dev (or agent desktop) while iterating
+- **`main`** — production only
+  - Auto-deploys to Vercel → gridsolutions.app on push/merge
+  - Must stay deployable: quality gates before merge
+  - Apply backward-compatible migrations to **Dev**, then promote to **Prod** before shipping code that needs them
+  - Cloud agents must not push/merge to `main` unless John asks to ship
 
-**Review before ship:** agent desktop / Live, or local `npm run dev` on hosted Dev. No staging-branch or PR-preview review.
+**Review before ship:** Vercel Preview URL, agent desktop / Live, or local `npm run dev` on hosted Dev.
 
 ## Development Workflow
 
 ### Starting a New Feature
 
-1. **Issue first, then pull `main`:**
+1. **Issue first, then branch from `main`:**
 
    ```bash
    gh issue list --state open --limit 30
    # or: gh issue create --title "..." --body "..."
    git checkout main
    git pull origin main
+   git checkout -b cursor/add-inventory-tracking
    ```
 
 2. **Develop against hosted Dev (preferred):**
@@ -47,7 +52,7 @@ Work only on **`main`**. No feature branches or pull requests as the review/depl
    - Create migrations if needed (see Migration Workflow below)
    - Verify on Dev / agent desktop
 
-4. **Commit and push `main` (only when John asks):**
+4. **Commit and push the feature branch (only when John asks for preview/review):**
 
    ```bash
    git add .
@@ -57,10 +62,13 @@ Work only on **`main`**. No feature branches or pull requests as the review/depl
    Closes #142
    EOF
    )"
-   git push origin main
+   git push -u origin HEAD
+   # Optional: open a PR for review + Preview URL
    ```
 
-### Migration Workflow on `main`
+5. **Ship to production (only when John asks):** quality gates → merge into `main` → bump version if needed → `git push origin main`.
+
+### Migration Workflow (feature branch → Dev → Prod → merge)
 
 **CRITICAL: Database migrations require special handling**
 
@@ -85,7 +93,7 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
    # Review via npm run dev on Dev or agent desktop
    ```
 
-3. **Promote to Prod BEFORE pushing code that uses it (only when John asks):**
+3. **Promote to Prod BEFORE shipping code that uses it (only when John asks):**
 
    ```bash
    CONFIRM_PROD_PUSH=1 npm run db:push:prod
@@ -97,10 +105,11 @@ If your migration is backward-compatible (adds columns, tables, etc. without bre
    Closes #142
    EOF
    )"
-   git push origin main
+   git push -u origin HEAD   # preview / PR first unless John asked to ship immediately
+   # When John asks to ship: merge to main and push main
    ```
 
-   If the schema and app change belong in the same commit, still run Prod `db:push:prod` **before** `git push origin main` when John has asked for both.
+   If the schema and app change belong in the same ship, still run Prod `db:push:prod` **before** `git push origin main` when John has asked for both.
 
 #### Option B: Breaking Migrations
 
@@ -119,9 +128,10 @@ If your migration breaks existing code (removes columns, changes types, etc.):
    npm run db:types:dev
    ```
 
-3. **Push code that no longer depends on the old schema, then apply the migration to Prod immediately (only when John asks):**
+3. **Ship code that no longer depends on the old schema, then apply the migration to Prod immediately (only when John asks):**
 
    ```bash
+   # After quality gates + merge to main:
    git push origin main
    CONFIRM_PROD_PUSH=1 npm run db:push:prod
    npm run db:types:prod
@@ -132,7 +142,8 @@ If your migration breaks existing code (removes columns, changes types, etc.):
    Refs #142
    EOF
    )"
-   git push origin main
+   git push -u origin HEAD
+   # Merge/push main again when John asks
    ```
 
 **Best Practice:** Prefer Option A (backward-compatible) whenever possible.
@@ -141,16 +152,17 @@ If your migration breaks existing code (removes columns, changes types, etc.):
 
 ### Vercel Deployment
 
-Every push to `main` deploys **production** at `https://gridsolutions.app`.
+- Push to a **feature branch** / PR → **Preview** deployment (share the URL for review)
+- Push/merge to **`main`** → **Production** at `https://gridsolutions.app`
 
-**Process**:
+**Production process**:
 
-1. Vercel automatically detects the push to `main`
+1. Vercel automatically detects the push/merge to `main`
 2. Builds the application
 3. Deploys to gridsolutions.app
 4. Uses environment variables from Vercel dashboard (Production) — **must point at Prod**, never Dev
 
-Verify on Dev / agent desktop before asking John to push. This workflow does not use feature-branch preview deployments.
+Verify via Preview / Dev / agent desktop before asking John to ship. Preview env vars must use **Dev**, not Prod.
 
 ### Manual Deployment Steps
 
@@ -170,20 +182,20 @@ Verify on Dev / agent desktop before asking John to push. This workflow does not
    npm run db:types:prod     # after Prod promote
    git add src/shared/types/database.types.ts
    git commit -m "chore: update types from production"
-   git push origin main
+   git push -u origin HEAD
    ```
 
-3. **Push to `main`:**
+3. **Ship to `main` (only when John asks):**
 
    ```bash
-   git checkout main
-   git pull origin main
+   npm run check && npm run test && npm run build:check
+   # merge feature branch → main (PR or local), bump version if needed
    git push origin main
    ```
 
 4. **Monitor Vercel deployment:**
-   - Check Vercel dashboard for build status
-   - Verify production at gridsolutions.app
+   - Preview: check Deployments for the feature branch
+   - Production: check Deployments for `main` / gridsolutions.app
 
 ## Environment Variables
 
@@ -240,14 +252,15 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 3. Go to **Settings → API**
 4. Copy Project URL, anon key, and project ref
 
-**Preview environment:** unused in this workflow (everything ships on `main`). Keep Production variables set to **Prod**.
+**Preview environment:** set to **hosted Dev** (or a dedicated non-Prod project). Keep Production variables set to **Prod**.
 
 ### Quick Check: Which URL Should You Use?
 
 **Use hosted Dev if:**
 
 - Day-to-day development, agents, migration dry-runs
-- Reviewing work before John commits/pushes
+- Vercel Preview env vars
+- Reviewing work before John ships
 
 **Use Docker localhost if:**
 
@@ -260,15 +273,15 @@ SUPABASE_PROJECT_REF=tlpgejkglrgoljgvpubn
 
 ## Pre-Deployment Checklist
 
-Before asking John to push to `main`:
+Before asking John to merge/push to `main`:
 
 - [ ] Migrations verified on hosted Dev (`db:push:dev` / `db:types:dev`)
 - [ ] Migrations promoted to Prod if needed (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`)
 - [ ] TypeScript types updated (`db:types:prod` after Prod promote)
-- [ ] Reviewed on Dev / agent desktop
+- [ ] Reviewed on Preview / Dev / agent desktop
 - [ ] Quality gates: `npm run check`, `npm run test`, `npm run build:check`
 - [ ] No console errors or warnings
-- [ ] Environment variables set in Vercel (Prod)
+- [ ] Environment variables set in Vercel (Prod + Preview→Dev)
 - [ ] Migration files committed to git
 - [ ] Types file committed to git
 
@@ -301,7 +314,7 @@ npm run dev
 
 ### Pre-Production Testing
 
-Before asking John to push to `main`:
+Before asking John to merge/push to `main`:
 
 1. **Verify migration on Dev:**
 
@@ -361,18 +374,18 @@ Before asking John to push to `main`:
 
 ## GitHub Issues
 
-See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes #N` / `Fixes #N` / `Refs #N`. Do not open pull requests as the ship path.
+See `GITHUB_ISSUES.md`. Work is tracked as issues on feature branches; commits use `Closes #N` / `Fixes #N` / `Refs #N`. Open PRs for Preview/review when useful; merge to `main` only when John asks to ship.
 
 ## Best Practices
 
 ### Do's
 
 - Always verify migrations on hosted Dev before Prod promote
-- Promote backward-compatible migrations to Prod before pushing code that uses them
+- Promote backward-compatible migrations to Prod before shipping code that uses them
 - Update TypeScript types after schema changes
-- Work on `main` and reference GitHub issues in commits
+- Use one feature branch per change and reference GitHub issues in commits
 - Keep `main` always deployable
-- Run quality gates before asking John to commit/push
+- Run quality gates before asking John to merge/push `main`
 - Document breaking changes in the issue and/or commit body
 
 ### Don'ts
@@ -380,12 +393,13 @@ See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes
 - Never push breaking migrations without deploying compatible code first
 - Never use bare `npm run db:push`
 - Never commit / `git push` / Prod `db:push:prod` unless John asks
+- Never merge/push `main` unless John asks to ship
 - Never commit `.env.local` files
 - Never make schema changes in Supabase Dashboard without migrations
 - Never push to `main` with failing tests
 - Never skip updating TypeScript types
-- Never create pull requests or long-lived staging branches as the review path
-- Never point Vercel Production at Dev
+- Never use a shared long-lived staging branch as the default review path
+- Never point Vercel Production at Dev (or Preview at Prod)
 - Never copy Prod data into Dev without written OK
 
 ## Related Documentation
@@ -420,4 +434,4 @@ See `GITHUB_ISSUES.md`. Work is tracked as issues; commits on `main` use `Closes
 
 ---
 
-**Remember**: Verify on hosted Dev / agent desktop first. Commit and push `main` only when John asks and quality gates pass.
+**Remember**: Verify on Preview / hosted Dev / agent desktop first. Push the feature branch for review when asked. Merge and push `main` only when John asks to ship and quality gates pass.

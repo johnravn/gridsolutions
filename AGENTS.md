@@ -5,27 +5,29 @@ This project is primarily developed using AI agents. Follow these rules strictly
 ## Hard gates
 
 - **Never** `git commit` or `git push` unless John explicitly asks in this conversation. Finishing a task is not permission. See `.cursor/rules/no-unsolicited-ship.mdc`.
-- **Before any `git commit` / `git push` to `main`**: run `npm run check`, `npm run test`, and `npm run build:check`; only ship when all three pass. Do not push hoping CI will catch failures.
+- **Never** merge or push to **`main`** unless John explicitly asks to **ship/merge**. Feature-branch push / PR for Preview is a separate ask from production.
+- **Before any merge / push to `main`**: run `npm run check`, `npm run test`, and `npm run build:check`; only ship when all three pass. Do not push hoping CI will catch failures.
 - **Never** Prod schema push (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`, or bare `npm run db:push` while linked to Prod) unless John explicitly asks.
 - **Never** use bare `npm run db:push` in instructions or as the default push — always `db:push:dev` or `db:push:prod`.
 - Agents **may** run `npm run db:push:dev` (and Dev link/types) when the change is clearly what John wants and quality looks good enough. Prefer asking if ambiguous.
 - All schema changes via migration files + RLS. Never schema-only in the Supabase Dashboard.
-- Vercel Production → **Prod** DB only. Cloud agent secrets → **Dev** only.
+- Vercel Production → **Prod** DB only. Cloud agent secrets → **Dev** only. Vercel **Preview** env vars must use **Dev** (or a dedicated non-Prod project), never Prod.
 - No Prod→Dev data copy / `db:copy-*` into Dev without written OK.
 
 ## Cloud agents vs shipping on main
 
-Grid’s **ship path** is `main` only (issues → commit on main → push main → Vercel Production).
-Do not open pull requests or ask John to merge feature branches as the default review path.
+Prefer **one feature branch per change** so each agent/run can share a **Vercel Preview URL**. Keep **`main` as production**. Do **not** use a shared staging branch as the default.
 
-If a cloud-agent runtime forces a working branch:
+```
+Issue → feature branch (cursor/…) → work
+  → (when asked) push branch / open PR → Vercel Preview
+  → (when John asks to ship) quality gates → merge to main → Production
+```
 
-- Use it only as disposable scratch for that run.
-- Do **not** treat the branch/PR as the review or deploy mechanism.
-- Do **not** merge to `main` or push `main` unless John explicitly asks.
-- Hand off: summary + desktop/Live and/or “pull branch / apply locally against Dev” — John reviews via agent desktop or `npm run dev` on hosted Dev.
-
-Never create a long-lived staging branch or Supabase Branching preview as the default review env.
+- Open PRs when useful for review/preview links. They are not a long-lived merge culture requirement.
+- Cloud agents must **not** push or merge to `main` unless John asks to ship/merge.
+- Hand off: Preview URL and/or agent desktop/Live and/or `npm run dev` on hosted Dev.
+- Never create a long-lived staging branch or Supabase Branching preview as the default review env.
 
 ## Cloud agent secrets
 
@@ -130,7 +132,7 @@ When adding a new feature, mirror an existing one (e.g. `src/features/matters/`)
 
 ## Quality Gates
 
-**Required before any commit/push to `main`** (hard gate above). Also run before asking John to commit or push:
+**Required before any merge/push to `main`** (hard gate above). Also run before asking John to ship:
 
 ```bash
 npm run check        # prettier --write + eslint --fix (auto-fixes most issues)
@@ -145,33 +147,34 @@ npm run build:check  # vite build + tsc (catches type errors CI will reject)
 
 ## GitHub & Deployment Workflow
 
-**Work on `main`. Track work with GitHub issues. Do not use pull requests or feature branches.**
-
-See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
+**Issue → feature branch → Preview → (on ask) merge to `main`.** Track work with GitHub issues. See `.cursor/rules/git-workflow.mdc`.
 
 1. **Issue first**: reuse an open GitHub issue, or `gh issue create` if none exists
-2. **Stay on `main`**: `git pull origin main` before starting
-3. **Make changes**: Code; verify on hosted Dev (`db:switch:dev` → `npm run dev`) or agent desktop
+2. **Branch from `main`**: `git pull origin main`, then `git checkout -b cursor/<short-description>` (or the runtime-assigned branch)
+3. **Make changes** on the feature branch; verify on hosted Dev (`db:switch:dev` → `npm run dev`) or agent desktop
 4. **Create migration** (if needed): `npm run db:migrate descriptive_name`, then `db:push:dev` when intent is clear
-5. **Stop here** unless John asks to commit, push GitHub, or promote to Prod
-6. **If asked to push Prod** (and the migration is backward-compatible): `CONFIRM_PROD_PUSH=1 npm run db:push:prod` before pushing code that depends on it
-7. **If asked to commit**: include `Closes #N` / `Fixes #N` / `Refs #N` — large commits are fine
-8. **If asked to push GitHub**: `git push origin main` — deploys production (`gridsolutions.app`)
+5. **Stop here** unless John asks to commit, push the branch/PR for Preview, ship/merge to `main`, or promote to Prod
+6. **If asked to push for preview/review**: commit (with issue ref), `git push -u origin HEAD`, optionally open/update a PR — share the Vercel Preview URL
+7. **If asked to push Prod** (and the migration is backward-compatible): `CONFIRM_PROD_PUSH=1 npm run db:push:prod` before shipping code that depends on it
+8. **If asked to ship**: quality gates → merge feature branch into `main` → bump version if needed → `git push origin main` — deploys production (`gridsolutions.app`)
 
 ### Vercel Deployments
 
-- **`main`** → Production (`gridsolutions.app`) on every push
-- Review via agent desktop / local Dev — there is no PR preview or staging-branch review step
+- **Feature branches / PRs** → Preview deployments (share the Preview URL for review)
+- **`main`** → Production (`gridsolutions.app`) on every push/merge to `main`
+- Preview env must not use Prod Supabase; Production env must use Prod only
 
 ### Git Best Practices
 
 - ✅ One GitHub issue per piece of work (search before creating)
+- ✅ One feature branch per change (for Preview URLs)
 - ✅ Every commit references the issue it tackles
-- ✅ Run quality gates before asking John to push `main`
+- ✅ Run quality gates before asking John to merge/push `main`
 - ✅ Document database changes in the issue and/or commit body
 - ❌ Never commit or `git push` unless John explicitly asks
+- ❌ Never merge/push `main` unless John asks to ship
 - ❌ Never Prod `db:push` / `db:push:prod` unless John explicitly asks
-- ❌ Never create pull requests or long-lived feature/staging branches
+- ❌ Never use a shared long-lived staging branch as the default review path
 - ❌ Never commit without an issue reference
 
 ## Documentation
@@ -198,14 +201,14 @@ See `.cursor/rules/git-workflow.mdc` for the full rule. Summary:
 **Before writing any code:**
 
 1. Confirm or create a GitHub issue (`gh issue list` / `gh issue create`)
-2. Work on `main` (`git pull origin main`)
-3. Make your changes
+2. Branch from latest `main` (`cursor/…` or similar)
+3. Make your changes on that branch
 4. Verify on hosted Dev (`npm run db:switch:dev` → `npm run dev`) or via agent desktop
-5. Do **not** commit or push unless John explicitly asks. If they do: commit with `Closes #N` (or `Refs #N` if incomplete), then push only if they also asked to push.
+5. Do **not** commit or push unless John explicitly asks. If they ask for preview: commit with `Refs #N` / `Closes #N` and push the **feature branch** (optionally open a PR). If they ask to ship: quality gates, merge to `main`, bump version if needed, push `main`.
 
 ---
 
 **Remember**:
 
 - Database: migration files → Dev (`db:push:dev` / `db:types:dev`) → Prod only with explicit ask (`CONFIRM_PROD_PUSH=1 npm run db:push:prod`).
-- Code: work on `main`, tie work to GitHub issues. Do not commit or push unless asked.
+- Code: issue → feature branch → Preview when asked → merge to `main` only when asked to ship. Do not commit or push unless asked.

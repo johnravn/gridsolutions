@@ -1,5 +1,5 @@
 # Project Rules for AI Agents
 
-Follow **`AGENTS.md`** as the single source of truth for agent rules (ship gates, hosted Dev migrations, git on `main`, code style).
+Follow **`AGENTS.md`** as the single source of truth for agent rules (ship gates, hosted Dev migrations, feature-branch + Vercel preview workflow, code style).
 
 Also always-on: `.cursor/rules/no-unsolicited-ship.mdc`, `.cursor/rules/git-workflow.mdc`, `.cursor/rules/db-reset.mdc`.
