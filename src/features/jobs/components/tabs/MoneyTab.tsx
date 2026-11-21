@@ -14,6 +14,7 @@ import {
   Text,
 } from '@radix-ui/themes'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
+import { useSplitLayoutChrome } from '@app/layout/split'
 import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
 import {
   CheckCircle,
@@ -103,7 +104,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
-  const isAccountingWide = useMediaQuery('(min-width: 1100px)')
+  // Two-column Conta invoice only when the Jobs list panel is collapsed.
+  const { isMinimized: isJobsListCollapsed } = useSplitLayoutChrome()
+  const isAccountingWide = isJobsListCollapsed
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('bar')
