@@ -3,6 +3,7 @@ import {
   buildContaInvoiceDisplay,
   hasContaInvoiceDisplayLines,
   parseContaInvoiceLines,
+  resolveContaInvoiceGrossTotal,
 } from './contaInvoiceDisplay'
 
 describe('parseContaInvoiceLines', () => {
@@ -95,5 +96,65 @@ describe('buildContaInvoiceDisplay', () => {
       }),
     ).toBe(true)
     expect(hasContaInvoiceDisplayLines({ invoice_data: {} })).toBe(false)
+  })
+})
+
+describe('resolveContaInvoiceGrossTotal', () => {
+  it('prefers Conta sumTotal over sumRemaining (paid invoices)', () => {
+    expect(
+      resolveContaInvoiceGrossTotal({
+        conta_response: {
+          sumTotal: 12500,
+          sumNet: 10000,
+          sumVAT: 2500,
+          sumRemaining: 0,
+        },
+      }),
+    ).toBe(12500)
+  })
+
+  it('does not treat sumRemaining as the invoice total', () => {
+    expect(
+      resolveContaInvoiceGrossTotal({
+        conta_response: {
+          sumRemaining: 0,
+          invoiceLines: [
+            {
+              description: 'Crew',
+              price: 1000,
+              quantity: 2,
+              discount: 0,
+              vatCode: 'high',
+            },
+          ],
+        },
+      }),
+    ).toBe(2500)
+  })
+
+  it('falls back to sumNet + sumVAT when sumTotal is missing', () => {
+    expect(
+      resolveContaInvoiceGrossTotal({
+        conta_response: { sumNet: 800, sumVAT: 200 },
+      }),
+    ).toBe(1000)
+  })
+
+  it('falls back to invoice_data lines with VAT when Conta totals are missing', () => {
+    expect(
+      resolveContaInvoiceGrossTotal({
+        invoice_data: {
+          invoiceLines: [
+            {
+              description: 'Transport',
+              price: 200,
+              quantity: 3,
+              discount: 0,
+              vatCode: 'high',
+            },
+          ],
+        },
+      }),
+    ).toBe(750)
   })
 })
