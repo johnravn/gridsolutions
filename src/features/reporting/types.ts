@@ -4,6 +4,11 @@ export type JobProfitabilityRow = {
   title: string
   customer_id: string | null
   customer_name: string | null
+  /**
+   * Display label for project lead (Jobs index rules:
+   * display_name → email → "Unassigned").
+   */
+  project_lead_name: string
   start_at: string | null
   end_at: string | null
   /** Job workflow status (for incompleteness: completed/invoiced/paid). */

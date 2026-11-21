@@ -21,6 +21,12 @@ import type {
   UtilizationRow,
 } from '../types'
 
+type ProjectLeadJoin = {
+  user_id: string
+  display_name: string | null
+  email: string | null
+}
+
 type JobRow = {
   id: string
   jobnr: number | null
@@ -30,6 +36,7 @@ type JobRow = {
   customer_id: string | null
   status?: string
   customer: { name: string } | Array<{ name: string }> | null
+  project_lead: ProjectLeadJoin | Array<ProjectLeadJoin> | null
 }
 
 function customerNameFromJoin(customer: JobRow['customer']): string | null {
@@ -38,6 +45,13 @@ function customerNameFromJoin(customer: JobRow['customer']): string | null {
     return customer[0]?.name ?? null
   }
   return customer.name ?? null
+}
+
+/** Same fallback order as JobsList: display_name → email → Unassigned. */
+function projectLeadNameFromJoin(projectLead: JobRow['project_lead']): string {
+  const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
+  if (!lead) return 'Unassigned'
+  return lead.display_name || lead.email || 'Unassigned'
 }
 
 function jobOverlapsRange(
@@ -74,8 +88,8 @@ async function fetchOverlappingJobs({
   const rangeEnd = to.getTime()
 
   const select = includeStatus
-    ? 'id, jobnr, title, start_at, end_at, customer_id, status, customer:customers(name)'
-    : 'id, jobnr, title, start_at, end_at, customer_id, customer:customers(name)'
+    ? 'id, jobnr, title, start_at, end_at, customer_id, status, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
+    : 'id, jobnr, title, start_at, end_at, customer_id, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
 
   const { data: jobs, error } = await supabase
     .from('jobs')
@@ -143,6 +157,7 @@ function toJobProfitabilityRow(
     title: job.title,
     customer_id: job.customer_id ?? null,
     customer_name: customerNameFromJoin(job.customer),
+    project_lead_name: projectLeadNameFromJoin(job.project_lead),
     start_at: job.start_at ?? null,
     end_at: job.end_at ?? null,
     status,
