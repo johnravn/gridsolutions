@@ -3,7 +3,7 @@ import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { getJobStatusColor } from '../utils/statusColors'
 import type { JobStatus } from '../types'
 
-/** Status badge plus optional green Verified chip (Jobs list). */
+/** Status badge plus Accounting Verified / Not verified chip (Jobs list). */
 export function JobStatusWithVerified({
   displayStatus,
   moneyVerified,
@@ -22,11 +22,14 @@ export function JobStatusWithVerified({
       >
         {makeWordPresentable(displayStatus)}
       </Badge>
-      {moneyVerified ? (
-        <Badge color="green" variant="soft" size="1" radius="full">
-          Verified
-        </Badge>
-      ) : null}
+      <Badge
+        color={moneyVerified ? 'green' : 'red'}
+        variant="soft"
+        size="1"
+        radius="full"
+      >
+        {moneyVerified ? 'Verified' : 'Not verified'}
+      </Badge>
     </Flex>
   )
 }
