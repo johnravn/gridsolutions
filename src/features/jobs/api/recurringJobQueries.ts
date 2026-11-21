@@ -5,6 +5,7 @@ import {
 } from '@shared/api/fuzzySearch'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
 import { aggregateRecurringJobCrew } from '../utils/aggregateRecurringJobCrew'
+import { jobNumberSearchHaystacks } from '../utils/jobNumberSearch'
 import { copyJob, deleteJobById } from './queries'
 import type { CopyJobResult } from './queries'
 import type { RawCrewBooking } from '../utils/aggregateRecurringJobCrew'
@@ -732,7 +733,7 @@ export function unassignedJobsQuery({
           search,
           [
             (j) => j.title,
-            (j) => (j.jobnr != null ? String(j.jobnr) : null),
+            (j) => jobNumberSearchHaystacks(j.jobnr).join(' ') || null,
             (j) => j.customer?.name ?? null,
           ],
           0.25,

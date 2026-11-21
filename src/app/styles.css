@@ -1568,9 +1568,18 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   background-color: var(--orange-9);
 }
 
+.split-header-icon-badge--red {
+  background-color: var(--red-9);
+}
+
 .split-header-icon-badge--on-solid {
   background-color: var(--orange-1);
   color: var(--orange-11);
+}
+
+.split-header-icon-badge--red.split-header-icon-badge--on-solid {
+  background-color: var(--red-1);
+  color: var(--red-11);
 }
 
 /* Sidebar nav: Radix ghost uses content-box + negative margins — keep width

@@ -36,3 +36,28 @@ export function filterIncompleteMoneyJobs<
 >(rows: Array<T>): Array<T> {
   return rows.filter((r) => r.money_incomplete)
 }
+
+/** Same queue as Home/Jobs “Ready to verify Accounting”: paid/invoiced, unverified. */
+export const ACCOUNTING_UNVERIFIED_STATUSES = ['invoiced', 'paid'] as const
+
+export function isAccountingUnverifiedJob(input: {
+  status: string | null | undefined
+  money_verified: boolean
+}): boolean {
+  if (input.money_verified) return false
+  return (
+    !!input.status &&
+    (ACCOUNTING_UNVERIFIED_STATUSES as ReadonlyArray<string>).includes(
+      input.status,
+    )
+  )
+}
+
+export function filterAccountingUnverifiedJobs<
+  T extends {
+    status: string | null | undefined
+    money_verified: boolean
+  },
+>(rows: Array<T>): Array<T> {
+  return rows.filter((r) => isAccountingUnverifiedJob(r))
+}

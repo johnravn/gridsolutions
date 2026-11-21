@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { Badge, Box, Card, Flex, Heading, Text } from '@radix-ui/themes'
-import { CalendarCheck, LotOfCash, Message } from 'iconoir-react'
+import { CalendarCheck, CheckCircle, LotOfCash, Message } from 'iconoir-react'
 import DashboardCardSkeleton from '@shared/ui/components/DashboardCardSkeleton'
 import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
 import {
@@ -169,6 +169,8 @@ export function HomeAttentionBand({
   mattersLoading,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
+  jobsAccountingUnverified,
+  jobsAccountingUnverifiedLoading,
   crewConflicts,
   vehicleConflicts,
   equipmentConflicts,
@@ -184,6 +186,8 @@ export function HomeAttentionBand({
   mattersLoading: boolean
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
+  jobsAccountingUnverified: Array<HomeJobReadyToInvoice>
+  jobsAccountingUnverifiedLoading: boolean
   crewConflicts: Array<CrewConflictRow>
   vehicleConflicts: Array<VehicleConflictRow>
   equipmentConflicts: Array<EquipmentConflictRow>
@@ -217,17 +221,20 @@ export function HomeAttentionBand({
     resolveMatterCardAuthor(m),
   ).length
   const invoiceCount = jobsReadyToInvoice.length
+  const verifyCount = jobsAccountingUnverified.length
 
-  type ColumnKey = 'matters' | 'invoices' | 'conflicts'
+  type ColumnKey = 'matters' | 'invoices' | 'verify' | 'conflicts'
   const columns: Array<ColumnKey> = []
   if (showMatters) columns.push('matters')
   if (showInvoices) columns.push('invoices')
+  if (showInvoices) columns.push('verify')
   if (showConflicts) columns.push('conflicts')
 
   if (columns.length === 0) return null
 
   const mattersFilled = !mattersLoading && mattersCount > 0
   const invoicesFilled = !jobsReadyToInvoiceLoading && invoiceCount > 0
+  const verifyFilled = !jobsAccountingUnverifiedLoading && verifyCount > 0
   const conflictsFilled = conflictsSettled && conflictCount > 0
 
   return (
@@ -305,6 +312,37 @@ export function HomeAttentionBand({
                   <ColumnClearState
                     icon={<LotOfCash width={22} height={22} />}
                     message="Nothing waiting to invoice"
+                  />
+                )}
+              </AttentionColumn>
+            )
+          }
+
+          if (key === 'verify') {
+            return (
+              <AttentionColumn
+                key={key}
+                title="Ready to verify Accounting"
+                icon={<CheckCircle width={16} height={16} />}
+                count={verifyCount}
+                showSeparator={showSeparator}
+              >
+                {verifyFilled ? (
+                  <InvoiceScrollContent
+                    jobs={jobsAccountingUnverified}
+                    loading={false}
+                    fillHeight
+                    fadeRight={showSeparator}
+                    cardMinWidth={200}
+                    jobTab="money"
+                    accentColor="var(--red-9)"
+                  />
+                ) : jobsAccountingUnverifiedLoading ? (
+                  <DashboardCardSkeleton rowCount={2} compact />
+                ) : (
+                  <ColumnClearState
+                    icon={<CheckCircle width={22} height={22} />}
+                    message="Nothing waiting to verify"
                   />
                 )}
               </AttentionColumn>

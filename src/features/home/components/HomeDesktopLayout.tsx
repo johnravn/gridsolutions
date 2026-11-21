@@ -31,6 +31,8 @@ type HomeDesktopLayoutProps = {
   mattersLoading: boolean
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
+  jobsAccountingUnverified: Array<HomeJobReadyToInvoice>
+  jobsAccountingUnverifiedLoading: boolean
   showMyJobsOnly: boolean
   onToggleMyJobsOnly: (value: boolean) => void
   isFreelancer: boolean
@@ -59,6 +61,8 @@ export function HomeDesktopLayout({
   mattersLoading,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
+  jobsAccountingUnverified,
+  jobsAccountingUnverifiedLoading,
   showMyJobsOnly,
   onToggleMyJobsOnly,
   isFreelancer,
@@ -148,6 +152,10 @@ export function HomeDesktopLayout({
                   mattersLoading={mattersLoading}
                   jobsReadyToInvoice={jobsReadyToInvoice}
                   jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+                  jobsAccountingUnverified={jobsAccountingUnverified}
+                  jobsAccountingUnverifiedLoading={
+                    jobsAccountingUnverifiedLoading
+                  }
                   crewConflicts={crewConflicts}
                   vehicleConflicts={vehicleConflicts}
                   equipmentConflicts={equipmentConflicts}

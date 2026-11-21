@@ -157,7 +157,7 @@ export default function JobInspector({
       { value: 'subcontractors', label: 'Subcontractors' },
       { value: 'packing', label: 'Packing' },
       { value: 'invoice', label: 'Invoice' },
-      { value: 'money', label: 'Money' },
+      { value: 'money', label: 'Accounting' },
       { value: 'todo', label: 'To Do' },
       { value: 'contacts', label: 'Contacts' },
       { value: 'files', label: 'Files' },
@@ -606,7 +606,9 @@ export default function JobInspector({
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
-            {!isFreelancer && <Tabs.Trigger value="money">Money</Tabs.Trigger>}
+            {!isFreelancer && (
+              <Tabs.Trigger value="money">Accounting</Tabs.Trigger>
+            )}
             {!isFreelancer && <Tabs.Trigger value="todo">To Do</Tabs.Trigger>}
             <Tabs.Trigger value="contacts">Contacts</Tabs.Trigger>
             <Tabs.Trigger value="files">Files</Tabs.Trigger>

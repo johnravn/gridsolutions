@@ -4,6 +4,7 @@ export type JobsIndexListArgsInput = {
   companyRole: string | null
   showJobsInRecurringSeries: boolean
   readyToInvoiceFilter: boolean
+  accountingUnverifiedFilter: boolean
   showMyJobsOnly: boolean
   statusFilter: Array<JobStatus>
   userId: string | null | undefined
@@ -17,12 +18,14 @@ export type JobsIndexListArgs = {
 
 /**
  * Shared Jobs index filter assembly for JobsPage (skeleton query) and JobsList.
- * Keep ready-to-invoice / recurring-member / my-jobs knowledge in one place.
+ * Keep ready-to-invoice / accounting-unverified / recurring-member / my-jobs
+ * knowledge in one place.
  */
 export function resolveJobsIndexListArgs({
   companyRole,
   showJobsInRecurringSeries,
   readyToInvoiceFilter,
+  accountingUnverifiedFilter,
   showMyJobsOnly,
   statusFilter,
   userId,
@@ -32,12 +35,18 @@ export function resolveJobsIndexListArgs({
       companyRole === 'freelancer' ||
       showJobsInRecurringSeries ||
       readyToInvoiceFilter ||
+      accountingUnverifiedFilter ||
       showMyJobsOnly,
-    projectLeadUserId: readyToInvoiceFilter ? (userId ?? null) : null,
+    projectLeadUserId:
+      readyToInvoiceFilter || accountingUnverifiedFilter
+        ? (userId ?? null)
+        : null,
     statuses: readyToInvoiceFilter
       ? (['completed'] as Array<JobStatus>)
-      : statusFilter.length > 0
-        ? statusFilter
-        : null,
+      : accountingUnverifiedFilter
+        ? (['invoiced', 'paid'] as Array<JobStatus>)
+        : statusFilter.length > 0
+          ? statusFilter
+          : null,
   }
 }

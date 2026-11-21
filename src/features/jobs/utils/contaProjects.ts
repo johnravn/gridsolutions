@@ -183,15 +183,34 @@ export async function findContaProjectId(
   organizationId: string,
   input: ContaProjectInput,
 ): Promise<number | null> {
-  const merged: Array<ContaProject> = []
-  for (const q of collectPrimarySearchQueries(input)) {
+  const queries = collectPrimarySearchQueries(input)
+  // Most specific first (full project name). Short-circuit when it hits.
+  const primary = queries[0]
+  if (primary) {
     try {
-      merged.push(...(await searchProjects(organizationId, q)))
+      const primaryHits = await searchProjects(organizationId, primary)
+      const fromPrimary = pickProjectIdFromHits(primaryHits, input, {
+        allowSingleHitFallback: true,
+      })
+      if (fromPrimary != null) return fromPrimary
     } catch {
       // ignore failed search term
     }
   }
-  const hits = mergeHitsById(merged)
+
+  const rest = queries.slice(1)
+  if (rest.length === 0) return null
+
+  const batches = await Promise.all(
+    rest.map(async (q) => {
+      try {
+        return await searchProjects(organizationId, q)
+      } catch {
+        return [] as Array<ContaProject>
+      }
+    }),
+  )
+  const hits = mergeHitsById(batches.flat())
   return pickProjectIdFromHits(hits, input, { allowSingleHitFallback: true })
 }
 

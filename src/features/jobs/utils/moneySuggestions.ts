@@ -1,3 +1,4 @@
+import { normalizeOrgNo } from '@shared/conta/contaCustomerMatch'
 import { roundMoney } from './offerCalculations'
 import {
   contaExpenseConfidence,
@@ -26,6 +27,8 @@ export type MoneySuggestion = {
   /** Conta (and related) match confidence for review UX */
   confidence?: ContaMatchConfidence | null
   confidenceReason?: string | null
+  /** Optional deep link (e.g. Conta invoice / bilag). */
+  externalUrl?: string | null
 }
 
 export const DEFAULT_TRANSPORT_COST_PER_KM = 5
@@ -246,6 +249,228 @@ export function buildContaExpenseSuggestions(input: {
       }
     })
     .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
+}
+
+export type CrewBookingExpenseInput = {
+  id: string
+  user_name: string
+  role: string | null
+  vat_number: string | null
+  /** Precomputed billing-rate amount; null when rate fallback unavailable. */
+  rateAmount: number | null
+  start_at: string | null
+}
+
+export type CrewContaInvoiceLineInput = {
+  id?: number
+  date?: string
+  dueDate?: string
+  description?: string
+  amount?: number
+  invoiceNo?: string
+  invoiceId?: number
+  transactionId?: number
+  supplierOrgNo?: string
+  supplierName?: string
+  bookkeepingAccountName?: string
+  externalUrl?: string | null
+}
+
+export type CompanyGeneralRates = {
+  employee_hourly_rate?: number | null
+  employee_daily_rate?: number | null
+  owner_hourly_rate?: number | null
+  owner_daily_rate?: number | null
+}
+
+/**
+ * Billing-rate amount for one crew booking (Accounting expense fallback).
+ *
+ * Freelancers use personal rate/rate_type (default hourly when rate is set but
+ * type is missing). They do **not** require company general rates. When a
+ * freelancer has no personal rate, fall back to employee company rates.
+ */
+export function computeCrewBookingRateAmount(input: {
+  role: string | null | undefined
+  rate: number | null | undefined
+  rate_type: string | null | undefined
+  start_at: string | null | undefined
+  end_at: string | null | undefined
+  billingUnit: 'hour' | 'day'
+  companyRates: CompanyGeneralRates | null | undefined
+}): number | null {
+  if (!input.start_at || !input.end_at) return null
+
+  const start = new Date(input.start_at)
+  const end = new Date(input.end_at)
+  const durationHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60)
+  if (!Number.isFinite(durationHours) || durationHours <= 0) return null
+  const durationDays = durationHours / 24
+
+  let rate: number | null = null
+  let rateType: 'daily' | 'hourly' | null = null
+  const role = input.role || null
+  const companyRates = input.companyRates
+
+  if (role === 'freelancer') {
+    if (input.rate != null && Number(input.rate) > 0) {
+      rate = Number(input.rate)
+      rateType =
+        input.rate_type === 'daily'
+          ? 'daily'
+          : input.rate_type === 'hourly'
+            ? 'hourly'
+            : 'hourly'
+    } else if (companyRates) {
+      const picked = pickCompanyRoleRate(
+        companyRates,
+        'employee',
+        input.billingUnit,
+      )
+      rate = picked.rate
+      rateType = picked.rateType
+    }
+  } else if (role === 'employee' || role === 'owner') {
+    if (!companyRates) return null
+    const picked = pickCompanyRoleRate(companyRates, role, input.billingUnit)
+    rate = picked.rate
+    rateType = picked.rateType
+  }
+
+  if (rate == null || rate <= 0 || !rateType) return null
+  return rateType === 'daily'
+    ? rate * Math.ceil(durationDays)
+    : rate * durationHours
+}
+
+function pickCompanyRoleRate(
+  companyRates: CompanyGeneralRates,
+  role: 'employee' | 'owner',
+  billingUnit: 'hour' | 'day',
+): { rate: number | null; rateType: 'daily' | 'hourly' | null } {
+  const hourly =
+    role === 'employee'
+      ? companyRates.employee_hourly_rate
+      : companyRates.owner_hourly_rate
+  const daily =
+    role === 'employee'
+      ? companyRates.employee_daily_rate
+      : companyRates.owner_daily_rate
+
+  const useHourly = billingUnit === 'hour' && hourly
+  const useDaily = billingUnit === 'day' && daily
+  if (useHourly) return { rate: Number(hourly), rateType: 'hourly' }
+  if (useDaily) return { rate: Number(daily), rateType: 'daily' }
+  if (daily) return { rate: Number(daily), rateType: 'daily' }
+  if (hourly) return { rate: Number(hourly), rateType: 'hourly' }
+  return { rate: null, rateType: null }
+}
+
+/**
+ * Crew booking expenses (#174):
+ * Priority 1 — Conta received invoices matching crew orgnr (show all).
+ * Priority 2 — billing-rate fallback when no usable Conta suggestions.
+ */
+export function buildCrewExpenseSuggestions(input: {
+  bookings: Array<CrewBookingExpenseInput>
+  contaLines: Array<CrewContaInvoiceLineInput>
+}): Array<MoneySuggestion> {
+  const out: Array<MoneySuggestion> = []
+  const linesByOrgNo = new Map<string, Array<CrewContaInvoiceLineInput>>()
+  for (const line of input.contaLines) {
+    const orgNo = normalizeOrgNo(line.supplierOrgNo)
+    if (!orgNo) continue
+    const bucket = linesByOrgNo.get(orgNo)
+    if (bucket) bucket.push(line)
+    else linesByOrgNo.set(orgNo, [line])
+  }
+
+  for (const booking of input.bookings) {
+    const orgNo = normalizeOrgNo(booking.vat_number)
+    const matches = orgNo.length > 0 ? (linesByOrgNo.get(orgNo) ?? []) : []
+
+    let contaSuggestionCount = 0
+    if (matches.length > 0) {
+      for (const line of matches) {
+        const amount = Math.abs(Number(line.amount ?? 0))
+        if (!amount) continue
+        const lineKey =
+          line.id ??
+          line.invoiceId ??
+          line.transactionId ??
+          `${line.invoiceNo ?? 'inv'}-${line.date ?? 'd'}`
+        const sourceId = `crew-conta-${booking.id}-${lineKey}`
+        const invoiceLabel = line.invoiceNo
+          ? `Conta invoice ${line.invoiceNo}`
+          : line.description ||
+            line.supplierName ||
+            line.bookkeepingAccountName ||
+            'Conta received invoice'
+        out.push({
+          id: sourceId,
+          sourceId,
+          type: 'expense',
+          description: `${booking.user_name}: ${invoiceLabel}`,
+          amount,
+          date: line.date || line.dueDate || booking.start_at,
+          reference: line.invoiceNo || undefined,
+          source: 'conta',
+          category: 'crew',
+          confidence: 'high',
+          confidenceReason:
+            matches.length === 1
+              ? 'Conta received invoice matched crew org number'
+              : `${matches.length} Conta received invoices matched crew org number — review all`,
+          externalUrl: line.externalUrl ?? null,
+        })
+        contaSuggestionCount += 1
+      }
+      if (contaSuggestionCount > 0) continue
+    }
+
+    if (booking.rateAmount == null || booking.rateAmount <= 0) continue
+    out.push({
+      id: `crew-expense-${booking.id}`,
+      sourceId: `crew-${booking.id}`,
+      type: 'expense',
+      description: `${booking.user_name} (${booking.role || 'unknown'})`,
+      amount: roundMoney(booking.rateAmount),
+      date: booking.start_at,
+      reference: undefined,
+      source: 'crew',
+      category: 'crew',
+      confidence: 'medium',
+      confidenceReason: 'Crew billing rate (no Conta invoice match)',
+    })
+  }
+
+  return out
+}
+
+/** Conta ledger line keys already suggested via crew orgnr matching. */
+export function contaLedgerLineKey(line: {
+  id?: number
+  invoiceId?: number
+  transactionId?: number
+  invoiceNo?: string
+  date?: string
+}): string {
+  if (line.id != null) return `id:${line.id}`
+  if (line.invoiceId != null) return `invoice:${line.invoiceId}`
+  if (line.transactionId != null) return `tx:${line.transactionId}`
+  return `ref:${line.invoiceNo ?? ''}-${line.date ?? ''}`
+}
+
+/** Conta ledger line keys already suggested via crew orgnr matching. */
+export function crewContaSuggestionLineKeys(
+  lines: Array<
+    Pick<
+      CrewContaInvoiceLineInput,
+      'id' | 'invoiceId' | 'transactionId' | 'invoiceNo' | 'date'
+    >
+  >,
+): Set<string> {
+  return new Set(lines.map((line) => contaLedgerLineKey(line)))
 }
 
 /** True when primary income from offer or Conta sales invoice exists (for crew-income suppress). */

@@ -1,11 +1,13 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Badge, Button, Flex, Text } from '@radix-ui/themes'
+import { Avatar, Badge, Button, Flex, Text } from '@radix-ui/themes'
 import {
   VirtualIndexTable,
   useClientSort,
   useVirtualIndexTable,
 } from '@shared/ui/index-table'
+import { getInitials } from '@shared/lib/generalFunctions'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { formatCurrency, formatDate, formatPercent } from '../utils/format'
 import { compareValues } from '../utils/sort'
 import { ReportTableShell } from './ReportTableShell'
@@ -16,6 +18,8 @@ type SortKey =
   | 'job_number'
   | 'title'
   | 'customer_name'
+  | 'project_lead_name'
+  | 'money_verified'
   | 'income'
   | 'expenses'
   | 'profit'
@@ -25,6 +29,8 @@ const COLUMNS: Array<IndexColumn<SortKey>> = [
   { id: 'job_number', header: 'Job #', sortable: true },
   { id: 'title', header: 'Title', sortable: true },
   { id: 'customer_name', header: 'Customer', sortable: true },
+  { id: 'project_lead_name', header: 'Lead', sortable: true },
+  { id: 'money_verified', header: 'Verified', sortable: true },
   { id: 'dates', header: 'Dates' },
   { id: 'income', header: 'Income', sortable: true, align: 'end' },
   { id: 'expenses', header: 'Expenses', sortable: true, align: 'end' },
@@ -33,7 +39,7 @@ const COLUMNS: Array<IndexColumn<SortKey>> = [
 ]
 
 const GRID =
-  'minmax(72px, 0.7fr) minmax(140px, 1.6fr) minmax(100px, 1.2fr) minmax(120px, 1.2fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(72px, 0.8fr)'
+  'minmax(72px, 0.7fr) minmax(140px, 1.5fr) minmax(100px, 1.1fr) minmax(100px, 1fr) minmax(88px, 0.8fr) minmax(120px, 1.1fr) minmax(80px, 0.85fr) minmax(80px, 0.85fr) minmax(80px, 0.85fr) minmax(72px, 0.75fr)'
 
 export function JobProfitabilityTable({
   rows,
@@ -89,6 +95,47 @@ export function JobProfitabilityTable({
               return (
                 <Text size="2" truncate>
                   {row.customer_name ?? '—'}
+                </Text>
+              )
+            case 'project_lead_name': {
+              const unassigned = row.project_lead_name === 'Unassigned'
+              const avatarUrl = resolveAvatarUrl(row.project_lead_avatar_url)
+              const initials = getInitials(
+                unassigned ? '' : row.project_lead_name,
+              )
+              return (
+                <Flex
+                  align="center"
+                  gap="2"
+                  style={{ minWidth: 0 }}
+                  title={row.project_lead_name}
+                >
+                  <Avatar
+                    size="1"
+                    src={avatarUrl ?? undefined}
+                    fallback={unassigned ? '?' : initials}
+                    radius="full"
+                    style={{ flexShrink: 0 }}
+                  />
+                  <Text
+                    size="2"
+                    truncate
+                    style={{ minWidth: 0 }}
+                    color={unassigned ? 'gray' : undefined}
+                  >
+                    {row.project_lead_name}
+                  </Text>
+                </Flex>
+              )
+            }
+            case 'money_verified':
+              return row.money_verified ? (
+                <Badge size="1" color="green" variant="soft">
+                  Verified
+                </Badge>
+              ) : (
+                <Text size="2" color="gray">
+                  —
                 </Text>
               )
             case 'dates':

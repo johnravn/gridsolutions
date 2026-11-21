@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import {
   assumedCapacityHours,
   clippedHours,
@@ -21,6 +22,13 @@ import type {
   UtilizationRow,
 } from '../types'
 
+type ProjectLeadJoin = {
+  user_id: string
+  display_name: string | null
+  email: string | null
+  avatar_url: string | null
+}
+
 type JobRow = {
   id: string
   jobnr: number | null
@@ -29,7 +37,9 @@ type JobRow = {
   end_at: string | null
   customer_id: string | null
   status?: string
+  money_verified_at?: string | null
   customer: { name: string } | Array<{ name: string }> | null
+  project_lead: ProjectLeadJoin | Array<ProjectLeadJoin> | null
 }
 
 function customerNameFromJoin(customer: JobRow['customer']): string | null {
@@ -38,6 +48,20 @@ function customerNameFromJoin(customer: JobRow['customer']): string | null {
     return customer[0]?.name ?? null
   }
   return customer.name ?? null
+}
+
+/** Same fallback order as JobsList: display_name → email → Unassigned. */
+function projectLeadNameFromJoin(projectLead: JobRow['project_lead']): string {
+  const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
+  if (!lead) return 'Unassigned'
+  return lead.display_name || lead.email || 'Unassigned'
+}
+
+function projectLeadAvatarFromJoin(
+  projectLead: JobRow['project_lead'],
+): string | null {
+  const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
+  return lead?.avatar_url ?? null
 }
 
 function jobOverlapsRange(
@@ -74,14 +98,21 @@ async function fetchOverlappingJobs({
   const rangeEnd = to.getTime()
 
   const select = includeStatus
-    ? 'id, jobnr, title, start_at, end_at, customer_id, status, customer:customers(name)'
-    : 'id, jobnr, title, start_at, end_at, customer_id, customer:customers(name)'
+    ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
+    : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
 
+  const fromIso = from.toISOString()
+  const toIso = to.toISOString()
+
+  // Server-side overlap prefilter (still re-check in JS for both-null / edge cases).
+  // (start is null OR start <= rangeEnd) AND (end is null OR end >= rangeStart)
   const { data: jobs, error } = await supabase
     .from('jobs')
     .select(select)
     .eq('company_id', scopedCompanyId)
     .eq('archived', false)
+    .or(`start_at.is.null,start_at.lte.${toIso}`)
+    .or(`end_at.is.null,end_at.gte.${fromIso}`)
 
   if (error) throw error
   if (!jobs?.length) return []
@@ -143,6 +174,8 @@ function toJobProfitabilityRow(
     title: job.title,
     customer_id: job.customer_id ?? null,
     customer_name: customerNameFromJoin(job.customer),
+    project_lead_name: projectLeadNameFromJoin(job.project_lead),
+    project_lead_avatar_url: projectLeadAvatarFromJoin(job.project_lead),
     start_at: job.start_at ?? null,
     end_at: job.end_at ?? null,
     status,
@@ -156,6 +189,7 @@ function toJobProfitabilityRow(
       income,
       itemCount: money.itemCount,
     }),
+    money_verified: job.money_verified_at != null,
   }
 }
 
@@ -229,48 +263,7 @@ export function reportCustomerProfitabilityQuery({
         fromDate,
         toDate,
       })
-
-      const byCustomer = new Map<
-        string,
-        {
-          customer_name: string | null
-          income: number
-          expenses: number
-          job_count: number
-        }
-      >()
-      const noCustomerKey = '__no_customer__'
-      for (const row of jobRows) {
-        const key = row.customer_id ?? noCustomerKey
-        const cur = byCustomer.get(key)
-        if (!cur) {
-          byCustomer.set(key, {
-            customer_name: row.customer_name,
-            income: row.income,
-            expenses: row.expenses,
-            job_count: 1,
-          })
-        } else {
-          cur.income += row.income
-          cur.expenses += row.expenses
-          cur.job_count += 1
-        }
-      }
-
-      return Array.from(byCustomer.entries())
-        .map(([customer_id, cur]) => {
-          const profit = cur.income - cur.expenses
-          return {
-            customer_id: customer_id === noCustomerKey ? null : customer_id,
-            customer_name: cur.customer_name,
-            income: cur.income,
-            expenses: cur.expenses,
-            profit,
-            margin_pct: marginPct(cur.income, profit),
-            job_count: cur.job_count,
-          }
-        })
-        .sort((a, b) => b.profit - a.profit)
+      return aggregateCustomerProfitabilityFromJobs(jobRows)
     },
   })
 }
@@ -378,21 +371,28 @@ export function reportMonthlyTrendQuery({
       const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
 
+      // Monthly P&L chart: only ledger rows on verified jobs.
       const [datedRes, undatedRes] = await Promise.all([
         supabase
           .from('job_money_items')
-          .select('type, amount, date, created_at')
+          .select(
+            'type, amount, date, created_at, jobs!inner(money_verified_at)',
+          )
           .eq('company_id', scopedCompanyId)
           .not('date', 'is', null)
           .gte('date', fromISO)
-          .lte('date', toISO),
+          .lte('date', toISO)
+          .not('jobs.money_verified_at', 'is', null),
         supabase
           .from('job_money_items')
-          .select('type, amount, date, created_at')
+          .select(
+            'type, amount, date, created_at, jobs!inner(money_verified_at)',
+          )
           .eq('company_id', scopedCompanyId)
           .is('date', null)
           .gte('created_at', fromISO)
-          .lte('created_at', toISO),
+          .lte('created_at', toISO)
+          .not('jobs.money_verified_at', 'is', null),
       ])
 
       if (datedRes.error) throw datedRes.error

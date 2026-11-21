@@ -3,7 +3,7 @@ import type { KpiItem } from '../components/SummaryKpis'
 
 export function financialKpis(
   rows: Array<{ income: number; expenses: number; profit: number }>,
-  options?: { incompleteCount?: number },
+  options?: { incompleteCount?: number; unverifiedCount?: number },
 ): Array<KpiItem> {
   const income = rows.reduce((s, r) => s + r.income, 0)
   const expenses = rows.reduce((s, r) => s + r.expenses, 0)
@@ -19,9 +19,16 @@ export function financialKpis(
   ]
   if (options?.incompleteCount != null && options.incompleteCount > 0) {
     items.push({
-      label: 'Incomplete Money',
+      label: 'Incomplete Accounting',
       value: String(options.incompleteCount),
       hint: 'Completed/paid with no confirmed income',
+    })
+  }
+  if (options?.unverifiedCount != null && options.unverifiedCount > 0) {
+    items.push({
+      label: 'Not verified',
+      value: String(options.unverifiedCount),
+      hint: 'Paid/invoiced — Accounting not verified',
     })
   }
   return items

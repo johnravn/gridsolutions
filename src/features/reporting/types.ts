@@ -4,6 +4,13 @@ export type JobProfitabilityRow = {
   title: string
   customer_id: string | null
   customer_name: string | null
+  /**
+   * Display label for project lead (Jobs index rules:
+   * display_name → email → "Unassigned").
+   */
+  project_lead_name: string
+  /** Profile avatar path/URL for the lead (Jobs list pattern). */
+  project_lead_avatar_url: string | null
   start_at: string | null
   end_at: string | null
   /** Job workflow status (for incompleteness: completed/invoiced/paid). */
@@ -12,13 +19,15 @@ export type JobProfitabilityRow = {
   expenses: number
   profit: number
   margin_pct: number | null
-  /** Count of confirmed Money lines (Reporting scope = ledger rows). */
+  /** Count of confirmed Accounting lines (Reporting scope = ledger rows). */
   money_item_count: number
   /**
    * True when status is completed/invoiced/paid and there is no confirmed
-   * income (empty Money or expenses-only).
+   * income (empty Accounting or expenses-only).
    */
   money_incomplete: boolean
+  /** True when the project lead marked Accounting as verified. */
+  money_verified: boolean
 }
 
 export type CustomerProfitabilityRow = {

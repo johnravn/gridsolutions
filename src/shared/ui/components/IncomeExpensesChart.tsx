@@ -25,7 +25,14 @@ type ChartData = {
   result?: number
 }
 
-type ChartType = 'bar' | 'line' | 'area' | 'composed'
+export type ChartType = 'bar' | 'line' | 'area' | 'composed'
+
+const CHART_TYPE_LABELS: Record<ChartType, string> = {
+  bar: 'Bar',
+  line: 'Line',
+  area: 'Area',
+  composed: 'Composed',
+}
 
 type IncomeExpensesChartProps = {
   data: Array<ChartData>
@@ -370,44 +377,35 @@ export function IncomeExpensesChart({
   )
 }
 
-// Export chart type selector as separate component
+const DEFAULT_CHART_TYPES: Array<ChartType> = [
+  'bar',
+  'line',
+  'area',
+  'composed',
+]
+
+/** Chart type selector (optional `types` subset for feature-specific UIs). */
 export function ChartTypeSelector({
   chartType,
   onChartTypeChange,
+  types = DEFAULT_CHART_TYPES,
 }: {
   chartType: ChartType
   onChartTypeChange: (type: ChartType) => void
+  types?: Array<ChartType>
 }) {
   return (
     <Flex gap="1" align="center" wrap="wrap">
-      <Button
-        variant={chartType === 'bar' ? 'solid' : 'soft'}
-        size="1"
-        onClick={() => onChartTypeChange('bar')}
-      >
-        Bar
-      </Button>
-      <Button
-        variant={chartType === 'line' ? 'solid' : 'soft'}
-        size="1"
-        onClick={() => onChartTypeChange('line')}
-      >
-        Line
-      </Button>
-      <Button
-        variant={chartType === 'area' ? 'solid' : 'soft'}
-        size="1"
-        onClick={() => onChartTypeChange('area')}
-      >
-        Area
-      </Button>
-      <Button
-        variant={chartType === 'composed' ? 'solid' : 'soft'}
-        size="1"
-        onClick={() => onChartTypeChange('composed')}
-      >
-        Composed
-      </Button>
+      {types.map((type) => (
+        <Button
+          key={type}
+          variant={chartType === type ? 'solid' : 'soft'}
+          size="1"
+          onClick={() => onChartTypeChange(type)}
+        >
+          {CHART_TYPE_LABELS[type]}
+        </Button>
+      ))}
     </Flex>
   )
 }

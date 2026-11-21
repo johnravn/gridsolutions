@@ -4,8 +4,8 @@ import { Text } from '@radix-ui/themes'
 export function ReportingBasisNotice() {
   return (
     <Text size="1" color="gray">
-      All amounts ex MVA. Based on confirmed Money items only — jobs without
-      fill-in may understate profit.
+      All amounts ex MVA. Based on confirmed Accounting items only — jobs
+      without fill-in may understate profit.
     </Text>
   )
 }

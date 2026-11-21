@@ -149,6 +149,8 @@ export type CrewDetail = {
   rate_type: 'daily' | 'hourly' | null
   rate: number | null
   rate_updated_at: string | null
+  /** Norwegian organization number (orgnr) for Conta supplier matching. */
+  vat_number: string | null
   primary_address: {
     id: string
     name: string | null
@@ -173,7 +175,7 @@ export function crewDetailQuery({
       const { data: base, error } = await supabase
         .from('company_user_profiles')
         .select(
-          'user_id, role, email, display_name, first_name, last_name, phone, avatar_url, created_at, rate_type, rate, rate_updated_at',
+          'user_id, role, email, display_name, first_name, last_name, phone, avatar_url, created_at, rate_type, rate, rate_updated_at, vat_number',
         )
         .eq('company_id', companyId)
         .eq('user_id', userId)
@@ -246,6 +248,7 @@ export function crewDetailQuery({
         rate_type: rateType,
         rate: base.rate != null ? Number(base.rate) : null,
         rate_updated_at: base.rate_updated_at ?? null,
+        vat_number: base.vat_number ?? null,
         primary_address: primaryAddress,
       }
     },
@@ -389,6 +392,26 @@ export async function updateCrewMemberRate({
       rate_type: rateType,
       rate: rate,
       rate_updated_at: new Date().toISOString(),
+    })
+    .eq('company_id', companyId)
+    .eq('user_id', userId)
+
+  if (error) throw error
+}
+
+export async function updateCrewMemberVatNumber({
+  companyId,
+  userId,
+  vatNumber,
+}: {
+  companyId: string
+  userId: string
+  vatNumber: string | null
+}) {
+  const { error } = await supabase
+    .from('company_users')
+    .update({
+      vat_number: vatNumber,
     })
     .eq('company_id', companyId)
     .eq('user_id', userId)

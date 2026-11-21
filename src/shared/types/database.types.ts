@@ -585,6 +585,7 @@ export type Database = {
           rate_updated_at: string | null
           role: Database["public"]["Enums"]["company_role"]
           user_id: string
+          vat_number: string | null
         }
         Insert: {
           company_id: string
@@ -593,6 +594,7 @@ export type Database = {
           rate_updated_at?: string | null
           role: Database["public"]["Enums"]["company_role"]
           user_id: string
+          vat_number?: string | null
         }
         Update: {
           company_id?: string
@@ -601,6 +603,7 @@ export type Database = {
           rate_updated_at?: string | null
           role?: Database["public"]["Enums"]["company_role"]
           user_id?: string
+          vat_number?: string | null
         }
         Relationships: [
           {
@@ -2027,6 +2030,8 @@ export type Database = {
           invoice_basis: string | null
           job_address_id: string | null
           jobnr: number | null
+          money_verified_at: string | null
+          money_verified_by: string | null
           project_lead_user_id: string | null
           recurring_job_id: string | null
           start_at: string | null
@@ -2048,6 +2053,8 @@ export type Database = {
           invoice_basis?: string | null
           job_address_id?: string | null
           jobnr?: number | null
+          money_verified_at?: string | null
+          money_verified_by?: string | null
           project_lead_user_id?: string | null
           recurring_job_id?: string | null
           start_at?: string | null
@@ -2069,6 +2076,8 @@ export type Database = {
           invoice_basis?: string | null
           job_address_id?: string | null
           jobnr?: number | null
+          money_verified_at?: string | null
+          money_verified_by?: string | null
           project_lead_user_id?: string | null
           recurring_job_id?: string | null
           start_at?: string | null
@@ -2112,6 +2121,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "addresses"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_money_verified_by_fkey"
+            columns: ["money_verified_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
           },
           {
             foreignKeyName: "jobs_project_lead_user_id_fkey"
@@ -4381,6 +4397,7 @@ export type Database = {
           rate_updated_at: string | null
           role: Database["public"]["Enums"]["company_role"] | null
           user_id: string | null
+          vat_number: string | null
         }
         Relationships: [
           {

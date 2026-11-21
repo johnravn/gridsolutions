@@ -40,3 +40,17 @@ export function getContaInvoiceAppUrl(
   const appBase = contaAppBaseUrl(gatewayUrl)
   return `${appBase}/faktura/${organizationId}/fakturaer/${invoiceId}`
 }
+
+/**
+ * Deep link into Conta bookkeeping voucher (bilag) for a transaction.
+ * Used for supplier / received-invoice ledger lines.
+ */
+export function getContaTransactionAppUrl(
+  organizationId: string,
+  transactionId: number | string | null | undefined,
+  gatewayUrl?: string,
+): string | null {
+  if (transactionId == null || transactionId === '') return null
+  const appBase = contaAppBaseUrl(gatewayUrl)
+  return `${appBase}/regnskap/${organizationId}/bilag/${transactionId}`
+}

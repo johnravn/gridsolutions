@@ -5,16 +5,20 @@ import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
-  reportCustomerProfitabilityQuery,
   reportInvoicePipelineQuery,
   reportJobProfitabilityQuery,
   reportMonthlyTrendQuery,
   reportUtilizationQuery,
 } from '../api/queries'
+import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import { CustomerProfitabilityTable } from '../components/CustomerProfitabilityTable'
 import { DateRangeControl } from '../components/DateRangeControl'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import { InvoicePipelineSection } from '../components/InvoicePipelineSection'
+import {
+  JOB_MONTHLY_CHART_HEIGHT,
+  JobMonthlyProfitabilityChart,
+} from '../components/JobMonthlyProfitabilityChart'
 import { JobProfitabilityTable } from '../components/JobProfitabilityTable'
 import { MonthlyTrendSection } from '../components/MonthlyTrendSection'
 import { ProfitabilityChart } from '../components/ProfitabilityChart'
@@ -23,23 +27,42 @@ import { ReportingBasisNotice } from '../components/ReportingBasisNotice'
 import { SegmentTabs } from '../components/SegmentTabs'
 import { SummaryKpis } from '../components/SummaryKpis'
 import { UtilizationTable } from '../components/UtilizationTable'
-import { dateRangeFromIndex } from '../utils/dates'
+import { dateRangeFromMonthYears } from '../utils/dates'
 import { formatHours, formatPercent } from '../utils/format'
 import { financialKpis } from '../utils/kpis'
 import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
-import { filterIncompleteMoneyJobs } from '../utils/incompleteness'
+import {
+  filterAccountingUnverifiedJobs,
+  filterIncompleteMoneyJobs,
+} from '../utils/incompleteness'
+import { aggregateJobsByMonth } from '../utils/monthlyJobs'
+import { yearRangeToMonthYears } from '../utils/periodPicker'
+import type { MonthYear } from '../utils/dates'
 import type { MarginThreshold, ReportSegment } from '../types'
+
+function defaultCalendarYearRange(now = new Date()): {
+  from: MonthYear
+  to: MonthYear
+} {
+  const year = now.getFullYear()
+  return yearRangeToMonthYears(year, year)
+}
 
 export default function ReportingPage() {
   const { companyId } = useCompany()
   const [segment, setSegment] = React.useState<ReportSegment>('jobs')
-  const [rangeIndex, setRangeIndex] = React.useState(1)
+  const [fromMonth, setFromMonth] = React.useState<MonthYear>(
+    () => defaultCalendarYearRange().from,
+  )
+  const [toMonth, setToMonth] = React.useState<MonthYear>(
+    () => defaultCalendarYearRange().to,
+  )
   const [marginThreshold, setMarginThreshold] =
     React.useState<MarginThreshold>(15)
 
   const { fromDate, toDate } = React.useMemo(
-    () => dateRangeFromIndex(rangeIndex),
-    [rangeIndex],
+    () => dateRangeFromMonthYears(fromMonth, toMonth),
+    [fromMonth, toMonth],
   )
 
   const jobsQuery = useQuery({
@@ -53,15 +76,6 @@ export default function ReportingPage() {
       (segment === 'jobs' ||
         segment === 'customers' ||
         segment === 'low-margin'),
-  })
-
-  const customersQuery = useQuery({
-    ...reportCustomerProfitabilityQuery({
-      companyId: companyId ?? '',
-      fromDate,
-      toDate,
-    }),
-    enabled: !!companyId && segment === 'customers',
   })
 
   const utilizationQuery = useQuery({
@@ -91,15 +105,34 @@ export default function ReportingPage() {
     enabled: !!companyId && segment === 'invoice',
   })
 
-  const jobRows = jobsQuery.data ?? []
-  const customerRows = customersQuery.data ?? []
+  const jobRows = React.useMemo(
+    () => jobsQuery.data ?? [],
+    [jobsQuery.data],
+  )
   const utilizationRows = utilizationQuery.data ?? []
   const monthlyRows = monthlyQuery.data ?? []
   const invoiceData = invoiceQuery.data
 
+  /** KPIs / charts use verified Money only; tables keep all jobs. */
+  const verifiedJobRows = React.useMemo(
+    () => jobRows.filter((r) => r.money_verified),
+    [jobRows],
+  )
+
+  // Derive customers from the jobs query — avoids a second identical money-totals
+  // fetch when the customers segment is open.
+  const customerRows = React.useMemo(
+    () => aggregateCustomerProfitabilityFromJobs(jobRows),
+    [jobRows],
+  )
+
   const lowMarginRows = React.useMemo(
     () => filterLowMarginJobs(jobRows, marginThreshold),
     [jobRows, marginThreshold],
+  )
+  const verifiedLowMarginRows = React.useMemo(
+    () => filterLowMarginJobs(verifiedJobRows, marginThreshold),
+    [verifiedJobRows, marginThreshold],
   )
 
   const incompleteMoneyJobs = React.useMemo(
@@ -107,6 +140,16 @@ export default function ReportingPage() {
     [jobRows],
   )
   const incompleteMoneyCount = incompleteMoneyJobs.length
+
+  const accountingUnverifiedCount = React.useMemo(
+    () => filterAccountingUnverifiedJobs(jobRows).length,
+    [jobRows],
+  )
+
+  const jobMonthlyChartData = React.useMemo(
+    () => aggregateJobsByMonth(verifiedJobRows, fromDate, toDate),
+    [verifiedJobRows, fromDate, toDate],
+  )
 
   const chartData = React.useMemo(() => {
     if (segment === 'customers') {
@@ -117,12 +160,8 @@ export default function ReportingPage() {
         profit: r.profit,
       }))
     }
-    if (segment === 'jobs' || segment === 'low-margin') {
-      const src =
-        segment === 'low-margin'
-          ? lowMarginRows.slice(0, 10)
-          : [...jobRows].sort((a, b) => b.profit - a.profit).slice(0, 10)
-      return src.map((r) => ({
+    if (segment === 'low-margin') {
+      return verifiedLowMarginRows.slice(0, 10).map((r) => ({
         name: `#${r.job_number}`,
         income: r.income,
         expenses: r.expenses,
@@ -130,14 +169,14 @@ export default function ReportingPage() {
       }))
     }
     return []
-  }, [segment, jobRows, customerRows, lowMarginRows])
+  }, [segment, customerRows, verifiedLowMarginRows])
 
   if (!companyId) {
     return <PageSkeleton columns="1fr" showInspector={false} />
   }
 
   const jobsLoading = jobsQuery.isLoading
-  const customersLoading = customersQuery.isLoading
+  const customersLoading = jobsLoading
   const utilizationLoading = utilizationQuery.isLoading
   const monthlyLoading = monthlyQuery.isLoading
   const invoiceLoading = invoiceQuery.isLoading
@@ -153,7 +192,14 @@ export default function ReportingPage() {
           style={{ minWidth: 0 }}
         >
           <ReportingBasisNotice />
-          <DateRangeControl rangeIndex={rangeIndex} onChange={setRangeIndex} />
+          <DateRangeControl
+            from={fromMonth}
+            to={toMonth}
+            onChange={(nextFrom, nextTo) => {
+              setFromMonth(nextFrom)
+              setToMonth(nextTo)
+            }}
+          />
         </Flex>
 
         <SegmentTabs value={segment} onChange={setSegment} />
@@ -174,8 +220,9 @@ export default function ReportingPage() {
                 <Flex justify="between" align="center" wrap="wrap" gap="2">
                   {!jobsLoading && jobRows.length > 0 ? (
                     <SummaryKpis
-                      items={financialKpis(jobRows, {
+                      items={financialKpis(verifiedJobRows, {
                         incompleteCount: incompleteMoneyCount,
+                        unverifiedCount: accountingUnverifiedCount,
                       })}
                     />
                   ) : (
@@ -187,18 +234,22 @@ export default function ReportingPage() {
                       'Job #',
                       'Title',
                       'Customer',
+                      'Lead',
+                      'Verified',
                       'Start',
                       'End',
                       'Income',
                       'Expenses',
                       'Profit',
                       'Margin %',
-                      'Money incomplete',
+                      'Accounting incomplete',
                     ]}
                     rows={jobRows.map((r) => [
                       r.job_number,
                       r.title,
                       r.customer_name,
+                      r.project_lead_name,
+                      r.money_verified ? 'yes' : '',
                       r.start_at,
                       r.end_at,
                       r.income,
@@ -212,15 +263,10 @@ export default function ReportingPage() {
                 </Flex>
                 {jobsLoading ? (
                   <Card size="3">
-                    <ChartSkeleton />
+                    <ChartSkeleton height={JOB_MONTHLY_CHART_HEIGHT} />
                   </Card>
                 ) : (
-                  <ProfitabilityChart
-                    data={chartData}
-                    caption={
-                      jobRows.length > 10 ? 'Top 10 jobs by profit' : undefined
-                    }
-                  />
+                  <JobMonthlyProfitabilityChart data={jobMonthlyChartData} />
                 )}
                 <JobProfitabilityTable rows={jobRows} loading={jobsLoading} />
               </>
@@ -230,14 +276,14 @@ export default function ReportingPage() {
 
         {segment === 'customers' && (
           <>
-            {customersQuery.isError ? (
+            {jobsQuery.isError ? (
               <ReportError
                 message={
-                  customersQuery.error instanceof Error
-                    ? customersQuery.error.message
+                  jobsQuery.error instanceof Error
+                    ? jobsQuery.error.message
                     : undefined
                 }
-                onRetry={() => void customersQuery.refetch()}
+                onRetry={() => void jobsQuery.refetch()}
               />
             ) : (
               <>
@@ -408,6 +454,8 @@ export default function ReportingPage() {
                       'Job #',
                       'Title',
                       'Customer',
+                      'Lead',
+                      'Verified',
                       'Income',
                       'Expenses',
                       'Profit',
@@ -417,6 +465,8 @@ export default function ReportingPage() {
                       r.job_number,
                       r.title,
                       r.customer_name,
+                      r.project_lead_name,
+                      r.money_verified ? 'yes' : '',
                       r.income,
                       r.expenses,
                       r.profit,
@@ -425,11 +475,15 @@ export default function ReportingPage() {
                     disabled={jobsLoading}
                   />
                 </Flex>
-                {!jobsLoading && lowMarginRows.length > 0 ? (
+                {!jobsLoading && verifiedLowMarginRows.length > 0 ? (
                   <SummaryKpis
-                    items={financialKpis(lowMarginRows, {
-                      incompleteCount:
-                        filterIncompleteMoneyJobs(lowMarginRows).length,
+                    items={financialKpis(verifiedLowMarginRows, {
+                      incompleteCount: filterIncompleteMoneyJobs(
+                        verifiedLowMarginRows,
+                      ).length,
+                      unverifiedCount: filterAccountingUnverifiedJobs(
+                        lowMarginRows,
+                      ).length,
                     })}
                   />
                 ) : null}
