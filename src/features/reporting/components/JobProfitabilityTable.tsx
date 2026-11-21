@@ -16,6 +16,7 @@ type SortKey =
   | 'job_number'
   | 'title'
   | 'customer_name'
+  | 'project_lead_name'
   | 'income'
   | 'expenses'
   | 'profit'
@@ -25,6 +26,7 @@ const COLUMNS: Array<IndexColumn<SortKey>> = [
   { id: 'job_number', header: 'Job #', sortable: true },
   { id: 'title', header: 'Title', sortable: true },
   { id: 'customer_name', header: 'Customer', sortable: true },
+  { id: 'project_lead_name', header: 'Lead', sortable: true },
   { id: 'dates', header: 'Dates' },
   { id: 'income', header: 'Income', sortable: true, align: 'end' },
   { id: 'expenses', header: 'Expenses', sortable: true, align: 'end' },
@@ -33,7 +35,7 @@ const COLUMNS: Array<IndexColumn<SortKey>> = [
 ]
 
 const GRID =
-  'minmax(72px, 0.7fr) minmax(140px, 1.6fr) minmax(100px, 1.2fr) minmax(120px, 1.2fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(72px, 0.8fr)'
+  'minmax(72px, 0.7fr) minmax(140px, 1.6fr) minmax(100px, 1.2fr) minmax(100px, 1.1fr) minmax(120px, 1.2fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(80px, 0.9fr) minmax(72px, 0.8fr)'
 
 export function JobProfitabilityTable({
   rows,
@@ -89,6 +91,18 @@ export function JobProfitabilityTable({
               return (
                 <Text size="2" truncate>
                   {row.customer_name ?? '—'}
+                </Text>
+              )
+            case 'project_lead_name':
+              return (
+                <Text
+                  size="2"
+                  truncate
+                  color={
+                    row.project_lead_name === 'Unassigned' ? 'gray' : undefined
+                  }
+                >
+                  {row.project_lead_name}
                 </Text>
               )
             case 'dates':

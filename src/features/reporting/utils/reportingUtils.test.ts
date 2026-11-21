@@ -51,6 +51,7 @@ function jobRow(
   return {
     customer_id: null,
     customer_name: null,
+    project_lead_name: 'Unassigned',
     start_at: null,
     end_at: null,
     status: null,
