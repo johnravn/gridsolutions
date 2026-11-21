@@ -1197,7 +1197,13 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         align="start"
         style={{ width: '100%' }}
       >
-        <Box style={{ flex: 1, minWidth: 0, width: '100%' }}>
+        <Box
+          style={{
+            flex: 1,
+            minWidth: 0,
+            width: isAccountingWide ? undefined : '100%',
+          }}
+        >
           <Card mb="3" style={{ background: 'var(--gray-a2)' }}>
             <Flex direction="column" gap="1">
               <Flex align="center" gap="2" wrap="wrap">
@@ -1760,8 +1766,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
 
         <Box
           style={{
-            flex: isAccountingWide ? '0 0 min(440px, 42%)' : undefined,
-            width: isAccountingWide ? 'min(440px, 42%)' : '100%',
+            flex: isAccountingWide ? 1 : undefined,
+            width: isAccountingWide ? undefined : '100%',
             minWidth: 0,
             position: isAccountingWide ? 'sticky' : undefined,
             top: isAccountingWide ? 12 : undefined,
