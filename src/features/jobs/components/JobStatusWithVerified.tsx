@@ -11,6 +11,10 @@ export function JobStatusWithVerified({
   displayStatus: JobStatus
   moneyVerified: boolean
 }) {
+  const showNotVerified =
+    !moneyVerified &&
+    (displayStatus === 'paid' || displayStatus === 'invoiced')
+
   return (
     <Flex gap="1" align="center" wrap="wrap" style={{ minWidth: 0 }}>
       <Badge
@@ -22,14 +26,15 @@ export function JobStatusWithVerified({
       >
         {makeWordPresentable(displayStatus)}
       </Badge>
-      <Badge
-        color={moneyVerified ? 'green' : 'red'}
-        variant="soft"
-        size="1"
-        radius="full"
-      >
-        {moneyVerified ? 'Verified' : 'Not verified'}
-      </Badge>
+      {moneyVerified ? (
+        <Badge color="green" variant="soft" size="1" radius="full">
+          Verified
+        </Badge>
+      ) : showNotVerified ? (
+        <Badge color="red" variant="soft" size="1" radius="full">
+          Not verified
+        </Badge>
+      ) : null}
     </Flex>
   )
 }
