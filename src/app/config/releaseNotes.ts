@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.13.56'
+export const APP_VERSION = '1.14.0'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -29,129 +29,34 @@ export const RELEASE_NOTES = {
   title: "What's new in Grid",
   highlights: [
     {
-      title: 'Smoother period picker',
+      title: 'Accounting verified',
       description:
-        'Start and End on the period trigger are separate click targets. Calendar picks alternate start → end (SAS-style), or pin one bound from the trigger then continue on the other.',
+        'Project leads mark job Accounting as verified. Reporting charts and KPIs use verified jobs; the Jobs list shows Verified / Not verified on paid and invoiced work.',
     },
     {
-      title: 'Jobs inspector on phone',
+      title: 'Conta on Accounting',
       description:
-        'Job detail tabs stay reachable while you scroll, Bookings uses a simple Crew / Equipment / Transport switcher, and Money / tables fit better on a small screen.',
+        'Open sent Conta invoice lines beside the ledger when the Jobs list is collapsed. Refetch when you need a fresh pull, with an Updated … ago badge.',
     },
     {
-      title: 'Geometric backgrounds',
+      title: 'Crew org number + Conta costs',
       description:
-        'Profile → Personalization offers sharp Grid Slash (default, with a soft large lattice tuned for light and dark), Prism Bands, Circuit, and Facet styles instead of soft circles. Auth pages use Grid Slash.',
+        'Store a freelancer org number on the crew profile. Accounting suggests Conta received invoices by orgnr near job end, or falls back to the crew billing rate.',
     },
     {
-      title: 'Job Accounting ledger',
+      title: 'Ready to verify queues',
       description:
-        'Confirm income and costs on the job Accounting tab — ex MVA, transport km × company rate, Conta suggestions, and clearer categories. Company Reporting rolls up confirmed lines only.',
+        'Home and Jobs surface paid/invoiced jobs that still need Accounting verification, so leads can clear the queue quickly.',
     },
     {
-      title: 'Honest Reporting',
+      title: 'Richer Reporting',
       description:
-        'Reporting shows when completed or paid jobs still lack Accounting fill-in, labels amounts as ex MVA, and Open jumps straight to the job Accounting tab. Conflicts and Reporting are out of beta.',
+        'Monthly job profitability charts, Lead avatar + name, calendar-year period picker, Incomplete Accounting and Not verified KPI cards, and zero-aligned dual axes.',
     },
     {
-      title: 'Company Logs card',
+      title: 'Jobs search',
       description:
-        'Company → Logs uses the same card shell as Overview and the other company tabs.',
-    },
-    {
-      title: 'Google sign-in',
-      description:
-        'Sign up or sign in with Google, link it to one Grid profile under Profile → Sign-in methods, and finish required name and phone after social signup. Superusers can merge accidental duplicate accounts.',
-    },
-    {
-      title: 'My jobs on the Jobs list',
-      description:
-        'Filter the Jobs tab to jobs you are crew or project lead on, sorted by date — without the two-week window on Home.',
-    },
-    {
-      title: 'Hourly crew hours on offers',
-      description:
-        'The offer editor no longer bills hourly crew as 24 hours per day. Set start and end times, or type hours per day, before crew bookings exist.',
-    },
-    {
-      title: 'Private customers in Conta',
-      description:
-        'Sync private / individual customers without an organisation number. Search Conta by name or email, pick the right match when several exist, and see which Conta customers are already linked.',
-    },
-    {
-      title: 'Technician crew booking on new jobs',
-      description:
-        'New jobs always create a Technician crew slot for the job duration. Choose whether to leave it open or confirm yourself on it.',
-    },
-    {
-      title: 'One Invoice tab',
-      description:
-        'Create, preview, and review invoice history on a single Invoice tab — for jobs and for recurring series.',
-    },
-    {
-      title: 'Reorder invoice lines',
-      description:
-        'Drag lines in the job invoice editor to choose the order that is sent to Conta.',
-    },
-    {
-      title: 'Recurring jobs for the whole company',
-      description:
-        'Everyone on staff can see recurring series in the jobs list. Jobs that belong to a series stay hidden until you turn on “Show jobs in recurring series”.',
-    },
-    {
-      title: 'Multi-job invoicing',
-      description:
-        'Invoice several jobs from a recurring series on one Conta invoice, with linked history and editable line-description templates.',
-    },
-    {
-      title: 'Daily verse fix',
-      description:
-        'The home daily verse loads again after the 1.13 release — the serverless endpoint no longer fails on cold start.',
-    },
-    {
-      title: 'Full-screen mobile detail',
-      description:
-        'On phones, list details open full-screen with a bottom-left Back control instead of a thin side drawer. Desktop split view is unchanged.',
-    },
-    {
-      title: 'Mobile list + inspector',
-      description:
-        'List pages open details in a slide-over drawer with a floating action button and sticky bottom actions — built for phones without losing the split-view desktop layout.',
-    },
-    {
-      title: 'Jobs list that keeps going',
-      description:
-        'Jobs load as you scroll, and the status filter defaults to all statuses so you can find older work without hunting.',
-    },
-    {
-      title: 'Flexible time logging',
-      description:
-        'Log hours against more than the job you are currently on, with a clearer month scroller and when/hours fields when creating or editing entries.',
-    },
-    {
-      title: 'Group booking conflicts',
-      description:
-        'Booked equipment groups are checked as units. Overlaps show up on home conflict cards and in attention counts alongside item-level conflicts.',
-    },
-    {
-      title: 'Simpler equipment bookings',
-      description:
-        'Equipment and vehicle bookings are treated as booked when they exist — less status noise when planning and packing a job.',
-    },
-    {
-      title: 'Recurring job times',
-      description:
-        'Edit recurring job windows with the range picker, including adjusting the end time directly without redoing the whole period.',
-    },
-    {
-      title: 'Bible version preference',
-      description:
-        'Choose BM11, NN11, NRSV, or The Message for the daily verse from Profile → Personalization.',
-    },
-    {
-      title: 'Polish and fixes',
-      description:
-        'Matter cards show the correct author, offer PDF totals line up, public technical offer groups expand again, and toast/tab interactions feel smoother.',
+        'Find jobs by number (including padded / # forms) and by project lead name. Empty search can show how many hits exist with filters cleared.',
     },
   ],
 } as const satisfies {
