@@ -72,6 +72,7 @@ import {
 import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
+import MoneyContaInvoicePanel from './MoneyContaInvoicePanel'
 import MoneyItemsFilter from './MoneyItemsFilter'
 import type { ContaDatePadOption } from '../../utils/moneyConta'
 import type { MoneySuggestion } from '../../utils/moneySuggestions'
@@ -102,6 +103,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
+  const isAccountingWide = useMediaQuery('(min-width: 1100px)')
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('bar')
@@ -220,7 +222,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       const { data, error } = await supabase
         .from('job_invoices')
         .select(
-          'id, status, created_at, invoice_data, conta_response, conta_invoice_id',
+          'id, status, created_at, invoice_data, conta_response, conta_invoice_id, organization_id',
         )
         .eq('job_id', jobId)
         .in('status', ['created', 'paid'])
@@ -1186,541 +1188,592 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         </Flex>
       </Flex>
 
-      <Card mb="3" style={{ background: 'var(--gray-a2)' }}>
-        <Flex direction="column" gap="1">
-          <Flex align="center" gap="2" wrap="wrap">
-            <Text size="2" weight="bold">
-              Job type
-            </Text>
-            <Badge variant="soft" size="1">
-              {MONEY_ARCHETYPE_LABELS[moneyArchetype]}
-            </Badge>
-          </Flex>
-          <Text size="2" color="gray">
-            {MONEY_ARCHETYPE_BLURBS[moneyArchetype]}
-          </Text>
-        </Flex>
-      </Card>
-
-      {completenessHints.length > 0 && (
-        <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
-          <Flex direction="column" gap="2">
-            <Flex align="center" gap="2">
-              <WarningTriangle width={16} height={16} />
-              <Text size="2" weight="bold">
-                Completeness
-              </Text>
-            </Flex>
-            {completenessHints.map((hint) => (
-              <Text
-                key={hint.id}
-                size="2"
-                color={hint.severity === 'warn' ? 'orange' : 'gray'}
-              >
-                {hint.message}
-              </Text>
-            ))}
-          </Flex>
-        </Card>
-      )}
-
-      <MoneyTransportKmCard
-        jobId={jobId}
-        kmDriven={jobInfo?.transport_km_driven ?? null}
-        costPerKm={transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM}
-        plannedOfferKm={plannedOfferKm ?? null}
-        prominent={moneyArchetype === 'transport_heavy' || hasTransportSignal}
-      />
-
-      <MoneyContaPanel
-        status={contaLinkStatus}
-        datePad={contaDatePad}
-        onDatePadChange={setContaDatePad}
-        onSync={() => {
-          void refetchContaExpenses()
-        }}
-        isSyncing={isContaExpensesLoading || isContaExpensesFetching}
-        projectId={contaProjectId ?? null}
-        expenseCount={
-          contaExpenseSuggestionsRaw.filter(
-            (s) => !confirmedSourceIds.has(s.sourceId),
-          ).length
-        }
-        incomeCount={
-          primaryIncomeSuggestionsRaw.filter(
-            (s) => s.source === 'conta' && !confirmedSourceIds.has(s.sourceId),
-          ).length
-        }
-        lastError={
-          contaExpensesError instanceof Error
-            ? contaExpensesError.message
-            : contaExpensesError
-              ? String(contaExpensesError)
-              : null
-        }
-      />
-
-      {/* Financial Summary Cards - from confirmed items only */}
       <Flex
-        gap="3"
-        mb="4"
-        wrap="wrap"
-        style={{ minWidth: 0, maxWidth: '100%' }}
+        direction={isAccountingWide ? 'row' : 'column'}
+        gap="4"
+        align="start"
+        style={{ width: '100%' }}
       >
-        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
-          <Flex direction="column" gap="2">
-            <Text size="2" color="gray">
-              Total Income
-            </Text>
-            <Heading size="6" color="green">
-              {formatCurrency(totalIncome)}
-            </Heading>
-            <Text size="1" color="gray">
-              {confirmedIncomeItems.length} item
-              {confirmedIncomeItems.length !== 1 ? 's' : ''}
-            </Text>
-          </Flex>
-        </Card>
-        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
-          <Flex direction="column" gap="2">
-            <Text size="2" color="gray">
-              Total Expenses
-            </Text>
-            <Heading size="6" color="red">
-              {formatCurrency(totalExpenses)}
-            </Heading>
-            <Text size="1" color="gray">
-              {confirmedExpenseItems.length} item
-              {confirmedExpenseItems.length !== 1 ? 's' : ''}
-            </Text>
-          </Flex>
-        </Card>
-        <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
-          <Flex direction="column" gap="2">
-            <Text size="2" color="gray">
-              Net Profit/Loss
-            </Text>
-            <Heading size="6" color={profitLoss >= 0 ? 'green' : 'red'}>
-              {formatCurrency(profitLoss)}
-            </Heading>
-            <Flex align="center" gap="1">
-              {profitLoss >= 0 ? (
-                <CheckCircle width={14} height={14} color="var(--green-9)" />
-              ) : (
-                <XmarkCircle width={14} height={14} color="var(--red-9)" />
-              )}
-              <Text size="1" color={profitLoss >= 0 ? 'green' : 'red'}>
-                {profitLoss >= 0 ? 'Profit' : 'Loss'}
-              </Text>
-            </Flex>
-            {hasCrewItems && (
-              <Text size="1" color="gray" mt="1">
-                Crew margin: {formatCurrency(crewMargin)}
-              </Text>
-            )}
-          </Flex>
-        </Card>
-      </Flex>
-
-      {/* Suggestions section */}
-      {suggestions.length > 0 && (
-        <Card mb="4">
-          <Flex justify="between" align="center" mb="3" wrap="wrap" gap="3">
-            <Heading size="4">
-              Suggestions{' '}
-              <Badge size="1" variant="soft">
-                {visibleSuggestions.length}
-              </Badge>
-            </Heading>
-            {(crewExpenseSuggestionsRaw.length > 0 ||
-              crewIncomeSuggestionsRaw.length > 0) && (
-              <Flex align="center" gap="2">
-                <Text size="2" color="gray">
-                  Crew rates:
+        <Box style={{ flex: 1, minWidth: 0, width: '100%' }}>
+          <Card mb="3" style={{ background: 'var(--gray-a2)' }}>
+            <Flex direction="column" gap="1">
+              <Flex align="center" gap="2" wrap="wrap">
+                <Text size="2" weight="bold">
+                  Job type
                 </Text>
-                <SegmentedControl.Root
-                  value={crewExpenseBillingUnit}
-                  onValueChange={(v) =>
-                    setCrewExpenseBillingUnit(v as 'hour' | 'day')
-                  }
-                  size="1"
-                >
-                  <SegmentedControl.Item value="day">
-                    Day rate
-                  </SegmentedControl.Item>
-                  <SegmentedControl.Item value="hour">
-                    Hour rate
-                  </SegmentedControl.Item>
-                </SegmentedControl.Root>
+                <Badge variant="soft" size="1">
+                  {MONEY_ARCHETYPE_LABELS[moneyArchetype]}
+                </Badge>
               </Flex>
-            )}
-          </Flex>
-          <Text size="2" color="gray" mb="3">
-            Add items from real events. You can edit before adding. Conta lines
-            show match confidence — review amounts (may be inkl. MVA).
-          </Text>
-          {isMobile ? (
-            <Flex direction="column" gap="2">
-              {visibleSuggestions.map((s) => (
-                <Box
-                  key={s.id}
-                  p="3"
-                  style={{
-                    border: '1px solid var(--gray-a5)',
-                    borderRadius: 8,
-                    background: 'var(--gray-a1)',
-                  }}
-                >
-                  <Flex justify="between" align="start" gap="3" mb="2">
-                    <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-                      <Flex align="center" gap="2" wrap="wrap">
-                        <Badge
-                          size="1"
-                          variant="soft"
-                          color={s.type === 'income' ? 'green' : 'red'}
-                        >
-                          {s.type === 'income' ? 'Income' : 'Expense'}
-                        </Badge>
-                        <Badge
-                          color={getSourceBadgeColor(s)}
-                          variant="soft"
-                          size="1"
-                        >
-                          {getSourceLabel(s)}
-                        </Badge>
-                        {s.confidence ? (
-                          <Badge
-                            size="1"
-                            variant="soft"
-                            color={CONTA_CONFIDENCE_COLOR[s.confidence]}
-                          >
-                            {CONTA_CONFIDENCE_LABEL[s.confidence]}
-                          </Badge>
-                        ) : null}
-                      </Flex>
-                      <Text size="2">{s.description}</Text>
-                      {s.confidenceReason && (
-                        <Text size="1" color="gray">
-                          {s.confidenceReason}
-                        </Text>
-                      )}
-                      <Text size="1" color="gray">
-                        {formatDate(s.date)}
-                      </Text>
-                    </Flex>
-                    <Text
-                      weight="medium"
-                      size="2"
-                      color={s.type === 'income' ? 'green' : 'red'}
-                      style={{ flexShrink: 0 }}
-                    >
-                      {formatCurrency(s.amount)}
-                    </Text>
-                  </Flex>
-                  <Button
-                    size="2"
-                    variant="soft"
-                    style={{ width: '100%', minHeight: 40 }}
-                    onClick={() => handleAddFromSuggestion(s)}
-                  >
-                    Add
-                  </Button>
-                </Box>
-              ))}
+              <Text size="2" color="gray">
+                {MONEY_ARCHETYPE_BLURBS[moneyArchetype]}
+              </Text>
             </Flex>
-          ) : (
-            <MobileHScroll>
-              <Table.Root variant="surface" size="1">
-                <Table.Header>
-                  <Table.Row>
-                    <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell>Confidence</Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell align="right">
-                      Amount
-                    </Table.ColumnHeaderCell>
-                    <Table.ColumnHeaderCell style={{ width: 80 }} />
-                  </Table.Row>
-                </Table.Header>
-                <Table.Body>
+          </Card>
+
+          {completenessHints.length > 0 && (
+            <Card mb="3" style={{ background: 'var(--yellow-a2)' }}>
+              <Flex direction="column" gap="2">
+                <Flex align="center" gap="2">
+                  <WarningTriangle width={16} height={16} />
+                  <Text size="2" weight="bold">
+                    Completeness
+                  </Text>
+                </Flex>
+                {completenessHints.map((hint) => (
+                  <Text
+                    key={hint.id}
+                    size="2"
+                    color={hint.severity === 'warn' ? 'orange' : 'gray'}
+                  >
+                    {hint.message}
+                  </Text>
+                ))}
+              </Flex>
+            </Card>
+          )}
+
+          <MoneyTransportKmCard
+            jobId={jobId}
+            kmDriven={jobInfo?.transport_km_driven ?? null}
+            costPerKm={transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM}
+            plannedOfferKm={plannedOfferKm ?? null}
+            prominent={
+              moneyArchetype === 'transport_heavy' || hasTransportSignal
+            }
+          />
+
+          <MoneyContaPanel
+            status={contaLinkStatus}
+            datePad={contaDatePad}
+            onDatePadChange={setContaDatePad}
+            onSync={() => {
+              void refetchContaExpenses()
+            }}
+            isSyncing={isContaExpensesLoading || isContaExpensesFetching}
+            projectId={contaProjectId ?? null}
+            expenseCount={
+              contaExpenseSuggestionsRaw.filter(
+                (s) => !confirmedSourceIds.has(s.sourceId),
+              ).length
+            }
+            incomeCount={
+              primaryIncomeSuggestionsRaw.filter(
+                (s) =>
+                  s.source === 'conta' && !confirmedSourceIds.has(s.sourceId),
+              ).length
+            }
+            lastError={
+              contaExpensesError instanceof Error
+                ? contaExpensesError.message
+                : contaExpensesError
+                  ? String(contaExpensesError)
+                  : null
+            }
+          />
+
+          {/* Financial Summary Cards - from confirmed items only */}
+          <Flex
+            gap="3"
+            mb="4"
+            wrap="wrap"
+            style={{ minWidth: 0, maxWidth: '100%' }}
+          >
+            <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
+              <Flex direction="column" gap="2">
+                <Text size="2" color="gray">
+                  Total Income
+                </Text>
+                <Heading size="6" color="green">
+                  {formatCurrency(totalIncome)}
+                </Heading>
+                <Text size="1" color="gray">
+                  {confirmedIncomeItems.length} item
+                  {confirmedIncomeItems.length !== 1 ? 's' : ''}
+                </Text>
+              </Flex>
+            </Card>
+            <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
+              <Flex direction="column" gap="2">
+                <Text size="2" color="gray">
+                  Total Expenses
+                </Text>
+                <Heading size="6" color="red">
+                  {formatCurrency(totalExpenses)}
+                </Heading>
+                <Text size="1" color="gray">
+                  {confirmedExpenseItems.length} item
+                  {confirmedExpenseItems.length !== 1 ? 's' : ''}
+                </Text>
+              </Flex>
+            </Card>
+            <Card style={{ flex: '1 1 200px', minWidth: 0, maxWidth: '100%' }}>
+              <Flex direction="column" gap="2">
+                <Text size="2" color="gray">
+                  Net Profit/Loss
+                </Text>
+                <Heading size="6" color={profitLoss >= 0 ? 'green' : 'red'}>
+                  {formatCurrency(profitLoss)}
+                </Heading>
+                <Flex align="center" gap="1">
+                  {profitLoss >= 0 ? (
+                    <CheckCircle
+                      width={14}
+                      height={14}
+                      color="var(--green-9)"
+                    />
+                  ) : (
+                    <XmarkCircle width={14} height={14} color="var(--red-9)" />
+                  )}
+                  <Text size="1" color={profitLoss >= 0 ? 'green' : 'red'}>
+                    {profitLoss >= 0 ? 'Profit' : 'Loss'}
+                  </Text>
+                </Flex>
+                {hasCrewItems && (
+                  <Text size="1" color="gray" mt="1">
+                    Crew margin: {formatCurrency(crewMargin)}
+                  </Text>
+                )}
+              </Flex>
+            </Card>
+          </Flex>
+
+          {/* Suggestions section */}
+          {suggestions.length > 0 && (
+            <Card mb="4">
+              <Flex justify="between" align="center" mb="3" wrap="wrap" gap="3">
+                <Heading size="4">
+                  Suggestions{' '}
+                  <Badge size="1" variant="soft">
+                    {visibleSuggestions.length}
+                  </Badge>
+                </Heading>
+                {(crewExpenseSuggestionsRaw.length > 0 ||
+                  crewIncomeSuggestionsRaw.length > 0) && (
+                  <Flex align="center" gap="2">
+                    <Text size="2" color="gray">
+                      Crew rates:
+                    </Text>
+                    <SegmentedControl.Root
+                      value={crewExpenseBillingUnit}
+                      onValueChange={(v) =>
+                        setCrewExpenseBillingUnit(v as 'hour' | 'day')
+                      }
+                      size="1"
+                    >
+                      <SegmentedControl.Item value="day">
+                        Day rate
+                      </SegmentedControl.Item>
+                      <SegmentedControl.Item value="hour">
+                        Hour rate
+                      </SegmentedControl.Item>
+                    </SegmentedControl.Root>
+                  </Flex>
+                )}
+              </Flex>
+              <Text size="2" color="gray" mb="3">
+                Add items from real events. You can edit before adding. Conta
+                lines show match confidence — review amounts (may be inkl. MVA).
+              </Text>
+              {isMobile ? (
+                <Flex direction="column" gap="2">
                   {visibleSuggestions.map((s) => (
-                    <Table.Row key={s.id}>
-                      <Table.Cell>
-                        <Badge
-                          size="1"
-                          variant="soft"
-                          color={s.type === 'income' ? 'green' : 'red'}
+                    <Box
+                      key={s.id}
+                      p="3"
+                      style={{
+                        border: '1px solid var(--gray-a5)',
+                        borderRadius: 8,
+                        background: 'var(--gray-a1)',
+                      }}
+                    >
+                      <Flex justify="between" align="start" gap="3" mb="2">
+                        <Flex
+                          direction="column"
+                          gap="1"
+                          style={{ minWidth: 0 }}
                         >
-                          {s.type === 'income' ? 'Income' : 'Expense'}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Flex direction="column" gap="1">
+                          <Flex align="center" gap="2" wrap="wrap">
+                            <Badge
+                              size="1"
+                              variant="soft"
+                              color={s.type === 'income' ? 'green' : 'red'}
+                            >
+                              {s.type === 'income' ? 'Income' : 'Expense'}
+                            </Badge>
+                            <Badge
+                              color={getSourceBadgeColor(s)}
+                              variant="soft"
+                              size="1"
+                            >
+                              {getSourceLabel(s)}
+                            </Badge>
+                            {s.confidence ? (
+                              <Badge
+                                size="1"
+                                variant="soft"
+                                color={CONTA_CONFIDENCE_COLOR[s.confidence]}
+                              >
+                                {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                              </Badge>
+                            ) : null}
+                          </Flex>
                           <Text size="2">{s.description}</Text>
                           {s.confidenceReason && (
                             <Text size="1" color="gray">
                               {s.confidenceReason}
                             </Text>
                           )}
-                        </Flex>
-                      </Table.Cell>
-                      <Table.Cell>{formatDate(s.date)}</Table.Cell>
-                      <Table.Cell>
-                        <Badge
-                          color={getSourceBadgeColor(s)}
-                          variant="soft"
-                          size="1"
-                        >
-                          {getSourceLabel(s)}
-                        </Badge>
-                      </Table.Cell>
-                      <Table.Cell>
-                        {s.confidence ? (
-                          <Badge
-                            size="1"
-                            variant="soft"
-                            color={CONTA_CONFIDENCE_COLOR[s.confidence]}
-                            title={s.confidenceReason ?? undefined}
-                          >
-                            {CONTA_CONFIDENCE_LABEL[s.confidence]}
-                          </Badge>
-                        ) : (
                           <Text size="1" color="gray">
-                            —
+                            {formatDate(s.date)}
                           </Text>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell align="right">
+                        </Flex>
                         <Text
                           weight="medium"
                           size="2"
                           color={s.type === 'income' ? 'green' : 'red'}
+                          style={{ flexShrink: 0 }}
                         >
                           {formatCurrency(s.amount)}
                         </Text>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Button
-                          size="1"
-                          variant="soft"
-                          onClick={() => handleAddFromSuggestion(s)}
-                        >
-                          Add
-                        </Button>
-                      </Table.Cell>
-                    </Table.Row>
+                      </Flex>
+                      <Button
+                        size="2"
+                        variant="soft"
+                        style={{ width: '100%', minHeight: 40 }}
+                        onClick={() => handleAddFromSuggestion(s)}
+                      >
+                        Add
+                      </Button>
+                    </Box>
                   ))}
-                </Table.Body>
-              </Table.Root>
-            </MobileHScroll>
+                </Flex>
+              ) : (
+                <MobileHScroll>
+                  <Table.Root variant="surface" size="1">
+                    <Table.Header>
+                      <Table.Row>
+                        <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>
+                          Description
+                        </Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell>
+                          Confidence
+                        </Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell align="right">
+                          Amount
+                        </Table.ColumnHeaderCell>
+                        <Table.ColumnHeaderCell style={{ width: 80 }} />
+                      </Table.Row>
+                    </Table.Header>
+                    <Table.Body>
+                      {visibleSuggestions.map((s) => (
+                        <Table.Row key={s.id}>
+                          <Table.Cell>
+                            <Badge
+                              size="1"
+                              variant="soft"
+                              color={s.type === 'income' ? 'green' : 'red'}
+                            >
+                              {s.type === 'income' ? 'Income' : 'Expense'}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Flex direction="column" gap="1">
+                              <Text size="2">{s.description}</Text>
+                              {s.confidenceReason && (
+                                <Text size="1" color="gray">
+                                  {s.confidenceReason}
+                                </Text>
+                              )}
+                            </Flex>
+                          </Table.Cell>
+                          <Table.Cell>{formatDate(s.date)}</Table.Cell>
+                          <Table.Cell>
+                            <Badge
+                              color={getSourceBadgeColor(s)}
+                              variant="soft"
+                              size="1"
+                            >
+                              {getSourceLabel(s)}
+                            </Badge>
+                          </Table.Cell>
+                          <Table.Cell>
+                            {s.confidence ? (
+                              <Badge
+                                size="1"
+                                variant="soft"
+                                color={CONTA_CONFIDENCE_COLOR[s.confidence]}
+                                title={s.confidenceReason ?? undefined}
+                              >
+                                {CONTA_CONFIDENCE_LABEL[s.confidence]}
+                              </Badge>
+                            ) : (
+                              <Text size="1" color="gray">
+                                —
+                              </Text>
+                            )}
+                          </Table.Cell>
+                          <Table.Cell align="right">
+                            <Text
+                              weight="medium"
+                              size="2"
+                              color={s.type === 'income' ? 'green' : 'red'}
+                            >
+                              {formatCurrency(s.amount)}
+                            </Text>
+                          </Table.Cell>
+                          <Table.Cell>
+                            <Button
+                              size="1"
+                              variant="soft"
+                              onClick={() => handleAddFromSuggestion(s)}
+                            >
+                              Add
+                            </Button>
+                          </Table.Cell>
+                        </Table.Row>
+                      ))}
+                    </Table.Body>
+                  </Table.Root>
+                </MobileHScroll>
+              )}
+            </Card>
           )}
-        </Card>
-      )}
 
-      {/* Confirmed Items */}
-      <Card mb="4">
-        <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
-          <Heading size="4">Items</Heading>
-          <Flex align="center" gap="2" wrap="wrap">
-            <Button size="2" variant="soft" onClick={handleAddCustom}>
-              <Plus width={16} height={16} />
-              Add item
-            </Button>
-            <MoneyItemsFilter
-              showIncome={showIncome}
-              showExpenses={showExpenses}
-              onShowIncomeChange={setShowIncome}
-              onShowExpensesChange={setShowExpenses}
-            />
-          </Flex>
-        </Flex>
+          {/* Confirmed Items */}
+          <Card mb="4">
+            <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
+              <Heading size="4">Items</Heading>
+              <Flex align="center" gap="2" wrap="wrap">
+                <Button size="2" variant="soft" onClick={handleAddCustom}>
+                  <Plus width={16} height={16} />
+                  Add item
+                </Button>
+                <MoneyItemsFilter
+                  showIncome={showIncome}
+                  showExpenses={showExpenses}
+                  onShowIncomeChange={setShowIncome}
+                  onShowExpensesChange={setShowExpenses}
+                />
+              </Flex>
+            </Flex>
 
-        {visibleConfirmedItems.length === 0 ? (
-          <Text size="2" color="gray">
-            No items yet. Add from suggestions or add item.
-          </Text>
-        ) : isMobile ? (
-          <Flex direction="column" gap="2">
-            {visibleConfirmedItems.map((item) => (
-              <Box
-                key={item.id}
-                p="3"
+            {visibleConfirmedItems.length === 0 ? (
+              <Text size="2" color="gray">
+                No items yet. Add from suggestions or add item.
+              </Text>
+            ) : isMobile ? (
+              <Flex direction="column" gap="2">
+                {visibleConfirmedItems.map((item) => (
+                  <Box
+                    key={item.id}
+                    p="3"
+                    style={{
+                      border: '1px solid var(--gray-a5)',
+                      borderRadius: 8,
+                      background: 'var(--gray-a1)',
+                    }}
+                  >
+                    <Flex justify="between" align="start" gap="3">
+                      <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                        <Flex align="center" gap="2" wrap="wrap">
+                          <Badge
+                            size="1"
+                            variant="soft"
+                            color={item.type === 'income' ? 'green' : 'red'}
+                          >
+                            {item.type === 'income' ? 'Income' : 'Expense'}
+                          </Badge>
+                          <Badge
+                            color={getSourceBadgeColor(item)}
+                            variant="soft"
+                          >
+                            {getSourceLabel(item)}
+                          </Badge>
+                        </Flex>
+                        <Text size="2">{item.description}</Text>
+                        <Text size="1" color="gray">
+                          {formatDate(item.date)}
+                          {item.reference ? ` · ${item.reference}` : ''}
+                        </Text>
+                      </Flex>
+                      <Flex direction="column" align="end" gap="2">
+                        <Text
+                          weight="medium"
+                          color={item.type === 'income' ? 'green' : 'red'}
+                        >
+                          {formatCurrency(item.amount)}
+                        </Text>
+                        <Flex gap="2">
+                          <IconButton
+                            size="2"
+                            variant="soft"
+                            color="gray"
+                            aria-label="Edit item"
+                            onClick={() => handleEditItem(item)}
+                          >
+                            <Edit width={14} height={14} />
+                          </IconButton>
+                          <IconButton
+                            size="2"
+                            variant="soft"
+                            color="red"
+                            aria-label="Delete item"
+                            onClick={() => deleteMutation.mutate(item.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash width={14} height={14} />
+                          </IconButton>
+                        </Flex>
+                      </Flex>
+                    </Flex>
+                  </Box>
+                ))}
+              </Flex>
+            ) : (
+              <MobileHScroll>
+                <Table.Root variant="surface">
+                  <Table.Header>
+                    <Table.Row>
+                      <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>
+                        Description
+                      </Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell align="right">
+                        Amount
+                      </Table.ColumnHeaderCell>
+                      <Table.ColumnHeaderCell style={{ width: 90 }} />
+                    </Table.Row>
+                  </Table.Header>
+                  <Table.Body>
+                    {visibleConfirmedItems.map((item) => (
+                      <Table.Row key={item.id}>
+                        <Table.Cell>
+                          <Badge
+                            size="1"
+                            variant="soft"
+                            color={item.type === 'income' ? 'green' : 'red'}
+                          >
+                            {item.type === 'income' ? 'Income' : 'Expense'}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell>{item.description}</Table.Cell>
+                        <Table.Cell>{formatDate(item.date)}</Table.Cell>
+                        <Table.Cell>{item.reference || '—'}</Table.Cell>
+                        <Table.Cell>
+                          <Badge
+                            color={getSourceBadgeColor(item)}
+                            variant="soft"
+                          >
+                            {getSourceLabel(item)}
+                          </Badge>
+                        </Table.Cell>
+                        <Table.Cell align="right">
+                          <Text
+                            weight="medium"
+                            color={item.type === 'income' ? 'green' : 'red'}
+                          >
+                            {formatCurrency(item.amount)}
+                          </Text>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Flex gap="2">
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              color="gray"
+                              onClick={() => handleEditItem(item)}
+                            >
+                              <Edit width={14} height={14} />
+                            </IconButton>
+                            <IconButton
+                              size="1"
+                              variant="ghost"
+                              color="red"
+                              onClick={() => deleteMutation.mutate(item.id)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash width={14} height={14} />
+                            </IconButton>
+                          </Flex>
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Table.Body>
+                </Table.Root>
+              </MobileHScroll>
+            )}
+          </Card>
+
+          {/* Chart */}
+          {chartData.length > 0 ? (
+            <Card mb="4">
+              <Heading size="4" mb="3">
+                Income vs Expenses
+              </Heading>
+              <MobileHScroll
                 style={{
-                  border: '1px solid var(--gray-a5)',
-                  borderRadius: 8,
-                  background: 'var(--gray-a1)',
+                  height: isMobile ? 240 : 400,
+                  width: '100%',
                 }}
               >
-                <Flex justify="between" align="start" gap="3">
-                  <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
-                    <Flex align="center" gap="2" wrap="wrap">
-                      <Badge
-                        size="1"
-                        variant="soft"
-                        color={item.type === 'income' ? 'green' : 'red'}
-                      >
-                        {item.type === 'income' ? 'Income' : 'Expense'}
-                      </Badge>
-                      <Badge color={getSourceBadgeColor(item)} variant="soft">
-                        {getSourceLabel(item)}
-                      </Badge>
-                    </Flex>
-                    <Text size="2">{item.description}</Text>
-                    <Text size="1" color="gray">
-                      {formatDate(item.date)}
-                      {item.reference ? ` · ${item.reference}` : ''}
-                    </Text>
-                  </Flex>
-                  <Flex direction="column" align="end" gap="2">
-                    <Text
-                      weight="medium"
-                      color={item.type === 'income' ? 'green' : 'red'}
-                    >
-                      {formatCurrency(item.amount)}
-                    </Text>
-                    <Flex gap="2">
-                      <IconButton
-                        size="2"
-                        variant="soft"
-                        color="gray"
-                        aria-label="Edit item"
-                        onClick={() => handleEditItem(item)}
-                      >
-                        <Edit width={14} height={14} />
-                      </IconButton>
-                      <IconButton
-                        size="2"
-                        variant="soft"
-                        color="red"
-                        aria-label="Delete item"
-                        onClick={() => deleteMutation.mutate(item.id)}
-                        disabled={deleteMutation.isPending}
-                      >
-                        <Trash width={14} height={14} />
-                      </IconButton>
-                    </Flex>
-                  </Flex>
-                </Flex>
-              </Box>
-            ))}
-          </Flex>
-        ) : (
-          <MobileHScroll>
-            <Table.Root variant="surface">
-              <Table.Header>
-                <Table.Row>
-                  <Table.ColumnHeaderCell>Type</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Description</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Reference</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell>Source</Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell align="right">
-                    Amount
-                  </Table.ColumnHeaderCell>
-                  <Table.ColumnHeaderCell style={{ width: 90 }} />
-                </Table.Row>
-              </Table.Header>
-              <Table.Body>
-                {visibleConfirmedItems.map((item) => (
-                  <Table.Row key={item.id}>
-                    <Table.Cell>
-                      <Badge
-                        size="1"
-                        variant="soft"
-                        color={item.type === 'income' ? 'green' : 'red'}
-                      >
-                        {item.type === 'income' ? 'Income' : 'Expense'}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell>{item.description}</Table.Cell>
-                    <Table.Cell>{formatDate(item.date)}</Table.Cell>
-                    <Table.Cell>{item.reference || '—'}</Table.Cell>
-                    <Table.Cell>
-                      <Badge color={getSourceBadgeColor(item)} variant="soft">
-                        {getSourceLabel(item)}
-                      </Badge>
-                    </Table.Cell>
-                    <Table.Cell align="right">
-                      <Text
-                        weight="medium"
-                        color={item.type === 'income' ? 'green' : 'red'}
-                      >
-                        {formatCurrency(item.amount)}
-                      </Text>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Flex gap="2">
-                        <IconButton
-                          size="1"
-                          variant="ghost"
-                          color="gray"
-                          onClick={() => handleEditItem(item)}
-                        >
-                          <Edit width={14} height={14} />
-                        </IconButton>
-                        <IconButton
-                          size="1"
-                          variant="ghost"
-                          color="red"
-                          onClick={() => deleteMutation.mutate(item.id)}
-                          disabled={deleteMutation.isPending}
-                        >
-                          <Trash width={14} height={14} />
-                        </IconButton>
-                      </Flex>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table.Body>
-            </Table.Root>
-          </MobileHScroll>
-        )}
-      </Card>
+                <IncomeExpensesChart
+                  data={chartData}
+                  height={isMobile ? 240 : 400}
+                  chartType={chartType}
+                  onChartTypeChange={setChartType}
+                />
+              </MobileHScroll>
+            </Card>
+          ) : (
+            <Card mb="4">
+              <Flex
+                direction="column"
+                align="center"
+                justify="center"
+                gap="3"
+                style={{
+                  minHeight: isMobile ? 180 : 300,
+                  padding: isMobile ? '24px' : '40px',
+                }}
+              >
+                <Text size="3" color="gray" align="center">
+                  No financial data yet
+                </Text>
+                <Text size="2" color="gray" align="center">
+                  Add income and expense items from suggestions or manually.
+                  Totals and chart will update.
+                </Text>
+              </Flex>
+            </Card>
+          )}
+        </Box>
 
-      {/* Chart */}
-      {chartData.length > 0 ? (
-        <Card mb="4">
-          <Heading size="4" mb="3">
-            Income vs Expenses
-          </Heading>
-          <MobileHScroll
-            style={{
-              height: isMobile ? 240 : 400,
-              width: '100%',
-            }}
-          >
-            <IncomeExpensesChart
-              data={chartData}
-              height={isMobile ? 240 : 400}
-              chartType={chartType}
-              onChartTypeChange={setChartType}
-            />
-          </MobileHScroll>
-        </Card>
-      ) : (
-        <Card mb="4">
-          <Flex
-            direction="column"
-            align="center"
-            justify="center"
-            gap="3"
-            style={{
-              minHeight: isMobile ? 180 : 300,
-              padding: isMobile ? '24px' : '40px',
-            }}
-          >
-            <Text size="3" color="gray" align="center">
-              No financial data yet
-            </Text>
-            <Text size="2" color="gray" align="center">
-              Add income and expense items from suggestions or manually. Totals
-              and chart will update.
-            </Text>
-          </Flex>
-        </Card>
-      )}
+        <Box
+          style={{
+            flex: isAccountingWide ? '0 0 min(440px, 42%)' : undefined,
+            width: isAccountingWide ? 'min(440px, 42%)' : '100%',
+            minWidth: 0,
+            position: isAccountingWide ? 'sticky' : undefined,
+            top: isAccountingWide ? 12 : undefined,
+            alignSelf: 'flex-start',
+          }}
+        >
+          <MoneyContaInvoicePanel
+            jobId={jobId}
+            organizationId={
+              accountingConfig?.accounting_organization_id ?? null
+            }
+            invoices={jobSalesInvoices}
+          />
+        </Box>
+      </Flex>
 
       <MoneyItemEditDialog
         open={editDialogOpen}
