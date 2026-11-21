@@ -31,6 +31,16 @@ const OWNER_EMAIL = process.env.E2E_TEST_EMAIL ?? 'owner@test.grid.local'
 const FREELANCER_EMAIL = 'freelancer@test.grid.local'
 const EMPLOYEE_EMAIL = 'employee@test.grid.local'
 
+/**
+ * John's real Prod login email (confirmed read-only on Prod Auth/profiles).
+ * Dev Auth is a separate user store — Prod password does NOT apply here.
+ * Override password with DEV_JOHN_PASSWORD if desired.
+ */
+const JOHN_DEV_EMAIL =
+  process.env.DEV_JOHN_EMAIL ?? 'john.ravndal@gmail.com'
+const JOHN_DEV_PASSWORD = process.env.DEV_JOHN_PASSWORD ?? 'TestPassword123!'
+const JOHN_DEV_NAME = 'John Ravndal'
+
 /** Deterministic UUID in the expansion namespace (never collide with E2E/demo). */
 function sid(kind, n) {
   const k = String(kind).padStart(4, '0')
@@ -177,7 +187,26 @@ async function ensureAuthUser(email, password, metadata = {}) {
   return data.user.id
 }
 
-async function upsertProfile(userId, email, displayName) {
+function readAppVersion() {
+  try {
+    const source = readFileSync(
+      join(process.cwd(), 'src/app/config/releaseNotes.ts'),
+      'utf8',
+    )
+    const match = source.match(/export const APP_VERSION = '([^']+)'/)
+    return match?.[1] ?? null
+  } catch {
+    return null
+  }
+}
+
+async function upsertProfile(
+  userId,
+  email,
+  displayName,
+  { superuser = false } = {},
+) {
+  const appVersion = readAppVersion()
   const { error } = await admin.from('profiles').upsert(
     {
       user_id: userId,
@@ -187,11 +216,30 @@ async function upsertProfile(userId, email, displayName) {
       last_name: displayName.split(' ').slice(1).join(' ') || 'User',
       phone: '+4712345678',
       selected_company_id: COMPANY_ID,
-      superuser: false,
+      superuser,
+      ...(appVersion ? { last_seen_release_version: appVersion } : {}),
     },
     { onConflict: 'user_id' },
   )
   if (error) throw error
+}
+
+/**
+ * Ensure John's real email can sign into hosted Dev and own Grid Test Company.
+ * Does not copy Prod password — Dev Auth is separate.
+ */
+async function seedJohnDevOwner() {
+  const userId = await ensureAuthUser(JOHN_DEV_EMAIL, JOHN_DEV_PASSWORD, {
+    display_name: JOHN_DEV_NAME,
+  })
+  await upsertProfile(userId, JOHN_DEV_EMAIL, JOHN_DEV_NAME, {
+    superuser: true,
+  })
+  await upsertCompanyUser(userId, 'owner', {
+    rate: 950,
+    rateType: 'daily',
+  })
+  return userId
 }
 
 async function upsertCompanyUser(
@@ -912,6 +960,11 @@ async function main() {
 
   await assertCompany()
 
+  const johnId = await seedJohnDevOwner()
+  console.log(
+    `  John Dev owner: ${JOHN_DEV_EMAIL} (auth id ${johnId}) — Dev password is NOT the Prod password`,
+  )
+
   const ownerId = await findUserIdByEmail(OWNER_EMAIL)
   const freelancerId = await findUserIdByEmail(FREELANCER_EMAIL)
   const employeeId = await findUserIdByEmail(EMPLOYEE_EMAIL)
@@ -981,7 +1034,13 @@ async function main() {
   console.log(`  Ready-to-invoice (seed): ${readyToInvoice}`)
   console.log(`  Ready-to-verify (seed):  ${readyToVerify}`)
   console.log(`  Company totals — jobs: ${companyJobs}, money: ${companyMoney}, customers: ${companyCustomers}`)
-  console.log(`  Login: ${OWNER_EMAIL} / TestPassword123!`)
+  console.log(`  Test login: ${OWNER_EMAIL} / TestPassword123!`)
+  console.log(
+    `  John login (Dev Auth): ${JOHN_DEV_EMAIL} / ${JOHN_DEV_PASSWORD}`,
+  )
+  console.log(
+    '  Note: Dev Auth ≠ Prod Auth — use the Dev password above (override with DEV_JOHN_PASSWORD).',
+  )
   console.log(
     '  Extra logins: freelancer2|3|4@test.grid.local / TestPassword123!',
   )
