@@ -16,6 +16,7 @@ import {
 import { Card, Flex, Text } from '@radix-ui/themes'
 import { ChartTypeSelector } from '@shared/ui/components/IncomeExpensesChart'
 import { formatCurrency } from '../utils/format'
+import { monthlyChartDomains } from '../utils/syncZeroAlignedDomains'
 import type { ChartType } from '@shared/ui/components/IncomeExpensesChart'
 import type { MonthlyJobProfitabilityPoint } from '../utils/monthlyJobs'
 
@@ -81,7 +82,13 @@ function MonthlyTooltip({
   )
 }
 
-function MoneyAxes() {
+function MoneyAxes({
+  moneyDomain,
+  jobsDomain,
+}: {
+  moneyDomain: [number, number]
+  jobsDomain: [number, number]
+}) {
   return (
     <>
       <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-5)" />
@@ -94,6 +101,7 @@ function MoneyAxes() {
       />
       <YAxis
         yAxisId="money"
+        domain={moneyDomain}
         tick={{ fontSize: 12, fill: 'var(--gray-11)' }}
         tickFormatter={formatMoneyTick}
         width={48}
@@ -101,8 +109,11 @@ function MoneyAxes() {
       <YAxis
         yAxisId="jobs"
         orientation="right"
+        domain={jobsDomain}
         allowDecimals={false}
         tick={{ fontSize: 12, fill: 'var(--gray-11)' }}
+        // Hide padded negative ticks — only job counts ≥ 0 are meaningful.
+        tickFormatter={(value: number) => (value < 0 ? '' : String(value))}
         width={36}
         label={{
           value: 'Jobs',
@@ -275,31 +286,35 @@ export function JobMonthlyProfitabilityChart({
     ? chartType
     : 'composed'
 
+  const { money: moneyDomain, jobs: jobsDomain } = monthlyChartDomains(data)
+
   const commonProps = {
     data,
     margin: { top: 12, right: 12, left: 4, bottom: 4 },
     barCategoryGap: '18%' as const,
   }
 
+  const axes = <MoneyAxes moneyDomain={moneyDomain} jobsDomain={jobsDomain} />
+
   let chart: React.ReactElement
   if (mode === 'line') {
     chart = (
       <LineChart {...commonProps}>
-        <MoneyAxes />
+        {axes}
         {renderSeries(mode)}
       </LineChart>
     )
   } else if (mode === 'area') {
     chart = (
       <AreaChart {...commonProps}>
-        <MoneyAxes />
+        {axes}
         {renderSeries(mode)}
       </AreaChart>
     )
   } else {
     chart = (
       <ComposedChart {...commonProps}>
-        <MoneyAxes />
+        {axes}
         {renderSeries('composed')}
       </ComposedChart>
     )
