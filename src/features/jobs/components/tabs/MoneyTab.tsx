@@ -70,6 +70,7 @@ import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
 import MoneyItemsFilter from './MoneyItemsFilter'
 import type { ContaDatePadOption } from '../../utils/moneyConta'
+import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import type { MoneySuggestion } from '../../utils/moneySuggestions'
 import type {
   JobMoneyItem,
@@ -99,7 +100,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
-  >('area')
+  >('bar')
   const [showIncome, setShowIncome] = React.useState(true)
   const [showExpenses, setShowExpenses] = React.useState(true)
   /** User choice for crew expense/income calculation (hour vs day rate) */
@@ -910,19 +911,23 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   )
   const visibleConfirmedItems = React.useMemo(
     () =>
-      confirmedItems.filter(
-        (i) =>
-          (i.type === 'income' && showIncome) ||
-          (i.type === 'expense' && showExpenses),
+      sortMoneyItems(
+        confirmedItems.filter(
+          (i) =>
+            (i.type === 'income' && showIncome) ||
+            (i.type === 'expense' && showExpenses),
+        ),
       ),
     [confirmedItems, showIncome, showExpenses],
   )
   const visibleSuggestions = React.useMemo(
     () =>
-      suggestions.filter(
-        (s) =>
-          (s.type === 'income' && showIncome) ||
-          (s.type === 'expense' && showExpenses),
+      sortMoneyItems(
+        suggestions.filter(
+          (s) =>
+            (s.type === 'income' && showIncome) ||
+            (s.type === 'expense' && showExpenses),
+        ),
       ),
     [suggestions, showIncome, showExpenses],
   )
