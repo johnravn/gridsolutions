@@ -15,6 +15,10 @@ import { CustomerProfitabilityTable } from '../components/CustomerProfitabilityT
 import { DateRangeControl } from '../components/DateRangeControl'
 import { ExportCsvButton } from '../components/ExportCsvButton'
 import { InvoicePipelineSection } from '../components/InvoicePipelineSection'
+import {
+  JOB_MONTHLY_CHART_HEIGHT,
+  JobMonthlyProfitabilityChart,
+} from '../components/JobMonthlyProfitabilityChart'
 import { JobProfitabilityTable } from '../components/JobProfitabilityTable'
 import { MonthlyTrendSection } from '../components/MonthlyTrendSection'
 import { ProfitabilityChart } from '../components/ProfitabilityChart'
@@ -28,6 +32,7 @@ import { formatHours, formatPercent } from '../utils/format'
 import { financialKpis } from '../utils/kpis'
 import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
 import { filterIncompleteMoneyJobs } from '../utils/incompleteness'
+import { aggregateJobsByMonth } from '../utils/monthlyJobs'
 import type { MarginThreshold, ReportSegment } from '../types'
 
 export default function ReportingPage() {
@@ -108,6 +113,11 @@ export default function ReportingPage() {
   )
   const incompleteMoneyCount = incompleteMoneyJobs.length
 
+  const jobMonthlyChartData = React.useMemo(
+    () => aggregateJobsByMonth(jobRows, fromDate, toDate),
+    [jobRows, fromDate, toDate],
+  )
+
   const chartData = React.useMemo(() => {
     if (segment === 'customers') {
       return customerRows.slice(0, 10).map((r) => ({
@@ -117,12 +127,8 @@ export default function ReportingPage() {
         profit: r.profit,
       }))
     }
-    if (segment === 'jobs' || segment === 'low-margin') {
-      const src =
-        segment === 'low-margin'
-          ? lowMarginRows.slice(0, 10)
-          : [...jobRows].sort((a, b) => b.profit - a.profit).slice(0, 10)
-      return src.map((r) => ({
+    if (segment === 'low-margin') {
+      return lowMarginRows.slice(0, 10).map((r) => ({
         name: `#${r.job_number}`,
         income: r.income,
         expenses: r.expenses,
@@ -130,7 +136,7 @@ export default function ReportingPage() {
       }))
     }
     return []
-  }, [segment, jobRows, customerRows, lowMarginRows])
+  }, [segment, customerRows, lowMarginRows])
 
   if (!companyId) {
     return <PageSkeleton columns="1fr" showInspector={false} />
@@ -214,15 +220,10 @@ export default function ReportingPage() {
                 </Flex>
                 {jobsLoading ? (
                   <Card size="3">
-                    <ChartSkeleton />
+                    <ChartSkeleton height={JOB_MONTHLY_CHART_HEIGHT} />
                   </Card>
                 ) : (
-                  <ProfitabilityChart
-                    data={chartData}
-                    caption={
-                      jobRows.length > 10 ? 'Top 10 jobs by profit' : undefined
-                    }
-                  />
+                  <JobMonthlyProfitabilityChart data={jobMonthlyChartData} />
                 )}
                 <JobProfitabilityTable rows={jobRows} loading={jobsLoading} />
               </>
