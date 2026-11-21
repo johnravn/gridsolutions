@@ -65,24 +65,20 @@ export function extractContaNumericInvoiceId(
   return null
 }
 
-export async function fetchContaInvoice(
+/**
+ * Look up a Conta sales invoice by Conta invoice number (`invoiceNo`), then
+ * return the full invoice payload.
+ */
+export async function fetchContaInvoiceByNumber(
   conta: ContaFetch,
   organizationId: string,
-  invoice: JobInvoiceSyncRow,
+  invoiceNo: string,
 ): Promise<ContaInvoicePayload | null> {
-  const preferredId = extractContaNumericInvoiceId(invoice)
-  if (preferredId) {
-    const fetched = await conta.get(
-      `/invoice/organizations/${organizationId}/invoices/${preferredId}`,
-    )
-    return asContaInvoice(fetched)
-  }
-
-  const invoiceNo = invoice.conta_invoice_id
-  if (!invoiceNo) return null
+  const trimmed = invoiceNo.trim()
+  if (!trimmed) return null
 
   const searchResponse = await conta.get(
-    `/invoice/organizations/${organizationId}/invoices?invoiceNo=${encodeURIComponent(invoiceNo)}`,
+    `/invoice/organizations/${organizationId}/invoices?invoiceNo=${encodeURIComponent(trimmed)}`,
   )
 
   const hits = Array.isArray(searchResponse)
@@ -100,6 +96,25 @@ export async function fetchContaInvoice(
     `/invoice/organizations/${organizationId}/invoices/${hitId}`,
   )
   return asContaInvoice(fetched)
+}
+
+export async function fetchContaInvoice(
+  conta: ContaFetch,
+  organizationId: string,
+  invoice: JobInvoiceSyncRow,
+): Promise<ContaInvoicePayload | null> {
+  const preferredId = extractContaNumericInvoiceId(invoice)
+  if (preferredId) {
+    const fetched = await conta.get(
+      `/invoice/organizations/${organizationId}/invoices/${preferredId}`,
+    )
+    return asContaInvoice(fetched)
+  }
+
+  const invoiceNo = invoice.conta_invoice_id
+  if (!invoiceNo) return null
+
+  return fetchContaInvoiceByNumber(conta, organizationId, invoiceNo)
 }
 
 export function resolveContaInvoiceIdString(

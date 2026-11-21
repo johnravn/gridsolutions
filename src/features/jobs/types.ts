@@ -15,7 +15,7 @@ export type JobStatus =
   | 'invoiced'
   | 'paid'
 
-export type InvoiceBasis = 'offer' | 'bookings'
+export type InvoiceBasis = 'offer' | 'bookings' | 'linked'
 
 export type JobListRow = {
   id: UUID
@@ -148,7 +148,7 @@ export type RecurringSeriesInvoice = {
   id: UUID
   created_at: string
   status: 'pending' | 'created' | 'failed' | 'paid'
-  invoice_basis: 'offer' | 'bookings'
+  invoice_basis: 'offer' | 'bookings' | 'linked'
   conta_invoice_id: string | null
   organization_id: string
   conta_response: unknown

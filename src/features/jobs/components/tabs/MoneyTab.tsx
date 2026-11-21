@@ -237,16 +237,42 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     useQuery({
       queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
       queryFn: async () => {
-        const { data, error } = await supabase
+        const { data: junctionRows, error: junctionError } = await supabase
+          .from('job_invoice_jobs')
+          .select('invoice_id')
+          .eq('job_id', jobId)
+        if (junctionError) throw junctionError
+
+        const junctionInvoiceIds = [
+          ...new Set((junctionRows ?? []).map((r) => r.invoice_id)),
+        ]
+
+        let query = supabase
           .from('job_invoices')
           .select(
             'id, status, created_at, updated_at, invoice_data, conta_response, conta_invoice_id, organization_id',
           )
-          .eq('job_id', jobId)
           .in('status', ['created', 'paid'])
-          .order('created_at', { ascending: false })
+
+        if (junctionInvoiceIds.length > 0) {
+          query = query.or(
+            `job_id.eq.${jobId},id.in.(${junctionInvoiceIds.join(',')})`,
+          )
+        } else {
+          query = query.eq('job_id', jobId)
+        }
+
+        const { data, error } = await query.order('created_at', {
+          ascending: false,
+        })
         if (error) throw error
-        return data ?? []
+
+        const seen = new Set<string>()
+        return (data ?? []).filter((inv) => {
+          if (seen.has(inv.id)) return false
+          seen.add(inv.id)
+          return true
+        })
       },
     })
 
@@ -689,9 +715,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     () =>
       crewContaInvoiceDateRange(jobInfo?.end_at, {
         startAt: jobInfo?.start_at,
-        bookingEnds: crewBookingEndDays
-          ? crewBookingEndDays.split('|')
-          : [],
+        bookingEnds: crewBookingEndDays ? crewBookingEndDays.split('|') : [],
       }),
     [jobInfo?.end_at, jobInfo?.start_at, crewBookingEndDays],
   )
@@ -1852,6 +1876,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         >
           <MoneyContaInvoicePanel
             jobId={jobId}
+            jobTitle={jobInfo?.title ?? 'Job'}
+            jobnr={jobInfo?.jobnr ?? null}
             organizationId={
               accountingConfig?.accounting_organization_id ?? null
             }

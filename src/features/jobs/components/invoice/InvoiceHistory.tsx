@@ -30,7 +30,7 @@ type InvoiceRecord = {
   organization_id: string
   conta_invoice_id: string | null
   conta_customer_id: number | null
-  invoice_basis: 'offer' | 'bookings'
+  invoice_basis: 'offer' | 'bookings' | 'linked'
   invoice_data: any
   status: 'pending' | 'created' | 'failed' | 'paid'
   error_message: string | null
@@ -352,10 +352,18 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
                     <Badge
                       variant="soft"
                       color={
-                        invoice.invoice_basis === 'offer' ? 'blue' : 'purple'
+                        invoice.invoice_basis === 'offer'
+                          ? 'blue'
+                          : invoice.invoice_basis === 'linked'
+                            ? 'teal'
+                            : 'purple'
                       }
                     >
-                      {invoice.invoice_basis === 'offer' ? 'Offer' : 'Bookings'}
+                      {invoice.invoice_basis === 'offer'
+                        ? 'Offer'
+                        : invoice.invoice_basis === 'linked'
+                          ? 'Linked'
+                          : 'Bookings'}
                     </Badge>
                     {Array.isArray(invoice.invoice_data?.linkedJobMeta) &&
                       invoice.invoice_data.linkedJobMeta.length > 1 && (
