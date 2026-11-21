@@ -10,16 +10,14 @@ import {
   Spinner,
   Table,
   Text,
-  TextField,
 } from '@radix-ui/themes'
 import { formatDistanceToNow } from 'date-fns'
-import { Link, Refresh } from 'iconoir-react'
+import { Refresh } from 'iconoir-react'
 import { contaClient } from '@shared/api/conta/client'
 import { fetchContaInvoice } from '@shared/conta/invoicePaidSyncCore'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
-import { linkContaInvoiceByNumber } from '../../api/linkContaInvoice'
 import {
   buildContaInvoiceDisplay,
   formatContaInvoiceMoney,
@@ -66,15 +64,11 @@ function formatUpdatedAgo(iso: string | null | undefined): string | null {
 
 export default function MoneyContaInvoicePanel({
   jobId,
-  jobTitle,
-  jobnr,
   organizationId,
   invoices,
   invoicesLoading = false,
 }: {
   jobId: string
-  jobTitle: string
-  jobnr: number | null
   organizationId: string | null
   invoices: Array<MoneyContaInvoiceRecord>
   invoicesLoading?: boolean
@@ -82,7 +76,6 @@ export default function MoneyContaInvoicePanel({
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
-  const [invoiceNumberInput, setInvoiceNumberInput] = React.useState('')
   const [fetchedById, setFetchedById] = React.useState<Record<string, unknown>>(
     {},
   )
@@ -126,55 +119,6 @@ export default function MoneyContaInvoicePanel({
     void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'invoices'] })
     void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money'] })
   }, [qc, jobId])
-
-  const linkMutation = useMutation({
-    mutationFn: async (invoiceNumber: string) => {
-      if (!organizationId) {
-        throw new Error('Conta organization is not configured for this company')
-      }
-      const { data: auth } = await supabase.auth.getUser()
-      return linkContaInvoiceByNumber({
-        jobId,
-        organizationId,
-        invoiceNumber,
-        jobMeta: { id: jobId, title: jobTitle, jobnr },
-        createdByUserId: auth.user?.id ?? null,
-      })
-    },
-    onSuccess: (result) => {
-      setInvoiceNumberInput('')
-      setSelectedId(result.invoiceId)
-      invalidateInvoiceQueries()
-      if (result.kind === 'already_linked') {
-        success(
-          'Already linked',
-          `Conta invoice #${result.contaInvoiceId} is already linked to this job.`,
-        )
-        return
-      }
-      if (result.kind === 'added_to_existing') {
-        const other =
-          result.primaryJob.jobnr != null
-            ? `#${result.primaryJob.jobnr} ${result.primaryJob.title}`
-            : result.primaryJob.title
-        success(
-          'Job added to Conta invoice',
-          `Invoice #${result.contaInvoiceId} was already on ${other}. This job is now included (multi-job link).`,
-        )
-        return
-      }
-      success(
-        'Conta invoice linked',
-        `Invoice #${result.contaInvoiceId} is linked to this job.`,
-      )
-    },
-    onError: (e: unknown) => {
-      toastError(
-        'Could not link Conta invoice',
-        e instanceof Error ? e.message : 'Please try again.',
-      )
-    },
-  })
 
   const fetchMutation = useMutation({
     mutationFn: async (opts?: { quiet?: boolean }) => {
@@ -273,8 +217,6 @@ export default function MoneyContaInvoicePanel({
   }, [selected?.id, selectedCanFetch])
 
   const isFetching = fetchMutation.isPending
-  const isLinking = linkMutation.isPending
-  const canLink = !!organizationId && !isLinking
   const showInitialLoading =
     invoicesLoading || (isFetching && (!display || display.lines.length === 0))
 
@@ -282,12 +224,6 @@ export default function MoneyContaInvoicePanel({
     ? (fetchedAtById[selected.id] ?? selected.updated_at ?? selected.created_at)
     : null
   const updatedAgo = formatUpdatedAgo(updatedAtIso)
-
-  const submitLink = () => {
-    const trimmed = invoiceNumberInput.trim()
-    if (!trimmed || !canLink) return
-    linkMutation.mutate(trimmed)
-  }
 
   return (
     <Card style={{ background: 'var(--gray-a2)' }}>
@@ -299,8 +235,8 @@ export default function MoneyContaInvoicePanel({
             </Heading>
             <Text size="2" color="gray">
               Sent Conta invoice lines and header — compare with Accounting
-              ledger. Link an existing Conta invoice by number if it was created
-              outside Grid.
+              ledger. To link an existing Conta invoice by number, use the
+              Invoice tab.
             </Text>
           </Box>
           <Button
@@ -320,57 +256,6 @@ export default function MoneyContaInvoicePanel({
           </Button>
         </Flex>
 
-        <Flex
-          gap="2"
-          align="end"
-          wrap="wrap"
-          style={{
-            padding: '12px',
-            borderRadius: 8,
-            background: 'var(--color-panel-solid)',
-            border: '1px solid var(--gray-a5)',
-          }}
-        >
-          <Box style={{ flex: '1 1 160px', minWidth: 140 }}>
-            <Text size="1" color="gray" mb="1">
-              Conta invoice number
-            </Text>
-            <TextField.Root
-              id="link-conta-invoice-no"
-              size="2"
-              placeholder="e.g. 10042"
-              value={invoiceNumberInput}
-              disabled={!organizationId || isLinking}
-              onChange={(e) => setInvoiceNumberInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  submitLink()
-                }
-              }}
-            />
-          </Box>
-          <Button
-            size="2"
-            disabled={!canLink || !invoiceNumberInput.trim()}
-            onClick={submitLink}
-          >
-            <Flex align="center" gap="1">
-              {isLinking ? (
-                <Spinner size="1" />
-              ) : (
-                <Link width={14} height={14} />
-              )}
-              {isLinking ? 'Linking…' : 'Link invoice'}
-            </Flex>
-          </Button>
-          {!organizationId && (
-            <Text size="1" color="orange" style={{ flexBasis: '100%' }}>
-              Connect Conta in Company settings to link invoices.
-            </Text>
-          )}
-        </Flex>
-
         {invoicesLoading && invoices.length === 0 ? (
           <Flex
             align="center"
@@ -387,8 +272,8 @@ export default function MoneyContaInvoicePanel({
           </Flex>
         ) : invoices.length === 0 ? (
           <Text size="2" color="gray">
-            No Conta invoices on this job yet. Create one from the Invoice tab,
-            or link an existing Conta invoice by number above.
+            No Conta invoices on this job yet. Create or link one from the
+            Invoice tab.
           </Text>
         ) : (
           <>

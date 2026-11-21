@@ -26,6 +26,7 @@ import { DialogCloseIconButton } from '@shared/ui/components/DialogCloseIconButt
 import { preventDialogCloseOnSearchableSelect } from '@shared/ui/components/SearchableSelect'
 import InvoicePreview from '../invoice/InvoicePreview'
 import InvoiceHistory from '../invoice/InvoiceHistory'
+import LinkContaInvoiceByNumberCard from '../invoice/LinkContaInvoiceByNumberCard'
 import { trackManualDescriptionEdit } from '../invoice/InvoiceDescriptionTemplateEditor'
 import InvoiceSettingsCards from '../invoice/InvoiceSettingsCards'
 import { jobBookingsForInvoiceQuery } from '../../api/invoiceQueries'
@@ -1076,6 +1077,13 @@ export default function InvoiceTab({
           )}
         </Flex>
       </Card>
+
+      <LinkContaInvoiceByNumberCard
+        jobId={jobId}
+        jobTitle={job.title}
+        jobnr={job.jobnr}
+        organizationId={accountingConfig?.accounting_organization_id ?? null}
+      />
 
       <Box mb="4">
         <InvoiceHistory jobId={jobId} />

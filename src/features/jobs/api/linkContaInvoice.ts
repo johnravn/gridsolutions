@@ -1,12 +1,9 @@
 import { supabase } from '@shared/api/supabase'
 import { contaClient } from '@shared/api/conta/client'
-import {
-  
-  fetchContaInvoiceByNumber
-} from '@shared/conta/invoicePaidSyncCore'
+import { fetchContaInvoiceByNumber } from '@shared/conta/invoicePaidSyncCore'
 import { isContaInvoicePaid } from '@shared/conta/contaInvoicePaid'
 import { markJobsInvoiced } from './createContaInvoice'
-import type {ContaInvoicePayload} from '@shared/conta/invoicePaidSyncCore';
+import type { ContaInvoicePayload } from '@shared/conta/invoicePaidSyncCore'
 
 export type LinkContaInvoiceJobMeta = {
   id: string
