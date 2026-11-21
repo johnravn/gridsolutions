@@ -1876,8 +1876,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         >
           <MoneyContaInvoicePanel
             jobId={jobId}
-            jobTitle={jobInfo?.title ?? 'Job'}
-            jobnr={jobInfo?.jobnr ?? null}
             organizationId={
               accountingConfig?.accounting_organization_id ?? null
             }
