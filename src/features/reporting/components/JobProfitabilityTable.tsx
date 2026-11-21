@@ -110,6 +110,13 @@ export function JobProfitabilityTable({
                   style={{ minWidth: 0 }}
                   title={row.project_lead_name}
                 >
+                  <Avatar
+                    size="1"
+                    src={avatarUrl ?? undefined}
+                    fallback={unassigned ? '?' : initials}
+                    radius="full"
+                    style={{ flexShrink: 0 }}
+                  />
                   <Text
                     size="2"
                     truncate
@@ -118,13 +125,6 @@ export function JobProfitabilityTable({
                   >
                     {row.project_lead_name}
                   </Text>
-                  <Avatar
-                    size="1"
-                    src={avatarUrl ?? undefined}
-                    fallback={unassigned ? '?' : initials}
-                    radius="full"
-                    style={{ flexShrink: 0 }}
-                  />
                 </Flex>
               )
             }
