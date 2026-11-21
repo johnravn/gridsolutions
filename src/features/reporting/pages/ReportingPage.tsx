@@ -29,7 +29,6 @@ import { SummaryKpis } from '../components/SummaryKpis'
 import { UtilizationTable } from '../components/UtilizationTable'
 import {
   
-  compareMonthYear,
   currentMonthYear,
   dateRangeFromMonthYears
 } from '../utils/dates'
@@ -173,14 +172,10 @@ export default function ReportingPage() {
           <DateRangeControl
             from={fromMonth}
             to={toMonth}
-            onChangeFrom={(next) => {
-              // Keep a single-month selection when From/To still match.
-              setFromMonth(next)
-              if (compareMonthYear(fromMonth, toMonth) === 0) {
-                setToMonth(next)
-              }
+            onChange={(nextFrom, nextTo) => {
+              setFromMonth(nextFrom)
+              setToMonth(nextTo)
             }}
-            onChangeTo={setToMonth}
           />
         </Flex>
 
