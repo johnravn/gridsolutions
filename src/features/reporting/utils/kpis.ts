@@ -19,7 +19,7 @@ export function financialKpis(
   ]
   if (options?.incompleteCount != null && options.incompleteCount > 0) {
     items.push({
-      label: 'Incomplete Money',
+      label: 'Incomplete Accounting',
       value: String(options.incompleteCount),
       hint: 'Completed/paid with no confirmed income',
     })

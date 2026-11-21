@@ -27,6 +27,8 @@ export type JobListRow = {
   end_at: string | null
   customer_contact_id: UUID | null
   archived: boolean
+  /** Set when the project lead verified Accounting for Reporting. */
+  money_verified_at?: string | null
   recurring_job_id?: UUID | null
   customer?: {
     id: UUID

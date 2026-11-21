@@ -25,6 +25,7 @@ type ProjectLeadJoin = {
   user_id: string
   display_name: string | null
   email: string | null
+  avatar_url: string | null
 }
 
 type JobRow = {
@@ -53,6 +54,13 @@ function projectLeadNameFromJoin(projectLead: JobRow['project_lead']): string {
   const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
   if (!lead) return 'Unassigned'
   return lead.display_name || lead.email || 'Unassigned'
+}
+
+function projectLeadAvatarFromJoin(
+  projectLead: JobRow['project_lead'],
+): string | null {
+  const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
+  return lead?.avatar_url ?? null
 }
 
 function jobOverlapsRange(
@@ -89,8 +97,8 @@ async function fetchOverlappingJobs({
   const rangeEnd = to.getTime()
 
   const select = includeStatus
-    ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
-    : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
+    ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
+    : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
 
   const { data: jobs, error } = await supabase
     .from('jobs')
@@ -159,6 +167,7 @@ function toJobProfitabilityRow(
     customer_id: job.customer_id ?? null,
     customer_name: customerNameFromJoin(job.customer),
     project_lead_name: projectLeadNameFromJoin(job.project_lead),
+    project_lead_avatar_url: projectLeadAvatarFromJoin(job.project_lead),
     start_at: job.start_at ?? null,
     end_at: job.end_at ?? null,
     status,

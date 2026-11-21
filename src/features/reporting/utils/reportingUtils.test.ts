@@ -57,6 +57,7 @@ function jobRow(
     customer_id: null,
     customer_name: null,
     project_lead_name: 'Unassigned',
+    project_lead_avatar_url: null,
     start_at: null,
     end_at: null,
     status: null,

@@ -38,7 +38,7 @@ import {
 } from 'iconoir-react'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { getInitials, makeWordPresentable } from '@shared/lib/generalFunctions'
+import { getInitials } from '@shared/lib/generalFunctions'
 import { motionEaseRevealOut, motionRevealTransition } from '@shared/lib/motion'
 import {
   IndexTableBodySkeleton,
@@ -51,18 +51,24 @@ import {
 } from '@shared/ui/index-table/indexTableStyles'
 import { HighlightedText } from '@shared/ui/components/HighlightedText'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
-import { jobDetailQuery, jobsIndexInfiniteQuery } from '../api/queries'
+import {
+  jobDetailQuery,
+  jobsIndexInfiniteQuery,
+  jobsIndexUnfilteredSearchCountQuery,
+} from '../api/queries'
 import {
   recurringJobDetailQuery,
   recurringJobsIndexQuery,
 } from '../api/recurringJobQueries'
 import { useAutoUpdateJobsListJobStatuses } from '../hooks/useAutoUpdateJobsListJobStatuses'
 import { filterScopedRecurringMemberJobs } from '../utils/filterScopedRecurringMemberJobs'
-import { jobsListEmptyMessage } from '../utils/jobsListEmptyMessage'
-import { getJobStatusColor, maskJobStatusForRole } from '../utils/statusColors'
+import { jobsListHasRestrictiveFilters } from '../utils/jobsListHasRestrictiveFilters'
+import { maskJobStatusForRole } from '../utils/statusColors'
 import { resolveJobsIndexListArgs } from '../utils/resolveJobsIndexListArgs'
 import { useJobCrewRoleIds } from '../hooks/useJobCrewRoleIds'
 import JobDialog from './dialogs/JobDialog'
+import { JobStatusWithVerified } from './JobStatusWithVerified'
+import { JobsListEmptyState } from './JobsListEmptyState'
 import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringJobListRow from './RecurringJobListRow'
 import type { JobsIndexPageResult } from '../api/queries'
@@ -104,9 +110,11 @@ export default function JobsList({
   dateFrom,
   dateTo,
   readyToInvoiceFilter = false,
+  accountingUnverifiedFilter = false,
   showMyJobsOnly = false,
   onlyJobIds = null,
   waitingForMyJobIds = false,
+  onClearListFilters,
   compact = false,
   toolbarExtra,
   listScope = null,
@@ -125,10 +133,14 @@ export default function JobsList({
   dateTo: string
   /** Same criteria as homepage: completed + current user is project lead */
   readyToInvoiceFilter?: boolean
+  /** Paid/invoiced jobs for this lead that still need Accounting verification */
+  accountingUnverifiedFilter?: boolean
   /** Same meaning as Home: only jobs where the current user is crew or project lead */
   showMyJobsOnly?: boolean
   onlyJobIds?: Array<string> | null
   waitingForMyJobIds?: boolean
+  /** Clears list filters so an empty search can show all matching jobs. */
+  onClearListFilters?: () => void
   /** When true, use a stacked card layout for better mobile display */
   compact?: boolean
   toolbarExtra?: React.ReactNode
@@ -144,8 +156,8 @@ export default function JobsList({
   const [search, setSearch] = React.useState('')
   const [debouncedSearch] = useDebouncedValue(search, { wait: 300 })
   React.useEffect(() => {
-    if (readyToInvoiceFilter) setSearch('')
-  }, [readyToInvoiceFilter])
+    if (readyToInvoiceFilter || accountingUnverifiedFilter) setSearch('')
+  }, [readyToInvoiceFilter, accountingUnverifiedFilter])
   const [sortBy, setSortBy] = React.useState<SortBy>('start_at')
   const [sortDir, setSortDir] = React.useState<SortDir>('asc')
   const [createOpen, setCreateOpen] = React.useState(false)
@@ -169,6 +181,7 @@ export default function JobsList({
     companyRole,
     showJobsInRecurringSeries,
     readyToInvoiceFilter,
+    accountingUnverifiedFilter,
     showMyJobsOnly,
     statusFilter,
     userId,
@@ -194,6 +207,32 @@ export default function JobsList({
     placeholderData: keepPreviousData,
   })
 
+  const hasRestrictiveFilters = jobsListHasRestrictiveFilters({
+    statusFilter,
+    showOnlyArchived,
+    showJobsInRecurringSeries,
+    showMyJobsOnly,
+    dateFrom,
+    dateTo,
+    readyToInvoiceFilter,
+    accountingUnverifiedFilter,
+  })
+  const searchTrimmed = debouncedSearch.trim()
+  const {
+    data: unfilteredSearchCount,
+    isFetching: unfilteredSearchCountLoading,
+  } = useQuery({
+    ...jobsIndexUnfilteredSearchCountQuery({
+      companyId: companyId ?? '__none__',
+      search: searchTrimmed,
+    }),
+    enabled:
+      !!companyId &&
+      !listScope &&
+      searchTrimmed.length > 0 &&
+      hasRestrictiveFilters,
+  })
+
   const { data: scopedRecurringDetail, isLoading: scopedLoading } = useQuery({
     ...recurringJobDetailQuery({
       recurringJobId: listScope?.id ?? '__none__',
@@ -210,7 +249,14 @@ export default function JobsList({
     fetchNextPage,
   } = jobsQuery
   const listIsLoading = isLoading || waitingForMyJobIds
-  const hideRecurringPins = readyToInvoiceFilter || showMyJobsOnly
+  const hideRecurringPins =
+    readyToInvoiceFilter || accountingUnverifiedFilter || showMyJobsOnly
+  const emptyUnfilteredProps = {
+    search: searchTrimmed,
+    unfilteredSearchCount,
+    unfilteredSearchCountLoading,
+    onClearFilters: onClearListFilters,
+  } as const
   const allData = React.useMemo(
     () => jobsQuery.data?.pages.flatMap((page) => page.rows) ?? [],
     [jobsQuery.data],
@@ -632,12 +678,10 @@ export default function JobsList({
           {scopedLoading ? (
             <IndexTableBodySkeleton rowCount={6} rowHeight={88} />
           ) : scopedMemberRows.length === 0 ? (
-            <Text size="2" color="gray">
-              {jobsListEmptyMessage({
-                scoped: true,
-                hasFilter: (scopedRecurringDetail?.jobs?.length ?? 0) > 0,
-              })}
-            </Text>
+            <JobsListEmptyState
+              scoped
+              hasFilter={(scopedRecurringDetail?.jobs?.length ?? 0) > 0}
+            />
           ) : (
             <Flex
               direction="column"
@@ -747,14 +791,10 @@ export default function JobsList({
                   <IndexTableBodySkeleton rowCount={8} />
                 </Box>
               ) : scopedMemberRows.length === 0 ? (
-                <Flex align="center" justify="center" py="6">
-                  <Text size="2" color="gray">
-                    {jobsListEmptyMessage({
-                      scoped: true,
-                      hasFilter: (scopedRecurringDetail?.jobs?.length ?? 0) > 0,
-                    })}
-                  </Text>
-                </Flex>
+                <JobsListEmptyState
+                  scoped
+                  hasFilter={(scopedRecurringDetail?.jobs?.length ?? 0) > 0}
+                />
               ) : (
                 <Flex direction="column" gap="1">
                   {scopedMemberRows.map((job) => (
@@ -889,12 +929,14 @@ export default function JobsList({
           ) : rows.length === 0 &&
             !hasNextPage &&
             (hideRecurringPins || searchRecurringHits.length === 0) ? (
-            <Text size="2" color="gray">
-              {jobsListEmptyMessage({
-                scoped: false,
-                hasFilter: !(allData.length === 0 && !hideRecurringPins),
-              })}
-            </Text>
+            <JobsListEmptyState
+              scoped={false}
+              hasFilter={
+                hasRestrictiveFilters ||
+                !(allData.length === 0 && !hideRecurringPins)
+              }
+              {...emptyUnfilteredProps}
+            />
           ) : (
             <Flex
               direction="column"
@@ -1165,14 +1207,14 @@ export default function JobsList({
             ) : rows.length === 0 &&
               !hasNextPage &&
               (hideRecurringPins || searchRecurringHits.length === 0) ? (
-              <Flex align="center" justify="center" py="6">
-                <Text size="2" color="gray">
-                  {jobsListEmptyMessage({
-                    scoped: false,
-                    hasFilter: !(allData.length === 0 && !hideRecurringPins),
-                  })}
-                </Text>
-              </Flex>
+              <JobsListEmptyState
+                scoped={false}
+                hasFilter={
+                  hasRestrictiveFilters ||
+                  !(allData.length === 0 && !hideRecurringPins)
+                }
+                {...emptyUnfilteredProps}
+              />
             ) : (
               <div
                 style={{
@@ -1365,18 +1407,10 @@ export default function JobsList({
                             align="center"
                             style={{ flexShrink: 0 }}
                           >
-                            <Badge
-                              color={getJobStatusColor(displayStatus)}
-                              radius="full"
-                              size="2"
-                              highContrast
-                              style={{
-                                width: 'fit-content',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {makeWordPresentable(displayStatus)}
-                            </Badge>
+                            <JobStatusWithVerified
+                              displayStatus={displayStatus}
+                              moneyVerified={!!job.money_verified_at}
+                            />
                             <Avatar
                               size="2"
                               src={avatarUrl ?? undefined}
@@ -1482,18 +1516,10 @@ export default function JobsList({
                               justifySelf: 'start',
                             }}
                           >
-                            <Badge
-                              color={getJobStatusColor(displayStatus)}
-                              radius="full"
-                              size="2"
-                              highContrast
-                              style={{
-                                width: 'fit-content',
-                                whiteSpace: 'nowrap',
-                              }}
-                            >
-                              {makeWordPresentable(displayStatus)}
-                            </Badge>
+                            <JobStatusWithVerified
+                              displayStatus={displayStatus}
+                              moneyVerified={!!job.money_verified_at}
+                            />
                           </Box>
                           <Flex
                             gap="2"
@@ -1674,15 +1700,10 @@ function JobIndexRow({
             </Flex>
           </Flex>
           <Flex gap="2" align="center" style={{ flexShrink: 0 }}>
-            <Badge
-              color={getJobStatusColor(displayStatus)}
-              radius="full"
-              size="2"
-              highContrast
-              style={{ width: 'fit-content', whiteSpace: 'nowrap' }}
-            >
-              {makeWordPresentable(displayStatus)}
-            </Badge>
+            <JobStatusWithVerified
+              displayStatus={displayStatus}
+              moneyVerified={!!job.money_verified_at}
+            />
             <Avatar
               size="2"
               src={avatarUrl ?? undefined}
@@ -1770,18 +1791,10 @@ function JobIndexRow({
               justifySelf: 'start',
             }}
           >
-            <Badge
-              color={getJobStatusColor(displayStatus)}
-              radius="full"
-              size="2"
-              highContrast
-              style={{
-                width: 'fit-content',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {makeWordPresentable(displayStatus)}
-            </Badge>
+            <JobStatusWithVerified
+              displayStatus={displayStatus}
+              moneyVerified={!!job.money_verified_at}
+            />
           </Box>
           <Flex
             gap="2"

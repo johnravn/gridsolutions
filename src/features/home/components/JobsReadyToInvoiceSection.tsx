@@ -31,6 +31,8 @@ export function InvoiceScrollContent({
   fadeRight = false,
   cardMinWidth = 220,
   emptyFallback = null,
+  jobTab = 'invoice',
+  accentColor = 'var(--orange-9)',
 }: {
   jobs: Array<HomeJobReadyToInvoice>
   loading: boolean
@@ -38,6 +40,9 @@ export function InvoiceScrollContent({
   fadeRight?: boolean
   cardMinWidth?: number
   emptyFallback?: ReactNode
+  /** Jobs inspector tab to open (invoice vs Accounting / money). */
+  jobTab?: string
+  accentColor?: string
 }) {
   const navigate = useNavigate()
 
@@ -77,7 +82,7 @@ export function InvoiceScrollContent({
                   search: {
                     jobId: job.id,
                     recurringJobId: undefined,
-                    tab: 'invoice',
+                    tab: jobTab,
                   },
                 })
               }
@@ -89,7 +94,7 @@ export function InvoiceScrollContent({
                       width: 10,
                       height: 10,
                       borderRadius: '50%',
-                      backgroundColor: 'var(--orange-9)',
+                      backgroundColor: accentColor,
                       flexShrink: 0,
                     }}
                   />

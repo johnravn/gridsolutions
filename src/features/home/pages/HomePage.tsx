@@ -14,6 +14,7 @@ import { HomeDesktopLayout, HomeMobileLayout } from '@features/home/components'
 import { companyJobsWeekQuery } from '@features/home/api/companyJobsWeekQuery'
 import { companyWeekJobsBookingsQuery } from '@features/home/api/companyWeekJobsBookingsQuery'
 import { activeRecurringJobsQuery } from '@features/home/api/activeRecurringJobsQuery'
+import { jobsAccountingUnverifiedQuery } from '@features/home/api/jobsAccountingUnverifiedQuery'
 import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
 import { projectLeadJobIdsQuery } from '@features/home/api/projectLeadJobIdsQuery'
 import {
@@ -76,6 +77,17 @@ export default function HomePage() {
     isLoading: jobsReadyToInvoiceLoading,
   } = useQuery({
     ...jobsReadyToInvoiceQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: !!companyId && !!userId && canVisitJobs,
+  })
+
+  const {
+    data: jobsAccountingUnverified = [],
+    isLoading: jobsAccountingUnverifiedLoading,
+  } = useQuery({
+    ...jobsAccountingUnverifiedQuery({
       companyId: companyId ?? '',
       userId: userId ?? '',
     }),
@@ -311,6 +323,8 @@ export default function HomePage() {
         mattersLoading={mattersLoading}
         jobsReadyToInvoice={jobsReadyToInvoice}
         jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+        jobsAccountingUnverified={jobsAccountingUnverified}
+        jobsAccountingUnverifiedLoading={jobsAccountingUnverifiedLoading}
         getInitials={getInitials}
         getAvatarUrl={getAvatarUrl}
         crewConflicts={filteredCrewConflicts}
@@ -337,6 +351,8 @@ export default function HomePage() {
       mattersLoading={mattersLoading}
       jobsReadyToInvoice={jobsReadyToInvoice}
       jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+      jobsAccountingUnverified={jobsAccountingUnverified}
+      jobsAccountingUnverifiedLoading={jobsAccountingUnverifiedLoading}
       showMyJobsOnly={showMyJobsOnly}
       onToggleMyJobsOnly={setShowMyJobsOnly}
       isFreelancer={isFreelancer}

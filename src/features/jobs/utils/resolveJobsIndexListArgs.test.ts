@@ -6,6 +6,7 @@ describe('resolveJobsIndexListArgs', () => {
     companyRole: 'employee' as string | null,
     showJobsInRecurringSeries: false,
     readyToInvoiceFilter: false,
+    accountingUnverifiedFilter: false,
     showMyJobsOnly: false,
     statusFilter: ['planned', 'confirmed'] as const,
     userId: 'user-1',
@@ -59,6 +60,20 @@ describe('resolveJobsIndexListArgs', () => {
       includeRecurringMembers: true,
       projectLeadUserId: 'user-1',
       statuses: ['completed'],
+    })
+  })
+
+  it('forces invoiced/paid + project lead when accounting-unverified is on', () => {
+    expect(
+      resolveJobsIndexListArgs({
+        ...base,
+        statusFilter: [...base.statusFilter],
+        accountingUnverifiedFilter: true,
+      }),
+    ).toEqual({
+      includeRecurringMembers: true,
+      projectLeadUserId: 'user-1',
+      statuses: ['invoiced', 'paid'],
     })
   })
 

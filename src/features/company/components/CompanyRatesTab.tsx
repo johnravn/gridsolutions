@@ -1006,7 +1006,7 @@ function VehicleRatesCard({
   )
 }
 
-/** Operational cost for Money tab (km × rate). Separate from sell-side vehicle distance rates. */
+/** Operational cost for Accounting tab (km × rate). Separate from sell-side vehicle distance rates. */
 function TransportCostCard({
   companyId,
   initialCostPerKm,
@@ -1047,7 +1047,7 @@ function TransportCostCard({
       })
       success(
         'Transport cost updated',
-        'Money tab will use this rate for km × cost.',
+        'Accounting tab will use this rate for km × cost.',
       )
       setIsExpanded(false)
     },
@@ -1102,7 +1102,7 @@ function TransportCostCard({
           />
         </Box>
         <Text size="1" color="gray">
-          Used by the Money tab for transport cost (km driven × this rate).
+          Used by the Accounting tab for transport cost (km driven × this rate).
           Default is 5 kr/km. This is not the customer-facing vehicle distance
           rate on offers.
         </Text>

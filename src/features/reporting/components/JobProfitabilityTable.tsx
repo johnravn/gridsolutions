@@ -1,11 +1,13 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Badge, Button, Flex, Text } from '@radix-ui/themes'
+import { Avatar, Badge, Button, Flex, Text } from '@radix-ui/themes'
 import {
   VirtualIndexTable,
   useClientSort,
   useVirtualIndexTable,
 } from '@shared/ui/index-table'
+import { getInitials } from '@shared/lib/generalFunctions'
+import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
 import { formatCurrency, formatDate, formatPercent } from '../utils/format'
 import { compareValues } from '../utils/sort'
 import { ReportTableShell } from './ReportTableShell'
@@ -95,18 +97,37 @@ export function JobProfitabilityTable({
                   {row.customer_name ?? '—'}
                 </Text>
               )
-            case 'project_lead_name':
-              return (
-                <Text
-                  size="2"
-                  truncate
-                  color={
-                    row.project_lead_name === 'Unassigned' ? 'gray' : undefined
-                  }
-                >
-                  {row.project_lead_name}
-                </Text>
+            case 'project_lead_name': {
+              const unassigned = row.project_lead_name === 'Unassigned'
+              const avatarUrl = resolveAvatarUrl(row.project_lead_avatar_url)
+              const initials = getInitials(
+                unassigned ? '' : row.project_lead_name,
               )
+              return (
+                <Flex
+                  align="center"
+                  gap="2"
+                  style={{ minWidth: 0 }}
+                  title={row.project_lead_name}
+                >
+                  <Text
+                    size="2"
+                    truncate
+                    style={{ minWidth: 0 }}
+                    color={unassigned ? 'gray' : undefined}
+                  >
+                    {row.project_lead_name}
+                  </Text>
+                  <Avatar
+                    size="1"
+                    src={avatarUrl ?? undefined}
+                    fallback={unassigned ? '?' : initials}
+                    radius="full"
+                    style={{ flexShrink: 0 }}
+                  />
+                </Flex>
+              )
+            }
             case 'money_verified':
               return row.money_verified ? (
                 <Badge size="1" color="green" variant="soft">

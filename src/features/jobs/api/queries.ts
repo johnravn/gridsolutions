@@ -22,7 +22,7 @@ import type {
 } from '../types'
 
 const JOBS_LIST_SELECT = `
-  id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
+  id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, money_verified_at, recurring_job_id,
   customer:customer_id ( id, name ),
   customer_user:customer_user_id ( user_id, display_name, email ),
   project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
@@ -224,14 +224,15 @@ export function jobsIndexQuery({
       let searchOrFilter: string | null = null
       const fuzzyTerm = search.trim().replace(/^#/, '')
       if (fuzzyTerm) {
-        const [customerIds, customerUserIds] = await Promise.all([
+        const [customerIds, memberUserIds] = await Promise.all([
           findCustomerIdsByNameCached(companyId, fuzzyTerm),
           findCustomerUserIdsBySearchCached(companyId, fuzzyTerm),
         ])
         searchOrFilter = jobsIndexSearchOrFilter({
           search: fuzzyTerm,
           customerIds,
-          customerUserIds,
+          customerUserIds: memberUserIds,
+          projectLeadUserIds: memberUserIds,
         })
       }
       const combinedOr = mergePostgrestAndOrFilters(
@@ -390,10 +391,13 @@ export function jobsIndexSearchOrFilter({
   search,
   customerIds = [],
   customerUserIds = [],
+  projectLeadUserIds = [],
 }: {
   search: string
   customerIds?: Array<string>
   customerUserIds?: Array<string>
+  /** Company members matching the search — all their lead jobs. */
+  projectLeadUserIds?: Array<string>
 }): string | null {
   const trimmed = search.trim().replace(/^#/, '')
   if (!trimmed) return null
@@ -411,6 +415,9 @@ export function jobsIndexSearchOrFilter({
   }
   if (customerUserIds.length > 0) {
     parts.push(`customer_user_id.in.(${customerUserIds.join(',')})`)
+  }
+  if (projectLeadUserIds.length > 0) {
+    parts.push(`project_lead_user_id.in.(${projectLeadUserIds.join(',')})`)
   }
   return parts.length > 0 ? parts.join(',') : null
 }
@@ -594,14 +601,15 @@ async function fetchJobsIndexPage({
   let searchOrFilter: string | null = null
   const indexSearch = search.trim().replace(/^#/, '')
   if (indexSearch) {
-    const [customerIds, customerUserIds] = await Promise.all([
+    const [customerIds, memberUserIds] = await Promise.all([
       findCustomerIdsByNameCached(companyId, indexSearch),
       findCustomerUserIdsBySearchCached(companyId, indexSearch),
     ])
     searchOrFilter = jobsIndexSearchOrFilter({
       search: indexSearch,
       customerIds,
-      customerUserIds,
+      customerUserIds: memberUserIds,
+      projectLeadUserIds: memberUserIds,
     })
   }
   const combinedOr = mergePostgrestAndOrFilters(
@@ -628,6 +636,41 @@ async function fetchJobsIndexPage({
   }
 
   return { rows, count: count ?? 0, fetched, page }
+}
+
+/**
+ * How many jobs match the search with list filters off (all statuses, all
+ * dates, include recurring members, non-archived). Used when the filtered
+ * search is empty so the UI can offer “clear filters”.
+ */
+export function jobsIndexUnfilteredSearchCountQuery({
+  companyId,
+  search,
+}: {
+  companyId: string
+  search: string
+}) {
+  const trimmed = search.trim()
+  return {
+    queryKey: [
+      'company',
+      companyId,
+      'jobs-index-unfiltered-search-count',
+      trimmed,
+    ] as const,
+    queryFn: async (): Promise<number> => {
+      const page = await fetchJobsIndexPage({
+        companyId,
+        page: 1,
+        pageSize: 1,
+        search: trimmed,
+        includeRecurringMembers: true,
+        statuses: null,
+      })
+      return page.count
+    },
+    staleTime: 30_000,
+  }
 }
 
 export function jobsIndexPageQuery({

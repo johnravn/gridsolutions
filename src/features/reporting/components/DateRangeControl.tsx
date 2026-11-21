@@ -1,19 +1,18 @@
 import * as React from 'react'
 import { Button, Flex, Popover, SegmentedControl, Text } from '@radix-ui/themes'
 import { NavArrowDown } from 'iconoir-react'
-import { MONTH_OPTIONS  } from '../utils/dates'
+import { MONTH_OPTIONS } from '../utils/dates'
 import {
-  
   formatPeriodLabel,
   isMonthInRange,
   isYearInRange,
   monthYearKey,
   normalizeMonthYearRange,
   periodPickerYears,
-  yearRangeToMonthYears
+  yearRangeToMonthYears,
 } from '../utils/periodPicker'
-import type {PeriodGranularity} from '../utils/periodPicker';
-import type {MonthYear} from '../utils/dates';
+import type { PeriodGranularity } from '../utils/periodPicker'
+import type { MonthYear } from '../utils/dates'
 
 const cellBase: React.CSSProperties = {
   border: '1px solid transparent',
@@ -67,7 +66,7 @@ export function DateRangeControl({
   onChange: (from: MonthYear, to: MonthYear) => void
 }) {
   const [granularity, setGranularity] =
-    React.useState<PeriodGranularity>('month')
+    React.useState<PeriodGranularity>('year')
   const [open, setOpen] = React.useState(false)
   const [anchor, setAnchor] = React.useState<MonthYear | null>(null)
   const [hover, setHover] = React.useState<MonthYear | null>(null)

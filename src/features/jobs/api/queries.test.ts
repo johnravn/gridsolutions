@@ -75,15 +75,17 @@ describe('jobsIndexSearchOrFilter', () => {
     expect(filter).not.toContain('jobnr.eq.000042')
   })
 
-  it('includes customer and customer-user ids so name search pages correctly', () => {
+  it('includes customer, customer-user, and project-lead ids so name search pages correctly', () => {
     const filter = jobsIndexSearchOrFilter({
       search: 'Acme',
       customerIds: ['cust-1', 'cust-2'],
       customerUserIds: ['user-1'],
+      projectLeadUserIds: ['lead-1', 'lead-2'],
     })
     expect(filter).toContain('title.ilike."%Acme%"')
     expect(filter).toContain('customer_id.in.(cust-1,cust-2)')
     expect(filter).toContain('customer_user_id.in.(user-1)')
+    expect(filter).toContain('project_lead_user_id.in.(lead-1,lead-2)')
   })
 
   it('strips PostgREST separators from the search term', () => {

@@ -44,14 +44,14 @@ export const RELEASE_NOTES = {
         'Profile → Personalization offers sharp Grid Slash (default, with a soft large lattice tuned for light and dark), Prism Bands, Circuit, and Facet styles instead of soft circles. Auth pages use Grid Slash.',
     },
     {
-      title: 'Job Money ledger',
+      title: 'Job Accounting ledger',
       description:
-        'Confirm income and costs on the job Money tab — ex MVA, transport km × company rate, Conta suggestions, and clearer categories. Company Reporting rolls up confirmed lines only.',
+        'Confirm income and costs on the job Accounting tab — ex MVA, transport km × company rate, Conta suggestions, and clearer categories. Company Reporting rolls up confirmed lines only.',
     },
     {
       title: 'Honest Reporting',
       description:
-        'Reporting shows when completed or paid jobs still lack Money fill-in, labels amounts as ex MVA, and Open jumps straight to the job Money tab. Conflicts and Reporting are out of beta.',
+        'Reporting shows when completed or paid jobs still lack Accounting fill-in, labels amounts as ex MVA, and Open jumps straight to the job Accounting tab. Conflicts and Reporting are out of beta.',
     },
     {
       title: 'Company Logs card',

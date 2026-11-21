@@ -10,7 +10,6 @@ import {
   Heading,
   IconButton,
   SegmentedControl,
-  Switch,
   Table,
   Text,
 } from '@radix-ui/themes'
@@ -152,15 +151,21 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
     onSuccess: (_data, verified) => {
       success(
-        verified ? 'Money verified' : 'Verification cleared',
+        verified ? 'Accounting verified' : 'Verification cleared',
         verified
-          ? 'This job’s Money is included in Reporting totals.'
+          ? 'This job’s Accounting is included in Reporting totals.'
           : 'Reporting totals will ignore this job until verified again.',
       )
       void qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'money-verification'],
       })
       void qc.invalidateQueries({ queryKey: ['reporting'] })
+      void qc.invalidateQueries({
+        queryKey: ['home', companyId, 'jobs-accounting-unverified'],
+      })
+      void qc.invalidateQueries({
+        queryKey: ['company', companyId, 'jobs-index-infinite'],
+      })
     },
     onError: (e: unknown) => {
       toastError(
@@ -1119,35 +1124,42 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   return (
     <Box style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
-        <Heading size="3">Money</Heading>
+        <Heading size="3">Accounting</Heading>
         <Flex align="center" gap="2" wrap="wrap">
           <Flex align="center" gap="2">
-            {moneyVerified ? (
-              <Badge color="green" variant="soft" size="1">
+            {canVerifyMoney ? (
+              <Button
+                size="3"
+                variant="solid"
+                color={moneyVerified ? 'green' : 'red'}
+                disabled={verifyMoneyMutation.isPending}
+                onClick={() => verifyMoneyMutation.mutate(!moneyVerified)}
+                aria-pressed={moneyVerified}
+                title={
+                  moneyVerified
+                    ? 'Clear Accounting verification'
+                    : 'Mark Accounting as verified for Reporting'
+                }
+              >
+                {moneyVerified ? (
+                  <Flex align="center" gap="2">
+                    <CheckCircle width={18} height={18} />
+                    Verified
+                  </Flex>
+                ) : (
+                  <Flex align="center" gap="2">
+                    <XmarkCircle width={18} height={18} />
+                    Not verified
+                  </Flex>
+                )}
+              </Button>
+            ) : moneyVerified ? (
+              <Badge color="green" variant="soft" size="2">
                 Verified
               </Badge>
             ) : (
-              <Badge color="gray" variant="soft" size="1">
-                Unverified
-              </Badge>
-            )}
-            {canVerifyMoney ? (
-              <Flex align="center" gap="2">
-                <Text size="2" as="label" htmlFor="money-verified-switch">
-                  Verified
-                </Text>
-                <Switch
-                  id="money-verified-switch"
-                  checked={moneyVerified}
-                  disabled={verifyMoneyMutation.isPending}
-                  onCheckedChange={(checked) =>
-                    verifyMoneyMutation.mutate(checked)
-                  }
-                />
-              </Flex>
-            ) : (
               <Text size="1" color="gray">
-                Project lead verifies Money for Reporting
+                Project lead verifies Accounting for Reporting
               </Text>
             )}
           </Flex>

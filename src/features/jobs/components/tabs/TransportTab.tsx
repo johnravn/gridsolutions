@@ -278,12 +278,12 @@ export default function TransportTab({ jobId }: { jobId: string }) {
         <Flex justify="between" align="center" gap="3" wrap="wrap">
           <Box>
             <Text size="2" weight="medium">
-              Km for Money tab
+              Km for Accounting tab
             </Text>
             <Text size="1" color="gray" as="div">
               {moneyKm != null && moneyKm > 0
-                ? `${moneyKm} km saved — edit on the Money tab (cost = km × company rate).`
-                : 'Enter km driven on the Money tab to suggest transport cost.'}
+                ? `${moneyKm} km saved — edit on the Accounting tab (cost = km × company rate).`
+                : 'Enter km driven on the Accounting tab to suggest transport cost.'}
             </Text>
           </Box>
           {moneyKm != null && moneyKm > 0 && (

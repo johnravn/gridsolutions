@@ -3,8 +3,9 @@ import { Badge, Box, Card, Flex, Spinner, Text } from '@radix-ui/themes'
 import { useNavigate } from '@tanstack/react-router'
 import { format } from 'date-fns'
 import { nb } from 'date-fns/locale'
-import { LotOfCash, Message, WarningTriangle } from 'iconoir-react'
+import { CheckCircle, LotOfCash, Message, WarningTriangle } from 'iconoir-react'
 import { resolveMatterCardAuthor } from '@features/matters/utils/matterAuthor'
+import { InvoiceScrollContent } from './JobsReadyToInvoiceSection'
 import {
   ConflictScrollCard,
   buildConflictCards,
@@ -25,7 +26,12 @@ import type {
 } from '@features/conflicts/api/queries'
 import type { HomeJobReadyToInvoice, HomeMatter } from '../types'
 
-export type HomeAttentionSheet = 'matters' | 'conflicts' | 'invoice' | null
+export type HomeAttentionSheet =
+  | 'matters'
+  | 'conflicts'
+  | 'invoice'
+  | 'verify'
+  | null
 
 function formatJobWhen(startAt: string | null, endAt: string | null): string {
   if (startAt) {
@@ -66,6 +72,8 @@ export function HomeAttentionSummary({
   groupConflicts,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
+  jobsAccountingUnverified,
+  jobsAccountingUnverifiedLoading,
   getInitials,
   getAvatarUrl,
 }: {
@@ -81,6 +89,8 @@ export function HomeAttentionSummary({
   groupConflicts: Array<GroupConflictRow>
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
+  jobsAccountingUnverified: Array<HomeJobReadyToInvoice>
+  jobsAccountingUnverifiedLoading: boolean
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
 }) {
@@ -102,9 +112,11 @@ export function HomeAttentionSummary({
     resolveMatterCardAuthor(m),
   ).length
   const invoiceCount = jobsReadyToInvoice.length
+  const verifyCount = jobsAccountingUnverified.length
   const showMattersRow = showMatters
   const showConflictsRow = showConflicts
   const showInvoiceRow = canVisitJobs
+  const showVerifyRow = canVisitJobs
 
   const conflictCards = React.useMemo(
     () =>
@@ -117,13 +129,19 @@ export function HomeAttentionSummary({
     [crewConflicts, vehicleConflicts, equipmentConflicts, groupConflicts],
   )
 
-  if (!showMattersRow && !showConflictsRow && !showInvoiceRow) {
+  if (
+    !showMattersRow &&
+    !showConflictsRow &&
+    !showInvoiceRow &&
+    !showVerifyRow
+  ) {
     return null
   }
 
-  const rows: Array<'matters' | 'invoice' | 'conflicts'> = []
+  const rows: Array<'matters' | 'invoice' | 'verify' | 'conflicts'> = []
   if (showMattersRow) rows.push('matters')
   if (showInvoiceRow) rows.push('invoice')
+  if (showVerifyRow) rows.push('verify')
   if (showConflictsRow) rows.push('conflicts')
 
   return (
@@ -162,6 +180,24 @@ export function HomeAttentionSummary({
                   loading={jobsReadyToInvoiceLoading}
                   tone={invoiceCount > 0 ? 'orange' : 'green'}
                   onClick={() => setSheet('invoice')}
+                />
+              </Card>
+            )
+          }
+          if (key === 'verify') {
+            return (
+              <Card
+                key={key}
+                size="2"
+                style={{ padding: 0, overflow: 'hidden' }}
+              >
+                <HomeDisclosureRow
+                  icon={<CheckCircle width={18} height={18} />}
+                  label="Ready to verify Accounting"
+                  count={verifyCount}
+                  loading={jobsAccountingUnverifiedLoading}
+                  tone={verifyCount > 0 ? 'red' : 'green'}
+                  onClick={() => setSheet('verify')}
                 />
               </Card>
             )
@@ -279,6 +315,23 @@ export function HomeAttentionSummary({
             })}
           </HorizontalCardScroller>
         )}
+      </HomeBottomSheet>
+
+      <HomeBottomSheet
+        open={sheet === 'verify'}
+        onOpenChange={(open) => setSheet(open ? 'verify' : null)}
+        title="Ready to verify Accounting"
+      >
+        <InvoiceScrollContent
+          jobs={jobsAccountingUnverified}
+          loading={jobsAccountingUnverifiedLoading}
+          fillHeight={false}
+          jobTab="money"
+          accentColor="var(--red-9)"
+          emptyFallback={
+            <SheetClearState message="Nothing waiting to verify" />
+          }
+        />
       </HomeBottomSheet>
     </>
   )

@@ -2,10 +2,11 @@ import * as React from 'react'
 import { Box, Flex, IconButton, Text, Tooltip } from '@radix-ui/themes'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from '@tanstack/react-router'
-import { CloudSync, LotOfCash, Sparks } from 'iconoir-react'
+import { CheckCircle, CloudSync, LotOfCash, Sparks } from 'iconoir-react'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useAuthz } from '@shared/auth/useAuthz'
 import { companyExpansionQuery } from '@features/company/api/queries'
+import { jobsAccountingUnverifiedQuery } from '@features/home/api/jobsAccountingUnverifiedQuery'
 import { jobsReadyToInvoiceQuery } from '@features/home/api/jobsReadyToInvoiceQuery'
 import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAccess'
 import {
@@ -128,6 +129,8 @@ export default function JobsPage() {
   const [dateFrom, setDateFrom] = React.useState('')
   const [dateTo, setDateTo] = React.useState('')
   const [readyToInvoiceFilter, setReadyToInvoiceFilter] = React.useState(false)
+  const [accountingUnverifiedFilter, setAccountingUnverifiedFilter] =
+    React.useState(false)
   const [showMyJobsOnly, setShowMyJobsOnly] = React.useState(false)
   const isFreelancer = companyRole === 'freelancer'
   const canFilterMyJobs = !isFreelancer
@@ -144,8 +147,21 @@ export default function JobsPage() {
   const showReadyToInvoiceButton =
     readyToInvoiceCount > 0 || readyToInvoiceFilter
 
+  const { data: jobsAccountingUnverified = [] } = useQuery({
+    ...jobsAccountingUnverifiedQuery({
+      companyId: companyId ?? '',
+      userId: userId ?? '',
+    }),
+    enabled: !!companyId && !!userId,
+  })
+  const accountingUnverifiedCount = jobsAccountingUnverified.length
+  const showAccountingUnverifiedButton =
+    accountingUnverifiedCount > 0 || accountingUnverifiedFilter
+
   const applyReadyToInvoiceFilter = React.useCallback(() => {
     setReadyToInvoiceFilter(true)
+    setAccountingUnverifiedFilter(false)
+    setShowMyJobsOnly(false)
     setStatusFilter(['completed'] as Array<JobStatus>)
     setShowOnlyArchived(false)
     setDateFrom('')
@@ -169,9 +185,48 @@ export default function JobsPage() {
     applyReadyToInvoiceFilter,
   ])
 
+  const applyAccountingUnverifiedFilter = React.useCallback(() => {
+    setAccountingUnverifiedFilter(true)
+    setReadyToInvoiceFilter(false)
+    setShowMyJobsOnly(false)
+    setStatusFilter(['invoiced', 'paid'] as Array<JobStatus>)
+    setShowOnlyArchived(false)
+    setDateFrom('')
+    setDateTo('')
+  }, [])
+
+  const clearAccountingUnverifiedFilter = React.useCallback(() => {
+    setAccountingUnverifiedFilter(false)
+    setStatusFilter([...DEFAULT_STATUS_FILTER])
+  }, [])
+
+  const toggleAccountingUnverifiedFilter = React.useCallback(() => {
+    if (accountingUnverifiedFilter) {
+      clearAccountingUnverifiedFilter()
+    } else {
+      applyAccountingUnverifiedFilter()
+    }
+  }, [
+    accountingUnverifiedFilter,
+    clearAccountingUnverifiedFilter,
+    applyAccountingUnverifiedFilter,
+  ])
+
+  const clearListFiltersForSearch = React.useCallback(() => {
+    setReadyToInvoiceFilter(false)
+    setAccountingUnverifiedFilter(false)
+    setShowMyJobsOnly(false)
+    setShowOnlyArchived(false)
+    setShowJobsInRecurringSeries(true)
+    setStatusFilter([])
+    setDateFrom('')
+    setDateTo('')
+  }, [])
+
   const handleStatusFilterChange = React.useCallback(
     (next: Array<JobStatus>) => {
       setReadyToInvoiceFilter(false)
+      setAccountingUnverifiedFilter(false)
       setStatusFilter(next)
     },
     [],
@@ -179,24 +234,33 @@ export default function JobsPage() {
 
   const handleShowOnlyArchivedChange = React.useCallback((next: boolean) => {
     setReadyToInvoiceFilter(false)
+    setAccountingUnverifiedFilter(false)
     setShowOnlyArchived(next)
   }, [])
 
   const handleShowJobsInRecurringSeriesChange = React.useCallback(
     (next: boolean) => {
       setReadyToInvoiceFilter(false)
+      setAccountingUnverifiedFilter(false)
       setShowJobsInRecurringSeries(next)
     },
     [],
   )
 
   const handleShowMyJobsOnlyChange = React.useCallback((next: boolean) => {
+    if (next) {
+      setReadyToInvoiceFilter(false)
+      setAccountingUnverifiedFilter(false)
+    }
     setShowMyJobsOnly(next)
   }, [])
 
   const handlePeriodChange = React.useCallback(
     (range: { startDate: string; endDate: string }) => {
-      if (range.startDate || range.endDate) setReadyToInvoiceFilter(false)
+      if (range.startDate || range.endDate) {
+        setReadyToInvoiceFilter(false)
+        setAccountingUnverifiedFilter(false)
+      }
       setDateFrom(range.startDate)
       setDateTo(range.endDate)
     },
@@ -298,12 +362,22 @@ export default function JobsPage() {
     enabled: !!companyId && !!userId && myJobsFilterActive,
   })
   const waitingForMyJobIds = myJobsFilterActive && myJobIdsLoading
-  const onlyJobIds = myJobsFilterActive ? (myJobIds ?? []) : null
+  const accountingUnverifiedIds = React.useMemo(
+    () => jobsAccountingUnverified.map((job) => job.id),
+    [jobsAccountingUnverified],
+  )
+  const onlyJobIds = myJobsFilterActive
+    ? (myJobIds ?? [])
+    : accountingUnverifiedFilter
+      ? accountingUnverifiedIds
+      : null
+  const waitingForOnlyJobIds = waitingForMyJobIds
 
   const indexListArgs = resolveJobsIndexListArgs({
     companyRole,
     showJobsInRecurringSeries,
     readyToInvoiceFilter,
+    accountingUnverifiedFilter,
     showMyJobsOnly: myJobsFilterActive,
     statusFilter,
     userId,
@@ -325,7 +399,7 @@ export default function JobsPage() {
       includeRecurringMembers: indexListArgs.includeRecurringMembers,
       onlyJobIds,
     }),
-    enabled: !!companyId && !waitingForMyJobIds,
+    enabled: !!companyId && !waitingForOnlyJobIds,
   })
   const showInitialSkeleton = useInitialPageLoad(jobsIndexLoading)
 
@@ -376,6 +450,31 @@ export default function JobsPage() {
             }
           >
             {readyToInvoiceCount}
+          </Box>
+        </Box>
+      )}
+      {showAccountingUnverifiedButton && (
+        <Box className="split-header-icon-wrap">
+          <IconButton
+            className="split-header-icon-button"
+            size="3"
+            variant={accountingUnverifiedFilter ? 'solid' : 'ghost'}
+            color="red"
+            onClick={toggleAccountingUnverifiedFilter}
+            title="Ready to verify Accounting"
+            aria-label={`${accountingUnverifiedCount} ready to verify Accounting`}
+          >
+            <CheckCircle width={22} height={22} />
+          </IconButton>
+          <Box
+            aria-hidden
+            className={
+              accountingUnverifiedFilter
+                ? 'split-header-icon-badge split-header-icon-badge--red split-header-icon-badge--on-solid'
+                : 'split-header-icon-badge split-header-icon-badge--red'
+            }
+          >
+            {accountingUnverifiedCount}
           </Box>
         </Box>
       )}
@@ -451,9 +550,11 @@ export default function JobsPage() {
       dateFrom={dateFrom}
       dateTo={dateTo}
       readyToInvoiceFilter={readyToInvoiceFilter}
+      accountingUnverifiedFilter={accountingUnverifiedFilter}
       showMyJobsOnly={myJobsFilterActive}
       onlyJobIds={onlyJobIds}
-      waitingForMyJobIds={waitingForMyJobIds}
+      waitingForMyJobIds={waitingForOnlyJobIds}
+      onClearListFilters={clearListFiltersForSearch}
       compact={!isLarge}
       toolbarExtra={isLarge ? undefined : leftToolbar}
     />

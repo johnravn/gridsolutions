@@ -38,6 +38,8 @@ type HomeMobileLayoutProps = {
   mattersLoading: boolean
   jobsReadyToInvoice: Array<HomeJobReadyToInvoice>
   jobsReadyToInvoiceLoading: boolean
+  jobsAccountingUnverified: Array<HomeJobReadyToInvoice>
+  jobsAccountingUnverifiedLoading: boolean
   getInitials: (name: string | null, email: string) => string
   getAvatarUrl: (avatarPath: string | null) => string | null
   crewConflicts: Array<CrewConflictRow>
@@ -66,6 +68,8 @@ export function HomeMobileLayout({
   mattersLoading,
   jobsReadyToInvoice,
   jobsReadyToInvoiceLoading,
+  jobsAccountingUnverified,
+  jobsAccountingUnverifiedLoading,
   getInitials,
   getAvatarUrl,
   crewConflicts,
@@ -105,6 +109,8 @@ export function HomeMobileLayout({
           groupConflicts={groupConflicts}
           jobsReadyToInvoice={jobsReadyToInvoice}
           jobsReadyToInvoiceLoading={jobsReadyToInvoiceLoading}
+          jobsAccountingUnverified={jobsAccountingUnverified}
+          jobsAccountingUnverifiedLoading={jobsAccountingUnverifiedLoading}
           getInitials={getInitials}
           getAvatarUrl={getAvatarUrl}
         />
