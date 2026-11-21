@@ -14,12 +14,9 @@ import {
   YAxis,
 } from 'recharts'
 import { Card, Flex, Text } from '@radix-ui/themes'
-import {
-  
-  ChartTypeSelector
-} from '@shared/ui/components/IncomeExpensesChart'
+import { ChartTypeSelector } from '@shared/ui/components/IncomeExpensesChart'
 import { formatCurrency } from '../utils/format'
-import type {ChartType} from '@shared/ui/components/IncomeExpensesChart';
+import type { ChartType } from '@shared/ui/components/IncomeExpensesChart'
 import type { MonthlyJobProfitabilityPoint } from '../utils/monthlyJobs'
 
 const JOB_CHART_TYPES: Array<ChartType> = ['composed', 'area', 'line']

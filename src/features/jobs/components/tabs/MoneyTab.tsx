@@ -66,11 +66,11 @@ import {
   contaLedgerDateRange,
   resolveContaLinkStatus,
 } from '../../utils/moneyConta'
+import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
 import MoneyItemsFilter from './MoneyItemsFilter'
 import type { ContaDatePadOption } from '../../utils/moneyConta'
-import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import type { MoneySuggestion } from '../../utils/moneySuggestions'
 import type {
   JobMoneyItem,
