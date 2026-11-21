@@ -21,6 +21,10 @@ import {
   applyContaInvoicePaidSync,
   fetchContaInvoice,
 } from '@shared/conta/invoicePaidSyncCore'
+import {
+  formatContaInvoiceMoney,
+  resolveContaInvoiceGrossTotal,
+} from '../../utils/contaInvoiceDisplay'
 import type { JobInvoiceSyncRow } from '@shared/conta/invoicePaidSyncCore'
 
 type InvoiceRecord = {
@@ -121,42 +125,11 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
     return { label: 'Pending', color: 'gray', icon: null }
   }
 
-  const vatCodeToPercent = (vatCode: string | undefined): number => {
-    if (!vatCode || vatCode === 'no.vat') return 0
-    if (vatCode === 'high') return 25
-    if (vatCode === 'medium') return 15
-    if (vatCode === 'low') return 10
-    return 25
-  }
-
-  const getInvoiceTotal = (invoice: InvoiceRecord): number | null => {
-    const contaAmount =
-      invoice.conta_response?.amount ??
-      invoice.conta_response?.totalAmount ??
-      invoice.conta_response?.sumRemaining
-    if (typeof contaAmount === 'number') return contaAmount
-
-    const lines = invoice.invoice_data?.invoiceLines
-    if (!Array.isArray(lines) || lines.length === 0) return null
-
-    let totalWithVat = 0
-    for (const line of lines) {
-      const price = Number(line.price) || 0
-      const qty = Number(line.quantity) || 0
-      const discount = Number(line.discount) || 0
-      const exVat = price * qty * (1 - discount / 100)
-      const vatPercent = vatCodeToPercent(line.vatCode)
-      totalWithVat += exVat * (1 + vatPercent / 100)
-    }
-    return Math.round(totalWithVat * 100) / 100
-  }
-
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat('nb-NO', {
-      style: 'currency',
-      currency: 'NOK',
-      minimumFractionDigits: 2,
-    }).format(amount)
+  const getInvoiceTotal = (invoice: InvoiceRecord): number | null =>
+    resolveContaInvoiceGrossTotal({
+      invoice_data: invoice.invoice_data,
+      conta_response: invoice.conta_response,
+    })
 
   const getInvoiceDeliveryLabel = (invoice: InvoiceRecord) => {
     const recipients =
@@ -399,15 +372,18 @@ export default function InvoiceHistory({ jobId }: { jobId: string }) {
                     </Text>
                   </Table.Cell>
                   <Table.Cell style={{ textAlign: 'right' }}>
-                    {getInvoiceTotal(invoice) != null ? (
-                      <Text size="2" weight="medium">
-                        {formatCurrency(getInvoiceTotal(invoice)!)}
-                      </Text>
-                    ) : (
-                      <Text size="2" color="gray">
-                        —
-                      </Text>
-                    )}
+                    {(() => {
+                      const total = getInvoiceTotal(invoice)
+                      return (
+                        <Text
+                          size="2"
+                          weight={total != null ? 'medium' : undefined}
+                          color={total == null ? 'gray' : undefined}
+                        >
+                          {formatContaInvoiceMoney(total)}
+                        </Text>
+                      )
+                    })()}
                   </Table.Cell>
                   <Table.Cell>
                     {displayContaInvoiceId ? (

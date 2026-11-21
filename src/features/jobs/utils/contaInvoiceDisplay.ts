@@ -214,6 +214,86 @@ export function formatContaInvoiceMoney(amount: number | null): string {
   }).format(amount)
 }
 
+/** Conta vatCode → percent. Unknown codes default to high (25%). */
+export function contaVatCodeToPercent(
+  vatCode: string | null | undefined,
+): number {
+  if (!vatCode || vatCode === 'no.vat') return 0
+  if (vatCode === 'high') return 25
+  if (vatCode === 'medium') return 15
+  if (vatCode === 'low') return 10
+  return 25
+}
+
+/**
+ * Gross (incl. MVA) total from Conta-style invoice lines.
+ * Returns null when there are no lines.
+ */
+export function invoiceLinesGrossTotal(invoiceLines: unknown): number | null {
+  const lines = parseContaInvoiceLines(invoiceLines)
+  if (lines.length === 0) return null
+  let total = 0
+  for (const line of lines) {
+    const vatPercent = contaVatCodeToPercent(line.vatCode)
+    total += line.sumNet * (1 + vatPercent / 100)
+  }
+  return roundMoney(total)
+}
+
+/**
+ * Invoice tab / history gross total (incl. MVA).
+ *
+ * Conta’s invoice model uses `sumTotal` / `sumNet` / `sumVAT`. Older UI code
+ * incorrectly preferred `sumRemaining`, which is **0 for paid invoices** and
+ * is a balance remaining — not the invoice total.
+ *
+ * Prefer Conta header totals, then line math from the richest available source.
+ * Never treat `sumRemaining` as the invoice total.
+ */
+export function resolveContaInvoiceGrossTotal(input: {
+  invoice_data?: unknown
+  conta_response?: unknown
+  fetched?: unknown
+}): number | null {
+  const display = buildContaInvoiceDisplay(input)
+  if (display.header.sumTotal != null) {
+    return roundMoney(display.header.sumTotal)
+  }
+
+  const sumNet = display.header.sumNet
+  const sumVat = display.header.sumVat
+  if (
+    sumNet != null &&
+    sumVat != null &&
+    Number.isFinite(sumNet) &&
+    Number.isFinite(sumVat)
+  ) {
+    return roundMoney(sumNet + sumVat)
+  }
+
+  const fetched = asRecord(input.fetched)
+  const response = asRecord(input.conta_response)
+  const stored = asRecord(input.invoice_data)
+  for (const source of [fetched, response, stored]) {
+    const fromLines = invoiceLinesGrossTotal(source?.invoiceLines)
+    if (fromLines != null) return fromLines
+  }
+
+  if (display.lines.length > 0) {
+    return invoiceLinesGrossTotal(
+      display.lines.map((line) => ({
+        price: line.price,
+        quantity: line.quantity,
+        discount: line.discount,
+        vatCode: line.vatCode,
+        sumNet: line.sumNet,
+      })),
+    )
+  }
+
+  return null
+}
+
 /** True when stored Conta / invoice_data already has displayable lines. */
 export function hasContaInvoiceDisplayLines(
   input: Parameters<typeof buildContaInvoiceDisplay>[0],
