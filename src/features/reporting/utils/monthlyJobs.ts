@@ -33,18 +33,22 @@ export function enumerateMonthKeys(
  * Bucket a job into a calendar month for the monthly profitability chart.
  * Prefer start_at, else end_at. Clip into [fromDate, toDate] so overlapping
  * jobs that started before the range still land on the chart.
+ *
+ * Pass precomputed `monthKeys` (from `enumerateMonthKeys`) when aggregating
+ * many rows so the range is not re-enumerated per job.
  */
 export function jobMonthKeyInRange(
   row: Pick<JobProfitabilityRow, 'start_at' | 'end_at'>,
   fromDate: string,
   toDate: string,
+  monthKeys?: Array<string>,
 ): string | null {
   const raw = row.start_at ?? row.end_at
   if (!raw) return null
   const d = new Date(raw)
   if (Number.isNaN(d.getTime())) return null
 
-  const keys = enumerateMonthKeys(fromDate, toDate)
+  const keys = monthKeys ?? enumerateMonthKeys(fromDate, toDate)
   if (keys.length === 0) return null
 
   const key = monthKeyFromDate(d)
@@ -74,7 +78,7 @@ export function aggregateJobsByMonth(
   }
 
   for (const row of rows) {
-    const key = jobMonthKeyInRange(row, fromDate, toDate)
+    const key = jobMonthKeyInRange(row, fromDate, toDate, keys)
     if (!key || !buckets.has(key)) continue
     const cur = buckets.get(key)!
     cur.income += row.income

@@ -399,6 +399,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
     enabled: !!accountingConfig?.accounting_organization_id && !!jobInfo,
     staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const jobNumberTokens = React.useMemo(() => {
@@ -503,8 +504,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
     enabled:
       !!accountingConfig?.accounting_organization_id &&
+      !!jobInfo &&
       (!!contaProjectId || jobNumberTokens.length > 0),
     staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 
   const contaLedgerLines = React.useMemo(
@@ -672,13 +675,25 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     return Array.from(orgNos).sort()
   }, [crewBookings])
 
+  const crewBookingEndDays = React.useMemo(
+    () =>
+      (crewBookings ?? [])
+        .map((b) => b.end_at?.slice(0, 10) ?? '')
+        .filter(Boolean)
+        .sort()
+        .join('|'),
+    [crewBookings],
+  )
+
   const crewContaDateRange = React.useMemo(
     () =>
       crewContaInvoiceDateRange(jobInfo?.end_at, {
         startAt: jobInfo?.start_at,
-        bookingEnds: (crewBookings ?? []).map((b) => b.end_at),
+        bookingEnds: crewBookingEndDays
+          ? crewBookingEndDays.split('|')
+          : [],
       }),
-    [jobInfo?.end_at, jobInfo?.start_at, crewBookings],
+    [jobInfo?.end_at, jobInfo?.start_at, crewBookingEndDays],
   )
 
   const { data: crewContaLedgerLines = [] } = useQuery({
@@ -698,6 +713,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       !!crewContaDateRange.endDate &&
       crewOrgNumbers.length > 0,
     staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const orgId = accountingConfig!.accounting_organization_id!
       const gatewayUrl = appEnv.contaApiUrl()

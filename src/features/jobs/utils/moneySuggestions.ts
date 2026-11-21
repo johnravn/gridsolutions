@@ -376,15 +376,18 @@ export function buildCrewExpenseSuggestions(input: {
   contaLines: Array<CrewContaInvoiceLineInput>
 }): Array<MoneySuggestion> {
   const out: Array<MoneySuggestion> = []
+  const linesByOrgNo = new Map<string, Array<CrewContaInvoiceLineInput>>()
+  for (const line of input.contaLines) {
+    const orgNo = normalizeOrgNo(line.supplierOrgNo)
+    if (!orgNo) continue
+    const bucket = linesByOrgNo.get(orgNo)
+    if (bucket) bucket.push(line)
+    else linesByOrgNo.set(orgNo, [line])
+  }
 
   for (const booking of input.bookings) {
     const orgNo = normalizeOrgNo(booking.vat_number)
-    const matches =
-      orgNo.length > 0
-        ? input.contaLines.filter(
-            (line) => normalizeOrgNo(line.supplierOrgNo) === orgNo,
-          )
-        : []
+    const matches = orgNo.length > 0 ? (linesByOrgNo.get(orgNo) ?? []) : []
 
     let contaSuggestionCount = 0
     if (matches.length > 0) {
