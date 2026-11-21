@@ -237,6 +237,8 @@ export function reportJobProfitabilityQuery({
   return queryOptions<Array<JobProfitabilityRow>>({
     queryKey: ['reporting', 'job-profitability', companyId, fromDate, toDate],
     queryFn: () => fetchJobProfitabilityRows({ companyId, fromDate, toDate }),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -265,6 +267,8 @@ export function reportCustomerProfitabilityQuery({
       })
       return aggregateCustomerProfitabilityFromJobs(jobRows)
     },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -279,6 +283,8 @@ export function reportUtilizationQuery({
 }) {
   return queryOptions<Array<UtilizationRow>>({
     queryKey: ['reporting', 'utilization', companyId, fromDate, toDate],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<Array<UtilizationRow>> => {
       const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO, from, to } = rangeBounds(fromDate, toDate)
@@ -367,6 +373,8 @@ export function reportMonthlyTrendQuery({
 }) {
   return queryOptions<Array<MonthlyTrendRow>>({
     queryKey: ['reporting', 'monthly-trend', companyId, fromDate, toDate],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<Array<MonthlyTrendRow>> => {
       const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
@@ -459,6 +467,8 @@ export function reportInvoicePipelineQuery({
 }) {
   return queryOptions<InvoicePipelineResult>({
     queryKey: ['reporting', 'invoice-pipeline', companyId, fromDate, toDate],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async (): Promise<InvoicePipelineResult> => {
       const overlapping = await fetchOverlappingJobs({
         companyId,

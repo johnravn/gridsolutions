@@ -43,6 +43,6 @@ export function jobsAccountingUnverifiedQuery({
       return (data ?? []) as Array<HomeJobReadyToInvoice>
     },
     staleTime: 60_000,
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false,
   }
 }
