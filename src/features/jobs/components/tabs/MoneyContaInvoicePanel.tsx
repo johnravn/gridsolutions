@@ -7,9 +7,11 @@ import {
   Card,
   Flex,
   Heading,
+  Spinner,
   Table,
   Text,
 } from '@radix-ui/themes'
+import { formatDistanceToNow } from 'date-fns'
 import { Refresh } from 'iconoir-react'
 import { contaClient } from '@shared/api/conta/client'
 import { fetchContaInvoice } from '@shared/conta/invoicePaidSyncCore'
@@ -25,6 +27,7 @@ export type MoneyContaInvoiceRecord = {
   id: string
   status: string
   created_at: string
+  updated_at?: string | null
   invoice_data: unknown
   conta_response: unknown
   conta_invoice_id: string | null
@@ -51,14 +54,23 @@ function HeaderField({
   )
 }
 
+function formatUpdatedAgo(iso: string | null | undefined): string | null {
+  if (!iso) return null
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return formatDistanceToNow(date, { addSuffix: true })
+}
+
 export default function MoneyContaInvoicePanel({
   jobId,
   organizationId,
   invoices,
+  invoicesLoading = false,
 }: {
   jobId: string
   organizationId: string | null
   invoices: Array<MoneyContaInvoiceRecord>
+  invoicesLoading?: boolean
 }) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
@@ -66,6 +78,11 @@ export default function MoneyContaInvoicePanel({
   const [fetchedById, setFetchedById] = React.useState<Record<string, unknown>>(
     {},
   )
+  const [fetchedAtById, setFetchedAtById] = React.useState<
+    Record<string, string>
+  >({})
+  const autoFetchedIdsRef = React.useRef(new Set<string>())
+  const [, setTick] = React.useState(0)
 
   const selected =
     invoices.find((inv) => inv.id === selectedId) ?? invoices[0] ?? null
@@ -76,6 +93,12 @@ export default function MoneyContaInvoicePanel({
       setSelectedId(invoices[0]?.id ?? null)
     }
   }, [invoices, selected])
+
+  // Keep “Updated … ago” badges fresh while the panel is open.
+  React.useEffect(() => {
+    const id = window.setInterval(() => setTick((n) => n + 1), 30_000)
+    return () => window.clearInterval(id)
+  }, [])
 
   const display = React.useMemo(() => {
     if (!selected) return null
@@ -89,7 +112,7 @@ export default function MoneyContaInvoicePanel({
   }, [selected, fetchedById])
 
   const fetchMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts?: { quiet?: boolean }) => {
       if (!selected) throw new Error('No invoice selected')
       const orgId = selected.organization_id ?? organizationId ?? null
       if (!orgId) {
@@ -129,14 +152,18 @@ export default function MoneyContaInvoicePanel({
         .eq('id', selected.id)
       if (error) throw error
 
-      return { invoiceId: selected.id, fetched }
+      return { invoiceId: selected.id, fetched, quiet: !!opts?.quiet }
     },
-    onSuccess: ({ invoiceId, fetched }) => {
+    onSuccess: ({ invoiceId, fetched, quiet }) => {
+      const nowIso = new Date().toISOString()
       setFetchedById((prev) => ({ ...prev, [invoiceId]: fetched }))
+      setFetchedAtById((prev) => ({ ...prev, [invoiceId]: nowIso }))
       void qc.invalidateQueries({
         queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
       })
-      success('Conta invoice loaded', 'Lines and header refreshed from Conta.')
+      if (!quiet) {
+        success('Conta invoice loaded', 'Lines and header refreshed from Conta.')
+      }
     },
     onError: (e: unknown) => {
       toastError(
@@ -148,6 +175,31 @@ export default function MoneyContaInvoicePanel({
 
   const canFetch =
     !!organizationId || invoices.some((inv) => !!inv.organization_id)
+
+  const selectedCanFetch =
+    !!selected &&
+    canFetch &&
+    !!(selected.conta_invoice_id || selected.conta_response)
+
+  // Initial load: pull Conta once per invoice when it becomes selected.
+  React.useEffect(() => {
+    if (!selected || !selectedCanFetch) return
+    if (autoFetchedIdsRef.current.has(selected.id)) return
+    if (fetchMutation.isPending) return
+    autoFetchedIdsRef.current.add(selected.id)
+    fetchMutation.mutate({ quiet: true })
+    // Intentionally depend on selected id + fetchability, not the mutation object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-fetch once per invoice
+  }, [selected?.id, selectedCanFetch])
+
+  const isFetching = fetchMutation.isPending
+  const showInitialLoading =
+    invoicesLoading || (isFetching && (!display || display.lines.length === 0))
+
+  const updatedAtIso = selected
+    ? (fetchedAtById[selected.id] ?? selected.updated_at ?? selected.created_at)
+    : null
+  const updatedAgo = formatUpdatedAgo(updatedAtIso)
 
   return (
     <Card style={{ background: 'var(--gray-a2)' }}>
@@ -163,24 +215,40 @@ export default function MoneyContaInvoicePanel({
             </Text>
           </Box>
           <Button
-            size="2"
-            variant="solid"
-            disabled={
-              !selected || !canFetch || fetchMutation.isPending || !display
-            }
-            onClick={() => fetchMutation.mutate()}
+            size="1"
+            variant="soft"
+            disabled={!selectedCanFetch || isFetching}
+            onClick={() => fetchMutation.mutate({ quiet: false })}
           >
-            <Flex align="center" gap="2">
-              <Refresh width={16} height={16} />
-              {fetchMutation.isPending ? 'Fetching…' : 'Fetch Conta invoice'}
+            <Flex align="center" gap="1">
+              {isFetching ? (
+                <Spinner size="1" />
+              ) : (
+                <Refresh width={14} height={14} />
+              )}
+              {isFetching ? 'Fetching…' : 'Refetch'}
             </Flex>
           </Button>
         </Flex>
 
-        {invoices.length === 0 ? (
+        {invoicesLoading && invoices.length === 0 ? (
+          <Flex
+            align="center"
+            justify="center"
+            gap="2"
+            py="6"
+            role="status"
+            aria-live="polite"
+          >
+            <Spinner size="3" />
+            <Text size="2" color="gray">
+              Loading Conta invoices…
+            </Text>
+          </Flex>
+        ) : invoices.length === 0 ? (
           <Text size="2" color="gray">
             No sent Conta invoices on this job yet. Create one from the Invoice
-            tab, then fetch here to inspect the lines Conta recorded.
+            tab, then open Accounting to inspect the lines Conta recorded.
           </Text>
         ) : (
           <>
@@ -204,26 +272,53 @@ export default function MoneyContaInvoicePanel({
               </Flex>
             )}
 
-            {display && (
-              <>
-                <Flex gap="2" wrap="wrap" align="center">
-                  {display.header.invoiceNo && (
-                    <Badge size="1" variant="soft" color="blue">
-                      Invoice #{display.header.invoiceNo}
-                    </Badge>
-                  )}
-                  {display.header.status && (
-                    <Badge size="1" variant="soft" color="gray">
-                      {display.header.status}
-                    </Badge>
-                  )}
-                  {selected?.status && (
-                    <Badge size="1" variant="outline" color="gray">
-                      Grid: {selected.status}
-                    </Badge>
-                  )}
-                </Flex>
+            <Flex gap="2" wrap="wrap" align="center">
+              {display?.header.invoiceNo && (
+                <Badge size="1" variant="soft" color="blue">
+                  Invoice #{display.header.invoiceNo}
+                </Badge>
+              )}
+              {display?.header.status && (
+                <Badge size="1" variant="soft" color="gray">
+                  {display.header.status}
+                </Badge>
+              )}
+              {selected?.status && (
+                <Badge size="1" variant="outline" color="gray">
+                  Grid: {selected.status}
+                </Badge>
+              )}
+              {updatedAgo && (
+                <Badge size="1" variant="soft" color="amber">
+                  Updated {updatedAgo}
+                </Badge>
+              )}
+              {isFetching && !showInitialLoading && (
+                <Badge size="1" variant="soft" color="blue">
+                  <Flex align="center" gap="1">
+                    <Spinner size="1" />
+                    Refreshing…
+                  </Flex>
+                </Badge>
+              )}
+            </Flex>
 
+            {showInitialLoading ? (
+              <Flex
+                align="center"
+                justify="center"
+                gap="2"
+                py="6"
+                role="status"
+                aria-live="polite"
+              >
+                <Spinner size="3" />
+                <Text size="2" color="gray">
+                  Loading Conta invoice…
+                </Text>
+              </Flex>
+            ) : display ? (
+              <>
                 <Flex gap="3" wrap="wrap">
                   <HeaderField
                     label="Org / sender ref"
@@ -287,8 +382,8 @@ export default function MoneyContaInvoicePanel({
 
                 {display.lines.length === 0 ? (
                   <Text size="2" color="gray">
-                    No invoice lines in stored data. Fetch from Conta to load
-                    the lines that were sent.
+                    No invoice lines in stored data. Use Refetch to load the
+                    lines Conta recorded.
                   </Text>
                 ) : (
                   <MobileHScroll>
@@ -343,7 +438,7 @@ export default function MoneyContaInvoicePanel({
                   </MobileHScroll>
                 )}
               </>
-            )}
+            ) : null}
           </>
         )}
       </Flex>

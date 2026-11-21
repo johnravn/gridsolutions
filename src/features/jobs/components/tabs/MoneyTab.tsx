@@ -219,13 +219,16 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
-  const { data: jobSalesInvoices = [] } = useQuery({
+  const {
+    data: jobSalesInvoices = [],
+    isLoading: isSalesInvoicesLoading,
+  } = useQuery({
     queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('job_invoices')
         .select(
-          'id, status, created_at, invoice_data, conta_response, conta_invoice_id, organization_id',
+          'id, status, created_at, updated_at, invoice_data, conta_response, conta_invoice_id, organization_id',
         )
         .eq('job_id', jobId)
         .in('status', ['created', 'paid'])
@@ -1780,6 +1783,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               accountingConfig?.accounting_organization_id ?? null
             }
             invoices={jobSalesInvoices}
+            invoicesLoading={isSalesInvoicesLoading}
           />
         </Box>
       </Flex>
