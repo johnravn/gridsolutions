@@ -3,6 +3,7 @@ import {
   applyContaInvoicePaidSync,
   extractContaNumericInvoiceId,
   fetchContaInvoice,
+  fetchContaInvoiceByNumber,
   resolveContaInvoiceIdString,
   syncInvoicePaidStatusForOrganization,
   type JobInvoiceSyncRow,
@@ -152,6 +153,38 @@ describe('resolveContaInvoiceIdString', () => {
         invoiceNo: 2000,
       }),
     ).toBe('2000')
+  })
+})
+
+describe('fetchContaInvoiceByNumber', () => {
+  it('searches then GETs full invoice', async () => {
+    const get = vi
+      .fn()
+      .mockResolvedValueOnce({ hits: [{ id: 88 }] })
+      .mockResolvedValueOnce({
+        id: 88,
+        invoiceNo: 2002,
+        status: 'INVOICE_CREATED',
+      })
+    const conta: ContaFetch = { get, post: vi.fn() }
+    const result = await fetchContaInvoiceByNumber(conta, 'org-1', '2002')
+    expect(get).toHaveBeenNthCalledWith(
+      1,
+      '/invoice/organizations/org-1/invoices?invoiceNo=2002',
+    )
+    expect(get).toHaveBeenNthCalledWith(
+      2,
+      '/invoice/organizations/org-1/invoices/88',
+    )
+    expect(result?.invoiceNo).toBe(2002)
+  })
+
+  it('returns null when no hits', async () => {
+    const get = vi.fn().mockResolvedValueOnce({ hits: [] })
+    const conta: ContaFetch = { get, post: vi.fn() }
+    await expect(
+      fetchContaInvoiceByNumber(conta, 'org-1', '999'),
+    ).resolves.toBeNull()
   })
 })
 
