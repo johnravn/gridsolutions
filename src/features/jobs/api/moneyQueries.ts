@@ -119,7 +119,64 @@ export async function updateJobTransportKmDriven(
 ): Promise<void> {
   const { error } = await supabase
     .from('jobs')
-    .update({ transport_km_driven: kmDriven })
+    .update({
+      transport_km_driven: kmDriven,
+      // Km changes the Money picture — clear lead verification.
+      money_verified_at: null,
+      money_verified_by: null,
+    })
+    .eq('id', jobId)
+  if (error) throw error
+}
+
+export type JobMoneyVerification = {
+  money_verified_at: string | null
+  money_verified_by: string | null
+  project_lead_user_id: string | null
+}
+
+export function jobMoneyVerificationQuery(jobId: string) {
+  return queryOptions<JobMoneyVerification>({
+    queryKey: ['jobs', jobId, 'money-verification'],
+    queryFn: async (): Promise<JobMoneyVerification> => {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('money_verified_at, money_verified_by, project_lead_user_id')
+        .eq('id', jobId)
+        .single()
+      if (error) throw error
+      return {
+        money_verified_at: data.money_verified_at ?? null,
+        money_verified_by: data.money_verified_by ?? null,
+        project_lead_user_id: data.project_lead_user_id ?? null,
+      }
+    },
+  })
+}
+
+/** Project lead (or company owner/super_user) marks Money as correct. */
+export async function setJobMoneyVerified({
+  jobId,
+  verified,
+  userId,
+}: {
+  jobId: string
+  verified: boolean
+  userId: string
+}): Promise<void> {
+  const { error } = await supabase
+    .from('jobs')
+    .update(
+      verified
+        ? {
+            money_verified_at: new Date().toISOString(),
+            money_verified_by: userId,
+          }
+        : {
+            money_verified_at: null,
+            money_verified_by: null,
+          },
+    )
     .eq('id', jobId)
   if (error) throw error
 }

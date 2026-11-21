@@ -24,6 +24,8 @@ export type JobProfitabilityRow = {
    * income (empty Money or expenses-only).
    */
   money_incomplete: boolean
+  /** True when the project lead marked Money as verified. */
+  money_verified: boolean
 }
 
 export type CustomerProfitabilityRow = {

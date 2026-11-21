@@ -66,6 +66,7 @@ function jobRow(
     margin_pct: null,
     money_item_count: 0,
     money_incomplete: false,
+    money_verified: false,
     ...partial,
   }
 }

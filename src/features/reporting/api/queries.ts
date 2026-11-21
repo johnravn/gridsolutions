@@ -35,6 +35,7 @@ type JobRow = {
   end_at: string | null
   customer_id: string | null
   status?: string
+  money_verified_at?: string | null
   customer: { name: string } | Array<{ name: string }> | null
   project_lead: ProjectLeadJoin | Array<ProjectLeadJoin> | null
 }
@@ -88,8 +89,8 @@ async function fetchOverlappingJobs({
   const rangeEnd = to.getTime()
 
   const select = includeStatus
-    ? 'id, jobnr, title, start_at, end_at, customer_id, status, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
-    : 'id, jobnr, title, start_at, end_at, customer_id, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
+    ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
+    : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email )'
 
   const { data: jobs, error } = await supabase
     .from('jobs')
@@ -171,6 +172,7 @@ function toJobProfitabilityRow(
       income,
       itemCount: money.itemCount,
     }),
+    money_verified: job.money_verified_at != null,
   }
 }
 
@@ -255,7 +257,9 @@ export function reportCustomerProfitabilityQuery({
         }
       >()
       const noCustomerKey = '__no_customer__'
+      // Charts / totals: verified Money only (list stays all-jobs elsewhere).
       for (const row of jobRows) {
+        if (!row.money_verified) continue
         const key = row.customer_id ?? noCustomerKey
         const cur = byCustomer.get(key)
         if (!cur) {
@@ -393,21 +397,28 @@ export function reportMonthlyTrendQuery({
       const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
 
+      // Monthly P&L chart: only ledger rows on verified jobs.
       const [datedRes, undatedRes] = await Promise.all([
         supabase
           .from('job_money_items')
-          .select('type, amount, date, created_at')
+          .select(
+            'type, amount, date, created_at, jobs!inner(money_verified_at)',
+          )
           .eq('company_id', scopedCompanyId)
           .not('date', 'is', null)
           .gte('date', fromISO)
-          .lte('date', toISO),
+          .lte('date', toISO)
+          .not('jobs.money_verified_at', 'is', null),
         supabase
           .from('job_money_items')
-          .select('type, amount, date, created_at')
+          .select(
+            'type, amount, date, created_at, jobs!inner(money_verified_at)',
+          )
           .eq('company_id', scopedCompanyId)
           .is('date', null)
           .gte('created_at', fromISO)
-          .lte('created_at', toISO),
+          .lte('created_at', toISO)
+          .not('jobs.money_verified_at', 'is', null),
       ])
 
       if (datedRes.error) throw datedRes.error

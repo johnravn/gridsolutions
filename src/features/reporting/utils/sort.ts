@@ -1,8 +1,8 @@
 import type { SortDir } from '../types'
 
 export function compareValues(
-  a: string | number | null | undefined,
-  b: string | number | null | undefined,
+  a: string | number | boolean | null | undefined,
+  b: string | number | boolean | null | undefined,
   dir: SortDir,
 ): number {
   const aNull = a == null || a === ''
@@ -12,7 +12,9 @@ export function compareValues(
   if (bNull) return -1
 
   let cmp = 0
-  if (typeof a === 'number' && typeof b === 'number') {
+  if (typeof a === 'boolean' && typeof b === 'boolean') {
+    cmp = Number(a) - Number(b)
+  } else if (typeof a === 'number' && typeof b === 'number') {
     cmp = a - b
   } else {
     cmp = String(a).localeCompare(String(b), 'nb', { numeric: true })

@@ -10,6 +10,7 @@ import {
   Heading,
   IconButton,
   SegmentedControl,
+  Switch,
   Table,
   Text,
 } from '@radix-ui/themes'
@@ -24,6 +25,7 @@ import {
   XmarkCircle,
 } from 'iconoir-react'
 import { supabase } from '@shared/api/supabase'
+import { useAuthz } from '@shared/auth/useAuthz'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import {
@@ -37,6 +39,8 @@ import {
   deleteJobMoneyItem,
   insertJobMoneyItem,
   jobMoneyItemsQuery,
+  jobMoneyVerificationQuery,
+  setJobMoneyVerified,
 } from '../../api/moneyQueries'
 import {
   jobSubcontractorQuotesQuery,
@@ -95,6 +99,7 @@ type Suggestion = MoneySuggestion
 
 export default function MoneyTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
+  const { userId, companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
@@ -129,6 +134,41 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
 
   // Fetch confirmed money items
   const { data: confirmedItems = [] } = useQuery(jobMoneyItemsQuery(jobId))
+
+  const { data: moneyVerification } = useQuery(jobMoneyVerificationQuery(jobId))
+  const moneyVerified = moneyVerification?.money_verified_at != null
+  const canVerifyMoney =
+    !!userId &&
+    (isGlobalSuperuser ||
+      companyRole === 'owner' ||
+      companyRole === 'super_user' ||
+      (!!moneyVerification?.project_lead_user_id &&
+        moneyVerification.project_lead_user_id === userId))
+
+  const verifyMoneyMutation = useMutation({
+    mutationFn: async (verified: boolean) => {
+      if (!userId) throw new Error('Not signed in')
+      await setJobMoneyVerified({ jobId, verified, userId })
+    },
+    onSuccess: (_data, verified) => {
+      success(
+        verified ? 'Money verified' : 'Verification cleared',
+        verified
+          ? 'This job’s Money is included in Reporting totals.'
+          : 'Reporting totals will ignore this job until verified again.',
+      )
+      void qc.invalidateQueries({
+        queryKey: ['jobs', jobId, 'money-verification'],
+      })
+      void qc.invalidateQueries({ queryKey: ['reporting'] })
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Could not update verification',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
 
   // Fetch accepted offers for suggestions
   const { data: acceptedOffers = [] } = useQuery({
@@ -1081,6 +1121,36 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
         <Heading size="3">Money</Heading>
         <Flex align="center" gap="2" wrap="wrap">
+          <Flex align="center" gap="2">
+            {moneyVerified ? (
+              <Badge color="green" variant="soft" size="1">
+                Verified
+              </Badge>
+            ) : (
+              <Badge color="gray" variant="soft" size="1">
+                Unverified
+              </Badge>
+            )}
+            {canVerifyMoney ? (
+              <Flex align="center" gap="2">
+                <Text size="2" as="label" htmlFor="money-verified-switch">
+                  Verified
+                </Text>
+                <Switch
+                  id="money-verified-switch"
+                  checked={moneyVerified}
+                  disabled={verifyMoneyMutation.isPending}
+                  onCheckedChange={(checked) =>
+                    verifyMoneyMutation.mutate(checked)
+                  }
+                />
+              </Flex>
+            ) : (
+              <Text size="1" color="gray">
+                Project lead verifies Money for Reporting
+              </Text>
+            )}
+          </Flex>
           {highConfidenceSuggestions.length > 0 && (
             <Button
               size="2"
