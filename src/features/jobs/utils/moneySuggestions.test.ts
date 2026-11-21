@@ -47,6 +47,15 @@ describe('jobInvoiceExVatAmount', () => {
       }),
     ).toBe(440)
   })
+
+  it('reads Conta sumNet from conta_response', () => {
+    expect(
+      jobInvoiceExVatAmount({
+        invoice_data: {},
+        conta_response: { sumNet: 8800, sumTotal: 11000, sumRemaining: 0 },
+      }),
+    ).toBe(8800)
+  })
 })
 
 describe('transportCostAmount', () => {

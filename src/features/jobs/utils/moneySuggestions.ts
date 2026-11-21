@@ -81,6 +81,8 @@ export function jobInvoiceExVatAmount(invoice: {
   if (resp && typeof resp === 'object') {
     const r = resp as Record<string, unknown>
     for (const key of [
+      // Conta RouteV1InvoiceModel / draft uses sumNet
+      'sumNet',
       'netAmount',
       'amountExVat',
       'sumExVat',
