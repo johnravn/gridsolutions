@@ -76,4 +76,17 @@ describe('filterScopedRecurringMemberJobs', () => {
     })
     expect(result.map((j) => j.id)).toEqual(['1'])
   })
+
+  it('matches job number including zero-padded # forms', () => {
+    const withNumber = [
+      job({ id: '1', title: 'Alpha', status: 'planned', jobnr: 42 }),
+      job({ id: '2', title: 'Beta', status: 'planned', jobnr: 99 }),
+    ]
+    expect(
+      filterScopedRecurringMemberJobs(withNumber, {
+        statusFilter: [...ACTIVE_STATUS_FILTER],
+        search: '#000042',
+      }).map((j) => j.id),
+    ).toEqual(['1'])
+  })
 })

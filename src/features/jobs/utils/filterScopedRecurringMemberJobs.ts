@@ -2,6 +2,7 @@ import {
   jobOverlapsDateFilter,
   resolveJobsIndexDateOverlap,
 } from '../api/jobsIndexDateOverlap'
+import { jobMatchesJobNumberSearch } from './jobNumberSearch'
 import type { JobListRow, JobStatus } from '../types'
 
 export type ScopedRecurringMemberJobFilters = {
@@ -74,7 +75,7 @@ export function filterScopedRecurringMemberJobs(
     result = result.filter(
       (job) =>
         job.title.toLowerCase().includes(q) ||
-        (job.jobnr != null && String(job.jobnr).includes(q)),
+        jobMatchesJobNumberSearch(job.jobnr, search),
     )
   }
 

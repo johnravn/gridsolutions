@@ -69,6 +69,12 @@ describe('jobsIndexSearchOrFilter', () => {
     expect(filter).toContain('jobnr.eq.42')
   })
 
+  it('normalizes zero-padded job numbers to integer equality', () => {
+    const filter = jobsIndexSearchOrFilter({ search: '#000042' })
+    expect(filter).toContain('jobnr.eq.42')
+    expect(filter).not.toContain('jobnr.eq.000042')
+  })
+
   it('includes customer and customer-user ids so name search pages correctly', () => {
     const filter = jobsIndexSearchOrFilter({
       search: 'Acme',

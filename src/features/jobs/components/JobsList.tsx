@@ -406,7 +406,7 @@ export default function JobsList({
         style={{ width: compact ? '100%' : undefined, flex: 1, minWidth: 0 }}
       >
         <TextField.Root
-          placeholder="Search"
+          placeholder="Search title, #, customer…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           size="3"

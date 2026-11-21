@@ -6,6 +6,10 @@ import {
 } from '@shared/api/fuzzySearch'
 import { parseCopyJobRpcResult } from '../utils/copyJobConflicts'
 import {
+  jobNumberSearchHaystacks,
+  parseJobsSearchJobNumber,
+} from '../utils/jobNumberSearch'
+import {
   jobsIndexDateOverlapFilters,
   resolveJobsIndexDateOverlap,
 } from './jobsIndexDateOverlap'
@@ -273,7 +277,8 @@ export function jobsIndexQuery({
           fuzzyTerm,
           [
             (job) => job.title,
-            (job) => (job.jobnr != null ? String(job.jobnr) : null),
+            // Raw + padded / # forms so `#000042` Fuse-matches jobnr 42
+            (job) => jobNumberSearchHaystacks(job.jobnr).join(' ') || null,
             (job) => job.customer?.name ?? null,
             (job) => job.customer_user?.display_name ?? null,
             (job) => job.customer_user?.email ?? null,
@@ -396,8 +401,10 @@ export function jobsIndexSearchOrFilter({
   const parts = postgrestIlikePatterns(trimmed).map((pattern) =>
     postgrestIlikeClause('title', pattern),
   )
-  if (/^\d+$/.test(trimmed)) {
-    parts.push(`jobnr.eq.${trimmed}`)
+  // Integer equality (normalize # / zero-padding so `#000042` → jobnr.eq.42)
+  const jobnr = parseJobsSearchJobNumber(search)
+  if (jobnr != null) {
+    parts.push(`jobnr.eq.${jobnr}`)
   }
   if (customerIds.length > 0) {
     parts.push(`customer_id.in.(${customerIds.join(',')})`)
