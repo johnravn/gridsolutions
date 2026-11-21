@@ -32,11 +32,13 @@ import {
   canChangeCompanyUserRoles,
   canChangeMemberRole,
 } from '@shared/auth/permissions'
+import { fmtVAT, formatVATInput } from '@shared/lib/vat'
 import {
   crewDetailQuery,
   crewIndexQuery,
   setCrewInternalNote,
   updateCrewMemberRate,
+  updateCrewMemberVatNumber,
 } from '../api/queries'
 import type { CrewDetail } from '../api/queries'
 import type { CompanyRole } from '@features/company/api/queries'
@@ -67,6 +69,10 @@ export default function CrewInspector({
     null,
   )
   const [rate, setRate] = React.useState<string>('')
+
+  // Org number (VAT) editing state
+  const [isEditingVat, setIsEditingVat] = React.useState(false)
+  const [vatNumber, setVatNumber] = React.useState('')
 
   const canSeeInternalNotes =
     !!isGlobalSuperuser ||
@@ -129,11 +135,13 @@ export default function CrewInspector({
     },
   })
 
-  // Initialize rate editing state when data loads
+  // Initialize rate / orgnr editing state when data loads
   React.useEffect(() => {
     if (data) {
       setRateType(data.rate_type)
       setRate(data.rate?.toString() ?? '')
+      setVatNumber(formatVATInput(data.vat_number ?? ''))
+      setIsEditingVat(false)
     }
   }, [data])
 
@@ -160,6 +168,32 @@ export default function CrewInspector({
       toastError(
         'Failed to save internal note',
         e?.message ?? 'Please try again.',
+      )
+    },
+  })
+
+  const updateVatMutation = useMutation({
+    mutationFn: async () => {
+      if (!companyId || !userId) throw new Error('Missing company or user ID')
+      const cleaned = vatNumber.replace(/\D/g, '').trim()
+      await updateCrewMemberVatNumber({
+        companyId,
+        userId,
+        vatNumber: cleaned.length > 0 ? cleaned : null,
+      })
+    },
+    onSuccess: () => {
+      success('Success', 'Organization number saved')
+      setIsEditingVat(false)
+      qc.invalidateQueries({
+        queryKey: ['company', companyId, 'crew-detail', userId],
+      })
+      qc.invalidateQueries({ queryKey: ['company', companyId, 'crew'] })
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to save organization number',
+        errorMessage(e) || 'Please try again.',
       )
     },
   })
@@ -453,6 +487,85 @@ export default function CrewInspector({
       </DefinitionList>
 
       <Separator my="2" />
+
+      {/* Organization number — Conta received-invoice matching */}
+      {(data.role === 'employee' ||
+        data.role === 'freelancer' ||
+        data.role === 'owner') && (
+        <>
+          <SectionTitle>Organization number</SectionTitle>
+          {!isEditingVat ? (
+            <Box mb="3">
+              <DefinitionList>
+                <DT>Org. number</DT>
+                <DD>{fmtVAT(data.vat_number)}</DD>
+              </DefinitionList>
+              <Text size="1" color="gray" as="div" mb="2">
+                Used to match Conta received invoices on Accounting.
+              </Text>
+              <Button
+                size="2"
+                variant="soft"
+                onClick={() => setIsEditingVat(true)}
+              >
+                <EditPencil width={14} height={14} />
+                Edit org. number
+              </Button>
+            </Box>
+          ) : (
+            <Box mb="3">
+              <Flex direction="column" gap="3">
+                <Box>
+                  <Text
+                    as="label"
+                    size="2"
+                    weight="medium"
+                    mb="1"
+                    style={{ display: 'block' }}
+                  >
+                    Org. number
+                  </Text>
+                  <TextField.Root
+                    value={vatNumber}
+                    onChange={(e) => setVatNumber(formatVATInput(e.target.value))}
+                    placeholder="xxx xxx xxx"
+                    inputMode="numeric"
+                    autoComplete="off"
+                  />
+                </Box>
+                <Flex gap="2">
+                  <Button
+                    size="2"
+                    variant="solid"
+                    onClick={() => updateVatMutation.mutate()}
+                    disabled={updateVatMutation.isPending}
+                  >
+                    {updateVatMutation.isPending ? (
+                      <>
+                        <Spinner size="2" /> Saving...
+                      </>
+                    ) : (
+                      'Save'
+                    )}
+                  </Button>
+                  <Button
+                    size="2"
+                    variant="soft"
+                    onClick={() => {
+                      setIsEditingVat(false)
+                      setVatNumber(formatVATInput(data.vat_number ?? ''))
+                    }}
+                    disabled={updateVatMutation.isPending}
+                  >
+                    Cancel
+                  </Button>
+                </Flex>
+              </Flex>
+            </Box>
+          )}
+          <Separator my="2" />
+        </>
+      )}
 
       {/* Billing Rate - show for employees, freelancers, and owners */}
       {(data.role === 'employee' ||

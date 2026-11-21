@@ -3,6 +3,7 @@ import {
   contaExpenseConfidence,
   contaIncomeConfidence,
   contaLedgerDateRange,
+  crewContaInvoiceDateRange,
   resolveContaLinkStatus,
 } from './moneyConta'
 
@@ -35,6 +36,19 @@ describe('contaLedgerDateRange', () => {
         'open',
       ),
     ).toEqual({})
+  })
+})
+
+describe('crewContaInvoiceDateRange', () => {
+  it('uses job end −1 day … +14 days', () => {
+    expect(crewContaInvoiceDateRange('2026-03-12T18:00:00Z')).toEqual({
+      startDate: '2026-03-11',
+      endDate: '2026-03-26',
+    })
+  })
+
+  it('returns empty without end date', () => {
+    expect(crewContaInvoiceDateRange(null)).toEqual({})
   })
 })
 

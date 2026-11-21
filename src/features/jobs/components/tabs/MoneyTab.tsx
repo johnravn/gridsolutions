@@ -33,6 +33,8 @@ import {
   IncomeExpensesChart,
 } from '@shared/ui/components/IncomeExpensesChart'
 import { contaClient } from '@shared/api/conta/client'
+import { getContaTransactionAppUrl } from '@shared/api/conta/gatewayUrls'
+import { appEnv } from '@shared/lib/env'
 import { findContaProjectId } from '../../utils/contaProjects'
 import { formatOfferNumberDisplay } from '../../utils/offerNumber'
 import {
@@ -50,9 +52,12 @@ import MoneyItemEditDialog from '../dialogs/MoneyItemEditDialog'
 import {
   DEFAULT_TRANSPORT_COST_PER_KM,
   buildContaExpenseSuggestions,
+  buildCrewExpenseSuggestions,
   buildPrimaryIncomeSuggestions,
   buildTransportCostSuggestion,
   categoryForSource,
+  contaLedgerLineKey,
+  crewContaSuggestionLineKeys,
   hasPrimaryIncomeSource,
 } from '../../utils/moneySuggestions'
 import {
@@ -68,6 +73,7 @@ import {
   CONTA_CONFIDENCE_COLOR,
   CONTA_CONFIDENCE_LABEL,
   contaLedgerDateRange,
+  crewContaInvoiceDateRange,
   resolveContaLinkStatus,
 } from '../../utils/moneyConta'
 import { sortMoneyItems } from '../../utils/sortMoneyItems'
@@ -91,9 +97,14 @@ type ContaLedgerLine = {
   description?: string
   amount?: number
   invoiceNo?: string
+  invoiceId?: number
+  transactionId?: number
   projectId?: number
   bookkeepingAccountName?: string
   supplierName?: string
+  supplierOrgNo?: string
+  supplierId?: number
+  externalUrl?: string | null
 }
 
 type Suggestion = MoneySuggestion
@@ -615,7 +626,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       if (userIds.length > 0) {
         const { data, error: cuError } = await supabase
           .from('company_user_profiles')
-          .select('user_id, role, rate_type, rate')
+          .select('user_id, role, rate_type, rate, vat_number')
           .eq('company_id', companyId!)
           .in('user_id', userIds)
         if (cuError) throw cuError
@@ -641,6 +652,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           role: companyUser?.role || null,
           rate_type: companyUser?.rate_type || null,
           rate: companyUser?.rate ? Number(companyUser.rate) : null,
+          vat_number: companyUser?.vat_number ?? null,
           start_at: timePeriod?.start_at || null,
           end_at: timePeriod?.end_at || null,
         }
@@ -648,11 +660,62 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const { data: crewContaLedgerLines = [] } = useQuery({
+    queryKey: [
+      'jobs',
+      jobId,
+      'money',
+      'crew-conta-invoices',
+      accountingConfig?.accounting_organization_id,
+      jobInfo?.end_at,
+    ],
+    enabled:
+      !!accountingConfig?.accounting_organization_id && !!jobInfo?.end_at,
+    queryFn: async () => {
+      const orgId = accountingConfig!.accounting_organization_id!
+      const range = crewContaInvoiceDateRange(jobInfo?.end_at)
+      if (!range.startDate || !range.endDate) return [] as Array<ContaLedgerLine>
+
+      const params = new URLSearchParams({
+        includeLedgerLines: 'true',
+        includeClosedLedgerLines: 'true',
+        includeOldTransactions: 'true',
+        maxTransactionsPerPage: '200',
+        startDate: range.startDate,
+        endDate: range.endDate,
+      })
+
+      const report = (await contaClient.get(
+        `/accounting/organizations/${orgId}/reports/supplier-ledger?${params.toString()}`,
+      )) as {
+        bookkeepingAccountLedgers?: Array<{
+          name?: string
+          orgNo?: string
+          ledgerLines?: Array<ContaLedgerLine>
+        }>
+      }
+
+      const gatewayUrl = appEnv.contaApiUrl()
+      return (report.bookkeepingAccountLedgers || []).flatMap((ledger) =>
+        (ledger.ledgerLines || []).map((line) => ({
+          ...line,
+          supplierName: line.supplierName || ledger.name,
+          supplierOrgNo: line.supplierOrgNo || ledger.orgNo,
+          externalUrl: getContaTransactionAppUrl(
+            orgId,
+            line.transactionId ?? null,
+            gatewayUrl,
+          ),
+        })),
+      ) as Array<ContaLedgerLine & { externalUrl?: string | null }>
+    },
+  })
+
   const crewExpenseSuggestionsRaw = React.useMemo(() => {
-    if (!crewBookings || !companyRates) return []
-    return crewBookings
-      .map((booking) => {
-        if (!booking.start_at || !booking.end_at) return null
+    if (!crewBookings) return []
+    const bookingsWithRates = crewBookings.map((booking) => {
+      let rateAmount: number | null = null
+      if (booking.start_at && booking.end_at && companyRates) {
         const start = new Date(booking.start_at)
         const end = new Date(booking.end_at)
         const durationHours =
@@ -702,33 +765,56 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             rateType = 'hourly'
           }
         }
-        if (!rate || !rateType) return null
-        const amount =
-          rateType === 'daily'
-            ? rate * Math.ceil(durationDays)
-            : rate * durationHours
-        return {
-          id: `crew-expense-${booking.id}`,
-          sourceId: `crew-${booking.id}`,
-          type: 'expense' as const,
-          description: `${booking.user_name} (${booking.role || 'unknown'})`,
-          amount,
-          date: booking.start_at,
-          reference: undefined as string | undefined,
-          source: 'crew' as JobMoneyItemSource,
-          category: 'crew' as JobMoneyItemCategory,
+        if (rate && rateType) {
+          rateAmount =
+            rateType === 'daily'
+              ? rate * Math.ceil(durationDays)
+              : rate * durationHours
         }
-      })
-      .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
-  }, [crewBookings, companyRates, crewExpenseBillingUnit])
+      }
+      return {
+        id: booking.id,
+        user_name: booking.user_name,
+        role: booking.role,
+        vat_number: booking.vat_number,
+        rateAmount,
+        start_at: booking.start_at,
+      }
+    })
+
+    return buildCrewExpenseSuggestions({
+      bookings: bookingsWithRates,
+      contaLines: crewContaLedgerLines,
+    })
+  }, [
+    crewBookings,
+    companyRates,
+    crewExpenseBillingUnit,
+    crewContaLedgerLines,
+  ])
+
+  const crewMatchedContaLineKeys = React.useMemo(() => {
+    const matched = crewContaLedgerLines.filter((line) =>
+      crewBookings?.some(
+        (b) =>
+          b.vat_number &&
+          (line.supplierOrgNo || '')
+            .replace(/\D/g, '')
+            .trim() === (b.vat_number || '').replace(/\D/g, '').trim(),
+      ),
+    )
+    return crewContaSuggestionLineKeys(matched)
+  }, [crewContaLedgerLines, crewBookings])
 
   const contaExpenseSuggestionsRaw = React.useMemo(
     () =>
       buildContaExpenseSuggestions({
-        lines: contaLedgerLines,
+        lines: contaLedgerLines.filter(
+          (line) => !crewMatchedContaLineKeys.has(contaLedgerLineKey(line)),
+        ),
         matchMode: contaExpenseMatchMode,
       }),
-    [contaLedgerLines, contaExpenseMatchMode],
+    [contaLedgerLines, contaExpenseMatchMode, crewMatchedContaLineKeys],
   )
 
   const contaLinkStatus = React.useMemo(
@@ -1124,7 +1210,8 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     if ('sourceId' in s && s.sourceId?.startsWith('quote-')) return 'Quote'
     if (s.category === 'transport') return 'Transport'
     if (s.source === 'offer') return 'Offer'
-    if (s.source === 'crew') return 'Crew'
+    if (s.source === 'crew') return 'Crew rate'
+    if (s.source === 'conta' && s.category === 'crew') return 'Conta · Crew'
     if (s.source === 'conta') return 'Conta'
     return 'Manual'
   }
@@ -1436,6 +1523,17 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               {s.confidenceReason}
                             </Text>
                           )}
+                          {s.externalUrl && (
+                            <Text size="1" as="div">
+                              <a
+                                href={s.externalUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                Open in Conta
+                              </a>
+                            </Text>
+                          )}
                           <Text size="1" color="gray">
                             {formatDate(s.date)}
                           </Text>
@@ -1498,6 +1596,17 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               {s.confidenceReason && (
                                 <Text size="1" color="gray">
                                   {s.confidenceReason}
+                                </Text>
+                              )}
+                              {s.externalUrl && (
+                                <Text size="1" as="div">
+                                  <a
+                                    href={s.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Open in Conta
+                                  </a>
                                 </Text>
                               )}
                             </Flex>

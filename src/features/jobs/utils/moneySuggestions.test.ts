@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildContaExpenseSuggestions,
+  buildCrewExpenseSuggestions,
   buildPrimaryIncomeSuggestions,
   buildTransportCostSuggestion,
   hasPrimaryIncomeSource,
@@ -145,6 +146,66 @@ describe('buildContaExpenseSuggestions', () => {
       lines: [{ id: 2, description: 'Job 12', amount: 50 }],
     })
     expect(med[0]?.confidence).toBe('medium')
+  })
+})
+
+describe('buildCrewExpenseSuggestions', () => {
+  const booking = {
+    id: 'b1',
+    user_name: 'Ada',
+    role: 'freelancer',
+    vat_number: '123 456 789',
+    rateAmount: 5000,
+    start_at: '2026-03-10T00:00:00Z',
+  }
+
+  it('prefers all Conta orgnr matches over billing rate', () => {
+    const suggestions = buildCrewExpenseSuggestions({
+      bookings: [booking],
+      contaLines: [
+        {
+          id: 1,
+          amount: -1200,
+          invoiceNo: 'R-1',
+          supplierOrgNo: '123456789',
+          date: '2026-03-11',
+          externalUrl: 'https://app.conta.no/regnskap/o/bilag/1',
+        },
+        {
+          id: 2,
+          amount: 800,
+          invoiceNo: 'R-2',
+          supplierOrgNo: '123456789',
+          date: '2026-03-12',
+        },
+      ],
+    })
+    expect(suggestions).toHaveLength(2)
+    expect(suggestions.every((s) => s.source === 'conta')).toBe(true)
+    expect(suggestions.every((s) => s.category === 'crew')).toBe(true)
+    expect(suggestions.map((s) => s.reference)).toEqual(['R-1', 'R-2'])
+    expect(suggestions[0]?.externalUrl).toContain('/bilag/1')
+  })
+
+  it('falls back to billing rate when no Conta match', () => {
+    const suggestions = buildCrewExpenseSuggestions({
+      bookings: [booking],
+      contaLines: [
+        {
+          id: 9,
+          amount: 100,
+          supplierOrgNo: '999999999',
+          invoiceNo: 'other',
+        },
+      ],
+    })
+    expect(suggestions).toHaveLength(1)
+    expect(suggestions[0]).toMatchObject({
+      source: 'crew',
+      category: 'crew',
+      amount: 5000,
+      sourceId: 'crew-b1',
+    })
   })
 })
 

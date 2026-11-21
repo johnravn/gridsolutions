@@ -1,3 +1,4 @@
+import { normalizeOrgNo } from '@shared/conta/contaCustomerMatch'
 import { roundMoney } from './offerCalculations'
 import {
   contaExpenseConfidence,
@@ -26,6 +27,8 @@ export type MoneySuggestion = {
   /** Conta (and related) match confidence for review UX */
   confidence?: ContaMatchConfidence | null
   confidenceReason?: string | null
+  /** Optional deep link (e.g. Conta invoice / bilag). */
+  externalUrl?: string | null
 }
 
 export const DEFAULT_TRANSPORT_COST_PER_KM = 5
@@ -246,6 +249,139 @@ export function buildContaExpenseSuggestions(input: {
       }
     })
     .filter((exp): exp is NonNullable<typeof exp> => exp !== null)
+}
+
+export type CrewBookingExpenseInput = {
+  id: string
+  user_name: string
+  role: string | null
+  vat_number: string | null
+  /** Precomputed billing-rate amount; null when rate fallback unavailable. */
+  rateAmount: number | null
+  start_at: string | null
+}
+
+export type CrewContaInvoiceLineInput = {
+  id?: number
+  date?: string
+  dueDate?: string
+  description?: string
+  amount?: number
+  invoiceNo?: string
+  invoiceId?: number
+  transactionId?: number
+  supplierOrgNo?: string
+  supplierName?: string
+  bookkeepingAccountName?: string
+  externalUrl?: string | null
+}
+
+/**
+ * Crew booking expenses (#174):
+ * Priority 1 — Conta received invoices matching crew orgnr (show all).
+ * Priority 2 — billing-rate fallback when no Conta matches.
+ */
+export function buildCrewExpenseSuggestions(input: {
+  bookings: Array<CrewBookingExpenseInput>
+  contaLines: Array<CrewContaInvoiceLineInput>
+}): Array<MoneySuggestion> {
+  const out: Array<MoneySuggestion> = []
+
+  for (const booking of input.bookings) {
+    const orgNo = normalizeOrgNo(booking.vat_number)
+    const matches =
+      orgNo.length > 0
+        ? input.contaLines.filter(
+            (line) => normalizeOrgNo(line.supplierOrgNo) === orgNo,
+          )
+        : []
+
+    if (matches.length > 0) {
+      for (const line of matches) {
+        const amount = Math.abs(Number(line.amount ?? 0))
+        if (!amount) continue
+        const lineKey =
+          line.id ??
+          line.invoiceId ??
+          line.transactionId ??
+          `${line.invoiceNo ?? 'inv'}-${line.date ?? 'd'}`
+        const sourceId = `crew-conta-${booking.id}-${lineKey}`
+        const invoiceLabel = line.invoiceNo
+          ? `Conta invoice ${line.invoiceNo}`
+          : line.description ||
+            line.supplierName ||
+            line.bookkeepingAccountName ||
+            'Conta received invoice'
+        out.push({
+          id: sourceId,
+          sourceId,
+          type: 'expense',
+          description: `${booking.user_name}: ${invoiceLabel}`,
+          amount,
+          date: line.date || line.dueDate || booking.start_at,
+          reference: line.invoiceNo || undefined,
+          source: 'conta',
+          category: 'crew',
+          confidence: 'high',
+          confidenceReason:
+            matches.length === 1
+              ? 'Conta received invoice matched crew org number'
+              : `${matches.length} Conta received invoices matched crew org number — review all`,
+          externalUrl: line.externalUrl ?? null,
+        })
+      }
+      continue
+    }
+
+    if (booking.rateAmount == null || booking.rateAmount <= 0) continue
+    out.push({
+      id: `crew-expense-${booking.id}`,
+      sourceId: `crew-${booking.id}`,
+      type: 'expense',
+      description: `${booking.user_name} (${booking.role || 'unknown'})`,
+      amount: roundMoney(booking.rateAmount),
+      date: booking.start_at,
+      reference: undefined,
+      source: 'crew',
+      category: 'crew',
+      confidence: 'medium',
+      confidenceReason: 'Crew billing rate (no Conta invoice match)',
+    })
+  }
+
+  return out
+}
+
+/** Conta ledger line keys already suggested via crew orgnr matching. */
+export function crewContaSuggestionLineKeys(
+  lines: Array<Pick<CrewContaInvoiceLineInput, 'id' | 'invoiceId' | 'transactionId' | 'invoiceNo' | 'date'>>,
+): Set<string> {
+  const keys = new Set<string>()
+  for (const line of lines) {
+    const key =
+      line.id != null
+        ? `id:${line.id}`
+        : line.invoiceId != null
+          ? `invoice:${line.invoiceId}`
+          : line.transactionId != null
+            ? `tx:${line.transactionId}`
+            : `ref:${line.invoiceNo ?? ''}-${line.date ?? ''}`
+    keys.add(key)
+  }
+  return keys
+}
+
+export function contaLedgerLineKey(line: {
+  id?: number
+  invoiceId?: number
+  transactionId?: number
+  invoiceNo?: string
+  date?: string
+}): string {
+  if (line.id != null) return `id:${line.id}`
+  if (line.invoiceId != null) return `invoice:${line.invoiceId}`
+  if (line.transactionId != null) return `tx:${line.transactionId}`
+  return `ref:${line.invoiceNo ?? ''}-${line.date ?? ''}`
 }
 
 /** True when primary income from offer or Conta sales invoice exists (for crew-income suppress). */

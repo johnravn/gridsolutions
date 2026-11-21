@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getContaInvoiceAppUrl,
+  getContaTransactionAppUrl,
   isContaSandboxUrl,
   resolveContaGatewayUrls,
 } from './gatewayUrls'
@@ -62,5 +63,24 @@ describe('getContaInvoiceAppUrl', () => {
 
   it('returns null without an invoice id', () => {
     expect(getContaInvoiceAppUrl('org-1', null)).toBeNull()
+  })
+})
+
+describe('getContaTransactionAppUrl', () => {
+  it('builds bookkeeping bilag deep links', () => {
+    expect(
+      getContaTransactionAppUrl('org-1', 42, 'https://api.gateway.conta.no'),
+    ).toBe('https://app.conta.no/regnskap/org-1/bilag/42')
+    expect(
+      getContaTransactionAppUrl(
+        'org-1',
+        '99',
+        'https://api.gateway.conta-sandbox.no',
+      ),
+    ).toBe('https://app.conta-sandbox.no/regnskap/org-1/bilag/99')
+  })
+
+  it('returns null without a transaction id', () => {
+    expect(getContaTransactionAppUrl('org-1', null)).toBeNull()
   })
 })

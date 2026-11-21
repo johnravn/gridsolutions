@@ -86,6 +86,21 @@ export function contaLedgerDateRange(
   return out
 }
 
+/**
+ * Conta received-invoice window for crew expense matching (#174):
+ * job end −1 day … job end +14 days.
+ */
+export function crewContaInvoiceDateRange(
+  endAt: string | null | undefined,
+): { startDate?: string; endDate?: string } {
+  const end = endAt?.split('T')[0] ?? null
+  if (!end) return {}
+  return {
+    startDate: addDays(end, -1),
+    endDate: addDays(end, 14),
+  }
+}
+
 export type ContaExpenseMatchMode = 'project' | 'jobnr'
 
 export function contaExpenseConfidence(
