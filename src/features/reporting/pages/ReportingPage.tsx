@@ -31,7 +31,10 @@ import { dateRangeFromMonthYears } from '../utils/dates'
 import { formatHours, formatPercent } from '../utils/format'
 import { financialKpis } from '../utils/kpis'
 import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
-import { filterIncompleteMoneyJobs } from '../utils/incompleteness'
+import {
+  filterAccountingUnverifiedJobs,
+  filterIncompleteMoneyJobs,
+} from '../utils/incompleteness'
 import { aggregateJobsByMonth } from '../utils/monthlyJobs'
 import { yearRangeToMonthYears } from '../utils/periodPicker'
 import type { MonthYear } from '../utils/dates'
@@ -138,6 +141,11 @@ export default function ReportingPage() {
   )
   const incompleteMoneyCount = incompleteMoneyJobs.length
 
+  const accountingUnverifiedCount = React.useMemo(
+    () => filterAccountingUnverifiedJobs(jobRows).length,
+    [jobRows],
+  )
+
   const jobMonthlyChartData = React.useMemo(
     () => aggregateJobsByMonth(verifiedJobRows, fromDate, toDate),
     [verifiedJobRows, fromDate, toDate],
@@ -214,6 +222,7 @@ export default function ReportingPage() {
                     <SummaryKpis
                       items={financialKpis(verifiedJobRows, {
                         incompleteCount: incompleteMoneyCount,
+                        unverifiedCount: accountingUnverifiedCount,
                       })}
                     />
                   ) : (
@@ -471,6 +480,9 @@ export default function ReportingPage() {
                     items={financialKpis(verifiedLowMarginRows, {
                       incompleteCount: filterIncompleteMoneyJobs(
                         verifiedLowMarginRows,
+                      ).length,
+                      unverifiedCount: filterAccountingUnverifiedJobs(
+                        lowMarginRows,
                       ).length,
                     })}
                   />

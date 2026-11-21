@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filterAccountingUnverifiedJobs,
   filterIncompleteMoneyJobs,
+  isAccountingUnverifiedJob,
   isMoneyIncompleteJob,
   isMoneyReviewStatus,
 } from './incompleteness'
@@ -49,5 +51,38 @@ describe('filterIncompleteMoneyJobs', () => {
       { money_incomplete: false, id: 'b' },
     ]
     expect(filterIncompleteMoneyJobs(rows).map((r) => r.id)).toEqual(['a'])
+  })
+})
+
+describe('isAccountingUnverifiedJob', () => {
+  it('matches paid/invoiced without verification', () => {
+    expect(
+      isAccountingUnverifiedJob({ status: 'paid', money_verified: false }),
+    ).toBe(true)
+    expect(
+      isAccountingUnverifiedJob({ status: 'invoiced', money_verified: false }),
+    ).toBe(true)
+    expect(
+      isAccountingUnverifiedJob({ status: 'paid', money_verified: true }),
+    ).toBe(false)
+    expect(
+      isAccountingUnverifiedJob({
+        status: 'completed',
+        money_verified: false,
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('filterAccountingUnverifiedJobs', () => {
+  it('keeps only paid/invoiced unverified rows', () => {
+    const rows = [
+      { id: 'a', status: 'paid', money_verified: false },
+      { id: 'b', status: 'invoiced', money_verified: true },
+      { id: 'c', status: 'completed', money_verified: false },
+    ]
+    expect(filterAccountingUnverifiedJobs(rows).map((r) => r.id)).toEqual([
+      'a',
+    ])
   })
 })
