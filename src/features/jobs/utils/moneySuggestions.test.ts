@@ -4,6 +4,7 @@ import {
   buildCrewExpenseSuggestions,
   buildPrimaryIncomeSuggestions,
   buildTransportCostSuggestion,
+  computeCrewBookingRateAmount,
   hasPrimaryIncomeSource,
   invoiceLinesExVatTotal,
   jobInvoiceExVatAmount,
@@ -149,6 +150,57 @@ describe('buildContaExpenseSuggestions', () => {
   })
 })
 
+describe('computeCrewBookingRateAmount', () => {
+  const window = {
+    start_at: '2026-03-10T10:00:00Z',
+    end_at: '2026-03-10T14:00:00Z', // 4 hours
+  }
+
+  it('uses freelancer personal rate without companyRates', () => {
+    expect(
+      computeCrewBookingRateAmount({
+        role: 'freelancer',
+        rate: 900,
+        rate_type: 'hourly',
+        ...window,
+        billingUnit: 'hour',
+        companyRates: null,
+      }),
+    ).toBe(3600)
+  })
+
+  it('defaults missing freelancer rate_type to hourly', () => {
+    expect(
+      computeCrewBookingRateAmount({
+        role: 'freelancer',
+        rate: 500,
+        rate_type: null,
+        ...window,
+        billingUnit: 'day',
+        companyRates: null,
+      }),
+    ).toBe(2000)
+  })
+
+  it('falls back to employee company rates when freelancer has no personal rate', () => {
+    expect(
+      computeCrewBookingRateAmount({
+        role: 'freelancer',
+        rate: null,
+        rate_type: null,
+        ...window,
+        billingUnit: 'hour',
+        companyRates: {
+          employee_hourly_rate: 750,
+          employee_daily_rate: null,
+          owner_hourly_rate: null,
+          owner_daily_rate: null,
+        },
+      }),
+    ).toBe(3000)
+  })
+})
+
 describe('buildCrewExpenseSuggestions', () => {
   const booking = {
     id: 'b1',
@@ -206,6 +258,22 @@ describe('buildCrewExpenseSuggestions', () => {
       amount: 5000,
       sourceId: 'crew-b1',
     })
+  })
+
+  it('falls back to billing rate when Conta matches have zero amounts', () => {
+    const suggestions = buildCrewExpenseSuggestions({
+      bookings: [booking],
+      contaLines: [
+        {
+          id: 3,
+          amount: 0,
+          supplierOrgNo: '123456789',
+          invoiceNo: 'empty',
+        },
+      ],
+    })
+    expect(suggestions).toHaveLength(1)
+    expect(suggestions[0]?.source).toBe('crew')
   })
 })
 

@@ -35,6 +35,7 @@ import {
 import { contaClient } from '@shared/api/conta/client'
 import { getContaTransactionAppUrl } from '@shared/api/conta/gatewayUrls'
 import { appEnv } from '@shared/lib/env'
+import { isValidOrgNo, normalizeOrgNo } from '@shared/conta/contaCustomerMatch'
 import { findContaProjectId } from '../../utils/contaProjects'
 import { formatOfferNumberDisplay } from '../../utils/offerNumber'
 import {
@@ -56,6 +57,7 @@ import {
   buildPrimaryIncomeSuggestions,
   buildTransportCostSuggestion,
   categoryForSource,
+  computeCrewBookingRateAmount,
   contaLedgerLineKey,
   crewContaSuggestionLineKeys,
   hasPrimaryIncomeSource,
@@ -76,6 +78,7 @@ import {
   crewContaInvoiceDateRange,
   resolveContaLinkStatus,
 } from '../../utils/moneyConta'
+import { fetchCrewContaInvoiceLines } from '../../utils/moneyCrewConta'
 import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
@@ -230,24 +233,22 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
-  const {
-    data: jobSalesInvoices = [],
-    isLoading: isSalesInvoicesLoading,
-  } = useQuery({
-    queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('job_invoices')
-        .select(
-          'id, status, created_at, updated_at, invoice_data, conta_response, conta_invoice_id, organization_id',
-        )
-        .eq('job_id', jobId)
-        .in('status', ['created', 'paid'])
-        .order('created_at', { ascending: false })
-      if (error) throw error
-      return data ?? []
-    },
-  })
+  const { data: jobSalesInvoices = [], isLoading: isSalesInvoicesLoading } =
+    useQuery({
+      queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
+      queryFn: async () => {
+        const { data, error } = await supabase
+          .from('job_invoices')
+          .select(
+            'id, status, created_at, updated_at, invoice_data, conta_response, conta_invoice_id, organization_id',
+          )
+          .eq('job_id', jobId)
+          .in('status', ['created', 'paid'])
+          .order('created_at', { ascending: false })
+        if (error) throw error
+        return data ?? []
+      },
+    })
 
   const { data: transportCostPerKm } = useQuery({
     queryKey: ['company', companyId, 'transport-cost-per-km'],
@@ -397,6 +398,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       })
     },
     enabled: !!accountingConfig?.accounting_organization_id && !!jobInfo,
+    staleTime: 5 * 60_000,
   })
 
   const jobNumberTokens = React.useMemo(() => {
@@ -502,6 +504,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     enabled:
       !!accountingConfig?.accounting_organization_id &&
       (!!contaProjectId || jobNumberTokens.length > 0),
+    staleTime: 5 * 60_000,
   })
 
   const contaLedgerLines = React.useMemo(
@@ -660,6 +663,24 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const crewOrgNumbers = React.useMemo(() => {
+    const orgNos = new Set<string>()
+    for (const booking of crewBookings ?? []) {
+      const orgNo = normalizeOrgNo(booking.vat_number)
+      if (isValidOrgNo(orgNo)) orgNos.add(orgNo)
+    }
+    return Array.from(orgNos).sort()
+  }, [crewBookings])
+
+  const crewContaDateRange = React.useMemo(
+    () =>
+      crewContaInvoiceDateRange(jobInfo?.end_at, {
+        startAt: jobInfo?.start_at,
+        bookingEnds: (crewBookings ?? []).map((b) => b.end_at),
+      }),
+    [jobInfo?.end_at, jobInfo?.start_at, crewBookings],
+  )
+
   const { data: crewContaLedgerLines = [] } = useQuery({
     queryKey: [
       'jobs',
@@ -667,141 +688,68 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       'money',
       'crew-conta-invoices',
       accountingConfig?.accounting_organization_id,
-      jobInfo?.end_at,
+      crewContaDateRange.startDate,
+      crewContaDateRange.endDate,
+      crewOrgNumbers.join(','),
     ],
     enabled:
-      !!accountingConfig?.accounting_organization_id && !!jobInfo?.end_at,
+      !!accountingConfig?.accounting_organization_id &&
+      !!crewContaDateRange.startDate &&
+      !!crewContaDateRange.endDate &&
+      crewOrgNumbers.length > 0,
+    staleTime: 5 * 60_000,
     queryFn: async () => {
       const orgId = accountingConfig!.accounting_organization_id!
-      const range = crewContaInvoiceDateRange(jobInfo?.end_at)
-      if (!range.startDate || !range.endDate) return [] as Array<ContaLedgerLine>
-
-      const params = new URLSearchParams({
-        includeLedgerLines: 'true',
-        includeClosedLedgerLines: 'true',
-        includeOldTransactions: 'true',
-        maxTransactionsPerPage: '200',
-        startDate: range.startDate,
-        endDate: range.endDate,
-      })
-
-      const report = (await contaClient.get(
-        `/accounting/organizations/${orgId}/reports/supplier-ledger?${params.toString()}`,
-      )) as {
-        bookkeepingAccountLedgers?: Array<{
-          name?: string
-          orgNo?: string
-          ledgerLines?: Array<ContaLedgerLine>
-        }>
-      }
-
       const gatewayUrl = appEnv.contaApiUrl()
-      return (report.bookkeepingAccountLedgers || []).flatMap((ledger) =>
-        (ledger.ledgerLines || []).map((line) => ({
-          ...line,
-          supplierName: line.supplierName || ledger.name,
-          supplierOrgNo: line.supplierOrgNo || ledger.orgNo,
-          externalUrl: getContaTransactionAppUrl(
-            orgId,
-            line.transactionId ?? null,
+      return (await fetchCrewContaInvoiceLines({
+        orgId,
+        orgNumbers: crewOrgNumbers,
+        startDate: crewContaDateRange.startDate!,
+        endDate: crewContaDateRange.endDate!,
+        get: (path) => contaClient.get(path),
+        transactionUrl: (accountingOrgId, transactionId) =>
+          getContaTransactionAppUrl(
+            accountingOrgId,
+            transactionId ?? null,
             gatewayUrl,
           ),
-        })),
-      ) as Array<ContaLedgerLine & { externalUrl?: string | null }>
+      })) as Array<ContaLedgerLine & { externalUrl?: string | null }>
     },
   })
 
   const crewExpenseSuggestionsRaw = React.useMemo(() => {
     if (!crewBookings) return []
-    const bookingsWithRates = crewBookings.map((booking) => {
-      let rateAmount: number | null = null
-      if (booking.start_at && booking.end_at && companyRates) {
-        const start = new Date(booking.start_at)
-        const end = new Date(booking.end_at)
-        const durationHours =
-          (end.getTime() - start.getTime()) / (1000 * 60 * 60)
-        const durationDays = durationHours / 24
-
-        let rate: number | null = null
-        let rateType: 'daily' | 'hourly' | null = null
-        if (booking.role === 'freelancer') {
-          rate = booking.rate
-          rateType = booking.rate_type
-        } else if (booking.role === 'employee') {
-          const useHourly =
-            crewExpenseBillingUnit === 'hour' &&
-            companyRates.employee_hourly_rate
-          const useDaily =
-            crewExpenseBillingUnit === 'day' && companyRates.employee_daily_rate
-          if (useHourly) {
-            rate = Number(companyRates.employee_hourly_rate)
-            rateType = 'hourly'
-          } else if (useDaily) {
-            rate = Number(companyRates.employee_daily_rate)
-            rateType = 'daily'
-          } else if (companyRates.employee_daily_rate) {
-            rate = Number(companyRates.employee_daily_rate)
-            rateType = 'daily'
-          } else if (companyRates.employee_hourly_rate) {
-            rate = Number(companyRates.employee_hourly_rate)
-            rateType = 'hourly'
-          }
-        } else if (booking.role === 'owner') {
-          const useHourly =
-            crewExpenseBillingUnit === 'hour' && companyRates.owner_hourly_rate
-          const useDaily =
-            crewExpenseBillingUnit === 'day' && companyRates.owner_daily_rate
-          if (useHourly) {
-            rate = Number(companyRates.owner_hourly_rate)
-            rateType = 'hourly'
-          } else if (useDaily) {
-            rate = Number(companyRates.owner_daily_rate)
-            rateType = 'daily'
-          } else if (companyRates.owner_daily_rate) {
-            rate = Number(companyRates.owner_daily_rate)
-            rateType = 'daily'
-          } else if (companyRates.owner_hourly_rate) {
-            rate = Number(companyRates.owner_hourly_rate)
-            rateType = 'hourly'
-          }
-        }
-        if (rate && rateType) {
-          rateAmount =
-            rateType === 'daily'
-              ? rate * Math.ceil(durationDays)
-              : rate * durationHours
-        }
-      }
-      return {
-        id: booking.id,
-        user_name: booking.user_name,
+    const bookingsWithRates = crewBookings.map((booking) => ({
+      id: booking.id,
+      user_name: booking.user_name,
+      role: booking.role,
+      vat_number: booking.vat_number,
+      rateAmount: computeCrewBookingRateAmount({
         role: booking.role,
-        vat_number: booking.vat_number,
-        rateAmount,
+        rate: booking.rate,
+        rate_type: booking.rate_type,
         start_at: booking.start_at,
-      }
-    })
+        end_at: booking.end_at,
+        billingUnit: crewExpenseBillingUnit,
+        companyRates,
+      }),
+      start_at: booking.start_at,
+    }))
 
     return buildCrewExpenseSuggestions({
       bookings: bookingsWithRates,
       contaLines: crewContaLedgerLines,
     })
-  }, [
-    crewBookings,
-    companyRates,
-    crewExpenseBillingUnit,
-    crewContaLedgerLines,
-  ])
+  }, [crewBookings, companyRates, crewExpenseBillingUnit, crewContaLedgerLines])
 
   const crewMatchedContaLineKeys = React.useMemo(() => {
+    const bookingOrgNos = new Set(
+      (crewBookings ?? [])
+        .map((b) => normalizeOrgNo(b.vat_number))
+        .filter((orgNo) => isValidOrgNo(orgNo)),
+    )
     const matched = crewContaLedgerLines.filter((line) =>
-      crewBookings?.some(
-        (b) =>
-          b.vat_number &&
-          (line.supplierOrgNo || '')
-            .replace(/\D/g, '')
-            .trim() === (b.vat_number || '').replace(/\D/g, '').trim(),
-      ),
+      bookingOrgNos.has(normalizeOrgNo(line.supplierOrgNo)),
     )
     return crewContaSuggestionLineKeys(matched)
   }, [crewContaLedgerLines, crewBookings])

@@ -89,16 +89,55 @@ export function contaLedgerDateRange(
 /**
  * Conta received-invoice window for crew expense matching (#174):
  * job end −1 day … job end +14 days.
+ *
+ * When `endAt` is missing, fall back to the latest booking end, then job start,
+ * so freelancer Conta lookups still run on jobs without `jobs.end_at`.
  */
 export function crewContaInvoiceDateRange(
   endAt: string | null | undefined,
+  fallbacks?: {
+    startAt?: string | null | undefined
+    bookingEnds?: Array<string | null | undefined>
+  },
 ): { startDate?: string; endDate?: string } {
-  const end = endAt?.split('T')[0] ?? null
+  const end =
+    endAt?.split('T')[0] ??
+    maxIsoDateDay(fallbacks?.bookingEnds) ??
+    fallbacks?.startAt?.split('T')[0] ??
+    null
   if (!end) return {}
   return {
     startDate: addDays(end, -1),
     endDate: addDays(end, 14),
   }
+}
+
+function maxIsoDateDay(
+  values: Array<string | null | undefined> | undefined,
+): string | null {
+  if (!values?.length) return null
+  let max: string | null = null
+  for (const value of values) {
+    const day = value?.split('T')[0] ?? null
+    if (!day) continue
+    if (!max || day > max) max = day
+  }
+  return max
+}
+
+/** Pick Conta supplier id whose orgNo matches the normalized crew orgnr. */
+export function pickContaSupplierIdByOrgNo(
+  hits: Array<{ id?: number; orgNo?: string | null } | null | undefined>,
+  orgNo: string,
+): number | null {
+  const target = (orgNo || '').replace(/\D/g, '').trim()
+  if (!target) return null
+  for (const hit of hits) {
+    if (!hit || hit.id == null) continue
+    const hitOrg = (hit.orgNo || '').replace(/\D/g, '').trim()
+    if (hitOrg === target) return hit.id
+  }
+  return null
 }
 
 export type ContaExpenseMatchMode = 'project' | 'jobnr'

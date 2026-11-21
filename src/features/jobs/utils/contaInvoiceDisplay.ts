@@ -213,3 +213,10 @@ export function formatContaInvoiceMoney(amount: number | null): string {
     minimumFractionDigits: 2,
   }).format(amount)
 }
+
+/** True when stored Conta / invoice_data already has displayable lines. */
+export function hasContaInvoiceDisplayLines(
+  input: Parameters<typeof buildContaInvoiceDisplay>[0],
+): boolean {
+  return buildContaInvoiceDisplay(input).lines.length > 0
+}

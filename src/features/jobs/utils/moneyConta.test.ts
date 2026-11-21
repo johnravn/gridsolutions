@@ -4,6 +4,7 @@ import {
   contaIncomeConfidence,
   contaLedgerDateRange,
   crewContaInvoiceDateRange,
+  pickContaSupplierIdByOrgNo,
   resolveContaLinkStatus,
 } from './moneyConta'
 
@@ -47,8 +48,51 @@ describe('crewContaInvoiceDateRange', () => {
     })
   })
 
-  it('returns empty without end date', () => {
+  it('returns empty without end date or fallbacks', () => {
     expect(crewContaInvoiceDateRange(null)).toEqual({})
+  })
+
+  it('falls back to latest booking end when job end missing', () => {
+    expect(
+      crewContaInvoiceDateRange(null, {
+        startAt: '2026-03-01T00:00:00Z',
+        bookingEnds: ['2026-03-10T12:00:00Z', '2026-03-14T18:00:00Z'],
+      }),
+    ).toEqual({
+      startDate: '2026-03-13',
+      endDate: '2026-03-28',
+    })
+  })
+
+  it('falls back to job start when no end or bookings', () => {
+    expect(
+      crewContaInvoiceDateRange(null, {
+        startAt: '2026-03-05T09:00:00Z',
+      }),
+    ).toEqual({
+      startDate: '2026-03-04',
+      endDate: '2026-03-19',
+    })
+  })
+})
+
+describe('pickContaSupplierIdByOrgNo', () => {
+  it('matches normalized org numbers', () => {
+    expect(
+      pickContaSupplierIdByOrgNo(
+        [
+          { id: 1, orgNo: '999 999 999' },
+          { id: 42, orgNo: '123 456 789' },
+        ],
+        '123456789',
+      ),
+    ).toBe(42)
+  })
+
+  it('returns null when no hit', () => {
+    expect(
+      pickContaSupplierIdByOrgNo([{ id: 1, orgNo: '111111111' }], '123456789'),
+    ).toBeNull()
   })
 })
 

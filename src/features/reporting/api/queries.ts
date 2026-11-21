@@ -1,5 +1,6 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import {
   assumedCapacityHours,
   clippedHours,
@@ -100,11 +101,18 @@ async function fetchOverlappingJobs({
     ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
     : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
 
+  const fromIso = from.toISOString()
+  const toIso = to.toISOString()
+
+  // Server-side overlap prefilter (still re-check in JS for both-null / edge cases).
+  // (start is null OR start <= rangeEnd) AND (end is null OR end >= rangeStart)
   const { data: jobs, error } = await supabase
     .from('jobs')
     .select(select)
     .eq('company_id', scopedCompanyId)
     .eq('archived', false)
+    .or(`start_at.is.null,start_at.lte.${toIso}`)
+    .or(`end_at.is.null,end_at.gte.${fromIso}`)
 
   if (error) throw error
   if (!jobs?.length) return []
@@ -255,50 +263,7 @@ export function reportCustomerProfitabilityQuery({
         fromDate,
         toDate,
       })
-
-      const byCustomer = new Map<
-        string,
-        {
-          customer_name: string | null
-          income: number
-          expenses: number
-          job_count: number
-        }
-      >()
-      const noCustomerKey = '__no_customer__'
-      // Charts / totals: verified Money only (list stays all-jobs elsewhere).
-      for (const row of jobRows) {
-        if (!row.money_verified) continue
-        const key = row.customer_id ?? noCustomerKey
-        const cur = byCustomer.get(key)
-        if (!cur) {
-          byCustomer.set(key, {
-            customer_name: row.customer_name,
-            income: row.income,
-            expenses: row.expenses,
-            job_count: 1,
-          })
-        } else {
-          cur.income += row.income
-          cur.expenses += row.expenses
-          cur.job_count += 1
-        }
-      }
-
-      return Array.from(byCustomer.entries())
-        .map(([customer_id, cur]) => {
-          const profit = cur.income - cur.expenses
-          return {
-            customer_id: customer_id === noCustomerKey ? null : customer_id,
-            customer_name: cur.customer_name,
-            income: cur.income,
-            expenses: cur.expenses,
-            profit,
-            margin_pct: marginPct(cur.income, profit),
-            job_count: cur.job_count,
-          }
-        })
-        .sort((a, b) => b.profit - a.profit)
+      return aggregateCustomerProfitabilityFromJobs(jobRows)
     },
   })
 }

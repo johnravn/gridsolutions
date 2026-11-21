@@ -5,12 +5,12 @@ import ChartSkeleton from '@shared/ui/components/ChartSkeleton'
 import PageSkeleton from '@shared/ui/components/PageSkeleton'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
-  reportCustomerProfitabilityQuery,
   reportInvoicePipelineQuery,
   reportJobProfitabilityQuery,
   reportMonthlyTrendQuery,
   reportUtilizationQuery,
 } from '../api/queries'
+import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import { CustomerProfitabilityTable } from '../components/CustomerProfitabilityTable'
 import { DateRangeControl } from '../components/DateRangeControl'
 import { ExportCsvButton } from '../components/ExportCsvButton'
@@ -75,15 +75,6 @@ export default function ReportingPage() {
         segment === 'low-margin'),
   })
 
-  const customersQuery = useQuery({
-    ...reportCustomerProfitabilityQuery({
-      companyId: companyId ?? '',
-      fromDate,
-      toDate,
-    }),
-    enabled: !!companyId && segment === 'customers',
-  })
-
   const utilizationQuery = useQuery({
     ...reportUtilizationQuery({
       companyId: companyId ?? '',
@@ -111,8 +102,10 @@ export default function ReportingPage() {
     enabled: !!companyId && segment === 'invoice',
   })
 
-  const jobRows = jobsQuery.data ?? []
-  const customerRows = customersQuery.data ?? []
+  const jobRows = React.useMemo(
+    () => jobsQuery.data ?? [],
+    [jobsQuery.data],
+  )
   const utilizationRows = utilizationQuery.data ?? []
   const monthlyRows = monthlyQuery.data ?? []
   const invoiceData = invoiceQuery.data
@@ -120,6 +113,13 @@ export default function ReportingPage() {
   /** KPIs / charts use verified Money only; tables keep all jobs. */
   const verifiedJobRows = React.useMemo(
     () => jobRows.filter((r) => r.money_verified),
+    [jobRows],
+  )
+
+  // Derive customers from the jobs query — avoids a second identical money-totals
+  // fetch when the customers segment is open.
+  const customerRows = React.useMemo(
+    () => aggregateCustomerProfitabilityFromJobs(jobRows),
     [jobRows],
   )
 
@@ -168,7 +168,7 @@ export default function ReportingPage() {
   }
 
   const jobsLoading = jobsQuery.isLoading
-  const customersLoading = customersQuery.isLoading
+  const customersLoading = jobsLoading
   const utilizationLoading = utilizationQuery.isLoading
   const monthlyLoading = monthlyQuery.isLoading
   const invoiceLoading = invoiceQuery.isLoading
@@ -267,14 +267,14 @@ export default function ReportingPage() {
 
         {segment === 'customers' && (
           <>
-            {customersQuery.isError ? (
+            {jobsQuery.isError ? (
               <ReportError
                 message={
-                  customersQuery.error instanceof Error
-                    ? customersQuery.error.message
+                  jobsQuery.error instanceof Error
+                    ? jobsQuery.error.message
                     : undefined
                 }
-                onRetry={() => void customersQuery.refetch()}
+                onRetry={() => void jobsQuery.refetch()}
               />
             ) : (
               <>

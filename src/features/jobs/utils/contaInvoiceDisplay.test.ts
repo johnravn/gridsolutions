@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildContaInvoiceDisplay,
+  hasContaInvoiceDisplayLines,
   parseContaInvoiceLines,
 } from './contaInvoiceDisplay'
 
@@ -83,5 +84,16 @@ describe('buildContaInvoiceDisplay', () => {
     expect(display.lines[0]?.sumNet).toBe(600)
     expect(display.header.personalMessage).toBe('Thanks')
     expect(display.header.sumNet).toBe(600)
+  })
+
+  it('hasContaInvoiceDisplayLines reflects stored lines', () => {
+    expect(
+      hasContaInvoiceDisplayLines({
+        invoice_data: {
+          invoiceLines: [{ description: 'X', price: 1, quantity: 1 }],
+        },
+      }),
+    ).toBe(true)
+    expect(hasContaInvoiceDisplayLines({ invoice_data: {} })).toBe(false)
   })
 })

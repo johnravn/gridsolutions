@@ -21,6 +21,7 @@ import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
 import {
   buildContaInvoiceDisplay,
   formatContaInvoiceMoney,
+  hasContaInvoiceDisplayLines,
 } from '../../utils/contaInvoiceDisplay'
 
 export type MoneyContaInvoiceRecord = {
@@ -94,9 +95,9 @@ export default function MoneyContaInvoicePanel({
     }
   }, [invoices, selected])
 
-  // Keep “Updated … ago” badges fresh while the panel is open.
+  // Keep “Updated … ago” badges fresh while the panel is open (1/min is enough).
   React.useEffect(() => {
-    const id = window.setInterval(() => setTick((n) => n + 1), 30_000)
+    const id = window.setInterval(() => setTick((n) => n + 1), 60_000)
     return () => window.clearInterval(id)
   }, [])
 
@@ -158,11 +159,16 @@ export default function MoneyContaInvoicePanel({
       const nowIso = new Date().toISOString()
       setFetchedById((prev) => ({ ...prev, [invoiceId]: fetched }))
       setFetchedAtById((prev) => ({ ...prev, [invoiceId]: nowIso }))
-      void qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
-      })
+      // Quiet auto-load already wrote conta_response; skip list invalidate to
+      // avoid a refetch/re-render loop on Accounting open.
       if (!quiet) {
-        success('Conta invoice loaded', 'Lines and header refreshed from Conta.')
+        void qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'money', 'sales-invoices'],
+        })
+        success(
+          'Conta invoice loaded',
+          'Lines and header refreshed from Conta.',
+        )
       }
     },
     onError: (e: unknown) => {
@@ -181,11 +187,23 @@ export default function MoneyContaInvoicePanel({
     canFetch &&
     !!(selected.conta_invoice_id || selected.conta_response)
 
-  // Initial load: pull Conta once per invoice when it becomes selected.
+  // Initial load: only hit Conta when stored payload has no displayable lines.
   React.useEffect(() => {
     if (!selected || !selectedCanFetch) return
     if (autoFetchedIdsRef.current.has(selected.id)) return
     if (fetchMutation.isPending) return
+    if (
+      hasContaInvoiceDisplayLines({
+        invoice_data: selected.invoice_data,
+        conta_response: selected.conta_response,
+        fetched: fetchedById[selected.id],
+        conta_invoice_id: selected.conta_invoice_id,
+        status: selected.status,
+      })
+    ) {
+      autoFetchedIdsRef.current.add(selected.id)
+      return
+    }
     autoFetchedIdsRef.current.add(selected.id)
     fetchMutation.mutate({ quiet: true })
     // Intentionally depend on selected id + fetchability, not the mutation object.
