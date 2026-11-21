@@ -27,24 +27,35 @@ import { ReportingBasisNotice } from '../components/ReportingBasisNotice'
 import { SegmentTabs } from '../components/SegmentTabs'
 import { SummaryKpis } from '../components/SummaryKpis'
 import { UtilizationTable } from '../components/UtilizationTable'
-import { dateRangeFromIndex } from '../utils/dates'
+import {
+  
+  compareMonthYear,
+  currentMonthYear,
+  dateRangeFromMonthYears
+} from '../utils/dates'
 import { formatHours, formatPercent } from '../utils/format'
 import { financialKpis } from '../utils/kpis'
 import { MARGIN_THRESHOLDS, filterLowMarginJobs } from '../utils/margin'
 import { filterIncompleteMoneyJobs } from '../utils/incompleteness'
 import { aggregateJobsByMonth } from '../utils/monthlyJobs'
+import type {MonthYear} from '../utils/dates';
 import type { MarginThreshold, ReportSegment } from '../types'
 
 export default function ReportingPage() {
   const { companyId } = useCompany()
   const [segment, setSegment] = React.useState<ReportSegment>('jobs')
-  const [rangeIndex, setRangeIndex] = React.useState(1)
+  const [fromMonth, setFromMonth] = React.useState<MonthYear>(() =>
+    currentMonthYear(),
+  )
+  const [toMonth, setToMonth] = React.useState<MonthYear>(() =>
+    currentMonthYear(),
+  )
   const [marginThreshold, setMarginThreshold] =
     React.useState<MarginThreshold>(15)
 
   const { fromDate, toDate } = React.useMemo(
-    () => dateRangeFromIndex(rangeIndex),
-    [rangeIndex],
+    () => dateRangeFromMonthYears(fromMonth, toMonth),
+    [fromMonth, toMonth],
   )
 
   const jobsQuery = useQuery({
@@ -159,7 +170,18 @@ export default function ReportingPage() {
           style={{ minWidth: 0 }}
         >
           <ReportingBasisNotice />
-          <DateRangeControl rangeIndex={rangeIndex} onChange={setRangeIndex} />
+          <DateRangeControl
+            from={fromMonth}
+            to={toMonth}
+            onChangeFrom={(next) => {
+              // Keep a single-month selection when From/To still match.
+              setFromMonth(next)
+              if (compareMonthYear(fromMonth, toMonth) === 0) {
+                setToMonth(next)
+              }
+            }}
+            onChangeTo={setToMonth}
+          />
         </Flex>
 
         <SegmentTabs value={segment} onChange={setSegment} />
