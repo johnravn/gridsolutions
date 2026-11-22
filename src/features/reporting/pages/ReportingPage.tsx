@@ -19,6 +19,10 @@ import {
   JOB_MONTHLY_CHART_HEIGHT,
   JobMonthlyProfitabilityChart,
 } from '../components/JobMonthlyProfitabilityChart'
+import {
+  PERIOD_TOTALS_CHART_HEIGHT,
+  PeriodTotalsBarChart,
+} from '../components/PeriodTotalsBarChart'
 import { JobProfitabilityTable } from '../components/JobProfitabilityTable'
 import { MonthlyTrendSection } from '../components/MonthlyTrendSection'
 import { ProfitabilityChart } from '../components/ProfitabilityChart'
@@ -36,6 +40,7 @@ import {
   filterIncompleteMoneyJobs,
 } from '../utils/incompleteness'
 import { aggregateJobsByMonth } from '../utils/monthlyJobs'
+import { aggregatePeriodTotals } from '../utils/periodTotals'
 import { yearRangeToMonthYears } from '../utils/periodPicker'
 import type { MonthYear } from '../utils/dates'
 import type { MarginThreshold, ReportSegment } from '../types'
@@ -105,10 +110,7 @@ export default function ReportingPage() {
     enabled: !!companyId && segment === 'invoice',
   })
 
-  const jobRows = React.useMemo(
-    () => jobsQuery.data ?? [],
-    [jobsQuery.data],
-  )
+  const jobRows = React.useMemo(() => jobsQuery.data ?? [], [jobsQuery.data])
   const utilizationRows = utilizationQuery.data ?? []
   const monthlyRows = monthlyQuery.data ?? []
   const invoiceData = invoiceQuery.data
@@ -149,6 +151,11 @@ export default function ReportingPage() {
   const jobMonthlyChartData = React.useMemo(
     () => aggregateJobsByMonth(verifiedJobRows, fromDate, toDate),
     [verifiedJobRows, fromDate, toDate],
+  )
+
+  const periodTotals = React.useMemo(
+    () => aggregatePeriodTotals(verifiedJobRows),
+    [verifiedJobRows],
   )
 
   const chartData = React.useMemo(() => {
@@ -262,11 +269,23 @@ export default function ReportingPage() {
                   />
                 </Flex>
                 {jobsLoading ? (
-                  <Card size="3">
-                    <ChartSkeleton height={JOB_MONTHLY_CHART_HEIGHT} />
-                  </Card>
+                  <Flex gap="3" wrap="wrap" align="stretch">
+                    <Card size="3" style={{ flex: '2 1 420px', minWidth: 0 }}>
+                      <ChartSkeleton height={JOB_MONTHLY_CHART_HEIGHT} />
+                    </Card>
+                    <Card size="3" style={{ flex: '1 1 280px', minWidth: 260 }}>
+                      <ChartSkeleton height={PERIOD_TOTALS_CHART_HEIGHT} />
+                    </Card>
+                  </Flex>
                 ) : (
-                  <JobMonthlyProfitabilityChart data={jobMonthlyChartData} />
+                  <Flex gap="3" wrap="wrap" align="stretch">
+                    <Box style={{ flex: '2 1 420px', minWidth: 0 }}>
+                      <JobMonthlyProfitabilityChart
+                        data={jobMonthlyChartData}
+                      />
+                    </Box>
+                    <PeriodTotalsBarChart totals={periodTotals} />
+                  </Flex>
                 )}
                 <JobProfitabilityTable rows={jobRows} loading={jobsLoading} />
               </>
@@ -481,9 +500,8 @@ export default function ReportingPage() {
                       incompleteCount: filterIncompleteMoneyJobs(
                         verifiedLowMarginRows,
                       ).length,
-                      unverifiedCount: filterAccountingUnverifiedJobs(
-                        lowMarginRows,
-                      ).length,
+                      unverifiedCount:
+                        filterAccountingUnverifiedJobs(lowMarginRows).length,
                     })}
                   />
                 ) : null}
