@@ -55,6 +55,7 @@
     "db:generate-seed": "node scripts/generate-seed.js",
     "db:reset:with-data": "node scripts/reset-with-data.js",
     "db:seed-test-users": "node scripts/seed-test-users.mjs",
+    "db:seed-dev-expansion": "node scripts/seed-dev-expansion.mjs",
     "conta:types": "openapi-typescript src/shared/api/conta/conta-external-api.json -o src/shared/api/conta/types.ts",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build -o storybook-static"
