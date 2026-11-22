@@ -28,6 +28,8 @@ export type JobProfitabilityRow = {
   money_incomplete: boolean
   /** True when the project lead marked Accounting as verified. */
   money_verified: boolean
+  /** ISO timestamp when Accounting was verified; null if not verified. */
+  money_verified_at: string | null
 }
 
 export type CustomerProfitabilityRow = {

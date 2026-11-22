@@ -1,6 +1,6 @@
 import * as React from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Avatar, Badge, Button, Flex, Text } from '@radix-ui/themes'
+import { Avatar, Badge, Button, Flex, Text, Tooltip } from '@radix-ui/themes'
 import {
   VirtualIndexTable,
   useClientSort,
@@ -8,7 +8,12 @@ import {
 } from '@shared/ui/index-table'
 import { getInitials } from '@shared/lib/generalFunctions'
 import { resolveAvatarUrl } from '@shared/lib/avatarUrl'
-import { formatCurrency, formatDate, formatPercent } from '../utils/format'
+import {
+  formatCurrency,
+  formatDate,
+  formatDateTime,
+  formatPercent,
+} from '../utils/format'
 import { compareValues } from '../utils/sort'
 import { ReportTableShell } from './ReportTableShell'
 import type { IndexColumn } from '@shared/ui/index-table'
@@ -130,9 +135,13 @@ export function JobProfitabilityTable({
             }
             case 'money_verified':
               return row.money_verified ? (
-                <Badge size="1" color="green" variant="soft">
-                  Verified
-                </Badge>
+                <Tooltip
+                  content={`Verified ${formatDateTime(row.money_verified_at)}`}
+                >
+                  <Badge size="1" color="green" variant="soft">
+                    Verified
+                  </Badge>
+                </Tooltip>
               ) : (
                 <Text size="2" color="gray">
                   —

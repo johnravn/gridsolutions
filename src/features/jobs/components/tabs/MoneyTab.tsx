@@ -146,6 +146,18 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     'invoice' | 'logging'
   >('invoice')
 
+  const formatVerifiedAt = (dateString: string | null | undefined) => {
+    if (!dateString) return null
+    return new Date(dateString).toLocaleString('nb-NO', {
+      timeZone: 'Europe/Oslo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '—'
     return new Date(dateString).toLocaleDateString('nb-NO', {
@@ -1249,6 +1261,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         <Heading size="3">Accounting</Heading>
         <Flex align="center" gap="2" wrap="wrap">
           <Flex align="center" gap="2">
+            {moneyVerified ? (
+              <Text size="2" color="gray" style={{ whiteSpace: 'nowrap' }}>
+                {formatVerifiedAt(moneyVerification?.money_verified_at)}
+              </Text>
+            ) : null}
             {canVerifyMoney ? (
               <Button
                 size="3"
