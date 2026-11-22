@@ -10,23 +10,34 @@ import {
   TextField,
 } from '@radix-ui/themes'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import { updateJobTransportKmDriven } from '../../api/moneyQueries'
 import {
-  DEFAULT_TRANSPORT_COST_PER_KM,
-  transportCostAmount,
-} from '../../utils/moneySuggestions'
+  deleteJobMoneyItemsBySourceId,
+  updateJobTransportKmDriven,
+  upsertJobMoneyItemBySourceId,
+} from '../../api/moneyQueries'
+import {
+  TRANSPORT_KM_SOURCE_ID,
+  computeTransportKmExpenseAmount,
+  resolveTransportCostPerKm,
+  transportKmExpenseDescription,
+} from '../../utils/transportKmExpense'
 
 export default function MoneyTransportKmCard({
   jobId,
+  companyId,
   kmDriven,
   costPerKm,
   plannedOfferKm,
+  expenseDate = null,
   prominent = false,
 }: {
   jobId: string
+  companyId: string
   kmDriven: number | null
   costPerKm: number
   plannedOfferKm: number | null
+  /** Job start date (YYYY-MM-DD or ISO) for the money item date. */
+  expenseDate?: string | null
   /** Emphasize for transport-heavy jobs */
   prominent?: boolean
 }) {
@@ -42,6 +53,8 @@ export default function MoneyTransportKmCard({
     setSeededFromOffer(false)
   }, [kmDriven])
 
+  const rate = resolveTransportCostPerKm(costPerKm)
+
   const parsedKm = React.useMemo(() => {
     if (draft.trim() === '') return null
     const n = Number(draft)
@@ -49,10 +62,7 @@ export default function MoneyTransportKmCard({
     return n
   }, [draft])
 
-  const previewCost = transportCostAmount(
-    parsedKm,
-    costPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM,
-  )
+  const previewCost = computeTransportKmExpenseAmount(parsedKm, rate)
 
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('nb-NO', {
@@ -64,12 +74,49 @@ export default function MoneyTransportKmCard({
   const saveMutation = useMutation({
     mutationFn: async (next: number | null) => {
       await updateJobTransportKmDriven(jobId, next)
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({
-        queryKey: ['jobs', jobId, 'money', 'job-info'],
+
+      const amount = computeTransportKmExpenseAmount(next, rate)
+      if (amount == null) {
+        await deleteJobMoneyItemsBySourceId(jobId, TRANSPORT_KM_SOURCE_ID)
+        return 'cleared' as const
+      }
+
+      const date =
+        expenseDate != null && expenseDate.length >= 10
+          ? expenseDate.slice(0, 10)
+          : null
+
+      const result = await upsertJobMoneyItemBySourceId({
+        jobId,
+        companyId,
+        sourceId: TRANSPORT_KM_SOURCE_ID,
+        type: 'expense',
+        description: transportKmExpenseDescription(Number(next), rate),
+        amount,
+        date,
+        reference: `${Number(next)} km`,
+        source: 'manual',
+        category: 'transport',
       })
-      success('Km saved', 'Transport cost suggestion will update.')
+      return result
+    },
+    onSuccess: async (result) => {
+      await Promise.all([
+        qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'money', 'job-info'],
+        }),
+        qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] }),
+        qc.invalidateQueries({
+          queryKey: ['jobs', jobId, 'money-verification'],
+        }),
+      ])
+      if (result === 'cleared') {
+        success('Km cleared', 'Transport expense removed.')
+      } else if (result === 'updated') {
+        success('Km saved', 'Transport expense updated.')
+      } else {
+        success('Km saved', 'Transport expense added.')
+      }
     },
     onError: (e: unknown) => {
       toastError(
@@ -113,8 +160,8 @@ export default function MoneyTransportKmCard({
             )}
         </Flex>
         <Text size="2" color="gray">
-          Transport cost = km × {costPerKm} kr/km (company Money rate). Conta
-          fuel/toll suggestions stay separate.
+          Save km adds a transport expense = km × {rate} kr/km (company Money
+          rate). Conta fuel/toll suggestions stay separate.
         </Text>
         <Flex gap="3" align="end" wrap="wrap">
           <Box style={{ minWidth: 140, maxWidth: 200 }}>
@@ -161,12 +208,12 @@ export default function MoneyTransportKmCard({
         </Flex>
         {previewCost != null && (
           <Text size="2">
-            Suggested cost:{' '}
+            Expense:{' '}
             <Text weight="bold" color="red">
               {formatCurrency(previewCost)}
             </Text>{' '}
             <Text color="gray">
-              ({parsedKm} × {costPerKm} kr)
+              ({parsedKm} × {rate} kr)
             </Text>
           </Text>
         )}

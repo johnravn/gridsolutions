@@ -112,6 +112,79 @@ export async function deleteJobMoneyItem(id: string): Promise<void> {
   if (error) throw error
 }
 
+/** Find a money item by job + source_id (e.g. transport-km for Save km upsert). */
+export async function findJobMoneyItemBySourceId(
+  jobId: string,
+  sourceId: string,
+): Promise<Pick<JobMoneyItem, 'id'> | null> {
+  const { data, error } = await supabase
+    .from('job_money_items')
+    .select('id')
+    .eq('job_id', jobId)
+    .eq('source_id', sourceId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * Insert or update the transport-km expense for a job.
+ * Returns 'inserted' | 'updated'. Caller supplies amount/description.
+ */
+export async function upsertJobMoneyItemBySourceId(input: {
+  jobId: string
+  companyId: string
+  sourceId: string
+  type: JobMoneyItemType
+  description: string
+  amount: number
+  date?: string | null
+  reference?: string | null
+  source: JobMoneyItemSource
+  category?: JobMoneyItemCategory | null
+}): Promise<'inserted' | 'updated'> {
+  const existing = await findJobMoneyItemBySourceId(input.jobId, input.sourceId)
+  if (existing) {
+    await updateJobMoneyItem(existing.id, {
+      description: input.description,
+      amount: input.amount,
+      date: input.date ?? null,
+      reference: input.reference ?? null,
+      category: input.category ?? null,
+    })
+    return 'updated'
+  }
+  await insertJobMoneyItem({
+    job_id: input.jobId,
+    company_id: input.companyId,
+    type: input.type,
+    description: input.description,
+    amount: input.amount,
+    date: input.date ?? null,
+    reference: input.reference ?? null,
+    source: input.source,
+    source_id: input.sourceId,
+    category: input.category ?? null,
+  })
+  return 'inserted'
+}
+
+/** Delete money items for a job matching source_id (idempotent). */
+export async function deleteJobMoneyItemsBySourceId(
+  jobId: string,
+  sourceId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from('job_money_items')
+    .delete()
+    .eq('job_id', jobId)
+    .eq('source_id', sourceId)
+  if (error) throw error
+}
+
 /** Phase 2 UX will edit this; Phase 1 exposes the writer for Money transport suggestions. */
 export async function updateJobTransportKmDriven(
   jobId: string,
