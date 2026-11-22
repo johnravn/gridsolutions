@@ -16,6 +16,19 @@ export function formatDate(d: string | null) {
   })
 }
 
+/** Compact datetime for verification stamps (Oslo / nb-NO). */
+export function formatDateTime(d: string | null) {
+  if (!d) return '—'
+  return new Date(d).toLocaleString('nb-NO', {
+    timeZone: 'Europe/Oslo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export function formatPercent(value: number | null) {
   if (value == null) return '—'
   return `${value}%`

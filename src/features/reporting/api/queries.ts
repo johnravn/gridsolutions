@@ -190,6 +190,7 @@ function toJobProfitabilityRow(
       itemCount: money.itemCount,
     }),
     money_verified: job.money_verified_at != null,
+    money_verified_at: job.money_verified_at ?? null,
   }
 }
 
