@@ -83,6 +83,7 @@ import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
 import MoneyContaInvoicePanel from './MoneyContaInvoicePanel'
+import MoneyLoggingEntriesPanel from './MoneyLoggingEntriesPanel'
 import MoneyItemsFilter from './MoneyItemsFilter'
 import type { ContaDatePadOption } from '../../utils/moneyConta'
 import type { MoneySuggestion } from '../../utils/moneySuggestions'
@@ -140,6 +141,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   )
   const [contaDatePad, setContaDatePad] =
     React.useState<ContaDatePadOption>('job')
+  /** Secondary column when Jobs list is collapsed: Conta invoice vs logging. */
+  const [accountingSideView, setAccountingSideView] = React.useState<
+    'invoice' | 'logging'
+  >('invoice')
 
   const formatDate = (dateString: string | null) => {
     if (!dateString) return '—'
@@ -1862,6 +1867,12 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               </Flex>
             </Card>
           )}
+
+          {!isAccountingWide && (
+            <Box mt="4">
+              <MoneyLoggingEntriesPanel jobId={jobId} />
+            </Box>
+          )}
         </Box>
 
         <Box
@@ -1874,14 +1885,48 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             alignSelf: 'flex-start',
           }}
         >
-          <MoneyContaInvoicePanel
-            jobId={jobId}
-            organizationId={
-              accountingConfig?.accounting_organization_id ?? null
-            }
-            invoices={jobSalesInvoices}
-            invoicesLoading={isSalesInvoicesLoading}
-          />
+          {isAccountingWide ? (
+            <Flex direction="column" gap="3" style={{ width: '100%' }}>
+              <SegmentedControl.Root
+                size="2"
+                value={accountingSideView}
+                onValueChange={(value) => {
+                  if (value === 'invoice' || value === 'logging') {
+                    setAccountingSideView(value)
+                  }
+                }}
+                style={{ alignSelf: 'stretch' }}
+              >
+                <SegmentedControl.Item value="invoice">
+                  Invoice
+                </SegmentedControl.Item>
+                <SegmentedControl.Item value="logging">
+                  Logging
+                </SegmentedControl.Item>
+              </SegmentedControl.Root>
+              {accountingSideView === 'invoice' ? (
+                <MoneyContaInvoicePanel
+                  jobId={jobId}
+                  organizationId={
+                    accountingConfig?.accounting_organization_id ?? null
+                  }
+                  invoices={jobSalesInvoices}
+                  invoicesLoading={isSalesInvoicesLoading}
+                />
+              ) : (
+                <MoneyLoggingEntriesPanel jobId={jobId} />
+              )}
+            </Flex>
+          ) : (
+            <MoneyContaInvoicePanel
+              jobId={jobId}
+              organizationId={
+                accountingConfig?.accounting_organization_id ?? null
+              }
+              invoices={jobSalesInvoices}
+              invoicesLoading={isSalesInvoicesLoading}
+            />
+          )}
         </Box>
       </Flex>
 
