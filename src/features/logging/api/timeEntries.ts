@@ -19,6 +19,18 @@ export type TimeEntryInsert =
 export type TimeEntryUpdate =
   Database['public']['Tables']['time_entries']['Update']
 
+const TIME_ENTRY_PROFILE_SELECT = `
+  *,
+  profile:profiles!time_entries_user_id_fkey (
+    user_id,
+    display_name,
+    first_name,
+    last_name,
+    email,
+    avatar_url
+  )
+`
+
 export function timeEntriesQuery({
   companyId,
   userId,
@@ -35,19 +47,7 @@ export function timeEntriesQuery({
     queryFn: async () => {
       let q = supabase
         .from('time_entries')
-        .select(
-          `
-          *,
-          profile:profiles!time_entries_user_id_fkey (
-            user_id,
-            display_name,
-            first_name,
-            last_name,
-            email,
-            avatar_url
-          )
-        `,
-        )
+        .select(TIME_ENTRY_PROFILE_SELECT)
         .eq('company_id', companyId)
         .gte('start_at', from)
         .lt('start_at', to)
@@ -61,6 +61,31 @@ export function timeEntriesQuery({
       if (error) throw error
       return (data ?? []) as Array<TimeEntryWithProfile>
     },
+  }
+}
+
+/** All time entries linked to a job (Accounting / Money tab). */
+export function timeEntriesForJobQuery({
+  companyId,
+  jobId,
+}: {
+  companyId: string
+  jobId: string
+}) {
+  return {
+    queryKey: ['time_entries', 'by-job', companyId, jobId] as const,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('time_entries')
+        .select(TIME_ENTRY_PROFILE_SELECT)
+        .eq('company_id', companyId)
+        .eq('job_id', jobId)
+        .order('start_at', { ascending: true })
+
+      if (error) throw error
+      return (data ?? []) as Array<TimeEntryWithProfile>
+    },
+    enabled: !!companyId && !!jobId,
   }
 }
 
