@@ -11,7 +11,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge PR and verify on Vercel preview
  */
-export const APP_VERSION = '1.14.9'
+export const APP_VERSION = '1.14.10'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
@@ -36,7 +36,7 @@ export const RELEASE_NOTES = {
     {
       title: 'Conta on Accounting',
       description:
-        'Open sent Conta invoice lines beside the ledger when the Jobs list is collapsed. Link an existing Conta invoice by number, or refetch with an Updated … ago badge.',
+        'Open sent Conta invoice lines beside the ledger when the Accounting panel is wide enough. Link an existing Conta invoice by number, or refetch with an Updated … ago badge.',
     },
     {
       title: 'Crew org number + Conta costs',
