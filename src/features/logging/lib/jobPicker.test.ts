@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildLoggingJobPickerList,
+  buildLoggingJobPickerSections,
   formatJobOption,
   isJobOnToday,
   jobStartsWithinLoggingWindow,
@@ -133,6 +134,56 @@ describe('buildLoggingJobPickerList', () => {
     })
     expect(result).toHaveLength(4)
     expect(result[0]?.id).toBe('logged')
+  })
+
+  it('includes far-future jobs when searching so they stay findable', () => {
+    const future = job({
+      id: 'future',
+      title: 'Festival load-in',
+      start_at: new Date(2026, 10, 1, 10, 0, 0).toISOString(),
+    })
+    const withoutSearch = buildLoggingJobPickerList({
+      jobs: [future],
+      previouslyLoggedJobs: [],
+      search: '',
+      now,
+    })
+    expect(withoutSearch).toHaveLength(0)
+
+    const withSearch = buildLoggingJobPickerList({
+      jobs: [future],
+      previouslyLoggedJobs: [],
+      search: 'festival',
+      now,
+    })
+    expect(withSearch.map((item) => item.id)).toEqual(['future'])
+  })
+})
+
+describe('buildLoggingJobPickerSections', () => {
+  it('groups today separately from other jobs', () => {
+    const todayJob = job({
+      id: 'today',
+      title: 'Today job',
+      start_at: new Date(2026, 7, 24, 9, 0, 0).toISOString(),
+      end_at: new Date(2026, 7, 24, 17, 0, 0).toISOString(),
+    })
+    const pastJob = job({
+      id: 'past',
+      title: 'Past job',
+      start_at: new Date(2026, 7, 20, 9, 0, 0).toISOString(),
+    })
+    const recent = job({ id: 'logged', title: 'Logged' })
+    const sections = buildLoggingJobPickerSections({
+      jobs: [todayJob, pastJob],
+      previouslyLoggedJobs: [recent],
+      search: '',
+      now,
+    })
+    expect(sections.map((s) => s.id)).toEqual(['today', 'recent', 'jobs'])
+    expect(sections[0]?.jobs.map((j) => j.id)).toEqual(['today'])
+    expect(sections[1]?.jobs.map((j) => j.id)).toEqual(['logged'])
+    expect(sections[2]?.jobs.map((j) => j.id)).toEqual(['past'])
   })
 })
 
