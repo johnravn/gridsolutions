@@ -1167,7 +1167,41 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     },
   })
 
+  const addSuggestionMutation = useMutation({
+    mutationFn: async (s: Suggestion) => {
+      if (!companyId) throw new Error('No company')
+      await insertJobMoneyItem({
+        job_id: jobId,
+        company_id: companyId,
+        type: s.type,
+        description: s.description,
+        amount: s.amount,
+        date: s.date,
+        reference: s.reference ?? null,
+        source: s.source,
+        source_id: s.sourceId,
+        category: s.category,
+      })
+    },
+    onSuccess: () => {
+      success('Item added')
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to add item',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
+  /** Fast path: insert suggestion as-is. */
   const handleAddFromSuggestion = (s: Suggestion) => {
+    addSuggestionMutation.mutate(s)
+  }
+
+  /** Review/tweak before insert (opens money-line edit dialog). */
+  const handleAdjustFromSuggestion = (s: Suggestion) => {
     setAddSuggestion(s)
     setEditMode('add')
     setEditingItem(null)
@@ -1464,7 +1498,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 )}
               </Flex>
               <Text size="2" color="gray" mb="3">
-                Add items from real events. You can edit before adding. Conta
+                Add inserts as suggested; Adjust lets you tweak first. Conta
                 lines show match confidence — review amounts (may be inkl. MVA).
               </Text>
               {isMobile ? (
@@ -1540,14 +1574,26 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                           {formatCurrency(s.amount)}
                         </Text>
                       </Flex>
-                      <Button
-                        size="2"
-                        variant="soft"
-                        style={{ width: '100%', minHeight: 40 }}
-                        onClick={() => handleAddFromSuggestion(s)}
-                      >
-                        Add
-                      </Button>
+                      <Flex gap="2" mt="1">
+                        <Button
+                          size="2"
+                          variant="soft"
+                          style={{ flex: 1, minHeight: 40 }}
+                          disabled={addSuggestionMutation.isPending}
+                          onClick={() => handleAddFromSuggestion(s)}
+                        >
+                          Add
+                        </Button>
+                        <Button
+                          size="2"
+                          variant="outline"
+                          style={{ flex: 1, minHeight: 40 }}
+                          disabled={addSuggestionMutation.isPending}
+                          onClick={() => handleAdjustFromSuggestion(s)}
+                        >
+                          Adjust
+                        </Button>
+                      </Flex>
                     </Box>
                   ))}
                 </Flex>
@@ -1568,7 +1614,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                         <Table.ColumnHeaderCell align="right">
                           Amount
                         </Table.ColumnHeaderCell>
-                        <Table.ColumnHeaderCell style={{ width: 80 }} />
+                        <Table.ColumnHeaderCell style={{ width: 140 }} />
                       </Table.Row>
                     </Table.Header>
                     <Table.Body>
@@ -1640,13 +1686,24 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                             </Text>
                           </Table.Cell>
                           <Table.Cell>
-                            <Button
-                              size="1"
-                              variant="soft"
-                              onClick={() => handleAddFromSuggestion(s)}
-                            >
-                              Add
-                            </Button>
+                            <Flex gap="1" justify="end">
+                              <Button
+                                size="1"
+                                variant="soft"
+                                disabled={addSuggestionMutation.isPending}
+                                onClick={() => handleAddFromSuggestion(s)}
+                              >
+                                Add
+                              </Button>
+                              <Button
+                                size="1"
+                                variant="outline"
+                                disabled={addSuggestionMutation.isPending}
+                                onClick={() => handleAdjustFromSuggestion(s)}
+                              >
+                                Adjust
+                              </Button>
+                            </Flex>
                           </Table.Cell>
                         </Table.Row>
                       ))}

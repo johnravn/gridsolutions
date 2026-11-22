@@ -192,7 +192,11 @@ export default function MoneyItemEditDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Content maxWidth="480px">
         <Dialog.Title>
-          {mode === 'edit' ? 'Edit item' : 'Add item'}
+          {mode === 'edit'
+            ? 'Edit item'
+            : initialData
+              ? 'Adjust suggestion'
+              : 'Add item'}
         </Dialog.Title>
 
         <form
