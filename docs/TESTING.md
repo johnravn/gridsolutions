@@ -343,10 +343,12 @@ Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 | ----------- | ----------------------------------------------------------------------- | ---------- |
 | Unit tests  | `npm run test`                                                          | —          |
 | Build       | `npm run build:check`                                                   | —          |
-| Integration | `supabase start` → `db reset` → seed → `test:integration`               | unit       |
-| E2E         | `playwright install chromium` → `supabase start` → seed → `test:e2e:ci` | unit       |
+| Integration | `supabase start -x …,mailpit` → `db reset` → seed → `test:integration`  | unit       |
+| E2E         | `playwright install chromium` → `supabase start -x …,mailpit` → seed → `test:e2e:ci` | unit       |
 
 E2E runs **in parallel with integration** (separate runner). Slim suite: `@ci` tags on Chromium + `mobile-pwa` on mobile-chrome. Force full: `E2E_FULL=1`.
+
+CI excludes **Mailpit** (`-x …,mailpit`) — no job reads the catcher UI, and start has flaked on port `54324`. The start step retries once after `supabase stop` for transient Docker/registry errors.
 
 Runs on every push to `main`.
 

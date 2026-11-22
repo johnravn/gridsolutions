@@ -73,7 +73,18 @@ jobs:
       # Use the locked npm `supabase` CLI (avoids GitHub rate limits on
       # supabase/setup-cli `version: latest`).
       - run: npm ci
-      - run: npx supabase start -x imgproxy,logflare,vector
+      # Skip Mailpit (inbucket): CI never asserts on the catcher UI, and start
+      # has flaked with "54324 address already in use" on ubuntu-latest.
+      # Retry once after stop for transient Docker/registry flakes.
+      - name: Start local Supabase
+        run: |
+          EXCLUDES=imgproxy,logflare,vector,mailpit
+          if ! npx supabase start -x "$EXCLUDES"; then
+            echo "supabase start failed; stopping and retrying once..."
+            npx supabase stop --no-backup || true
+            sleep 3
+            npx supabase start -x "$EXCLUDES"
+          fi
       - run: npx supabase db reset
       - name: Export Supabase env
         run: |
@@ -99,7 +110,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npx supabase start -x imgproxy,logflare,vector
+      - name: Start local Supabase
+        run: |
+          EXCLUDES=imgproxy,logflare,vector,mailpit
+          if ! npx supabase start -x "$EXCLUDES"; then
+            echo "supabase start failed; stopping and retrying once..."
+            npx supabase stop --no-backup || true
+            sleep 3
+            npx supabase start -x "$EXCLUDES"
+          fi
       - run: npx supabase db reset
       - name: Export Supabase env
         run: |
