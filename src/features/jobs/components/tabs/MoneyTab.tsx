@@ -13,8 +13,8 @@ import {
   Table,
   Text,
 } from '@radix-ui/themes'
+import { useElementMinWidth } from '@app/hooks/useElementMinWidth'
 import { useMediaQuery } from '@app/hooks/useMediaQuery'
-import { useSplitLayoutChrome } from '@app/layout/split'
 import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
 import {
   CheckCircle,
@@ -113,15 +113,22 @@ type ContaLedgerLine = {
 
 type Suggestion = MoneySuggestion
 
+/** Min Accounting panel width for Invoice/Logging beside the money list. */
+const ACCOUNTING_TWO_COL_MIN_PX = 960
+
 export default function MoneyTab({ jobId }: { jobId: string }) {
   const { companyId } = useCompany()
   const { userId, companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
-  // Two-column Conta invoice only when the Jobs list panel is collapsed.
-  const { isMinimized: isJobsListCollapsed } = useSplitLayoutChrome()
-  const isAccountingWide = isJobsListCollapsed
+  // Two-column layout when the Accounting panel itself is wide enough —
+  // not when the Jobs list chrome is collapsed.
+  const accountingLayoutRef = React.useRef<HTMLDivElement>(null)
+  const isAccountingWide = useElementMinWidth(
+    accountingLayoutRef,
+    ACCOUNTING_TWO_COL_MIN_PX,
+  )
   const [chartType, setChartType] = React.useState<
     'bar' | 'line' | 'area' | 'composed'
   >('bar')
@@ -141,7 +148,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   )
   const [contaDatePad, setContaDatePad] =
     React.useState<ContaDatePadOption>('job')
-  /** Secondary column when Jobs list is collapsed: Conta invoice vs logging. */
+  /** Secondary column when wide enough: Conta invoice vs logging. */
   const [accountingSideView, setAccountingSideView] = React.useState<
     'invoice' | 'logging'
   >('invoice')
@@ -1256,7 +1263,7 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   }
 
   return (
-    <Box style={{ maxWidth: '100%', minWidth: 0 }}>
+    <Box ref={accountingLayoutRef} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
         <Heading size="3">Accounting</Heading>
         <Flex align="center" gap="2" wrap="wrap">
