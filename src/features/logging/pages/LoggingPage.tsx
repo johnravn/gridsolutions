@@ -1,21 +1,16 @@
 import * as React from 'react'
 import {
-  Badge,
   Box,
   Button,
   Dialog,
   Flex,
   Heading,
-  IconButton,
   Select,
   Separator,
-  Switch,
   Text,
   TextArea,
-  TextField,
-  Tooltip,
 } from '@radix-ui/themes'
-import { InfoCircle, Link as LinkIcon, Plus, Search } from 'iconoir-react'
+import { Plus } from 'iconoir-react'
 import {
   keepPreviousData,
   useMutation,
@@ -50,19 +45,18 @@ import {
   timeEntriesQuery,
 } from '../api/timeEntries'
 import EditTimeEntryDialog from '../components/EditTimeEntryDialog'
+import LoggingJobPickerField from '../components/LoggingJobPickerField'
 import LoggingMonthScroller from '../components/LoggingMonthScroller'
 import TimeEntriesTable from '../components/TimeEntriesTable'
 import TimeEntryWhenFields from '../components/TimeEntryWhenFields'
 import {
-  buildLoggingJobPickerList,
+  buildLoggingJobPickerSections,
   formatJobOption,
-  isJobOnToday,
   loggingSearchTerm,
 } from '../lib/jobPicker'
 import {
   formatHoursBetween,
   formatHoursInput,
-  hoursFromRangeOrDefault,
   hoursToRange,
   isValidLoggedHours,
   parseHoursInput,
@@ -72,7 +66,6 @@ import {
   formatLoggingDate,
   formatMonthInput,
   getDefaultTimes,
-  getEndFallback,
   getMonthOptions,
   getRange,
   getYearFromIso,
@@ -179,16 +172,20 @@ export default function LoggingPage() {
   })
 
   const LOGGING_JOBS_MAX_ROWS = 150
+  const activeJobSearch = loggingSearchTerm(debouncedJobSearch)
+  // Typing a search always scans all company jobs — the My/All toggle only
+  // scopes the browse list, which is what made attach-to-job hard to find.
+  const searchAllJobs = showAllJobs || Boolean(activeJobSearch)
   const { data: jobsData = [], isLoading: jobsLoading } = useQuery({
     ...jobsIndexQuery({
       companyId: companyId ?? '',
-      search: loggingSearchTerm(debouncedJobSearch),
+      search: activeJobSearch,
       sortBy: 'start_at',
       sortDir: 'desc',
       userId: userId ?? null,
       companyRole: companyRole ?? null,
       includeArchived: false,
-      onlyCrewForUserId: showAllJobs ? null : (userId ?? null),
+      onlyCrewForUserId: searchAllJobs ? null : (userId ?? null),
       maxRows: LOGGING_JOBS_MAX_ROWS,
     }),
     enabled,
@@ -210,9 +207,9 @@ export default function LoggingPage() {
     [previouslyLoggedJobs],
   )
 
-  const jobsForPicker = React.useMemo(
+  const jobPickerSections = React.useMemo(
     () =>
-      buildLoggingJobPickerList({
+      buildLoggingJobPickerSections({
         jobs: jobsData,
         previouslyLoggedJobs,
         search: jobSearch,
@@ -220,6 +217,16 @@ export default function LoggingPage() {
       }),
     [jobSearch, jobsData, previouslyLoggedJobs],
   )
+
+  const selectedJobLabel = React.useMemo(() => {
+    if (!selectedJobId) return ''
+    const job =
+      jobsData.find((j) => j.id === selectedJobId) ??
+      previouslyLoggedJobs.find((j) => j.id === selectedJobId)
+    return job
+      ? formatJobOption(job, formatLoggingDate)
+      : title || selectedJobId
+  }, [jobsData, previouslyLoggedJobs, selectedJobId, title])
 
   const entryStartYear = React.useMemo(
     () => getYearFromIso(startAt) ?? new Date().getFullYear(),
@@ -279,48 +286,22 @@ export default function LoggingPage() {
   }, [endAt, lockedMonthSetForEntry, startAt])
 
   const handleJobSelect = React.useCallback(
-    (
-      jobId: string,
-      job?: {
-        id: string
-        title: string
-        jobnr: number | null
-        start_at: string | null
-        end_at: string | null
-      },
-    ) => {
-      setSelectedJobId(jobId)
-      const resolved =
-        job ??
-        jobsData.find((item) => item.id === jobId) ??
-        previouslyLoggedJobs.find((item) => item.id === jobId)
-      if (!resolved) return
-
-      setTitle(resolved.title || '')
-      setJobNumber(resolved.jobnr != null ? String(resolved.jobnr) : '')
-
-      const nextStart = resolved.start_at ?? ''
-      if (timeMode === 'hours') {
-        const hours = hoursFromRangeOrDefault(startAt, endAt)
-        const dateIso = nextStart || startAt
-        if (dateIso) {
-          const range = hoursToRange(dateIso, hours)
-          setStartAt(range.startAt)
-          setEndAt(range.endAt)
-          setHoursInput(formatHoursInput(hours))
-        }
-      } else if (nextStart) {
-        setStartAt(nextStart)
-        if (resolved.end_at) {
-          setEndAt(resolved.end_at)
-        } else {
-          setEndAt(getEndFallback(nextStart))
-        }
-      }
+    (job: {
+      id: string
+      title: string
+      jobnr: number | null
+      start_at: string | null
+      end_at: string | null
+    }) => {
+      // Keep the user's when-fields; attaching a job should not replace the
+      // entry window with the job's full schedule (often multi-day).
+      setSelectedJobId(job.id)
+      setTitle(job.title || '')
+      setJobNumber(job.jobnr != null ? String(job.jobnr) : '')
       setJobSearchOpen(false)
       setJobSearch('')
     },
-    [jobsData, previouslyLoggedJobs, startAt, endAt, timeMode],
+    [],
   )
 
   const createEntry = useMutation({
@@ -493,185 +474,32 @@ export default function LoggingPage() {
           gap: 16,
         }}
       >
-        <Box style={{ position: 'relative', gridColumn: '1 / -1' }}>
-          <Text as="div" size="2" mb="1" weight="medium">
-            Title
-          </Text>
-          {selectedJobId ? (
-            <Flex align="center" gap="2">
-              <Flex
-                align="center"
-                gap="2"
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  height: 'var(--space-6)',
-                  padding: '0 var(--space-2)',
-                  borderRadius: 'max(var(--radius-2), var(--radius-full))',
-                  boxShadow: 'inset 0 0 0 1px var(--gray-a7)',
-                  background: 'var(--color-surface)',
-                }}
-              >
-                <Tooltip content="Linked to a job">
-                  <span
-                    aria-label="Linked to a job"
-                    style={{
-                      display: 'inline-flex',
-                      flexShrink: 0,
-                      color: 'var(--accent-11)',
-                    }}
-                  >
-                    <LinkIcon width={16} height={16} />
-                  </span>
-                </Tooltip>
-                <Text size="2" style={{ flex: 1, minWidth: 0 }} truncate>
-                  {(() => {
-                    const job =
-                      jobsData.find((j) => j.id === selectedJobId) ??
-                      previouslyLoggedJobs.find((j) => j.id === selectedJobId)
-                    return job
-                      ? formatJobOption(job, formatLoggingDate)
-                      : title || selectedJobId
-                  })()}
-                </Text>
-              </Flex>
-              <Button
-                size="2"
-                variant="soft"
-                onClick={() => {
-                  setSelectedJobId(null)
-                  setJobSearch(title)
-                  setJobNumber('')
-                  setJobSearchOpen(true)
-                }}
-              >
-                Change
-              </Button>
-            </Flex>
-          ) : (
-            <>
-              <Flex align="center" gap="3" wrap="wrap">
-                <Box ref={jobSearchInputRef} style={{ flex: 1, minWidth: 240 }}>
-                  <TextField.Root
-                    placeholder="Search a job or type a title"
-                    value={jobSearch}
-                    onChange={(e) => {
-                      setJobSearch(e.target.value)
-                      setJobSearchOpen(true)
-                    }}
-                    onFocus={() => setJobSearchOpen(true)}
-                    onBlur={() => {
-                      setTimeout(() => setJobSearchOpen(false), 150)
-                    }}
-                  >
-                    <TextField.Slot side="left">
-                      <Search width={16} height={16} />
-                    </TextField.Slot>
-                  </TextField.Root>
-                </Box>
-                <Flex align="center" gap="2" style={{ flexShrink: 0 }}>
-                  <Switch
-                    checked={showAllJobs}
-                    onCheckedChange={(v) => setShowAllJobs(Boolean(v))}
-                  />
-                  <Text size="2">Show all jobs</Text>
-                  <Tooltip content="Job list: Off — Only jobs you're crew on (newest first, today and the next 2 days plus all past). On — All company jobs in the same date range. Jobs you've already logged time on always appear so you can add another entry.">
-                    <IconButton
-                      size="1"
-                      variant="ghost"
-                      color="gray"
-                      style={{ cursor: 'help' }}
-                      aria-label="Explain job list options"
-                    >
-                      <InfoCircle width={16} height={16} />
-                    </IconButton>
-                  </Tooltip>
-                </Flex>
-              </Flex>
-              {jobSearchOpen && (
-                <Box
-                  style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    top: '100%',
-                    marginTop: 4,
-                    zIndex: 10,
-                    maxHeight: 280,
-                    overflow: 'auto',
-                    background: 'var(--color-background)',
-                    border: '1px solid var(--gray-a6)',
-                    borderRadius: 'var(--radius-3)',
-                    boxShadow: 'var(--shadow-4)',
-                  }}
-                >
-                  {jobsForPicker.length === 0 ? (
-                    <Box p="3">
-                      <Text size="2" color="gray">
-                        {jobsSearchLoading
-                          ? 'Searching…'
-                          : jobSearch.trim()
-                            ? `No matches for “${jobSearch.trim()}”`
-                            : 'No jobs found. Try a different search or turn on "Show all jobs".'}
-                      </Text>
-                    </Box>
-                  ) : (
-                    <>
-                      {jobsTruncated && (
-                        <Box px="2" pt="2">
-                          <Text size="1" color="gray">
-                            Top {LOGGING_JOBS_MAX_ROWS} results — refine search
-                          </Text>
-                        </Box>
-                      )}
-                      {jobsForPicker.map((job) => (
-                        <Box
-                          key={job.id}
-                          asChild
-                          p="2"
-                          style={{
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => handleJobSelect(job.id, job)}
-                          onMouseDown={(e) => e.preventDefault()}
-                        >
-                          <div>
-                            <Flex align="center" gap="2" wrap="wrap">
-                              <Text size="2">
-                                {formatJobOption(job, formatLoggingDate)}
-                              </Text>
-                              {previouslyLoggedJobIds.has(job.id) && (
-                                <Badge size="1" color="green" variant="soft">
-                                  Logged
-                                </Badge>
-                              )}
-                              {isJobOnToday(job) && (
-                                <Badge size="1" color="blue" variant="soft">
-                                  Today
-                                </Badge>
-                              )}
-                            </Flex>
-                            {(job.customer?.name ??
-                              job.project_lead?.display_name) && (
-                              <Text size="1" color="gray" as="div">
-                                {[
-                                  job.customer?.name,
-                                  job.project_lead?.display_name,
-                                ]
-                                  .filter(Boolean)
-                                  .join(' · ')}
-                              </Text>
-                            )}
-                          </div>
-                        </Box>
-                      ))}
-                    </>
-                  )}
-                </Box>
-              )}
-            </>
-          )}
-        </Box>
+        <LoggingJobPickerField
+          selectedJobId={selectedJobId}
+          selectedLabel={selectedJobLabel}
+          search={jobSearch}
+          onSearchChange={setJobSearch}
+          open={jobSearchOpen}
+          onOpenChange={setJobSearchOpen}
+          showAllJobs={showAllJobs}
+          onShowAllJobsChange={setShowAllJobs}
+          sections={jobPickerSections}
+          previouslyLoggedJobIds={previouslyLoggedJobIds}
+          loading={jobsSearchLoading}
+          truncated={jobsTruncated}
+          truncatedLimit={LOGGING_JOBS_MAX_ROWS}
+          onSelectJob={handleJobSelect}
+          onClearJob={() => {
+            setSelectedJobId(null)
+            setJobSearch(title)
+            setJobNumber('')
+            setJobSearchOpen(true)
+          }}
+          onUseTitleOnly={() => {
+            setJobSearchOpen(false)
+          }}
+          inputRef={jobSearchInputRef}
+        />
         <Box style={{ gridColumn: '1 / -1' }}>
           <TimeEntryWhenFields
             mode={timeMode}
