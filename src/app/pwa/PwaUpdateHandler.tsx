@@ -1,33 +1,32 @@
 import * as React from 'react'
 import { registerSW } from 'virtual:pwa-register'
 import { useToast } from '@shared/ui/toast/ToastProvider'
+import {
+  GRID_BOOTED_ATTR,
+  GRID_SW_RECOVERY_KEY,
+  clearGridServiceWorkerCaches,
+} from './bootRecovery'
 
 export function PwaUpdateHandler() {
   const toast = useToast()
-  const promptedRef = React.useRef(false)
   const registerErrorRef = React.useRef(false)
 
   React.useEffect(() => {
-    const updateSW = registerSW({
-      onNeedRefresh() {
-        if (promptedRef.current) return
-        promptedRef.current = true
+    // Mark that the React shell mounted successfully so the index.html
+    // watchdog does not treat a slow first paint as a stale-SW failure.
+    document.documentElement.setAttribute(GRID_BOOTED_ATTR, '1')
+    try {
+      sessionStorage.removeItem(GRID_SW_RECOVERY_KEY)
+    } catch {
+      // ignore quota / private-mode failures
+    }
 
-        toast.show({
-          kind: 'info',
-          title: 'A new version is available',
-          description: 'Reload to get the latest updates.',
-          duration: 0,
-          onUndo: () => {
-            void updateSW(true)
-          },
-          undoLabel: 'Reload',
-        })
-      },
+    registerSW({
+      immediate: true,
       onRegisterError() {
         // Stale SW / missing workbox chunk after a deploy can surface as Safari's
-        // "'text/html' is not a valid JavaScript MIME type" when the host SPA
-        // fallback returns index.html for a .js URL. Offer a hard reload once.
+        // "'text/html' is not a valid JavaScript MIME type" or a silent blank
+        // page when hashed assets 404. Offer a hard recovery once.
         if (registerErrorRef.current) return
         registerErrorRef.current = true
 
@@ -37,7 +36,14 @@ export function PwaUpdateHandler() {
           description: 'Reload to clear a stale offline cache.',
           duration: 0,
           onUndo: () => {
-            window.location.reload()
+            void (async () => {
+              try {
+                await clearGridServiceWorkerCaches()
+              } catch {
+                // still reload — network fetch may be enough
+              }
+              window.location.reload()
+            })()
           },
           undoLabel: 'Reload',
         })

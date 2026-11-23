@@ -24,6 +24,8 @@ export default [
       'vitest.integration.config.ts',
       'src/test/integration/**',
       'scripts/**',
+      // Static assets / SW helpers — not in tsconfig; not app TS.
+      'public/**',
       'eslint.config.js',
       'prettier.config.js',
     ],
