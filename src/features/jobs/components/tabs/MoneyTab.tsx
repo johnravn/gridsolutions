@@ -46,6 +46,10 @@ import {
   setJobMoneyVerified,
 } from '../../api/moneyQueries'
 import {
+  JOB_MONEY_VERIFY_STATUS_HINT,
+  isJobStatusEligibleForMoneyVerify,
+} from '../../utils/moneyVerifyStatus'
+import {
   jobSubcontractorQuotesQuery,
   jobSubcontractorsQuery,
 } from '../../api/subcontractorQueries'
@@ -194,6 +198,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
 
   const { data: moneyVerification } = useQuery(jobMoneyVerificationQuery(jobId))
   const moneyVerified = moneyVerification?.money_verified_at != null
+  const statusAllowsMoneyVerify = isJobStatusEligibleForMoneyVerify(
+    moneyVerification?.status,
+  )
   const canVerifyMoney =
     !!userId &&
     (isGlobalSuperuser ||
@@ -205,6 +212,12 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const verifyMoneyMutation = useMutation({
     mutationFn: async (verified: boolean) => {
       if (!userId) throw new Error('Not signed in')
+      if (
+        verified &&
+        !isJobStatusEligibleForMoneyVerify(moneyVerification?.status)
+      ) {
+        throw new Error(JOB_MONEY_VERIFY_STATUS_HINT)
+      }
       await setJobMoneyVerified({ jobId, verified, userId })
     },
     onSuccess: (_data, verified) => {
@@ -232,6 +245,17 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
       )
     },
   })
+
+  /** Mark-as-verified requires eligible status; clearing verification does not. */
+  const verifyControlDisabled =
+    verifyMoneyMutation.isPending ||
+    (!moneyVerified && !statusAllowsMoneyVerify)
+  const verifyControlTitle =
+    !moneyVerified && !statusAllowsMoneyVerify
+      ? JOB_MONEY_VERIFY_STATUS_HINT
+      : moneyVerified
+        ? 'Clear Accounting verification'
+        : 'Mark Accounting as verified for Reporting'
 
   // Fetch accepted offers for suggestions
   const { data: acceptedOffers = [] } = useQuery({
@@ -1281,31 +1305,34 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               </Text>
             ) : null}
             {canVerifyMoney ? (
-              <Button
-                size="3"
-                variant="solid"
-                color={moneyVerified ? 'green' : 'red'}
-                disabled={verifyMoneyMutation.isPending}
-                onClick={() => verifyMoneyMutation.mutate(!moneyVerified)}
-                aria-pressed={moneyVerified}
-                title={
-                  moneyVerified
-                    ? 'Clear Accounting verification'
-                    : 'Mark Accounting as verified for Reporting'
-                }
-              >
-                {moneyVerified ? (
-                  <Flex align="center" gap="2">
-                    <CheckCircle width={18} height={18} />
-                    Verified
-                  </Flex>
-                ) : (
-                  <Flex align="center" gap="2">
-                    <XmarkCircle width={18} height={18} />
-                    Not verified
-                  </Flex>
-                )}
-              </Button>
+              <Flex align="center" gap="2" wrap="wrap">
+                <Button
+                  size="3"
+                  variant="solid"
+                  color={moneyVerified ? 'green' : 'red'}
+                  disabled={verifyControlDisabled}
+                  onClick={() => verifyMoneyMutation.mutate(!moneyVerified)}
+                  aria-pressed={moneyVerified}
+                  title={verifyControlTitle}
+                >
+                  {moneyVerified ? (
+                    <Flex align="center" gap="2">
+                      <CheckCircle width={18} height={18} />
+                      Verified
+                    </Flex>
+                  ) : (
+                    <Flex align="center" gap="2">
+                      <XmarkCircle width={18} height={18} />
+                      Not verified
+                    </Flex>
+                  )}
+                </Button>
+                {!moneyVerified && !statusAllowsMoneyVerify ? (
+                  <Text size="1" color="gray" style={{ maxWidth: 280 }}>
+                    {JOB_MONEY_VERIFY_STATUS_HINT}
+                  </Text>
+                ) : null}
+              </Flex>
             ) : moneyVerified ? (
               <Badge color="green" variant="soft" size="2">
                 Verified

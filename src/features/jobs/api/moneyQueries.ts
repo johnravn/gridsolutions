@@ -1,6 +1,11 @@
 // src/features/jobs/api/moneyQueries.ts
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
+import {
+  JOB_MONEY_VERIFY_STATUSES,
+  JOB_MONEY_VERIFY_STATUS_HINT,
+  isJobStatusEligibleForMoneyVerify,
+} from '../utils/moneyVerifyStatus'
 
 export type JobMoneyItemSource =
   | 'offer'
@@ -212,6 +217,7 @@ export type JobMoneyVerification = {
   money_verified_at: string | null
   money_verified_by: string | null
   project_lead_user_id: string | null
+  status: string
 }
 
 export function jobMoneyVerificationQuery(jobId: string) {
@@ -220,7 +226,9 @@ export function jobMoneyVerificationQuery(jobId: string) {
     queryFn: async (): Promise<JobMoneyVerification> => {
       const { data, error } = await supabase
         .from('jobs')
-        .select('money_verified_at, money_verified_by, project_lead_user_id')
+        .select(
+          'money_verified_at, money_verified_by, project_lead_user_id, status',
+        )
         .eq('id', jobId)
         .single()
       if (error) throw error
@@ -228,6 +236,7 @@ export function jobMoneyVerificationQuery(jobId: string) {
         money_verified_at: data.money_verified_at ?? null,
         money_verified_by: data.money_verified_by ?? null,
         project_lead_user_id: data.project_lead_user_id ?? null,
+        status: data.status,
       }
     },
   })
@@ -243,7 +252,19 @@ export async function setJobMoneyVerified({
   verified: boolean
   userId: string
 }): Promise<void> {
-  const { error } = await supabase
+  if (verified) {
+    const { data: job, error: statusError } = await supabase
+      .from('jobs')
+      .select('status')
+      .eq('id', jobId)
+      .single()
+    if (statusError) throw statusError
+    if (!isJobStatusEligibleForMoneyVerify(job.status)) {
+      throw new Error(JOB_MONEY_VERIFY_STATUS_HINT)
+    }
+  }
+
+  let query = supabase
     .from('jobs')
     .update(
       verified
@@ -257,5 +278,15 @@ export async function setJobMoneyVerified({
           },
     )
     .eq('id', jobId)
+
+  // Race-safe: only set verified when status still allows it.
+  if (verified) {
+    query = query.in('status', [...JOB_MONEY_VERIFY_STATUSES])
+  }
+
+  const { data, error } = await query.select('id').maybeSingle()
   if (error) throw error
+  if (verified && !data) {
+    throw new Error(JOB_MONEY_VERIFY_STATUS_HINT)
+  }
 }
