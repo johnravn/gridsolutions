@@ -14,7 +14,7 @@
  * 3. Run npm run test && npm run build:check
  * 4. Merge to main when John asks — bot bumps patch if you did not
  */
-export const APP_VERSION = '1.14.24'
+export const APP_VERSION = '1.14.25'
 
 /** Major.minor used to decide when to show "What's new". Patch is ignored. */
 export function whatsNewReleaseChannel(version: string): string {
