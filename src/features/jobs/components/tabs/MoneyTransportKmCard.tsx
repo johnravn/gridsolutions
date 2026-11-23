@@ -131,6 +131,17 @@ export default function MoneyTransportKmCard({
     (parsedKm != null && kmDriven == null) ||
     (parsedKm != null && kmDriven != null && parsedKm !== kmDriven)
 
+  const canSave =
+    !saveMutation.isPending &&
+    dirty &&
+    !(draft.trim() !== '' && parsedKm == null)
+
+  const handleSave = (event?: React.FormEvent) => {
+    event?.preventDefault()
+    if (!canSave) return
+    saveMutation.mutate(parsedKm)
+  }
+
   return (
     <Card
       mb="4"
@@ -163,49 +174,43 @@ export default function MoneyTransportKmCard({
           Save km adds a transport expense = km × {rate} kr/km (company Money
           rate). Conta fuel/toll suggestions stay separate.
         </Text>
-        <Flex gap="3" align="end" wrap="wrap">
-          <Box style={{ minWidth: 140, maxWidth: 200 }}>
-            <TextField.Root
-              type="number"
-              min="0"
-              step="1"
-              placeholder="e.g. 120"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              disabled={saveMutation.isPending}
-            >
-              <TextField.Slot side="right">km</TextField.Slot>
-            </TextField.Root>
-          </Box>
-          <Button
-            size="2"
-            variant="soft"
-            disabled={
-              saveMutation.isPending ||
-              !dirty ||
-              (draft.trim() !== '' && parsedKm == null)
-            }
-            onClick={() => saveMutation.mutate(parsedKm)}
-          >
-            {saveMutation.isPending ? 'Saving…' : 'Save km'}
-          </Button>
-          {plannedOfferKm != null &&
-            plannedOfferKm > 0 &&
-            (kmDriven == null || kmDriven === 0) && (
-              <Button
-                size="2"
-                variant="outline"
+        <form onSubmit={handleSave}>
+          <Flex gap="3" align="end" wrap="wrap">
+            <Box style={{ minWidth: 140, maxWidth: 200 }}>
+              <TextField.Root
+                type="number"
+                min="0"
+                step="1"
+                placeholder="e.g. 120"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
                 disabled={saveMutation.isPending}
-                onClick={() => {
-                  setDraft(String(plannedOfferKm))
-                  setSeededFromOffer(true)
-                  saveMutation.mutate(plannedOfferKm)
-                }}
               >
-                Use offer {plannedOfferKm} km
-              </Button>
-            )}
-        </Flex>
+                <TextField.Slot side="right">km</TextField.Slot>
+              </TextField.Root>
+            </Box>
+            <Button type="submit" size="2" variant="soft" disabled={!canSave}>
+              {saveMutation.isPending ? 'Saving…' : 'Save km'}
+            </Button>
+            {plannedOfferKm != null &&
+              plannedOfferKm > 0 &&
+              (kmDriven == null || kmDriven === 0) && (
+                <Button
+                  type="button"
+                  size="2"
+                  variant="outline"
+                  disabled={saveMutation.isPending}
+                  onClick={() => {
+                    setDraft(String(plannedOfferKm))
+                    setSeededFromOffer(true)
+                    saveMutation.mutate(plannedOfferKm)
+                  }}
+                >
+                  Use offer {plannedOfferKm} km
+                </Button>
+              )}
+          </Flex>
+        </form>
         {previewCost != null && (
           <Text size="2">
             Expense:{' '}
