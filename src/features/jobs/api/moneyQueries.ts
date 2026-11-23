@@ -46,6 +46,7 @@ export type JobMoneyItemInsert = {
 }
 
 export type JobMoneyItemUpdate = {
+  type?: JobMoneyItemType
   description?: string
   amount?: number
   date?: string | null
