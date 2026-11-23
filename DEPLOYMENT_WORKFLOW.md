@@ -66,7 +66,7 @@ Prefer **one feature branch per change** for Vercel Preview. Keep **`main` as pr
    # Optional: open a PR for review + Preview URL
    ```
 
-5. **Ship to production (only when John asks):** quality gates → merge into `main` → bump version if needed → `git push origin main`.
+5. **Ship to production (only when John asks):** quality gates → merge into `main` → `git push origin main`. Patch `APP_VERSION` bumps are automatic on `main` (see `.github/workflows/bump-app-version.yml`); do not push a version-only follow-up.
 
 ### Migration Workflow (feature branch → Dev → Prod → merge)
 
@@ -189,7 +189,7 @@ Verify via Preview / Dev / agent desktop before asking John to ship. Preview env
 
    ```bash
    npm run check && npm run test && npm run build:check
-   # merge feature branch → main (PR or local), bump version if needed
+   # merge feature branch → main (PR or local); patch version bumps automatically
    git push origin main
    ```
 

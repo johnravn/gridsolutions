@@ -1,17 +1,17 @@
 # Vercel Deployments
 
-| Git ref | Vercel target | URL |
-| ------- | ------------- | --- |
-| **`main`** | **Production** | [gridsolutions.app](https://gridsolutions.app) |
-| **Feature branches / PRs** | **Preview** | Per-deployment `*.vercel.app` URL (share for review) |
+| Git ref                    | Vercel target  | URL                                                  |
+| -------------------------- | -------------- | ---------------------------------------------------- |
+| **`main`**                 | **Production** | [gridsolutions.app](https://gridsolutions.app)       |
+| **Feature branches / PRs** | **Preview**    | Per-deployment `*.vercel.app` URL (share for review) |
 
-Repo config (`vercel.json`) sets routes/headers/crons only — it does **not** disable Preview deployments. Pushing a non-`main` branch (or opening a PR) should create a Preview. GitHub Actions CI also runs on `pull_request`.
+Repo config (`vercel.json`) sets routes/headers/crons and Production `ignoreCommand` (version-gated builds on `main`). It does **not** disable Preview deployments. Pushing a non-`main` branch (or opening a PR) should create a Preview. GitHub Actions CI also runs on `pull_request`.
 
 Review via the **Preview URL**, agent desktop / Live, or local `npm run dev` on hosted Dev. Prefer one feature branch per change (not a shared staging branch). Push/merge **`main` only when John asks to ship**.
 
 ## Production (`main`)
 
-**When**: every push/merge to `main`
+**When**: pushes to `main` that change `APP_VERSION` (see `ignoreCommand`)
 
 **URL**: `https://gridsolutions.app`
 
@@ -19,9 +19,9 @@ Review via the **Preview URL**, agent desktop / Live, or local `npm run dev` on 
 
 **Process**:
 
-1. Vercel detects the push to `main`
-2. Builds the app
-3. Deploys to gridsolutions.app (usually 1–3 minutes)
+1. Feature merges to `main`. If `APP_VERSION` did not change, `scripts/vercel-should-build.sh` **skips** the deploy.
+2. `.github/workflows/bump-app-version.yml` bumps the patch and pushes `chore: bump APP_VERSION to x.y.z` (no-ops if the ship already bumped).
+3. That bump commit (or a merge that already changed `APP_VERSION`) builds and deploys to gridsolutions.app — **one** production build per ship, with the new version.
 
 Verify at `https://gridsolutions.app` and in the Vercel dashboard.
 

@@ -5,11 +5,14 @@
  * Patch bumps (1.13.10 → 1.13.11) still update the sidebar version, but do
  * not prompt users again.
  *
- * Release checklist:
- * 1. Bump APP_VERSION below
+ * Patch bumps on `main` are automatic (GitHub Action + Vercel ignoreCommand).
+ * Do **not** push a standalone "Bump APP_VERSION" commit after ship.
+ *
+ * Release checklist (notable / What's New ships only):
+ * 1. Bump major or minor below (or leave patch to the main bump bot)
  * 2. On major/minor bumps, update RELEASE_NOTES (title + highlights)
  * 3. Run npm run test && npm run build:check
- * 4. Merge PR and verify on Vercel preview
+ * 4. Merge to main when John asks — bot bumps patch if you did not
  */
 export const APP_VERSION = '1.14.22'
 
