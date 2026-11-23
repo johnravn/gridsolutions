@@ -49,8 +49,7 @@ import { useTheme } from '../hooks/useTheme'
 import { APP_VERSION } from '../config/releaseNotes'
 import { useSidebarNavIndicators } from './useSidebarNavIndicators'
 import { useBlurFocusedDescendantWhenClosed } from './mobile/useBlurFocusedDescendantWhenClosed'
-
-const SIDEBAR_WIDTH = 200
+import { getDesktopSidebarWidth } from './sidebarLayout'
 
 type NavItem = { to: string; label: string; icon: React.ReactNode }
 
@@ -164,7 +163,7 @@ export function Sidebar({
   onLogout?: () => void
 }) {
   const isMobile = useMediaQuery('(max-width: 768px)')
-  const staticWidth = isMobile ? 0 : SIDEBAR_WIDTH
+  const staticWidth = isMobile ? 0 : getDesktopSidebarWidth(open)
   const navigate = useNavigate()
   const { allowedRoutes } = useAllowedSidebarRoutes()
 
@@ -189,6 +188,15 @@ export function Sidebar({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [isMobile, open, onToggle])
 
+  // Drive tablet/desktop chrome that offsets from the rail (Back FAB, etc.).
+  React.useEffect(() => {
+    const root = document.documentElement
+    root.style.setProperty('--app-sidebar-rail-width', `${staticWidth}px`)
+    return () => {
+      root.style.removeProperty('--app-sidebar-rail-width')
+    }
+  }, [staticWidth])
+
   return (
     <>
       {/* Static slot (desktop width reservation) */}
@@ -196,6 +204,7 @@ export function Sidebar({
         asChild
         style={{
           width: staticWidth,
+          transition: 'width 180ms ease',
         }}
       >
         <aside aria-label="Sidebar navigation" />
@@ -268,6 +277,7 @@ export function Sidebar({
             bottom: 0,
             width: staticWidth,
             pointerEvents: 'none',
+            transition: 'width 180ms ease',
           }}
         >
           <Box
@@ -275,13 +285,15 @@ export function Sidebar({
               height: '100svh',
               width: staticWidth,
               pointerEvents: 'auto',
+              transition: 'width 180ms ease',
             }}
           >
             <SidebarContent
-              open
+              open={open}
               onToggle={onToggle}
               currentPath={currentPath}
               isMobile={isMobile}
+              showCollapseButton
             />
           </Box>
         </Box>
