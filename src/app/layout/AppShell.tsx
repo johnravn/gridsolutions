@@ -205,11 +205,8 @@ export default function AppShell() {
 
         {!isPublic && !showNoCompanyMessage && (
           <Sidebar
-            open={isMobile ? open : true}
-            onToggle={(next) => {
-              if (!isMobile) return
-              setOpen(next ?? !open)
-            }}
+            open={open}
+            onToggle={(next) => setOpen(next ?? !open)}
             currentPath={currentPath}
             // NEW:
             userDisplayName={displayName}

@@ -42,6 +42,8 @@
     var(--app-menu-fab-clearance) + var(--app-safe-bottom) + 20px
   );
   --app-sidebar-drawer-width: min(320px, 85vw);
+  /* Desktop/tablet nav rail — Sidebar updates this on collapse/expand */
+  --app-sidebar-rail-width: 200px;
   /* Full-screen mobile detail (replaces thin right drawer) */
   --app-inspector-drawer-width: 100%;
   /* Main scroll bottom padding — keep in sync with AppShell */
@@ -585,10 +587,13 @@ button:not(:disabled),
     background-color 220ms ease;
 }
 
-/* Tablet: static 200px sidebar — keep Back over the content column. */
+/* Tablet: static sidebar rail — keep Back over the content column. */
 @media (min-width: 769px) and (max-width: 1023px) {
   .app-detail-back-fab.rt-IconButton {
-    left: calc(200px + var(--app-menu-fab-inset) + var(--app-safe-left));
+    left: calc(
+      var(--app-sidebar-rail-width) + var(--app-menu-fab-inset) +
+        var(--app-safe-left)
+    );
   }
 }
 
@@ -721,10 +726,13 @@ button:not(:disabled),
   right: calc(var(--app-menu-fab-inset) + var(--app-safe-right));
 }
 
-/* Tablet: no menu FAB; static sidebar is 200px (Sidebar SIDEBAR_WIDTH). */
+/* Tablet+: no menu FAB; offset from the desktop/tablet sidebar rail. */
 @media (min-width: 769px) {
   .app-mobile-bottom-action-bar {
-    left: calc(200px + var(--app-content-padding) + var(--app-safe-left));
+    left: calc(
+      var(--app-sidebar-rail-width) + var(--app-content-padding) +
+        var(--app-safe-left)
+    );
   }
 }
 
