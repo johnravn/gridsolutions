@@ -87,11 +87,14 @@ async function fetchOverlappingJobs({
   fromDate,
   toDate,
   includeStatus = false,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
   includeStatus?: boolean
+  /** When set, only jobs where this user is project lead. */
+  projectLeadUserId?: string | null
 }): Promise<Array<JobRow>> {
   const scopedCompanyId = requireCompanyId(companyId)
   const { from, to } = rangeBounds(fromDate, toDate)
@@ -107,7 +110,7 @@ async function fetchOverlappingJobs({
 
   // Server-side overlap prefilter (still re-check in JS for both-null / edge cases).
   // (start is null OR start <= rangeEnd) AND (end is null OR end >= rangeStart)
-  const { data: jobs, error } = await supabase
+  let q = supabase
     .from('jobs')
     .select(select)
     .eq('company_id', scopedCompanyId)
@@ -115,12 +118,55 @@ async function fetchOverlappingJobs({
     .or(`start_at.is.null,start_at.lte.${toIso}`)
     .or(`end_at.is.null,end_at.gte.${fromIso}`)
 
+  if (projectLeadUserId) {
+    q = q.eq('project_lead_user_id', projectLeadUserId)
+  }
+
+  const { data: jobs, error } = await q
+
   if (error) throw error
   if (!jobs?.length) return []
 
   return (jobs as unknown as Array<JobRow>).filter((job) =>
     jobOverlapsRange(job.start_at, job.end_at, rangeStart, rangeEnd),
   )
+}
+
+function projectLeadUserIdFromJoin(
+  projectLead: JobRow['project_lead'],
+): string | null {
+  const lead = Array.isArray(projectLead) ? projectLead[0] : projectLead
+  return lead?.user_id ?? null
+}
+
+export type ProjectLeadOption = {
+  user_id: string
+  display_name: string | null
+  email: string
+  role: string
+}
+
+/**
+ * Company members eligible as project leads (same as Job / Recurring dialogs:
+ * everyone except freelancers — employees, owners, super_users).
+ */
+export function reportProjectLeadsQuery({ companyId }: { companyId: string }) {
+  return queryOptions<Array<ProjectLeadOption>>({
+    queryKey: ['company', companyId, 'project-leads'],
+    queryFn: async () => {
+      const scopedCompanyId = requireCompanyId(companyId)
+      const { data, error } = await supabase
+        .from('company_user_profiles')
+        .select('user_id, display_name, email, role')
+        .eq('company_id', scopedCompanyId)
+        .neq('role', 'freelancer')
+        .order('display_name', { ascending: true })
+      if (error) throw error
+      return (data ?? []) as Array<ProjectLeadOption>
+    },
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  })
 }
 
 type MoneyTotals = {
@@ -170,6 +216,7 @@ function toJobProfitabilityRow(
     title: job.title,
     customer_id: job.customer_id ?? null,
     customer_name: customerNameFromJoin(job.customer),
+    project_lead_user_id: projectLeadUserIdFromJoin(job.project_lead),
     project_lead_name: projectLeadNameFromJoin(job.project_lead),
     project_lead_avatar_url: projectLeadAvatarFromJoin(job.project_lead),
     start_at: job.start_at ?? null,
@@ -197,10 +244,12 @@ export async function fetchJobProfitabilityRows({
   companyId,
   fromDate,
   toDate,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
+  projectLeadUserId?: string | null
 }): Promise<Array<JobProfitabilityRow>> {
   const scopedCompanyId = requireCompanyId(companyId)
   const overlapping = await fetchOverlappingJobs({
@@ -208,6 +257,7 @@ export async function fetchJobProfitabilityRows({
     fromDate,
     toDate,
     includeStatus: true,
+    projectLeadUserId,
   })
   if (overlapping.length === 0) return []
 
@@ -226,14 +276,29 @@ export function reportJobProfitabilityQuery({
   companyId,
   fromDate,
   toDate,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
+  projectLeadUserId?: string | null
 }) {
   return queryOptions<Array<JobProfitabilityRow>>({
-    queryKey: ['reporting', 'job-profitability', companyId, fromDate, toDate],
-    queryFn: () => fetchJobProfitabilityRows({ companyId, fromDate, toDate }),
+    queryKey: [
+      'reporting',
+      'job-profitability',
+      companyId,
+      fromDate,
+      toDate,
+      projectLeadUserId,
+    ],
+    queryFn: () =>
+      fetchJobProfitabilityRows({
+        companyId,
+        fromDate,
+        toDate,
+        projectLeadUserId,
+      }),
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
   })
@@ -243,10 +308,12 @@ export function reportCustomerProfitabilityQuery({
   companyId,
   fromDate,
   toDate,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
+  projectLeadUserId?: string | null
 }) {
   return queryOptions<Array<CustomerProfitabilityRow>>({
     queryKey: [
@@ -255,12 +322,14 @@ export function reportCustomerProfitabilityQuery({
       companyId,
       fromDate,
       toDate,
+      projectLeadUserId,
     ],
     queryFn: async (): Promise<Array<CustomerProfitabilityRow>> => {
       const jobRows = await fetchJobProfitabilityRows({
         companyId,
         fromDate,
         toDate,
+        projectLeadUserId,
       })
       return aggregateCustomerProfitabilityFromJobs(jobRows)
     },
@@ -367,13 +436,22 @@ export function reportMonthlyTrendQuery({
   companyId,
   fromDate,
   toDate,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
+  projectLeadUserId?: string | null
 }) {
   return queryOptions<Array<MonthlyTrendRow>>({
-    queryKey: ['reporting', 'monthly-trend', companyId, fromDate, toDate],
+    queryKey: [
+      'reporting',
+      'monthly-trend',
+      companyId,
+      fromDate,
+      toDate,
+      projectLeadUserId,
+    ],
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<Array<MonthlyTrendRow>> => {
@@ -381,28 +459,33 @@ export function reportMonthlyTrendQuery({
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
 
       // Monthly P&L chart: only ledger rows on verified jobs.
-      const [datedRes, undatedRes] = await Promise.all([
-        supabase
-          .from('job_money_items')
-          .select(
-            'type, amount, date, created_at, jobs!inner(money_verified_at)',
-          )
-          .eq('company_id', scopedCompanyId)
-          .not('date', 'is', null)
-          .gte('date', fromISO)
-          .lte('date', toISO)
-          .not('jobs.money_verified_at', 'is', null),
-        supabase
-          .from('job_money_items')
-          .select(
-            'type, amount, date, created_at, jobs!inner(money_verified_at)',
-          )
-          .eq('company_id', scopedCompanyId)
-          .is('date', null)
-          .gte('created_at', fromISO)
-          .lte('created_at', toISO)
-          .not('jobs.money_verified_at', 'is', null),
-      ])
+      const select =
+        'type, amount, date, created_at, jobs!inner(money_verified_at, project_lead_user_id)'
+
+      let datedQ = supabase
+        .from('job_money_items')
+        .select(select)
+        .eq('company_id', scopedCompanyId)
+        .not('date', 'is', null)
+        .gte('date', fromISO)
+        .lte('date', toISO)
+        .not('jobs.money_verified_at', 'is', null)
+
+      let undatedQ = supabase
+        .from('job_money_items')
+        .select(select)
+        .eq('company_id', scopedCompanyId)
+        .is('date', null)
+        .gte('created_at', fromISO)
+        .lte('created_at', toISO)
+        .not('jobs.money_verified_at', 'is', null)
+
+      if (projectLeadUserId) {
+        datedQ = datedQ.eq('jobs.project_lead_user_id', projectLeadUserId)
+        undatedQ = undatedQ.eq('jobs.project_lead_user_id', projectLeadUserId)
+      }
+
+      const [datedRes, undatedRes] = await Promise.all([datedQ, undatedQ])
 
       if (datedRes.error) throw datedRes.error
       if (undatedRes.error) throw undatedRes.error
@@ -461,13 +544,22 @@ export function reportInvoicePipelineQuery({
   companyId,
   fromDate,
   toDate,
+  projectLeadUserId = null,
 }: {
   companyId: string
   fromDate: string
   toDate: string
+  projectLeadUserId?: string | null
 }) {
   return queryOptions<InvoicePipelineResult>({
-    queryKey: ['reporting', 'invoice-pipeline', companyId, fromDate, toDate],
+    queryKey: [
+      'reporting',
+      'invoice-pipeline',
+      companyId,
+      fromDate,
+      toDate,
+      projectLeadUserId,
+    ],
     staleTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async (): Promise<InvoicePipelineResult> => {
@@ -476,6 +568,7 @@ export function reportInvoicePipelineQuery({
         fromDate,
         toDate,
         includeStatus: true,
+        projectLeadUserId,
       })
 
       const jobIds = overlapping.map((j) => j.id)

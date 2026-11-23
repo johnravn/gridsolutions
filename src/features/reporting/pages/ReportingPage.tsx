@@ -14,6 +14,10 @@ import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import { CustomerProfitabilityTable } from '../components/CustomerProfitabilityTable'
 import { DateRangeControl } from '../components/DateRangeControl'
 import { ExportCsvButton } from '../components/ExportCsvButton'
+import {
+  PROJECT_LEAD_FILTER_ALL,
+  ProjectLeadControl,
+} from '../components/ProjectLeadControl'
 import { InvoicePipelineSection } from '../components/InvoicePipelineSection'
 import {
   JOB_MONTHLY_CHART_HEIGHT,
@@ -42,6 +46,7 @@ import {
 import { aggregateJobsByMonth } from '../utils/monthlyJobs'
 import { aggregatePeriodTotals } from '../utils/periodTotals'
 import { yearRangeToMonthYears } from '../utils/periodPicker'
+import { projectLeadUserIdFromFilter } from '../utils/projectLeadFilter'
 import type { MonthYear } from '../utils/dates'
 import type { MarginThreshold, ReportSegment } from '../types'
 
@@ -64,10 +69,18 @@ export default function ReportingPage() {
   )
   const [marginThreshold, setMarginThreshold] =
     React.useState<MarginThreshold>(15)
+  const [projectLeadFilter, setProjectLeadFilter] = React.useState(
+    PROJECT_LEAD_FILTER_ALL,
+  )
 
   const { fromDate, toDate } = React.useMemo(
     () => dateRangeFromMonthYears(fromMonth, toMonth),
     [fromMonth, toMonth],
+  )
+
+  const projectLeadUserId = React.useMemo(
+    () => projectLeadUserIdFromFilter(projectLeadFilter),
+    [projectLeadFilter],
   )
 
   const jobsQuery = useQuery({
@@ -75,6 +88,7 @@ export default function ReportingPage() {
       companyId: companyId ?? '',
       fromDate,
       toDate,
+      projectLeadUserId,
     }),
     enabled:
       !!companyId &&
@@ -97,6 +111,7 @@ export default function ReportingPage() {
       companyId: companyId ?? '',
       fromDate,
       toDate,
+      projectLeadUserId,
     }),
     enabled: !!companyId && segment === 'monthly',
   })
@@ -106,6 +121,7 @@ export default function ReportingPage() {
       companyId: companyId ?? '',
       fromDate,
       toDate,
+      projectLeadUserId,
     }),
     enabled: !!companyId && segment === 'invoice',
   })
@@ -199,14 +215,21 @@ export default function ReportingPage() {
           style={{ minWidth: 0 }}
         >
           <ReportingBasisNotice />
-          <DateRangeControl
-            from={fromMonth}
-            to={toMonth}
-            onChange={(nextFrom, nextTo) => {
-              setFromMonth(nextFrom)
-              setToMonth(nextTo)
-            }}
-          />
+          <Flex align="center" gap="2" wrap="wrap" justify="end">
+            <DateRangeControl
+              from={fromMonth}
+              to={toMonth}
+              onChange={(nextFrom, nextTo) => {
+                setFromMonth(nextFrom)
+                setToMonth(nextTo)
+              }}
+            />
+            <ProjectLeadControl
+              companyId={companyId}
+              value={projectLeadFilter}
+              onChange={setProjectLeadFilter}
+            />
+          </Flex>
         </Flex>
 
         <SegmentTabs value={segment} onChange={setSegment} />
