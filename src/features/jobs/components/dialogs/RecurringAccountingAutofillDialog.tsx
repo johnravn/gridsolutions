@@ -22,13 +22,14 @@ import {
   fetchExistingMoneyItemsForJobs,
 } from '../../api/seriesAccountingAutofill'
 import {
-  
-  
   buildCrewRateAutofillPreview,
   buildFixedAutofillPreview,
-  previewLinesToInserts
+  previewLinesToInserts,
 } from '../../utils/seriesAccountingAutofill'
-import type {AutofillFixedLine, AutofillPreview} from '../../utils/seriesAccountingAutofill';
+import type {
+  AutofillFixedLine,
+  AutofillPreview,
+} from '../../utils/seriesAccountingAutofill'
 import type { RecurringJobAccountingEntry } from '../../types'
 
 type Mode = 'fixed' | 'crew'
@@ -298,23 +299,43 @@ export default function RecurringAccountingAutofillDialog({
                         }}
                       />
                     </Box>
-                    <Select.Root
-                      value={line.type}
-                      onValueChange={(value) => {
-                        const type = value as 'income' | 'expense'
-                        setFixedLines((prev) =>
-                          prev.map((row, i) =>
-                            i === index ? { ...row, type } : row,
-                          ),
-                        )
-                      }}
+                    <Flex
+                      gap="1"
+                      role="group"
+                      aria-label="Line type"
+                      style={{ flexShrink: 0 }}
                     >
-                      <Select.Trigger />
-                      <Select.Content>
-                        <Select.Item value="expense">Expense</Select.Item>
-                        <Select.Item value="income">Income</Select.Item>
-                      </Select.Content>
-                    </Select.Root>
+                      <Button
+                        type="button"
+                        size="2"
+                        color="green"
+                        variant={line.type === 'income' ? 'solid' : 'soft'}
+                        onClick={() => {
+                          setFixedLines((prev) =>
+                            prev.map((row, i) =>
+                              i === index ? { ...row, type: 'income' } : row,
+                            ),
+                          )
+                        }}
+                      >
+                        Income
+                      </Button>
+                      <Button
+                        type="button"
+                        size="2"
+                        color="red"
+                        variant={line.type === 'expense' ? 'solid' : 'soft'}
+                        onClick={() => {
+                          setFixedLines((prev) =>
+                            prev.map((row, i) =>
+                              i === index ? { ...row, type: 'expense' } : row,
+                            ),
+                          )
+                        }}
+                      >
+                        Expense
+                      </Button>
+                    </Flex>
                     <Button
                       size="2"
                       variant="soft"
