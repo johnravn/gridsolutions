@@ -12,10 +12,7 @@ import {
 } from '@radix-ui/themes'
 import { BIBLE_VERSION_OPTIONS } from '@shared/lib/bibleVersion'
 import ThemeToggle from '@shared/theme/ThemeToggle'
-import {
-  DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
-  GEOMETRIC_BACKGROUND_PRESETS,
-} from '@shared/ui/components/AnimatedBackground'
+import { DEFAULT_GEOMETRIC_BACKGROUND_PRESET } from '@shared/ui/components/AnimatedBackground'
 import type { GeometricBackgroundPreset } from '@shared/ui/components/AnimatedBackground'
 import type { BibleVersion } from '@shared/lib/bibleVersion'
 
@@ -65,7 +62,7 @@ export default function ProfilePersonalizationTab({
           Personalization
         </Heading>
         <Text size="2" color="gray" mb="4">
-          Theme, optional geometric background, and what appears in the
+          Theme, optional subtle grid background, and what appears in the
           inspiration card on your home screen.
         </Text>
 
@@ -84,20 +81,22 @@ export default function ProfilePersonalizationTab({
               Background
             </Text>
             <Text size="2" color="gray" mb="3" style={{ display: 'block' }}>
-              Show a sharp geometric accent layer behind the app. When off
-              (default), the shell stays solid and the controls below are
-              disabled.
+              Show a subtle grid lattice behind the app. When off (default), the
+              shell stays solid and intensity below is disabled.
             </Text>
 
             <PreferenceRow
-              label="Geometric background"
-              description="Enables the accent layer plus intensity and style options underneath."
+              label="Grid background"
+              description="Enables the subtle lattice plus intensity underneath."
               checked={backgroundOn}
               disabled={isSaving}
               onCheckedChange={async (next) => {
                 if (isSaving) return
                 const prev = form.animatedBackground
-                patchForm({ animatedBackground: next })
+                patchForm({
+                  animatedBackground: next,
+                  backgroundPreset: DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
+                })
                 try {
                   await saveProfile()
                 } catch {
@@ -111,7 +110,7 @@ export default function ProfilePersonalizationTab({
             <Flex direction="column" gap="2">
               <Flex align="center" justify="between" wrap="wrap" gap="2">
                 <Text size="2" weight="medium">
-                  Background intensity
+                  Grid intensity
                 </Text>
                 <Button
                   size="1"
@@ -165,46 +164,6 @@ export default function ProfilePersonalizationTab({
                 >
                   {Math.round(form.backgroundIntensity * 100)}%
                 </Text>
-              </Flex>
-            </Flex>
-
-            <Separator size="4" my="4" />
-
-            <Flex direction="column" gap="2">
-              <Text size="2" weight="medium">
-                Style
-              </Text>
-              <Text
-                size="1"
-                color="gray"
-                mb="1"
-                style={{ opacity: !backgroundOn ? 0.5 : 1 }}
-              >
-                Sharp geometric presets — not soft circles.
-              </Text>
-              <Flex gap="2" wrap="wrap">
-                {GEOMETRIC_BACKGROUND_PRESETS.map((preset) => (
-                  <Button
-                    key={preset.id}
-                    size="2"
-                    variant={
-                      form.backgroundPreset === preset.id ? 'solid' : 'soft'
-                    }
-                    onClick={async () => {
-                      if (isSaving || !backgroundOn) return
-                      patchForm({ backgroundPreset: preset.id })
-                      try {
-                        await saveProfile()
-                      } catch {
-                        /* mutation onError */
-                      }
-                    }}
-                    disabled={!backgroundOn || isSaving}
-                    title={preset.description}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
               </Flex>
             </Flex>
           </Box>
