@@ -13,6 +13,7 @@ function job(
     job_number: '1',
     title: 'Job',
     customer_name: partial.customer_name ?? 'Acme',
+    project_lead_user_id: null,
     project_lead_name: 'Lead',
     project_lead_avatar_url: null,
     start_at: null,

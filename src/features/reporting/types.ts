@@ -4,6 +4,8 @@ export type JobProfitabilityRow = {
   title: string
   customer_id: string | null
   customer_name: string | null
+  /** `jobs.project_lead_user_id` when assigned. */
+  project_lead_user_id: string | null
   /**
    * Display label for project lead (Jobs index rules:
    * display_name → email → "Unassigned").
