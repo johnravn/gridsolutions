@@ -507,7 +507,7 @@ export function categoryForSource(
   explicit?: JobMoneyItemCategory | null,
 ): JobMoneyItemCategory | null {
   if (explicit) return explicit
-  if (source === 'crew') return 'crew'
+  if (source === 'crew' || source === 'logging') return 'crew'
   if (source === 'conta' && type === 'expense') return 'conta'
   if (source === 'conta' && type === 'income') return 'other'
   if (source === 'offer') return 'other'
