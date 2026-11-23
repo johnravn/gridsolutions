@@ -36,6 +36,15 @@
           "value": "public, max-age=31536000, immutable"
         }
       ]
+    },
+    {
+      "source": "/sw-update-reload.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
+        }
+      ]
     }
   ],
   "routes": [
@@ -53,6 +62,16 @@
     },
     {
       "src": "^/sw\\.js$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "^/sw-update-reload\\.js$",
+      "status": 404,
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "src": "^/registerSW\\.js$",
       "status": 404,
       "headers": { "Cache-Control": "no-store" }
     },
