@@ -71,7 +71,7 @@ git push -u origin HEAD
 ```
 
 - Pushing a **feature branch** (or opening a PR) triggers a **Vercel Preview** — not production.
-- Shipping: when John asks, merge into `main` (PR merge or local merge), bump version if needed, push `main` → Production (`gridsolutions.app`).
+- Shipping: when John asks, merge into `main` (PR merge or local merge), push `main` → Production (`gridsolutions.app`). Do not follow up with a standalone patch `APP_VERSION` bump — that is automated on `main`.
 - GitHub Actions CI already runs on `pull_request` and on pushes to `main`.
 
 Do not force-push `main` unless explicitly asked. Do not commit or `git push` unless John explicitly asks (see `.cursor/rules/no-unsolicited-ship.mdc`). Asking to push a feature branch / open a PR is **not** permission to merge to `main`.

@@ -156,7 +156,7 @@ npm run build:check  # vite build + tsc (catches type errors CI will reject)
 5. **Stop here** unless John asks to commit, push the branch/PR for Preview, ship/merge to `main`, or promote to Prod
 6. **If asked to push for preview/review**: commit (with issue ref), `git push -u origin HEAD`, optionally open/update a PR — share the Vercel Preview URL
 7. **If asked to push Prod** (and the migration is backward-compatible): `CONFIRM_PROD_PUSH=1 npm run db:push:prod` before shipping code that depends on it
-8. **If asked to ship**: quality gates → merge feature branch into `main` → bump version if needed → `git push origin main` — deploys production (`gridsolutions.app`)
+8. **If asked to ship**: quality gates → merge feature branch into `main` → `git push origin main` — production deploy. **Do not** push a standalone patch `APP_VERSION` bump; the `Bump APP_VERSION` Action + `vercel.json` `ignoreCommand` handle patch bumps so Vercel builds once with the new version. Only bump major/minor in the feature PR when updating `RELEASE_NOTES` / What's New.
 
 ### Vercel Deployments
 
@@ -204,7 +204,7 @@ npm run build:check  # vite build + tsc (catches type errors CI will reject)
 2. Branch from latest `main` (`cursor/…` or similar)
 3. Make your changes on that branch
 4. Verify on hosted Dev (`npm run db:switch:dev` → `npm run dev`) or via agent desktop
-5. Do **not** commit or push unless John explicitly asks. If they ask for preview: commit with `Refs #N` / `Closes #N` and push the **feature branch** (optionally open a PR). If they ask to ship: quality gates, merge to `main`, bump version if needed, push `main`.
+5. Do **not** commit or push unless John explicitly asks. If they ask for preview: commit with `Refs #N` / `Closes #N` and push the **feature branch** (optionally open a PR). If they ask to ship: quality gates, merge to `main`, push `main` — skip manual patch version bumps (see auto bump on main).
 
 ---
 

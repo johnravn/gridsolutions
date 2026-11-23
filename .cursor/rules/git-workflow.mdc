@@ -48,7 +48,7 @@ Do not open a second issue for work already covered by an open one.
 2. Create a **feature branch** from `main`, e.g. `cursor/<short-description>` (cloud agents often use a runtime suffix — that is fine).
 3. Do all work on that branch. Do not commit directly on `main` unless John explicitly asks for a main-only hotfix.
 4. When asked to push for preview/review: `git push -u origin HEAD` (feature branch only). Share the Vercel Preview URL / PR link.
-5. When asked to **ship**: merge the feature branch into `main` (via PR merge or local merge), run quality gates, bump version if needed, then push `main`. Never force-push `main` unless explicitly asked.
+5. When asked to **ship**: merge the feature branch into `main` (via PR merge or local merge), run quality gates, then push `main`. Do **not** push a standalone patch `APP_VERSION` bump — the main bump Action handles that. Only bump major/minor in the feature PR when updating What's New. Never force-push `main` unless explicitly asked.
 
 ## Commits
 

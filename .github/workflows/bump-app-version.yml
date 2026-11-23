@@ -1,0 +1,81 @@
+name: Bump APP_VERSION
+
+# After every push to main, bump the patch version unless this push already
+# changed APP_VERSION (or is itself the bot bump). Paired with
+# scripts/vercel-should-build.sh so Production gets one Vercel deploy that
+# includes the new version — not a feature deploy + a version-only deploy.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: bump-app-version-main
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    name: Bump patch on main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate on commit message
+        id: gate
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          if echo "$COMMIT_MSG" | grep -qE '^chore: bump APP_VERSION to '; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Already a version bump commit — skip"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.skip != 'true'
+        with:
+          fetch-depth: 0
+
+      - name: Skip if APP_VERSION already changed in this push
+        if: steps.gate.outputs.skip != 'true'
+        id: changed
+        run: |
+          BEFORE="${{ github.event.before }}"
+          AFTER="${{ github.sha }}"
+          if [[ -z "$BEFORE" || "$BEFORE" == "0000000000000000000000000000000000000000" ]]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff -G "export const APP_VERSION" "$BEFORE" "$AFTER" -- \
+            src/app/config/releaseNotes.ts | grep -q .; then
+            echo "APP_VERSION already changed in this push — skip bot bump"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.gate.outputs.skip != 'true' && steps.changed.outputs.changed != 'true'
+        with:
+          node-version: 22
+
+      - name: Bump patch
+        if: steps.gate.outputs.skip != 'true' && steps.changed.outputs.changed != 'true'
+        id: bump
+        run: |
+          NEW=$(node scripts/bump-app-version.mjs)
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "Bumped APP_VERSION to $NEW"
+
+      - name: Commit and push
+        if: steps.gate.outputs.skip != 'true' && steps.changed.outputs.changed != 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/app/config/releaseNotes.ts
+          git commit -m "chore: bump APP_VERSION to ${{ steps.bump.outputs.version }}"
+          # Rebase if another push landed while we bumped.
+          git pull --rebase origin main
+          git push origin HEAD:main
