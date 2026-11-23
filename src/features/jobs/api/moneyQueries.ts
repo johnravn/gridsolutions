@@ -2,7 +2,12 @@
 import { queryOptions } from '@tanstack/react-query'
 import { supabase } from '@shared/api/supabase'
 
-export type JobMoneyItemSource = 'offer' | 'crew' | 'conta' | 'manual'
+export type JobMoneyItemSource =
+  | 'offer'
+  | 'crew'
+  | 'conta'
+  | 'manual'
+  | 'logging'
 export type JobMoneyItemType = 'income' | 'expense'
 export type JobMoneyItemCategory =
   | 'crew'

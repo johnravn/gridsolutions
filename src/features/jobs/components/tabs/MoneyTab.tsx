@@ -81,6 +81,10 @@ import {
 } from '../../utils/moneyConta'
 import { fetchCrewContaInvoiceLines } from '../../utils/moneyCrewConta'
 import { sortMoneyItems } from '../../utils/sortMoneyItems'
+import {
+  getMoneySourceBadgeColor,
+  getMoneySourceLabel,
+} from '../../utils/moneySuggestionSource'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
 import MoneyContaInvoicePanel from './MoneyContaInvoicePanel'
@@ -1249,27 +1253,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     setEditDialogOpen(true)
   }
 
-  const getSourceBadgeColor = (s: Suggestion | JobMoneyItem) => {
-    const source = s.source
-    if ('source_id' in s && s.source_id?.startsWith('quote-')) return 'orange'
-    if ('sourceId' in s && s.sourceId?.startsWith('quote-')) return 'orange'
-    if (s.category === 'transport') return 'amber'
-    if (source === 'offer') return 'green'
-    if (source === 'crew') return 'red'
-    if (source === 'conta') return 'blue'
-    return 'gray'
-  }
-  const getSourceLabel = (s: Suggestion | JobMoneyItem) => {
-    if ('source_id' in s && s.source_id?.startsWith('quote-')) return 'Quote'
-    if ('sourceId' in s && s.sourceId?.startsWith('quote-')) return 'Quote'
-    if (s.category === 'transport') return 'Transport'
-    if (s.source === 'offer') return 'Offer'
-    if (s.source === 'crew') return 'Crew rate'
-    if (s.source === 'conta' && s.category === 'crew') return 'Conta · Crew'
-    if (s.source === 'conta') return 'Conta'
-    return 'Manual'
-  }
-
   return (
     <Box ref={accountingLayoutRef} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
@@ -1528,8 +1511,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 )}
               </Flex>
               <Text size="2" color="gray" mb="3">
-                Add inserts as suggested; Adjust lets you tweak first. Conta
-                lines show match confidence — review amounts (may be inkl. MVA).
+                Source badges show Booking, Conta incoming invoice, Conta sales
+                invoice, Offer, Subcontractor quote, Transport, Logging, or
+                Manual. Add inserts as suggested; Adjust lets you tweak first.
+                Conta lines show match confidence — review amounts (may be inkl.
+                MVA).
               </Text>
               {isMobile ? (
                 <Flex direction="column" gap="2">
@@ -1558,11 +1544,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               {s.type === 'income' ? 'Income' : 'Expense'}
                             </Badge>
                             <Badge
-                              color={getSourceBadgeColor(s)}
+                              color={getMoneySourceBadgeColor(s)}
                               variant="soft"
                               size="1"
                             >
-                              {getSourceLabel(s)}
+                              {getMoneySourceLabel(s)}
                             </Badge>
                             {s.confidence ? (
                               <Badge
@@ -1721,11 +1707,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                           <Table.Cell>{formatDate(s.date)}</Table.Cell>
                           <Table.Cell>
                             <Badge
-                              color={getSourceBadgeColor(s)}
+                              color={getMoneySourceBadgeColor(s)}
                               variant="soft"
                               size="1"
                             >
-                              {getSourceLabel(s)}
+                              {getMoneySourceLabel(s)}
                             </Badge>
                           </Table.Cell>
                           <Table.Cell>
@@ -1827,10 +1813,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                             {item.type === 'income' ? 'Income' : 'Expense'}
                           </Badge>
                           <Badge
-                            color={getSourceBadgeColor(item)}
+                            color={getMoneySourceBadgeColor(item)}
                             variant="soft"
                           >
-                            {getSourceLabel(item)}
+                            {getMoneySourceLabel(item)}
                           </Badge>
                         </Flex>
                         <Text size="2">{item.description}</Text>
@@ -1907,10 +1893,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                         <Table.Cell>{item.reference || '—'}</Table.Cell>
                         <Table.Cell>
                           <Badge
-                            color={getSourceBadgeColor(item)}
+                            color={getMoneySourceBadgeColor(item)}
                             variant="soft"
                           >
-                            {getSourceLabel(item)}
+                            {getMoneySourceLabel(item)}
                           </Badge>
                         </Table.Cell>
                         <Table.Cell align="right">

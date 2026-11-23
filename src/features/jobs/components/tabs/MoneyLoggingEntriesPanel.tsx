@@ -17,10 +17,7 @@ import { getInitialsFromNameOrEmail } from '@shared/lib/generalFunctions'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import { supabase } from '@shared/api/supabase'
 import { useToast } from '@shared/ui/toast/ToastProvider'
-import {
-  
-  timeEntriesForJobQuery
-} from '@features/logging/api/timeEntries'
+import { timeEntriesForJobQuery } from '@features/logging/api/timeEntries'
 import {
   looksLikeHoursOnlyEntry,
   rangeToHours,
@@ -32,7 +29,7 @@ import {
   loggingExpenseSourceId,
 } from '../../utils/loggingExpense'
 import { insertJobMoneyItem, jobMoneyItemsQuery } from '../../api/moneyQueries'
-import type {TimeEntryWithProfile} from '@features/logging/api/timeEntries';
+import type { TimeEntryWithProfile } from '@features/logging/api/timeEntries'
 
 function getDisplayName(
   profile: TimeEntryWithProfile['profile'] | null | undefined,
@@ -186,7 +183,7 @@ export default function MoneyLoggingEntriesPanel({ jobId }: { jobId: string }) {
         amount,
         date: entry.start_at.slice(0, 10),
         reference: hoursLabel,
-        source: 'manual',
+        source: 'logging',
         source_id: sourceId,
         category: 'crew',
       })
