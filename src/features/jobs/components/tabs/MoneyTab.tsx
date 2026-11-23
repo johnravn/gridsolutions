@@ -1331,12 +1331,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 : `Add all high-confidence (${highConfidenceSuggestions.length})`}
             </Button>
           )}
-          {chartData.length > 0 && (
-            <ChartTypeSelector
-              chartType={chartType}
-              onChartTypeChange={setChartType}
-            />
-          )}
         </Flex>
       </Flex>
 
@@ -1959,9 +1953,13 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           {/* Chart */}
           {chartData.length > 0 ? (
             <Card mb="4">
-              <Heading size="4" mb="3">
-                Income vs Expenses
-              </Heading>
+              <Flex justify="between" align="center" wrap="wrap" gap="2" mb="3">
+                <Heading size="4">Income vs Expenses</Heading>
+                <ChartTypeSelector
+                  chartType={chartType}
+                  onChartTypeChange={setChartType}
+                />
+              </Flex>
               <MobileHScroll
                 style={{
                   height: isMobile ? 240 : 400,
