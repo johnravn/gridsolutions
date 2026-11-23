@@ -21,9 +21,14 @@ import {
   recurringJobInvoicesOverviewQuery,
 } from '../../../api/recurringJobQueries'
 import RecurringInvoiceJobPickerDialog from '../../dialogs/RecurringInvoiceJobPickerDialog'
+import RecurringInvoiceJobsCoveredDialog from '../../dialogs/RecurringInvoiceJobsCoveredDialog'
 import MultiJobInvoiceDialog from '../../dialogs/MultiJobInvoiceDialog'
 import { getSeriesInvoiceStatus } from '../../../utils/seriesInvoiceStatus'
-import type { RecurringJobDetail, RecurringSeriesInvoice } from '../../../types'
+import type {
+  RecurringJobDetail,
+  RecurringSeriesInvoice,
+  RecurringSeriesInvoiceJob,
+} from '../../../types'
 
 type Props = {
   detail: RecurringJobDetail
@@ -81,13 +86,6 @@ function getContaInvoiceUrl(
   return getContaInvoiceAppUrl(organizationId, invoiceId, appEnv.contaApiUrl())
 }
 
-function formatJobLabel(job: { title: string; jobnr: number | null }): string {
-  if (job.jobnr != null) {
-    return `${job.title} (#${String(job.jobnr).padStart(6, '0')})`
-  }
-  return job.title
-}
-
 export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
   const { canWrite } = useCompanyWriteAccess()
   const [invoicePickerOpen, setInvoicePickerOpen] = React.useState(false)
@@ -95,6 +93,8 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
   const [invoiceSelectedJobIds, setInvoiceSelectedJobIds] = React.useState<
     Array<string>
   >([])
+  const [jobsCoveredDialogJobs, setJobsCoveredDialogJobs] =
+    React.useState<Array<RecurringSeriesInvoiceJob> | null>(null)
 
   const { data: invoiceSummary = [] } = useQuery({
     ...recurringJobInvoiceSummaryQuery({ recurringJobId: detail.id }),
@@ -269,24 +269,22 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
                         </Badge>
                       </Table.Cell>
                       <Table.Cell>
-                        <Flex direction="column" gap="1">
-                          <Text size="1" color="gray">
+                        <Flex align="center" gap="2" wrap="wrap">
+                          <Text size="2">
                             {invoice.jobs.length} job
                             {invoice.jobs.length !== 1 ? 's' : ''}
                           </Text>
-                          <Flex gap="1" wrap="wrap">
-                            {invoice.jobs.map((job) => (
-                              <Button
-                                key={job.id}
-                                size="1"
-                                variant="soft"
-                                color="gray"
-                                onClick={() => onSelectJob(job.id)}
-                              >
-                                {formatJobLabel(job)}
-                              </Button>
-                            ))}
-                          </Flex>
+                          {invoice.jobs.length > 0 && (
+                            <Button
+                              size="1"
+                              variant="soft"
+                              onClick={() =>
+                                setJobsCoveredDialogJobs(invoice.jobs)
+                              }
+                            >
+                              See jobs
+                            </Button>
+                          )}
                         </Flex>
                       </Table.Cell>
                       <Table.Cell>
@@ -337,6 +335,15 @@ export default function RecurringInvoicesTab({ detail, onSelectJob }: Props) {
         onOpenChange={setInvoicePreviewOpen}
         selectedJobIds={invoiceSelectedJobIds}
         memberJobs={detail.jobs}
+      />
+
+      <RecurringInvoiceJobsCoveredDialog
+        open={jobsCoveredDialogJobs != null}
+        onOpenChange={(open) => {
+          if (!open) setJobsCoveredDialogJobs(null)
+        }}
+        jobs={jobsCoveredDialogJobs ?? []}
+        onSelectJob={onSelectJob}
       />
     </Flex>
   )
