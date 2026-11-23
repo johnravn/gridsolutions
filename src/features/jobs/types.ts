@@ -166,6 +166,22 @@ export type RecurringJobBookingSummary = {
   transport_count: number
 }
 
+/** Per-member Accounting rollup for a recurring series. */
+export type RecurringJobAccountingEntry = {
+  job_id: UUID
+  job_title: string
+  jobnr: number | null
+  status: JobStatus
+  archived: boolean
+  start_at: string | null
+  end_at: string | null
+  money_verified_at: string | null
+  project_lead_user_id: UUID | null
+  income_total: number
+  expense_total: number
+  item_count: number
+}
+
 export type JobsPageSelection =
   | { kind: 'job'; id: UUID }
   | { kind: 'recurring_job'; id: UUID }

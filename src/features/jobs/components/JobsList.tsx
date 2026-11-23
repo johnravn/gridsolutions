@@ -119,12 +119,17 @@ export default function JobsList({
   toolbarExtra,
   listScope = null,
   onExitListScope,
+  seriesTab = 'overview',
 }: {
   /** Binds the page-level create shortcut to this list's create dialog. */
   createShortcutRef?: React.MutableRefObject<(() => void) | null>
   selection: JobsPageSelection
   onSelectJob: (id: string | null) => void
-  onSelectRecurringJob: (id: string | null, title?: string) => void
+  onSelectRecurringJob: (
+    id: string | null,
+    title?: string,
+    tab?: string,
+  ) => void
   statusFilter: Array<JobStatus>
   showOnlyArchived: boolean
   showJobsInRecurringSeries?: boolean
@@ -147,6 +152,8 @@ export default function JobsList({
   /** When set, show only member jobs for this recurring series */
   listScope?: JobsListScope
   onExitListScope?: () => void
+  /** Active tab on the series inspector (drives strip CTA “here” state) */
+  seriesTab?: string
 }) {
   const { companyId } = useCompany()
   const qc = useQueryClient()
@@ -559,10 +566,18 @@ export default function JobsList({
       : listScope?.title && listScope.title !== 'Recurring job'
         ? listScope.title
         : (scopedRecurringDetail?.title ?? listScope?.title ?? 'Series')
-  const showSeriesOverviewCta = Boolean(listScope && selection?.kind === 'job')
+  const onSeriesInspector = selection?.kind === 'recurring_job'
+  const isSeriesOverviewHere = onSeriesInspector && seriesTab === 'overview'
+  const isSeriesAccountingHere = onSeriesInspector && seriesTab === 'money'
+  const showSeriesOverviewCta = !isSeriesOverviewHere
+  const showSeriesAccountingCta = !isSeriesAccountingHere
   const openScopedSeriesOverview = () => {
     if (!listScope) return
-    onSelectRecurringJob(listScope.id, scopedSeriesTitle)
+    onSelectRecurringJob(listScope.id, scopedSeriesTitle, 'overview')
+  }
+  const openScopedSeriesAccounting = () => {
+    if (!listScope) return
+    onSelectRecurringJob(listScope.id, scopedSeriesTitle, 'money')
   }
 
   const scopedHeader = listScope ? (
@@ -640,31 +655,58 @@ export default function JobsList({
             {scopedSeriesTitle}
           </Text>
         </Flex>
-        <Button
-          size="1"
-          variant={showSeriesOverviewCta ? 'soft' : 'outline'}
-          color="violet"
-          highContrast={!showSeriesOverviewCta}
-          style={{ flexShrink: 0 }}
-          onClick={openScopedSeriesOverview}
-          aria-current={showSeriesOverviewCta ? undefined : 'page'}
-          title={
-            showSeriesOverviewCta
-              ? 'Open series overview'
-              : 'Viewing series overview'
-          }
-        >
-          Overview
-          <NavArrowRight
-            width={14}
-            height={14}
-            style={{
-              opacity: showSeriesOverviewCta ? 1 : 0,
-              flexShrink: 0,
-            }}
-            aria-hidden={!showSeriesOverviewCta}
-          />
-        </Button>
+        <Flex align="center" gap="1" style={{ flexShrink: 0 }}>
+          <Button
+            size="1"
+            variant={showSeriesAccountingCta ? 'soft' : 'outline'}
+            color="violet"
+            highContrast={!showSeriesAccountingCta}
+            style={{ flexShrink: 0 }}
+            onClick={openScopedSeriesAccounting}
+            aria-current={showSeriesAccountingCta ? undefined : 'page'}
+            title={
+              showSeriesAccountingCta
+                ? 'Open series Accounting'
+                : 'Viewing series Accounting'
+            }
+          >
+            Accounting
+            <NavArrowRight
+              width={14}
+              height={14}
+              style={{
+                opacity: showSeriesAccountingCta ? 1 : 0,
+                flexShrink: 0,
+              }}
+              aria-hidden={!showSeriesAccountingCta}
+            />
+          </Button>
+          <Button
+            size="1"
+            variant={showSeriesOverviewCta ? 'soft' : 'outline'}
+            color="violet"
+            highContrast={!showSeriesOverviewCta}
+            style={{ flexShrink: 0 }}
+            onClick={openScopedSeriesOverview}
+            aria-current={showSeriesOverviewCta ? undefined : 'page'}
+            title={
+              showSeriesOverviewCta
+                ? 'Open series overview'
+                : 'Viewing series overview'
+            }
+          >
+            Overview
+            <NavArrowRight
+              width={14}
+              height={14}
+              style={{
+                opacity: showSeriesOverviewCta ? 1 : 0,
+                flexShrink: 0,
+              }}
+              aria-hidden={!showSeriesOverviewCta}
+            />
+          </Button>
+        </Flex>
       </Flex>
     </Flex>
   ) : null
