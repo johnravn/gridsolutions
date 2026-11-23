@@ -1,5 +1,6 @@
 import { Badge, Flex } from '@radix-ui/themes'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
+import { isJobStatusEligibleForMoneyVerify } from '../utils/moneyVerifyStatus'
 import { getJobStatusColor } from '../utils/statusColors'
 import type { JobStatus } from '../types'
 
@@ -12,8 +13,7 @@ export function JobStatusWithVerified({
   moneyVerified: boolean
 }) {
   const showNotVerified =
-    !moneyVerified &&
-    (displayStatus === 'paid' || displayStatus === 'invoiced')
+    !moneyVerified && isJobStatusEligibleForMoneyVerify(displayStatus)
 
   return (
     <Flex gap="1" align="center" wrap="wrap" style={{ minWidth: 0 }}>
