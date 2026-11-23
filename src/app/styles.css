@@ -2291,6 +2291,29 @@ body:has([data-state='open'].rt-DialogContent) .app-inspector-fab {
   }
 }
 
+/* Conta invoice line row: ⋮ menu on hover */
+.conta-invoice-line-row-actions {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  pointer-events: none;
+}
+
+.conta-invoice-line-row:hover .conta-invoice-line-row-actions,
+.conta-invoice-line-row:focus-within .conta-invoice-line-row-actions,
+.conta-invoice-line-row-actions:has([data-state='open']),
+.conta-invoice-line-row:has(.conta-invoice-line-row-actions [data-state='open'])
+  .conta-invoice-line-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: none), (max-width: 640px) {
+  .conta-invoice-line-row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 /* Animated tab underline + hover pill: slide between triggers via transform */
 .animated-tabs-list {
   position: relative;
