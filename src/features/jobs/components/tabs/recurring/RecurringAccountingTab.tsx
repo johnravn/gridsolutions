@@ -5,6 +5,7 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Flex,
   Heading,
   SegmentedControl,
@@ -28,7 +29,12 @@ import {
   canVerifyJobAccounting,
   getSeriesAccountingStatus,
 } from '../../../utils/seriesAccountingStatus'
+import {
+  JOB_MONEY_VERIFY_STATUS_HINT,
+  isJobStatusEligibleForMoneyVerify,
+} from '../../../utils/moneyVerifyStatus'
 import { getJobStatusColor } from '../../../utils/statusColors'
+import RecurringAccountingAutofillDialog from '../../dialogs/RecurringAccountingAutofillDialog'
 import type {
   RecurringJobAccountingEntry,
   RecurringJobDetail,
@@ -95,6 +101,10 @@ export default function RecurringAccountingTab({
   const [verifyFilter, setVerifyFilter] = React.useState<VerifyFilter>('all')
   const [periodKey, setPeriodKey] = React.useState<string | 'all'>('all')
   const [focusJobId, setFocusJobId] = React.useState<string | null>(null)
+  const [selectedJobIds, setSelectedJobIds] = React.useState<Set<string>>(
+    () => new Set(),
+  )
+  const [autofillOpen, setAutofillOpen] = React.useState(false)
 
   const { data: accountingSummary = [], isLoading } = useQuery({
     ...recurringJobAccountingSummaryQuery({ recurringJobId: detail.id }),
@@ -157,6 +167,7 @@ export default function RecurringAccountingTab({
   const verifiableUnverified = React.useMemo(() => {
     return accountingSummary.filter((entry) => {
       if (entry.archived || entry.money_verified_at != null) return false
+      if (!isJobStatusEligibleForMoneyVerify(entry.status)) return false
       return canVerifyJobAccounting({
         userId,
         isGlobalSuperuser,
@@ -165,6 +176,38 @@ export default function RecurringAccountingTab({
       })
     })
   }, [accountingSummary, userId, isGlobalSuperuser, companyRole])
+
+  const selectedEntries = React.useMemo(
+    () =>
+      accountingSummary.filter(
+        (entry) => !entry.archived && selectedJobIds.has(entry.job_id),
+      ),
+    [accountingSummary, selectedJobIds],
+  )
+
+  const allFilteredSelected =
+    filteredEntries.length > 0 &&
+    filteredEntries.every((entry) => selectedJobIds.has(entry.job_id))
+
+  const toggleJobSelected = (jobId: string, checked: boolean) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(jobId)
+      else next.delete(jobId)
+      return next
+    })
+  }
+
+  const toggleSelectFiltered = (checked: boolean) => {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev)
+      for (const entry of filteredEntries) {
+        if (checked) next.add(entry.job_id)
+        else next.delete(entry.job_id)
+      }
+      return next
+    })
+  }
 
   const bulkVerify = useMutation({
     mutationFn: async (entries: Array<RecurringJobAccountingEntry>) => {
@@ -274,7 +317,10 @@ export default function RecurringAccountingTab({
             </Heading>
             <Text size="2" color="gray">
               Mark every unverified occurrence you lead (or manage) as verified
-              for Reporting. Ledger editing stays on each job’s Accounting tab.
+              for Reporting when status is Invoiced, Paid, or Canceled.
+            </Text>
+            <Text size="1" color="gray" mt="1" style={{ display: 'block' }}>
+              {JOB_MONEY_VERIFY_STATUS_HINT}
             </Text>
           </Box>
           {canWrite ? (
@@ -290,6 +336,44 @@ export default function RecurringAccountingTab({
                 ? 'Nothing to verify'
                 : `Verify ${verifiableUnverified.length} job${verifiableUnverified.length !== 1 ? 's' : ''}…`}
             </Button>
+          ) : null}
+        </Flex>
+      </Card>
+
+      <Card>
+        <Flex justify="between" align="start" gap="3" wrap="wrap">
+          <Box style={{ minWidth: 0, flex: '1 1 240px' }}>
+            <Heading size="4" mb="1">
+              Autofill
+            </Heading>
+            <Text size="2" color="gray">
+              Copy fixed income/expense lines or crew-rate expenses onto all or
+              selected occurrences — preview before writing.
+            </Text>
+          </Box>
+          {canWrite ? (
+            <Flex gap="2" wrap="wrap">
+              <Button
+                size="2"
+                variant="soft"
+                disabled={filteredEntries.length === 0}
+                onClick={() => {
+                  toggleSelectFiltered(true)
+                }}
+              >
+                Select filtered
+              </Button>
+              <Button
+                size="2"
+                disabled={selectedEntries.length === 0}
+                onClick={() => setAutofillOpen(true)}
+              >
+                Autofill
+                {selectedEntries.length > 0
+                  ? ` (${selectedEntries.length})…`
+                  : '…'}
+              </Button>
+            </Flex>
           ) : null}
         </Flex>
       </Card>
@@ -382,9 +466,27 @@ export default function RecurringAccountingTab({
           </Box>
         ) : (
           <Box className="mobile-hscroll">
-            <Table.Root size="2" variant="surface" style={{ minWidth: 720 }}>
+            <Table.Root size="2" variant="surface" style={{ minWidth: 760 }}>
               <Table.Header>
                 <Table.Row>
+                  <Table.ColumnHeaderCell style={{ width: 36 }}>
+                    <Checkbox
+                      checked={
+                        allFilteredSelected
+                          ? true
+                          : selectedJobIds.size > 0 &&
+                              filteredEntries.some((e) =>
+                                selectedJobIds.has(e.job_id),
+                              )
+                            ? 'indeterminate'
+                            : false
+                      }
+                      onCheckedChange={(checked) =>
+                        toggleSelectFiltered(checked === true)
+                      }
+                      aria-label="Select all filtered occurrences"
+                    />
+                  </Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Job</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Date</Table.ColumnHeaderCell>
                   <Table.ColumnHeaderCell>Status</Table.ColumnHeaderCell>
@@ -408,6 +510,7 @@ export default function RecurringAccountingTab({
                   const verified = entry.money_verified_at != null
                   const net = entry.income_total - entry.expense_total
                   const isFocus = entry.job_id === focusEntry?.job_id
+                  const isChecked = selectedJobIds.has(entry.job_id)
                   return (
                     <Table.Row
                       key={entry.job_id}
@@ -417,6 +520,15 @@ export default function RecurringAccountingTab({
                           : undefined
                       }
                     >
+                      <Table.Cell>
+                        <Checkbox
+                          checked={isChecked}
+                          onCheckedChange={(checked) =>
+                            toggleJobSelected(entry.job_id, checked === true)
+                          }
+                          aria-label={`Select ${formatJobLabel(entry)}`}
+                        />
+                      </Table.Cell>
                       <Table.Cell>
                         <Text size="2" weight="medium">
                           {formatJobLabel(entry)}
@@ -496,6 +608,13 @@ export default function RecurringAccountingTab({
           </Flex>
         </Card>
       ) : null}
+
+      <RecurringAccountingAutofillDialog
+        open={autofillOpen}
+        onOpenChange={setAutofillOpen}
+        recurringJobId={detail.id}
+        selectedEntries={selectedEntries}
+      />
     </Flex>
   )
 }
