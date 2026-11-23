@@ -41,17 +41,6 @@ export function getContaInvoiceAppUrl(
   return `${appBase}/faktura/${organizationId}/fakturaer/${invoiceId}`
 }
 
-/**
- * Conta bilag “rediger” path kind — Conta has no `/bilag/{id}` detail route.
- * Real routes are `/regnskap/{org}/bilag/{transactionId}/rediger/{kind}`.
- */
-export type ContaBilagEditKind =
-  | 'ehf'
-  | 'kjop'
-  | 'inntekt'
-  | 'avansert'
-  | 'proff'
-
 /** Conta `transactionSourceType` values that are received EHFs. */
 export function isContaEhfTransactionSource(
   sourceType?: string | null,
@@ -62,43 +51,76 @@ export function isContaEhfTransactionSource(
   )
 }
 
-/** Map Conta ledger/transaction source type → bilag edit route kind. */
-export function contaBilagEditKindFromSourceType(
-  sourceType?: string | null,
-): ContaBilagEditKind {
-  if (isContaEhfTransactionSource(sourceType)) return 'ehf'
-  switch (sourceType) {
-    case 'REGISTER_INCOME':
-      return 'inntekt'
-    case 'PRO_TRANSACTION':
-      return 'proff'
-    case 'ADVANCED_TRANSACTION':
-    case 'BULK_TRANSACTION':
-      return 'avansert'
-    case 'REGISTER_PURCHASE':
-    case 'CREDIT_CARD_PURCHASE':
-      return 'kjop'
-    default:
-      // Supplier-ledger / received-invoice suggestions → purchase bilag.
-      return 'kjop'
-  }
+/** Options for Conta bilagsjournal deep links. */
+export type ContaBilagsjournalLinkOptions = {
+  /**
+   * Ledger / invoice date (`YYYY-MM-DD`). When `fromDate`/`toDate` are omitted,
+   * the calendar year of this date is used (`YYYY-01-01` … `YYYY-12-31`).
+   */
+  date?: string | null
+  /** Explicit from date (`YYYY-MM-DD`). */
+  fromDate?: string | null
+  /** Explicit to date (`YYYY-MM-DD`). */
+  toDate?: string | null
+  gatewayUrl?: string
+}
+
+/** Extract a 4-digit year from an ISO date string (`YYYY-MM-DD` or prefix). */
+export function yearFromContaDate(
+  date: string | null | undefined,
+): number | null {
+  if (!date) return null
+  const match = /^(\d{4})/.exec(date.trim())
+  if (!match) return null
+  const year = Number(match[1])
+  return Number.isFinite(year) ? year : null
 }
 
 /**
- * Deep link into Conta bookkeeping voucher (bilag) for a transaction.
- * Used for supplier / received-invoice ledger lines.
+ * Resolve bilagsjournal `fraDato` / `tilDato`.
+ * Prefers explicit from/to; otherwise uses the calendar year of `date`.
+ */
+export function resolveContaBilagsjournalDateRange(
+  options: Pick<
+    ContaBilagsjournalLinkOptions,
+    'date' | 'fromDate' | 'toDate'
+  > = {},
+): { fromDate: string; toDate: string } | null {
+  const from = options.fromDate?.trim() || null
+  const to = options.toDate?.trim() || null
+  if (from && to) return { fromDate: from, toDate: to }
+
+  const year = yearFromContaDate(options.date ?? from ?? to)
+  if (year == null) return null
+  return { fromDate: `${year}-01-01`, toDate: `${year}-12-31` }
+}
+
+/**
+ * Deep link into Conta’s bilagsjournal focused on one bilag (voucher) number.
  *
- * Conta does **not** serve `/regnskap/{org}/bilag/{id}` (that 404s). The working
- * pattern is `/regnskap/{org}/bilag/{transactionId}/rediger/{kind}`.
+ * Conta field mapping:
+ * - **bilag number** → API `transactionNo` (shown as Bilag in Conta UI)
+ * - **transactionId** → internal id used by `/bilag/{id}/rediger/{kind}` — do **not**
+ *   use that for “Open in Conta” on Accounting suggestions
+ *
+ * Pattern:
+ * `/regnskap/{orgId}/rapporter/bilagsjournal?fraBilag={n}&fraDato=…&tilBilag={n}&tilDato=…`
  */
 export function getContaTransactionAppUrl(
   organizationId: string,
-  transactionId: number | string | null | undefined,
-  gatewayUrl?: string,
-  sourceType?: string | null,
+  bilagNo: number | string | null | undefined,
+  options?: ContaBilagsjournalLinkOptions,
 ): string | null {
-  if (transactionId == null || transactionId === '') return null
-  const appBase = contaAppBaseUrl(gatewayUrl)
-  const kind = contaBilagEditKindFromSourceType(sourceType)
-  return `${appBase}/regnskap/${organizationId}/bilag/${transactionId}/rediger/${kind}`
+  if (bilagNo == null || bilagNo === '') return null
+  const range = resolveContaBilagsjournalDateRange(options)
+  if (!range) return null
+
+  const appBase = contaAppBaseUrl(options?.gatewayUrl)
+  const params = new URLSearchParams({
+    fraBilag: String(bilagNo),
+    fraDato: range.fromDate,
+    tilBilag: String(bilagNo),
+    tilDato: range.toDate,
+  })
+  return `${appBase}/regnskap/${organizationId}/rapporter/bilagsjournal?${params.toString()}`
 }

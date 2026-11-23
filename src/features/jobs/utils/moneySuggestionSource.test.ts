@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getMoneySourceBadgeColor,
   getMoneySourceLabel,
+  getMoneySourceShortLabel,
 } from './moneySuggestionSource'
 
 describe('getMoneySourceLabel', () => {
@@ -117,6 +118,45 @@ describe('getMoneySourceLabel', () => {
         source_id: 'quote-abc',
       }),
     ).toBe('Subcontractor quote')
+  })
+})
+
+describe('getMoneySourceShortLabel', () => {
+  it('shortens Conta and quote labels for compact badges', () => {
+    expect(
+      getMoneySourceShortLabel({
+        source: 'conta',
+        type: 'expense',
+        category: 'crew',
+      }),
+    ).toBe('Conta in')
+    expect(
+      getMoneySourceShortLabel({
+        source: 'conta',
+        type: 'income',
+        category: 'other',
+      }),
+    ).toBe('Conta sales')
+    expect(
+      getMoneySourceShortLabel({
+        source: 'manual',
+        category: 'equipment',
+        sourceId: 'quote-1',
+      }),
+    ).toBe('Sub quote')
+  })
+
+  it('keeps already-short labels unchanged', () => {
+    expect(getMoneySourceShortLabel({ source: 'crew' })).toBe('Booking')
+    expect(getMoneySourceShortLabel({ source: 'logging' })).toBe('Logging')
+    expect(getMoneySourceShortLabel({ source: 'offer' })).toBe('Offer')
+    expect(
+      getMoneySourceShortLabel({
+        source: 'manual',
+        category: 'transport',
+      }),
+    ).toBe('Transport')
+    expect(getMoneySourceShortLabel({ source: 'manual' })).toBe('Manual')
   })
 })
 

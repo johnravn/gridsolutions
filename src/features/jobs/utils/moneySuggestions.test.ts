@@ -231,9 +231,10 @@ describe('buildCrewExpenseSuggestions', () => {
           supplierOrgNo: '123456789',
           date: '2026-03-11',
           transactionId: 1,
+          transactionNo: 805,
           transactionSourceType: 'REGISTER_PURCHASE',
           externalUrl:
-            'https://app.conta.no/regnskap/o/bilag/1/rediger/kjop',
+            'https://app.conta.no/regnskap/o/rapporter/bilagsjournal?fraBilag=805&fraDato=2026-01-01&tilBilag=805&tilDato=2026-12-31',
         },
         {
           id: 2,
@@ -242,6 +243,7 @@ describe('buildCrewExpenseSuggestions', () => {
           supplierOrgNo: '123456789',
           date: '2026-03-12',
           transactionId: 2,
+          transactionNo: 806,
           transactionSourceType: 'EHF_RECEIVED',
         },
       ],
@@ -250,7 +252,9 @@ describe('buildCrewExpenseSuggestions', () => {
     expect(suggestions.every((s) => s.source === 'conta')).toBe(true)
     expect(suggestions.every((s) => s.category === 'crew')).toBe(true)
     expect(suggestions.map((s) => s.reference)).toEqual(['R-1', 'R-2'])
-    expect(suggestions[0]?.externalUrl).toContain('/bilag/1/rediger/kjop')
+    expect(suggestions[0]?.externalUrl).toContain(
+      '/rapporter/bilagsjournal?fraBilag=805',
+    )
     expect(suggestions[0]?.transactionId).toBe(1)
     expect(suggestions[0]?.isEhf).toBe(false)
     expect(suggestions[1]?.isEhf).toBe(true)

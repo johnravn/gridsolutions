@@ -84,7 +84,9 @@ import { sortMoneyItems } from '../../utils/sortMoneyItems'
 import {
   getMoneySourceBadgeColor,
   getMoneySourceLabel,
+  getMoneySourceShortLabel,
 } from '../../utils/moneySuggestionSource'
+import MoneySuggestionDescription from './MoneySuggestionDescription'
 import MoneyTransportKmCard from './MoneyTransportKmCard'
 import MoneyContaPanel from './MoneyContaPanel'
 import MoneyContaInvoicePanel from './MoneyContaInvoicePanel'
@@ -108,6 +110,8 @@ type ContaLedgerLine = {
   invoiceNo?: string
   invoiceId?: number
   transactionId?: number
+  /** Conta bilag number (`transactionNo`), used for bilagsjournal links. */
+  transactionNo?: number
   transactionSourceType?: string
   projectId?: number
   bookkeepingAccountName?: string
@@ -782,13 +786,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         startDate: crewContaDateRange.startDate!,
         endDate: crewContaDateRange.endDate!,
         get: (path) => contaClient.get(path),
-        transactionUrl: (accountingOrgId, transactionId, sourceType) =>
-          getContaTransactionAppUrl(
-            accountingOrgId,
-            transactionId ?? null,
+        transactionUrl: ({ orgId: accountingOrgId, bilagNo, date }) =>
+          getContaTransactionAppUrl(accountingOrgId, bilagNo ?? null, {
+            date,
             gatewayUrl,
-            sourceType,
-          ),
+          }),
       })) as Array<ContaLedgerLine & { externalUrl?: string | null }>
     },
   })
@@ -1511,9 +1513,10 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                 )}
               </Flex>
               <Text size="2" color="gray" mb="3">
-                Source badges show Booking, Conta incoming invoice, Conta sales
-                invoice, Offer, Subcontractor quote, Transport, Logging, or
-                Manual. Add inserts as suggested; Adjust lets you tweak first.
+                Source badges show Conta in, Conta sales, Booking, Logging,
+                Offer, Sub quote, Transport, or Manual (hover for the full
+                name). Descriptions are clamped — hover or click for the full
+                text. Add inserts as suggested; Adjust lets you tweak first.
                 Conta lines show match confidence — review amounts (may be inkl.
                 MVA).
               </Text>
@@ -1547,8 +1550,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               color={getMoneySourceBadgeColor(s)}
                               variant="soft"
                               size="1"
+                              title={getMoneySourceLabel(s)}
                             >
-                              {getMoneySourceLabel(s)}
+                              {getMoneySourceShortLabel(s)}
                             </Badge>
                             {s.confidence ? (
                               <Badge
@@ -1560,42 +1564,42 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               </Badge>
                             ) : null}
                           </Flex>
-                          <Text size="2">{s.description}</Text>
-                          {s.confidenceReason && (
-                            <Text size="1" color="gray">
-                              {s.confidenceReason}
-                            </Text>
-                          )}
-                          {(s.isEhf || s.externalUrl) && (
-                            <Flex gap="2" wrap="wrap" mt="1">
-                              {s.isEhf && s.transactionId != null ? (
-                                <Button
-                                  size="1"
-                                  variant="soft"
-                                  onClick={() =>
-                                    setEhfPreview({
-                                      transactionId: s.transactionId!,
-                                      externalUrl: s.externalUrl,
-                                      title: s.description,
-                                    })
-                                  }
-                                >
-                                  Preview
-                                </Button>
-                              ) : null}
-                              {s.externalUrl ? (
-                                <Button size="1" variant="outline" asChild>
-                                  <a
-                                    href={s.externalUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    Open in Conta
-                                  </a>
-                                </Button>
-                              ) : null}
-                            </Flex>
-                          )}
+                          <MoneySuggestionDescription
+                            description={s.description}
+                            confidenceReason={s.confidenceReason}
+                            actions={
+                              s.isEhf || s.externalUrl ? (
+                                <Flex gap="2" wrap="wrap" mt="1">
+                                  {s.isEhf && s.transactionId != null ? (
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      onClick={() =>
+                                        setEhfPreview({
+                                          transactionId: s.transactionId!,
+                                          externalUrl: s.externalUrl,
+                                          title: s.description,
+                                        })
+                                      }
+                                    >
+                                      Preview
+                                    </Button>
+                                  ) : null}
+                                  {s.externalUrl ? (
+                                    <Button size="1" variant="outline" asChild>
+                                      <a
+                                        href={s.externalUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        Open in Conta
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                </Flex>
+                              ) : null
+                            }
+                          />
                           <Text size="1" color="gray">
                             {formatDate(s.date)}
                           </Text>
@@ -1665,44 +1669,46 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                             </Badge>
                           </Table.Cell>
                           <Table.Cell>
-                            <Flex direction="column" gap="1">
-                              <Text size="2">{s.description}</Text>
-                              {s.confidenceReason && (
-                                <Text size="1" color="gray">
-                                  {s.confidenceReason}
-                                </Text>
-                              )}
-                              {(s.isEhf || s.externalUrl) && (
-                                <Flex gap="2" wrap="wrap" mt="1">
-                                  {s.isEhf && s.transactionId != null ? (
-                                    <Button
-                                      size="1"
-                                      variant="soft"
-                                      onClick={() =>
-                                        setEhfPreview({
-                                          transactionId: s.transactionId!,
-                                          externalUrl: s.externalUrl,
-                                          title: s.description,
-                                        })
-                                      }
-                                    >
-                                      Preview
-                                    </Button>
-                                  ) : null}
-                                  {s.externalUrl ? (
-                                    <Button size="1" variant="outline" asChild>
-                                      <a
-                                        href={s.externalUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                            <MoneySuggestionDescription
+                              description={s.description}
+                              confidenceReason={s.confidenceReason}
+                              actions={
+                                s.isEhf || s.externalUrl ? (
+                                  <Flex gap="2" wrap="wrap" mt="1">
+                                    {s.isEhf && s.transactionId != null ? (
+                                      <Button
+                                        size="1"
+                                        variant="soft"
+                                        onClick={() =>
+                                          setEhfPreview({
+                                            transactionId: s.transactionId!,
+                                            externalUrl: s.externalUrl,
+                                            title: s.description,
+                                          })
+                                        }
                                       >
-                                        Open in Conta
-                                      </a>
-                                    </Button>
-                                  ) : null}
-                                </Flex>
-                              )}
-                            </Flex>
+                                        Preview
+                                      </Button>
+                                    ) : null}
+                                    {s.externalUrl ? (
+                                      <Button
+                                        size="1"
+                                        variant="outline"
+                                        asChild
+                                      >
+                                        <a
+                                          href={s.externalUrl}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                        >
+                                          Open in Conta
+                                        </a>
+                                      </Button>
+                                    ) : null}
+                                  </Flex>
+                                ) : null
+                              }
+                            />
                           </Table.Cell>
                           <Table.Cell>{formatDate(s.date)}</Table.Cell>
                           <Table.Cell>
@@ -1710,8 +1716,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               color={getMoneySourceBadgeColor(s)}
                               variant="soft"
                               size="1"
+                              title={getMoneySourceLabel(s)}
                             >
-                              {getMoneySourceLabel(s)}
+                              {getMoneySourceShortLabel(s)}
                             </Badge>
                           </Table.Cell>
                           <Table.Cell>
@@ -1815,8 +1822,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                           <Badge
                             color={getMoneySourceBadgeColor(item)}
                             variant="soft"
+                            title={getMoneySourceLabel(item)}
                           >
-                            {getMoneySourceLabel(item)}
+                            {getMoneySourceShortLabel(item)}
                           </Badge>
                         </Flex>
                         <Text size="2">{item.description}</Text>
@@ -1895,8 +1903,9 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                           <Badge
                             color={getMoneySourceBadgeColor(item)}
                             variant="soft"
+                            title={getMoneySourceLabel(item)}
                           >
-                            {getMoneySourceLabel(item)}
+                            {getMoneySourceShortLabel(item)}
                           </Badge>
                         </Table.Cell>
                         <Table.Cell align="right">

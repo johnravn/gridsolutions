@@ -19,7 +19,8 @@ describe('fetchCrewContaInvoiceLines', () => {
                   amount: -4000,
                   invoiceNo: 'R-9',
                   date: '2026-03-12',
-                  transactionId: 99,
+                  transactionId: 75275314,
+                  transactionNo: 805,
                 },
               ],
             },
@@ -35,9 +36,9 @@ describe('fetchCrewContaInvoiceLines', () => {
       startDate: '2026-03-11',
       endDate: '2026-03-26',
       get,
-      transactionUrl: (_org, tx, sourceType) =>
-        tx
-          ? `https://app.conta.no/regnskap/o/bilag/${tx}/rediger/${sourceType === 'EHF_RECEIVED' ? 'ehf' : 'kjop'}`
+      transactionUrl: ({ orgId, bilagNo, date }) =>
+        bilagNo != null && date
+          ? `https://app.conta.no/regnskap/${orgId}/rapporter/bilagsjournal?fraBilag=${bilagNo}&fraDato=2026-01-01&tilBilag=${bilagNo}&tilDato=2026-12-31`
           : null,
     })
 
@@ -46,7 +47,9 @@ describe('fetchCrewContaInvoiceLines', () => {
       id: 11,
       supplierOrgNo: '123456789',
       invoiceNo: 'R-9',
-      externalUrl: 'https://app.conta.no/regnskap/o/bilag/99/rediger/kjop',
+      transactionNo: 805,
+      externalUrl:
+        'https://app.conta.no/regnskap/org-1/rapporter/bilagsjournal?fraBilag=805&fraDato=2026-01-01&tilBilag=805&tilDato=2026-12-31',
     })
     expect(get).toHaveBeenCalledTimes(2)
   })
