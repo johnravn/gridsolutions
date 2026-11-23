@@ -1,4 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
+import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
 import { aggregateCustomerProfitabilityFromJobs } from '../utils/customers'
 import {
@@ -137,24 +138,19 @@ async function fetchMoneyTotalsByJob(
   }
   if (jobIds.length === 0) return byJob
 
-  // Chunk to stay under PostgREST URL limits for large companies
-  const chunkSize = 200
-  for (let i = 0; i < jobIds.length; i += chunkSize) {
-    const chunk = jobIds.slice(i, i + chunkSize)
-    const { data: items, error } = await supabase
+  const items = await fetchAllInChunks(jobIds, (chunk) =>
+    supabase
       .from('job_money_items')
       .select('job_id, type, amount')
-      .in('job_id', chunk)
+      .in('job_id', chunk),
+  )
 
-    if (error) throw error
-
-    for (const row of items ?? []) {
-      const cur = byJob.get(row.job_id)
-      if (!cur) continue
-      cur.itemCount += 1
-      if (row.type === 'income') cur.income += Number(row.amount)
-      else if (row.type === 'expense') cur.expenses += Number(row.amount)
-    }
+  for (const row of items) {
+    const cur = byJob.get(row.job_id)
+    if (!cur) continue
+    cur.itemCount += 1
+    if (row.type === 'income') cur.income += Number(row.amount)
+    else if (row.type === 'expense') cur.expenses += Number(row.amount)
   }
 
   return byJob
@@ -307,15 +303,17 @@ export function reportUtilizationQuery({
       const periodIds = periods.map((p) => p.id)
       const periodMap = new Map(periods.map((p) => [p.id, p]))
 
-      const { data: crew, error: crewError } = await supabase
-        .from('reserved_crew')
-        .select('user_id, time_period_id, status')
-        .in('time_period_id', periodIds)
-        .not('user_id', 'is', null)
-        .neq('status', 'canceled')
-
-      if (crewError) throw crewError
-      if (!crew?.length) return []
+      // Chunk `.in(time_period_id)` — a full year of periods easily exceeds
+      // PostgREST/Kong URL limits and surfaces as HTTP 400 in the browser.
+      const crew = await fetchAllInChunks(periodIds, (chunk) =>
+        supabase
+          .from('reserved_crew')
+          .select('user_id, time_period_id, status')
+          .in('time_period_id', chunk)
+          .not('user_id', 'is', null)
+          .neq('status', 'canceled'),
+      )
+      if (!crew.length) return []
 
       const hoursByUser = new Map<string, number>()
       for (const row of crew) {
@@ -332,13 +330,15 @@ export function reportUtilizationQuery({
       const userIds = Array.from(hoursByUser.keys())
       if (userIds.length === 0) return []
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id, display_name, first_name, last_name')
-        .in('user_id', userIds)
+      const profiles = await fetchAllInChunks(userIds, (chunk) =>
+        supabase
+          .from('profiles')
+          .select('user_id, display_name, first_name, last_name')
+          .in('user_id', chunk),
+      )
 
       const nameByUser = new Map<string, string | null>()
-      for (const p of profiles ?? []) {
+      for (const p of profiles) {
         const name =
           p.display_name ??
           ([p.first_name, p.last_name].filter(Boolean).join(' ') || null)
