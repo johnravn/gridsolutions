@@ -1,4 +1,4 @@
-/* Geometric backdrop — sharp lines, neutral gray solids only (no brand hue).
+/* Subtle lattice only — no decorative polygons, bands, or circuit art.
    Optional micro-drift via .geo-bg--motion; prefers-reduced-motion disables it. */
 
 .geo-bg {
@@ -7,47 +7,23 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  /* Intensity dims geometric art only; fine grid uses its own readable ink. */
   --geo-intensity: 1;
   --geo-grid-size: 72px;
   --geo-grid-line: 1px;
   /*
    * Always --gray-12 (Radix dark flips the scale — gray-1 is near-black there).
-   * Soft dial from Live-visible 22%/2px/0.85 — whisper lattice, still perceptible.
+   * Whisper lattice: lower ink than the previous geometric pass.
    */
-  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 11%, transparent);
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 6%, transparent);
+  --geo-grid-opacity: 0.28;
 }
 
 .dark .geo-bg {
   /* White-on-dark reads hotter than black-on-light at the same %. */
-  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 9%, transparent);
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 4.5%, transparent);
 }
 
-.geo-bg__art {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  opacity: var(--geo-intensity);
-}
-
-.geo-bg__svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.geo-bg__base {
-  fill: transparent;
-}
-
-/*
- * Large grid for grid-slash (~72px). Above geometric art.
- * Soft wash: light blur only — heavy blur erased hairlines before.
- */
 .geo-bg__fine-grid {
-  display: none;
   position: absolute;
   inset: 0;
   z-index: 1;
@@ -70,106 +46,25 @@
     );
   background-size: var(--geo-grid-size) var(--geo-grid-size);
   background-position: 0 0;
-  opacity: 0.48;
-  filter: blur(1.5px);
-}
-
-.geo-bg--grid-slash .geo-bg__fine-grid {
-  display: block;
+  opacity: calc(var(--geo-grid-opacity) * var(--geo-intensity));
+  filter: blur(2px);
 }
 
 @media (prefers-contrast: more) {
   .geo-bg {
-    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 16%, transparent);
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 10%, transparent);
+    --geo-grid-opacity: 0.42;
   }
   .dark .geo-bg {
-    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 14%, transparent);
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 8%, transparent);
   }
   .geo-bg__fine-grid {
-    opacity: 0.65;
-    filter: blur(0.9px);
+    filter: blur(1.2px);
   }
-}
-
-/* Ink lines (circuit traces): readable on light + dark */
-.geo-bg__ink {
-  stroke: var(--geo-grid-ink);
-  fill: none;
-}
-
-/* Neutral gray geometry — slight step differences for depth, no hue. */
-.geo-bg__fill-a {
-  fill: var(--gray-a4);
-}
-.geo-bg__fill-b {
-  fill: var(--gray-a3);
-}
-.geo-bg__fill-c {
-  fill: var(--gray-a5);
-}
-.geo-bg__fill-d {
-  fill: var(--gray-a3);
-}
-.geo-bg__fill-e {
-  fill: var(--gray-a4);
-}
-
-.geo-bg__stroke-a {
-  stroke: var(--gray-8);
-  fill: none;
-}
-.geo-bg__stroke-b {
-  stroke: var(--gray-7);
-  fill: none;
-}
-.geo-bg__stroke-c {
-  stroke: var(--gray-8);
-  fill: none;
-}
-.geo-bg__stroke-d {
-  stroke: var(--gray-7);
-  fill: none;
-}
-.geo-bg__stroke-e {
-  stroke: var(--gray-8);
-  fill: none;
-}
-
-.geo-bg__node-a {
-  fill: var(--gray-8);
-}
-.geo-bg__node-b {
-  fill: var(--gray-7);
-}
-.geo-bg__node-c {
-  fill: var(--gray-8);
-}
-.geo-bg__node-d {
-  fill: var(--gray-7);
-}
-.geo-bg__node-e {
-  fill: var(--gray-8);
-}
-
-/* Light: slightly stronger fills so geometry still reads on pale chrome */
-.light .geo-bg__fill-a {
-  fill: var(--gray-a5);
-}
-.light .geo-bg__fill-b {
-  fill: var(--gray-a4);
-}
-.light .geo-bg__fill-c {
-  fill: var(--gray-a6);
-}
-.light .geo-bg__fill-d {
-  fill: var(--gray-a4);
-}
-.light .geo-bg__fill-e {
-  fill: var(--gray-a5);
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .geo-bg--motion .geo-bg__svg {
+  .geo-bg--motion .geo-bg__fine-grid {
     animation: geo-bg-drift 56s ease-in-out infinite alternate;
   }
 }
@@ -184,7 +79,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .geo-bg--motion .geo-bg__svg {
+  .geo-bg--motion .geo-bg__fine-grid {
     animation: none;
   }
 }

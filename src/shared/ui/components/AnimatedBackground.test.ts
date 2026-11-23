@@ -5,7 +5,7 @@ import {
 } from './AnimatedBackground'
 
 describe('normalizeGeometricPreset', () => {
-  it('keeps canvas preset ids', () => {
+  it('keeps canvas preset ids (legacy prefs)', () => {
     expect(normalizeGeometricPreset('grid-slash')).toBe('grid-slash')
     expect(normalizeGeometricPreset('prism-bands')).toBe('prism-bands')
     expect(normalizeGeometricPreset('circuit')).toBe('circuit')
