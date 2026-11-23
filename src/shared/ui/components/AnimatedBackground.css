@@ -12,15 +12,18 @@
   --geo-grid-line: 1px;
   /*
    * Always --gray-12 (Radix dark flips the scale — gray-1 is near-black there).
-   * Whisper lattice: lower ink than the previous geometric pass.
+   * Soft but readable on chrome: #257 whisper (6%/0.28×intensity) vanished at
+   * Recommended 35%. Intensity maps to a floor→full opacity scale so low
+   * intensity still shows a soft lattice.
    */
-  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 6%, transparent);
-  --geo-grid-opacity: 0.28;
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 18%, transparent);
+  /* At intensity 0 → 0.45 of base; at 1 → full base. Recommended 0.35 ≈ 0.59. */
+  --geo-grid-opacity: calc(0.5 * (0.45 + 0.55 * var(--geo-intensity)));
 }
 
 .dark .geo-bg {
-  /* White-on-dark reads hotter than black-on-light at the same %. */
-  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 4.5%, transparent);
+  /* White-on-dark reads hotter — slightly less ink than light. */
+  --geo-grid-ink: color-mix(in oklab, var(--gray-12) 14%, transparent);
 }
 
 .geo-bg__fine-grid {
@@ -46,20 +49,21 @@
     );
   background-size: var(--geo-grid-size) var(--geo-grid-size);
   background-position: 0 0;
-  opacity: calc(var(--geo-grid-opacity) * var(--geo-intensity));
-  filter: blur(2px);
+  opacity: var(--geo-grid-opacity);
+  /* Light blur only — heavy blur erased hairlines on real chrome. */
+  filter: blur(0.85px);
 }
 
 @media (prefers-contrast: more) {
   .geo-bg {
-    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 10%, transparent);
-    --geo-grid-opacity: 0.42;
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 24%, transparent);
+    --geo-grid-opacity: calc(0.7 * (0.45 + 0.55 * var(--geo-intensity)));
   }
   .dark .geo-bg {
-    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 8%, transparent);
+    --geo-grid-ink: color-mix(in oklab, var(--gray-12) 18%, transparent);
   }
   .geo-bg__fine-grid {
-    filter: blur(1.2px);
+    filter: blur(0.4px);
   }
 }
 
