@@ -35,8 +35,10 @@ describe('fetchCrewContaInvoiceLines', () => {
       startDate: '2026-03-11',
       endDate: '2026-03-26',
       get,
-      transactionUrl: (_org, tx) =>
-        tx ? `https://app.conta.no/regnskap/o/bilag/${tx}` : null,
+      transactionUrl: (_org, tx, sourceType) =>
+        tx
+          ? `https://app.conta.no/regnskap/o/bilag/${tx}/rediger/${sourceType === 'EHF_RECEIVED' ? 'ehf' : 'kjop'}`
+          : null,
     })
 
     expect(lines).toHaveLength(1)
@@ -44,7 +46,7 @@ describe('fetchCrewContaInvoiceLines', () => {
       id: 11,
       supplierOrgNo: '123456789',
       invoiceNo: 'R-9',
-      externalUrl: 'https://app.conta.no/regnskap/o/bilag/99',
+      externalUrl: 'https://app.conta.no/regnskap/o/bilag/99/rediger/kjop',
     })
     expect(get).toHaveBeenCalledTimes(2)
   })

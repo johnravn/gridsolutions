@@ -50,6 +50,7 @@ import {
   jobSubcontractorsQuery,
 } from '../../api/subcontractorQueries'
 import MoneyItemEditDialog from '../dialogs/MoneyItemEditDialog'
+import ContaEhfPreviewDialog from '../dialogs/ContaEhfPreviewDialog'
 import {
   DEFAULT_TRANSPORT_COST_PER_KM,
   buildContaExpenseSuggestions,
@@ -103,6 +104,7 @@ type ContaLedgerLine = {
   invoiceNo?: string
   invoiceId?: number
   transactionId?: number
+  transactionSourceType?: string
   projectId?: number
   bookkeepingAccountName?: string
   supplierName?: string
@@ -146,6 +148,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
   const [addSuggestion, setAddSuggestion] = React.useState<Suggestion | null>(
     null,
   )
+  const [ehfPreview, setEhfPreview] = React.useState<{
+    transactionId: number
+    externalUrl?: string | null
+    title?: string | null
+  } | null>(null)
   const [contaDatePad, setContaDatePad] =
     React.useState<ContaDatePadOption>('job')
   /** Secondary column when wide enough: Conta invoice vs logging. */
@@ -771,11 +778,12 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
         startDate: crewContaDateRange.startDate!,
         endDate: crewContaDateRange.endDate!,
         get: (path) => contaClient.get(path),
-        transactionUrl: (accountingOrgId, transactionId) =>
+        transactionUrl: (accountingOrgId, transactionId, sourceType) =>
           getContaTransactionAppUrl(
             accountingOrgId,
             transactionId ?? null,
             gatewayUrl,
+            sourceType,
           ),
       })) as Array<ContaLedgerLine & { externalUrl?: string | null }>
     },
@@ -1578,16 +1586,35 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                               {s.confidenceReason}
                             </Text>
                           )}
-                          {s.externalUrl && (
-                            <Text size="1" as="div">
-                              <a
-                                href={s.externalUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                Open in Conta
-                              </a>
-                            </Text>
+                          {(s.isEhf || s.externalUrl) && (
+                            <Flex gap="2" wrap="wrap" mt="1">
+                              {s.isEhf && s.transactionId != null ? (
+                                <Button
+                                  size="1"
+                                  variant="soft"
+                                  onClick={() =>
+                                    setEhfPreview({
+                                      transactionId: s.transactionId!,
+                                      externalUrl: s.externalUrl,
+                                      title: s.description,
+                                    })
+                                  }
+                                >
+                                  Preview
+                                </Button>
+                              ) : null}
+                              {s.externalUrl ? (
+                                <Button size="1" variant="outline" asChild>
+                                  <a
+                                    href={s.externalUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    Open in Conta
+                                  </a>
+                                </Button>
+                              ) : null}
+                            </Flex>
                           )}
                           <Text size="1" color="gray">
                             {formatDate(s.date)}
@@ -1665,16 +1692,35 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                                   {s.confidenceReason}
                                 </Text>
                               )}
-                              {s.externalUrl && (
-                                <Text size="1" as="div">
-                                  <a
-                                    href={s.externalUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                  >
-                                    Open in Conta
-                                  </a>
-                                </Text>
+                              {(s.isEhf || s.externalUrl) && (
+                                <Flex gap="2" wrap="wrap" mt="1">
+                                  {s.isEhf && s.transactionId != null ? (
+                                    <Button
+                                      size="1"
+                                      variant="soft"
+                                      onClick={() =>
+                                        setEhfPreview({
+                                          transactionId: s.transactionId!,
+                                          externalUrl: s.externalUrl,
+                                          title: s.description,
+                                        })
+                                      }
+                                    >
+                                      Preview
+                                    </Button>
+                                  ) : null}
+                                  {s.externalUrl ? (
+                                    <Button size="1" variant="outline" asChild>
+                                      <a
+                                        href={s.externalUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                      >
+                                        Open in Conta
+                                      </a>
+                                    </Button>
+                                  ) : null}
+                                </Flex>
                               )}
                             </Flex>
                           </Table.Cell>
@@ -2040,6 +2086,17 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
           setAddSuggestion(null)
           setEditingItem(null)
         }}
+      />
+
+      <ContaEhfPreviewDialog
+        open={ehfPreview != null}
+        onOpenChange={(next) => {
+          if (!next) setEhfPreview(null)
+        }}
+        orgId={accountingConfig?.accounting_organization_id}
+        transactionId={ehfPreview?.transactionId}
+        externalUrl={ehfPreview?.externalUrl}
+        title={ehfPreview?.title}
       />
     </Box>
   )

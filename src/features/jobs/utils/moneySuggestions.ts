@@ -1,4 +1,5 @@
 import { normalizeOrgNo } from '@shared/conta/contaCustomerMatch'
+import { isContaEhfTransactionSource } from '@shared/api/conta/gatewayUrls'
 import { roundMoney } from './offerCalculations'
 import {
   contaExpenseConfidence,
@@ -29,6 +30,12 @@ export type MoneySuggestion = {
   confidenceReason?: string | null
   /** Optional deep link (e.g. Conta invoice / bilag). */
   externalUrl?: string | null
+  /** Conta bookkeeping transaction id (for bilag deep link / EHF preview). */
+  transactionId?: number | null
+  /** Conta `transactionSourceType` from supplier ledger. */
+  transactionSourceType?: string | null
+  /** True when Conta source is a received EHF (show Preview). */
+  isEhf?: boolean
 }
 
 export const DEFAULT_TRANSPORT_COST_PER_KM = 5
@@ -272,6 +279,7 @@ export type CrewContaInvoiceLineInput = {
   invoiceNo?: string
   invoiceId?: number
   transactionId?: number
+  transactionSourceType?: string
   supplierOrgNo?: string
   supplierName?: string
   bookkeepingAccountName?: string
@@ -424,6 +432,9 @@ export function buildCrewExpenseSuggestions(input: {
               ? 'Conta received invoice matched crew org number'
               : `${matches.length} Conta received invoices matched crew org number — review all`,
           externalUrl: line.externalUrl ?? null,
+          transactionId: line.transactionId ?? null,
+          transactionSourceType: line.transactionSourceType ?? null,
+          isEhf: isContaEhfTransactionSource(line.transactionSourceType),
         })
         contaSuggestionCount += 1
       }
