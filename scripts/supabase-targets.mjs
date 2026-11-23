@@ -70,8 +70,9 @@ export function readEnvFile(filePath) {
  * @returns {string[]}
  */
 export function supabaseLinesFromEnv(env) {
-  return SUPABASE_KEYS.filter((key) => env[key] != null && env[key] !== '')
-    .map((key) => `${key}=${env[key]}`)
+  return SUPABASE_KEYS.filter((key) => env[key] != null && env[key] !== '').map(
+    (key) => `${key}=${env[key]}`,
+  )
 }
 
 /**
@@ -120,7 +121,10 @@ export function readLinkedProjectRef() {
  * @returns {'local' | 'dev' | 'prod' | 'unknown'}
  */
 export function classifyEnvContent(content) {
-  if (content.includes('127.0.0.1:54321') || content.includes('localhost:54321')) {
+  if (
+    content.includes('127.0.0.1:54321') ||
+    content.includes('localhost:54321')
+  ) {
     return 'local'
   }
   const env = parseEnvContent(content)

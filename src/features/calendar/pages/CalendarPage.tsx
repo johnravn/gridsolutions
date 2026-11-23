@@ -23,12 +23,11 @@ import SubscribeToCalendarDialog from '@features/calendar/components/SubscribeTo
 import PersonalCalendarEventDialog from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
 import {
   CALENDAR_CATEGORY_KINDS,
-  
   applyCalendarFilter,
   defaultCalendarWindow,
   defaultKindsForCategory,
   isJobDurationTitle,
-  toEventInputs
+  toEventInputs,
 } from '@features/calendar/components/domain'
 import { companyCalendarQuery } from '@features/calendar/api/queries'
 import {
@@ -39,7 +38,7 @@ import { inventoryIndexQuery } from '@features/inventory/api/queries'
 import { crewIndexQuery } from '@features/crew/api/queries'
 import { jobsIndexQuery } from '@features/jobs/api/queries'
 import { fuzzySearch } from '@shared/lib/generalFunctions'
-import type {CalendarPageCategory} from '@features/calendar/components/domain';
+import type { CalendarPageCategory } from '@features/calendar/components/domain'
 import type { PersonalEventDraft } from '@features/calendar/components/dialogs/PersonalCalendarEventDialog'
 
 export default function CalendarPage() {

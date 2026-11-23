@@ -8,19 +8,19 @@ App version lives in `src/app/config/releaseNotes.ts` (`APP_VERSION`).
 
 ## Product areas
 
-| Area | What it does |
-| ---- | ------------ |
-| **Home** | Attention band (conflicts, ready-to-invoice, ready-to-verify Accounting), week overview |
-| **Jobs** | Job list + inspector: bookings, offers, invoice, **Accounting** (ledger, Conta suggestions / invoice lines, verify) |
-| **Calendar** | Company schedule for jobs, crew, and resources |
-| **Crew** | People, roles, rates; freelancers can store **org number** for Conta expense matching |
-| **Inventory / Vehicles** | Stock, groups, fleet; booking against jobs |
-| **Customers** | Customer records and Conta customer linking |
-| **Reporting** | Job / customer profitability, utilization, monthly trends; charts/KPIs use **verified** Accounting |
-| **Logging** | Time entries |
-| **Matters** | Internal notes / discussion |
-| **Company** | Company profile, rates, expansions (Conta org), logs |
-| **Profile / Super** | Personal settings; superuser company/user tools |
+| Area                     | What it does                                                                                                        |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **Home**                 | Attention band (conflicts, ready-to-invoice, ready-to-verify Accounting), week overview                             |
+| **Jobs**                 | Job list + inspector: bookings, offers, invoice, **Accounting** (ledger, Conta suggestions / invoice lines, verify) |
+| **Calendar**             | Company schedule for jobs, crew, and resources                                                                      |
+| **Crew**                 | People, roles, rates; freelancers can store **org number** for Conta expense matching                               |
+| **Inventory / Vehicles** | Stock, groups, fleet; booking against jobs                                                                          |
+| **Customers**            | Customer records and Conta customer linking                                                                         |
+| **Reporting**            | Job / customer profitability, utilization, monthly trends; charts/KPIs use **verified** Accounting                  |
+| **Logging**              | Time entries                                                                                                        |
+| **Matters**              | Internal notes / discussion                                                                                         |
+| **Company**              | Company profile, rates, expansions (Conta org), logs                                                                |
+| **Profile / Super**      | Personal settings; superuser company/user tools                                                                     |
 
 ### Accounting & Conta (high level)
 
@@ -34,11 +34,11 @@ React 19 + TypeScript + Vite · TanStack Query / Router · Radix Themes · Supab
 
 ## Environments
 
-| Env | Use |
-| --- | --- |
-| **Prod** | `main` → Vercel Production → [gridsolutions.app](https://gridsolutions.app) · Prod Supabase only |
-| **Dev** | Hosted Dev Supabase · cloud agents / `npm run db:switch:dev` · Preview env must **not** use Prod |
-| **Preview** | Feature branches / PRs → Vercel Preview URLs |
+| Env         | Use                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------ |
+| **Prod**    | `main` → Vercel Production → [gridsolutions.app](https://gridsolutions.app) · Prod Supabase only |
+| **Dev**     | Hosted Dev Supabase · cloud agents / `npm run db:switch:dev` · Preview env must **not** use Prod |
+| **Preview** | Feature branches / PRs → Vercel Preview URLs                                                     |
 
 Details: `ENVIRONMENT_SETUP.md`, `DEPLOYMENT_WORKFLOW.md`, `VERCEL_DEPLOYMENTS.md`.
 
@@ -80,14 +80,14 @@ See `GITHUB_ISSUES.md` and `.cursor/rules/git-workflow.mdc`. Do not commit or pu
 
 ## Docs map
 
-| Doc | Topic |
-| --- | ----- |
-| `AGENTS.md` | Hard gates for AI agents |
-| `ENVIRONMENT_SETUP.md` | Secrets, Dev vs Prod |
-| `DEPLOYMENT_WORKFLOW.md` | Vercel + migration timing |
-| `CONTRIBUTING.md` | Migrations + RLS |
-| `GITHUB_ISSUES.md` | Issues / branches / commits |
-| `docs/TESTING.md` | Tests |
-| `QUICK_START.md` | Short setup notes |
+| Doc                      | Topic                       |
+| ------------------------ | --------------------------- |
+| `AGENTS.md`              | Hard gates for AI agents    |
+| `ENVIRONMENT_SETUP.md`   | Secrets, Dev vs Prod        |
+| `DEPLOYMENT_WORKFLOW.md` | Vercel + migration timing   |
+| `CONTRIBUTING.md`        | Migrations + RLS            |
+| `GITHUB_ISSUES.md`       | Issues / branches / commits |
+| `docs/TESTING.md`        | Tests                       |
+| `QUICK_START.md`         | Short setup notes           |
 
 Private — all rights reserved. Built for Ekte Lyd AS.

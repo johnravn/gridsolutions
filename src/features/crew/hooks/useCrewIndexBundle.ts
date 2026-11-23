@@ -1,11 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import {
-  
-  
-  crewIndexQuery,
-  pendingInvitesQuery
-} from '../api/queries'
-import type {CrewPerson, PendingInvite} from '../api/queries';
+import { crewIndexQuery, pendingInvitesQuery } from '../api/queries'
+import type { CrewPerson, PendingInvite } from '../api/queries'
 
 export type CrewIndexBundle = {
   employees: Array<CrewPerson>

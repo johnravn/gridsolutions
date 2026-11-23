@@ -36,8 +36,7 @@ const EMPLOYEE_EMAIL = 'employee@test.grid.local'
  * Dev Auth is a separate user store — Prod password does NOT apply here.
  * Override password with DEV_JOHN_PASSWORD if desired.
  */
-const JOHN_DEV_EMAIL =
-  process.env.DEV_JOHN_EMAIL ?? 'john.ravndal@gmail.com'
+const JOHN_DEV_EMAIL = process.env.DEV_JOHN_EMAIL ?? 'john.ravndal@gmail.com'
 const JOHN_DEV_PASSWORD = process.env.DEV_JOHN_PASSWORD ?? 'TestPassword123!'
 const JOHN_DEV_NAME = 'John Ravndal'
 
@@ -113,15 +112,13 @@ loadEnvLocalFile()
 const loaded = loadLocalSupabaseEnv()
 
 const SUPABASE_URL =
-  loaded?.url ??
-  process.env.SUPABASE_URL ??
-  process.env.VITE_SUPABASE_URL ??
-  ''
+  loaded?.url ?? process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? ''
 const SERVICE_ROLE_KEY =
   loaded?.serviceRoleKey ?? process.env.SUPABASE_SERVICE_ROLE_KEY
 const PROJECT_REF =
   process.env.SUPABASE_PROJECT_REF ??
-  (SUPABASE_URL.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i)?.[1] ?? '')
+  SUPABASE_URL.match(/https?:\/\/([a-z0-9]+)\.supabase\.co/i)?.[1] ??
+  ''
 
 if (!SERVICE_ROLE_KEY || !SUPABASE_URL) {
   throw new Error(
@@ -138,7 +135,10 @@ if (
   )
 }
 
-if (!SUPABASE_URL.includes('.supabase.co') && !SUPABASE_URL.includes('127.0.0.1')) {
+if (
+  !SUPABASE_URL.includes('.supabase.co') &&
+  !SUPABASE_URL.includes('127.0.0.1')
+) {
   console.warn(
     `Warning: unexpected Supabase URL host — expected hosted Dev or local. Continuing because URL is not Prod.`,
   )
@@ -345,12 +345,28 @@ function buildJobCatalog() {
 
   // Invoiced/paid unverified → Accounting ready-to-verify queue
   const unverifiedSpecs = [
-    { title: 'Unverified Invoice — Opera Gala', status: 'invoiced', monthsAgo: 1 },
-    { title: 'Unverified Invoice — Corporate Townhall', status: 'invoiced', monthsAgo: 2 },
+    {
+      title: 'Unverified Invoice — Opera Gala',
+      status: 'invoiced',
+      monthsAgo: 1,
+    },
+    {
+      title: 'Unverified Invoice — Corporate Townhall',
+      status: 'invoiced',
+      monthsAgo: 2,
+    },
     { title: 'Unverified Paid — Outdoor Stage', status: 'paid', monthsAgo: 3 },
     { title: 'Unverified Paid — Conference AV', status: 'paid', monthsAgo: 4 },
-    { title: 'Unverified Invoice — Theatre Tour', status: 'invoiced', monthsAgo: 5 },
-    { title: 'Unverified Paid — Brand Activation', status: 'paid', monthsAgo: 6 },
+    {
+      title: 'Unverified Invoice — Theatre Tour',
+      status: 'invoiced',
+      monthsAgo: 5,
+    },
+    {
+      title: 'Unverified Paid — Brand Activation',
+      status: 'paid',
+      monthsAgo: 6,
+    },
   ]
   for (const spec of unverifiedSpecs) {
     const start = new Date()
@@ -406,7 +422,11 @@ function buildJobCatalog() {
     { title: 'Requested Lead — Museum Install', status: 'requested', days: 25 },
     { title: 'Planned — City Square Concert', status: 'planned', days: 14 },
     { title: 'Confirmed — Sports Arena', status: 'confirmed', days: 10 },
-    { title: 'In Progress — Nightclub Residency', status: 'in_progress', days: -1 },
+    {
+      title: 'In Progress — Nightclub Residency',
+      status: 'in_progress',
+      days: -1,
+    },
     { title: 'Canceled — Rainout Outdoor', status: 'canceled', days: -20 },
     { title: 'Search Alpha — Nordlys Stage', status: 'confirmed', days: 21 },
     { title: 'Search Beta — Fjord Film Shoot', status: 'planned', days: 28 },
@@ -601,11 +621,7 @@ async function seedJobs(jobs, ownerId, employeeId) {
     const queueJob =
       job.status === 'completed' ||
       ((job.status === 'invoiced' || job.status === 'paid') && !job.verified)
-    const lead = queueJob
-      ? ownerId
-      : job.jobnr % 7 === 0
-        ? employeeId
-        : ownerId
+    const lead = queueJob ? ownerId : job.jobnr % 7 === 0 ? employeeId : ownerId
     const { error } = await admin.from('jobs').upsert(
       {
         id: job.id,
@@ -999,12 +1015,7 @@ async function main() {
   const moneyCount = await seedMoneyItems(jobs)
   const verifiedCount = await applyMoneyVerified(jobs, ownerId)
 
-  const crewUserIds = [
-    freelancerId,
-    employeeId,
-    ownerId,
-    ...extraFreelancerIds,
-  ]
+  const crewUserIds = [freelancerId, employeeId, ownerId, ...extraFreelancerIds]
   const bookingCount = await seedCrewBookings(jobs, crewUserIds, ownerId)
   const invoiceCount = await seedJobInvoices(jobs, ownerId)
   const timeEntryCount = await seedTimeEntries(jobs, [
@@ -1030,10 +1041,14 @@ async function main() {
   console.log(`  Crew bookings:           ${bookingCount}`)
   console.log(`  Conta-linked invoices:   ${invoiceCount}`)
   console.log(`  Time entries:            ${timeEntryCount}`)
-  console.log(`  Extra freelancers:       ${IDS.freelancers.length} (with vat_number)`)
+  console.log(
+    `  Extra freelancers:       ${IDS.freelancers.length} (with vat_number)`,
+  )
   console.log(`  Ready-to-invoice (seed): ${readyToInvoice}`)
   console.log(`  Ready-to-verify (seed):  ${readyToVerify}`)
-  console.log(`  Company totals — jobs: ${companyJobs}, money: ${companyMoney}, customers: ${companyCustomers}`)
+  console.log(
+    `  Company totals — jobs: ${companyJobs}, money: ${companyMoney}, customers: ${companyCustomers}`,
+  )
   console.log(`  Test login: ${OWNER_EMAIL} / TestPassword123!`)
   console.log(
     `  John login (Dev Auth): ${JOHN_DEV_EMAIL} / ${JOHN_DEV_PASSWORD}`,

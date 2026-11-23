@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <link
       rel="icon"
@@ -55,8 +55,115 @@
         }
       })
     </script>
-    <script type="module" crossorigin src="/assets/index-C6zA5b0T.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-B2FwOm9K.css">
+    <script>
+      // Boot watchdog: if a controlling SW leaves us with an empty #root
+      // (stale precache → 404 hashed assets), unregister + clear caches once.
+      // Does not depend on the main module bundle loading.
+      ;(function gridBootRecovery() {
+        var RECOVERY_KEY = 'grid-sw-boot-recovery'
+        var BOOTED_ATTR = 'data-grid-booted'
+        // Main bundle is multi-MB; keep this well above a slow Safari parse.
+        var WAIT_MS = 20000
+        var sawAssetScriptError = false
+
+        function alreadyRecovered() {
+          try {
+            return sessionStorage.getItem(RECOVERY_KEY) === '1'
+          } catch (e) {
+            return false
+          }
+        }
+
+        function markRecovered() {
+          try {
+            sessionStorage.setItem(RECOVERY_KEY, '1')
+          } catch (e) {
+            // ignore
+          }
+        }
+
+        function rootIsEmpty() {
+          var root = document.getElementById('root')
+          return !root || !root.hasChildNodes()
+        }
+
+        function appBooted() {
+          return document.documentElement.getAttribute(BOOTED_ATTR) === '1'
+        }
+
+        function hasFailedAssetScript() {
+          if (sawAssetScriptError) return true
+          if (!window.performance || !performance.getEntriesByType) return false
+          var entries = performance.getEntriesByType('resource')
+          for (var i = 0; i < entries.length; i++) {
+            var e = entries[i]
+            if (e.name.indexOf('/assets/') === -1) continue
+            if (!/\.(js|mjs)(\?|$)/.test(e.name)) continue
+            // transferSize 0 + decodedBodySize 0 often means failed/blocked fetch
+            if (
+              typeof e.transferSize === 'number' &&
+              e.transferSize === 0 &&
+              typeof e.decodedBodySize === 'number' &&
+              e.decodedBodySize === 0 &&
+              e.duration > 0
+            ) {
+              return true
+            }
+          }
+          return false
+        }
+
+        function recover() {
+          if (alreadyRecovered() || appBooted() || !rootIsEmpty()) return
+          if (!('serviceWorker' in navigator)) return
+          if (!navigator.serviceWorker.controller) return
+          if (!hasFailedAssetScript()) return
+
+          markRecovered()
+          var done = function () {
+            window.location.reload()
+          }
+          var clearCaches = function () {
+            if (!('caches' in window)) return Promise.resolve()
+            return caches.keys().then(function (keys) {
+              return Promise.all(
+                keys.map(function (k) {
+                  return caches.delete(k)
+                }),
+              )
+            })
+          }
+          navigator.serviceWorker
+            .getRegistrations()
+            .then(function (regs) {
+              return Promise.all(
+                regs.map(function (r) {
+                  return r.unregister()
+                }),
+              )
+            })
+            .then(clearCaches)
+            .then(done)
+            .catch(done)
+        }
+
+        window.setTimeout(recover, WAIT_MS)
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            var t = event && event.target
+            if (!t || t.tagName !== 'SCRIPT') return
+            if (!t.src || t.src.indexOf('/assets/') === -1) return
+            sawAssetScriptError = true
+            recover()
+          },
+          true,
+        )
+      })()
+    </script>
+    <script type="module" crossorigin src="/assets/index-CzrZ75fx.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BeXvO5kJ.css">
   </head>
   <body>
     <div id="root"></div>

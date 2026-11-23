@@ -125,9 +125,7 @@ describe('ConflictScrollCard', () => {
     if (!item) throw new Error('expected conflict card')
     renderWithProviders(<ConflictScrollCard item={item} />)
 
-    expect(
-      screen.getByText('Unresolved · Equipment group'),
-    ).toBeInTheDocument()
+    expect(screen.getByText('Unresolved · Equipment group')).toBeInTheDocument()
     expect(screen.getByText('Vocal package')).toBeInTheDocument()
   })
 })

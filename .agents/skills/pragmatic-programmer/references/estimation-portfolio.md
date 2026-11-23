@@ -3,6 +3,7 @@
 Deep reference for reliable estimation techniques and continuous learning strategies. Load when guidance is needed on project estimation, PERT analysis, or managing a developer's knowledge portfolio.
 
 ## Table of Contents
+
 1. [How to Estimate](#how-to-estimate)
 2. [Understanding Scope](#understanding-scope)
 3. [Building a Model](#building-a-model)
@@ -22,13 +23,13 @@ Estimation is the pragmatic programmer's most valuable communication skill. A go
 
 Before estimating anything, ask: **"What is this estimate for?"** The answer determines the precision required:
 
-| Context | Precision Needed | Appropriate Format |
-|---------|-----------------|-------------------|
+| Context                     | Precision Needed   | Appropriate Format         |
+| --------------------------- | ------------------ | -------------------------- |
 | Budget planning (next year) | Order of magnitude | "6 months, give or take 3" |
-| Quarterly planning | Weeks | "4-8 weeks" |
-| Sprint planning | Days | "3-5 days" |
-| Daily standup | Hours | "About 4 hours remaining" |
-| Production incident | Minutes | "ETA: 30-60 minutes" |
+| Quarterly planning          | Weeks              | "4-8 weeks"                |
+| Sprint planning             | Days               | "3-5 days"                 |
+| Daily standup               | Hours              | "About 4 hours remaining"  |
+| Production incident         | Minutes            | "ETA: 30-60 minutes"       |
 
 **Key insight:** Stating "it'll take 2 weeks" for a quarterly planning exercise implies false precision. Stating "1-3 weeks" is more honest and more useful.
 
@@ -36,12 +37,12 @@ Before estimating anything, ask: **"What is this estimate for?"** The answer det
 
 Choose units that convey the right level of uncertainty:
 
-| Estimate | What the Listener Hears |
-|----------|------------------------|
-| "128 hours" | "They calculated this precisely; it should be exactly 128 hours" |
-| "About 3 weeks" | "Roughly 3 weeks, could be 2-4" |
-| "1-2 months" | "It's a big effort with meaningful uncertainty" |
-| "6 months, give or take" | "We're really not sure; this is a rough order of magnitude" |
+| Estimate                 | What the Listener Hears                                          |
+| ------------------------ | ---------------------------------------------------------------- |
+| "128 hours"              | "They calculated this precisely; it should be exactly 128 hours" |
+| "About 3 weeks"          | "Roughly 3 weeks, could be 2-4"                                  |
+| "1-2 months"             | "It's a big effort with meaningful uncertainty"                  |
+| "6 months, give or take" | "We're really not sure; this is a rough order of magnitude"      |
 
 Use the roughest unit that matches your actual confidence level.
 
@@ -53,25 +54,25 @@ The first step in any estimate is understanding what you're estimating. This sou
 
 ### Scope Clarification Questions
 
-| Question | Why It Matters |
-|----------|---------------|
-| What's included? | "Build a login page" -- does that include password reset? OAuth? 2FA? |
-| What's excluded? | Explicit exclusions prevent scope creep after estimation |
-| What can I assume? | "Can I use an existing component library or build from scratch?" |
-| What's the quality bar? | MVP vs. production-hardened vs. enterprise-grade |
-| Who's the audience? | Internal tool vs. public-facing vs. API for partners |
-| What are the dependencies? | "I need the design team to deliver mocks first" |
+| Question                   | Why It Matters                                                        |
+| -------------------------- | --------------------------------------------------------------------- |
+| What's included?           | "Build a login page" -- does that include password reset? OAuth? 2FA? |
+| What's excluded?           | Explicit exclusions prevent scope creep after estimation              |
+| What can I assume?         | "Can I use an existing component library or build from scratch?"      |
+| What's the quality bar?    | MVP vs. production-hardened vs. enterprise-grade                      |
+| Who's the audience?        | Internal tool vs. public-facing vs. API for partners                  |
+| What are the dependencies? | "I need the design team to deliver mocks first"                       |
 
 ### The Scope Multiplier Table
 
 The same feature at different quality levels:
 
-| Quality Level | Multiplier | Includes |
-|--------------|-----------|----------|
-| **Spike/Prototype** | 1x | Happy path only, no tests, no error handling |
-| **MVP** | 2-3x | Happy path + basic error handling + basic tests |
-| **Production-ready** | 4-6x | Full error handling, monitoring, tests, documentation |
-| **Enterprise-grade** | 8-12x | Security audit, compliance, HA, disaster recovery, SLA |
+| Quality Level        | Multiplier | Includes                                               |
+| -------------------- | ---------- | ------------------------------------------------------ |
+| **Spike/Prototype**  | 1x         | Happy path only, no tests, no error handling           |
+| **MVP**              | 2-3x       | Happy path + basic error handling + basic tests        |
+| **Production-ready** | 4-6x       | Full error handling, monitoring, tests, documentation  |
+| **Enterprise-grade** | 8-12x      | Security audit, compliance, HA, disaster recovery, SLA |
 
 A "login page" that takes 2 days as a prototype takes 8-12 days as production-ready. Make sure you and the stakeholder agree on the quality level before estimating.
 
@@ -95,11 +96,11 @@ Good estimates come from models, not gut feelings. A model breaks the work into 
 
 After building a model, sanity-check it:
 
-| Check | How |
-|-------|-----|
-| **Comparison** | "Is this estimate in the same ballpark as similar past work?" |
-| **Gut check** | "Does this feel right based on my experience?" |
-| **Peer review** | "Does another senior engineer agree with this estimate?" |
+| Check             | How                                                                            |
+| ----------------- | ------------------------------------------------------------------------------ |
+| **Comparison**    | "Is this estimate in the same ballpark as similar past work?"                  |
+| **Gut check**     | "Does this feel right based on my experience?"                                 |
+| **Peer review**   | "Does another senior engineer agree with this estimate?"                       |
 | **Boundary test** | "What's the absolute minimum time? What's the longest it could possibly take?" |
 
 ---
@@ -119,10 +120,10 @@ Standard Deviation = (Pessimistic - Optimistic) / 6
 
 Estimating a database migration:
 
-| Scenario | Value | Reasoning |
-|----------|-------|-----------|
-| **Optimistic (O)** | 3 days | Schema is simple, no data transformation needed |
-| **Most Likely (M)** | 7 days | Some data transformation, testing in staging |
+| Scenario            | Value   | Reasoning                                               |
+| ------------------- | ------- | ------------------------------------------------------- |
+| **Optimistic (O)**  | 3 days  | Schema is simple, no data transformation needed         |
+| **Most Likely (M)** | 7 days  | Some data transformation, testing in staging            |
 | **Pessimistic (P)** | 15 days | Complex data issues, rollback needed, multiple attempts |
 
 ```
@@ -136,13 +137,13 @@ Communicate: **"About 8 days, with a range of 6-10 days (one standard deviation)
 
 When estimating a project with multiple tasks, PERT each task separately, then sum:
 
-| Task | O | M | P | Expected | Std Dev |
-|------|---|---|---|----------|---------|
-| Schema design | 1 | 2 | 5 | 2.3 | 0.7 |
-| Migration script | 2 | 4 | 8 | 4.3 | 1.0 |
-| Testing | 1 | 3 | 7 | 3.3 | 1.0 |
-| Rollback plan | 0.5 | 1 | 3 | 1.3 | 0.4 |
-| **Total** | | | | **11.2** | **1.6** |
+| Task             | O   | M   | P   | Expected | Std Dev |
+| ---------------- | --- | --- | --- | -------- | ------- |
+| Schema design    | 1   | 2   | 5   | 2.3      | 0.7     |
+| Migration script | 2   | 4   | 8   | 4.3      | 1.0     |
+| Testing          | 1   | 3   | 7   | 3.3      | 1.0     |
+| Rollback plan    | 0.5 | 1   | 3   | 1.3      | 0.4     |
+| **Total**        |     |     |     | **11.2** | **1.6** |
 
 Total standard deviation for independent tasks: `sqrt(0.7² + 1.0² + 1.0² + 0.4²) = sqrt(0.49 + 1.0 + 1.0 + 0.16) = sqrt(2.65) ≈ 1.6 days`
 
@@ -191,12 +192,12 @@ Total estimate: 12 days
 
 ### Buffer Strategy
 
-| Buffer Type | Amount | Rationale |
-|-------------|--------|-----------|
-| **Task buffer** | +20% per task | Unknown unknowns within the task |
-| **Integration buffer** | +10-20% of total | Time to connect components |
-| **Risk buffer** | +10-30% based on novelty | New tech, new domain, new team |
-| **Communication buffer** | +10% | Meetings, reviews, decisions |
+| Buffer Type              | Amount                   | Rationale                        |
+| ------------------------ | ------------------------ | -------------------------------- |
+| **Task buffer**          | +20% per task            | Unknown unknowns within the task |
+| **Integration buffer**   | +10-20% of total         | Time to connect components       |
+| **Risk buffer**          | +10-30% based on novelty | New tech, new domain, new team   |
+| **Communication buffer** | +10%                     | Meetings, reviews, decisions     |
 
 **Total project buffer** typically ranges from 30-50% on top of raw task estimates. This isn't padding -- it's realism.
 
@@ -210,72 +211,72 @@ The secret to getting better at estimation: **track your accuracy and adjust.**
 
 Keep a simple log:
 
-| Date | Task | Estimate | Actual | Ratio | Notes |
-|------|------|----------|--------|-------|-------|
-| Jan 5 | Payment integration | 5 days | 8 days | 1.6x | Underestimated API complexity |
-| Jan 15 | User dashboard | 3 days | 2.5 days | 0.8x | Reused more components than expected |
-| Jan 22 | Data migration | 2 days | 6 days | 3.0x | Unexpected data quality issues |
+| Date   | Task                | Estimate | Actual   | Ratio | Notes                                |
+| ------ | ------------------- | -------- | -------- | ----- | ------------------------------------ |
+| Jan 5  | Payment integration | 5 days   | 8 days   | 1.6x  | Underestimated API complexity        |
+| Jan 15 | User dashboard      | 3 days   | 2.5 days | 0.8x  | Reused more components than expected |
+| Jan 22 | Data migration      | 2 days   | 6 days   | 3.0x  | Unexpected data quality issues       |
 
 ### Calibration Metrics
 
 After 20+ entries, calculate:
 
-| Metric | What It Tells You |
-|--------|------------------|
-| **Average ratio** | Your systematic bias (>1 = underestimate, <1 = overestimate) |
-| **Standard deviation** | Your consistency (lower = more reliable) |
+| Metric                   | What It Tells You                                                  |
+| ------------------------ | ------------------------------------------------------------------ |
+| **Average ratio**        | Your systematic bias (>1 = underestimate, <1 = overestimate)       |
+| **Standard deviation**   | Your consistency (lower = more reliable)                           |
 | **Pattern by task type** | Where you're consistently wrong (always underestimate infra work?) |
-| **Trend over time** | Are you getting better? |
+| **Trend over time**      | Are you getting better?                                            |
 
 If your average ratio is 1.5x, multiply all future estimates by 1.5 until you recalibrate.
 
 ### Common Estimation Biases
 
-| Bias | Description | Fix |
-|------|-------------|-----|
-| **Optimism** | Assuming best case | Use PERT to force pessimistic thinking |
-| **Anchoring** | First number heard dominates | Estimate independently before discussing |
-| **Planning fallacy** | Ignoring past overruns | Consult your estimation log |
-| **Scope neglect** | Forgetting testing, deployment, documentation | Use a checklist of "hidden" work |
-| **Confidence bias** | Being too sure of your estimate | Always provide ranges |
+| Bias                 | Description                                   | Fix                                      |
+| -------------------- | --------------------------------------------- | ---------------------------------------- |
+| **Optimism**         | Assuming best case                            | Use PERT to force pessimistic thinking   |
+| **Anchoring**        | First number heard dominates                  | Estimate independently before discussing |
+| **Planning fallacy** | Ignoring past overruns                        | Consult your estimation log              |
+| **Scope neglect**    | Forgetting testing, deployment, documentation | Use a checklist of "hidden" work         |
+| **Confidence bias**  | Being too sure of your estimate               | Always provide ranges                    |
 
 ---
 
 ## Knowledge Portfolio Management
 
-Hunt and Thomas argue that your knowledge and experience are your most important professional assets -- and they're *expiring* assets. Technology changes. What you know today becomes obsolete.
+Hunt and Thomas argue that your knowledge and experience are your most important professional assets -- and they're _expiring_ assets. Technology changes. What you know today becomes obsolete.
 
 ### The Portfolio Analogy
 
 Manage your knowledge like a financial portfolio:
 
-| Financial Principle | Knowledge Equivalent |
-|--------------------|---------------------|
-| **Invest regularly** | Learn something every week, even when busy |
-| **Diversify** | Don't only learn your current stack; explore adjacent areas |
-| **Manage risk** | Mix safe investments (deepen expertise) with speculative ones (learn something wild) |
-| **Buy low, sell high** | Learn emerging technologies early, before they're mainstream |
-| **Review and rebalance** | Periodically assess what you know and identify gaps |
+| Financial Principle      | Knowledge Equivalent                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| **Invest regularly**     | Learn something every week, even when busy                                           |
+| **Diversify**            | Don't only learn your current stack; explore adjacent areas                          |
+| **Manage risk**          | Mix safe investments (deepen expertise) with speculative ones (learn something wild) |
+| **Buy low, sell high**   | Learn emerging technologies early, before they're mainstream                         |
+| **Review and rebalance** | Periodically assess what you know and identify gaps                                  |
 
 ### Practical Investment Strategies
 
-| Strategy | Time Commitment | Example |
-|----------|----------------|---------|
-| **Learn a new language every year** | 2 hours/week for 3 months | Learn Rust if you're a Python developer |
-| **Read a technical book every quarter** | 30 min/day | One book on architecture, one on a new domain |
-| **Take a course or workshop** | 1 day/quarter | Online course, conference workshop |
-| **Participate in open source** | 2 hours/week | Contribute to a project outside your comfort zone |
-| **Attend user groups or meetups** | 2 hours/month | Learn what other people are building and how |
-| **Experiment with different environments** | 1 day/quarter | Try Windows if you use macOS; try Linux if you use Windows |
-| **Stay current** | 15 min/day | Read technical newsletters, blogs, papers |
+| Strategy                                   | Time Commitment           | Example                                                    |
+| ------------------------------------------ | ------------------------- | ---------------------------------------------------------- |
+| **Learn a new language every year**        | 2 hours/week for 3 months | Learn Rust if you're a Python developer                    |
+| **Read a technical book every quarter**    | 30 min/day                | One book on architecture, one on a new domain              |
+| **Take a course or workshop**              | 1 day/quarter             | Online course, conference workshop                         |
+| **Participate in open source**             | 2 hours/week              | Contribute to a project outside your comfort zone          |
+| **Attend user groups or meetups**          | 2 hours/month             | Learn what other people are building and how               |
+| **Experiment with different environments** | 1 day/quarter             | Try Windows if you use macOS; try Linux if you use Windows |
+| **Stay current**                           | 15 min/day                | Read technical newsletters, blogs, papers                  |
 
 ### The Portfolio Balance
 
-| Category | Investment | Examples |
-|----------|-----------|---------|
-| **Core expertise (50%)** | Deepen what you do daily | Advanced patterns in your primary language, deep database knowledge |
-| **Adjacent skills (30%)** | Expand your range | DevOps if you're a developer, UX if you're backend, security for everyone |
-| **Speculative bets (20%)** | Explore the frontier | New paradigms (functional, AI/ML, blockchain), new languages, new domains |
+| Category                   | Investment               | Examples                                                                  |
+| -------------------------- | ------------------------ | ------------------------------------------------------------------------- |
+| **Core expertise (50%)**   | Deepen what you do daily | Advanced patterns in your primary language, deep database knowledge       |
+| **Adjacent skills (30%)**  | Expand your range        | DevOps if you're a developer, UX if you're backend, security for everyone |
+| **Speculative bets (20%)** | Explore the frontier     | New paradigms (functional, AI/ML, blockchain), new languages, new domains |
 
 ---
 
@@ -285,13 +286,13 @@ The pragmatic programmer doesn't just consume knowledge -- they evaluate it crit
 
 ### Questions to Ask About What You Read and Hear
 
-| Question | Why It Matters |
-|----------|---------------|
-| **Who's saying it?** | A vendor promoting their own product has different motivations than an independent researcher |
-| **What's their context?** | "Microservices are the answer" -- at Google's scale, maybe. At your 5-person startup, probably not |
-| **When was it written?** | A 2015 article about JavaScript best practices may be obsolete |
-| **Why are they telling me this?** | Conference talks often promote the speaker's product or approach |
-| **What are the trade-offs?** | Every technique has downsides. If the source doesn't mention any, be skeptical |
+| Question                          | Why It Matters                                                                                     |
+| --------------------------------- | -------------------------------------------------------------------------------------------------- |
+| **Who's saying it?**              | A vendor promoting their own product has different motivations than an independent researcher      |
+| **What's their context?**         | "Microservices are the answer" -- at Google's scale, maybe. At your 5-person startup, probably not |
+| **When was it written?**          | A 2015 article about JavaScript best practices may be obsolete                                     |
+| **Why are they telling me this?** | Conference talks often promote the speaker's product or approach                                   |
+| **What are the trade-offs?**      | Every technique has downsides. If the source doesn't mention any, be skeptical                     |
 
 ### The "Works for Us" Fallacy
 
@@ -304,13 +305,13 @@ Just because Netflix uses microservices doesn't mean you should. Critical thinki
 
 ### Building a Bullshit Filter
 
-| Claim | Red Flag | Better Question |
-|-------|----------|----------------|
-| "X is dead" | Absolutism | "In what contexts is X still appropriate?" |
-| "Everyone is using Y" | Bandwagon | "What problem does Y solve that we actually have?" |
-| "Z scales to millions" | Irrelevant scale | "Does Z work well at our scale of thousands?" |
-| "You should always do W" | No nuance | "What are the trade-offs of W vs. alternatives?" |
-| "This is best practice" | Appeal to authority | "Best for whom, in what context, measured how?" |
+| Claim                    | Red Flag            | Better Question                                    |
+| ------------------------ | ------------------- | -------------------------------------------------- |
+| "X is dead"              | Absolutism          | "In what contexts is X still appropriate?"         |
+| "Everyone is using Y"    | Bandwagon           | "What problem does Y solve that we actually have?" |
+| "Z scales to millions"   | Irrelevant scale    | "Does Z work well at our scale of thousands?"      |
+| "You should always do W" | No nuance           | "What are the trade-offs of W vs. alternatives?"   |
+| "This is best practice"  | Appeal to authority | "Best for whom, in what context, measured how?"    |
 
 ### The Pragmatic Evaluation Framework
 

@@ -301,10 +301,12 @@ async function seedDemoCatalog(ownerId) {
     { id: DEMO_IDS.catCables, name: 'Cables & stands' },
   ]
   for (const cat of categories) {
-    const { error } = await admin.from('item_categories').upsert(
-      { id: cat.id, company_id: TEST_IDS.companyId, name: cat.name },
-      { onConflict: 'id' },
-    )
+    const { error } = await admin
+      .from('item_categories')
+      .upsert(
+        { id: cat.id, company_id: TEST_IDS.companyId, name: cat.name },
+        { onConflict: 'id' },
+      )
     if (error) throw error
   }
 
@@ -315,10 +317,12 @@ async function seedDemoCatalog(ownerId) {
     { id: DEMO_IDS.brandBlackmagic, name: 'Blackmagic' },
   ]
   for (const brand of brands) {
-    const { error } = await admin.from('item_brands').upsert(
-      { id: brand.id, company_id: TEST_IDS.companyId, name: brand.name },
-      { onConflict: 'id' },
-    )
+    const { error } = await admin
+      .from('item_brands')
+      .upsert(
+        { id: brand.id, company_id: TEST_IDS.companyId, name: brand.name },
+        { onConflict: 'id' },
+      )
     if (error) throw error
   }
 

@@ -3,6 +3,7 @@
 Deep reference for understanding and combating software entropy. Load when guidance is needed on technical debt, code quality culture, and strategies for maintaining clean codebases.
 
 ## Table of Contents
+
 1. [The Original Theory](#the-original-theory)
 2. [Software Entropy](#software-entropy)
 3. [Don't Live with Broken Windows](#dont-live-with-broken-windows)
@@ -28,12 +29,12 @@ Entropy is the tendency of systems toward disorder. In physics, it's a law. In s
 
 ### How Entropy Manifests in Code
 
-| Stage | Signs | Severity |
-|-------|-------|----------|
-| **Early decay** | A few TODO comments, one skipped test, a "temporary" workaround | Low -- easy to fix |
-| **Spreading neglect** | Growing list of known bugs, inconsistent naming, unused imports everywhere | Medium -- needs dedicated effort |
-| **Normalized deviance** | "That's just how this codebase is," copy-paste as standard practice, no code review standards | High -- requires culture change |
-| **Terminal entropy** | Nobody dares touch core modules, every change causes regressions, new features take 10x longer than expected | Critical -- rewrite may be cheaper |
+| Stage                   | Signs                                                                                                        | Severity                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------- |
+| **Early decay**         | A few TODO comments, one skipped test, a "temporary" workaround                                              | Low -- easy to fix                 |
+| **Spreading neglect**   | Growing list of known bugs, inconsistent naming, unused imports everywhere                                   | Medium -- needs dedicated effort   |
+| **Normalized deviance** | "That's just how this codebase is," copy-paste as standard practice, no code review standards                | High -- requires culture change    |
+| **Terminal entropy**    | Nobody dares touch core modules, every change causes regressions, new features take 10x longer than expected | Critical -- rewrite may be cheaper |
 
 ### The Entropy Acceleration Curve
 
@@ -79,13 +80,13 @@ The pragmatic programmer's prime directive for code quality: **don't leave broke
 
 Sometimes you genuinely can't fix a broken window immediately. In that case, **board it up** -- take some visible action to show it's being managed:
 
-| Action | How |
-|--------|-----|
-| **Create a ticket** | File a tracked issue with clear description and severity |
-| **Add a clear comment** | `# TECH-DEBT(JIRA-123): This needs refactoring because...` |
-| **Wrap it in a clean interface** | Put a well-designed adapter around the messy code |
-| **Disable the feature** | If it's broken, turn it off rather than shipping broken functionality |
-| **Add a failing test** | Document the expected behavior even if the implementation is wrong |
+| Action                           | How                                                                   |
+| -------------------------------- | --------------------------------------------------------------------- |
+| **Create a ticket**              | File a tracked issue with clear description and severity              |
+| **Add a clear comment**          | `# TECH-DEBT(JIRA-123): This needs refactoring because...`            |
+| **Wrap it in a clean interface** | Put a well-designed adapter around the messy code                     |
+| **Disable the feature**          | If it's broken, turn it off rather than shipping broken functionality |
+| **Add a failing test**           | Document the expected behavior even if the implementation is wrong    |
 
 The critical difference between a broken window and a boarded-up window: **visibility and intent.** A boarded-up window says "we know this is broken and we have a plan."
 
@@ -121,13 +122,13 @@ A frog placed in boiling water jumps out immediately. A frog placed in slowly he
 
 **Prevention:** Track quality metrics over time and set alerts for negative trends:
 
-| Metric | Healthy Trend | Alarm |
-|--------|---------------|-------|
-| Test coverage | Stable or increasing | Dropped 5%+ in a quarter |
-| Build time | Stable or decreasing | Increased 50%+ in 6 months |
-| Linting violations | Decreasing | Increasing quarter over quarter |
-| Cyclomatic complexity | Stable per module | New modules starting above threshold |
-| Deployment frequency | Stable or increasing | Decreasing (fear of deploying) |
+| Metric                    | Healthy Trend        | Alarm                                  |
+| ------------------------- | -------------------- | -------------------------------------- |
+| Test coverage             | Stable or increasing | Dropped 5%+ in a quarter               |
+| Build time                | Stable or decreasing | Increased 50%+ in 6 months             |
+| Linting violations        | Decreasing           | Increasing quarter over quarter        |
+| Cyclomatic complexity     | Stable per module    | New modules starting above threshold   |
+| Deployment frequency      | Stable or increasing | Decreasing (fear of deploying)         |
 | Time to resolve incidents | Stable or decreasing | Increasing (system is harder to debug) |
 
 ---
@@ -159,13 +160,13 @@ Don't rewrite the old system. Strangle it gradually:
 
 ### Leading by Example
 
-| Action | Impact |
-|--------|--------|
-| Write thorough tests in your PRs | Others see the standard and follow |
-| Add clear commit messages | Raises the bar for the whole team |
-| Document your architectural decisions | Creates a culture of documentation |
-| Refactor one thing in every PR | Normalizes continuous improvement |
-| Respond to broken windows in code review | Makes quality everyone's job |
+| Action                                   | Impact                             |
+| ---------------------------------------- | ---------------------------------- |
+| Write thorough tests in your PRs         | Others see the standard and follow |
+| Add clear commit messages                | Raises the bar for the whole team  |
+| Document your architectural decisions    | Creates a culture of documentation |
+| Refactor one thing in every PR           | Normalizes continuous improvement  |
+| Respond to broken windows in code review | Makes quality everyone's job       |
 
 ---
 
@@ -175,27 +176,27 @@ Don't rewrite the old system. Strangle it gradually:
 
 When reviewing code, look for these broken windows:
 
-| Category | Broken Window Signs |
-|----------|-------------------|
-| **Naming** | Variables named `x`, `temp`, `data`, `stuff`; misleading names; inconsistent conventions |
-| **Structure** | Functions > 50 lines; deeply nested logic; God classes with 20+ methods |
-| **Error handling** | Empty catch blocks; generic exception handling; errors swallowed silently |
-| **Tests** | No tests for new code; skipped tests; tests that test nothing meaningful |
-| **Dependencies** | Unused imports; outdated dependencies with known vulnerabilities |
-| **Duplication** | Copy-pasted blocks; same logic in multiple places |
-| **Comments** | Commented-out code; comments that contradict the code; "temporary" hacks from 2019 |
+| Category           | Broken Window Signs                                                                      |
+| ------------------ | ---------------------------------------------------------------------------------------- |
+| **Naming**         | Variables named `x`, `temp`, `data`, `stuff`; misleading names; inconsistent conventions |
+| **Structure**      | Functions > 50 lines; deeply nested logic; God classes with 20+ methods                  |
+| **Error handling** | Empty catch blocks; generic exception handling; errors swallowed silently                |
+| **Tests**          | No tests for new code; skipped tests; tests that test nothing meaningful                 |
+| **Dependencies**   | Unused imports; outdated dependencies with known vulnerabilities                         |
+| **Duplication**    | Copy-pasted blocks; same logic in multiple places                                        |
+| **Comments**       | Commented-out code; comments that contradict the code; "temporary" hacks from 2019       |
 
 ### Automated Detection
 
 Use tools to find broken windows automatically:
 
-| Tool Category | What It Catches |
-|---------------|----------------|
-| **Linters** (ESLint, Pylint, Clippy) | Style violations, unused variables, complexity |
+| Tool Category                                | What It Catches                                    |
+| -------------------------------------------- | -------------------------------------------------- |
+| **Linters** (ESLint, Pylint, Clippy)         | Style violations, unused variables, complexity     |
 | **Static analysis** (SonarQube, CodeClimate) | Duplication, cognitive complexity, security issues |
-| **Dependency scanners** (Dependabot, Snyk) | Outdated or vulnerable dependencies |
-| **Test coverage** (Istanbul, Coverage.py) | Untested code paths |
-| **Dead code detectors** (knip, vulture) | Unused exports, unreachable code |
+| **Dependency scanners** (Dependabot, Snyk)   | Outdated or vulnerable dependencies                |
+| **Test coverage** (Istanbul, Coverage.py)    | Untested code paths                                |
+| **Dead code detectors** (knip, vulture)      | Unused exports, unreachable code                   |
 
 ---
 
@@ -205,13 +206,13 @@ Use tools to find broken windows automatically:
 
 Not all broken windows are equally damaging. Prioritize:
 
-| Priority | Category | Rationale |
-|----------|----------|-----------|
-| **P0** | Security vulnerabilities | Active risk of exploitation |
-| **P1** | Data integrity issues | Silent corruption is worse than crashes |
-| **P2** | High-traffic code with poor error handling | Most likely to cause incidents |
-| **P3** | Core domain logic that's hard to understand | Slows down every feature |
-| **P4** | Cosmetic issues in rarely-touched code | Low impact, fix opportunistically |
+| Priority | Category                                    | Rationale                               |
+| -------- | ------------------------------------------- | --------------------------------------- |
+| **P0**   | Security vulnerabilities                    | Active risk of exploitation             |
+| **P1**   | Data integrity issues                       | Silent corruption is worse than crashes |
+| **P2**   | High-traffic code with poor error handling  | Most likely to cause incidents          |
+| **P3**   | Core domain logic that's hard to understand | Slows down every feature                |
+| **P4**   | Cosmetic issues in rarely-touched code      | Low impact, fix opportunistically       |
 
 ### The 20% Rule
 
@@ -229,13 +230,13 @@ The exact model doesn't matter as much as the commitment. Teams that spend 0% on
 
 ### Team Practices
 
-| Practice | How It Helps |
-|----------|-------------|
-| **"No broken windows" as a team value** | Gives everyone permission and responsibility to maintain quality |
-| **Tech debt tracking** | Makes broken windows visible to management and the team |
-| **Quality gates in CI** | Prevents new broken windows from merging |
-| **Blameless postmortems** | Focus on the system (the broken window), not the person |
-| **Celebrate cleanup** | Recognize engineers who fix broken windows, not just those who ship features |
+| Practice                                | How It Helps                                                                 |
+| --------------------------------------- | ---------------------------------------------------------------------------- |
+| **"No broken windows" as a team value** | Gives everyone permission and responsibility to maintain quality             |
+| **Tech debt tracking**                  | Makes broken windows visible to management and the team                      |
+| **Quality gates in CI**                 | Prevents new broken windows from merging                                     |
+| **Blameless postmortems**               | Focus on the system (the broken window), not the person                      |
+| **Celebrate cleanup**                   | Recognize engineers who fix broken windows, not just those who ship features |
 
 ### Definition of Done
 

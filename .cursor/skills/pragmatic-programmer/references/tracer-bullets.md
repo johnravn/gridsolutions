@@ -3,6 +3,7 @@
 Deep reference for two distinct approaches to uncertainty: tracer bullets (keep the code) and prototypes (throw it away). Load when guidance is needed on which approach to use and how to execute each.
 
 ## Table of Contents
+
 1. [The Tracer Bullet Metaphor](#the-tracer-bullet-metaphor)
 2. [Tracer Bullet Development](#tracer-bullet-development)
 3. [Prototyping](#prototyping)
@@ -30,13 +31,13 @@ A tracer bullet is a thin, end-to-end implementation that connects all the major
 
 ### Characteristics of Tracer Bullet Code
 
-| Property | Description |
-|----------|-------------|
-| **End-to-end** | Touches every layer: UI, API, business logic, data store |
-| **Functional** | Actually works, even if only for one scenario |
+| Property               | Description                                              |
+| ---------------------- | -------------------------------------------------------- |
+| **End-to-end**         | Touches every layer: UI, API, business logic, data store |
+| **Functional**         | Actually works, even if only for one scenario            |
 | **Production quality** | Written with proper error handling, tests, and structure |
-| **Incomplete** | Handles one path through the system, not all edge cases |
-| **Extensible** | Built as a framework that other features can fill in |
+| **Incomplete**         | Handles one path through the system, not all edge cases  |
+| **Extensible**         | Built as a framework that other features can fill in     |
 
 ### Example: Building a New Web Application
 
@@ -69,23 +70,23 @@ A prototype is a focused investigation of one specific aspect of the system. Unl
 
 ### What to Prototype
 
-| Aspect | Question It Answers |
-|--------|-------------------|
-| **Algorithm** | Is this approach fast enough? Does it produce correct results? |
-| **UI/UX** | Does this interaction model make sense to users? |
-| **Architecture** | Can these components communicate at the required scale? |
-| **Third-party tool** | Does this library/service meet our requirements? |
-| **Performance** | Can this database handle our query patterns at load? |
+| Aspect               | Question It Answers                                            |
+| -------------------- | -------------------------------------------------------------- |
+| **Algorithm**        | Is this approach fast enough? Does it produce correct results? |
+| **UI/UX**            | Does this interaction model make sense to users?               |
+| **Architecture**     | Can these components communicate at the required scale?        |
+| **Third-party tool** | Does this library/service meet our requirements?               |
+| **Performance**      | Can this database handle our query patterns at load?           |
 
 ### Characteristics of Prototype Code
 
-| Property | Description |
-|----------|-------------|
-| **Focused** | Explores one question, ignores everything else |
-| **Incomplete** | No error handling, no edge cases, no tests |
-| **Disposable** | Will be thrown away -- this must be explicit and agreed upon |
-| **Fast** | Built to answer a question quickly, not to last |
-| **Unrestricted** | Can use any language, tool, or shortcut |
+| Property         | Description                                                  |
+| ---------------- | ------------------------------------------------------------ |
+| **Focused**      | Explores one question, ignores everything else               |
+| **Incomplete**   | No error handling, no edge cases, no tests                   |
+| **Disposable**   | Will be thrown away -- this must be explicit and agreed upon |
+| **Fast**         | Built to answer a question quickly, not to last              |
+| **Unrestricted** | Can use any language, tool, or shortcut                      |
 
 ### What to Ignore When Prototyping
 
@@ -126,7 +127,7 @@ print("Similar users:", indices)
 print("Their top products:", matrix.iloc[indices[0]].sum().nlargest(10))
 ```
 
-This prototype answers: "Does collaborative filtering work with our data?" The code is not production-quality and should never ship. But the *learning* it produces guides the real implementation.
+This prototype answers: "Does collaborative filtering work with our data?" The code is not production-quality and should never ship. But the _learning_ it produces guides the real implementation.
 
 ---
 
@@ -134,15 +135,15 @@ This prototype answers: "Does collaborative filtering work with our data?" The c
 
 This is the critical distinction:
 
-| Aspect | Tracer Bullet | Prototype |
-|--------|--------------|-----------|
-| **Purpose** | Build the real framework, thin but complete | Explore a specific risk or question |
-| **Code quality** | Production quality | Throwaway quality |
-| **Scope** | End-to-end across all layers | Focused on one aspect or component |
-| **After completion** | Keep and extend | Throw away completely |
-| **Team visibility** | Shows real progress | Shows research findings |
-| **Risk addressed** | Integration risk, architectural unknowns | Technical feasibility, design questions |
-| **Deliverable** | Working (minimal) system | Knowledge and a decision |
+| Aspect               | Tracer Bullet                               | Prototype                               |
+| -------------------- | ------------------------------------------- | --------------------------------------- |
+| **Purpose**          | Build the real framework, thin but complete | Explore a specific risk or question     |
+| **Code quality**     | Production quality                          | Throwaway quality                       |
+| **Scope**            | End-to-end across all layers                | Focused on one aspect or component      |
+| **After completion** | Keep and extend                             | Throw away completely                   |
+| **Team visibility**  | Shows real progress                         | Shows research findings                 |
+| **Risk addressed**   | Integration risk, architectural unknowns    | Technical feasibility, design questions |
+| **Deliverable**      | Working (minimal) system                    | Knowledge and a decision                |
 
 ### Decision Guide
 
@@ -200,13 +201,13 @@ When a tracer bullet misses the target (stakeholders don't like what they see, p
 
 ### What "Missing" Looks Like
 
-| Miss Type | Symptom | Adjustment |
-|-----------|---------|------------|
-| Wrong feature | Users don't use it | Pivot to a different feature |
-| Wrong UX | Users are confused | Redesign the interaction model |
-| Wrong architecture | Performance is unacceptable | Restructure the layers |
-| Wrong technology | Library doesn't scale | Swap the component (orthogonality helps here) |
-| Wrong integration | Services don't coordinate well | Redesign the communication pattern |
+| Miss Type          | Symptom                        | Adjustment                                    |
+| ------------------ | ------------------------------ | --------------------------------------------- |
+| Wrong feature      | Users don't use it             | Pivot to a different feature                  |
+| Wrong UX           | Users are confused             | Redesign the interaction model                |
+| Wrong architecture | Performance is unacceptable    | Restructure the layers                        |
+| Wrong technology   | Library doesn't scale          | Swap the component (orthogonality helps here) |
+| Wrong integration  | Services don't coordinate well | Redesign the communication pattern            |
 
 The cost of each adjustment is low because you only built a thin slice. Compare this to building the full system and discovering at the end that the architecture is wrong.
 
@@ -235,17 +236,17 @@ The walking skeleton proves that your entire delivery pipeline works before you 
 
 ### Walking Skeleton Checklist
 
-| Component | Verification |
-|-----------|-------------|
-| Source control | Code is tracked, branches work, PRs are reviewed |
-| Build | `make build` (or equivalent) produces an artifact |
-| Unit tests | `make test` runs and passes (even with one trivial test) |
-| Integration tests | At least one test hits a real dependency |
-| Linting | Code style is enforced automatically |
-| Staging deploy | One command deploys to a staging environment |
-| Production deploy | Same pipeline deploys to production |
-| Monitoring | Logs are collected, metrics are reported |
-| Alerting | At least one alert fires on failure (health check) |
+| Component         | Verification                                             |
+| ----------------- | -------------------------------------------------------- |
+| Source control    | Code is tracked, branches work, PRs are reviewed         |
+| Build             | `make build` (or equivalent) produces an artifact        |
+| Unit tests        | `make test` runs and passes (even with one trivial test) |
+| Integration tests | At least one test hits a real dependency                 |
+| Linting           | Code style is enforced automatically                     |
+| Staging deploy    | One command deploys to a staging environment             |
+| Production deploy | Same pipeline deploys to production                      |
+| Monitoring        | Logs are collected, metrics are reported                 |
+| Alerting          | At least one alert fires on failure (health check)       |
 
 ---
 
@@ -256,6 +257,7 @@ The walking skeleton proves that your entire delivery pipeline works before you 
 The most dangerous mistake. A prototype is built quickly, stakeholders see it, love it, and demand it ship. The throwaway code becomes permanent.
 
 **Prevention:**
+
 - Write "PROTOTYPE - NOT FOR PRODUCTION" in the README, code comments, and PR description
 - Use a different repository or branch for prototypes
 - Present findings, not the code -- show screenshots, not live demos when possible

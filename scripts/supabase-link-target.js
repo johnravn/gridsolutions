@@ -41,11 +41,10 @@ console.log(
     : `Linking ${target} (${ref})`,
 )
 
-const result = spawnSync(
-  'npx',
-  ['supabase', 'link', '--project-ref', ref],
-  { stdio: 'inherit', shell: false },
-)
+const result = spawnSync('npx', ['supabase', 'link', '--project-ref', ref], {
+  stdio: 'inherit',
+  shell: false,
+})
 
 if (result.status !== 0) {
   process.exit(result.status ?? 1)
