@@ -71,21 +71,17 @@ export default defineConfig(({ mode }) => {
       viteReact(),
       tailwindcss(),
       VitePWA({
-        // autoUpdate: new SW skipWaiting + clientsClaim so a blank Safari tab
-        // (React dead → no SKIP_WAITING toast) can still take the update.
-        registerType: 'autoUpdate',
+        // prompt: waiting SW + onNeedRefresh toast → user Reload → updateSW(true).
+        // Blank Safari tabs are recovered by index.html boot watchdog (not
+        // autoUpdate), so we keep intentional reload UX without silent claim.
+        registerType: 'prompt',
         includeAssets: [
           'grid-icon-light.svg',
           'grid-icon-dark.svg',
           'icons/*.png',
-          'sw-update-reload.js',
         ],
         manifest: false,
         workbox: {
-          // Runs in the SW: reload open clients when replacing an older worker.
-          importScripts: ['/sw-update-reload.js'],
-          skipWaiting: true,
-          clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
           maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
           // SPA shell only for navigations — never for hashed assets / SW helpers.
