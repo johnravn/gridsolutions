@@ -2,6 +2,26 @@ import { Box, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { Community, Package, Truck } from 'iconoir-react'
 import type { JobBookingSummary } from '../utils/bookingSummary'
 
+/** Icon sized to Text size-1 line-height; gray balances muted crew copy. */
+function CrewRecapIcon() {
+  return (
+    <Box
+      style={{
+        flexShrink: 0,
+        color: 'var(--gray-11)',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 'var(--line-height-1)',
+        width: 14,
+      }}
+      aria-hidden
+    >
+      <Community width={14} height={14} strokeWidth={1.5} />
+    </Box>
+  )
+}
+
 export function JobBookingRecap({
   summary,
   loading,
@@ -62,9 +82,7 @@ export function JobBookingRecap({
         )}
         {summary.crewLabels.length > 0 && (
           <Flex align="center" gap="1" style={{ minWidth: 0 }}>
-            <Box style={{ flexShrink: 0, color: 'var(--accent-11)' }}>
-              <Community width={16} height={16} />
-            </Box>
+            <CrewRecapIcon />
             <Text size="1" color="gray" style={{ minWidth: 0 }}>
               {summary.crewLabels.join(', ')}
             </Text>
@@ -102,15 +120,7 @@ export function JobBookingRecap({
       )}
       {summary.crewLabels.length > 0 && (
         <Flex align="start" gap="1" style={{ minWidth: 0 }}>
-          <Box
-            style={{
-              flexShrink: 0,
-              color: 'var(--accent-11)',
-              marginTop: 2,
-            }}
-          >
-            <Community width={16} height={16} />
-          </Box>
+          <CrewRecapIcon />
           <Text size="1" color="gray" style={{ minWidth: 0 }}>
             Crew: {summary.crewLabels.join(', ')}
           </Text>
