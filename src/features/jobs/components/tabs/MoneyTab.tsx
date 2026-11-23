@@ -1257,7 +1257,21 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     <Box ref={accountingLayoutRef} style={{ maxWidth: '100%', minWidth: 0 }}>
       <Flex justify="between" align="center" mb="3" gap="3" wrap="wrap">
         <Heading size="3">Accounting</Heading>
-        <Flex align="center" gap="2" wrap="wrap">
+        <Flex align="center" gap="2" wrap="wrap" style={{ marginLeft: 'auto' }}>
+          {highConfidenceSuggestions.length > 0 && (
+            <Button
+              size="2"
+              variant="soft"
+              disabled={addAllHighConfidenceMutation.isPending}
+              onClick={() =>
+                addAllHighConfidenceMutation.mutate(highConfidenceSuggestions)
+              }
+            >
+              {addAllHighConfidenceMutation.isPending
+                ? 'Adding…'
+                : `Add all high-confidence (${highConfidenceSuggestions.length})`}
+            </Button>
+          )}
           <Flex align="center" gap="2">
             {moneyVerified ? (
               <Text size="2" color="gray" style={{ whiteSpace: 'nowrap' }}>
@@ -1300,20 +1314,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
               </Text>
             )}
           </Flex>
-          {highConfidenceSuggestions.length > 0 && (
-            <Button
-              size="2"
-              variant="soft"
-              disabled={addAllHighConfidenceMutation.isPending}
-              onClick={() =>
-                addAllHighConfidenceMutation.mutate(highConfidenceSuggestions)
-              }
-            >
-              {addAllHighConfidenceMutation.isPending
-                ? 'Adding…'
-                : `Add all high-confidence (${highConfidenceSuggestions.length})`}
-            </Button>
-          )}
         </Flex>
       </Flex>
 
