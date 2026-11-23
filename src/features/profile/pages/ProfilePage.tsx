@@ -35,8 +35,11 @@ import MapEmbed from '@shared/maps/MapEmbed' // <- ensure this path fits your pr
 import { NorwayZipCodeField } from '@shared/lib/NorwayZipCodeField'
 import { profilePageQuery } from '@features/profile/api/profileQuery'
 import {
+  
+  
+  
   prefsAsRecord,
-  saveProfilePage,
+  saveProfilePage
 } from '@features/profile/api/updateProfile'
 import { uploadAvatar } from '@features/profile/api/uploadAvatar'
 import ProfileAuthTab from '@features/profile/components/ProfileAuthTab'
@@ -48,11 +51,7 @@ import {
   DEFAULT_GEOMETRIC_BACKGROUND_PRESET,
   normalizeGeometricPreset,
 } from '@shared/ui/components/AnimatedBackground'
-import type {
-  ProfileAddressForm,
-  ProfilePageForm,
-  ProfilePreferencesFields,
-} from '@features/profile/api/updateProfile'
+import type {ProfileAddressForm, ProfilePageForm, ProfilePreferencesFields} from '@features/profile/api/updateProfile';
 import type { ProfilePersonalizationFormSlice } from '@features/profile/components/ProfilePersonalizationTab'
 
 const PROFILE_TABS = [

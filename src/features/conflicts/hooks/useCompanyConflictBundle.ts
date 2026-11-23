@@ -2,10 +2,14 @@ import * as React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useCompany } from '@shared/companies/CompanyProvider'
 import {
+  
+  
+  
+  
   crewConflictsQuery,
   equipmentConflictsQuery,
   groupConflictsQuery,
-  vehicleConflictsQuery,
+  vehicleConflictsQuery
 } from '../api/queries'
 import { conflictAttentionBounds } from '../utils/conflictAttentionBounds'
 import {
@@ -13,12 +17,7 @@ import {
   keepAttentionPairConflicts,
 } from '../utils/filterConflictsByProjectLead'
 import { buildConflictCards } from '../utils/conflictItems'
-import type {
-  CrewConflictRow,
-  EquipmentConflictRow,
-  GroupConflictRow,
-  VehicleConflictRow,
-} from '../api/queries'
+import type {CrewConflictRow, EquipmentConflictRow, GroupConflictRow, VehicleConflictRow} from '../api/queries';
 import type { ConflictCardItem } from '../utils/conflictItems'
 
 /**

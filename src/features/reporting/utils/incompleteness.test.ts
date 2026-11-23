@@ -81,6 +81,8 @@ describe('filterAccountingUnverifiedJobs', () => {
       { id: 'b', status: 'invoiced', money_verified: true },
       { id: 'c', status: 'completed', money_verified: false },
     ]
-    expect(filterAccountingUnverifiedJobs(rows).map((r) => r.id)).toEqual(['a'])
+    expect(filterAccountingUnverifiedJobs(rows).map((r) => r.id)).toEqual([
+      'a',
+    ])
   })
 })

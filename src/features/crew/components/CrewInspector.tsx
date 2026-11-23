@@ -527,9 +527,7 @@ export default function CrewInspector({
                   </Text>
                   <TextField.Root
                     value={vatNumber}
-                    onChange={(e) =>
-                      setVatNumber(formatVATInput(e.target.value))
-                    }
+                    onChange={(e) => setVatNumber(formatVATInput(e.target.value))}
                     placeholder="xxx xxx xxx"
                     inputMode="numeric"
                     autoComplete="off"

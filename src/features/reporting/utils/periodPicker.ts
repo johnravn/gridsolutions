@@ -1,5 +1,10 @@
-import { MONTH_OPTIONS, compareMonthYear, reportingYearOptions } from './dates'
-import type { MonthYear } from './dates'
+import {
+  MONTH_OPTIONS,
+  
+  compareMonthYear,
+  reportingYearOptions
+} from './dates'
+import type {MonthYear} from './dates';
 
 export type PeriodGranularity = 'month' | 'year'
 

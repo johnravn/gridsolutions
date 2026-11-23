@@ -12,7 +12,8 @@ export function JobStatusWithVerified({
   moneyVerified: boolean
 }) {
   const showNotVerified =
-    !moneyVerified && (displayStatus === 'paid' || displayStatus === 'invoiced')
+    !moneyVerified &&
+    (displayStatus === 'paid' || displayStatus === 'invoiced')
 
   return (
     <Flex gap="1" align="center" wrap="wrap" style={{ minWidth: 0 }}>

@@ -232,7 +232,8 @@ describe('buildCrewExpenseSuggestions', () => {
           date: '2026-03-11',
           transactionId: 1,
           transactionSourceType: 'REGISTER_PURCHASE',
-          externalUrl: 'https://app.conta.no/regnskap/o/bilag/1/rediger/kjop',
+          externalUrl:
+            'https://app.conta.no/regnskap/o/bilag/1/rediger/kjop',
         },
         {
           id: 2,

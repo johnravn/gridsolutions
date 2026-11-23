@@ -3,7 +3,10 @@ import { queryOptions } from '@tanstack/react-query'
 import { fetchAllInChunks } from '@shared/api/inFilterChunks'
 import { supabase } from '@shared/api/supabase'
 import { crewDisplayName } from '../utils/canFollowCrewUser'
-import { defaultCalendarWindow } from '../components/domain'
+import {
+  
+  defaultCalendarWindow
+} from '../components/domain'
 import {
   buildPendingInviteUserIdsByPeriod,
   companyCrewPeriodIsVisible,
@@ -15,7 +18,7 @@ import {
   isFreelancerVisibleCrewBooking,
 } from './freelancerCalendarVisibility'
 import { listPersonalCalendarEvents } from './personalCalendarEvents'
-import type { CalendarRecord } from '../components/domain'
+import type {CalendarRecord} from '../components/domain';
 
 /** Shared job-title lookup for entity calendars (vehicle/item/crew). */
 export async function fetchJobTitlesByIds(

@@ -3,7 +3,6 @@
 Deep reference for the two most foundational principles of pragmatic programming. Load when deeper guidance is needed on eliminating duplication and designing decoupled systems.
 
 ## Table of Contents
-
 1. [DRY: Knowledge, Not Code](#dry-knowledge-not-code)
 2. [The Four Types of Duplication](#the-four-types-of-duplication)
 3. [Detecting DRY Violations](#detecting-dry-violations)
@@ -54,13 +53,11 @@ Today these look the same, but billing validation and shipping validation are go
 The environment or tooling forces duplication.
 
 **Examples:**
-
 - Language requires header files that repeat function signatures
 - Multiple platforms need the same validation (iOS, Android, web)
 - API documentation must match the implementation
 
 **Mitigations:**
-
 - Generate code from a single source (OpenAPI -> client + server + docs)
 - Use code generation for cross-platform shared logic
 - Keep documentation in code (docstrings, annotations) and generate external docs
@@ -71,13 +68,11 @@ The environment or tooling forces duplication.
 Developers don't realize they're duplicating knowledge.
 
 **Examples:**
-
 - A `Line` class stores `start`, `end`, AND `length` -- length is derivable
 - The same business rule exists in the frontend form validation and the backend API
 - Configuration defaults are hard-coded in multiple services
 
 **Mitigations:**
-
 - Derive values instead of storing them: `@property def length(self): return self.end - self.start`
 - Share validation schemas between frontend and backend (e.g., Zod, JSON Schema)
 - Centralize configuration with a config service or shared env files
@@ -87,13 +82,11 @@ Developers don't realize they're duplicating knowledge.
 "I'll clean it up later." Developers know they're duplicating but choose speed.
 
 **Examples:**
-
 - Copy-pasting a utility function into a new service instead of extracting a shared library
 - Duplicating a SQL query with slight modifications instead of parameterizing
 - Hardcoding a value that already exists in a config file
 
 **Mitigations:**
-
 - Make the right thing easy: invest in shared libraries, package registries, and templates
 - Time-box the "right way" -- often it takes only 10 minutes more than copy-paste
 - Code review: flag copy-paste duplication as a blocker, not a nit
@@ -103,13 +96,11 @@ Developers don't realize they're duplicating knowledge.
 Multiple developers or teams unknowingly build the same thing.
 
 **Examples:**
-
 - Two teams build their own date-formatting utility
 - Three microservices each implement user authentication logic
 - Frontend and backend teams both build a currency formatter
 
 **Mitigations:**
-
 - Establish shared libraries and make them discoverable (internal package registry)
 - Regular cross-team architecture reviews
 - Appoint a "librarian" or use a tech radar to track shared concerns
@@ -121,22 +112,22 @@ Multiple developers or teams unknowingly build the same thing.
 
 ### Code-Level Signals
 
-| Signal                                                          | What It Suggests                  |
-| --------------------------------------------------------------- | --------------------------------- |
-| Shotgun surgery (changing one thing requires touching 5+ files) | Knowledge is scattered            |
-| "Find and replace" is your refactoring strategy                 | Same knowledge in multiple places |
-| Bug fix in one place doesn't fix it everywhere                  | Duplicated logic                  |
-| New developer asks "which one is the real one?"                 | Multiple sources of truth         |
-| Enum values are defined in both code and database               | Schema duplication                |
+| Signal | What It Suggests |
+|--------|-----------------|
+| Shotgun surgery (changing one thing requires touching 5+ files) | Knowledge is scattered |
+| "Find and replace" is your refactoring strategy | Same knowledge in multiple places |
+| Bug fix in one place doesn't fix it everywhere | Duplicated logic |
+| New developer asks "which one is the real one?" | Multiple sources of truth |
+| Enum values are defined in both code and database | Schema duplication |
 
 ### Architecture-Level Signals
 
-| Signal                                                        | What It Suggests          |
-| ------------------------------------------------------------- | ------------------------- |
+| Signal | What It Suggests |
+|--------|-----------------|
 | Multiple services validate the same business rule differently | Inter-service duplication |
-| Config values are hard-coded in multiple deployment scripts   | Imposed duplication       |
-| API documentation regularly drifts from implementation        | Docs/code duplication     |
-| "We need to update this in 3 places"                          | Knowledge not centralized |
+| Config values are hard-coded in multiple deployment scripts | Imposed duplication |
+| API documentation regularly drifts from implementation | Docs/code duplication |
+| "We need to update this in 3 places" | Knowledge not centralized |
 
 ---
 
@@ -170,12 +161,12 @@ The most common way to achieve orthogonality is through layers:
 
 ### Component Independence Checklist
 
-| Question                                                           | Good Answer                            |
-| ------------------------------------------------------------------ | -------------------------------------- |
-| Can I test this component in isolation?                            | Yes, with mocked dependencies          |
-| If I remove this component, what breaks?                           | Only things that directly depend on it |
-| Does this component know about the deployment environment?         | No, it receives config via injection   |
-| Can two developers work on separate components without conflicts?  | Yes, interfaces are stable             |
+| Question | Good Answer |
+|----------|-------------|
+| Can I test this component in isolation? | Yes, with mocked dependencies |
+| If I remove this component, what breaks? | Only things that directly depend on it |
+| Does this component know about the deployment environment? | No, it receives config via injection |
+| Can two developers work on separate components without conflicts? | Yes, interfaces are stable |
 | Does this component import from more than one architectural layer? | No, it depends only on the layer below |
 
 ---
@@ -230,12 +221,12 @@ class User:
 
 For any proposed change, count the number of modules affected:
 
-| Change Scope                           | Modules Affected                       | Assessment                                          |
-| -------------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| Fix a bug in tax calculation           | 1 (tax module)                         | Excellent orthogonality                             |
-| Change database from Postgres to MySQL | 1-2 (data layer)                       | Good orthogonality                                  |
-| Add a new field to user profile        | 3-5 (model, API, UI, migration, tests) | Acceptable (vertical feature)                       |
-| Change the logging library             | 15+ modules                            | Poor orthogonality -- logging is coupled everywhere |
+| Change Scope | Modules Affected | Assessment |
+|-------------|------------------|------------|
+| Fix a bug in tax calculation | 1 (tax module) | Excellent orthogonality |
+| Change database from Postgres to MySQL | 1-2 (data layer) | Good orthogonality |
+| Add a new field to user profile | 3-5 (model, API, UI, migration, tests) | Acceptable (vertical feature) |
+| Change the logging library | 15+ modules | Poor orthogonality -- logging is coupled everywhere |
 
 ### The "Stranger" Test
 
@@ -263,11 +254,11 @@ Could a developer unfamiliar with the codebase change one component without brea
 
 Orthogonality and DRY are multiplicative. A system that is both DRY and orthogonal sees dramatic improvements:
 
-| Property              | Without DRY/Orthogonality                       | With Both                      |
-| --------------------- | ----------------------------------------------- | ------------------------------ |
-| Bug fix time          | Hours (find all duplicates, test all couplings) | Minutes (one change, one test) |
-| Feature addition      | High risk of regressions                        | Localized, predictable impact  |
-| Onboarding time       | Weeks to understand dependencies                | Days to become productive      |
-| Deployment confidence | "Deploy and pray"                               | "Deploy and verify"            |
+| Property | Without DRY/Orthogonality | With Both |
+|----------|--------------------------|-----------|
+| Bug fix time | Hours (find all duplicates, test all couplings) | Minutes (one change, one test) |
+| Feature addition | High risk of regressions | Localized, predictable impact |
+| Onboarding time | Weeks to understand dependencies | Days to become productive |
+| Deployment confidence | "Deploy and pray" | "Deploy and verify" |
 
 The pragmatic programmer pursues both relentlessly -- not for theoretical purity, but because the compound effect saves enormous amounts of time and pain over the life of a project.

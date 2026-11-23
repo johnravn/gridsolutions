@@ -1,9 +1,9 @@
 # Vercel Deployments
 
-| Git ref                    | Vercel target  | URL                                                  |
-| -------------------------- | -------------- | ---------------------------------------------------- |
-| **`main`**                 | **Production** | [gridsolutions.app](https://gridsolutions.app)       |
-| **Feature branches / PRs** | **Preview**    | Per-deployment `*.vercel.app` URL (share for review) |
+| Git ref | Vercel target | URL |
+| ------- | ------------- | --- |
+| **`main`** | **Production** | [gridsolutions.app](https://gridsolutions.app) |
+| **Feature branches / PRs** | **Preview** | Per-deployment `*.vercel.app` URL (share for review) |
 
 Repo config (`vercel.json`) sets routes/headers/crons only — it does **not** disable Preview deployments. Pushing a non-`main` branch (or opening a PR) should create a Preview. GitHub Actions CI also runs on `pull_request`.
 

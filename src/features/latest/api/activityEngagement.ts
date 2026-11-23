@@ -2,7 +2,7 @@
 import { supabase } from '@shared/api/supabase'
 
 export async function fetchActivityEngagement(
-  activityIds: Array<string>,
+  activityIds: string[],
   currentUserId?: string,
 ): Promise<{
   likeCounts: Map<string, number>

@@ -339,11 +339,11 @@ The seed script uses the **system** `supabase` binary (not `node_modules/.bin/su
 
 Workflow: [`.github/workflows/ci.yml`](../.github/workflows/ci.yml)
 
-| Job         | Command                                                                              | Depends on |
-| ----------- | ------------------------------------------------------------------------------------ | ---------- |
-| Unit tests  | `npm run test`                                                                       | —          |
-| Build       | `npm run build:check`                                                                | —          |
-| Integration | `supabase start -x …,mailpit` → `db reset` → seed → `test:integration`               | unit       |
+| Job         | Command                                                                 | Depends on |
+| ----------- | ----------------------------------------------------------------------- | ---------- |
+| Unit tests  | `npm run test`                                                          | —          |
+| Build       | `npm run build:check`                                                   | —          |
+| Integration | `supabase start -x …,mailpit` → `db reset` → seed → `test:integration`  | unit       |
 | E2E         | `playwright install chromium` → `supabase start -x …,mailpit` → seed → `test:e2e:ci` | unit       |
 
 E2E runs **in parallel with integration** (separate runner). Slim suite: `@ci` tags on Chromium + `mobile-pwa` on mobile-chrome. Force full: `E2E_FULL=1`.
