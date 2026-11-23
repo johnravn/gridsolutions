@@ -14,7 +14,7 @@ const meta = {
     docs: {
       description: {
         component:
-          'Sharp geometric SVG backdrops (grid-slash, prism-bands, circuit, facet). Used on auth and optional app-shell personalization.',
+          'Neutral geometric SVG backdrops (grid-slash, prism-bands, circuit, facet). Used on auth and optional app-shell personalization.',
       },
     },
     layout: 'fullscreen',
@@ -50,7 +50,7 @@ function BackgroundDemo({
             {label}
           </Text>
           <Text as="p" size="2" color="gray" mt="2">
-            Canvas preset — sharp geometry, no soft circles.
+            Canvas preset — sharp neutral geometry, no soft circles.
           </Text>
         </Card>
       </Box>
