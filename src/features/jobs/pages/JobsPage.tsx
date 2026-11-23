@@ -78,12 +78,20 @@ export default function JobsPage() {
 
   const writeSelectionToUrl = React.useCallback(
     (next: JobsPageSelection, nextTab?: string) => {
+      const resolvedTab =
+        next == null
+          ? undefined
+          : nextTab !== undefined
+            ? nextTab
+            : next.kind === 'job' || next.kind === 'recurring_job'
+              ? tab
+              : undefined
       void navigate({
         to: '/jobs',
         search: {
           jobId: next?.kind === 'job' ? next.id : undefined,
           recurringJobId: next?.kind === 'recurring_job' ? next.id : undefined,
-          tab: next?.kind === 'job' ? (nextTab ?? tab) : undefined,
+          tab: resolvedTab || undefined,
         },
         replace: true,
       })
@@ -118,6 +126,14 @@ export default function JobsPage() {
       ? { kind: 'recurring', id: recurringJobId, title: 'Recurring job' }
       : null,
   )
+  const [seriesTab, setSeriesTab] = React.useState(() =>
+    recurringJobId && tab ? tab : 'overview',
+  )
+
+  React.useEffect(() => {
+    if (!recurringJobId) return
+    if (tab) setSeriesTab(tab)
+  }, [recurringJobId, tab])
   const { drawerOpen, setDrawerOpen, openDrawer, toggleDrawer } =
     useMobileInspectorDrawer(isLarge)
   const [statusFilter, setStatusFilter] = React.useState([
@@ -300,11 +316,12 @@ export default function JobsPage() {
   )
 
   const handleSelectRecurringJob = React.useCallback(
-    (id: string | null, title?: string) => {
+    (id: string | null, title?: string, nextTab: string = 'overview') => {
       const next: JobsPageSelection = id ? { kind: 'recurring_job', id } : null
       setSelection(next)
-      writeSelectionToUrl(next)
       if (id) {
+        setSeriesTab(nextTab)
+        writeSelectionToUrl(next, nextTab)
         setListScope((prev) => ({
           kind: 'recurring',
           id,
@@ -315,6 +332,7 @@ export default function JobsPage() {
         }))
       } else {
         setListScope(null)
+        writeSelectionToUrl(next)
       }
       if (id && !isLarge) openDrawer()
     },
@@ -322,13 +340,23 @@ export default function JobsPage() {
   )
 
   const handleSelectJobFromRecurring = React.useCallback(
-    (id: string) => {
+    (id: string, nextTab?: string) => {
       const next: JobsPageSelection = { kind: 'job', id }
       setSelection(next)
-      writeSelectionToUrl(next)
+      writeSelectionToUrl(next, nextTab)
       if (!isLarge) openDrawer()
     },
     [isLarge, openDrawer, writeSelectionToUrl],
+  )
+
+  const handleSeriesTabChange = React.useCallback(
+    (nextTab: string) => {
+      setSeriesTab(nextTab)
+      if (selection?.kind === 'recurring_job') {
+        writeSelectionToUrl(selection, nextTab)
+      }
+    },
+    [selection, writeSelectionToUrl],
   )
 
   const handleExitListScope = React.useCallback(() => {
@@ -348,8 +376,9 @@ export default function JobsPage() {
         kind: 'recurring_job',
         id: recurringId,
       }
+      setSeriesTab('overview')
       setSelection(next)
-      writeSelectionToUrl(next)
+      writeSelectionToUrl(next, 'overview')
     },
     [writeSelectionToUrl],
   )
@@ -526,6 +555,8 @@ export default function JobsPage() {
         onSelectJob={handleSelectJobFromRecurring}
         onArchived={() => setSelection(null)}
         onDeleted={() => setSelection(null)}
+        initialTab={seriesTab}
+        onTabChange={handleSeriesTabChange}
       />
     ) : (
       <JobInspector
@@ -544,6 +575,7 @@ export default function JobsPage() {
       onSelectRecurringJob={handleSelectRecurringJob}
       listScope={listScope}
       onExitListScope={handleExitListScope}
+      seriesTab={seriesTab}
       statusFilter={statusFilter}
       showOnlyArchived={showOnlyArchived}
       showJobsInRecurringSeries={showJobsInRecurringSeries}

@@ -12,6 +12,7 @@ import type { RawCrewBooking } from '../utils/aggregateRecurringJobCrew'
 import type {
   JobListRow,
   JobStatus,
+  RecurringJobAccountingEntry,
   RecurringJobBookingSummary,
   RecurringJobCrewEntry,
   RecurringJobDetail,
@@ -32,7 +33,7 @@ const RECURRING_JOB_SELECT = `
 `
 
 const MEMBER_JOB_SELECT = `
-  id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, recurring_job_id,
+  id, company_id, title, jobnr, status, start_at, end_at, customer_contact_id, archived, money_verified_at, recurring_job_id,
   customer:customer_id ( id, name ),
   customer_user:customer_user_id ( user_id, display_name, email ),
   project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )
@@ -353,6 +354,71 @@ export function recurringJobInvoiceSummaryQuery({
           status: job.status,
           invoice_count: inv?.count ?? 0,
           last_invoice_at: inv?.last_at ?? null,
+        }
+      })
+    },
+  }
+}
+
+export function recurringJobAccountingSummaryQuery({
+  recurringJobId,
+}: {
+  recurringJobId: string
+}) {
+  return {
+    queryKey: ['recurring-jobs-accounting', recurringJobId],
+    queryFn: async (): Promise<Array<RecurringJobAccountingEntry>> => {
+      const { data: jobs, error: jobsError } = await supabase
+        .from('jobs')
+        .select(
+          'id, title, jobnr, status, archived, start_at, end_at, money_verified_at, project_lead_user_id',
+        )
+        .eq('recurring_job_id', recurringJobId)
+        .order('start_at', { ascending: true })
+
+      if (jobsError) throw jobsError
+      if (!jobs?.length) return []
+
+      const jobIds = jobs.map((j) => j.id)
+      const { data: moneyItems, error: moneyError } = await supabase
+        .from('job_money_items')
+        .select('job_id, type, amount')
+        .in('job_id', jobIds)
+
+      if (moneyError) throw moneyError
+
+      const totals = new Map<
+        string,
+        { income: number; expense: number; count: number }
+      >()
+      for (const item of moneyItems ?? []) {
+        const current = totals.get(item.job_id) ?? {
+          income: 0,
+          expense: 0,
+          count: 0,
+        }
+        const amount = Number(item.amount) || 0
+        if (item.type === 'income') current.income += amount
+        else if (item.type === 'expense') current.expense += amount
+        current.count += 1
+        totals.set(item.job_id, current)
+      }
+
+      return jobs.map((job) => {
+        const money = totals.get(job.id)
+        return {
+          job_id: job.id,
+          job_title: job.title,
+          jobnr: job.jobnr,
+          status: job.status as JobStatus,
+          archived: job.archived,
+          start_at: job.start_at,
+          end_at: job.end_at,
+          money_verified_at: job.money_verified_at ?? null,
+          project_lead_user_id: job.project_lead_user_id ?? null,
+          income_total: money?.income ?? 0,
+          expense_total: money?.expense ?? 0,
+          item_count: money?.count ?? 0,
         }
       })
     },

@@ -36,6 +36,7 @@ import RecurringJobDialog from './dialogs/RecurringJobDialog'
 import RecurringOverviewTab from './tabs/recurring/RecurringOverviewTab'
 import RecurringJobsTab from './tabs/recurring/RecurringJobsTab'
 import RecurringInvoicesTab from './tabs/recurring/RecurringInvoicesTab'
+import RecurringAccountingTab from './tabs/recurring/RecurringAccountingTab'
 import RecurringCrewTab from './tabs/recurring/RecurringCrewTab'
 import RecurringBookingsTab from './tabs/recurring/RecurringBookingsTab'
 import type { DeleteRecurringJobMode } from '../api/recurringJobQueries'
@@ -43,6 +44,7 @@ import type { DeleteRecurringJobMode } from '../api/recurringJobQueries'
 const RECURRING_JOB_TABS = [
   'overview',
   'jobs',
+  'money',
   'invoice',
   'crew',
   'bookings',
@@ -55,16 +57,38 @@ const RECURRING_JOB_TABS_FREELANCER = [
   'bookings',
 ] as const
 
+const RECURRING_TAB_SET = new Set<string>(RECURRING_JOB_TABS)
+
+function normalizeRecurringTab(
+  tab: string | undefined,
+  isFreelancer: boolean,
+): string {
+  const resolved =
+    tab && RECURRING_TAB_SET.has(tab)
+      ? tab
+      : tab === 'accounting'
+        ? 'money'
+        : 'overview'
+  if (isFreelancer && (resolved === 'invoice' || resolved === 'money')) {
+    return 'overview'
+  }
+  return resolved
+}
+
 export default function RecurringJobInspector({
   id,
   onSelectJob,
   onArchived,
   onDeleted,
+  initialTab,
+  onTabChange,
 }: {
   id: string | null
-  onSelectJob: (jobId: string) => void
+  onSelectJob: (jobId: string, tab?: string) => void
   onArchived?: () => void
   onDeleted?: () => void
+  initialTab?: string
+  onTabChange?: (tab: string) => void
 }) {
   const { companyRole } = useAuthz()
   const { canWrite } = useCompanyWriteAccess()
@@ -75,17 +99,31 @@ export default function RecurringJobInspector({
   const [editOpen, setEditOpen] = React.useState(false)
   const [archiveOpen, setArchiveOpen] = React.useState(false)
   const [deleteOpen, setDeleteOpen] = React.useState(false)
-  const [activeTab, setActiveTab] = React.useState('overview')
+  const [activeTab, setActiveTab] = React.useState(() =>
+    normalizeRecurringTab(initialTab, isFreelancer),
+  )
+
+  const setTab = React.useCallback(
+    (tab: string) => {
+      const resolved = normalizeRecurringTab(tab, isFreelancer)
+      setActiveTab(resolved)
+      onTabChange?.(resolved)
+    },
+    [isFreelancer, onTabChange],
+  )
 
   const tabOptions = React.useMemo(() => {
     const list = [
       { value: 'overview', label: 'Overview' },
       { value: 'jobs', label: 'Jobs' },
+      { value: 'money', label: 'Accounting' },
       { value: 'invoice', label: 'Invoice' },
       { value: 'crew', label: 'Crew' },
       { value: 'bookings', label: 'Bookings' },
     ]
-    return isFreelancer ? list.filter((t) => t.value !== 'invoice') : list
+    return isFreelancer
+      ? list.filter((t) => t.value !== 'invoice' && t.value !== 'money')
+      : list
   }, [isFreelancer])
 
   const { scopeRef, scopeProps } = useTabKeyboardScopeProps()
@@ -93,15 +131,21 @@ export default function RecurringJobInspector({
     scopeRef,
     tabs: isFreelancer ? RECURRING_JOB_TABS_FREELANCER : RECURRING_JOB_TABS,
     activeTab,
-    onTabChange: setActiveTab,
+    onTabChange: setTab,
     enabled: !!id,
   })
 
   React.useEffect(() => {
-    if (isFreelancer && activeTab === 'invoice') {
-      setActiveTab('overview')
+    if (initialTab == null) return
+    const resolved = normalizeRecurringTab(initialTab, isFreelancer)
+    setActiveTab((prev) => (prev === resolved ? prev : resolved))
+  }, [initialTab, isFreelancer])
+
+  React.useEffect(() => {
+    if (isFreelancer && (activeTab === 'invoice' || activeTab === 'money')) {
+      setTab('overview')
     }
-  }, [isFreelancer, activeTab])
+  }, [isFreelancer, activeTab, setTab])
 
   const { data, isLoading, isError, isFetched } = useQuery({
     ...recurringJobDetailQuery({ recurringJobId: id ?? '__none__' }),
@@ -294,19 +338,22 @@ export default function RecurringJobInspector({
 
       <Separator size="4" mb="3" />
 
-      <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
+      <Tabs.Root value={activeTab} onValueChange={setTab}>
         {isMobile ? (
           <Box className="job-inspector-sticky-chrome" mb="3">
             <InspectorMobileTabSelect
               value={activeTab}
               options={tabOptions}
-              onChange={setActiveTab}
+              onChange={setTab}
             />
           </Box>
         ) : (
           <AnimatedTabsList mb="3" wrap="wrap">
             <Tabs.Trigger value="overview">Overview</Tabs.Trigger>
             <Tabs.Trigger value="jobs">Jobs</Tabs.Trigger>
+            {!isFreelancer && (
+              <Tabs.Trigger value="money">Accounting</Tabs.Trigger>
+            )}
             {!isFreelancer && (
               <Tabs.Trigger value="invoice">Invoice</Tabs.Trigger>
             )}
@@ -325,6 +372,15 @@ export default function RecurringJobInspector({
             <RecurringOverviewTab detail={data} onSelectJob={onSelectJob} />
           )}
         </Tabs.Content>
+        {!isFreelancer && (
+          <Tabs.Content value="money">
+            <RecurringAccountingTab
+              detail={data}
+              onSelectJob={onSelectJob}
+              onOpenSeriesInvoice={() => setTab('invoice')}
+            />
+          </Tabs.Content>
+        )}
         {!isFreelancer && (
           <Tabs.Content value="invoice">
             <RecurringInvoicesTab detail={data} onSelectJob={onSelectJob} />
