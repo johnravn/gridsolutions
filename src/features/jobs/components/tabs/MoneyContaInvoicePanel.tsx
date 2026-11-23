@@ -278,23 +278,53 @@ export default function MoneyContaInvoicePanel({
         ) : (
           <>
             {invoices.length > 1 && (
-              <Flex gap="2" wrap="wrap">
-                {invoices.map((inv) => {
-                  const active = (selected?.id ?? invoices[0]?.id) === inv.id
-                  return (
-                    <Button
-                      key={inv.id}
-                      size="1"
-                      variant={active ? 'solid' : 'soft'}
-                      onClick={() => setSelectedId(inv.id)}
-                    >
-                      {inv.conta_invoice_id
+              <Box
+                p="3"
+                style={{
+                  background: 'var(--accent-a3)',
+                  border: '1px solid var(--accent-a6)',
+                  borderRadius: 'var(--radius-3)',
+                }}
+              >
+                <Flex direction="column" gap="3">
+                  <Text size="3" weight="bold">
+                    Choose invoice ({invoices.length})
+                  </Text>
+                  <Flex
+                    gap="3"
+                    wrap="wrap"
+                    role="group"
+                    aria-label="Choose invoice"
+                  >
+                    {invoices.map((inv) => {
+                      const active =
+                        (selected?.id ?? invoices[0]?.id) === inv.id
+                      const label = inv.conta_invoice_id
                         ? `#${inv.conta_invoice_id}`
-                        : new Date(inv.created_at).toLocaleDateString('nb-NO')}
-                    </Button>
-                  )
-                })}
-              </Flex>
+                        : new Date(inv.created_at).toLocaleDateString('nb-NO')
+                      return (
+                        <Button
+                          key={inv.id}
+                          size="3"
+                          highContrast={active}
+                          variant={active ? 'solid' : 'outline'}
+                          onClick={() => setSelectedId(inv.id)}
+                          aria-pressed={active}
+                          style={{
+                            minHeight: 48,
+                            minWidth: 120,
+                            fontSize: 'var(--font-size-4)',
+                            fontWeight: active ? 700 : 600,
+                            paddingInline: 20,
+                          }}
+                        >
+                          {label}
+                        </Button>
+                      )
+                    })}
+                  </Flex>
+                </Flex>
+              </Box>
             )}
 
             <Flex gap="2" wrap="wrap" align="center">
