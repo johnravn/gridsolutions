@@ -191,7 +191,11 @@ export default function AppShell() {
         height={isPublic ? 'auto' : '100svh'} // was 100dvh
         width="100%"
         direction="row"
-        style={{ position: 'relative', minHeight: 0 }} // allow children to shrink
+        style={{
+          position: 'relative',
+          minHeight: 0, // allow children to shrink
+          backgroundColor: isPublic ? undefined : 'var(--app-chrome-bg)',
+        }}
       >
         {!isPublic ? <GlobalHotkeys /> : null}
         {/* Animated background - only on authenticated pages and if enabled */}

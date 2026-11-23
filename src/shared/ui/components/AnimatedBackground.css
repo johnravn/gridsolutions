@@ -1,4 +1,4 @@
-/* Geometric accent backdrop — sharp lines, multi-hue solids, no soft blobs.
+/* Geometric backdrop — sharp lines, neutral gray solids only (no brand hue).
    Optional micro-drift via .geo-bg--motion; prefers-reduced-motion disables it. */
 
 .geo-bg {
@@ -7,7 +7,7 @@
   z-index: 0;
   pointer-events: none;
   overflow: hidden;
-  /* Intensity dims colored art only; fine grid uses its own readable ink. */
+  /* Intensity dims geometric art only; fine grid uses its own readable ink. */
   --geo-intensity: 1;
   --geo-grid-size: 72px;
   --geo-grid-line: 1px;
@@ -43,7 +43,7 @@
 }
 
 /*
- * Large grid for grid-slash (~72px). Above colored art.
+ * Large grid for grid-slash (~72px). Above geometric art.
  * Soft wash: light blur only — heavy blur erased hairlines before.
  */
 .geo-bg__fine-grid {
@@ -97,74 +97,75 @@
   fill: none;
 }
 
+/* Neutral gray geometry — slight step differences for depth, no hue. */
 .geo-bg__fill-a {
-  fill: var(--blue-a8);
+  fill: var(--gray-a4);
 }
 .geo-bg__fill-b {
-  fill: var(--cyan-a8);
+  fill: var(--gray-a3);
 }
 .geo-bg__fill-c {
-  fill: var(--purple-a8);
+  fill: var(--gray-a5);
 }
 .geo-bg__fill-d {
-  fill: var(--pink-a8);
+  fill: var(--gray-a3);
 }
 .geo-bg__fill-e {
-  fill: var(--orange-a8);
+  fill: var(--gray-a4);
 }
 
 .geo-bg__stroke-a {
-  stroke: var(--blue-9);
+  stroke: var(--gray-8);
   fill: none;
 }
 .geo-bg__stroke-b {
-  stroke: var(--cyan-9);
+  stroke: var(--gray-7);
   fill: none;
 }
 .geo-bg__stroke-c {
-  stroke: var(--purple-9);
+  stroke: var(--gray-8);
   fill: none;
 }
 .geo-bg__stroke-d {
-  stroke: var(--pink-9);
+  stroke: var(--gray-7);
   fill: none;
 }
 .geo-bg__stroke-e {
-  stroke: var(--orange-9);
+  stroke: var(--gray-8);
   fill: none;
 }
 
 .geo-bg__node-a {
-  fill: var(--blue-9);
+  fill: var(--gray-8);
 }
 .geo-bg__node-b {
-  fill: var(--cyan-9);
+  fill: var(--gray-7);
 }
 .geo-bg__node-c {
-  fill: var(--purple-9);
+  fill: var(--gray-8);
 }
 .geo-bg__node-d {
-  fill: var(--pink-9);
+  fill: var(--gray-7);
 }
 .geo-bg__node-e {
-  fill: var(--orange-9);
+  fill: var(--gray-8);
 }
 
-/* Light: punch fills so geometry reads on pale auth/app shells */
+/* Light: slightly stronger fills so geometry still reads on pale chrome */
 .light .geo-bg__fill-a {
-  fill: var(--blue-a9);
+  fill: var(--gray-a5);
 }
 .light .geo-bg__fill-b {
-  fill: var(--cyan-a9);
+  fill: var(--gray-a4);
 }
 .light .geo-bg__fill-c {
-  fill: var(--purple-a9);
+  fill: var(--gray-a6);
 }
 .light .geo-bg__fill-d {
-  fill: var(--pink-a9);
+  fill: var(--gray-a4);
 }
 .light .geo-bg__fill-e {
-  fill: var(--orange-a9);
+  fill: var(--gray-a5);
 }
 
 @media (prefers-reduced-motion: no-preference) {

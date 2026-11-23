@@ -2,8 +2,9 @@
 import { Box, Flex, Grid, Text } from '@radix-ui/themes'
 import type { RadixGrayColor } from '../api/queries'
 
+/** True-neutral first; tinted grays kept for companies that already chose them. */
 const GRAY_COLORS: Array<{ value: RadixGrayColor; label: string }> = [
-  { value: 'gray', label: 'Gray' },
+  { value: 'gray', label: 'Gray (neutral)' },
   { value: 'mauve', label: 'Mauve' },
   { value: 'slate', label: 'Slate' },
   { value: 'sage', label: 'Sage' },

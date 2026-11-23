@@ -22,7 +22,7 @@ export const GEOMETRIC_BACKGROUND_PRESETS: ReadonlyArray<{
   {
     id: 'prism-bands',
     label: 'Prism Bands',
-    description: 'Bold angled color bands with sharp edges',
+    description: 'Bold angled neutral bands with sharp edges',
   },
   {
     id: 'circuit',
@@ -32,7 +32,7 @@ export const GEOMETRIC_BACKGROUND_PRESETS: ReadonlyArray<{
   {
     id: 'facet',
     label: 'Facet',
-    description: 'Low-poly triangles with saturated solid fills',
+    description: 'Low-poly triangles with neutral solid fills',
   },
 ]
 
@@ -287,8 +287,8 @@ function PresetArt({ preset }: { preset: GeometricBackgroundPreset }) {
 }
 
 /**
- * Geometric accent backdrop for auth / app shells.
- * Sharp multi-hue SVG geometry (canvas presets) — no soft circle blobs.
+ * Geometric backdrop for auth / app shells.
+ * Sharp neutral-gray SVG geometry (canvas presets) — no soft blobs, no brand hue.
  * Subtle scale/drift only when `subtleMotion` and OS allows motion.
  */
 export function AnimatedBackground({
