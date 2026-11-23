@@ -1383,15 +1383,19 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             </Card>
           )}
 
-          <MoneyTransportKmCard
-            jobId={jobId}
-            kmDriven={jobInfo?.transport_km_driven ?? null}
-            costPerKm={transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM}
-            plannedOfferKm={plannedOfferKm ?? null}
-            prominent={
-              moneyArchetype === 'transport_heavy' || hasTransportSignal
-            }
-          />
+          {companyId && (
+            <MoneyTransportKmCard
+              jobId={jobId}
+              companyId={companyId}
+              kmDriven={jobInfo?.transport_km_driven ?? null}
+              costPerKm={transportCostPerKm ?? DEFAULT_TRANSPORT_COST_PER_KM}
+              plannedOfferKm={plannedOfferKm ?? null}
+              expenseDate={jobInfo?.start_at ?? null}
+              prominent={
+                moneyArchetype === 'transport_heavy' || hasTransportSignal
+              }
+            />
+          )}
 
           <MoneyContaPanel
             status={contaLinkStatus}
