@@ -1,28 +1,41 @@
 import * as React from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Badge,
   Box,
   Button,
   Card,
+  DropdownMenu,
   Flex,
   Heading,
+  IconButton,
   Spinner,
   Table,
   Text,
 } from '@radix-ui/themes'
 import { formatDistanceToNow } from 'date-fns'
-import { Refresh } from 'iconoir-react'
+import { MoreVert, Refresh } from 'iconoir-react'
 import { contaClient } from '@shared/api/conta/client'
 import { fetchContaInvoice } from '@shared/conta/invoicePaidSyncCore'
 import { supabase } from '@shared/api/supabase'
+import { useCompany } from '@shared/companies/CompanyProvider'
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { MobileHScroll } from '@shared/ui/components/MobileHScroll'
 import {
+  
   buildContaInvoiceDisplay,
   formatContaInvoiceMoney,
-  hasContaInvoiceDisplayLines,
+  hasContaInvoiceDisplayLines
 } from '../../utils/contaInvoiceDisplay'
+import {
+  computeContaLineExpenseAmount,
+  contaLineExpenseDate,
+  contaLineExpenseDescription,
+  contaLineExpenseReference,
+  contaLineExpenseSourceId,
+} from '../../utils/contaLineExpense'
+import { insertJobMoneyItem, jobMoneyItemsQuery } from '../../api/moneyQueries'
+import type {ContaInvoiceDisplayLine} from '../../utils/contaInvoiceDisplay';
 
 export type MoneyContaInvoiceRecord = {
   id: string
@@ -73,6 +86,7 @@ export default function MoneyContaInvoicePanel({
   invoices: Array<MoneyContaInvoiceRecord>
   invoicesLoading?: boolean
 }) {
+  const { companyId } = useCompany()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
@@ -84,6 +98,21 @@ export default function MoneyContaInvoicePanel({
   >({})
   const autoFetchedIdsRef = React.useRef(new Set<string>())
   const [, setTick] = React.useState(0)
+
+  const { data: moneyItems = [] } = useQuery({
+    ...jobMoneyItemsQuery(jobId),
+    enabled: !!jobId,
+  })
+
+  const addedSourceIds = React.useMemo(
+    () =>
+      new Set(
+        moneyItems
+          .filter((item) => item.source_id)
+          .map((item) => item.source_id as string),
+      ),
+    [moneyItems],
+  )
 
   const selected =
     invoices.find((inv) => inv.id === selectedId) ?? invoices[0] ?? null
@@ -180,6 +209,57 @@ export default function MoneyContaInvoicePanel({
     onError: (e: unknown) => {
       toastError(
         'Could not fetch Conta invoice',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
+  const addLineExpenseMutation = useMutation({
+    mutationFn: async (input: {
+      line: ContaInvoiceDisplayLine
+      lineIndex: number
+      invoiceRecordId: string
+      invoiceNo: string | null
+      invoiceDate: string | null
+    }) => {
+      if (!companyId) throw new Error('No company')
+      const sourceId = contaLineExpenseSourceId(
+        input.invoiceRecordId,
+        input.line.lineNo,
+        input.lineIndex,
+      )
+      if (addedSourceIds.has(sourceId)) {
+        throw new Error('Already added as an expense')
+      }
+      const amount = computeContaLineExpenseAmount(input.line)
+      if (amount == null) {
+        throw new Error('Line has no net amount to add as expense')
+      }
+      await insertJobMoneyItem({
+        job_id: jobId,
+        company_id: companyId,
+        type: 'expense',
+        description: contaLineExpenseDescription(input.line),
+        amount,
+        date: contaLineExpenseDate(input.invoiceDate),
+        reference: contaLineExpenseReference({
+          invoiceNo: input.invoiceNo,
+          lineNo: input.line.lineNo,
+          lineIndex: input.lineIndex,
+        }),
+        source: 'conta',
+        source_id: sourceId,
+        category: 'other',
+      })
+      return sourceId
+    },
+    onSuccess: () => {
+      success('Expense added from Conta line')
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    },
+    onError: (e: unknown) => {
+      toastError(
+        'Failed to add expense',
         e instanceof Error ? e.message : 'Please try again.',
       )
     },
@@ -462,32 +542,109 @@ export default function MoneyContaInvoicePanel({
                           <Table.ColumnHeaderCell justify="end">
                             Net
                           </Table.ColumnHeaderCell>
+                          <Table.ColumnHeaderCell
+                            style={{ width: 40 }}
+                            aria-label="Actions"
+                          />
                         </Table.Row>
                       </Table.Header>
                       <Table.Body>
-                        {display.lines.map((line, index) => (
-                          <Table.Row
-                            key={`${line.lineNo ?? index}-${line.description}`}
-                          >
-                            <Table.Cell>{line.lineNo ?? index + 1}</Table.Cell>
-                            <Table.Cell>
-                              <Text size="2">{line.description}</Text>
-                            </Table.Cell>
-                            <Table.Cell justify="end">
-                              {line.quantity}
-                            </Table.Cell>
-                            <Table.Cell justify="end">
-                              {formatContaInvoiceMoney(line.price)}
-                            </Table.Cell>
-                            <Table.Cell justify="end">
-                              {line.discount}
-                            </Table.Cell>
-                            <Table.Cell>{line.vatCode ?? '—'}</Table.Cell>
-                            <Table.Cell justify="end">
-                              {formatContaInvoiceMoney(line.sumNet)}
-                            </Table.Cell>
-                          </Table.Row>
-                        ))}
+                        {display.lines.map((line, index) => {
+                          const sourceId = selected
+                            ? contaLineExpenseSourceId(
+                                selected.id,
+                                line.lineNo,
+                                index,
+                              )
+                            : null
+                          const alreadyAdded =
+                            !!sourceId && addedSourceIds.has(sourceId)
+                          const isPending =
+                            addLineExpenseMutation.isPending &&
+                            addLineExpenseMutation.variables?.lineIndex ===
+                              index &&
+                            addLineExpenseMutation.variables
+                              ?.invoiceRecordId === selected?.id
+
+                          return (
+                            <Table.Row
+                              key={`${line.lineNo ?? index}-${line.description}`}
+                              className="conta-invoice-line-row"
+                            >
+                              <Table.Cell>
+                                {line.lineNo ?? index + 1}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Text size="2">{line.description}</Text>
+                              </Table.Cell>
+                              <Table.Cell justify="end">
+                                {line.quantity}
+                              </Table.Cell>
+                              <Table.Cell justify="end">
+                                {formatContaInvoiceMoney(line.price)}
+                              </Table.Cell>
+                              <Table.Cell justify="end">
+                                {line.discount}
+                              </Table.Cell>
+                              <Table.Cell>{line.vatCode ?? '—'}</Table.Cell>
+                              <Table.Cell justify="end">
+                                {formatContaInvoiceMoney(line.sumNet)}
+                              </Table.Cell>
+                              <Table.Cell>
+                                <Flex
+                                  className="conta-invoice-line-row-actions"
+                                  justify="end"
+                                  align="center"
+                                >
+                                  <DropdownMenu.Root>
+                                    <DropdownMenu.Trigger>
+                                      <IconButton
+                                        size="1"
+                                        variant="ghost"
+                                        color="gray"
+                                        aria-label="Line actions"
+                                        disabled={!selected || isPending}
+                                      >
+                                        {isPending ? (
+                                          <Spinner size="1" />
+                                        ) : (
+                                          <MoreVert width={16} height={16} />
+                                        )}
+                                      </IconButton>
+                                    </DropdownMenu.Trigger>
+                                    <DropdownMenu.Content
+                                      align="end"
+                                      style={{ zIndex: 10000 }}
+                                    >
+                                      <DropdownMenu.Item
+                                        disabled={
+                                          !selected ||
+                                          alreadyAdded ||
+                                          addLineExpenseMutation.isPending
+                                        }
+                                        onSelect={() => {
+                                          if (!selected) return
+                                          addLineExpenseMutation.mutate({
+                                            line,
+                                            lineIndex: index,
+                                            invoiceRecordId: selected.id,
+                                            invoiceNo: display.header.invoiceNo,
+                                            invoiceDate:
+                                              display.header.invoiceDate,
+                                          })
+                                        }}
+                                      >
+                                        {alreadyAdded
+                                          ? 'Already added as expense'
+                                          : 'Add item as expense'}
+                                      </DropdownMenu.Item>
+                                    </DropdownMenu.Content>
+                                  </DropdownMenu.Root>
+                                </Flex>
+                              </Table.Cell>
+                            </Table.Row>
+                          )
+                        })}
                       </Table.Body>
                     </Table.Root>
                   </MobileHScroll>
