@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
-  contaBilagEditKindFromSourceType,
   getContaInvoiceAppUrl,
   getContaTransactionAppUrl,
   isContaEhfTransactionSource,
   isContaSandboxUrl,
+  resolveContaBilagsjournalDateRange,
   resolveContaGatewayUrls,
+  yearFromContaDate,
 } from './gatewayUrls'
 
 describe('resolveContaGatewayUrls', () => {
@@ -68,48 +69,65 @@ describe('getContaInvoiceAppUrl', () => {
   })
 })
 
-describe('getContaTransactionAppUrl', () => {
-  it('builds bookkeeping bilag deep links with rediger/kjop by default', () => {
+describe('resolveContaBilagsjournalDateRange', () => {
+  it('uses explicit from/to dates', () => {
     expect(
-      getContaTransactionAppUrl('org-1', 42, 'https://api.gateway.conta.no'),
-    ).toBe('https://app.conta.no/regnskap/org-1/bilag/42/rediger/kjop')
-    expect(
-      getContaTransactionAppUrl(
-        'org-1',
-        '99',
-        'https://api.gateway.conta-sandbox.no',
-      ),
-    ).toBe('https://app.conta-sandbox.no/regnskap/org-1/bilag/99/rediger/kjop')
+      resolveContaBilagsjournalDateRange({
+        fromDate: '2026-02-01',
+        toDate: '2026-02-28',
+      }),
+    ).toEqual({ fromDate: '2026-02-01', toDate: '2026-02-28' })
   })
 
-  it('uses ehf kind for received EHF source types', () => {
-    expect(
-      getContaTransactionAppUrl(
-        '327064',
-        75275314,
-        'https://api.gateway.conta.no',
-        'EHF_RECEIVED',
-      ),
-    ).toBe('https://app.conta.no/regnskap/327064/bilag/75275314/rediger/ehf')
+  it('derives calendar year from ledger date', () => {
+    expect(resolveContaBilagsjournalDateRange({ date: '2026-03-12' })).toEqual({
+      fromDate: '2026-01-01',
+      toDate: '2026-12-31',
+    })
   })
 
-  it('returns null without a transaction id', () => {
-    expect(getContaTransactionAppUrl('org-1', null)).toBeNull()
+  it('returns null without usable dates', () => {
+    expect(resolveContaBilagsjournalDateRange({})).toBeNull()
+    expect(yearFromContaDate('not-a-date')).toBeNull()
   })
 })
 
-describe('contaBilagEditKindFromSourceType', () => {
-  it('maps Conta source types to rediger kinds', () => {
-    expect(contaBilagEditKindFromSourceType('EHF_RECEIVED')).toBe('ehf')
+describe('getContaTransactionAppUrl', () => {
+  it('builds bilagsjournal deep links from bilag number + year', () => {
     expect(
-      contaBilagEditKindFromSourceType('EHF_AUTOMATICALLY_PROCESSED'),
-    ).toBe('ehf')
-    expect(contaBilagEditKindFromSourceType('REGISTER_PURCHASE')).toBe('kjop')
-    expect(contaBilagEditKindFromSourceType('REGISTER_INCOME')).toBe('inntekt')
-    expect(contaBilagEditKindFromSourceType('ADVANCED_TRANSACTION')).toBe(
-      'avansert',
+      getContaTransactionAppUrl(327064, 805, {
+        date: '2026-06-15',
+        gatewayUrl: 'https://api.gateway.conta.no',
+      }),
+    ).toBe(
+      'https://app.conta.no/regnskap/327064/rapporter/bilagsjournal?fraBilag=805&fraDato=2026-01-01&tilBilag=805&tilDato=2026-12-31',
     )
-    expect(contaBilagEditKindFromSourceType(null)).toBe('kjop')
+    expect(
+      getContaTransactionAppUrl('org-1', '99', {
+        date: '2025-01-02',
+        gatewayUrl: 'https://api.gateway.conta-sandbox.no',
+      }),
+    ).toBe(
+      'https://app.conta-sandbox.no/regnskap/org-1/rapporter/bilagsjournal?fraBilag=99&fraDato=2025-01-01&tilBilag=99&tilDato=2025-12-31',
+    )
+  })
+
+  it('accepts explicit invoice date range', () => {
+    expect(
+      getContaTransactionAppUrl('327064', 805, {
+        fromDate: '2026-03-01',
+        toDate: '2026-03-31',
+      }),
+    ).toBe(
+      'https://app.conta.no/regnskap/327064/rapporter/bilagsjournal?fraBilag=805&fraDato=2026-03-01&tilBilag=805&tilDato=2026-03-31',
+    )
+  })
+
+  it('returns null without bilag number or date context', () => {
+    expect(
+      getContaTransactionAppUrl('org-1', null, { date: '2026-01-01' }),
+    ).toBe(null)
+    expect(getContaTransactionAppUrl('org-1', 805)).toBeNull()
   })
 })
 

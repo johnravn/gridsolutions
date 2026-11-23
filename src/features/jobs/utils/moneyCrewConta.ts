@@ -13,12 +13,21 @@ export type CrewContaLedgerLine = {
   invoiceNo?: string
   invoiceId?: number
   transactionId?: number
+  /** Conta bilag number (UI “Bilag”) — not the internal `transactionId`. */
+  transactionNo?: number
   transactionSourceType?: string
   supplierName?: string
   supplierOrgNo?: string
   supplierId?: number
   bookkeepingAccountName?: string
   externalUrl?: string | null
+}
+
+export type CrewContaTransactionUrlInput = {
+  orgId: string
+  /** Conta `transactionNo` (bilag number). */
+  bilagNo: number | null | undefined
+  date?: string | null
 }
 
 type ContaGet = (path: string) => Promise<unknown>
@@ -42,11 +51,7 @@ export type FetchCrewContaInvoiceLinesInput = {
   startDate: string
   endDate: string
   get: ContaGet
-  transactionUrl: (
-    orgId: string,
-    transactionId: number | null | undefined,
-    sourceType?: string | null,
-  ) => string | null
+  transactionUrl: (input: CrewContaTransactionUrlInput) => string | null
   /** Cap lines per ledger request (default 200). */
   maxTransactionsPerPage?: number
 }
@@ -85,11 +90,11 @@ export async function fetchCrewContaInvoiceLines(
       ...line,
       supplierName: line.supplierName || supplierName || undefined,
       supplierOrgNo,
-      externalUrl: transactionUrl(
+      externalUrl: transactionUrl({
         orgId,
-        line.transactionId ?? null,
-        line.transactionSourceType ?? null,
-      ),
+        bilagNo: line.transactionNo ?? null,
+        date: line.date ?? null,
+      }),
     })
   }
 

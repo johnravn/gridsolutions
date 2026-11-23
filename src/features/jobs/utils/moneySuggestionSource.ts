@@ -36,7 +36,9 @@ function sourceKeyStartsWith(
 }
 
 /**
- * Plain-language origin for Accounting suggestion / confirmed-item badges.
+ * Full plain-language origin for Accounting suggestion / confirmed-item badges
+ * (tooltips, dialogs, docs). Prefer {@link getMoneySourceShortLabel} on the
+ * badge face so the Source column stays compact.
  *
  * Maps the coded `JobMoneyItemSource` (+ quote/transport/logging heuristics)
  * to labels that distinguish bookings, Conta incoming invoices, logging, and
@@ -52,6 +54,24 @@ export function getMoneySourceLabel(s: MoneySourceLabelInput): string {
   if (s.source === 'conta') {
     if (s.type === 'income') return 'Conta sales invoice'
     return 'Conta incoming invoice'
+  }
+  return 'Manual'
+}
+
+/**
+ * Compact badge face for the Accounting Source column.
+ * Full name remains available via {@link getMoneySourceLabel} (tooltip).
+ */
+export function getMoneySourceShortLabel(s: MoneySourceLabelInput): string {
+  if (sourceKeyStartsWith(s, 'quote-')) return 'Sub quote'
+  if (s.source === 'logging' || sourceKeyStartsWith(s, 'logging-'))
+    return 'Logging'
+  if (s.category === 'transport') return 'Transport'
+  if (s.source === 'offer') return 'Offer'
+  if (s.source === 'crew') return 'Booking'
+  if (s.source === 'conta') {
+    if (s.type === 'income') return 'Conta sales'
+    return 'Conta in'
   }
   return 'Manual'
 }
