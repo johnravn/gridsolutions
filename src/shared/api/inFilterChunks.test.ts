@@ -24,6 +24,14 @@ describe('chunkList', () => {
     expect(chunks[0]).toHaveLength(POSTGREST_IN_FILTER_CHUNK_SIZE)
     expect(chunks[1]).toEqual([String(POSTGREST_IN_FILTER_CHUNK_SIZE)])
   })
+
+  it('keeps a full UUID chunk under typical Kong 8KB URI budget', () => {
+    // Encoded UUID + comma ≈ 39 chars; leave headroom for select/filters.
+    const uuid = '00000000-0000-4000-8000-000000000000'
+    const encodedLen =
+      POSTGREST_IN_FILTER_CHUNK_SIZE * encodeURIComponent(`${uuid},`).length
+    expect(encodedLen).toBeLessThan(8_000)
+  })
 })
 
 describe('fetchAllInChunks', () => {
