@@ -1306,6 +1306,11 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
             ) : null}
             {canVerifyMoney ? (
               <Flex align="center" gap="2" wrap="wrap">
+                {!moneyVerified && !statusAllowsMoneyVerify ? (
+                  <Text size="1" color="gray" style={{ maxWidth: 280 }}>
+                    {JOB_MONEY_VERIFY_STATUS_HINT}
+                  </Text>
+                ) : null}
                 <Button
                   size="3"
                   variant="solid"
@@ -1327,11 +1332,6 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
                     </Flex>
                   )}
                 </Button>
-                {!moneyVerified && !statusAllowsMoneyVerify ? (
-                  <Text size="1" color="gray" style={{ maxWidth: 280 }}>
-                    {JOB_MONEY_VERIFY_STATUS_HINT}
-                  </Text>
-                ) : null}
               </Flex>
             ) : moneyVerified ? (
               <Badge color="green" variant="soft" size="2">
