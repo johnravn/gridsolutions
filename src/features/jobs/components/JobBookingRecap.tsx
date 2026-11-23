@@ -2,13 +2,13 @@ import { Box, Flex, Skeleton, Text } from '@radix-ui/themes'
 import { Community, Package, Truck } from 'iconoir-react'
 import type { JobBookingSummary } from '../utils/bookingSummary'
 
-/** Icon sized to Text size-1 line-height; gray balances muted crew copy. */
+/** Icon sized to Text size-1 line-height; accent matches package/truck meta icons. */
 function CrewRecapIcon() {
   return (
     <Box
       style={{
         flexShrink: 0,
-        color: 'var(--gray-11)',
+        color: 'var(--accent-11)',
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
