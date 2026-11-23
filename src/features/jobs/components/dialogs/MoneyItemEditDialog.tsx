@@ -1,13 +1,6 @@
 import * as React from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  Box,
-  Button,
-  Dialog,
-  Flex,
-  SegmentedControl,
-  Text,
-} from '@radix-ui/themes'
+import { Box, Button, Dialog, Flex, Text } from '@radix-ui/themes'
 import { z } from 'zod'
 import { useAppForm } from '@shared/form'
 import { useToast } from '@shared/ui/toast/ToastProvider'
@@ -166,6 +159,7 @@ export default function MoneyItemEditDialog({
       if (!existingItem) throw new Error('No item to update')
       const amountNum = parseFloat(value.amount)
       await updateJobMoneyItem(existingItem.id, {
+        type: value.type,
         description: value.description.trim(),
         amount: amountNum,
         date: value.date ? `${value.date}T00:00:00Z` : null,
@@ -208,28 +202,41 @@ export default function MoneyItemEditDialog({
         >
           <form.AppForm>
             <Flex direction="column" gap="3" mt="3">
-              {mode === 'add' && !initialData && (
+              {(mode === 'edit' || (mode === 'add' && !initialData)) && (
                 <form.AppField name="type">
                   {(field) => (
                     <Box>
                       <Text as="div" size="2" mb="1" weight="medium">
                         Type
                       </Text>
-                      <SegmentedControl.Root
-                        value={field.state.value}
-                        onValueChange={(v) =>
-                          field.handleChange(v as JobMoneyItemType)
-                        }
-                        size="2"
-                        disabled={isPending}
-                      >
-                        <SegmentedControl.Item value="income">
+                      <Flex gap="2" role="group" aria-label="Item type">
+                        <Button
+                          type="button"
+                          size="2"
+                          color="green"
+                          variant={
+                            field.state.value === 'income' ? 'solid' : 'soft'
+                          }
+                          disabled={isPending}
+                          onClick={() => field.handleChange('income')}
+                          style={{ flex: 1 }}
+                        >
                           Income
-                        </SegmentedControl.Item>
-                        <SegmentedControl.Item value="expense">
+                        </Button>
+                        <Button
+                          type="button"
+                          size="2"
+                          color="red"
+                          variant={
+                            field.state.value === 'expense' ? 'solid' : 'soft'
+                          }
+                          disabled={isPending}
+                          onClick={() => field.handleChange('expense')}
+                          style={{ flex: 1 }}
+                        >
                           Expense
-                        </SegmentedControl.Item>
-                      </SegmentedControl.Root>
+                        </Button>
+                      </Flex>
                     </Box>
                   )}
                 </form.AppField>
