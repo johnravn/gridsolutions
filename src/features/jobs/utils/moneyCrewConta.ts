@@ -13,6 +13,7 @@ export type CrewContaLedgerLine = {
   invoiceNo?: string
   invoiceId?: number
   transactionId?: number
+  transactionSourceType?: string
   supplierName?: string
   supplierOrgNo?: string
   supplierId?: number
@@ -44,6 +45,7 @@ export type FetchCrewContaInvoiceLinesInput = {
   transactionUrl: (
     orgId: string,
     transactionId: number | null | undefined,
+    sourceType?: string | null,
   ) => string | null
   /** Cap lines per ledger request (default 200). */
   maxTransactionsPerPage?: number
@@ -83,7 +85,11 @@ export async function fetchCrewContaInvoiceLines(
       ...line,
       supplierName: line.supplierName || supplierName || undefined,
       supplierOrgNo,
-      externalUrl: transactionUrl(orgId, line.transactionId ?? null),
+      externalUrl: transactionUrl(
+        orgId,
+        line.transactionId ?? null,
+        line.transactionSourceType ?? null,
+      ),
     })
   }
 

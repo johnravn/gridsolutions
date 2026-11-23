@@ -42,15 +42,63 @@ export function getContaInvoiceAppUrl(
 }
 
 /**
+ * Conta bilag “rediger” path kind — Conta has no `/bilag/{id}` detail route.
+ * Real routes are `/regnskap/{org}/bilag/{transactionId}/rediger/{kind}`.
+ */
+export type ContaBilagEditKind =
+  | 'ehf'
+  | 'kjop'
+  | 'inntekt'
+  | 'avansert'
+  | 'proff'
+
+/** Conta `transactionSourceType` values that are received EHFs. */
+export function isContaEhfTransactionSource(
+  sourceType?: string | null,
+): boolean {
+  return (
+    sourceType === 'EHF_RECEIVED' ||
+    sourceType === 'EHF_AUTOMATICALLY_PROCESSED'
+  )
+}
+
+/** Map Conta ledger/transaction source type → bilag edit route kind. */
+export function contaBilagEditKindFromSourceType(
+  sourceType?: string | null,
+): ContaBilagEditKind {
+  if (isContaEhfTransactionSource(sourceType)) return 'ehf'
+  switch (sourceType) {
+    case 'REGISTER_INCOME':
+      return 'inntekt'
+    case 'PRO_TRANSACTION':
+      return 'proff'
+    case 'ADVANCED_TRANSACTION':
+    case 'BULK_TRANSACTION':
+      return 'avansert'
+    case 'REGISTER_PURCHASE':
+    case 'CREDIT_CARD_PURCHASE':
+      return 'kjop'
+    default:
+      // Supplier-ledger / received-invoice suggestions → purchase bilag.
+      return 'kjop'
+  }
+}
+
+/**
  * Deep link into Conta bookkeeping voucher (bilag) for a transaction.
  * Used for supplier / received-invoice ledger lines.
+ *
+ * Conta does **not** serve `/regnskap/{org}/bilag/{id}` (that 404s). The working
+ * pattern is `/regnskap/{org}/bilag/{transactionId}/rediger/{kind}`.
  */
 export function getContaTransactionAppUrl(
   organizationId: string,
   transactionId: number | string | null | undefined,
   gatewayUrl?: string,
+  sourceType?: string | null,
 ): string | null {
   if (transactionId == null || transactionId === '') return null
   const appBase = contaAppBaseUrl(gatewayUrl)
-  return `${appBase}/regnskap/${organizationId}/bilag/${transactionId}`
+  const kind = contaBilagEditKindFromSourceType(sourceType)
+  return `${appBase}/regnskap/${organizationId}/bilag/${transactionId}/rediger/${kind}`
 }

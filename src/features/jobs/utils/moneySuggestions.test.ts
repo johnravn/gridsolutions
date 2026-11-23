@@ -230,7 +230,10 @@ describe('buildCrewExpenseSuggestions', () => {
           invoiceNo: 'R-1',
           supplierOrgNo: '123456789',
           date: '2026-03-11',
-          externalUrl: 'https://app.conta.no/regnskap/o/bilag/1',
+          transactionId: 1,
+          transactionSourceType: 'REGISTER_PURCHASE',
+          externalUrl:
+            'https://app.conta.no/regnskap/o/bilag/1/rediger/kjop',
         },
         {
           id: 2,
@@ -238,6 +241,8 @@ describe('buildCrewExpenseSuggestions', () => {
           invoiceNo: 'R-2',
           supplierOrgNo: '123456789',
           date: '2026-03-12',
+          transactionId: 2,
+          transactionSourceType: 'EHF_RECEIVED',
         },
       ],
     })
@@ -245,7 +250,10 @@ describe('buildCrewExpenseSuggestions', () => {
     expect(suggestions.every((s) => s.source === 'conta')).toBe(true)
     expect(suggestions.every((s) => s.category === 'crew')).toBe(true)
     expect(suggestions.map((s) => s.reference)).toEqual(['R-1', 'R-2'])
-    expect(suggestions[0]?.externalUrl).toContain('/bilag/1')
+    expect(suggestions[0]?.externalUrl).toContain('/bilag/1/rediger/kjop')
+    expect(suggestions[0]?.transactionId).toBe(1)
+    expect(suggestions[0]?.isEhf).toBe(false)
+    expect(suggestions[1]?.isEhf).toBe(true)
   })
 
   it('falls back to billing rate when no Conta match', () => {
