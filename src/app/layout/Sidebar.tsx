@@ -8,7 +8,6 @@ import {
   Box,
   Button,
   Flex,
-  IconButton,
   Select,
   Separator,
   Text,
@@ -23,8 +22,9 @@ import {
   GoogleDocs,
   Group,
   HomeAlt,
-  Menu,
   Message,
+  NavArrowLeft,
+  NavArrowRight,
   Potion,
   StatsUpSquare,
   User,
@@ -379,8 +379,16 @@ function SidebarContent({
 
   const navListProps = useSidebarNavIndicators(currentPath)
 
+  const desktopRailClass =
+    !isMobile && showCollapseButton
+      ? open
+        ? 'sidebar-desktop-rail sidebar-desktop-rail--expanded'
+        : 'sidebar-desktop-rail sidebar-desktop-rail--collapsed'
+      : undefined
+
   return (
     <aside
+      className={desktopRailClass}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -459,7 +467,8 @@ function SidebarContent({
         justify="between"
         px="3"
         py="3"
-        gap="3"
+        gap="2"
+        className="sidebar-desktop-header"
         style={{ flexShrink: 0 }}
       >
         <Flex align="center" gap="2" style={{ minWidth: 0, flex: 1 }}>
@@ -510,16 +519,23 @@ function SidebarContent({
         </Flex>
 
         {!isMobile && showCollapseButton && (
-          <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
-            <IconButton
-              size="2"
-              variant="ghost"
-              onClick={() => onToggle(!open)}
-              aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
-            >
-              <Menu />
-            </IconButton>
-          </Tooltip>
+          <div className="sidebar-collapse-slot">
+            <Tooltip content={open ? 'Collapse' : 'Expand'} delayDuration={300}>
+              <button
+                type="button"
+                className="sidebar-collapse-chevron"
+                data-size={open ? 'sm' : 'md'}
+                onClick={() => onToggle(!open)}
+                aria-label={open ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                {open ? (
+                  <NavArrowLeft width={12} height={12} strokeWidth={2} />
+                ) : (
+                  <NavArrowRight width={18} height={18} strokeWidth={2} />
+                )}
+              </button>
+            </Tooltip>
+          </div>
         )}
       </Flex>
 
