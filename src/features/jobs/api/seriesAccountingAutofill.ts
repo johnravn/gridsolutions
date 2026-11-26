@@ -1,10 +1,6 @@
 import { supabase } from '@shared/api/supabase'
-import {
-  
-  deleteJobMoneyItem,
-  insertJobMoneyItem
-} from './moneyQueries'
-import type {JobMoneyItemInsert} from './moneyQueries';
+import { deleteJobMoneyItem, insertJobMoneyItem } from './moneyQueries'
+import type { JobMoneyItemInsert } from './moneyQueries'
 import type {
   AutofillCrewBooking,
   AutofillExistingMoneyItem,
@@ -34,11 +30,16 @@ export async function fetchExistingMoneyItemsForJobs(
     .select('id, job_id, source_id')
     .in('job_id', [...jobIds])
   if (error) throw error
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    job_id: row.job_id,
-    source_id: row.source_id ?? null,
-  }))
+  return (data ?? [])
+    .filter(
+      (row): row is typeof row & { job_id: string } =>
+        typeof row.job_id === 'string',
+    )
+    .map((row) => ({
+      id: row.id,
+      job_id: row.job_id,
+      source_id: row.source_id ?? null,
+    }))
 }
 
 /**

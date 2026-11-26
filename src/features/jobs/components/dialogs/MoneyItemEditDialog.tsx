@@ -35,7 +35,10 @@ const schema = z.object({
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  jobId: string
+  /** Job-scoped ledger. Exactly one of jobId / recurringJobId. */
+  jobId?: string
+  /** Combined series ledger. */
+  recurringJobId?: string
   companyId: string
   mode: 'add' | 'edit'
   initialData?: {
@@ -78,6 +81,7 @@ export default function MoneyItemEditDialog({
   open,
   onOpenChange,
   jobId,
+  recurringJobId,
   companyId,
   mode,
   initialData,
@@ -86,6 +90,20 @@ export default function MoneyItemEditDialog({
 }: Props) {
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
+
+  const invalidateLedger = React.useCallback(() => {
+    if (jobId) {
+      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+    }
+    if (recurringJobId) {
+      void qc.invalidateQueries({
+        queryKey: ['recurring-jobs', recurringJobId, 'money-items'],
+      })
+      void qc.invalidateQueries({
+        queryKey: ['recurring-jobs', recurringJobId, 'money-verification'],
+      })
+    }
+  }, [jobId, recurringJobId, qc])
 
   const form = useAppForm({
     defaultValues,
@@ -125,9 +143,13 @@ export default function MoneyItemEditDialog({
 
   const insertMutation = useMutation({
     mutationFn: async (value: typeof defaultValues) => {
+      if ((jobId == null) === (recurringJobId == null)) {
+        throw new Error('Money item requires a job or recurring series')
+      }
       const amountNum = parseFloat(value.amount)
       const payload: JobMoneyItemInsert = {
-        job_id: jobId,
+        job_id: jobId ?? null,
+        recurring_job_id: recurringJobId ?? null,
         company_id: companyId,
         type: value.type,
         description: value.description.trim(),
@@ -144,7 +166,7 @@ export default function MoneyItemEditDialog({
       success('Item added')
       onOpenChange(false)
       onSaved?.()
-      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+      invalidateLedger()
     },
     onError: (e: unknown) => {
       toastError(
@@ -170,7 +192,7 @@ export default function MoneyItemEditDialog({
       success('Item updated')
       onOpenChange(false)
       onSaved?.()
-      void qc.invalidateQueries({ queryKey: ['jobs', jobId, 'money-items'] })
+      invalidateLedger()
     },
     onError: (e: unknown) => {
       toastError(

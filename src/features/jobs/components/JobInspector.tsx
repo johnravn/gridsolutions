@@ -78,7 +78,11 @@ export default function JobInspector({
   id: string | null
   onDeleted?: () => void
   initialTab?: string
-  onOpenRecurringSeries?: (recurringId: string, title: string) => void
+  onOpenRecurringSeries?: (
+    recurringId: string,
+    title: string,
+    tab?: string,
+  ) => void
 }) {
   // ✅ hooks first
   const { companyRole } = useAuthz()
@@ -660,7 +664,20 @@ export default function JobInspector({
         )}
         {!isFreelancer && (
           <Tabs.Content value="money" mt={'10px'}>
-            <MoneyTab jobId={job.id} />
+            <MoneyTab
+              jobId={job.id}
+              recurringJob={job.recurring_job ?? null}
+              onOpenSeriesAccounting={
+                job.recurring_job && onOpenRecurringSeries
+                  ? () =>
+                      onOpenRecurringSeries(
+                        job.recurring_job!.id,
+                        job.recurring_job!.title,
+                        'money',
+                      )
+                  : undefined
+              }
+            />
           </Tabs.Content>
         )}
         {!isFreelancer && (

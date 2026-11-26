@@ -34,6 +34,8 @@ export function makeRecurringJobDetail(
     archived: false,
     period_start: null,
     period_end: null,
+    accounting_mode: 'per_job',
+    money_verified_at: null,
     job_count: 0,
     project_lead_user_id: '66666666-6666-4666-8666-666666666666',
     customer_id: '77777777-7777-4777-8777-777777777777',

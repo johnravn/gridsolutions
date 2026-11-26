@@ -32,6 +32,13 @@ export type JobProfitabilityRow = {
   money_verified: boolean
   /** ISO timestamp when Accounting was verified; null if not verified. */
   money_verified_at: string | null
+  /**
+   * job = normal / per-job recurring occurrence.
+   * combined_series = one rollup row for a Combined-mode recurring series.
+   */
+  accounting_scope: 'job' | 'combined_series'
+  /** Set when this row is a combined series (or a per-job member). */
+  recurring_job_id: string | null
 }
 
 export type CustomerProfitabilityRow = {

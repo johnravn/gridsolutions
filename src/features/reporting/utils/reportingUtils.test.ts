@@ -70,6 +70,8 @@ function jobRow(
     money_incomplete: false,
     money_verified: false,
     money_verified_at: null,
+    accounting_scope: 'job',
+    recurring_job_id: null,
     ...partial,
   }
 }

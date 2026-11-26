@@ -30,6 +30,19 @@ type ProjectLeadJoin = {
   avatar_url: string | null
 }
 
+type RecurringJobJoin = {
+  id: string
+  title: string
+  accounting_mode: 'per_job' | 'combined' | null
+  money_verified_at: string | null
+  period_start: string | null
+  period_end: string | null
+  project_lead_user_id: string | null
+  customer_id: string | null
+  customer: { name: string } | Array<{ name: string }> | null
+  project_lead: ProjectLeadJoin | Array<ProjectLeadJoin> | null
+}
+
 type JobRow = {
   id: string
   jobnr: number | null
@@ -39,8 +52,10 @@ type JobRow = {
   customer_id: string | null
   status?: string
   money_verified_at?: string | null
+  recurring_job_id?: string | null
   customer: { name: string } | Array<{ name: string }> | null
   project_lead: ProjectLeadJoin | Array<ProjectLeadJoin> | null
+  recurring_job?: RecurringJobJoin | Array<RecurringJobJoin> | null
 }
 
 function customerNameFromJoin(customer: JobRow['customer']): string | null {
@@ -101,9 +116,11 @@ async function fetchOverlappingJobs({
   const rangeStart = from.getTime()
   const rangeEnd = to.getTime()
 
+  const recurringJoin =
+    'recurring_job:recurring_job_id ( id, title, accounting_mode, money_verified_at, period_start, period_end, project_lead_user_id, customer_id, customer:customer_id(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ) )'
   const select = includeStatus
-    ? 'id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
-    : 'id, jobnr, title, start_at, end_at, customer_id, money_verified_at, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url )'
+    ? `id, jobnr, title, start_at, end_at, customer_id, status, money_verified_at, recurring_job_id, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ), ${recurringJoin}`
+    : `id, jobnr, title, start_at, end_at, customer_id, money_verified_at, recurring_job_id, customer:customers(name), project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ), ${recurringJoin}`
 
   const fromIso = from.toISOString()
   const toIso = to.toISOString()
@@ -192,6 +209,7 @@ async function fetchMoneyTotalsByJob(
   )
 
   for (const row of items) {
+    if (!row.job_id) continue
     const cur = byJob.get(row.job_id)
     if (!cur) continue
     cur.itemCount += 1
@@ -200,6 +218,41 @@ async function fetchMoneyTotalsByJob(
   }
 
   return byJob
+}
+
+async function fetchMoneyTotalsByRecurringJob(
+  recurringJobIds: Array<string>,
+): Promise<Map<string, MoneyTotals>> {
+  const bySeries = new Map<string, MoneyTotals>()
+  for (const id of recurringJobIds) {
+    bySeries.set(id, { income: 0, expenses: 0, itemCount: 0 })
+  }
+  if (recurringJobIds.length === 0) return bySeries
+
+  const items = await fetchAllInChunks(recurringJobIds, (chunk) =>
+    supabase
+      .from('job_money_items')
+      .select('recurring_job_id, type, amount')
+      .in('recurring_job_id', chunk),
+  )
+
+  for (const row of items) {
+    if (!row.recurring_job_id) continue
+    const cur = bySeries.get(row.recurring_job_id)
+    if (!cur) continue
+    cur.itemCount += 1
+    if (row.type === 'income') cur.income += Number(row.amount)
+    else if (row.type === 'expense') cur.expenses += Number(row.amount)
+  }
+
+  return bySeries
+}
+
+function recurringJobFromJoin(
+  recurringJob: JobRow['recurring_job'],
+): RecurringJobJoin | null {
+  if (recurringJob == null) return null
+  return Array.isArray(recurringJob) ? (recurringJob[0] ?? null) : recurringJob
 }
 
 function toJobProfitabilityRow(
@@ -234,6 +287,52 @@ function toJobProfitabilityRow(
     }),
     money_verified: job.money_verified_at != null,
     money_verified_at: job.money_verified_at ?? null,
+    accounting_scope: 'job',
+    recurring_job_id: job.recurring_job_id ?? null,
+  }
+}
+
+function toCombinedSeriesProfitabilityRow(
+  series: RecurringJobJoin,
+  money: MoneyTotals,
+  childStatuses: Array<string>,
+): JobProfitabilityRow {
+  const income = money.income
+  const expenses = money.expenses
+  const profit = income - expenses
+  // Prefer an eligible child status for incompleteness; else first child.
+  const status =
+    childStatuses.find((s) =>
+      ['completed', 'invoiced', 'paid', 'canceled'].includes(s),
+    ) ??
+    childStatuses[0] ??
+    null
+  return {
+    job_id: series.id,
+    job_number: 'Series',
+    title: series.title,
+    customer_id: series.customer_id ?? null,
+    customer_name: customerNameFromJoin(series.customer),
+    project_lead_user_id: projectLeadUserIdFromJoin(series.project_lead),
+    project_lead_name: projectLeadNameFromJoin(series.project_lead),
+    project_lead_avatar_url: projectLeadAvatarFromJoin(series.project_lead),
+    start_at: series.period_start ?? null,
+    end_at: series.period_end ?? null,
+    status,
+    income,
+    expenses,
+    profit,
+    margin_pct: marginPct(income, profit),
+    money_item_count: money.itemCount,
+    money_incomplete: isMoneyIncompleteJob({
+      status,
+      income,
+      itemCount: money.itemCount,
+    }),
+    money_verified: series.money_verified_at != null,
+    money_verified_at: series.money_verified_at ?? null,
+    accounting_scope: 'combined_series',
+    recurring_job_id: series.id,
   }
 }
 
@@ -259,17 +358,64 @@ export async function fetchJobProfitabilityRows({
     includeStatus: true,
     projectLeadUserId,
   })
-  if (overlapping.length === 0) return []
 
-  const jobIds = overlapping.map((j) => j.id)
-  const byJob = await fetchMoneyTotalsByJob(jobIds)
+  const perJobJobs: Array<JobRow> = []
+  const combinedSeriesById = new Map<
+    string,
+    { series: RecurringJobJoin; childStatuses: Array<string> }
+  >()
 
-  return overlapping.map((job) =>
+  for (const job of overlapping) {
+    const series = recurringJobFromJoin(job.recurring_job)
+    if (series?.accounting_mode === 'combined' && job.recurring_job_id) {
+      if (
+        projectLeadUserId &&
+        series.project_lead_user_id !== projectLeadUserId
+      ) {
+        continue
+      }
+      const existing = combinedSeriesById.get(job.recurring_job_id)
+      if (existing) {
+        if (job.status) existing.childStatuses.push(job.status)
+      } else {
+        combinedSeriesById.set(job.recurring_job_id, {
+          series,
+          childStatuses: job.status ? [job.status] : [],
+        })
+      }
+      continue
+    }
+    perJobJobs.push(job)
+  }
+
+  const jobIds = perJobJobs.map((j) => j.id)
+  const seriesIds = [...combinedSeriesById.keys()]
+  const [byJob, bySeries] = await Promise.all([
+    fetchMoneyTotalsByJob(jobIds),
+    fetchMoneyTotalsByRecurringJob(seriesIds),
+  ])
+
+  const jobRows = perJobJobs.map((job) =>
     toJobProfitabilityRow(
       job,
       byJob.get(job.id) ?? { income: 0, expenses: 0, itemCount: 0 },
     ),
   )
+
+  const seriesRows = [...combinedSeriesById.values()].map(
+    ({ series, childStatuses }) =>
+      toCombinedSeriesProfitabilityRow(
+        series,
+        bySeries.get(series.id) ?? {
+          income: 0,
+          expenses: 0,
+          itemCount: 0,
+        },
+        childStatuses,
+      ),
+  )
+
+  return [...jobRows, ...seriesRows]
 }
 
 export function reportJobProfitabilityQuery({
@@ -458,39 +604,89 @@ export function reportMonthlyTrendQuery({
       const scopedCompanyId = requireCompanyId(companyId)
       const { fromISO, toISO } = rangeBounds(fromDate, toDate)
 
-      // Monthly P&L chart: only ledger rows on verified jobs.
-      const select =
+      // Monthly P&L chart: verified job ledger + verified combined-series ledger.
+      const jobSelect =
         'type, amount, date, created_at, jobs!inner(money_verified_at, project_lead_user_id)'
+      const seriesSelect =
+        'type, amount, date, created_at, recurring_jobs!inner(money_verified_at, project_lead_user_id, accounting_mode)'
 
-      let datedQ = supabase
+      let datedJobQ = supabase
         .from('job_money_items')
-        .select(select)
+        .select(jobSelect)
         .eq('company_id', scopedCompanyId)
+        .not('job_id', 'is', null)
         .not('date', 'is', null)
         .gte('date', fromISO)
         .lte('date', toISO)
         .not('jobs.money_verified_at', 'is', null)
 
-      let undatedQ = supabase
+      let undatedJobQ = supabase
         .from('job_money_items')
-        .select(select)
+        .select(jobSelect)
         .eq('company_id', scopedCompanyId)
+        .not('job_id', 'is', null)
         .is('date', null)
         .gte('created_at', fromISO)
         .lte('created_at', toISO)
         .not('jobs.money_verified_at', 'is', null)
 
+      let datedSeriesQ = supabase
+        .from('job_money_items')
+        .select(seriesSelect)
+        .eq('company_id', scopedCompanyId)
+        .not('recurring_job_id', 'is', null)
+        .not('date', 'is', null)
+        .gte('date', fromISO)
+        .lte('date', toISO)
+        .eq('recurring_jobs.accounting_mode', 'combined')
+        .not('recurring_jobs.money_verified_at', 'is', null)
+
+      let undatedSeriesQ = supabase
+        .from('job_money_items')
+        .select(seriesSelect)
+        .eq('company_id', scopedCompanyId)
+        .not('recurring_job_id', 'is', null)
+        .is('date', null)
+        .gte('created_at', fromISO)
+        .lte('created_at', toISO)
+        .eq('recurring_jobs.accounting_mode', 'combined')
+        .not('recurring_jobs.money_verified_at', 'is', null)
+
       if (projectLeadUserId) {
-        datedQ = datedQ.eq('jobs.project_lead_user_id', projectLeadUserId)
-        undatedQ = undatedQ.eq('jobs.project_lead_user_id', projectLeadUserId)
+        datedJobQ = datedJobQ.eq('jobs.project_lead_user_id', projectLeadUserId)
+        undatedJobQ = undatedJobQ.eq(
+          'jobs.project_lead_user_id',
+          projectLeadUserId,
+        )
+        datedSeriesQ = datedSeriesQ.eq(
+          'recurring_jobs.project_lead_user_id',
+          projectLeadUserId,
+        )
+        undatedSeriesQ = undatedSeriesQ.eq(
+          'recurring_jobs.project_lead_user_id',
+          projectLeadUserId,
+        )
       }
 
-      const [datedRes, undatedRes] = await Promise.all([datedQ, undatedQ])
+      const [datedJobRes, undatedJobRes, datedSeriesRes, undatedSeriesRes] =
+        await Promise.all([
+          datedJobQ,
+          undatedJobQ,
+          datedSeriesQ,
+          undatedSeriesQ,
+        ])
 
-      if (datedRes.error) throw datedRes.error
-      if (undatedRes.error) throw undatedRes.error
+      if (datedJobRes.error) throw datedJobRes.error
+      if (undatedJobRes.error) throw undatedJobRes.error
+      if (datedSeriesRes.error) throw datedSeriesRes.error
+      if (undatedSeriesRes.error) throw undatedSeriesRes.error
 
-      const items = [...(datedRes.data ?? []), ...(undatedRes.data ?? [])]
+      const items = [
+        ...(datedJobRes.data ?? []),
+        ...(undatedJobRes.data ?? []),
+        ...(datedSeriesRes.data ?? []),
+        ...(undatedSeriesRes.data ?? []),
+      ]
       const monthly = new Map<string, { income: number; expenses: number }>()
       for (const item of items) {
         const raw = item.date || item.created_at

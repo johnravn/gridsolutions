@@ -370,15 +370,15 @@ export default function JobsPage() {
   }, [writeSelectionToUrl])
 
   const handleOpenRecurringSeries = React.useCallback(
-    (recurringId: string, title: string) => {
+    (recurringId: string, title: string, nextTab: string = 'overview') => {
       setListScope({ kind: 'recurring', id: recurringId, title })
       const next: JobsPageSelection = {
         kind: 'recurring_job',
         id: recurringId,
       }
-      setSeriesTab('overview')
+      setSeriesTab(nextTab)
       setSelection(next)
-      writeSelectionToUrl(next, 'overview')
+      writeSelectionToUrl(next, nextTab)
     },
     [writeSelectionToUrl],
   )

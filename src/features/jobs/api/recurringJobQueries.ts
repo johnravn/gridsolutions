@@ -25,6 +25,7 @@ import type {
 
 const RECURRING_JOB_SELECT = `
   id, company_id, title, description, archived, period_start, period_end,
+  accounting_mode, money_verified_at,
   project_lead_user_id, customer_id, customer_user_id, customer_contact_id,
   customer:customer_id ( id, name ),
   customer_user:customer_user_id ( user_id, display_name, email ),
@@ -392,6 +393,7 @@ export function recurringJobAccountingSummaryQuery({
         { income: number; expense: number; count: number }
       >()
       for (const item of moneyItems ?? []) {
+        if (!item.job_id) continue
         const current = totals.get(item.job_id) ?? {
           income: 0,
           expense: 0,
@@ -708,6 +710,18 @@ export async function updateRecurringJob(payload: {
       period_start: payload.periodStart,
       period_end: payload.periodEnd ?? null,
     })
+    .eq('id', payload.id)
+
+  if (error) throw error
+}
+
+export async function updateRecurringJobAccountingMode(payload: {
+  id: UUID
+  accountingMode: 'per_job' | 'combined'
+}): Promise<void> {
+  const { error } = await supabase
+    .from('recurring_jobs')
+    .update({ accounting_mode: payload.accountingMode })
     .eq('id', payload.id)
 
   if (error) throw error

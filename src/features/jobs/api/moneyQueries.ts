@@ -4,7 +4,9 @@ import { supabase } from '@shared/api/supabase'
 import {
   JOB_MONEY_VERIFY_STATUSES,
   JOB_MONEY_VERIFY_STATUS_HINT,
+  SERIES_MONEY_VERIFY_STATUS_HINT,
   isJobStatusEligibleForMoneyVerify,
+  isSeriesEligibleForMoneyVerify,
 } from '../utils/moneyVerifyStatus'
 
 export type JobMoneyItemSource =
@@ -23,7 +25,8 @@ export type JobMoneyItemCategory =
 
 export type JobMoneyItem = {
   id: string
-  job_id: string
+  job_id: string | null
+  recurring_job_id: string | null
   company_id: string
   type: JobMoneyItemType
   description: string
@@ -38,7 +41,9 @@ export type JobMoneyItem = {
 }
 
 export type JobMoneyItemInsert = {
-  job_id: string
+  /** Exactly one of job_id / recurring_job_id must be set. */
+  job_id?: string | null
+  recurring_job_id?: string | null
   company_id: string
   type: JobMoneyItemType
   description: string
@@ -59,6 +64,25 @@ export type JobMoneyItemUpdate = {
   category?: JobMoneyItemCategory | null
 }
 
+function mapMoneyItemRow(row: Record<string, unknown>): JobMoneyItem {
+  return {
+    id: row.id as string,
+    job_id: (row.job_id as string | null) ?? null,
+    recurring_job_id: (row.recurring_job_id as string | null) ?? null,
+    company_id: row.company_id as string,
+    type: row.type as JobMoneyItemType,
+    description: row.description as string,
+    amount: Number(row.amount),
+    date: (row.date as string | null) ?? null,
+    reference: (row.reference as string | null) ?? null,
+    source: row.source as JobMoneyItemSource,
+    source_id: (row.source_id as string | null) ?? null,
+    category: (row.category as JobMoneyItemCategory | null) ?? null,
+    created_at: row.created_at as string,
+    updated_at: row.updated_at as string,
+  }
+}
+
 export function jobMoneyItemsQuery(jobId: string) {
   return queryOptions<Array<JobMoneyItem>>({
     queryKey: ['jobs', jobId, 'money-items'],
@@ -71,13 +95,28 @@ export function jobMoneyItemsQuery(jobId: string) {
         .order('created_at', { ascending: true })
 
       if (error) throw error
-      return (data ?? []).map((row) => ({
-        ...row,
-        type: row.type as JobMoneyItemType,
-        source: row.source as JobMoneyItemSource,
-        category: (row.category as JobMoneyItemCategory | null) ?? null,
-        amount: Number(row.amount),
-      }))
+      return (data ?? []).map((row) =>
+        mapMoneyItemRow(row as Record<string, unknown>),
+      )
+    },
+  })
+}
+
+export function recurringJobMoneyItemsQuery(recurringJobId: string) {
+  return queryOptions<Array<JobMoneyItem>>({
+    queryKey: ['recurring-jobs', recurringJobId, 'money-items'],
+    queryFn: async (): Promise<Array<JobMoneyItem>> => {
+      const { data, error } = await supabase
+        .from('job_money_items')
+        .select('*')
+        .eq('recurring_job_id', recurringJobId)
+        .order('date', { ascending: true, nullsFirst: false })
+        .order('created_at', { ascending: true })
+
+      if (error) throw error
+      return (data ?? []).map((row) =>
+        mapMoneyItemRow(row as Record<string, unknown>),
+      )
     },
   })
 }
@@ -85,10 +124,19 @@ export function jobMoneyItemsQuery(jobId: string) {
 export async function insertJobMoneyItem(
   payload: JobMoneyItemInsert,
 ): Promise<string> {
+  const jobId = payload.job_id ?? null
+  const recurringJobId = payload.recurring_job_id ?? null
+  if ((jobId == null) === (recurringJobId == null)) {
+    throw new Error(
+      'Money item requires exactly one of job_id or recurring_job_id',
+    )
+  }
+
   const { data, error } = await supabase
     .from('job_money_items')
     .insert({
-      job_id: payload.job_id,
+      job_id: jobId,
+      recurring_job_id: recurringJobId,
       company_id: payload.company_id,
       type: payload.type,
       description: payload.description,
@@ -289,4 +337,85 @@ export async function setJobMoneyVerified({
   if (verified && !data) {
     throw new Error(JOB_MONEY_VERIFY_STATUS_HINT)
   }
+}
+
+export type SeriesMoneyVerification = {
+  money_verified_at: string | null
+  money_verified_by: string | null
+  project_lead_user_id: string | null
+  accounting_mode: 'per_job' | 'combined'
+  /** Child job statuses used for the combined verify gate. */
+  child_statuses: Array<string>
+}
+
+export function seriesMoneyVerificationQuery(recurringJobId: string) {
+  return queryOptions<SeriesMoneyVerification>({
+    queryKey: ['recurring-jobs', recurringJobId, 'money-verification'],
+    queryFn: async (): Promise<SeriesMoneyVerification> => {
+      const { data, error } = await supabase
+        .from('recurring_jobs')
+        .select(
+          'money_verified_at, money_verified_by, project_lead_user_id, accounting_mode',
+        )
+        .eq('id', recurringJobId)
+        .single()
+      if (error) throw error
+
+      const { data: children, error: childrenError } = await supabase
+        .from('jobs')
+        .select('status')
+        .eq('recurring_job_id', recurringJobId)
+        .eq('archived', false)
+      if (childrenError) throw childrenError
+
+      return {
+        money_verified_at: data.money_verified_at ?? null,
+        money_verified_by: data.money_verified_by ?? null,
+        project_lead_user_id: data.project_lead_user_id ?? null,
+        accounting_mode:
+          (data.accounting_mode as 'per_job' | 'combined' | null) ?? 'per_job',
+        child_statuses: (children ?? []).map((c) => c.status),
+      }
+    },
+  })
+}
+
+export async function setSeriesMoneyVerified({
+  recurringJobId,
+  verified,
+  userId,
+}: {
+  recurringJobId: string
+  verified: boolean
+  userId: string
+}): Promise<void> {
+  if (verified) {
+    const { data: children, error: childrenError } = await supabase
+      .from('jobs')
+      .select('status')
+      .eq('recurring_job_id', recurringJobId)
+      .eq('archived', false)
+    if (childrenError) throw childrenError
+    const statuses = (children ?? []).map((c) => c.status)
+    if (!isSeriesEligibleForMoneyVerify(statuses)) {
+      throw new Error(SERIES_MONEY_VERIFY_STATUS_HINT)
+    }
+  }
+
+  const { error } = await supabase
+    .from('recurring_jobs')
+    .update(
+      verified
+        ? {
+            money_verified_at: new Date().toISOString(),
+            money_verified_by: userId,
+          }
+        : {
+            money_verified_at: null,
+            money_verified_by: null,
+          },
+    )
+    .eq('id', recurringJobId)
+
+  if (error) throw error
 }

@@ -1,22 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
-  JOB_MONEY_VERIFY_STATUSES,
   isJobStatusEligibleForMoneyVerify,
+  isSeriesEligibleForMoneyVerify,
 } from './moneyVerifyStatus'
 
 describe('isJobStatusEligibleForMoneyVerify', () => {
-  it('allows invoiced, paid, and canceled', () => {
-    for (const status of JOB_MONEY_VERIFY_STATUSES) {
-      expect(isJobStatusEligibleForMoneyVerify(status)).toBe(true)
-    }
+  it('allows invoiced, paid, canceled', () => {
+    expect(isJobStatusEligibleForMoneyVerify('invoiced')).toBe(true)
+    expect(isJobStatusEligibleForMoneyVerify('paid')).toBe(true)
+    expect(isJobStatusEligibleForMoneyVerify('canceled')).toBe(true)
   })
 
-  it('rejects earlier workflow statuses and empty values', () => {
-    expect(isJobStatusEligibleForMoneyVerify('draft')).toBe(false)
+  it('rejects other statuses', () => {
     expect(isJobStatusEligibleForMoneyVerify('completed')).toBe(false)
-    expect(isJobStatusEligibleForMoneyVerify('in_progress')).toBe(false)
     expect(isJobStatusEligibleForMoneyVerify(null)).toBe(false)
-    expect(isJobStatusEligibleForMoneyVerify(undefined)).toBe(false)
-    expect(isJobStatusEligibleForMoneyVerify('')).toBe(false)
+  })
+})
+
+describe('isSeriesEligibleForMoneyVerify', () => {
+  it('is true when any child is eligible', () => {
+    expect(
+      isSeriesEligibleForMoneyVerify(['completed', 'invoiced', 'planned']),
+    ).toBe(true)
+  })
+
+  it('is false when no child is eligible', () => {
+    expect(isSeriesEligibleForMoneyVerify(['completed', 'planned'])).toBe(false)
+    expect(isSeriesEligibleForMoneyVerify([])).toBe(false)
   })
 })

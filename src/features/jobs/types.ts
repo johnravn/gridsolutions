@@ -48,10 +48,14 @@ export type JobListRow = {
   recurring_job?: {
     id: UUID
     title: string
+    accounting_mode?: RecurringAccountingMode
   } | null
 }
 
 /* ---------- Recurring jobs ---------- */
+
+/** How Accounting is scoped for a recurring series. */
+export type RecurringAccountingMode = 'per_job' | 'combined'
 
 export type RecurringJobListRow = {
   id: UUID
@@ -61,6 +65,10 @@ export type RecurringJobListRow = {
   archived: boolean
   period_start: string | null
   period_end: string | null
+  /** Default per_job; combined = series ledger, child Accounting off. */
+  accounting_mode: RecurringAccountingMode
+  /** Combined-mode series verification timestamp. */
+  money_verified_at?: string | null
   job_count: number
   customer?: {
     id: UUID
@@ -253,6 +261,7 @@ export type JobDetail = {
   recurring_job?: {
     id: UUID
     title: string
+    accounting_mode?: RecurringAccountingMode
   } | null
 
   customer_contact?: {

@@ -26,7 +26,7 @@ const JOBS_LIST_SELECT = `
   customer:customer_id ( id, name ),
   customer_user:customer_user_id ( user_id, display_name, email ),
   project_lead:project_lead_user_id ( user_id, display_name, email, avatar_url ),
-  recurring_job:recurring_job_id ( id, title )
+  recurring_job:recurring_job_id ( id, title, accounting_mode )
 `
 
 type JobsIndexSortBy = 'title' | 'start_at' | 'status' | 'customer_name'
@@ -921,7 +921,7 @@ export function jobDetailQuery({ jobId }: { jobId: string }) {
           project_lead:project_lead_user_id ( user_id, display_name, email ),
           customer_contact:customer_contact_id ( id, name, email, phone, title ),
           address:job_address_id ( id, name, address_line, zip_code, city, country ),
-          recurring_job:recurring_job_id ( id, title )
+          recurring_job:recurring_job_id ( id, title, accounting_mode )
         `,
         )
         .eq('id', jobId)
