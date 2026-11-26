@@ -82,13 +82,24 @@ export function JobProfitabilityTable({
         renderCell={(row, colId) => {
           switch (colId) {
             case 'job_number':
-              return <Text size="2">#{row.job_number}</Text>
+              return (
+                <Text size="2">
+                  {row.accounting_scope === 'combined_series'
+                    ? row.job_number
+                    : `#${row.job_number}`}
+                </Text>
+              )
             case 'title':
               return (
                 <Flex align="center" gap="2" style={{ minWidth: 0 }}>
                   <Text size="2" truncate style={{ minWidth: 0 }}>
                     {row.title}
                   </Text>
+                  {row.accounting_scope === 'combined_series' ? (
+                    <Badge size="1" color="violet" variant="soft">
+                      Combined
+                    </Badge>
+                  ) : null}
                   {row.money_incomplete ? (
                     <Badge size="1" color="orange" variant="soft">
                       Incomplete
@@ -171,6 +182,17 @@ export function JobProfitabilityTable({
             variant="soft"
             onClick={(e) => {
               e.stopPropagation()
+              if (row.accounting_scope === 'combined_series') {
+                navigate({
+                  to: '/jobs',
+                  search: {
+                    jobId: undefined,
+                    recurringJobId: row.recurring_job_id ?? row.job_id,
+                    tab: 'money',
+                  },
+                })
+                return
+              }
               navigate({
                 to: '/jobs',
                 search: {

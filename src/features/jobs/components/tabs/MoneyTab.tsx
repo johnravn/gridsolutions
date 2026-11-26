@@ -130,12 +130,25 @@ type Suggestion = MoneySuggestion
 /** Min Accounting panel width for Invoice/Logging beside the money list. */
 const ACCOUNTING_TWO_COL_MIN_PX = 960
 
-export default function MoneyTab({ jobId }: { jobId: string }) {
+export default function MoneyTab({
+  jobId,
+  recurringJob = null,
+  onOpenSeriesAccounting,
+}: {
+  jobId: string
+  recurringJob?: {
+    id: string
+    title: string
+    accounting_mode?: 'per_job' | 'combined'
+  } | null
+  onOpenSeriesAccounting?: () => void
+}) {
   const { companyId } = useCompany()
   const { userId, companyRole, isGlobalSuperuser } = useAuthz()
   const qc = useQueryClient()
   const { success, error: toastError } = useToast()
   const isMobile = useMediaQuery('(max-width: 768px)')
+  const combinedSeriesAccounting = recurringJob?.accounting_mode === 'combined'
   // Two-column layout when the Accounting panel itself is wide enough —
   // not when the Jobs list chrome is collapsed.
   const accountingLayoutRef = React.useRef<HTMLDivElement>(null)
@@ -1277,6 +1290,41 @@ export default function MoneyTab({ jobId }: { jobId: string }) {
     setEditMode('edit')
     setEditingItem(item)
     setEditDialogOpen(true)
+  }
+
+  if (combinedSeriesAccounting) {
+    return (
+      <Box style={{ maxWidth: '100%', minWidth: 0 }}>
+        <Heading size="3" mb="3">
+          Accounting
+        </Heading>
+        <Card>
+          <Flex direction="column" gap="3" align="start">
+            <Text size="2">
+              Accounting for this job is managed on the recurring series
+              {recurringJob?.title ? (
+                <>
+                  {' '}
+                  <Text weight="medium">{recurringJob.title}</Text>
+                </>
+              ) : null}{' '}
+              (Combined mode). Income, expenses, and verification live on the
+              series — not on individual jobs.
+            </Text>
+            {onOpenSeriesAccounting ? (
+              <Button size="2" onClick={onOpenSeriesAccounting}>
+                Open series Accounting
+              </Button>
+            ) : (
+              <Text size="2" color="gray">
+                Open the series from the violet strip and choose the Accounting
+                tab.
+              </Text>
+            )}
+          </Flex>
+        </Card>
+      </Box>
+    )
   }
 
   return (

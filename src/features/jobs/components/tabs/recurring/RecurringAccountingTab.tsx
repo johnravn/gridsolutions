@@ -24,7 +24,10 @@ import { useCompanyWriteAccess } from '@features/demo/hooks/useCompanyWriteAcces
 import { useToast } from '@shared/ui/toast/ToastProvider'
 import { makeWordPresentable } from '@shared/lib/generalFunctions'
 import { setJobMoneyVerified } from '../../../api/moneyQueries'
-import { recurringJobAccountingSummaryQuery } from '../../../api/recurringJobQueries'
+import {
+  recurringJobAccountingSummaryQuery,
+  updateRecurringJobAccountingMode,
+} from '../../../api/recurringJobQueries'
 import {
   canVerifyJobAccounting,
   getSeriesAccountingStatus,
@@ -35,7 +38,9 @@ import {
 } from '../../../utils/moneyVerifyStatus'
 import { getJobStatusColor } from '../../../utils/statusColors'
 import RecurringAccountingAutofillDialog from '../../dialogs/RecurringAccountingAutofillDialog'
+import RecurringCombinedMoneyPanel from './RecurringCombinedMoneyPanel'
 import type {
+  RecurringAccountingMode,
   RecurringJobAccountingEntry,
   RecurringJobDetail,
 } from '../../../types'
@@ -106,8 +111,43 @@ export default function RecurringAccountingTab({
   )
   const [autofillOpen, setAutofillOpen] = React.useState(false)
 
+  const accountingMode: RecurringAccountingMode =
+    detail.accounting_mode === 'combined' ? 'combined' : 'per_job'
+
+  const setModeMutation = useMutation({
+    mutationFn: async (mode: RecurringAccountingMode) => {
+      await updateRecurringJobAccountingMode({
+        id: detail.id,
+        accountingMode: mode,
+      })
+    },
+    onSuccess: (_data, mode) => {
+      success(
+        mode === 'combined'
+          ? 'Combined accounting enabled'
+          : 'Per-job accounting enabled',
+        mode === 'combined'
+          ? 'Series ledger is active. Child job Accounting is turned off.'
+          : 'Each job keeps its own Accounting again.',
+      )
+      void qc.invalidateQueries({
+        queryKey: ['recurring-jobs-detail', detail.id],
+      })
+      void qc.invalidateQueries({
+        queryKey: ['company', companyId, 'recurring-jobs-index'],
+      })
+    },
+    onError: (e: unknown) => {
+      showError(
+        'Could not change accounting mode',
+        e instanceof Error ? e.message : 'Please try again.',
+      )
+    },
+  })
+
   const { data: accountingSummary = [], isLoading } = useQuery({
     ...recurringJobAccountingSummaryQuery({ recurringJobId: detail.id }),
+    enabled: accountingMode === 'per_job',
   })
 
   const {
@@ -261,9 +301,56 @@ export default function RecurringAccountingTab({
     onSelectJob(nextEntry.job_id, 'money')
   }
 
+  const modeSelector = (
+    <Card>
+      <Flex justify="between" align="start" gap="3" wrap="wrap">
+        <Box style={{ minWidth: 0, flex: '1 1 240px' }}>
+          <Heading size="4" mb="1">
+            Accounting mode
+          </Heading>
+          <Text size="2" color="gray">
+            {accountingMode === 'combined'
+              ? 'One ledger for the whole series. Child job Accounting tabs are deactivated.'
+              : 'Each occurrence keeps its own Accounting. Use this tab for rollup, bulk verify, and autofill.'}
+          </Text>
+        </Box>
+        <SegmentedControl.Root
+          size="2"
+          value={accountingMode}
+          disabled={!canWrite || setModeMutation.isPending}
+          onValueChange={(value) => {
+            if (!canWrite || setModeMutation.isPending) return
+            if (value !== 'per_job' && value !== 'combined') return
+            if (value === accountingMode) return
+            setModeMutation.mutate(value)
+          }}
+        >
+          <SegmentedControl.Item value="per_job">Per job</SegmentedControl.Item>
+          <SegmentedControl.Item value="combined">
+            Combined
+          </SegmentedControl.Item>
+        </SegmentedControl.Root>
+      </Flex>
+    </Card>
+  )
+
+  if (accountingMode === 'combined') {
+    return (
+      <Flex direction="column" gap="4">
+        <Heading size="3">Accounting</Heading>
+        {modeSelector}
+        <RecurringCombinedMoneyPanel
+          recurringJobId={detail.id}
+          onOpenSeriesInvoice={onOpenSeriesInvoice}
+        />
+      </Flex>
+    )
+  }
+
   return (
     <Flex direction="column" gap="4">
       <Heading size="3">Accounting</Heading>
+      {modeSelector}
 
       <Card>
         <Flex justify="between" align="center" gap="3" wrap="wrap">

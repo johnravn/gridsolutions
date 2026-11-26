@@ -29,7 +29,8 @@ export function jobsAccountingUnverifiedQuery({
           jobnr,
           start_at,
           end_at,
-          customer:customer_id ( id, name )
+          customer:customer_id ( id, name ),
+          recurring_job:recurring_job_id ( accounting_mode )
         `,
         )
         .eq('company_id', companyId)
@@ -40,7 +41,14 @@ export function jobsAccountingUnverifiedQuery({
         .order('start_at', { ascending: false })
 
       if (error) throw error
-      return (data ?? []) as Array<HomeJobReadyToInvoice>
+      // Combined-mode children are verified on the series ledger, not per job.
+      const rows = (data ?? []).filter((row) => {
+        const series = Array.isArray(row.recurring_job)
+          ? row.recurring_job[0]
+          : row.recurring_job
+        return series?.accounting_mode !== 'combined'
+      })
+      return rows as Array<HomeJobReadyToInvoice>
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,

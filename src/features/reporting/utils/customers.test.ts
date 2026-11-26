@@ -25,6 +25,8 @@ function job(
     money_incomplete: false,
     money_verified: true,
     money_verified_at: '2026-11-21T12:00:00Z',
+    accounting_scope: 'job',
+    recurring_job_id: null,
     ...partial,
     ...(partial.money_verified === false &&
     partial.money_verified_at === undefined
