@@ -75,6 +75,9 @@ export default defineConfig(({ mode }) => {
         // Blank Safari tabs are recovered by index.html boot watchdog (not
         // autoUpdate), so we keep intentional reload UX without silent claim.
         registerType: 'prompt',
+        // Only register via virtual:pwa-register in PwaUpdateHandler — never
+        // also inject a second register script into index.html.
+        injectRegister: false,
         includeAssets: [
           'grid-icon-light.svg',
           'grid-icon-dark.svg',

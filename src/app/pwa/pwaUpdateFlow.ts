@@ -12,9 +12,20 @@
  * without a prompt and races forced client navigations, which is what made
  * reload-on-new-version feel worse after the Safari blank-page fix (#206).
  *
- * Guards are module-scoped so StrictMode remounts / effect re-runs that call
- * registerSW again cannot stack identical "new version" toasts.
+ * Prompt locks live in pwaUpdateGuards (window + sessionStorage) so remounts,
+ * duplicate bundle eval, and dismiss/re-focus cannot stack toasts.
  */
+
+import {
+  PWA_NEED_REFRESH_DEDUPE_KEY,
+  PWA_REGISTER_ERROR_DEDUPE_KEY,
+  isNeedRefreshLocked,
+  isRegisterErrorLocked,
+  isUpdateInFlight,
+  lockNeedRefresh,
+  lockRegisterError,
+  setUpdateInFlight,
+} from './pwaUpdateGuards'
 
 export type PwaUpdateToastShow = (opts: {
   kind: 'info' | 'error'
@@ -23,6 +34,7 @@ export type PwaUpdateToastShow = (opts: {
   duration: number
   onUndo: () => void
   undoLabel: string
+  dedupeKey: string
 }) => void
 
 export type PwaUpdateFlowDeps = {
@@ -36,56 +48,50 @@ export type PwaUpdateFlow = {
   onRegisterError: () => void
 }
 
-/** Session-level: at most one need-refresh toast until full navigation. */
-let needRefreshToastShown = false
-/** Session-level: at most one register-error toast until full navigation. */
-let registerErrorToastShown = false
-/** True while Reload → updateSW/clearCaches is running. */
-let updateInFlight = false
-
-/** Test-only: reset module guards between cases. */
-export function resetPwaUpdateFlowGuardsForTests() {
-  needRefreshToastShown = false
-  registerErrorToastShown = false
-  updateInFlight = false
-}
+export { resetPwaUpdateGuardsForTests } from './pwaUpdateGuards'
 
 export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
   return {
     onNeedRefresh(updateSW) {
-      if (needRefreshToastShown || updateInFlight) return
-      needRefreshToastShown = true
+      if (isNeedRefreshLocked()) return
+      lockNeedRefresh()
 
       deps.showToast({
         kind: 'info',
         title: 'A new version is available',
         description: 'Reload to get the latest updates.',
         duration: 0,
+        dedupeKey: PWA_NEED_REFRESH_DEDUPE_KEY,
         onUndo: () => {
-          if (updateInFlight) return
-          updateInFlight = true
-          void updateSW(true).finally(() => {
-            // Page should reload after SKIP_WAITING. If it does not, allow
-            // another click on the same toast — but never open a second one.
-            updateInFlight = false
+          if (isUpdateInFlight()) return
+          setUpdateInFlight(true)
+          void updateSW(true).catch(() => {
+            // Hard reload below still runs.
           })
+          // vite-plugin-pwa reloads on `controlling` when skipWaiting works.
+          // Always schedule a fallback navigation so a hung updateSW cannot
+          // leave a waiting worker that keeps re-prompting.
+          window.setTimeout(() => {
+            deps.reload()
+          }, 600)
         },
         undoLabel: 'Reload',
       })
     },
 
     onRegisterError() {
-      if (registerErrorToastShown || updateInFlight) return
-      registerErrorToastShown = true
+      if (isRegisterErrorLocked()) return
+      lockRegisterError()
 
       deps.showToast({
         kind: 'error',
         title: 'Could not update the app shell',
         description: 'Reload to clear a stale offline cache.',
         duration: 0,
+        dedupeKey: PWA_REGISTER_ERROR_DEDUPE_KEY,
         onUndo: () => {
-          if (updateInFlight) return
-          updateInFlight = true
+          if (isUpdateInFlight()) return
+          setUpdateInFlight(true)
           void (async () => {
             try {
               await deps.clearCaches()
@@ -94,7 +100,7 @@ export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
             }
             deps.reload()
           })().finally(() => {
-            updateInFlight = false
+            setUpdateInFlight(false)
           })
         },
         undoLabel: 'Reload',

@@ -22,6 +22,8 @@ type ToastItem = {
   duration?: number
   onUndo?: () => void
   undoLabel?: string
+  /** When set, at most one non-closing toast with this key may exist. */
+  dedupeKey?: string
   progressCurrent?: number
   progressTotal?: number
   closing?: boolean
@@ -242,7 +244,15 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
 
   const push = React.useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = crypto.randomUUID()
-    setToasts((prev) => [...prev, { ...t, id }])
+    setToasts((prev) => {
+      if (
+        t.dedupeKey &&
+        prev.some((x) => x.dedupeKey === t.dedupeKey && !x.closing)
+      ) {
+        return prev
+      }
+      return [...prev, { ...t, id }]
+    })
     return id
   }, [])
 
