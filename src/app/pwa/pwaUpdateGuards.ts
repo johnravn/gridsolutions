@@ -5,6 +5,8 @@
  * once in one tab (stale+fresh chunks) or if registerSW is re-entered: each
  * copy can show another toast. Window + sessionStorage locks are shared by
  * every copy in the tab for the life of the session.
+ *
+ * Prod rebuild (#269): verify one reload toast after the next patch deploy.
  */
 
 export const PWA_NEED_REFRESH_DEDUPE_KEY = 'pwa-need-refresh'
