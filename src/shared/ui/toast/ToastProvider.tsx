@@ -246,95 +246,100 @@ export function AppToastProvider({ children }: { children: React.ReactNode }) {
     return id
   }, [])
 
-  const api: ToastContextValue = {
-    show: ({ kind = 'info', ...rest }) => {
-      if (kind === 'error') {
-        console.error('[Toast Error]', {
-          title: rest.title,
-          description: rest.description,
-          duration: rest.duration,
-          timestamp: new Date().toISOString(),
-          stack: new Error().stack,
-        })
-      }
-      push({ kind, ...rest })
-    },
-    success: (title, description, duration, onUndo, undoLabel) =>
-      push({
-        kind: 'success',
-        title,
-        description,
-        duration,
-        onUndo,
-        undoLabel,
-      }),
-    error: (title, description, duration) => {
-      if (wasDemoBlockRecently()) return
-      console.error('[Toast Error]', {
-        title,
-        description,
-        duration,
-        timestamp: new Date().toISOString(),
-        stack: new Error().stack,
-      })
-      push({ kind: 'error', title, description, duration })
-    },
-    info: (title, description, duration) =>
-      push({ kind: 'info', title, description, duration }),
-    progress: (title, description, opts) => {
-      const id = push({
-        kind: 'progress',
-        title,
-        description,
-        progressCurrent: opts?.current,
-        progressTotal: opts?.total,
-      })
-      return {
-        update: (next) =>
-          updateById(id, {
-            ...(next.title != null ? { title: next.title } : null),
-            ...(next.description != null
-              ? { description: next.description }
-              : null),
-            ...(next.current != null
-              ? { progressCurrent: next.current }
-              : null),
-            ...(next.total != null ? { progressTotal: next.total } : null),
-          }),
-        success: (nextTitle, nextDescription, duration) =>
-          updateById(id, {
-            kind: 'success',
-            title: nextTitle,
-            description: nextDescription,
-            duration,
-            progressCurrent: undefined,
-            progressTotal: undefined,
-          }),
-        error: (nextTitle, nextDescription, duration) => {
-          if (wasDemoBlockRecently()) {
-            updateById(id, { closing: true })
-            return
-          }
+  // Stable identity: consumers (e.g. PwaUpdateHandler) must not re-run
+  // effects every time a toast is pushed because the context value changed.
+  const api = React.useMemo<ToastContextValue>(
+    () => ({
+      show: ({ kind = 'info', ...rest }) => {
+        if (kind === 'error') {
           console.error('[Toast Error]', {
-            title: nextTitle,
-            description: nextDescription,
-            duration,
+            title: rest.title,
+            description: rest.description,
+            duration: rest.duration,
             timestamp: new Date().toISOString(),
             stack: new Error().stack,
           })
-          updateById(id, {
-            kind: 'error',
-            title: nextTitle,
-            description: nextDescription,
-            duration,
-            progressCurrent: undefined,
-            progressTotal: undefined,
-          })
-        },
-        dismiss: () => updateById(id, { closing: true }),
-      }
-    },
-  }
+        }
+        push({ kind, ...rest })
+      },
+      success: (title, description, duration, onUndo, undoLabel) =>
+        push({
+          kind: 'success',
+          title,
+          description,
+          duration,
+          onUndo,
+          undoLabel,
+        }),
+      error: (title, description, duration) => {
+        if (wasDemoBlockRecently()) return
+        console.error('[Toast Error]', {
+          title,
+          description,
+          duration,
+          timestamp: new Date().toISOString(),
+          stack: new Error().stack,
+        })
+        push({ kind: 'error', title, description, duration })
+      },
+      info: (title, description, duration) =>
+        push({ kind: 'info', title, description, duration }),
+      progress: (title, description, opts) => {
+        const id = push({
+          kind: 'progress',
+          title,
+          description,
+          progressCurrent: opts?.current,
+          progressTotal: opts?.total,
+        })
+        return {
+          update: (next) =>
+            updateById(id, {
+              ...(next.title != null ? { title: next.title } : null),
+              ...(next.description != null
+                ? { description: next.description }
+                : null),
+              ...(next.current != null
+                ? { progressCurrent: next.current }
+                : null),
+              ...(next.total != null ? { progressTotal: next.total } : null),
+            }),
+          success: (nextTitle, nextDescription, duration) =>
+            updateById(id, {
+              kind: 'success',
+              title: nextTitle,
+              description: nextDescription,
+              duration,
+              progressCurrent: undefined,
+              progressTotal: undefined,
+            }),
+          error: (nextTitle, nextDescription, duration) => {
+            if (wasDemoBlockRecently()) {
+              updateById(id, { closing: true })
+              return
+            }
+            console.error('[Toast Error]', {
+              title: nextTitle,
+              description: nextDescription,
+              duration,
+              timestamp: new Date().toISOString(),
+              stack: new Error().stack,
+            })
+            updateById(id, {
+              kind: 'error',
+              title: nextTitle,
+              description: nextDescription,
+              duration,
+              progressCurrent: undefined,
+              progressTotal: undefined,
+            })
+          },
+          dismiss: () => updateById(id, { closing: true }),
+        }
+      },
+    }),
+    [push, updateById],
+  )
 
   const viewport = (
     <Toast.Viewport

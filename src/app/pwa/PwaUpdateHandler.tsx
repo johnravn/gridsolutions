@@ -10,6 +10,10 @@ import { createPwaUpdateFlow } from './pwaUpdateFlow'
 
 export function PwaUpdateHandler() {
   const toast = useToast()
+  // Keep show stable across ToastProvider re-renders so we never put `toast`
+  // in the effect deps (that recreated registerSW and re-fired onNeedRefresh).
+  const showToastRef = React.useRef(toast.show)
+  showToastRef.current = toast.show
 
   React.useEffect(() => {
     // Mark that the React shell mounted successfully so the index.html
@@ -22,7 +26,7 @@ export function PwaUpdateHandler() {
     }
 
     const flow = createPwaUpdateFlow({
-      showToast: (opts) => toast.show(opts),
+      showToast: (opts) => showToastRef.current(opts),
       clearCaches: clearGridServiceWorkerCaches,
       reload: () => window.location.reload(),
     })
@@ -36,7 +40,7 @@ export function PwaUpdateHandler() {
         flow.onRegisterError()
       },
     })
-  }, [toast])
+  }, [])
 
   return null
 }
