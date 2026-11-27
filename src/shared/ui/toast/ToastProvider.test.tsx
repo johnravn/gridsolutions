@@ -236,4 +236,32 @@ describe('AppToastProvider', () => {
       '67',
     )
   })
+
+  it('keeps toast context identity stable when a toast is shown', async () => {
+    const seen: unknown[] = []
+    function Probe() {
+      const toast = useToast()
+      seen.push(toast)
+      return (
+        <button type="button" onClick={() => toast.info('Stable')}>
+          Fire
+        </button>
+      )
+    }
+
+    render(
+      <Theme>
+        <AppToastProvider>
+          <Probe />
+        </AppToastProvider>
+      </Theme>,
+    )
+
+    const before = seen[seen.length - 1]
+    fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
+    await waitFor(() => {
+      expect(screen.getByText('Stable')).toBeInTheDocument()
+    })
+    expect(seen[seen.length - 1]).toBe(before)
+  })
 })

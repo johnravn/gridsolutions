@@ -11,6 +11,9 @@
  * Do not use registerType: 'autoUpdate' here: it skipWaiting/clientsClaim
  * without a prompt and races forced client navigations, which is what made
  * reload-on-new-version feel worse after the Safari blank-page fix (#206).
+ *
+ * Guards are module-scoped so StrictMode remounts / effect re-runs that call
+ * registerSW again cannot stack identical "new version" toasts.
  */
 
 export type PwaUpdateToastShow = (opts: {
@@ -33,14 +36,25 @@ export type PwaUpdateFlow = {
   onRegisterError: () => void
 }
 
-export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
-  let prompted = false
-  let registerErrorPrompted = false
+/** Session-level: at most one need-refresh toast until full navigation. */
+let needRefreshToastShown = false
+/** Session-level: at most one register-error toast until full navigation. */
+let registerErrorToastShown = false
+/** True while Reload → updateSW/clearCaches is running. */
+let updateInFlight = false
 
+/** Test-only: reset module guards between cases. */
+export function resetPwaUpdateFlowGuardsForTests() {
+  needRefreshToastShown = false
+  registerErrorToastShown = false
+  updateInFlight = false
+}
+
+export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
   return {
     onNeedRefresh(updateSW) {
-      if (prompted) return
-      prompted = true
+      if (needRefreshToastShown || updateInFlight) return
+      needRefreshToastShown = true
 
       deps.showToast({
         kind: 'info',
@@ -48,15 +62,21 @@ export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
         description: 'Reload to get the latest updates.',
         duration: 0,
         onUndo: () => {
-          void updateSW(true)
+          if (updateInFlight) return
+          updateInFlight = true
+          void updateSW(true).finally(() => {
+            // Page should reload after SKIP_WAITING. If it does not, allow
+            // another click on the same toast — but never open a second one.
+            updateInFlight = false
+          })
         },
         undoLabel: 'Reload',
       })
     },
 
     onRegisterError() {
-      if (registerErrorPrompted) return
-      registerErrorPrompted = true
+      if (registerErrorToastShown || updateInFlight) return
+      registerErrorToastShown = true
 
       deps.showToast({
         kind: 'error',
@@ -64,6 +84,8 @@ export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
         description: 'Reload to clear a stale offline cache.',
         duration: 0,
         onUndo: () => {
+          if (updateInFlight) return
+          updateInFlight = true
           void (async () => {
             try {
               await deps.clearCaches()
@@ -71,7 +93,9 @@ export function createPwaUpdateFlow(deps: PwaUpdateFlowDeps): PwaUpdateFlow {
               // still reload — network fetch may be enough
             }
             deps.reload()
-          })()
+          })().finally(() => {
+            updateInFlight = false
+          })
         },
         undoLabel: 'Reload',
       })
