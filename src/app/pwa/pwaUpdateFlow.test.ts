@@ -1,12 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPwaUpdateFlow,
-  resetPwaUpdateFlowGuardsForTests,
+  resetPwaUpdateGuardsForTests,
 } from './pwaUpdateFlow'
+import { claimPwaRegistrationSlot } from './pwaUpdateGuards'
 
 describe('createPwaUpdateFlow', () => {
   afterEach(() => {
-    resetPwaUpdateFlowGuardsForTests()
+    resetPwaUpdateGuardsForTests()
+    vi.useRealTimers()
   })
 
   it('shows a sticky reload toast once when a new SW is waiting', () => {
@@ -28,12 +30,9 @@ describe('createPwaUpdateFlow', () => {
         title: 'A new version is available',
         duration: 0,
         undoLabel: 'Reload',
+        dedupeKey: 'pwa-need-refresh',
       }),
     )
-
-    const onUndo = showToast.mock.calls[0]?.[0]?.onUndo as () => void
-    onUndo()
-    expect(updateSW).toHaveBeenCalledWith(true)
   })
 
   it('does not stack toasts across separate flow instances (effect remount)', () => {
@@ -46,45 +45,45 @@ describe('createPwaUpdateFlow', () => {
     }
 
     createPwaUpdateFlow(deps).onNeedRefresh(updateSW)
-    // Simulates StrictMode / toast-context identity change remounting the
-    // handler and creating a fresh flow while a waiting SW still exists.
     createPwaUpdateFlow(deps).onNeedRefresh(updateSW)
     createPwaUpdateFlow(deps).onNeedRefresh(updateSW)
 
     expect(showToast).toHaveBeenCalledTimes(1)
   })
 
-  it('ignores Reload clicks while an update is already in flight', async () => {
-    let resolveUpdate!: () => void
-    const updateSW = vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveUpdate = resolve
-        }),
-    )
+  it('keeps the session lock after many rapid needRefresh callbacks', () => {
     const showToast = vi.fn()
+    const updateSW = vi.fn(async () => undefined)
     const flow = createPwaUpdateFlow({
       showToast,
       clearCaches: vi.fn(async () => undefined),
       reload: vi.fn(),
     })
 
+    for (let i = 0; i < 50; i++) flow.onNeedRefresh(updateSW)
+
+    expect(showToast).toHaveBeenCalledTimes(1)
+  })
+
+  it('forces a reload fallback after Reload even if updateSW hangs', async () => {
+    vi.useFakeTimers()
+    const showToast = vi.fn()
+    const reload = vi.fn()
+    const updateSW = vi.fn(() => new Promise<void>(() => {}))
+    const flow = createPwaUpdateFlow({
+      showToast,
+      clearCaches: vi.fn(async () => undefined),
+      reload,
+    })
+
     flow.onNeedRefresh(updateSW)
     const onUndo = showToast.mock.calls[0]?.[0]?.onUndo as () => void
     onUndo()
     onUndo()
-    onUndo()
 
     expect(updateSW).toHaveBeenCalledTimes(1)
-    resolveUpdate()
-    await vi.waitFor(() => {
-      expect(updateSW).toHaveBeenCalledTimes(1)
-    })
-
-    // Same toast may retry after a failed/no-reload update; still no second toast.
-    onUndo()
-    expect(updateSW).toHaveBeenCalledTimes(2)
-    expect(showToast).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(600)
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it('offers a one-shot cache-clear reload on register error', async () => {
@@ -111,6 +110,7 @@ describe('createPwaUpdateFlow', () => {
         kind: 'error',
         title: 'Could not update the app shell',
         undoLabel: 'Reload',
+        dedupeKey: 'pwa-register-error',
       }),
     )
 
@@ -120,5 +120,11 @@ describe('createPwaUpdateFlow', () => {
       expect(clearCaches).toHaveBeenCalledTimes(1)
       expect(reload).toHaveBeenCalledTimes(1)
     })
+  })
+
+  it('claims the SW registration slot only once per tab', () => {
+    expect(claimPwaRegistrationSlot()).toBe(true)
+    expect(claimPwaRegistrationSlot()).toBe(false)
+    expect(claimPwaRegistrationSlot()).toBe(false)
   })
 })

@@ -6,6 +6,7 @@ import {
   GRID_SW_RECOVERY_KEY,
   clearGridServiceWorkerCaches,
 } from './bootRecovery'
+import { claimPwaRegistrationSlot } from './pwaUpdateGuards'
 import { createPwaUpdateFlow } from './pwaUpdateFlow'
 
 export function PwaUpdateHandler() {
@@ -25,8 +26,14 @@ export function PwaUpdateHandler() {
       // ignore quota / private-mode failures
     }
 
+    // StrictMode remounts / accidental effect re-entry must not create a
+    // second Workbox with its own `waiting` → onNeedRefresh pipeline.
+    if (!claimPwaRegistrationSlot()) return
+
     const flow = createPwaUpdateFlow({
-      showToast: (opts) => showToastRef.current(opts),
+      showToast: (opts) => {
+        showToastRef.current(opts)
+      },
       clearCaches: clearGridServiceWorkerCaches,
       reload: () => window.location.reload(),
     })

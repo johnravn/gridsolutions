@@ -264,4 +264,51 @@ describe('AppToastProvider', () => {
     })
     expect(seen[seen.length - 1]).toBe(before)
   })
+
+  it('dedupes sticky toasts that share a dedupeKey', async () => {
+    function Probe() {
+      const toast = useToast()
+      return (
+        <button
+          type="button"
+          onClick={() => {
+            toast.show({
+              kind: 'info',
+              title: 'A new version is available',
+              description: 'Reload to get the latest updates.',
+              duration: 0,
+              dedupeKey: 'pwa-need-refresh',
+              undoLabel: 'Reload',
+              onUndo: () => {},
+            })
+            toast.show({
+              kind: 'info',
+              title: 'A new version is available',
+              description: 'Reload to get the latest updates.',
+              duration: 0,
+              dedupeKey: 'pwa-need-refresh',
+              undoLabel: 'Reload',
+              onUndo: () => {},
+            })
+          }}
+        >
+          Fire
+        </button>
+      )
+    }
+
+    render(
+      <Theme>
+        <AppToastProvider>
+          <Probe />
+        </AppToastProvider>
+      </Theme>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Fire' }))
+    await waitFor(() => {
+      expect(screen.getByText('A new version is available')).toBeInTheDocument()
+    })
+    expect(screen.getAllByText('A new version is available')).toHaveLength(1)
+  })
 })
